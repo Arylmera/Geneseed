@@ -65,34 +65,59 @@ def render_file(path: Path, theme: dict) -> str:
     return substitute(text, theme)
 
 
-def out_path(rel: Path, out: Path) -> Path:
+def dest_rel(rel: Path) -> Path:
     # AGENT.md.tmpl -> AGENT.md ; everything else keeps its name.
     if rel.name == "AGENT.md.tmpl":
-        return out / "AGENT.md"
-    return out / rel
+        return rel.with_name("AGENT.md")
+    return rel
 
 
-def build(theme_name: str, out: Path) -> None:
+def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]]]:
+    """Render every source file once. Returns (theme, items) where each item is
+    (output_relpath, rendered_text_or_None, source_path). Text files carry their
+    rendered text; binary files carry None text and are copied from source_path.
+
+    Shared by `build()` (writes to a directory) and the prompt emitter (embeds
+    the text in a single self-contained prompt) so the two never drift."""
     theme = load_theme(theme_name)
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
-
-    written = 0
+    items: list[tuple[str, str | None, Path]] = []
     for path in sorted(SRC.rglob("*")):
         if path.is_dir() or "__pycache__" in path.parts:
             continue
         rel = path.relative_to(SRC)
-        dest = out_path(rel, out)
-        dest.parent.mkdir(parents=True, exist_ok=True)
+        out_rel = dest_rel(rel).as_posix()
         if path.suffix in TEXT_SUFFIXES:
-            dest.write_text(render_file(path, theme), encoding="utf-8")
+            items.append((out_rel, render_file(path, theme), path))
         else:
-            shutil.copy2(path, dest)
-        written += 1
+            items.append((out_rel, None, path))
+    return theme, items
+
+
+def build(theme_name: str, out: Path) -> None:
+    _, items = render_all(theme_name)
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+
+    for out_rel, text, src in items:
+        dest = out / out_rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if text is not None:
+            dest.write_text(text, encoding="utf-8")
+        else:
+            shutil.copy2(src, dest)
 
     (out / ".geneseed-theme").write_text(theme_name + "\n", encoding="utf-8")
-    print(f"[geneseed] built theme '{theme_name}' -> {out} ({written} files)")
+    print(f"[geneseed] built theme '{theme_name}' -> {out} ({len(items)} files)")
+
+
+def resolve_out(raw: str) -> Path:
+    """A target may be absolute or relative to the current working directory,
+    so the harness can be rendered straight into any repository."""
+    p = Path(raw)
+    if not p.is_absolute():
+        p = Path.cwd() / p
+    return p.resolve()
 
 
 def main() -> None:
@@ -102,10 +127,12 @@ def main() -> None:
 
     ap = argparse.ArgumentParser(description="Render the Geneseed harness for a theme.")
     ap.add_argument("--theme", default=default_theme, help="theme name (neutral, imperial, ...)")
-    ap.add_argument("--out", default="dist", help="output directory (default: dist)")
+    ap.add_argument("--out", "--target", dest="out", default="dist",
+                    help="output directory — absolute, or relative to the current "
+                         "directory (default: ./dist)")
     args = ap.parse_args()
 
-    build(args.theme, (ROOT / args.out).resolve())
+    build(args.theme, resolve_out(args.out))
 
 
 if __name__ == "__main__":

@@ -40,19 +40,48 @@ Geneseed/
 │   ├── skills/           repeatable workflows
 │   └── memory/           memory convention + index
 ├── themes/               token → label maps (neutral, imperial)
-├── scripts/harness.py    optional CLI: build · doctor · learn
+├── scripts/harness.py    optional CLI: build · doctor · prompt · learn
+├── prompts/              self-contained install prompts (no Python needed)
 ├── adapters/             optional per-tool glue (e.g. Claude Code hooks)
 └── dist/                 generated bundle — this is what you port
 ```
 
 ## Implant it into a repo
 
-1. `python build.py --theme neutral`
-2. Copy `dist/AGENT.md`, `dist/agents/`, `dist/skills/`, `dist/memory/`, and
-   `dist/laws/` into the target repository's root.
-3. Fill in `laws/project.md` with that repository's conventions.
-4. (Optional) wire `scripts/harness.py` to a git hook or CI, or use the
-   `adapters/claude-code/` hook snippet.
+There are two ways — pick whichever fits. Both let you choose the destination.
+
+### A. Generator (build into any folder)
+
+`--out` / `--target` accepts an absolute path or one relative to your current
+directory, so you can render straight into the repo you want:
+
+```
+python build.py --theme neutral --target /path/to/your-repo
+```
+
+Then fill in `laws/project.md` with that repo's conventions.
+
+### B. Prompt (no Python required)
+
+For environments where you'd rather not run a script, use a **self-contained
+install prompt**: paste it into any AI assistant (Claude, ChatGPT, Cursor…),
+tell it the target folder, and it writes the whole harness verbatim.
+
+- Ready-made, copy-paste from the repo: [`prompts/install.neutral.md`](prompts/install.neutral.md)
+  or [`prompts/install.imperial.md`](prompts/install.imperial.md).
+- Or regenerate fresh (always in sync with `src/`):
+
+```
+python scripts/harness.py prompt --theme neutral            # to stdout
+python scripts/harness.py prompt --theme imperial --out my-prompt.md
+```
+
+The prompt asks the agent which folder to target (default: the current repo root).
+
+### Optional automation
+
+Wire `scripts/harness.py` to a git hook or CI, or use the
+`adapters/claude-code/` hook snippet.
 
 ## Validate
 

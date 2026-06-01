@@ -25,6 +25,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build.py"
+sys.path.insert(0, str(ROOT))
+import build  # noqa: E402  (path adjusted above)
 TOKEN_RE = re.compile(r"\{\{[A-Z_]+\}\}")
 LINK_RE = re.compile(r"\]\((?!https?://|#)([^)]+)\)")
 FENCE_RE = re.compile(r"```.*?```", re.S)
@@ -95,6 +97,58 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         return 0
 
 
+def _fence_for(text: str) -> str:
+    """A backtick fence longer than the longest backtick run inside `text`, so
+    embedded code fences never close the wrapper. Minimum four."""
+    longest = run = 0
+    for ch in text:
+        run = run + 1 if ch == "`" else 0
+        longest = max(longest, run)
+    return "`" * max(4, longest + 1)
+
+
+def build_prompt(theme_name: str) -> str:
+    _, items = build.render_all(theme_name)
+    n_text = sum(1 for _, t, _ in items if t is not None)
+    out = [
+        f"# Geneseed Harness — install prompt (theme: {theme_name})",
+        "",
+        "You are an AI agent. Recreate the Geneseed harness file tree below, writing",
+        "every file **verbatim**. No Python or build step is required.",
+        "",
+        "## Target directory",
+        "Write all files under the directory the user specifies. If none was given, ask",
+        "for it, defaulting to the current repository root. Preserve the exact relative",
+        "path shown in each file heading, creating subfolders as needed.",
+        "",
+        "## Rules",
+        "- Copy each file's content exactly — do not summarise, reflow, or edit it.",
+        "- After writing, fill in `laws/project.md` with the target repo's conventions.",
+        "- When finished, list every file you created.",
+        "",
+        f"## Files ({n_text} text files)",
+    ]
+    for out_rel, text, _src in items:
+        if text is None:
+            out.append(f"\n### `{out_rel}` (binary — copy it from the Geneseed repo)")
+            continue
+        fence = _fence_for(text)
+        out += [f"\n### `{out_rel}`", "", fence, text.rstrip("\n"), fence]
+    return "\n".join(out) + "\n"
+
+
+def cmd_prompt(args: argparse.Namespace) -> int:
+    text = build_prompt(args.theme or "neutral")
+    if args.out:
+        dest = Path(args.out)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(text, encoding="utf-8")
+        print(f"[prompt] wrote {args.out} ({args.theme or 'neutral'})")
+    else:
+        sys.stdout.write(text)
+    return 0
+
+
 def cmd_learn(args: argparse.Namespace) -> int:
     notes = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.read()
     prompt = LEARN_PROMPT + notes
@@ -119,6 +173,11 @@ def main() -> int:
     d = sub.add_parser("doctor", help="validate a build")
     d.add_argument("--theme", default=None)
     d.set_defaults(fn=cmd_doctor)
+
+    p = sub.add_parser("prompt", help="emit a self-contained install prompt (no Python needed to use it)")
+    p.add_argument("--theme", default=None)
+    p.add_argument("--out", default=None, help="write to FILE (default: stdout)")
+    p.set_defaults(fn=cmd_prompt)
 
     le = sub.add_parser("learn", help="distil notes into memory entries")
     le.add_argument("file", nargs="?", help="notes file (default: stdin)")
