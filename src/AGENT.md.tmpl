@@ -26,7 +26,7 @@ reply of the session with this line, so the user knows the harness is fully load
 
 ## 2. Project {{LAWS}}
 
-Project-specific rules live in [`laws/project.md`](laws/project.md). Read them
+Project-specific rules live in [`{{DIR_LAWS}}/project.md`]({{DIR_LAWS}}/project.md). Read them
 before acting. They override nothing in §1 but add repository-local conventions
 (branch naming, CI, review gates, stack choices).
 
@@ -38,16 +38,16 @@ before acting. They override nothing in §1 but add repository-local conventions
 
 Delegate focused work to a specialist rather than doing everything in one
 context. Each specialist has a single clear purpose and a defined output
-contract. Specs live in [`agents/`](agents/).
+contract. Specs live in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/).
 
 | {{AGENT}} | Use it when… |
 | --- | --- |
-| [reviewer](agents/reviewer.md) | a change is ready and needs a correctness + quality pass before merge |
-| [tester](agents/tester.md) | you need tests written, run, or a failure diagnosed |
-| [architect](agents/architect.md) | a task needs a design/plan before any code is written |
-| [docs](agents/docs.md) | code is done and user-facing docs/READMEs must follow |
-| [security](agents/security.md) | a change touches auth, input handling, secrets, or dependencies |
-| [explorer](agents/explorer.md) | you must sweep many files for an answer but only want the conclusion |
+| [reviewer]({{DIR_AGENTS}}/reviewer.md) | a change is ready and needs a correctness + quality pass before merge |
+| [tester]({{DIR_AGENTS}}/tester.md) | you need tests written, run, or a failure diagnosed |
+| [architect]({{DIR_AGENTS}}/architect.md) | a task needs a design/plan before any code is written |
+| [docs]({{DIR_AGENTS}}/docs.md) | code is done and user-facing docs/READMEs must follow |
+| [security]({{DIR_AGENTS}}/security.md) | a change touches auth, input handling, secrets, or dependencies |
+| [explorer]({{DIR_AGENTS}}/explorer.md) | you must sweep many files for an answer but only want the conclusion |
 
 **Rule of delegation:** read-only investigation can be dispatched freely; any
 {{AGENT}} that *writes* must return a summary of exactly what it changed.
@@ -57,16 +57,16 @@ contract. Specs live in [`agents/`](agents/).
 ## 4. {{SKILLS}} — repeatable workflows
 
 A {{SKILL}} is a written procedure for a recurring task. Run the matching {{SKILL}}
-before improvising. Specs live in [`skills/`](skills/).
+before improvising. Specs live in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/).
 
 | {{SKILL}} | Trigger |
 | --- | --- |
-| [plan](skills/plan.md) | a task has more than a couple of steps |
-| [verify](skills/verify.md) | about to claim something is done |
-| [repo-map](skills/repo-map.md) | orienting to the repo, or structure changed |
-| [commit](skills/commit.md) | staging and writing a commit |
-| [code-review](skills/code-review.md) | reviewing a diff or PR |
-| [create-skill](skills/create-skill.md) | a task has crystallised into a repeatable pattern |
+| [plan]({{DIR_SKILLS}}/plan.md) | a task has more than a couple of steps |
+| [verify]({{DIR_SKILLS}}/verify.md) | about to claim something is done |
+| [repo-map]({{DIR_SKILLS}}/repo-map.md) | orienting to the repo, or structure changed |
+| [commit]({{DIR_SKILLS}}/commit.md) | staging and writing a commit |
+| [code-review]({{DIR_SKILLS}}/code-review.md) | reviewing a diff or PR |
+| [create-skill]({{DIR_SKILLS}}/create-skill.md) | a task has crystallised into a repeatable pattern |
 
 When a task repeats and no {{SKILL}} covers it, forge one (see `create-skill`).
 
@@ -74,18 +74,18 @@ When a task repeats and no {{SKILL}} covers it, forge one (see `create-skill`).
 
 ## 5. {{MEMORY}} — durable knowledge across sessions
 
-Persistent facts live in [`memory/`](memory/) — one fact per file, indexed by a
+Persistent facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/) — one fact per file, indexed by a
 local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision
-worth keeping. The `memory/` directory is **personal and git-ignored** — it is
+worth keeping. The `{{DIR_MEMORY}}/` directory is **personal and git-ignored** — it is
 never committed or shared; to share knowledge, put it in code, docs, or the
-project {{LAWS}}. Full convention: [`memory/README.md`](memory/README.md).
+project {{LAWS}}. Full convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
 
 ---
 
 ## 6. {{SCRIPTS}} — optional automation
 
 Everything above works on agent self-discipline alone. For teams that want hard
-automation, the `scripts/` directory ships a dependency-free CLI (`harness build`,
+automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
 `harness learn`, `harness doctor`) you can wire to git hooks or CI. It is opt-in —
 the harness is fully functional without it.

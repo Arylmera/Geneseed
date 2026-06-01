@@ -209,7 +209,7 @@ project Rules. Full convention: [`memory/README.md`](memory/README.md).
 ## 6. Scripts — optional automation
 
 Everything above works on agent self-discipline alone. For teams that want hard
-automation, the `scripts/` directory ships a dependency-free CLI (`harness build`,
+automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
 `harness learn`, `harness doctor`) you can wire to git hooks or CI. It is opt-in —
 the harness is fully functional without it.
 ````

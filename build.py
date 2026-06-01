@@ -65,6 +65,24 @@ def render_file(path: Path, theme: dict) -> str:
     return substitute(text, theme)
 
 
+# Source top-level dirs whose OUTPUT name is themed (the source tree stays neutral).
+SRC_DIR_TOKENS = {
+    "laws": "DIR_LAWS",
+    "agents": "DIR_AGENTS",
+    "skills": "DIR_SKILLS",
+    "memory": "DIR_MEMORY",
+}
+
+
+def themed_rel(rel: Path, theme: dict) -> Path:
+    """Rename the top-level folder of an output path per theme (laws -> leges …).
+    The source tree keeps neutral names; only the rendered bundle is themed."""
+    parts = list(rel.parts)
+    if parts and parts[0] in SRC_DIR_TOKENS:
+        parts[0] = theme.get(SRC_DIR_TOKENS[parts[0]], parts[0])
+    return Path(*parts)
+
+
 def dest_rel(rel: Path) -> Path:
     # AGENT.md.tmpl -> AGENT.md ; everything else keeps its name.
     if rel.name == "AGENT.md.tmpl":
@@ -85,7 +103,7 @@ def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]
         if path.is_dir() or "__pycache__" in path.parts:
             continue
         rel = path.relative_to(SRC)
-        out_rel = dest_rel(rel).as_posix()
+        out_rel = dest_rel(themed_rel(rel, theme)).as_posix()
         if path.suffix in TEXT_SUFFIXES:
             items.append((out_rel, render_file(path, theme), path))
         else:
@@ -141,13 +159,15 @@ def emit_opencode(theme_name: str, out: Path) -> None:
     _, items = render_all(theme_name)
 
     n_agents = n_cmds = 0
-    for out_rel, text, _src in items:
+    for _out_rel, text, src in items:
         if text is None:
             continue
-        parts = out_rel.split("/")
-        if len(parts) != 2 or not parts[1].endswith(".md") or parts[1].startswith("_"):
+        # Key off the SOURCE folder (always neutral); the themed output name
+        # must not change OpenCode's fixed .opencode/agent and command dirs.
+        sparts = src.relative_to(SRC).as_posix().split("/")
+        if len(sparts) != 2 or not sparts[1].endswith(".md") or sparts[1].startswith("_"):
             continue
-        folder, stem = parts[0], parts[1][:-3]
+        folder, stem = sparts[0], sparts[1][:-3]
         desc = _first_blockquote(text)
         body = text.lstrip("\n")
         if folder == "agents":

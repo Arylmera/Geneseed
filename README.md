@@ -13,8 +13,10 @@ set of operating **rules**, a roster of capability **agents**, runnable
 
 One canonical source in `src/` is written in neutral tokens. A tiny,
 dependency-free generator (`build.py`) renders it into a themed bundle in
-`dist/`. A theme changes only *terminology*, never structure — so the output
-stays drop-in compatible with any tool.
+`dist/`. A theme changes the prose vocabulary *and* the bundle's top-level folder
+names (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`); the
+`src/` tree itself always keeps neutral names. Internal links are themed to match,
+so the bundle always resolves.
 
 ```
 python build.py                  # default theme (neutral)
@@ -40,7 +42,7 @@ Geneseed/
 │   ├── skills/           repeatable workflows
 │   └── memory/           memory convention + index
 ├── themes/               token → label maps (neutral, imperial)
-├── scripts/harness.py    optional CLI: build · doctor · prompt · learn
+├── rituals/harness.py    optional CLI: build · doctor · prompt · learn
 ├── prompts/              self-contained install prompts (no Python needed)
 ├── adapters/             optional per-tool glue (Claude Code hooks, OpenCode config)
 └── dist/                 generated bundle — this is what you port
@@ -79,15 +81,15 @@ tell it the target folder, and it writes the whole harness verbatim.
 - Or regenerate fresh (always in sync with `src/`):
 
 ```
-python scripts/harness.py prompt --theme neutral            # to stdout
-python scripts/harness.py prompt --theme imperial --out my-prompt.md
+python rituals/harness.py prompt --theme neutral            # to stdout
+python rituals/harness.py prompt --theme imperial --out my-prompt.md
 ```
 
 The prompt asks the agent which folder to target (default: the current repo root).
 
 ### Optional automation
 
-Wire `scripts/harness.py` to a git hook or CI, or use the
+Wire `rituals/harness.py` to a git hook or CI, or use the
 `adapters/claude-code/` hook snippet.
 
 ### Tool adapters
@@ -102,8 +104,8 @@ Wire `scripts/harness.py` to a git hook or CI, or use the
 ## Validate
 
 ```
-python scripts/harness.py doctor            # checks both: no unresolved tokens, no dead links
-python scripts/harness.py doctor --theme imperial
+python rituals/harness.py doctor            # checks both: no unresolved tokens, no dead links
+python rituals/harness.py doctor --theme imperial
 ```
 
 ## License

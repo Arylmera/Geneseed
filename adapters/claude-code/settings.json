@@ -11,7 +11,7 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "python scripts/harness.py learn < /dev/null || true" }
+          { "type": "command", "command": "python rituals/harness.py learn < /dev/null || true" }
         ]
       }
     ]

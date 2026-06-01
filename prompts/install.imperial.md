@@ -129,7 +129,7 @@ context is a faster, cheaper, more accurate agent.
 
 ## 2. Project Leges
 
-Project-specific rules live in [`laws/project.md`](laws/project.md). Read them
+Project-specific rules live in [`leges/project.md`](leges/project.md). Read them
 before acting. They override nothing in §1 but add repository-local conventions
 (branch naming, CI, review gates, stack choices).
 
@@ -161,16 +161,16 @@ before acting. They override nothing in §1 but add repository-local conventions
 
 Delegate focused work to a specialist rather than doing everything in one
 context. Each specialist has a single clear purpose and a defined output
-contract. Specs live in [`agents/`](agents/).
+contract. Specs live in [`legati/`](legati/).
 
 | Legatus | Use it when… |
 | --- | --- |
-| [reviewer](agents/reviewer.md) | a change is ready and needs a correctness + quality pass before merge |
-| [tester](agents/tester.md) | you need tests written, run, or a failure diagnosed |
-| [architect](agents/architect.md) | a task needs a design/plan before any code is written |
-| [docs](agents/docs.md) | code is done and user-facing docs/READMEs must follow |
-| [security](agents/security.md) | a change touches auth, input handling, secrets, or dependencies |
-| [explorer](agents/explorer.md) | you must sweep many files for an answer but only want the conclusion |
+| [reviewer](legati/reviewer.md) | a change is ready and needs a correctness + quality pass before merge |
+| [tester](legati/tester.md) | you need tests written, run, or a failure diagnosed |
+| [architect](legati/architect.md) | a task needs a design/plan before any code is written |
+| [docs](legati/docs.md) | code is done and user-facing docs/READMEs must follow |
+| [security](legati/security.md) | a change touches auth, input handling, secrets, or dependencies |
+| [explorer](legati/explorer.md) | you must sweep many files for an answer but only want the conclusion |
 
 **Rule of delegation:** read-only investigation can be dispatched freely; any
 Legatus that *writes* must return a summary of exactly what it changed.
@@ -180,16 +180,16 @@ Legatus that *writes* must return a summary of exactly what it changed.
 ## 4. Rites — repeatable workflows
 
 A Rite is a written procedure for a recurring task. Run the matching Rite
-before improvising. Specs live in [`skills/`](skills/).
+before improvising. Specs live in [`rites/`](rites/).
 
 | Rite | Trigger |
 | --- | --- |
-| [plan](skills/plan.md) | a task has more than a couple of steps |
-| [verify](skills/verify.md) | about to claim something is done |
-| [repo-map](skills/repo-map.md) | orienting to the repo, or structure changed |
-| [commit](skills/commit.md) | staging and writing a commit |
-| [code-review](skills/code-review.md) | reviewing a diff or PR |
-| [create-skill](skills/create-skill.md) | a task has crystallised into a repeatable pattern |
+| [plan](rites/plan.md) | a task has more than a couple of steps |
+| [verify](rites/verify.md) | about to claim something is done |
+| [repo-map](rites/repo-map.md) | orienting to the repo, or structure changed |
+| [commit](rites/commit.md) | staging and writing a commit |
+| [code-review](rites/code-review.md) | reviewing a diff or PR |
+| [create-skill](rites/create-skill.md) | a task has crystallised into a repeatable pattern |
 
 When a task repeats and no Rite covers it, forge one (see `create-skill`).
 
@@ -197,24 +197,24 @@ When a task repeats and no Rite covers it, forge one (see `create-skill`).
 
 ## 5. Anamnesis — durable knowledge across sessions
 
-Persistent facts live in [`memory/`](memory/) — one fact per file, indexed by a
+Persistent facts live in [`anamnesis/`](anamnesis/) — one fact per file, indexed by a
 local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision
-worth keeping. The `memory/` directory is **personal and git-ignored** — it is
+worth keeping. The `anamnesis/` directory is **personal and git-ignored** — it is
 never committed or shared; to share knowledge, put it in code, docs, or the
-project Leges. Full convention: [`memory/README.md`](memory/README.md).
+project Leges. Full convention: [`anamnesis/README.md`](anamnesis/README.md).
 
 ---
 
 ## 6. Rituals — optional automation
 
 Everything above works on agent self-discipline alone. For teams that want hard
-automation, the `scripts/` directory ships a dependency-free CLI (`harness build`,
+automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
 `harness learn`, `harness doctor`) you can wire to git hooks or CI. It is opt-in —
 the harness is fully functional without it.
 ````
 
-### `agents/_template.md`
+### `legati/_template.md`
 
 ````
 # Legatus: <name>
@@ -241,7 +241,7 @@ the harness is fully functional without it.
   findings with file:line, a verdict, a summary of changes made).
 ````
 
-### `agents/architect.md`
+### `legati/architect.md`
 
 ````
 # Legatus: architect
@@ -273,7 +273,7 @@ the harness is fully functional without it.
   steps. No code — the plan is the deliverable.
 ````
 
-### `agents/docs.md`
+### `legati/docs.md`
 
 ````
 # Legatus: docs
@@ -303,7 +303,7 @@ the harness is fully functional without it.
 - The doc files written/updated and a one-line note of what changed and why.
 ````
 
-### `agents/explorer.md`
+### `legati/explorer.md`
 
 ````
 # Legatus: explorer
@@ -337,7 +337,7 @@ the harness is fully functional without it.
   it, and any open questions. Never the full contents of what was read.
 ````
 
-### `agents/reviewer.md`
+### `legati/reviewer.md`
 
 ````
 # Legatus: reviewer
@@ -370,7 +370,7 @@ the harness is fully functional without it.
   correctness-first. End with a one-line verdict: ship / fix-then-ship / block.
 ````
 
-### `agents/security.md`
+### `legati/security.md`
 
 ````
 # Legatus: security
@@ -402,7 +402,7 @@ the harness is fully functional without it.
   first. End with: safe to ship / fix-required. State if no issues were found.
 ````
 
-### `agents/tester.md`
+### `legati/tester.md`
 
 ````
 # Legatus: tester
@@ -435,7 +435,7 @@ the harness is fully functional without it.
   output (pass/fail counts). For diagnosis: root cause + recommended fix location.
 ````
 
-### `laws/project.md`
+### `leges/project.md`
 
 ````
 <!-- Project-specific rules. Fill this in per repository. Examples below — replace them. -->
@@ -461,7 +461,7 @@ the harness is fully functional without it.
 - _e.g. language, framework, formatting tool, directory layout the agent must follow._
 ````
 
-### `laws/universal.md`
+### `leges/universal.md`
 
 ````
 <!-- Canonical, runtime-agnostic laws. Themed labels are substituted at build time. -->
@@ -550,9 +550,9 @@ Delegate wide reading to a sub-Legatus that returns only its conclusion. A lean
 context is a faster, cheaper, more accurate agent.
 ````
 
-### `memory/.gitignore` (binary — copy it from the Geneseed repo)
+### `anamnesis/.gitignore` (binary — copy it from the Geneseed repo)
 
-### `memory/README.md`
+### `anamnesis/README.md`
 
 ````
 # Anamnesis convention
@@ -605,7 +605,7 @@ The fact, stated plainly. For `feedback` and `project`, follow with
   (universal Lex III).
 ````
 
-### `skills/_template.md`
+### `rites/_template.md`
 
 ````
 # Rite: <name>
@@ -622,7 +622,7 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 - The observable condition that means the Rite succeeded.
 ````
 
-### `skills/code-review.md`
+### `rites/code-review.md`
 
 ````
 # Rite: code-review
@@ -634,7 +634,7 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 ## Procedure
 1. Read the task/issue the change is meant to satisfy.
 2. Get the diff. For a large change, consider dispatching the
-   [reviewer Legatus](../agents/reviewer.md) to keep the main context clean.
+   [reviewer Legatus](../legati/reviewer.md) to keep the main context clean.
 3. Pass 1 — correctness: logic errors, edge cases, error handling, race
    conditions. Verify suspect behaviour by running tests, not by assuming.
 4. Pass 2 — quality: duplication, naming, dead code, units that do too much.
@@ -644,7 +644,7 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 - Findings are reported with a clear verdict: ship / fix-then-ship / block.
 ````
 
-### `skills/commit.md`
+### `rites/commit.md`
 
 ````
 # Rite: commit
@@ -666,7 +666,7 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 - The commit contains only the intended change and the working tree is clean of it.
 ````
 
-### `skills/create-skill.md`
+### `rites/create-skill.md`
 
 ````
 # Rite: create-skill
@@ -688,7 +688,7 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 - A new (or extended) Rite exists, named by domain, and is listed in `AGENT.md`.
 ````
 
-### `skills/plan.md`
+### `rites/plan.md`
 
 ````
 # Rite: plan
@@ -717,7 +717,7 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 > git-ignoring `WORKLOG.md` if it should stay local to each developer.
 ````
 
-### `skills/repo-map.md`
+### `rites/repo-map.md`
 
 ````
 # Rite: repo-map
@@ -740,7 +740,7 @@ The fact, stated plainly. For `feedback` and `project`, follow with
   from it in a single read.
 ````
 
-### `skills/verify.md`
+### `rites/verify.md`
 
 ````
 # Rite: verify
@@ -750,7 +750,7 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 **Trigger:** about to say a task is done, fixed, or passing.
 
 ## Procedure
-1. Find the project's Definition of Done (see [`laws/project.md`](../laws/project.md))
+1. Find the project's Definition of Done (see [`leges/project.md`](../leges/project.md))
    — typically the test, lint, and build commands.
 2. Run them. Read the actual output; do not assume (universal Lex III).
 3. If anything fails, the task is not done — fix it or report it; do not claim

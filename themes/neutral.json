@@ -11,5 +11,9 @@
   "SCRIPT": "Script",
   "SCRIPTS": "Scripts",
   "TAGLINE": "A portable, theme-able harness you implant into any repository to grow a disciplined AI agent.",
-  "LOADED_SIGIL": "✅ Harness loaded — rules in force, agents and skills ready."
+  "LOADED_SIGIL": "✅ Harness loaded — rules in force, agents and skills ready.",
+  "DIR_LAWS": "laws",
+  "DIR_AGENTS": "agents",
+  "DIR_SKILLS": "skills",
+  "DIR_MEMORY": "memory"
 }

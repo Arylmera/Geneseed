@@ -5,7 +5,7 @@
 **Trigger:** about to say a task is done, fixed, or passing.
 
 ## Procedure
-1. Find the project's Definition of Done (see [`laws/project.md`](../laws/project.md))
+1. Find the project's Definition of Done (see [`{{DIR_LAWS}}/project.md`](../{{DIR_LAWS}}/project.md))
    — typically the test, lint, and build commands.
 2. Run them. Read the actual output; do not assume (universal {{LAW}} III).
 3. If anything fails, the task is not done — fix it or report it; do not claim

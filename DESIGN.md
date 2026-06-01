@@ -20,10 +20,15 @@ vault or a specific tool's hooks.
    are expressed primarily as instructions in `AGENT.md` that the model follows.
    Scripts are a power-user convenience layered on top, never a requirement.
 
-3. **Theme is terminology, not structure.** A single neutral source renders to
-   any theme via token substitution. Folder/file names in `dist/` stay neutral so
-   output is drop-in for any tool; only prose labels change. Toggle = one flag.
-   This is why themes are flat JSON maps and the generator is pure substitution.
+3. **Theme covers vocabulary and the bundle's folder names.** A single neutral
+   source renders to any theme via token substitution. A theme changes both the
+   prose labels *and* the top-level folder names of the rendered bundle
+   (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`, defined by
+   the `DIR_*` tokens). Two things stay fixed regardless of theme: the **source
+   tree** under `src/` (always neutral, for sane authoring) and the **`.opencode/`
+   layer** emitted by `--emit opencode` (OpenCode requires the exact dir names
+   `agent/` and `command/`). Internal links in the bundle are themed via the same
+   `DIR_*` tokens so they always resolve. Toggle = one flag.
 
 4. **Delegation by capability, not by folder.** The source system owned content
    folders with delegate agents. For code repositories, specialists by capability
@@ -35,16 +40,19 @@ vault or a specific tool's hooks.
 
 ## Components
 
+The `dist/` output column shows the **neutral** folder name; the imperial theme
+renders it as the name in parentheses.
+
 | Component | Source | `dist/` output | Purpose |
 | --- | --- | --- | --- |
 | Entrypoint | `src/AGENT.md.tmpl` | `AGENT.md` | what the tool reads; inlines the rules, links the rest |
-| Governance | `src/laws/` | `laws/` | universal rules + a project-specific stub |
-| Delegation | `src/agents/` | `agents/` | capability specialists with output contracts |
-| Workflows | `src/skills/` | `skills/` | repeatable procedures |
-| Memory | `src/memory/` | `memory/` | one-fact-per-file convention + index |
+| Governance | `src/laws/` | `laws/` (`leges/`) | universal rules + a project-specific stub |
+| Delegation | `src/agents/` | `agents/` (`legati/`) | capability specialists with output contracts |
+| Workflows | `src/skills/` | `skills/` (`rites/`) | repeatable procedures |
+| Memory | `src/memory/` | `memory/` (`anamnesis/`) | one-fact-per-file convention + index |
 | Themes | `themes/*.json` | — | token → label maps |
 | Generator | `build.py` | — | substitution + `<!-- INCLUDE: -->` inlining |
-| Automation | `scripts/harness.py` | — | optional `build` / `doctor` / `learn` |
+| Automation | `rituals/harness.py` | — | optional `build` / `doctor` / `learn` |
 | Adapters | `adapters/` | — | optional per-tool glue (hooks) |
 
 ## Generator contract
