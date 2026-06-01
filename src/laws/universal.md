@@ -67,3 +67,18 @@ does not already exist; prefer extending what is there. Duplication is a defect.
 Match the surrounding code — its naming, structure, formatting, and patterns.
 Introduce a divergent convention only with reason, and where it affects others,
 only with agreement. Consistency outranks personal preference.
+
+### {{LAW}} XIV — Plan Before Acting
+For any non-trivial task — more than a couple of steps, or touching several files
+— write a short numbered plan before executing, and keep a running record of
+progress (done / current / next / blockers) in a worklog the session can re-read.
+The plan is external memory: it lets a context-limited agent recover its place
+after the window fills, and lets the user correct course before effort is spent.
+Trivial edits need no plan.
+
+### {{LAW}} XV — Context Economy
+Treat the context window as scarce. Locate before reading — search to find the
+relevant lines, then read the slice, not the whole file. Summarise long command
+output instead of carrying it verbatim. Do not re-read what is already in context.
+Delegate wide reading to a sub-{{AGENT}} that returns only its conclusion. A lean
+context is a faster, cheaper, more accurate agent.

@@ -10,6 +10,10 @@
 ### Build, test, lint
 - _e.g. `make test` must pass before any commit; `make lint` before any PR._
 
+### Definition of Done
+- _e.g. a task is Done only when `make test` and `make lint` pass and the_
+  _`verify` Skill has been run with its output observed._
+
 ### Review gates
 - _e.g. every PR needs one human review; the `security` Agent runs on any auth change._
 

@@ -13,7 +13,7 @@ path shown in each file heading, creating subfolders as needed.
 - After writing, fill in `laws/project.md` with the target repo's conventions.
 - When finished, list every file you created.
 
-## Files (14 text files)
+## Files (18 text files)
 
 ### `AGENT.md`
 
@@ -110,6 +110,21 @@ Match the surrounding code — its naming, structure, formatting, and patterns.
 Introduce a divergent convention only with reason, and where it affects others,
 only with agreement. Consistency outranks personal preference.
 
+### Lex XIV — Plan Before Acting
+For any non-trivial task — more than a couple of steps, or touching several files
+— write a short numbered plan before executing, and keep a running record of
+progress (done / current / next / blockers) in a worklog the session can re-read.
+The plan is external memory: it lets a context-limited agent recover its place
+after the window fills, and lets the user correct course before effort is spent.
+Trivial edits need no plan.
+
+### Lex XV — Context Economy
+Treat the context window as scarce. Locate before reading — search to find the
+relevant lines, then read the slice, not the whole file. Summarise long command
+output instead of carrying it verbatim. Do not re-read what is already in context.
+Delegate wide reading to a sub-Legatus that returns only its conclusion. A lean
+context is a faster, cheaper, more accurate agent.
+
 ---
 
 ## 2. Project Leges
@@ -129,6 +144,10 @@ before acting. They override nothing in §1 but add repository-local conventions
 
 ### Build, test, lint
 - _e.g. `make test` must pass before any commit; `make lint` before any PR._
+
+### Definition of Done
+- _e.g. a task is Done only when `make test` and `make lint` pass and the_
+  _`verify` Rite has been run with its output observed._
 
 ### Review gates
 - _e.g. every PR needs one human review; the `security` Legatus runs on any auth change._
@@ -151,6 +170,7 @@ contract. Specs live in [`agents/`](agents/).
 | [architect](agents/architect.md) | a task needs a design/plan before any code is written |
 | [docs](agents/docs.md) | code is done and user-facing docs/READMEs must follow |
 | [security](agents/security.md) | a change touches auth, input handling, secrets, or dependencies |
+| [explorer](agents/explorer.md) | you must sweep many files for an answer but only want the conclusion |
 
 **Rule of delegation:** read-only investigation can be dispatched freely; any
 Legatus that *writes* must return a summary of exactly what it changed.
@@ -164,6 +184,9 @@ before improvising. Specs live in [`skills/`](skills/).
 
 | Rite | Trigger |
 | --- | --- |
+| [plan](skills/plan.md) | a task has more than a couple of steps |
+| [verify](skills/verify.md) | about to claim something is done |
+| [repo-map](skills/repo-map.md) | orienting to the repo, or structure changed |
 | [commit](skills/commit.md) | staging and writing a commit |
 | [code-review](skills/code-review.md) | reviewing a diff or PR |
 | [create-skill](skills/create-skill.md) | a task has crystallised into a repeatable pattern |
@@ -280,6 +303,40 @@ the harness is fully functional without it.
 - The doc files written/updated and a one-line note of what changed and why.
 ````
 
+### `agents/explorer.md`
+
+````
+# Legatus: explorer
+
+> Reads and searches widely in a throwaway context, returns only distilled findings.
+
+## When to dispatch
+- A question needs sweeping many files or directories, but you only want the
+  conclusion — not the file contents in your context.
+- Locating where something lives, how a subsystem fits together, or gathering
+  facts scattered across the repo.
+- Your main context is small and the expensive reading should happen elsewhere.
+
+## When NOT to dispatch
+- A single known file — just read it.
+- Any work that changes files — explorer is read-only.
+
+## Inputs
+- The question to answer and where to look (paths, keywords, scope).
+
+## Allowed tools
+- **Read-only**: search and read. Never edits.
+
+## Procedure
+1. Search to locate the relevant files before reading them (universal Lex XV).
+2. Read only the slices that matter; follow references outward as needed.
+3. Synthesize — return findings, not raw dumps.
+
+## Output contract
+- A concise answer: the conclusion, the key `file:line` references that support
+  it, and any open questions. Never the full contents of what was read.
+````
+
 ### `agents/reviewer.md`
 
 ````
@@ -393,6 +450,10 @@ the harness is fully functional without it.
 ### Build, test, lint
 - _e.g. `make test` must pass before any commit; `make lint` before any PR._
 
+### Definition of Done
+- _e.g. a task is Done only when `make test` and `make lint` pass and the_
+  _`verify` Rite has been run with its output observed._
+
 ### Review gates
 - _e.g. every PR needs one human review; the `security` Legatus runs on any auth change._
 
@@ -472,6 +533,21 @@ does not already exist; prefer extending what is there. Duplication is a defect.
 Match the surrounding code — its naming, structure, formatting, and patterns.
 Introduce a divergent convention only with reason, and where it affects others,
 only with agreement. Consistency outranks personal preference.
+
+### Lex XIV — Plan Before Acting
+For any non-trivial task — more than a couple of steps, or touching several files
+— write a short numbered plan before executing, and keep a running record of
+progress (done / current / next / blockers) in a worklog the session can re-read.
+The plan is external memory: it lets a context-limited agent recover its place
+after the window fills, and lets the user correct course before effort is spent.
+Trivial edits need no plan.
+
+### Lex XV — Context Economy
+Treat the context window as scarce. Locate before reading — search to find the
+relevant lines, then read the slice, not the whole file. Summarise long command
+output instead of carrying it verbatim. Do not re-read what is already in context.
+Delegate wide reading to a sub-Legatus that returns only its conclusion. A lean
+context is a faster, cheaper, more accurate agent.
 ````
 
 ### `memory/.gitignore` (binary — copy it from the Geneseed repo)
@@ -610,4 +686,77 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 
 ## Done when
 - A new (or extended) Rite exists, named by domain, and is listed in `AGENT.md`.
+````
+
+### `skills/plan.md`
+
+````
+# Rite: plan
+
+> Write a plan to a file before executing a non-trivial task; track progress as you go.
+
+**Trigger:** a task with more than a couple of steps, or touching several files
+(universal Lex XIV).
+
+## Procedure
+1. Restate the goal in one line and confirm the actual starting state (universal
+   Lex III — verify before designing).
+2. Write a numbered plan to `WORKLOG.md` (or `plans/<task>.md`): ordered steps,
+   each independently checkable.
+3. Execute one step at a time. After each, update the worklog — mark it done, note
+   the current step, the next step, and any blockers.
+4. If the plan proves wrong, revise the file *before* continuing. The file, not
+   your memory, is the source of truth for where you are.
+5. On finishing, clear or archive the worklog.
+
+## Done when
+- Every plan step is checked off and the goal's done-condition is verified.
+
+> The worklog is external memory: it lets a context-limited agent recover its
+> place after the window fills, and lets the user correct course early. Consider
+> git-ignoring `WORKLOG.md` if it should stay local to each developer.
+````
+
+### `skills/repo-map.md`
+
+````
+# Rite: repo-map
+
+> Create and maintain a one-read orientation map of the repository.
+
+**Trigger:** onboarding to a repo that has no map, or after a structural change.
+
+## Procedure
+1. If `ARCHITECTURE.md` exists, read it first — it is the cheapest orientation
+   (universal Lex XV).
+2. If absent or stale, build or refresh it: entry points, the key directories and
+   what each holds, how to build / test / run, external services, and the one or
+   two non-obvious conventions a newcomer must know.
+3. Keep it short — a map, not documentation. Link out for detail.
+4. Update it in the same change whenever structure shifts (universal Lex XI).
+
+## Done when
+- `ARCHITECTURE.md` reflects the current structure, and a fresh agent could orient
+  from it in a single read.
+````
+
+### `skills/verify.md`
+
+````
+# Rite: verify
+
+> Confirm work is actually done before claiming it — run the checks, read the output.
+
+**Trigger:** about to say a task is done, fixed, or passing.
+
+## Procedure
+1. Find the project's Definition of Done (see [`laws/project.md`](../laws/project.md))
+   — typically the test, lint, and build commands.
+2. Run them. Read the actual output; do not assume (universal Lex III).
+3. If anything fails, the task is not done — fix it or report it; do not claim
+   success.
+4. State what you ran and its result when you report completion.
+
+## Done when
+- The Definition-of-Done checks have been run and observed to pass.
 ````

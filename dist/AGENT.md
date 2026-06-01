@@ -90,6 +90,21 @@ Match the surrounding code — its naming, structure, formatting, and patterns.
 Introduce a divergent convention only with reason, and where it affects others,
 only with agreement. Consistency outranks personal preference.
 
+### Rule XIV — Plan Before Acting
+For any non-trivial task — more than a couple of steps, or touching several files
+— write a short numbered plan before executing, and keep a running record of
+progress (done / current / next / blockers) in a worklog the session can re-read.
+The plan is external memory: it lets a context-limited agent recover its place
+after the window fills, and lets the user correct course before effort is spent.
+Trivial edits need no plan.
+
+### Rule XV — Context Economy
+Treat the context window as scarce. Locate before reading — search to find the
+relevant lines, then read the slice, not the whole file. Summarise long command
+output instead of carrying it verbatim. Do not re-read what is already in context.
+Delegate wide reading to a sub-Agent that returns only its conclusion. A lean
+context is a faster, cheaper, more accurate agent.
+
 ---
 
 ## 2. Project Rules
@@ -109,6 +124,10 @@ before acting. They override nothing in §1 but add repository-local conventions
 
 ### Build, test, lint
 - _e.g. `make test` must pass before any commit; `make lint` before any PR._
+
+### Definition of Done
+- _e.g. a task is Done only when `make test` and `make lint` pass and the_
+  _`verify` Skill has been run with its output observed._
 
 ### Review gates
 - _e.g. every PR needs one human review; the `security` Agent runs on any auth change._
@@ -131,6 +150,7 @@ contract. Specs live in [`agents/`](agents/).
 | [architect](agents/architect.md) | a task needs a design/plan before any code is written |
 | [docs](agents/docs.md) | code is done and user-facing docs/READMEs must follow |
 | [security](agents/security.md) | a change touches auth, input handling, secrets, or dependencies |
+| [explorer](agents/explorer.md) | you must sweep many files for an answer but only want the conclusion |
 
 **Rule of delegation:** read-only investigation can be dispatched freely; any
 Agent that *writes* must return a summary of exactly what it changed.
@@ -144,6 +164,9 @@ before improvising. Specs live in [`skills/`](skills/).
 
 | Skill | Trigger |
 | --- | --- |
+| [plan](skills/plan.md) | a task has more than a couple of steps |
+| [verify](skills/verify.md) | about to claim something is done |
+| [repo-map](skills/repo-map.md) | orienting to the repo, or structure changed |
 | [commit](skills/commit.md) | staging and writing a commit |
 | [code-review](skills/code-review.md) | reviewing a diff or PR |
 | [create-skill](skills/create-skill.md) | a task has crystallised into a repeatable pattern |

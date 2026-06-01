@@ -47,6 +47,7 @@ contract. Specs live in [`agents/`](agents/).
 | [architect](agents/architect.md) | a task needs a design/plan before any code is written |
 | [docs](agents/docs.md) | code is done and user-facing docs/READMEs must follow |
 | [security](agents/security.md) | a change touches auth, input handling, secrets, or dependencies |
+| [explorer](agents/explorer.md) | you must sweep many files for an answer but only want the conclusion |
 
 **Rule of delegation:** read-only investigation can be dispatched freely; any
 {{AGENT}} that *writes* must return a summary of exactly what it changed.
@@ -60,6 +61,9 @@ before improvising. Specs live in [`skills/`](skills/).
 
 | {{SKILL}} | Trigger |
 | --- | --- |
+| [plan](skills/plan.md) | a task has more than a couple of steps |
+| [verify](skills/verify.md) | about to claim something is done |
+| [repo-map](skills/repo-map.md) | orienting to the repo, or structure changed |
 | [commit](skills/commit.md) | staging and writing a commit |
 | [code-review](skills/code-review.md) | reviewing a diff or PR |
 | [create-skill](skills/create-skill.md) | a task has crystallised into a repeatable pattern |
