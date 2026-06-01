@@ -42,7 +42,7 @@ Geneseed/
 ├── themes/               token → label maps (neutral, imperial)
 ├── scripts/harness.py    optional CLI: build · doctor · prompt · learn
 ├── prompts/              self-contained install prompts (no Python needed)
-├── adapters/             optional per-tool glue (e.g. Claude Code hooks)
+├── adapters/             optional per-tool glue (Claude Code hooks, OpenCode config)
 └── dist/                 generated bundle — this is what you port
 ```
 
@@ -82,6 +82,14 @@ The prompt asks the agent which folder to target (default: the current repo root
 
 Wire `scripts/harness.py` to a git hook or CI, or use the
 `adapters/claude-code/` hook snippet.
+
+### Tool adapters
+
+- **OpenCode** — [`adapters/opencode/`](adapters/opencode/): a drop-in
+  `opencode.json` (loads `AGENT.md` as a rule file) plus a guide to mapping the
+  capability agents and skills onto OpenCode's native subagents and commands.
+- **Claude Code** — [`adapters/claude-code/`](adapters/claude-code/): SessionStart
+  + Stop hook snippet.
 
 ## Validate
 
