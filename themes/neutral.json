@@ -10,5 +10,6 @@
   "MEMORY": "Memory",
   "SCRIPT": "Script",
   "SCRIPTS": "Scripts",
-  "TAGLINE": "A portable, theme-able harness you implant into any repository to grow a disciplined AI agent."
+  "TAGLINE": "A portable, theme-able harness you implant into any repository to grow a disciplined AI agent.",
+  "LOADED_SIGIL": "✅ Harness loaded — rules in force, agents and skills ready."
 }

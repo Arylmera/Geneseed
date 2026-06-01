@@ -10,5 +10,6 @@
   "MEMORY": "Anamnesis",
   "SCRIPT": "Ritual",
   "SCRIPTS": "Rituals",
-  "TAGLINE": "Implant the gene-seed into any repository; from it a disciplined servant is grown."
+  "TAGLINE": "Implant the gene-seed into any repository; from it a disciplined servant is grown.",
+  "LOADED_SIGIL": "🧬 Gene-seed implanted — the harness wakes, the Codex in force. Ready."
 }

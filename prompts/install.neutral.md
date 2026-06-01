@@ -31,6 +31,11 @@ It is tool-agnostic: it works with any assistant that reads an `AGENT.md` /
 sub-agents, the Agents below are dispatched as real sub-agents; where it does
 not, treat each as a *persona* the single agent adopts for that slice of work.
 
+**Readiness sigil.** When you have read this file and its Rules, open your first
+reply of the session with this line, so the user knows the harness is fully loaded:
+
+> ✅ Harness loaded — rules in force, agents and skills ready.
+
 ---
 
 ## 1. Rules (always in force)
