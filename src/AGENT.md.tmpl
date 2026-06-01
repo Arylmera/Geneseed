@@ -1,0 +1,80 @@
+# AGENT.md — {{HARNESS}} Harness
+
+> {{TAGLINE}}
+
+This file is the entry point an AI coding agent reads when working in this
+repository. It defines the **{{LAWS}}** the agent obeys, the **{{AGENTS}}** it can
+delegate to, the **{{SKILLS}}** it can run, and how it keeps **{{MEMORY}}**.
+
+It is tool-agnostic: it works with any assistant that reads an `AGENT.md` /
+`AGENTS.md` / `CLAUDE.md` at the repository root. Where a tool supports
+sub-agents, the {{AGENTS}} below are dispatched as real sub-agents; where it does
+not, treat each as a *persona* the single agent adopts for that slice of work.
+
+---
+
+## 1. {{LAWS}} (always in force)
+
+<!-- INCLUDE: laws/universal.md -->
+
+---
+
+## 2. Project {{LAWS}}
+
+Project-specific rules live in [`laws/project.md`](laws/project.md). Read them
+before acting. They override nothing in §1 but add repository-local conventions
+(branch naming, CI, review gates, stack choices).
+
+<!-- INCLUDE: laws/project.md -->
+
+---
+
+## 3. {{AGENTS}} — delegation by capability
+
+Delegate focused work to a specialist rather than doing everything in one
+context. Each specialist has a single clear purpose and a defined output
+contract. Specs live in [`agents/`](agents/).
+
+| {{AGENT}} | Use it when… |
+| --- | --- |
+| [reviewer](agents/reviewer.md) | a change is ready and needs a correctness + quality pass before merge |
+| [tester](agents/tester.md) | you need tests written, run, or a failure diagnosed |
+| [architect](agents/architect.md) | a task needs a design/plan before any code is written |
+| [docs](agents/docs.md) | code is done and user-facing docs/READMEs must follow |
+| [security](agents/security.md) | a change touches auth, input handling, secrets, or dependencies |
+
+**Rule of delegation:** read-only investigation can be dispatched freely; any
+{{AGENT}} that *writes* must return a summary of exactly what it changed.
+
+---
+
+## 4. {{SKILLS}} — repeatable workflows
+
+A {{SKILL}} is a written procedure for a recurring task. Run the matching {{SKILL}}
+before improvising. Specs live in [`skills/`](skills/).
+
+| {{SKILL}} | Trigger |
+| --- | --- |
+| [commit](skills/commit.md) | staging and writing a commit |
+| [code-review](skills/code-review.md) | reviewing a diff or PR |
+| [create-skill](skills/create-skill.md) | a task has crystallised into a repeatable pattern |
+
+When a task repeats and no {{SKILL}} covers it, forge one (see `create-skill`).
+
+---
+
+## 5. {{MEMORY}} — durable knowledge across sessions
+
+Persistent facts live in [`memory/`](memory/) — one fact per file, indexed by
+[`memory/MEMORY.md`](memory/MEMORY.md). Read the index at the start of a session;
+write a new memory whenever the conversation yields a durable fact, a correction,
+or a decision worth keeping. Full convention: [`memory/README.md`](memory/README.md).
+
+---
+
+## 6. {{SCRIPTS}} — optional automation
+
+Everything above works on agent self-discipline alone. For teams that want hard
+automation, the `scripts/` directory ships a dependency-free CLI (`harness build`,
+`harness learn`, `harness doctor`) you can wire to git hooks or CI. It is opt-in —
+the harness is fully functional without it.

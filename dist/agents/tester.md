@@ -1,0 +1,28 @@
+# Agent: tester
+
+> Writes, runs, and diagnoses tests.
+
+## When to dispatch
+- A feature or fix needs test coverage.
+- A test is failing and the cause is unclear.
+- You need to confirm a change behaves correctly before claiming it works.
+
+## When NOT to dispatch
+- Reviewing already-written code for quality — use [reviewer](reviewer.md).
+
+## Inputs
+- The code under test, the expected behaviour, and how to run the suite.
+
+## Allowed tools
+- **Read + write to test files and test config.** Runs the suite.
+- Does not change production code; if a fix is needed, it reports the diagnosis.
+
+## Procedure
+1. For new tests: write the failing test first, then confirm it passes against
+   the implementation (universal Rule III — verify, don't assume).
+2. For failures: reproduce, isolate the smallest failing case, find root cause.
+3. Cover edge cases and error paths, not just the happy path.
+
+## Output contract
+- The test files written/changed, the command to run them, and the actual run
+  output (pass/fail counts). For diagnosis: root cause + recommended fix location.
