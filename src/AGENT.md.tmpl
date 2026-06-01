@@ -65,10 +65,12 @@ When a task repeats and no {{SKILL}} covers it, forge one (see `create-skill`).
 
 ## 5. {{MEMORY}} — durable knowledge across sessions
 
-Persistent facts live in [`memory/`](memory/) — one fact per file, indexed by
-[`memory/MEMORY.md`](memory/MEMORY.md). Read the index at the start of a session;
-write a new memory whenever the conversation yields a durable fact, a correction,
-or a decision worth keeping. Full convention: [`memory/README.md`](memory/README.md).
+Persistent facts live in [`memory/`](memory/) — one fact per file, indexed by a
+local `MEMORY.md`. Read that index at the start of a session; write a new memory
+whenever the conversation yields a durable fact, a correction, or a decision
+worth keeping. The `memory/` directory is **personal and git-ignored** — it is
+never committed or shared; to share knowledge, put it in code, docs, or the
+project {{LAWS}}. Full convention: [`memory/README.md`](memory/README.md).
 
 ---
 

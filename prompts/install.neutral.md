@@ -13,7 +13,7 @@ path shown in each file heading, creating subfolders as needed.
 - After writing, fill in `laws/project.md` with the target repo's conventions.
 - When finished, list every file you created.
 
-## Files (15 text files)
+## Files (14 text files)
 
 ### `AGENT.md`
 
@@ -153,10 +153,12 @@ When a task repeats and no Skill covers it, forge one (see `create-skill`).
 
 ## 5. Memory — durable knowledge across sessions
 
-Persistent facts live in [`memory/`](memory/) — one fact per file, indexed by
-[`memory/MEMORY.md`](memory/MEMORY.md). Read the index at the start of a session;
-write a new memory whenever the conversation yields a durable fact, a correction,
-or a decision worth keeping. Full convention: [`memory/README.md`](memory/README.md).
+Persistent facts live in [`memory/`](memory/) — one fact per file, indexed by a
+local `MEMORY.md`. Read that index at the start of a session; write a new memory
+whenever the conversation yields a durable fact, a correction, or a decision
+worth keeping. The `memory/` directory is **personal and git-ignored** — it is
+never committed or shared; to share knowledge, put it in code, docs, or the
+project Rules. Full convention: [`memory/README.md`](memory/README.md).
 
 ---
 
@@ -435,23 +437,21 @@ All configuration and instruction files — this file, Rule files, Agent and
 Skill specs — are written in English, so any contributor or tool can read them.
 ````
 
-### `memory/MEMORY.md`
-
-````
-# Memory Index
-
-One line per memory. See [`README.md`](README.md) for the convention.
-
-<!-- Add entries below as: - [Title](file.md) — one-line hook -->
-````
+### `memory/.gitignore` (binary — copy it from the Geneseed repo)
 
 ### `memory/README.md`
 
 ````
 # Memory convention
 
+> **Personal and local.** This directory is **git-ignored** — memory is private
+> to each developer, never committed or shared. The convention (`README.md`) and
+> the `.gitignore` are the only files tracked; your `MEMORY.md` index and all
+> fact files live only on your machine. (To share knowledge with the team, put
+> it in code, docs, or the project Rules instead.)
+
 Durable knowledge that must survive across sessions lives here as **one fact per
-file**. An agent reads [`MEMORY.md`](MEMORY.md) (the index) at the start of a
+file**. An agent reads `MEMORY.md` (the local index it creates) at the start of a
 session and writes a new file whenever a session yields something worth keeping
 (universal Rule VI).
 

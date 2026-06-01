@@ -1,7 +1,13 @@
 # {{MEMORY}} convention
 
+> **Personal and local.** This directory is **git-ignored** — memory is private
+> to each developer, never committed or shared. The convention (`README.md`) and
+> the `.gitignore` are the only files tracked; your `MEMORY.md` index and all
+> fact files live only on your machine. (To share knowledge with the team, put
+> it in code, docs, or the project {{LAWS}} instead.)
+
 Durable knowledge that must survive across sessions lives here as **one fact per
-file**. An agent reads [`MEMORY.md`](MEMORY.md) (the index) at the start of a
+file**. An agent reads `MEMORY.md` (the local index it creates) at the start of a
 session and writes a new file whenever a session yields something worth keeping
 (universal {{LAW}} VI).
 

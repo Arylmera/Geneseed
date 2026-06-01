@@ -1,0 +1,6 @@
+# Memory is personal and local — it is NOT committed or shared with the team.
+# Keep only the convention and this ignore file; every actual memory (the
+# MEMORY.md index and all fact files) stays on the individual developer's machine.
+*
+!.gitignore
+!README.md
