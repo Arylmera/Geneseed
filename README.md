@@ -61,6 +61,13 @@ python build.py --theme neutral --target /path/to/your-repo
 
 Then fill in `laws/project.md` with that repo's conventions.
 
+For **OpenCode**, add `--emit opencode` to also generate native subagents,
+commands, and an `opencode.json` alongside the bundle:
+
+```
+python build.py --emit opencode --target /path/to/your-repo
+```
+
 ### B. Prompt (no Python required)
 
 For environments where you'd rather not run a script, use a **self-contained
@@ -86,8 +93,9 @@ Wire `scripts/harness.py` to a git hook or CI, or use the
 ### Tool adapters
 
 - **OpenCode** — [`adapters/opencode/`](adapters/opencode/): a drop-in
-  `opencode.json` (loads `AGENT.md` as a rule file) plus a guide to mapping the
-  capability agents and skills onto OpenCode's native subagents and commands.
+  `opencode.json` (loads `AGENT.md` as a rule file), plus `build.py --emit
+  opencode` which generates native subagents (`.opencode/agent/`) and commands
+  (`.opencode/command/`) from the same source — zero drift.
 - **Claude Code** — [`adapters/claude-code/`](adapters/claude-code/): SessionStart
   + Stop hook snippet.
 

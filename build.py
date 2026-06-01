@@ -120,6 +120,56 @@ def resolve_out(raw: str) -> Path:
     return p.resolve()
 
 
+def _first_blockquote(text: str) -> str:
+    """The one-line purpose: the first `>` line in a spec."""
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith(">"):
+            return s.lstrip(">").strip()
+    return ""
+
+
+def _is_readonly(text: str) -> bool:
+    return "Read-only" in text
+
+
+def emit_opencode(theme_name: str, out: Path) -> None:
+    """Render the standard bundle, then add an OpenCode-native layer derived from
+    the same source: capability agents become subagents, skills become commands,
+    and an opencode.json wires AGENT.md as a rule file."""
+    build(theme_name, out)
+    _, items = render_all(theme_name)
+
+    n_agents = n_cmds = 0
+    for out_rel, text, _src in items:
+        if text is None:
+            continue
+        parts = out_rel.split("/")
+        if len(parts) != 2 or not parts[1].endswith(".md") or parts[1].startswith("_"):
+            continue
+        folder, stem = parts[0], parts[1][:-3]
+        desc = _first_blockquote(text)
+        body = text.lstrip("\n")
+        if folder == "agents":
+            fm = [f"description: {json.dumps(desc)}", "mode: subagent"]
+            if _is_readonly(text):
+                fm += ["tools:", "  write: false", "  edit: false"]
+            dest = out / ".opencode" / "agent" / f"{stem}.md"
+            n_agents += 1
+        elif folder == "skills":
+            fm = [f"description: {json.dumps(desc)}", "agent: build"]
+            dest = out / ".opencode" / "command" / f"{stem}.md"
+            n_cmds += 1
+        else:
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + body, encoding="utf-8")
+
+    config = {"$schema": "https://opencode.ai/config.json", "instructions": ["AGENT.md"]}
+    (out / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    print(f"[geneseed] opencode layer: {n_agents} subagents, {n_cmds} commands, opencode.json")
+
+
 def main() -> None:
     default_theme = "neutral"
     if CONFIG.exists():
@@ -130,9 +180,16 @@ def main() -> None:
     ap.add_argument("--out", "--target", dest="out", default="dist",
                     help="output directory — absolute, or relative to the current "
                          "directory (default: ./dist)")
+    ap.add_argument("--emit", choices=["files", "opencode"], default="files",
+                    help="files: plain bundle (default). opencode: bundle + native "
+                         ".opencode/ subagents & commands + opencode.json")
     args = ap.parse_args()
 
-    build(args.theme, resolve_out(args.out))
+    out = resolve_out(args.out)
+    if args.emit == "opencode":
+        emit_opencode(args.theme, out)
+    else:
+        build(args.theme, out)
 
 
 if __name__ == "__main__":

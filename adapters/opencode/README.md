@@ -21,49 +21,41 @@ That's it. OpenCode loads `AGENT.md` as a rule file on every run.
 > config at all. If you prefer that, rename the harness entrypoint
 > `AGENT.md` → `AGENTS.md` when you implant it and skip `opencode.json` entirely.
 
-## Native mapping (recommended for the full experience)
+## Native mapping (recommended) — generated, zero drift
 
 Turn Geneseed's capability agents into OpenCode **subagents** and its skills into
-**commands**, so they're dispatchable rather than just described in prose.
+**commands**, so they're dispatchable rather than just described in prose. The
+generator produces all of it from the same `src/`, so it never drifts:
 
-### Agents → `.opencode/agent/<name>.md`
-
-For each file in `agents/`, create `.opencode/agent/<name>.md`:
-
-```markdown
----
-description: <the one-line purpose from the Geneseed agent spec>
-mode: subagent
-tools:
-  write: false   # read-only agents (reviewer, architect, security, docs-read)
-  edit: false
----
-
-<paste the body of the Geneseed agent spec here>
+```
+python build.py --emit opencode --target /path/to/your-repo
 ```
 
-Leave `write`/`edit` enabled for agents that must change files (e.g. tester).
-OpenCode then invokes them via the task tool (`subagent_type: "reviewer"`).
+That writes, on top of the normal bundle:
 
-### Skills → commands
-
-For each file in `skills/`, create a command markdown file with frontmatter:
-
-```markdown
----
-description: <the skill's one-line purpose>
-agent: build
----
-
-<paste the skill procedure here>
+```
+your-repo/
+├── opencode.json              instructions → AGENT.md
+└── .opencode/
+    ├── agent/                 one subagent per capability agent
+    │   ├── reviewer.md  architect.md  security.md   (read-only: write/edit denied)
+    │   ├── tester.md    docs.md                      (may edit files)
+    └── command/               one command per skill
+        ├── commit.md  code-review.md  create-skill.md
 ```
 
-(See the OpenCode docs for the exact command directory on your version —
-`.opencode/command/` and `.opencode/commands/` are both recognised.)
+- Read-only agents (their spec says *Read-only*) get `tools: { write: false,
+  edit: false }`; the rest keep edit access.
+- OpenCode invokes a subagent via the task tool, e.g. `subagent_type: "reviewer"`.
+- Themed: add `--theme imperial` for the Warhammer vocabulary.
 
-> If you want this generated automatically from `src/` instead of by hand, ask
-> for the `build.py --emit opencode` generator — it produces these files from the
-> same single source, so they never drift.
+### Manual mapping (fallback)
+
+If you'd rather not run the generator, create each file by hand:
+`.opencode/agent/<name>.md` with frontmatter `description`, `mode: subagent`, and
+(for read-only agents) `tools: { write: false, edit: false }`, body = the agent
+spec. Skills become command files with `description` + `agent: build` frontmatter.
+(`.opencode/command/` and `.opencode/commands/` are both recognised.)
 
 ## Notes
 
