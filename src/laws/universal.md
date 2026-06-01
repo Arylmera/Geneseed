@@ -51,3 +51,19 @@ Answer in the language the user writes in. No language is imposed.
 ### {{LAW}} X — English Configuration
 All configuration and instruction files — this file, {{LAW}} files, {{AGENT}} and
 {{SKILL}} specs — are written in English, so any contributor or tool can read them.
+
+### {{LAW}} XI — Documentation in Step
+When a change alters structure, an interface, or behaviour, update the affected
+documentation — README, API docs, usage examples — in the *same* change. Code and
+its description ship together; documentation that has drifted from the code is a
+defect, not a deferred task.
+
+### {{LAW}} XII — Search Before Creating
+Before adding a file, module, function, or abstraction, confirm an equivalent
+does not already exist; prefer extending what is there. Duplication is a defect.
+({{LAW}} VII applies this to {{SKILLS}}; here it binds all code.)
+
+### {{LAW}} XIII — Respect Conventions
+Match the surrounding code — its naming, structure, formatting, and patterns.
+Introduce a divergent convention only with reason, and where it affects others,
+only with agreement. Consistency outranks personal preference.

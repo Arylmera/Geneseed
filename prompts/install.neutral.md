@@ -89,6 +89,22 @@ Answer in the language the user writes in. No language is imposed.
 All configuration and instruction files — this file, Rule files, Agent and
 Skill specs — are written in English, so any contributor or tool can read them.
 
+### Rule XI — Documentation in Step
+When a change alters structure, an interface, or behaviour, update the affected
+documentation — README, API docs, usage examples — in the *same* change. Code and
+its description ship together; documentation that has drifted from the code is a
+defect, not a deferred task.
+
+### Rule XII — Search Before Creating
+Before adding a file, module, function, or abstraction, confirm an equivalent
+does not already exist; prefer extending what is there. Duplication is a defect.
+(Rule VII applies this to Skills; here it binds all code.)
+
+### Rule XIII — Respect Conventions
+Match the surrounding code — its naming, structure, formatting, and patterns.
+Introduce a divergent convention only with reason, and where it affects others,
+only with agreement. Consistency outranks personal preference.
+
 ---
 
 ## 2. Project Rules
@@ -435,6 +451,22 @@ Answer in the language the user writes in. No language is imposed.
 ### Rule X — English Configuration
 All configuration and instruction files — this file, Rule files, Agent and
 Skill specs — are written in English, so any contributor or tool can read them.
+
+### Rule XI — Documentation in Step
+When a change alters structure, an interface, or behaviour, update the affected
+documentation — README, API docs, usage examples — in the *same* change. Code and
+its description ship together; documentation that has drifted from the code is a
+defect, not a deferred task.
+
+### Rule XII — Search Before Creating
+Before adding a file, module, function, or abstraction, confirm an equivalent
+does not already exist; prefer extending what is there. Duplication is a defect.
+(Rule VII applies this to Skills; here it binds all code.)
+
+### Rule XIII — Respect Conventions
+Match the surrounding code — its naming, structure, formatting, and patterns.
+Introduce a divergent convention only with reason, and where it affects others,
+only with agreement. Consistency outranks personal preference.
 ````
 
 ### `memory/.gitignore` (binary — copy it from the Geneseed repo)
