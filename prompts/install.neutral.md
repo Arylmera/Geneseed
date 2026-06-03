@@ -140,6 +140,15 @@ are not harness scaffolding to move, rewrite, or delete; verify what a file is
 before touching it (Rule III) and change it only when the task calls for it
 (Rule IV).
 
+### Rule XVII — Read the Docs First
+Before changing a part of the system, read the project's own documentation for it.
+Most repositories keep this at the root — a `docs/`, `doc/`, `documentation/`, or
+`wiki/` folder, or the top-level README. Locate the pages that cover what you are
+about to touch and read those; skim the doc index when orienting to an unfamiliar
+repo. Read the relevant pages, not the whole tree (Rule XV). Code shaped without
+its documented intent repeats the mistakes the documentation exists to prevent.
+This is the read-before counterpart to Rule XI's write-after.
+
 ---
 
 ## 2. Agents — delegation by capability
@@ -601,6 +610,15 @@ Memory (Rule VI). But you do not own the folder. Files you did not create
 are not harness scaffolding to move, rewrite, or delete; verify what a file is
 before touching it (Rule III) and change it only when the task calls for it
 (Rule IV).
+
+### Rule XVII — Read the Docs First
+Before changing a part of the system, read the project's own documentation for it.
+Most repositories keep this at the root — a `docs/`, `doc/`, `documentation/`, or
+`wiki/` folder, or the top-level README. Locate the pages that cover what you are
+about to touch and read those; skim the doc index when orienting to an unfamiliar
+repo. Read the relevant pages, not the whole tree (Rule XV). Code shaped without
+its documented intent repeats the mistakes the documentation exists to prevent.
+This is the read-before counterpart to Rule XI's write-after.
 ````
 
 ### `memory/.gitignore` (binary — copy it from the Geneseed repo)
@@ -782,11 +800,16 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 ## Procedure
 1. If `ARCHITECTURE.md` exists, read it first — it is the cheapest orientation
    (universal Rule XV).
-2. If absent or stale, build or refresh it: entry points, the key directories and
-   what each holds, how to build / test / run, external services, and the one or
-   two non-obvious conventions a newcomer must know.
-3. Keep it short — a map, not documentation. Link out for detail.
-4. Update it in the same change whenever structure shifts (universal Rule XI).
+2. Locate the project's own documentation — a `docs/`, `doc/`, `documentation/`,
+   or `wiki/` folder at the root, or the top-level README. Note where it lives and
+   what it covers, and record that in the map. Read the pages relevant to the work
+   at hand before changing the code they describe (universal Rule XVII) — the
+   relevant pages, not the whole tree (Rule XV).
+3. If `ARCHITECTURE.md` is absent or stale, build or refresh it: entry points, the
+   key directories and what each holds, how to build / test / run, external
+   services, and the one or two non-obvious conventions a newcomer must know.
+4. Keep it short — a map, not documentation. Link out for detail.
+5. Update it in the same change whenever structure shifts (universal Rule XI).
 
 ## Done when
 - `ARCHITECTURE.md` reflects the current structure, and a fresh agent could orient

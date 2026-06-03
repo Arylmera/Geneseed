@@ -120,6 +120,15 @@ are not harness scaffolding to move, rewrite, or delete; verify what a file is
 before touching it (Rule III) and change it only when the task calls for it
 (Rule IV).
 
+### Rule XVII — Read the Docs First
+Before changing a part of the system, read the project's own documentation for it.
+Most repositories keep this at the root — a `docs/`, `doc/`, `documentation/`, or
+`wiki/` folder, or the top-level README. Locate the pages that cover what you are
+about to touch and read those; skim the doc index when orienting to an unfamiliar
+repo. Read the relevant pages, not the whole tree (Rule XV). Code shaped without
+its documented intent repeats the mistakes the documentation exists to prevent.
+This is the read-before counterpart to Rule XI's write-after.
+
 ---
 
 ## 2. Agents — delegation by capability
