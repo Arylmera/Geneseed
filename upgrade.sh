@@ -28,7 +28,12 @@ set -eo pipefail
 
 REPO="Arylmera/Geneseed"
 REF="${1:-main}"                                   # branch or tag (default: main)
+THEME_ARG="${2:-}"                                 # optional: force a theme (neutral|imperial|…)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Render the bundle BESIDE the Geneseed folder by default (a sibling dir named
+# Harness/), so AGENT.md sits at the project level. Override with GENESEED_OUT.
+OUT="${GENESEED_OUT:-$(dirname "$HERE")/Harness}"
 
 # Factory files refreshed from upstream. Everything else in the folder is left
 # alone — notably context.json and Harness/memory/ (your runtime state).
