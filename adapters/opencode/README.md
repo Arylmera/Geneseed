@@ -59,29 +59,28 @@ your-repo/
 
 ### Keeping it in sync — `upgrade.sh`
 
-`upgrade.sh` regenerates the OpenCode layer for you. It renders the bundle to a
-sibling `Harness/` (beside the Geneseed folder) and, if it finds an existing
-`opencode.json` or `.opencode/` at the project root, **re-emits the OpenCode layer
-there automatically** — so your subagents and commands never drift across an
-upgrade:
+By default `upgrade.sh` emits only the **plain bundle** (rendered to a sibling
+`Harness/`). If you reference the bundle's `AGENT.md` directly — including by
+absolute path from anywhere on the machine, or through OpenCode's global config —
+that's all you need; **no `opencode.json` is written**.
 
 ```
 cd Geneseed
-./upgrade.sh                  # auto-detects the OpenCode layer, keeps the theme
+./upgrade.sh                  # plain bundle, keeps the last-built theme
 ./upgrade.sh main imperial    # force a theme while upgrading
 ```
 
-The first time (before any `.opencode/` exists) force it explicitly:
+The native layer is **opt-in**. To (re)generate subagents, commands, and an
+`opencode.json` on upgrade, set `GENESEED_EMIT=opencode`:
 
 ```
 GENESEED_EMIT=opencode ./upgrade.sh main imperial
 ```
 
-With this layout the project root is the Geneseed folder's parent: `opencode.json`
-and `.opencode/` land there, the bundle stays in `Harness/`, and the instruction
-paths are prefixed accordingly — `["Harness/AGENT.md", "Harness/context.json"]`.
-Override the locations with `GENESEED_OUT` (bundle) and `GENESEED_ROOT` (project
-root) for unusual layouts.
+That writes `opencode.json` + `.opencode/` to the project root (the Geneseed
+folder's parent), keeps the bundle in `Harness/`, and prefixes the instruction
+paths — `["Harness/AGENT.md", "Harness/context.json"]`. Override the locations
+with `GENESEED_OUT` (bundle) and `GENESEED_ROOT` (project root).
 
 ### Manual mapping (fallback)
 

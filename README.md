@@ -137,10 +137,11 @@ upstream) > a loud warning + the upstream default. The marker lives in the
 git-ignored `Harness/`, so it does **not** travel between machines — pass the theme
 explicitly the first time on a new host (`./upgrade.sh main imperial`).
 
-**OpenCode**: if `opencode.json` or `.opencode/` already exists at the project root,
-the upgrade re-emits the OpenCode layer (subagents, commands, `opencode.json`)
-automatically — zero drift. Force it the first time with `GENESEED_EMIT=opencode`.
-See [`adapters/opencode/`](adapters/opencode/).
+**OpenCode**: by default the upgrade emits only the plain bundle — point OpenCode
+at the bundle's `AGENT.md` (by absolute path, from anywhere on the machine, or via
+your global config) and you're done; no `opencode.json` is written. The native
+layer (subagents, commands, `opencode.json` at the project root) is **opt-in only**
+— set `GENESEED_EMIT=opencode`. See [`adapters/opencode/`](adapters/opencode/).
 
 Override locations with `GENESEED_OUT` (bundle) and `GENESEED_ROOT` (project root).
 `upgrade.sh` excludes itself from the sync (a running script must not overwrite

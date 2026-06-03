@@ -39,17 +39,11 @@ OUT="${GENESEED_OUT:-$(dirname "$HERE")/Harness}"
 # live. Defaults to the bundle's parent; override with GENESEED_ROOT.
 ROOT_DIR="${GENESEED_ROOT:-$(dirname "$OUT")}"
 
-# Emit mode. 'opencode' also (re)generates native subagents, commands, and
-# opencode.json. Explicit GENESEED_EMIT wins; otherwise auto-detect a prior
-# OpenCode layer at the project root and keep it in sync across upgrades.
-EMIT="${GENESEED_EMIT:-}"
-if [ -z "$EMIT" ]; then
-  if [ -d "$ROOT_DIR/.opencode" ] || [ -f "$ROOT_DIR/opencode.json" ]; then
-    EMIT="opencode"
-  else
-    EMIT="files"
-  fi
-fi
+# Emit mode — plain bundle by default (just the harness, referenced by its own
+# AGENT.md, from anywhere on the machine). The OpenCode native layer (subagents,
+# commands, and an opencode.json at the project root) is OPT-IN ONLY: set
+# GENESEED_EMIT=opencode. It is never generated automatically.
+EMIT="${GENESEED_EMIT:-files}"
 
 # Factory files refreshed from upstream. Everything else in the folder is left
 # alone — notably context.json and Harness/memory/ (your runtime state).
