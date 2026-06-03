@@ -38,19 +38,21 @@ vault or a specific tool's hooks.
    references nothing outside itself — no links into the vault it grew from, no
    secrets, no host-specific paths. This guarantees a clean `git subtree split` /
    copy into any destination. The single sanctioned bridge to host-specific
-   documentation is the `references/` layer (Decision 6): because everything in it
-   except the convention is git-ignored, host paths and proprietary docs never
-   enter the published bundle, so hermeticity holds.
+   documentation is the `context.json` manifest (Decision 6): it is git-ignored, so
+   host paths and proprietary docs never enter the published bundle, so
+   hermeticity holds.
 
-6. **References are a local, git-ignored layer — never published.** A consumer
-   often needs the agent to know about substantial external documentation
+6. **Project context is a single git-ignored manifest — never published.** A
+   consumer often needs the agent to know about substantial external documentation
    (framework internals, front-/back-end architecture) that must not be committed
-   into the portable harness. `references/` mirrors the `memory/` pattern: only
-   `README.md` + `.gitignore` are tracked; the `REFERENCES.md` index, the absolute
-   paths it points to, and any doc dropped in the folder stay on the machine. It
-   accepts both modes at once — external absolute-path pointers and locally
-   dropped files — and is distinct from `memory/` (atomic learned *facts*) by
-   holding pointers to *bodies of documentation* maintained elsewhere.
+   into the portable harness. A `context.json` file at the bundle root lists those
+   docs by path, each with a `load` mode (`eager` = read every session, `lazy` =
+   read on demand). Only the tracked `context.example.json` template ships; the
+   real `context.json` and the docs it points at stay on the machine. The agent
+   reads it dynamically — no build step, tool-agnostic — and it is distinct from
+   `memory/` (atomic learned *facts*) by holding pointers to *bodies of
+   documentation* maintained elsewhere. It also subsumes what a baked-in project
+   rules file used to do: point at the project's own conventions instead.
 
 ## Components
 
@@ -60,11 +62,11 @@ renders it as the name in parentheses.
 | Component | Source | `Harness/` output | Purpose |
 | --- | --- | --- | --- |
 | Entrypoint | `src/AGENT.md.tmpl` | `AGENT.md` | what the tool reads; inlines the rules, links the rest |
-| Governance | `src/laws/` | `laws/` (`leges/`) | universal rules + a project-specific stub |
+| Governance | `src/laws/` | `laws/` (`leges/`) | universal rules |
 | Delegation | `src/agents/` | `agents/` (`legati/`) | capability specialists with output contracts |
 | Workflows | `src/skills/` | `skills/` (`rites/`) | repeatable procedures |
 | Memory | `src/memory/` | `memory/` (`anamnesis/`) | one-fact-per-file convention + index |
-| References | `src/references/` | `references/` (`apocrypha/`) | pointers to host-specific external docs; git-ignored, never published |
+| Context | `src/context.example.json` | `context.example.json` | template for the per-repo `context.json` manifest (git-ignored) |
 | Themes | `themes/*.json` | — | token → label maps |
 | Generator | `build.py` | — | substitution + `<!-- INCLUDE: -->` inlining |
 | Automation | `rituals/harness.py` | — | optional `build` / `doctor` / `learn` |

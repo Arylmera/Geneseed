@@ -7,15 +7,15 @@ Geneseed distils a personal, vault-grown agent system into a generic,
 tool-agnostic harness built around a single `AGENT.md`. Implant it into a repo
 and any assistant that reads `AGENT.md` / `AGENTS.md` / `CLAUDE.md` inherits a
 set of operating **rules**, a roster of capability **agents**, runnable
-**skills**, a **memory** convention, and a git-ignored **references** layer for
-host-specific external docs.
+**skills**, a **memory** convention, and a **`context.json`** manifest that points
+the agent at this repository's own documentation, wherever it lives.
 
 ## How it works
 
 One canonical source in `src/` is written in neutral tokens. A tiny,
 dependency-free generator (`build.py`) renders it into a themed bundle in
 `Harness/`. A theme changes the prose vocabulary *and* the bundle's top-level folder
-names (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`, `references→apocrypha`); the
+names (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`); the
 `src/` tree itself always keeps neutral names. Internal links are themed to match,
 so the bundle always resolves.
 
@@ -25,7 +25,7 @@ python build.py --theme imperial # Warhammer-flavoured labels
 ```
 
 Two themes ship:
-- **neutral** — plain professional vocabulary (Rules, Agents, Skills, Memory, References).
+- **neutral** — plain professional vocabulary (Rules, Agents, Skills, Memory, Context).
 - **imperial** — Warhammer 40k flavour (Codex, Legati, Rites, Anamnesis, Apocrypha).
 
 Adding a theme is one JSON file in `themes/`.
@@ -38,11 +38,11 @@ Geneseed/
 ├── harness.config.json   default theme + metadata
 ├── src/                  canonical source — edit here
 │   ├── AGENT.md.tmpl     the entrypoint that gets rendered to Harness/AGENT.md
-│   ├── laws/             governance rules (universal + project stub)
+│   ├── laws/             governance rules (universal)
 │   ├── agents/           capability specialists
 │   ├── skills/           repeatable workflows
 │   ├── memory/           memory convention + index
-│   └── references/       pointers to host-specific external docs (git-ignored)
+│   └── context.example.json  template for the per-repo context manifest
 ├── themes/               token → label maps (neutral, imperial)
 ├── rituals/harness.py    optional CLI: build · doctor · prompt · learn
 ├── prompts/              self-contained install prompts (no Python needed)
@@ -63,7 +63,8 @@ directory, so you can render straight into the repo you want:
 python build.py --theme neutral --target /path/to/your-repo
 ```
 
-Then fill in `laws/project.md` with that repo's conventions.
+Then give the agent your repo's knowledge — copy `context.example.json` to
+`context.json` and list your docs (see **Project context** below).
 
 For **OpenCode**, add `--emit opencode` to also generate native subagents,
 commands, and an `opencode.json` alongside the bundle:
@@ -102,6 +103,33 @@ Wire `rituals/harness.py` to a git hook or CI, or use the
   (`.opencode/command/`) from the same source — zero drift.
 - **Claude Code** — [`adapters/claude-code/`](adapters/claude-code/): SessionStart
   + Stop hook snippet.
+
+## Project context — `context.json`
+
+The harness ships no project-specific knowledge. To give the agent that knowledge,
+drop a **`context.json`** manifest at the bundle root (beside `AGENT.md`). It is
+optional and host-specific — **git-ignore it**; the build never touches or
+publishes it, and rebuilds leave it intact.
+
+Copy [`context.example.json`](Harness/context.example.json) and list your docs:
+
+```json
+{
+  "context": [
+    { "path": "/abs/path/to/house-rules.md", "load": "eager",
+      "description": "Conventions, branch policy, Definition of Done." },
+    { "path": "C:/work/repo/docs/ARCHITECTURE.md", "load": "lazy",
+      "description": "Back-end architecture — read when touching the backend." }
+  ]
+}
+```
+
+- **`eager`** — read every session (small, always-relevant rules).
+- **`lazy`** — read only when the task needs it (large or occasional docs).
+- `path` is absolute (a doc anywhere on the machine) or relative to the repo root.
+
+This replaces baked-in project rules: point at the project's own files instead of
+editing the harness.
 
 ## Validate
 

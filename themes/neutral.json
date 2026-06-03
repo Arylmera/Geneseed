@@ -9,18 +9,17 @@
   "SKILLS": "Skills",
   "MEMORY": "Memory",
   "VAULT": "Workspace",
-  "REFERENCES": "References",
+  "CONTEXT": "Context",
   "SCRIPT": "Script",
   "SCRIPTS": "Scripts",
   "TAGLINE": "A portable, theme-able harness you implant into any repository to grow a disciplined AI agent.",
   "LOADED_SIGIL": "✅ Harness loaded — rules in force, agents and skills ready.",
   "EPI_LAWS": "The rules below hold in every task, in every repository.",
-  "EPI_PROJECT": "Repository-local conventions layer on top of the universal rules.",
   "EPI_AGENTS": "Send the right specialist instead of doing everything in one context.",
   "EPI_SKILLS": "Run the written procedure before improvising.",
   "EPI_MEMORY": "What is worth keeping must outlive the session in writing.",
   "EPI_VAULT": "Read where you were installed — it holds more than the harness.",
-  "EPI_REFS": "Bridge to the larger documentation kept elsewhere on the machine.",
+  "EPI_CONTEXT": "Point the agent at the project's own docs, wherever they live.",
   "EPI_SCRIPTS": "Optional automation for teams that want hard enforcement.",
   "BENEDICTION": "Work with discipline, keep the rules, and ship clean.",
   "DESC_REVIEWER": "Reviews a change for correctness and quality before it merges.",
@@ -38,6 +37,5 @@
   "DIR_LAWS": "laws",
   "DIR_AGENTS": "agents",
   "DIR_SKILLS": "skills",
-  "DIR_MEMORY": "memory",
-  "DIR_REFS": "references"
+  "DIR_MEMORY": "memory"
 }

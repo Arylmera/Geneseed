@@ -123,7 +123,7 @@ def build_prompt(theme_name: str) -> str:
         "",
         "## Rules",
         "- Copy each file's content exactly — do not summarise, reflow, or edit it.",
-        "- After writing, fill in `laws/project.md` with the target repo's conventions.",
+        "- After writing, copy `context.example.json` to `context.json` and list the repo's docs.",
         "- When finished, list every file you created.",
         "",
         f"## Files ({n_text} text files)",

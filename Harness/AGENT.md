@@ -122,39 +122,7 @@ before touching it (Rule III) and change it only when the task calls for it
 
 ---
 
-## 2. Project Rules
-
-*Repository-local conventions layer on top of the universal rules.*
-
-Project-specific rules live in [`laws/project.md`](laws/project.md). Read them
-before acting. They override nothing in §1 but add repository-local conventions
-(branch naming, CI, review gates, stack choices).
-
-<!-- Project-specific rules. Fill this in per repository. Examples below — replace them. -->
-
-> **Fill me in.** These are repository-local conventions layered on top of the
-> universal Rules. Delete the examples and write your own.
-
-### Branching & commits
-- _e.g. your branching model — commit straight to `main`, or branch + PR for review._
-- _e.g. Conventional Commits (`feat:`, `fix:`, `chore:`)._
-
-### Build, test, lint
-- _e.g. `make test` must pass before any commit; `make lint` before any PR._
-
-### Definition of Done
-- _e.g. a task is Done only when `make test` and `make lint` pass and the_
-  _`verify` Skill has been run with its output observed._
-
-### Review gates
-- _e.g. every PR needs one human review; the `security` Agent runs on any auth change._
-
-### Stack conventions
-- _e.g. language, framework, formatting tool, directory layout the agent must follow._
-
----
-
-## 3. Agents — delegation by capability
+## 2. Agents — delegation by capability
 
 *Send the right specialist instead of doing everything in one context.*
 
@@ -176,7 +144,7 @@ Agent that *writes* must return a summary of exactly what it changed.
 
 ---
 
-## 4. Skills — repeatable workflows
+## 3. Skills — repeatable workflows
 
 *Run the written procedure before improvising.*
 
@@ -196,7 +164,7 @@ When a task repeats and no Skill covers it, forge one (see `create-skill`).
 
 ---
 
-## 5. Memory — durable knowledge across sessions
+## 4. Memory — durable knowledge across sessions
 
 *What is worth keeping must outlive the session in writing.*
 
@@ -204,12 +172,12 @@ Persistent facts live in [`memory/`](memory/) — one fact per file, indexed by 
 local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision
 worth keeping. The `memory/` directory is **personal and git-ignored** — it is
-never committed or shared; to share knowledge, put it in code, docs, or the
-project Rules. Full convention: [`memory/README.md`](memory/README.md).
+never committed or shared; to share knowledge, put it in code or docs. Full
+convention: [`memory/README.md`](memory/README.md).
 
 ---
 
-## 6. Workspace — the folder you live in
+## 5. Workspace — the folder you live in
 
 *Read where you were installed — it holds more than the harness.*
 
@@ -220,7 +188,7 @@ configs, documents, prior work. All of it is context you may use.
 
 After reading this file, take stock of what surrounds it. That non-harness
 content is knowledge to **read and learn from**, not scaffolding to reorganise.
-When you find a durable fact there worth keeping, index it into Memory (§5) so
+When you find a durable fact there worth keeping, index it into Memory (§4) so
 it outlives the session.
 
 Because the folder is shared, two cautions hold (Rule XVI):
@@ -231,26 +199,32 @@ Because the folder is shared, two cautions hold (Rule XVI):
 
 ---
 
-## 7. References — host-specific external documentation
+## 6. Context — pointing the agent at your own docs
 
-*Bridge to the larger documentation kept elsewhere on the machine.*
+*Point the agent at the project's own docs, wherever they live.*
 
-Some project knowledge — framework internals, front-end / back-end architecture,
-API references — is too large or too proprietary to live in this harness, and is
-maintained elsewhere on the machine. The `references/` directory bridges to it
-**without** breaking the harness's hermetic rule: it is **git-ignored**, so the
-documentation, and even its location, never enter the published bundle. If a
-local `references/REFERENCES.md` index exists, read that small index at the start
-of a session — then treat every source it lists as **lazy**: load a referenced
-document with your Read tool only when the task in hand actually needs it, never
-all of them up front (Rule XV). Entries are written as `@`-prefixed paths —
-absolute for a doc living elsewhere on the machine, relative for one dropped into
-`references/`; on OpenCode the `@` prefix is the native cue to load the file on
-demand. Full convention: [`references/README.md`](references/README.md).
+The harness is hermetic: it carries no project-specific knowledge. To give the
+agent that knowledge, drop a **`context.json`** manifest beside this file. It is
+optional and should be **git-ignored** — host-specific, so its paths and the docs
+they point to never enter the bundle. If `context.json` is present, read it at the
+start of a session and act on each entry by its `load` mode:
+
+- **`"eager"`** — read the file **now**, every session. For small, always-relevant
+  knowledge: house conventions, branch/commit policy, the Definition of Done.
+- **`"lazy"`** — read the file **only when the task in hand needs it**, never up
+  front (Rule XV). For large or occasional docs — architecture notes, API
+  references — often maintained elsewhere on the machine.
+
+Each `path` may be **absolute** (a doc living anywhere on the machine) or relative
+to the repository root. This is the sanctioned escape hatch from the harness's
+hermetic rule, and it replaces baked-in project rules: point at the project's own
+files instead of editing the harness. See
+[`context.example.json`](context.example.json) for the schema; copy it to
+`context.json` to begin.
 
 ---
 
-## 8. Scripts — optional automation
+## 7. Scripts — optional automation
 
 *Optional automation for teams that want hard enforcement.*
 

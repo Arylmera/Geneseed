@@ -10,10 +10,10 @@ path shown in each file heading, creating subfolders as needed.
 
 ## Rules
 - Copy each file's content exactly — do not summarise, reflow, or edit it.
-- After writing, fill in `laws/project.md` with the target repo's conventions.
+- After writing, copy `context.example.json` to `context.json` and list the repo's docs.
 - When finished, list every file you created.
 
-## Files (19 text files)
+## Files (18 text files)
 
 ### `AGENT.md`
 
@@ -142,39 +142,7 @@ before touching it (Lex III) and change it only when the task calls for it
 
 ---
 
-## 2. Project Leges
-
-*Each world keeps its own rites; honour them as you honour the Codex.*
-
-Project-specific rules live in [`leges/project.md`](leges/project.md). Read them
-before acting. They override nothing in §1 but add repository-local conventions
-(branch naming, CI, review gates, stack choices).
-
-<!-- Project-specific rules. Fill this in per repository. Examples below — replace them. -->
-
-> **Fill me in.** These are repository-local conventions layered on top of the
-> universal Leges. Delete the examples and write your own.
-
-### Branching & commits
-- _e.g. your branching model — commit straight to `main`, or branch + PR for review._
-- _e.g. Conventional Commits (`feat:`, `fix:`, `chore:`)._
-
-### Build, test, lint
-- _e.g. `make test` must pass before any commit; `make lint` before any PR._
-
-### Definition of Done
-- _e.g. a task is Done only when `make test` and `make lint` pass and the_
-  _`verify` Rite has been run with its output observed._
-
-### Review gates
-- _e.g. every PR needs one human review; the `security` Legatus runs on any auth change._
-
-### Stack conventions
-- _e.g. language, framework, formatting tool, directory layout the agent must follow._
-
----
-
-## 3. Legati — delegation by capability
+## 2. Legati — delegation by capability
 
 *No commander wages every war alone — dispatch thy Legati.*
 
@@ -196,7 +164,7 @@ Legatus that *writes* must return a summary of exactly what it changed.
 
 ---
 
-## 4. Rites — repeatable workflows
+## 3. Rites — repeatable workflows
 
 *The rite remembered is the rite performed without error.*
 
@@ -216,7 +184,7 @@ When a task repeats and no Rite covers it, forge one (see `create-skill`).
 
 ---
 
-## 5. Anamnesis — durable knowledge across sessions
+## 4. Anamnesis — durable knowledge across sessions
 
 *Forget nothing of worth; the Anamnesis endures beyond the waking.*
 
@@ -224,12 +192,12 @@ Persistent facts live in [`anamnesis/`](anamnesis/) — one fact per file, index
 local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision
 worth keeping. The `anamnesis/` directory is **personal and git-ignored** — it is
-never committed or shared; to share knowledge, put it in code, docs, or the
-project Leges. Full convention: [`anamnesis/README.md`](anamnesis/README.md).
+never committed or shared; to share knowledge, put it in code or docs. Full
+convention: [`anamnesis/README.md`](anamnesis/README.md).
 
 ---
 
-## 6. Vault — the folder you live in
+## 5. Vault — the folder you live in
 
 *Know the ground you are planted in, for the Vault is not yours alone.*
 
@@ -240,7 +208,7 @@ configs, documents, prior work. All of it is context you may use.
 
 After reading this file, take stock of what surrounds it. That non-harness
 content is knowledge to **read and learn from**, not scaffolding to reorganise.
-When you find a durable fact there worth keeping, index it into Anamnesis (§5) so
+When you find a durable fact there worth keeping, index it into Anamnesis (§4) so
 it outlives the session.
 
 Because the folder is shared, two cautions hold (Lex XVI):
@@ -251,26 +219,32 @@ Because the folder is shared, two cautions hold (Lex XVI):
 
 ---
 
-## 7. Apocrypha — host-specific external documentation
+## 6. Apocrypha — pointing the agent at your own docs
 
-*Seek the Apocrypha kept apart, and let none of it escape into the light.*
+*Summon the Apocrypha of this world — at the hour of need, not before.*
 
-Some project knowledge — framework internals, front-end / back-end architecture,
-API references — is too large or too proprietary to live in this harness, and is
-maintained elsewhere on the machine. The `apocrypha/` directory bridges to it
-**without** breaking the harness's hermetic rule: it is **git-ignored**, so the
-documentation, and even its location, never enter the published bundle. If a
-local `apocrypha/REFERENCES.md` index exists, read that small index at the start
-of a session — then treat every source it lists as **lazy**: load a referenced
-document with your Read tool only when the task in hand actually needs it, never
-all of them up front (Lex XV). Entries are written as `@`-prefixed paths —
-absolute for a doc living elsewhere on the machine, relative for one dropped into
-`apocrypha/`; on OpenCode the `@` prefix is the native cue to load the file on
-demand. Full convention: [`apocrypha/README.md`](apocrypha/README.md).
+The harness is hermetic: it carries no project-specific knowledge. To give the
+agent that knowledge, drop a **`context.json`** manifest beside this file. It is
+optional and should be **git-ignored** — host-specific, so its paths and the docs
+they point to never enter the bundle. If `context.json` is present, read it at the
+start of a session and act on each entry by its `load` mode:
+
+- **`"eager"`** — read the file **now**, every session. For small, always-relevant
+  knowledge: house conventions, branch/commit policy, the Definition of Done.
+- **`"lazy"`** — read the file **only when the task in hand needs it**, never up
+  front (Lex XV). For large or occasional docs — architecture notes, API
+  references — often maintained elsewhere on the machine.
+
+Each `path` may be **absolute** (a doc living anywhere on the machine) or relative
+to the repository root. This is the sanctioned escape hatch from the harness's
+hermetic rule, and it replaces baked-in project rules: point at the project's own
+files instead of editing the harness. See
+[`context.example.json`](context.example.json) for the schema; copy it to
+`context.json` to begin.
 
 ---
 
-## 8. Rituals — optional automation
+## 7. Rituals — optional automation
 
 *Where discipline must be made iron, let the Rituals bind it.*
 
@@ -505,30 +479,29 @@ the harness is fully functional without it.
   output (pass/fail counts). For diagnosis: root cause + recommended fix location.
 ````
 
-### `leges/project.md`
+### `context.example.json`
 
 ````
-<!-- Project-specific rules. Fill this in per repository. Examples below — replace them. -->
-
-> **Fill me in.** These are repository-local conventions layered on top of the
-> universal Leges. Delete the examples and write your own.
-
-### Branching & commits
-- _e.g. your branching model — commit straight to `main`, or branch + PR for review._
-- _e.g. Conventional Commits (`feat:`, `fix:`, `chore:`)._
-
-### Build, test, lint
-- _e.g. `make test` must pass before any commit; `make lint` before any PR._
-
-### Definition of Done
-- _e.g. a task is Done only when `make test` and `make lint` pass and the_
-  _`verify` Rite has been run with its output observed._
-
-### Review gates
-- _e.g. every PR needs one human review; the `security` Legatus runs on any auth change._
-
-### Stack conventions
-- _e.g. language, framework, formatting tool, directory layout the agent must follow._
+{
+  "_comment": "Copy this file to context.json (and git-ignore context.json — it is host-specific). It points the agent at this project's own documentation, wherever it lives. 'load': 'eager' = read every session (small, always-relevant rules); 'load': 'lazy' = read only when the task needs it (large/occasional docs). 'path' may be absolute or relative to the repo root.",
+  "context": [
+    {
+      "path": "/abs/path/to/house-rules.md",
+      "load": "eager",
+      "description": "Team coding conventions, branch/commit policy, Definition of Done."
+    },
+    {
+      "path": "C:/work/my-repo/docs/ARCHITECTURE.md",
+      "load": "lazy",
+      "description": "Back-end service boundaries, auth flow, queues — read when touching the backend."
+    },
+    {
+      "path": "./docs/frontend.md",
+      "load": "lazy",
+      "description": "Front-end architecture, relative to the repo root."
+    }
+  ]
+}
 ````
 
 ### `leges/universal.md`
@@ -685,84 +658,6 @@ The fact, stated plainly. For `feedback` and `project`, follow with
   (universal Lex III).
 ````
 
-### `apocrypha/.gitignore` (binary — copy it from the Geneseed repo)
-
-### `apocrypha/README.md`
-
-````
-# Apocrypha convention
-
-> **Host-specific and local.** This directory is **git-ignored** — its contents
-> are private to each machine and never committed or shared. Only this `README.md`
-> and the `.gitignore` are tracked. The `REFERENCES.md` index, every path it
-> points to, and any document dropped here live only on your machine. This is the
-> sanctioned escape hatch from the harness's hermetic rule: it lets the agent
-> reach host-specific documentation **without** that documentation — or its
-> location — ever entering the published bundle.
-
-Use this layer to point the agent at substantial bodies of project documentation
-that must **not** live in the harness itself: framework internals, front-end /
-back-end architecture notes, design systems, API references — knowledge that is
-either too large, too proprietary, or simply maintained elsewhere on the machine.
-
-## Two modes (mix freely)
-
-The index supports both, side by side:
-
-- **A — External pointer.** The doc stays where it already lives on the machine.
-  You record an **absolute `@`-path** to it. Nothing is copied.
-- **B — Local drop.** You place a doc (or a copy) **inside this folder** and
-  reference it by **relative `@`-path**. It is git-ignored like everything here.
-
-Prefer **A** when the doc has its own home and is updated independently; prefer
-**B** when you want a self-contained snapshot travelling with the repo checkout.
-
-## The index — `REFERENCES.md`
-
-Create a local `REFERENCES.md` in this folder (git-ignored) and list every
-reference in one table. The agent reads this small index at the start of a
-session, then **lazy-loads** an individual source — with its Read tool — only when
-the task actually calls for it, never all of them up front (universal Lex XV).
-
-Write each location as an **`@`-prefixed path**. On OpenCode the `@` prefix is the
-native cue to load that file on a need-to-know basis; on other tools it is a plain
-instruction to read the path when it becomes relevant.
-
-```markdown
----
-name: references-index
----
-
-# Apocrypha index
-
-| Reference | Location | What it covers |
-| --- | --- | --- |
-| Front-end architecture | @/abs/path/to/frontend-docs/README.md | component tree, state mgmt, routing |
-| Back-end services      | @/abs/path/to/backend/README.md       | service boundaries, auth flow, queues |
-| Framework internals    | @./framework-notes.md                 | (dropped here) lifecycle, gotchas, patterns |
-```
-
-## Rules
-
-- **Pointers, not secrets.** A path or a doc is fine; never inscribe a credential,
-  token, or password here (universal Lex I). Point at where a secret is
-  configured, never at its value.
-- **One row per source.** Before adding, check the index for an existing row that
-  covers it and update that instead.
-- **Verify before trusting.** A path can rot or a doc can drift; confirm a
-  reference still resolves and still matches reality before acting on it
-  (universal Lex III).
-- **Not Anamnesis.** Anamnesis holds atomic, non-obvious *facts* learned across
-  sessions; Apocrypha points at *bodies of documentation* maintained
-  elsewhere. A one-line URL or ticket belongs in Anamnesis (`type: reference`);
-  a whole doc set belongs here.
-- **Lazy, not ambient.** This layer is read on demand, to respect the context
-  budget (Lex XV). If instead a *small* rule file must load on **every**
-  session, add its path to the `instructions` array in `harness.config.json` — the
-  generator folds it into the produced `opencode.json` so OpenCode always loads it
-  alongside `AGENT.md`. Keep large or occasional docs here, lazy.
-````
-
 ### `rites/_template.md`
 
 ````
@@ -908,8 +803,9 @@ name: references-index
 **Trigger:** about to say a task is done, fixed, or passing.
 
 ## Procedure
-1. Find the project's Definition of Done (see [`leges/project.md`](../leges/project.md))
-   — typically the test, lint, and build commands.
+1. Find the project's Definition of Done — typically the test, lint, and build
+   commands. It lives in the project's own docs (pointed at from `context.json`);
+   if it is undefined, ask rather than assume.
 2. Run them. Read the actual output; do not assume (universal Lex III).
 3. If anything fails, the task is not done — fix it or report it; do not claim
    success.

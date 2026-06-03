@@ -59,32 +59,24 @@ spec. Skills become command files with `description` + `agent: build` frontmatte
 
 ## Pointing the agent at files beyond the Harness
 
-Two native OpenCode mechanisms, for two purposes — use whichever fits, or both:
+Drop a **`context.json`** manifest at the bundle root (beside `AGENT.md`) and the
+agent loads it dynamically — no `opencode.json` wiring needed, and it works on any
+tool. Each entry carries a `load` mode: `eager` (read every session — small,
+always-relevant rules) or `lazy` (read only when the task needs it — large or
+occasional docs, often elsewhere on the machine). Copy `context.example.json` to
+`context.json`, git-ignore it, and list your docs by absolute or repo-relative
+path. See AGENT.md §6 and
+[`context.example.json`](../../src/context.example.json) for the schema.
 
-**Ambient — always loaded.** For *small, always-relevant* rule files. List their
-paths in the `instructions` array of `harness.config.json`:
-
-```json
-{ "theme": "neutral", "instructions": ["/abs/path/to/house-rules.md", "docs/*.md"] }
-```
-
-`python build.py --emit opencode` folds them into the generated `opencode.json`
-alongside `AGENT.md`. Entries may be absolute paths (a file living elsewhere on the
-machine), repo-relative paths, globs, or URLs. They cost tokens every session —
-keep this list short.
-
-**Lazy — loaded on demand.** For *large or occasional* docs, and anything that
-lives **elsewhere on the machine**. Use the git-ignored `references/` layer: list
-each doc in `references/REFERENCES.md` as an `@`-prefixed path; OpenCode reads it
-only when the task needs it (see [`references/README.md`](../../src/references/README.md)).
-This is the better default for host-specific documentation — zero token cost until
-used, and never published.
+If you'd rather use OpenCode's own always-on loading for a small rule file, you can
+also add its path to the `instructions` array of `opencode.json` directly — it
+accepts absolute paths, repo-relative paths, globs, and URLs.
 
 ## Notes
 
 - Project config beats global; `./opencode.json` or `.opencode/opencode.json`
   both work (OpenCode walks up to the worktree root).
-- `instructions` accepts absolute paths, repo-relative paths, globs (`"laws/*.md"`),
-  and URLs — see the ambient mechanism above.
+- `instructions` in `opencode.json` accepts absolute paths, repo-relative paths,
+  globs (`"laws/*.md"`), and URLs — edit it directly for ambient rule files.
 - OpenCode also auto-loads external skills from `~/.claude/skills/` — unrelated to
   this harness, but handy to know.
