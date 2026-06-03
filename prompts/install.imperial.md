@@ -13,7 +13,7 @@ path shown in each file heading, creating subfolders as needed.
 - After writing, create an empty context.json at the repo root if absent, and list the repo's docs in it.
 - When finished, list every file you created.
 
-## Files (22 text files)
+## Files (24 text files)
 
 ### `AGENT.md`
 
@@ -198,12 +198,14 @@ before improvising. Specs live in [`rites/`](rites/).
 | [brainstorm](rites/brainstorm.md) | a new feature or design with no plan yet |
 | [plan](rites/plan.md) | a task has more than a couple of steps |
 | [parallel-agents](rites/parallel-agents.md) | several independent subtasks and a tool that runs subagents |
+| [tdd](rites/tdd.md) | implementing behaviour that can be pinned by a test |
 | [verify](rites/verify.md) | about to claim something is done |
 | [debug](rites/debug.md) | a bug or failure to diagnose before fixing |
 | [repo-map](rites/repo-map.md) | orienting to the repo, or structure changed |
 | [commit](rites/commit.md) | staging and writing a commit |
 | [code-review](rites/code-review.md) | reviewing a diff or PR |
 | [refactor](rites/refactor.md) | improving code structure without changing behaviour |
+| [handoff](rites/handoff.md) | context filling, or passing work to another agent or session |
 | [roast-me](rites/roast-me.md) | you want an artifact torn apart, brutally and actionably |
 | [create-skill](rites/create-skill.md) | a task has crystallised into a repeatable pattern |
 
@@ -807,6 +809,26 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 - The failure is reproduced, root-caused, fixed at the cause, and the reproduction passes with no new breakage.
 ````
 
+### `rites/handoff.md`
+
+````
+# Rite: handoff
+
+> Inscribe the state of the work so a fresh mind may take up the watch without loss.
+
+**Trigger:** the context window is filling, a session is ending mid-task, or you're passing work to another agent or developer.
+
+## Procedure
+1. Capture the state in the worklog (`WORKLOG.md` or the task's plan file): the goal, what's done, the step in progress, and the exact next step.
+2. Record open decisions, dead ends already ruled out, and blockers — so the next agent doesn't re-derive them.
+3. Promote any durable fact or correction learned this session into Anamnesis (§4), not just the worklog.
+4. Point to the live artifacts: branch name, changed files, how to run the tests, and where any failure reproduces.
+5. Put a one-line "resume here" pointer at the top so a fresh context picks up in a single read (Lex XV).
+
+## Done when
+- A fresh agent can resume from the worklog alone — goal, progress, next step, and blockers are all written down.
+````
+
 ### `rites/parallel-agents.md`
 
 ````
@@ -922,6 +944,26 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 
 ## Done when
 - Findings are severity-ranked, every one carries a fix, and the highest-impact change is named.
+````
+
+### `rites/tdd.md`
+
+````
+# Rite: tdd
+
+> Let the trials lead the work — set the failing trial first, then only the code to pass it.
+
+**Trigger:** implementing a feature or fixing a bug whose behaviour can be expressed as a test — before writing implementation code.
+
+## Procedure
+1. Write one failing test that pins the next small slice of behaviour; be specific about the expected output. For a bug, the test reproduces it.
+2. Run it and watch it fail for the RIGHT reason — a test that passes immediately proves nothing.
+3. Write the minimum code to make it pass; add nothing the test doesn't demand (Lex XV).
+4. With the suite green, tidy up via the [refactor Rite](refactor.md) — the tests are your safety net.
+5. Repeat one slice at a time, committing each green cycle with the [commit Rite](commit.md).
+
+## Done when
+- The behaviour is covered by tests written before the code, the suite is green, and each cycle was committed.
 ````
 
 ### `rites/verify.md`
