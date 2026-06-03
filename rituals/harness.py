@@ -5,6 +5,10 @@ Dependency-free. Three subcommands:
 
     harness build [--theme NAME]   render src/ -> Harness/ for a theme
     harness doctor [--theme NAME]  validate a build: unresolved tokens, dead links
+    harness context                resolve context.json and print eager entries'
+                                   contents (Rule XVIII enforcement; wire to a
+                                   SessionStart hook so the manifest is injected,
+                                   never merely requested)
     harness learn [FILE]           distil notes/transcript into memory entries
                                    via a model CLI of your choice (no API key)
 
@@ -16,6 +20,7 @@ an API key and never calls a paid API directly.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -149,6 +154,60 @@ def cmd_prompt(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_context(args: argparse.Namespace) -> int:
+    """Resolve context.json beside the harness and print eager entries' contents
+    so a SessionStart hook injects them into context — Rule XVIII without relying
+    on the agent to read the manifest itself. Lazy entries are only listed.
+
+    Designed to be safe in a hook: any error prints a note to stderr and exits 0,
+    so it never blocks a session start."""
+    manifest = ROOT / "context.json"
+    if not manifest.exists():
+        sys.stderr.write(f"[context] no context.json at {manifest} — nothing to load.\n")
+        return 0
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        entries = data.get("context", [])
+    except (json.JSONDecodeError, OSError) as e:
+        sys.stderr.write(f"[context] could not parse {manifest}: {e}\n")
+        return 0
+
+    eager = [e for e in entries if e.get("load") == "eager"]
+    lazy = [e for e in entries if e.get("load") == "lazy"]
+    if not eager and not lazy:
+        sys.stderr.write("[context] context.json is empty — fill it in to load project docs.\n")
+        return 0
+
+    out: list[str] = [
+        "=== PROJECT CONTEXT (context.json) — binding for this repo per Rule XVIII ===",
+        "",
+    ]
+    for entry in eager:
+        path = entry.get("path", "")
+        desc = entry.get("description", "")
+        target = Path(path)
+        if not target.is_absolute():
+            target = ROOT / path
+        header = f"----- {path}" + (f" — {desc}" if desc else "") + " -----"
+        out.append(header)
+        try:
+            out.append(target.read_text(encoding="utf-8").rstrip("\n"))
+        except OSError as e:
+            out.append(f"[context] MISSING eager file: {e}")
+        out.append("")
+
+    if lazy:
+        out.append("--- Lazy entries (load only when the task needs them) ---")
+        for entry in lazy:
+            path = entry.get("path", "")
+            desc = entry.get("description", "")
+            out.append(f"  - {path}" + (f" — {desc}" if desc else ""))
+        out.append("")
+
+    sys.stdout.write("\n".join(out) + "\n")
+    return 0
+
+
 def cmd_learn(args: argparse.Namespace) -> int:
     notes = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.read()
     prompt = LEARN_PROMPT + notes
@@ -163,6 +222,15 @@ def cmd_learn(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    # Force UTF-8 I/O so injected docs / templates with unicode (sigils, em-dashes)
+    # do not crash on a legacy code page (e.g. Windows cp1252). Dependency-free.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except (ValueError, OSError):
+                pass
+
     ap = argparse.ArgumentParser(prog="harness", description="Geneseed harness CLI")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -178,6 +246,9 @@ def main() -> int:
     p.add_argument("--theme", default=None)
     p.add_argument("--out", default=None, help="write to FILE (default: stdout)")
     p.set_defaults(fn=cmd_prompt)
+
+    c = sub.add_parser("context", help="print context.json eager entries for a SessionStart hook (Rule XVIII)")
+    c.set_defaults(fn=cmd_context)
 
     le = sub.add_parser("learn", help="distil notes into memory entries")
     le.add_argument("file", nargs="?", help="notes file (default: stdin)")

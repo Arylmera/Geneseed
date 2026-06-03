@@ -4,7 +4,8 @@
       {
         "matcher": "startup|resume|clear",
         "hooks": [
-          { "type": "command", "command": "cat AGENT.md" }
+          { "type": "command", "command": "cat AGENT.md" },
+          { "type": "command", "command": "python rituals/harness.py context" }
         ]
       }
     ],

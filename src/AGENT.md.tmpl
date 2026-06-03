@@ -143,8 +143,10 @@ overwrites it; just fill it in.
 
 Everything above works on agent self-discipline alone. For teams that want hard
 automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
-`harness learn`, `harness doctor`) you can wire to git hooks or CI. It is opt-in —
-the harness is fully functional without it.
+`harness context`, `harness learn`, `harness doctor`) you can wire to git hooks or
+CI. In particular `harness context` injects `context.json`'s `eager` entries at
+session start so {{LAW}} XVIII is enforced by the hook, not left to the agent — see
+the Claude Code adapter. It is opt-in — the harness is fully functional without it.
 
 ---
 

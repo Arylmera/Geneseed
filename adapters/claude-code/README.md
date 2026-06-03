@@ -10,10 +10,19 @@ Merge [`settings.json`](settings.json) into your repo's `.claude/settings.json`
 (or your user settings). It:
 
 - on **SessionStart**, prints `AGENT.md` so the harness is in context from the
-  first turn;
+  first turn, then runs `harness context` to **inject** the `eager` entries of
+  `context.json` directly into the session — so Rule XVIII is enforced by the
+  hook, not left to the agent to remember (lazy entries are only listed);
 - on **Stop**, runs `harness learn` over the session to capture durable memories.
 
 Adjust the paths if your harness bundle is not at the repository root.
+
+Why inject rather than instruct? Rule XVIII tells the agent to read
+`context.json` at startup, but startup rituals are exactly what agents skip. The
+`harness context` hook removes the choice: the eager files' contents land in
+context before the first turn regardless of agent discipline. On tools without
+hooks (or on OpenCode, which loads `context.json` itself), the AGENT.md prose
+still carries the rule.
 
 ## Other tools
 
