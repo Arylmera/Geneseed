@@ -35,6 +35,22 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Harness/), so AGENT.md sits at the project level. Override with GENESEED_OUT.
 OUT="${GENESEED_OUT:-$(dirname "$HERE")/Harness}"
 
+# Project root the agent / OpenCode run from — where opencode.json and .opencode/
+# live. Defaults to the bundle's parent; override with GENESEED_ROOT.
+ROOT_DIR="${GENESEED_ROOT:-$(dirname "$OUT")}"
+
+# Emit mode. 'opencode' also (re)generates native subagents, commands, and
+# opencode.json. Explicit GENESEED_EMIT wins; otherwise auto-detect a prior
+# OpenCode layer at the project root and keep it in sync across upgrades.
+EMIT="${GENESEED_EMIT:-}"
+if [ -z "$EMIT" ]; then
+  if [ -d "$ROOT_DIR/.opencode" ] || [ -f "$ROOT_DIR/opencode.json" ]; then
+    EMIT="opencode"
+  else
+    EMIT="files"
+  fi
+fi
+
 # Factory files refreshed from upstream. Everything else in the folder is left
 # alone — notably context.json and Harness/memory/ (your runtime state).
 SYNC=(build.py rituals src themes adapters prompts \
@@ -84,12 +100,15 @@ if [ -z "$THEME" ]; then
   echo "[geneseed] ⚠️      ./upgrade.sh $REF imperial" >&2
 fi
 
-echo "[geneseed] rebuilding bundle -> $OUT (theme: ${THEME:-config default}) ..."
+BUILD_ARGS=(--out "$OUT")
+if [ -n "$THEME" ]; then BUILD_ARGS+=(--theme "$THEME"); fi
+if [ "$EMIT" = "opencode" ]; then BUILD_ARGS+=(--emit opencode --root "$ROOT_DIR"); fi
+
+echo "[geneseed] rebuilding bundle -> $OUT (theme: ${THEME:-config default}, emit: $EMIT) ..."
+python3 build.py "${BUILD_ARGS[@]}"
 if [ -n "$THEME" ]; then
-  python3 build.py --theme "$THEME" --out "$OUT"
   python3 rituals/harness.py doctor --theme "$THEME" || true
 else
-  python3 build.py --out "$OUT"
   python3 rituals/harness.py doctor || true
 fi
 

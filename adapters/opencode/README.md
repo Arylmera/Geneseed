@@ -57,6 +57,32 @@ your-repo/
   both instruction paths are prefixed (`Harness/AGENT.md`, `Harness/context.json`):
   `python build.py --emit opencode --out repo/Harness --root repo`.
 
+### Keeping it in sync — `upgrade.sh`
+
+`upgrade.sh` regenerates the OpenCode layer for you. It renders the bundle to a
+sibling `Harness/` (beside the Geneseed folder) and, if it finds an existing
+`opencode.json` or `.opencode/` at the project root, **re-emits the OpenCode layer
+there automatically** — so your subagents and commands never drift across an
+upgrade:
+
+```
+cd Geneseed
+./upgrade.sh                  # auto-detects the OpenCode layer, keeps the theme
+./upgrade.sh main imperial    # force a theme while upgrading
+```
+
+The first time (before any `.opencode/` exists) force it explicitly:
+
+```
+GENESEED_EMIT=opencode ./upgrade.sh main imperial
+```
+
+With this layout the project root is the Geneseed folder's parent: `opencode.json`
+and `.opencode/` land there, the bundle stays in `Harness/`, and the instruction
+paths are prefixed accordingly — `["Harness/AGENT.md", "Harness/context.json"]`.
+Override the locations with `GENESEED_OUT` (bundle) and `GENESEED_ROOT` (project
+root) for unusual layouts.
+
 ### Manual mapping (fallback)
 
 If you'd rather not run the generator, create each file by hand:
