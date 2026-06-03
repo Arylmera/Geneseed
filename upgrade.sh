@@ -4,13 +4,20 @@
 #
 # Run it from inside the Geneseed folder you want to update:
 #
-#     ./upgrade.sh            # track the main branch
-#     ./upgrade.sh v0.1.0     # pin to a tag
+#     ./upgrade.sh                  # track main, keep the last-built theme
+#     ./upgrade.sh v0.1.0           # pin to a tag
+#     ./upgrade.sh main imperial    # track main and force a theme
 #
 # It downloads the latest published source from GitHub, refreshes the factory
-# files in this folder, and re-renders the Harness/ bundle with the same theme
-# it was last built with. Your host-specific files are left untouched:
-# context.json, Harness/memory/, and anything not in the SYNC list below.
+# files in this folder, and re-renders the bundle BESIDE this folder (a sibling
+# directory named Harness/ at the same level as Geneseed), overwriting the files
+# already there. Override the target with GENESEED_OUT=/abs/path.
+#
+# The theme is resolved by precedence: explicit arg > the existing bundle's
+# .geneseed-theme marker > the local harness.config.json (read before it is
+# refreshed from upstream) > a loud warning + the upstream default. Your
+# host-specific files are left untouched: context.json, the bundle's memory/,
+# and anything not in the SYNC list below.
 #
 # Collision-safe: GitHub serves the zip as Geneseed-<ref>.zip and unzips to a
 # Geneseed-<ref>/ folder. Both could clash with files in this directory, so all
