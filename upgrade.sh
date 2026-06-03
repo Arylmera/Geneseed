@@ -55,6 +55,12 @@ unzip -q "$TMP/src.zip" -d "$TMP"
 NEW="$(find "$TMP" -maxdepth 1 -type d -iname 'geneseed-*' | head -n1)"
 [ -n "$NEW" ] || { echo "[geneseed] no Geneseed-* folder in the archive" >&2; exit 1; }
 
+# Capture the theme the LOCAL config asks for *before* SYNC overwrites
+# harness.config.json with upstream's (which ships neutral). Fallback only —
+# the bundle's own .geneseed-theme marker still wins over this.
+CONFIG_THEME="$(python3 -c 'import json,sys
+d=json.load(open(sys.argv[1]));print(d.get("theme",""))' "$HERE/harness.config.json" 2>/dev/null || true)"
+
 echo "[geneseed] refreshing factory files in $HERE ..."
 for item in "${SYNC[@]}"; do
   if [ -e "$NEW/$item" ]; then
@@ -63,17 +69,36 @@ for item in "${SYNC[@]}"; do
   fi
 done
 
-# Re-render with the theme the local bundle was last built with (build.py and
-# doctor fall back to harness.config.json's default theme when none is given).
-THEME="$(cat "$HERE/Harness/.geneseed-theme" 2>/dev/null || true)"
+# Theme to rebuild with. Precedence:
+#   1. explicit arg:          ./upgrade.sh <ref> <theme>
+#   2. existing bundle marker .geneseed-theme (written by the last build)
+#   3. the local harness.config.json captured before SYNC
+#   4. else: warn loudly, let build.py use the (now upstream) config default
+MARKER_THEME="$(cat "$OUT/.geneseed-theme" 2>/dev/null || true)"
+THEME="${THEME_ARG:-${MARKER_THEME:-$CONFIG_THEME}}"
+
 cd "$HERE"
-echo "[geneseed] rebuilding bundle (theme: ${THEME:-config default}) ..."
+if [ -z "$THEME" ]; then
+  echo "[geneseed] ⚠️  no theme found — no marker at $OUT/.geneseed-theme, no local config theme." >&2
+  echo "[geneseed] ⚠️  falling back to the upstream default. Pin it explicitly to avoid a silent downgrade:" >&2
+  echo "[geneseed] ⚠️      ./upgrade.sh $REF imperial" >&2
+fi
+
+echo "[geneseed] rebuilding bundle -> $OUT (theme: ${THEME:-config default}) ..."
 if [ -n "$THEME" ]; then
-  python3 build.py --theme "$THEME"
+  python3 build.py --theme "$THEME" --out "$OUT"
   python3 rituals/harness.py doctor --theme "$THEME" || true
 else
-  python3 build.py
+  python3 build.py --out "$OUT"
   python3 rituals/harness.py doctor || true
+fi
+
+# A previous run may have rendered the bundle INSIDE this factory folder
+# ($HERE/Harness). The canonical location is now $OUT; drop the stray copy so
+# there are never two bundles. Never touched when it IS the target.
+if [ "$OUT" != "$HERE/Harness" ] && [ -d "$HERE/Harness" ]; then
+  echo "[geneseed] removing stray in-folder bundle $HERE/Harness (canonical: $OUT)"
+  rm -rf "$HERE/Harness"
 fi
 
 echo "[geneseed] upgrade complete."
