@@ -84,6 +84,15 @@ root, so without `--root` it wouldn't be found.
 The build drops an empty `context.json` beside `AGENT.md` on first run and never
 overwrites it — fill it in (see **Project context** below).
 
+**Committing the rendered bundle.** The rendered harness — `AGENT.md`, the laws,
+agents, and skills — is content you can version with your project. The build also
+drops a bundle-level `.gitignore` that keeps only the host-specific files out
+(`context.json`, the `.geneseed-theme` marker), with personal memory excluded by
+`memory/`'s own ignore — everything else is trackable. **One gotcha:** if a parent
+`.gitignore` blanket-ignores the whole bundle dir (a bare `Harness/` line), git
+won't descend into it and the skills can't be tracked no matter what — remove that
+line and let the bundle's own `.gitignore` do the scoping.
+
 ## Use it everywhere — the OpenCode plugins
 
 The bundle is built in one location but used from any directory. Two plugins make
@@ -136,9 +145,10 @@ the new location first**, so migrating never wipes your manifest or learned memo
 
 **Theme** is resolved by precedence: explicit arg > the bundle's `.geneseed-theme`
 marker > the local `harness.config.json` (captured *before* it is refreshed from
-upstream) > a loud warning + the upstream default. The marker lives in the
-git-ignored `Harness/`, so it does **not** travel between machines — pass the theme
-explicitly the first time on a new machine (`./upgrade.sh main imperial`).
+upstream) > a loud warning + the upstream default. The marker is git-ignored (the
+bundle's `.gitignore` excludes `.geneseed-theme`), so it does **not** travel between
+machines — pass the theme explicitly the first time on a new machine
+(`./upgrade.sh main imperial`).
 
 By default the upgrade emits only the plain bundle. To regenerate the OpenCode
 native layer (subagents, commands, plugins, `opencode.json`) on upgrade, set
