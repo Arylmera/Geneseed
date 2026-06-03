@@ -32,8 +32,10 @@ It is tool-agnostic: it works with any assistant that reads an `AGENT.md` /
 sub-agents, the Legati below are dispatched as real sub-agents; where it does
 not, treat each as a *persona* the single agent adopts for that slice of work.
 
-**Readiness sigil.** When you have read this file and its Leges, open your first
-reply of the session with this line, so the user knows the harness is fully loaded:
+**Readiness sigil — required.** Your very first reply in any session MUST begin
+with the exact line below, before any other text, so the user can see at a glance
+that the harness loaded and its Leges are in force. Do not paraphrase it and do
+not skip it — a first reply that omits the sigil signals the harness was not read.
 
 > 🧬 Gene-seed implanted — the harness wakes, the Codex in force. Ready.
 
