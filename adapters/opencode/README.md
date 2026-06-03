@@ -92,12 +92,10 @@ spec. Skills become command files with `description` + `agent: build` frontmatte
 
 ## Memory loop — the `learn` plugin
 
-OpenCode has no shell-hook config like Claude Code's `Stop`; its session-end
-equivalent is a **plugin** reacting to the `session.idle` event. Geneseed ships one
-— [`plugins/geneseed-learn.js`](plugins/geneseed-learn.js) — the runtime-agnostic
-counterpart of the Claude Code learn hook. On every session end it distils durable
-memories from the conversation and writes them into the bundle's `memory/`,
-maintaining `MEMORY.md` and deduping against what is already stored.
+OpenCode's session-end event is `session.idle`; Geneseed hooks it with a **plugin**
+— [`plugins/geneseed-learn.js`](plugins/geneseed-learn.js). On every session end it
+distils durable memories from the conversation and writes them into the bundle's
+`memory/`, maintaining `MEMORY.md` and deduping against what is already stored.
 
 It is **self-contained**: it distils with the *same model the session already
 used* (read from the transcript), so it inherits your OpenCode provider config —
@@ -112,29 +110,25 @@ in `opencode.json`** (that `"plugin"` array is only for npm-package plugins), an
 both `.js` and `.ts` are accepted. The directory does **not** exist by default, so
 create it the first time.
 
-- **Global (recommended — the bundle is used everywhere):** drop the plugins into
-  your user plugins dir so they run in every project. The `*.js` glob installs both
-  the learn plugin and the [context plugin](#doc-enforcement--the-context-plugin):
+- **Global (recommended — the bundle is used everywhere):** **run this from inside
+  the Geneseed folder.** It installs both the learn plugin and the
+  [context plugin](#doc-enforcement--the-context-plugin) (the `*.js` glob), and
+  points `$GENESEED_HARNESS` at the sibling bundle `upgrade.sh` builds at
+  `../Harness` — so the plugins find your memory store and `context.json` with no
+  hand-typed path:
 
   ```
   mkdir -p ~/.config/opencode/plugins
   cp adapters/opencode/plugins/*.js ~/.config/opencode/plugins/
+  export GENESEED_HARNESS="$(dirname "$PWD")/Harness"                  # this shell
+  echo "export GENESEED_HARNESS=\"$GENESEED_HARNESS\"" >> ~/.zshrc     # persist (run once)
   ```
 
-  PowerShell:
-
-  ```powershell
-  New-Item -ItemType Directory -Force "$HOME\.config\opencode\plugins" | Out-Null
-  Copy-Item adapters\opencode\plugins\*.js "$HOME\.config\opencode\plugins\"
-  ```
+  Using a non-default bundle location (`GENESEED_OUT`)? Set `GENESEED_HARNESS` to
+  that path instead of `../Harness`.
 
 - **Per-project:** `build.py --emit opencode` (and `GENESEED_EMIT=opencode
   ./upgrade.sh`) creates `.opencode/plugins/` in the repo and drops it in for you.
-
-> The global path follows XDG (`~/.config/opencode/plugins/`) on macOS and Linux.
-> On Windows, confirm your build's config location — OpenCode may use
-> `%APPDATA%\opencode\plugins\` instead of `~\.config\…`; install into whichever
-> your `opencode` actually reads.
 
 **Verify it loaded:** start a session, do a little work, end it. On `session.idle`
 the plugin logs to stderr — either `[geneseed-learn] wrote N memory file(s): …` or
@@ -159,8 +153,7 @@ export GENESEED_HARNESS=/abs/path/to/Harness        # e.g. in your shell profile
 ```
 
 If the plugin can't read the session's model from the transcript, set a fallback
-`GENESEED_MODEL=provider/model` (e.g. `anthropic/claude-sonnet-4-...`). Otherwise
-there is nothing else to configure.
+`GENESEED_MODEL=provider/model`. Otherwise there is nothing else to configure.
 
 > **Field-test note.** This plugin follows the published OpenCode plugin + SDK docs
 > (`session.idle`, `client.session.messages`, message `info.providerID/modelID`,
@@ -173,8 +166,7 @@ there is nothing else to configure.
 
 OpenCode's `instructions` array loads `context.json` itself (the *manifest*), but
 not the docs it points at — so the `eager`/`lazy` distinction isn't enforced. The
-[`plugins/geneseed-context.js`](plugins/geneseed-context.js) plugin closes that gap:
-the OpenCode equivalent of the Claude Code `harness context` SessionStart hook.
+[`plugins/geneseed-context.js`](plugins/geneseed-context.js) plugin closes that gap.
 
 On the `session.created` event it reads `context.json` and **injects the contents
 of every `eager` entry** into the new session via a no-reply prompt
