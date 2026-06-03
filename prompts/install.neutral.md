@@ -13,7 +13,7 @@ path shown in each file heading, creating subfolders as needed.
 - After writing, create an empty context.json at the repo root if absent, and list the repo's docs in it.
 - When finished, list every file you created.
 
-## Files (17 text files)
+## Files (19 text files)
 
 ### `AGENT.md`
 
@@ -195,11 +195,13 @@ before improvising. Specs live in [`skills/`](skills/).
 
 | Skill | Trigger |
 | --- | --- |
+| [brainstorm](skills/brainstorm.md) | a new feature or design with no plan yet |
 | [plan](skills/plan.md) | a task has more than a couple of steps |
 | [verify](skills/verify.md) | about to claim something is done |
 | [repo-map](skills/repo-map.md) | orienting to the repo, or structure changed |
 | [commit](skills/commit.md) | staging and writing a commit |
 | [code-review](skills/code-review.md) | reviewing a diff or PR |
+| [roast-me](skills/roast-me.md) | you want an artifact torn apart, brutally and actionably |
 | [create-skill](skills/create-skill.md) | a task has crystallised into a repeatable pattern |
 
 When a task repeats and no Skill covers it, forge one (see `create-skill`).
@@ -275,8 +277,10 @@ overwrites it; just fill it in.
 
 Everything above works on agent self-discipline alone. For teams that want hard
 automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
-`harness learn`, `harness doctor`) you can wire to git hooks or CI. It is opt-in —
-the harness is fully functional without it.
+`harness context`, `harness learn`, `harness doctor`) you can wire to git hooks or
+CI. In particular `harness context` injects `context.json`'s `eager` entries at
+session start so Rule XVIII is enforced by the hook, not left to the agent — see
+the Claude Code adapter. It is opt-in — the harness is fully functional without it.
 
 ---
 
@@ -694,6 +698,26 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 - The observable condition that means the Skill succeeded.
 ````
 
+### `skills/brainstorm.md`
+
+````
+# Skill: brainstorm
+
+> Turn a raw idea into an approved design before any code is written.
+
+**Trigger:** a new feature or behaviour change with no design yet, or the user says "brainstorm" / "let's design this".
+
+## Procedure
+1. Read the current project state and its own docs (Rule XVII) so questions are grounded; if the request bundles several systems, decompose and take one at a time.
+2. Ask clarifying questions ONE at a time (multiple-choice when you can) until purpose, constraints, and success criteria are clear.
+3. Propose 2-3 approaches with trade-offs; lead with your recommendation.
+4. Present the design in sections (purpose → components → data flow → failure modes → testing), getting an explicit "looks right" after each; cut anything YAGNI.
+5. Write the agreed design to a spec, re-read it for ambiguity, then hand off to the [plan Skill](plan.md) to sequence it — writing no implementation code before that approval.
+
+## Done when
+- An approved, ambiguity-free design exists and `plan` has it to sequence, with no code written beforehand.
+````
+
 ### `skills/code-review.md`
 
 ````
@@ -815,6 +839,26 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 ## Done when
 - `ARCHITECTURE.md` reflects the current structure, and a fresh agent could orient
   from it in a single read.
+````
+
+### `skills/roast-me.md`
+
+````
+# Skill: roast-me
+
+> Adversarially critique any artifact — brutal, specific, always actionable.
+
+**Trigger:** the user asks to "roast", "tear apart", "find the fatal flaws", or "be brutally honest" about an artifact — code, design, plan, pitch, or writing.
+
+## Procedure
+1. Identify the artifact and the critique axis that matters (correctness, architecture, viability, clarity, security…); if unclear, ask once, then proceed.
+2. Steelman it: state the strongest case FOR the artifact in a sentence, so the attack hits the real thing, not a strawman.
+3. In the voice of a blunt, no-nonsense senior reviewer who has watched this exact thing fail before, write each flaw as one line — `location/claim — what's wrong — what to do instead`. No praise, no hedging, no filler; drop any finding you can't pair with a fix.
+4. Rank findings by severity: fatal → significant → minor.
+5. Close with the single change that would help most.
+
+## Done when
+- Findings are severity-ranked, every one carries a fix, and the highest-impact change is named.
 ````
 
 ### `skills/verify.md`

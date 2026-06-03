@@ -13,7 +13,7 @@ path shown in each file heading, creating subfolders as needed.
 - After writing, create an empty context.json at the repo root if absent, and list the repo's docs in it.
 - When finished, list every file you created.
 
-## Files (17 text files)
+## Files (19 text files)
 
 ### `AGENT.md`
 
@@ -195,11 +195,13 @@ before improvising. Specs live in [`rites/`](rites/).
 
 | Rite | Trigger |
 | --- | --- |
+| [brainstorm](rites/brainstorm.md) | a new feature or design with no plan yet |
 | [plan](rites/plan.md) | a task has more than a couple of steps |
 | [verify](rites/verify.md) | about to claim something is done |
 | [repo-map](rites/repo-map.md) | orienting to the repo, or structure changed |
 | [commit](rites/commit.md) | staging and writing a commit |
 | [code-review](rites/code-review.md) | reviewing a diff or PR |
+| [roast-me](rites/roast-me.md) | you want an artifact torn apart, brutally and actionably |
 | [create-skill](rites/create-skill.md) | a task has crystallised into a repeatable pattern |
 
 When a task repeats and no Rite covers it, forge one (see `create-skill`).
@@ -275,8 +277,10 @@ overwrites it; just fill it in.
 
 Everything above works on agent self-discipline alone. For teams that want hard
 automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
-`harness learn`, `harness doctor`) you can wire to git hooks or CI. It is opt-in —
-the harness is fully functional without it.
+`harness context`, `harness learn`, `harness doctor`) you can wire to git hooks or
+CI. In particular `harness context` injects `context.json`'s `eager` entries at
+session start so Lex XVIII is enforced by the hook, not left to the agent — see
+the Claude Code adapter. It is opt-in — the harness is fully functional without it.
 
 ---
 
@@ -694,6 +698,26 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 - The observable condition that means the Rite succeeded.
 ````
 
+### `rites/brainstorm.md`
+
+````
+# Rite: brainstorm
+
+> Forge a raw notion into sanctioned design ere a single rune of code is graven.
+
+**Trigger:** a new feature or behaviour change with no design yet, or the user says "brainstorm" / "let's design this".
+
+## Procedure
+1. Read the current project state and its own docs (Lex XVII) so questions are grounded; if the request bundles several systems, decompose and take one at a time.
+2. Ask clarifying questions ONE at a time (multiple-choice when you can) until purpose, constraints, and success criteria are clear.
+3. Propose 2-3 approaches with trade-offs; lead with your recommendation.
+4. Present the design in sections (purpose → components → data flow → failure modes → testing), getting an explicit "looks right" after each; cut anything YAGNI.
+5. Write the agreed design to a spec, re-read it for ambiguity, then hand off to the [plan Rite](plan.md) to sequence it — writing no implementation code before that approval.
+
+## Done when
+- An approved, ambiguity-free design exists and `plan` has it to sequence, with no code written beforehand.
+````
+
 ### `rites/code-review.md`
 
 ````
@@ -815,6 +839,26 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 ## Done when
 - `ARCHITECTURE.md` reflects the current structure, and a fresh agent could orient
   from it in a single read.
+````
+
+### `rites/roast-me.md`
+
+````
+# Rite: roast-me
+
+> Put any work to the question — merciless, exact, and ever actionable.
+
+**Trigger:** the user asks to "roast", "tear apart", "find the fatal flaws", or "be brutally honest" about an artifact — code, design, plan, pitch, or writing.
+
+## Procedure
+1. Identify the artifact and the critique axis that matters (correctness, architecture, viability, clarity, security…); if unclear, ask once, then proceed.
+2. Steelman it: state the strongest case FOR the artifact in a sentence, so the attack hits the real thing, not a strawman.
+3. In the voice of a Drill-Abbot of the Adeptus Mechanicus — no patience for weakness, contempt for excuses, zealous for the work, write each flaw as one line — `location/claim — what's wrong — what to do instead`. No praise, no hedging, no filler; drop any finding you can't pair with a fix.
+4. Rank findings by severity: fatal → significant → minor.
+5. Close with the single change that would help most.
+
+## Done when
+- Findings are severity-ranked, every one carries a fix, and the highest-impact change is named.
 ````
 
 ### `rites/verify.md`
