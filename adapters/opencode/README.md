@@ -106,15 +106,40 @@ are skipped and any error is swallowed, so it never blocks or disturbs a session
 
 ### Install
 
-- **Global (recommended — the bundle is used everywhere):** copy it into your user
+OpenCode auto-loads any plugin file from its plugins directory at startup — the
+folder is **`plugins`** (plural), files are loaded automatically with **no entry
+in `opencode.json`** (that `"plugin"` array is only for npm-package plugins), and
+both `.js` and `.ts` are accepted. The directory does **not** exist by default, so
+create it the first time.
+
+- **Global (recommended — the bundle is used everywhere):** drop it into your user
   plugins dir so it runs in every project:
 
   ```
+  mkdir -p ~/.config/opencode/plugins
   cp adapters/opencode/plugins/geneseed-learn.js ~/.config/opencode/plugins/
   ```
 
+  PowerShell:
+
+  ```powershell
+  New-Item -ItemType Directory -Force "$HOME\.config\opencode\plugins" | Out-Null
+  Copy-Item adapters\opencode\plugins\geneseed-learn.js "$HOME\.config\opencode\plugins\"
+  ```
+
 - **Per-project:** `build.py --emit opencode` (and `GENESEED_EMIT=opencode
-  ./upgrade.sh`) drops it into the repo's `.opencode/plugins/` automatically.
+  ./upgrade.sh`) creates `.opencode/plugins/` in the repo and drops it in for you.
+
+> The global path follows XDG (`~/.config/opencode/plugins/`) on macOS and Linux.
+> On Windows, confirm your build's config location — OpenCode may use
+> `%APPDATA%\opencode\plugins\` instead of `~\.config\…`; install into whichever
+> your `opencode` actually reads.
+
+**Verify it loaded:** start a session, do a little work, end it. On `session.idle`
+the plugin logs to stderr — either `[geneseed-learn] wrote N memory file(s): …` or
+a `[geneseed-learn] …` skip reason. Total silence means it did not load: re-check
+the filename, the `.js` extension, and that the path is exactly the plugins dir
+above.
 
 ### Point it at the memory dir
 
