@@ -7,14 +7,15 @@ Geneseed distils a personal, vault-grown agent system into a generic,
 tool-agnostic harness built around a single `AGENT.md`. Implant it into a repo
 and any assistant that reads `AGENT.md` / `AGENTS.md` / `CLAUDE.md` inherits a
 set of operating **rules**, a roster of capability **agents**, runnable
-**skills**, and a **memory** convention.
+**skills**, a **memory** convention, and a git-ignored **references** layer for
+host-specific external docs.
 
 ## How it works
 
 One canonical source in `src/` is written in neutral tokens. A tiny,
 dependency-free generator (`build.py`) renders it into a themed bundle in
 `dist/`. A theme changes the prose vocabulary *and* the bundle's top-level folder
-names (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`); the
+names (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`, `references→apocrypha`); the
 `src/` tree itself always keeps neutral names. Internal links are themed to match,
 so the bundle always resolves.
 
@@ -24,8 +25,8 @@ python build.py --theme imperial # Warhammer-flavoured labels
 ```
 
 Two themes ship:
-- **neutral** — plain professional vocabulary (Rules, Agents, Skills, Memory).
-- **imperial** — Warhammer 40k flavour (Codex, Legati, Rites, Anamnesis).
+- **neutral** — plain professional vocabulary (Rules, Agents, Skills, Memory, References).
+- **imperial** — Warhammer 40k flavour (Codex, Legati, Rites, Anamnesis, Apocrypha).
 
 Adding a theme is one JSON file in `themes/`.
 
@@ -40,7 +41,8 @@ Geneseed/
 │   ├── laws/             governance rules (universal + project stub)
 │   ├── agents/           capability specialists
 │   ├── skills/           repeatable workflows
-│   └── memory/           memory convention + index
+│   ├── memory/           memory convention + index
+│   └── references/       pointers to host-specific external docs (git-ignored)
 ├── themes/               token → label maps (neutral, imperial)
 ├── rituals/harness.py    optional CLI: build · doctor · prompt · learn
 ├── prompts/              self-contained install prompts (no Python needed)

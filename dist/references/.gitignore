@@ -1,0 +1,8 @@
+# References are host-specific — they are NOT committed or shared.
+# Only the convention (README.md) and this ignore file are tracked; the
+# REFERENCES.md index, every pointer it holds, and any doc dropped in this
+# folder stay on the individual machine. This is what keeps the harness
+# hermetic: nothing host-specific ever enters the published bundle.
+*
+!.gitignore
+!README.md

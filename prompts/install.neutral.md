@@ -13,7 +13,7 @@ path shown in each file heading, creating subfolders as needed.
 - After writing, fill in `laws/project.md` with the target repo's conventions.
 - When finished, list every file you created.
 
-## Files (18 text files)
+## Files (19 text files)
 
 ### `AGENT.md`
 
@@ -24,7 +24,8 @@ path shown in each file heading, creating subfolders as needed.
 
 This file is the entry point an AI coding agent reads when working in this
 repository. It defines the **Rules** the agent obeys, the **Agents** it can
-delegate to, the **Skills** it can run, and how it keeps **Memory**.
+delegate to, the **Skills** it can run, how it keeps **Memory**, and how it
+draws on the surrounding **Workspace**.
 
 It is tool-agnostic: it works with any assistant that reads an `AGENT.md` /
 `AGENTS.md` / `CLAUDE.md` at the repository root. Where a tool supports
@@ -125,6 +126,16 @@ output instead of carrying it verbatim. Do not re-read what is already in contex
 Delegate wide reading to a sub-Agent that returns only its conclusion. A lean
 context is a faster, cheaper, more accurate agent.
 
+### Rule XVI — Know the Workspace
+The folder this harness is installed into is a shared Workspace: it holds the
+harness and, alongside it, whatever notes, data, and files already belong to this
+machine or project. That surrounding content is yours to read and learn from —
+treat it as first-class context, and index durable facts you find there into
+Memory (Rule VI). But you do not own the folder. Files you did not create
+are not harness scaffolding to move, rewrite, or delete; verify what a file is
+before touching it (Rule III) and change it only when the task calls for it
+(Rule IV).
+
 ---
 
 ## 2. Project Rules
@@ -206,7 +217,42 @@ project Rules. Full convention: [`memory/README.md`](memory/README.md).
 
 ---
 
-## 6. Scripts — optional automation
+## 6. Workspace — the folder you live in
+
+The directory this harness is installed into is its **Workspace**, and it is
+shared. The harness files — these Rules, Agents, Skills, this file — sit
+*alongside* whatever already belongs to this machine or repository: notes, data,
+configs, documents, prior work. All of it is context you may use.
+
+After reading this file, take stock of what surrounds it. That non-harness
+content is knowledge to **read and learn from**, not scaffolding to reorganise.
+When you find a durable fact there worth keeping, index it into Memory (§5) so
+it outlives the session.
+
+Because the folder is shared, two cautions hold (Rule XVI):
+- **You do not own it.** Files you did not create are not yours to move, rename,
+  or delete unless the task explicitly requires it (Rule IV).
+- **Do not assume.** Before treating a file as harness scaffolding or as
+  disposable, verify what it actually is (Rule III).
+
+---
+
+## 7. References — host-specific external documentation
+
+Some project knowledge — framework internals, front-end / back-end architecture,
+API references — is too large or too proprietary to live in this harness, and is
+maintained elsewhere on the machine. The `references/` directory bridges to it
+**without** breaking the harness's hermetic rule: it is **git-ignored**, so the
+documentation, and even its location, never enter the published bundle. If a
+local `references/REFERENCES.md` index exists, read it at the start of a session
+and consult the sources it lists before answering questions about this project's
+stack. Each entry is either an absolute path to a doc living elsewhere or a doc
+dropped into `references/` directly. Full convention:
+[`references/README.md`](references/README.md).
+
+---
+
+## 8. Scripts — optional automation
 
 Everything above works on agent self-discipline alone. For teams that want hard
 automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
@@ -548,6 +594,16 @@ relevant lines, then read the slice, not the whole file. Summarise long command
 output instead of carrying it verbatim. Do not re-read what is already in context.
 Delegate wide reading to a sub-Agent that returns only its conclusion. A lean
 context is a faster, cheaper, more accurate agent.
+
+### Rule XVI — Know the Workspace
+The folder this harness is installed into is a shared Workspace: it holds the
+harness and, alongside it, whatever notes, data, and files already belong to this
+machine or project. That surrounding content is yours to read and learn from —
+treat it as first-class context, and index durable facts you find there into
+Memory (Rule VI). But you do not own the folder. Files you did not create
+are not harness scaffolding to move, rewrite, or delete; verify what a file is
+before touching it (Rule III) and change it only when the task calls for it
+(Rule IV).
 ````
 
 ### `memory/.gitignore` (binary — copy it from the Geneseed repo)
@@ -603,6 +659,74 @@ The fact, stated plainly. For `feedback` and `project`, follow with
   `- [Title](file.md) — one-line hook`.
 - Verify a recalled memory still matches reality before acting on it
   (universal Rule III).
+````
+
+### `references/.gitignore` (binary — copy it from the Geneseed repo)
+
+### `references/README.md`
+
+````
+# References convention
+
+> **Host-specific and local.** This directory is **git-ignored** — its contents
+> are private to each machine and never committed or shared. Only this `README.md`
+> and the `.gitignore` are tracked. The `REFERENCES.md` index, every path it
+> points to, and any document dropped here live only on your machine. This is the
+> sanctioned escape hatch from the harness's hermetic rule: it lets the agent
+> reach host-specific documentation **without** that documentation — or its
+> location — ever entering the published bundle.
+
+Use this layer to point the agent at substantial bodies of project documentation
+that must **not** live in the harness itself: framework internals, front-end /
+back-end architecture notes, design systems, API references — knowledge that is
+either too large, too proprietary, or simply maintained elsewhere on the machine.
+
+## Two modes (mix freely)
+
+The index supports both, side by side:
+
+- **A — External pointer.** The doc stays where it already lives on the machine.
+  You record an **absolute path** to it. Nothing is copied.
+- **B — Local drop.** You place a doc (or a copy) **inside this folder** and
+  reference it by **relative path**. It is git-ignored like everything here.
+
+Prefer **A** when the doc has its own home and is updated independently; prefer
+**B** when you want a self-contained snapshot travelling with the repo checkout.
+
+## The index — `REFERENCES.md`
+
+Create a local `REFERENCES.md` in this folder (git-ignored) and list every
+reference in one table. The agent reads it at the start of a session and consults
+the listed sources before answering questions about this project's stack.
+
+```markdown
+---
+name: references-index
+---
+
+# References index
+
+| Reference | Location | What it covers |
+| --- | --- | --- |
+| Front-end architecture | /abs/path/to/frontend-docs/        | component tree, state mgmt, routing |
+| Back-end services      | /abs/path/to/backend/README.md     | service boundaries, auth flow, queues |
+| Framework internals    | ./framework-notes.md               | (dropped here) lifecycle, gotchas, patterns |
+```
+
+## Rules
+
+- **Pointers, not secrets.** A path or a doc is fine; never inscribe a credential,
+  token, or password here (universal Rule I). Point at where a secret is
+  configured, never at its value.
+- **One row per source.** Before adding, check the index for an existing row that
+  covers it and update that instead.
+- **Verify before trusting.** A path can rot or a doc can drift; confirm a
+  reference still resolves and still matches reality before acting on it
+  (universal Rule III).
+- **Not Memory.** Memory holds atomic, non-obvious *facts* learned across
+  sessions; References points at *bodies of documentation* maintained
+  elsewhere. A one-line URL or ticket belongs in Memory (`type: reference`);
+  a whole doc set belongs here.
 ````
 
 ### `skills/_template.md`

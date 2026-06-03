@@ -71,6 +71,7 @@ SRC_DIR_TOKENS = {
     "agents": "DIR_AGENTS",
     "skills": "DIR_SKILLS",
     "memory": "DIR_MEMORY",
+    "references": "DIR_REFS",
 }
 
 

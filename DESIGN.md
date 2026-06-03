@@ -34,9 +34,23 @@ vault or a specific tool's hooks.
    folders with delegate agents. For code repositories, specialists by capability
    (reviewer, tester, architect, docs, security) fit better and stay generic.
 
-5. **Hermetic.** Geneseed references nothing outside itself — no links into the
-   vault it grew from, no secrets, no host-specific paths. This guarantees a
-   clean `git subtree split` / copy into any destination.
+5. **Hermetic — with one git-ignored escape hatch.** The *tracked* harness
+   references nothing outside itself — no links into the vault it grew from, no
+   secrets, no host-specific paths. This guarantees a clean `git subtree split` /
+   copy into any destination. The single sanctioned bridge to host-specific
+   documentation is the `references/` layer (Decision 6): because everything in it
+   except the convention is git-ignored, host paths and proprietary docs never
+   enter the published bundle, so hermeticity holds.
+
+6. **References are a local, git-ignored layer — never published.** A consumer
+   often needs the agent to know about substantial external documentation
+   (framework internals, front-/back-end architecture) that must not be committed
+   into the portable harness. `references/` mirrors the `memory/` pattern: only
+   `README.md` + `.gitignore` are tracked; the `REFERENCES.md` index, the absolute
+   paths it points to, and any doc dropped in the folder stay on the machine. It
+   accepts both modes at once — external absolute-path pointers and locally
+   dropped files — and is distinct from `memory/` (atomic learned *facts*) by
+   holding pointers to *bodies of documentation* maintained elsewhere.
 
 ## Components
 
@@ -50,6 +64,7 @@ renders it as the name in parentheses.
 | Delegation | `src/agents/` | `agents/` (`legati/`) | capability specialists with output contracts |
 | Workflows | `src/skills/` | `skills/` (`rites/`) | repeatable procedures |
 | Memory | `src/memory/` | `memory/` (`anamnesis/`) | one-fact-per-file convention + index |
+| References | `src/references/` | `references/` (`apocrypha/`) | pointers to host-specific external docs; git-ignored, never published |
 | Themes | `themes/*.json` | — | token → label maps |
 | Generator | `build.py` | — | substitution + `<!-- INCLUDE: -->` inlining |
 | Automation | `rituals/harness.py` | — | optional `build` / `doctor` / `learn` |

@@ -8,6 +8,8 @@
   "SKILL": "Rite",
   "SKILLS": "Rites",
   "MEMORY": "Anamnesis",
+  "VAULT": "Vault",
+  "REFERENCES": "Apocrypha",
   "SCRIPT": "Ritual",
   "SCRIPTS": "Rituals",
   "TAGLINE": "Implant the gene-seed into any repository; from it a disciplined servant is grown.",
@@ -15,5 +17,6 @@
   "DIR_LAWS": "leges",
   "DIR_AGENTS": "legati",
   "DIR_SKILLS": "rites",
-  "DIR_MEMORY": "anamnesis"
+  "DIR_MEMORY": "anamnesis",
+  "DIR_REFS": "apocrypha"
 }

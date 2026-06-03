@@ -186,7 +186,22 @@ project Rules. Full convention: [`memory/README.md`](memory/README.md).
 
 ---
 
-## 6. Scripts — optional automation
+## 6. References — host-specific external documentation
+
+Some project knowledge — framework internals, front-end / back-end architecture,
+API references — is too large or too proprietary to live in this harness, and is
+maintained elsewhere on the machine. The `references/` directory bridges to it
+**without** breaking the harness's hermetic rule: it is **git-ignored**, so the
+documentation, and even its location, never enter the published bundle. If a
+local `references/REFERENCES.md` index exists, read it at the start of a session
+and consult the sources it lists before answering questions about this project's
+stack. Each entry is either an absolute path to a doc living elsewhere or a doc
+dropped into `references/` directly. Full convention:
+[`references/README.md`](references/README.md).
+
+---
+
+## 7. Scripts — optional automation
 
 Everything above works on agent self-discipline alone. For teams that want hard
 automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,

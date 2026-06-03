@@ -8,6 +8,8 @@
   "SKILL": "Skill",
   "SKILLS": "Skills",
   "MEMORY": "Memory",
+  "VAULT": "Workspace",
+  "REFERENCES": "References",
   "SCRIPT": "Script",
   "SCRIPTS": "Scripts",
   "TAGLINE": "A portable, theme-able harness you implant into any repository to grow a disciplined AI agent.",
@@ -15,5 +17,6 @@
   "DIR_LAWS": "laws",
   "DIR_AGENTS": "agents",
   "DIR_SKILLS": "skills",
-  "DIR_MEMORY": "memory"
+  "DIR_MEMORY": "memory",
+  "DIR_REFS": "references"
 }
