@@ -246,9 +246,11 @@ Because the folder is shared, two cautions hold (Rule XVI):
 
 **Read `context.json` at the start of every session — this is Rule XVIII, not a
 suggestion.** The harness is hermetic and carries no project-specific knowledge;
-this manifest, dropped beside this file, is how the project hands you its own. It is
-host-specific and should be **git-ignored**. The moment the session opens, before
-your first reply, read it and act on each entry by its `load` mode:
+this manifest is how the project hands you its own. It lives at the **project
+root** — the directory you are working in, which may be a *parent* of this file
+when the harness sits in a subfolder. It is host-specific and should be
+**git-ignored**. The moment the session opens, before your first reply, read
+`context.json` from the project root and act on each entry by its `load` mode:
 
 - **`"eager"`** — read the file **now**, every session. For small, always-relevant
   knowledge: house conventions, branch/commit policy, the Definition of Done.
@@ -259,9 +261,9 @@ your first reply, read it and act on each entry by its `load` mode:
 Each `path` may be **absolute** (a doc living anywhere on the machine) or relative
 to the repository root. This is the sanctioned escape hatch from the harness's
 hermetic rule, and it replaces baked-in project rules: point at the project's own
-files instead of editing the harness. The build drops an empty
-[`context.json`](context.json) here on first run — its schema is in the file's own
-comment — and never overwrites it; just fill it in.
+files instead of editing the harness. The build drops an empty `context.json` at
+the project root on first run — its schema is in the file's own comment — and never
+overwrites it; just fill it in.
 
 ---
 
