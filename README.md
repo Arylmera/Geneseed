@@ -62,7 +62,8 @@ python build.py --emit opencode --target /path/to/your-repo
 ```
 
 That writes, alongside the bundle:
-- `opencode.json` — points OpenCode's `instructions` at `AGENT.md` and `context.json`;
+- `opencode.json` — points OpenCode's `instructions` at `AGENT.md` (the context
+  plugin loads `context.json`, so it is not listed here — see below);
 - `.opencode/agent/` — one subagent per capability agent;
 - `.opencode/command/` — one command per skill;
 - `.opencode/plugins/` — the **learn** and **context** plugins (see below).
@@ -76,9 +77,9 @@ python build.py --emit opencode --out /path/to/your-repo/Harness --root /path/to
 
 The whole bundle — `AGENT.md`, `laws/`, **and `context.json`** — stays in
 `Harness/`. Only `opencode.json` and `.opencode/` are written to the repo root,
-where OpenCode discovers them, with both instruction paths prefixed
-(`["Harness/AGENT.md", "Harness/context.json"]`). OpenCode resolves instruction
-paths from the project root, so without `--root` they wouldn't be found.
+where OpenCode discovers them, with the instruction path prefixed
+(`["Harness/AGENT.md"]`). OpenCode resolves instruction paths from the project
+root, so without `--root` it wouldn't be found.
 
 The build drops an empty `context.json` beside `AGENT.md` on first run and never
 overwrites it — fill it in (see **Project context** below).
@@ -108,10 +109,11 @@ export GENESEED_HARNESS="$(dirname "$PWD")/Harness"               # this shell
 echo "export GENESEED_HARNESS=\"$GENESEED_HARNESS\"" >> ~/.zshrc  # persist (run once)
 ```
 
-To load the rules in every project too, add the bundle's `AGENT.md` and
-`context.json` (absolute paths) to the `instructions` array of your global
-`~/.config/opencode/opencode.json`. Per-project, `--emit opencode` already writes a
-local `opencode.json` that does this.
+To load the rules in every project too, add the bundle's `AGENT.md` (absolute path)
+to the `instructions` array of your global `~/.config/opencode/opencode.json`. List
+**only `AGENT.md`** — the context plugin loads `context.json`; adding it to
+`instructions` as well would double-load it. Per-project, `--emit opencode` already
+writes a local `opencode.json` that does this.
 
 Full detail, env overrides, and a field-test note: [`adapters/opencode/`](adapters/opencode/).
 

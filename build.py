@@ -249,15 +249,16 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + body, encoding="utf-8")
 
-    # Load AGENT.md (the harness) and context.json (the project manifest) ambiently
-    # every session, so the agent cannot miss either. Both live together in the
-    # bundle (`out`); paths are made relative to `root`, the dir OpenCode resolves
-    # from, so a subfolder bundle gets both prefixed and neither path dangles.
+    # Load AGENT.md (the harness) ambiently every session via instructions. The
+    # project manifest context.json is loaded by the context plugin on
+    # session.created — NOT listed here. Listing it too would double-load it when this
+    # config merges with a global opencode.json that also points at the bundle. Path
+    # is relative to `root` (the dir OpenCode resolves from) so a subfolder bundle
+    # still resolves.
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
-    context_path = f"{rel}/context.json" if rel else "context.json"
     config = {"$schema": "https://opencode.ai/config.json",
-              "instructions": [agent_path, context_path]}
+              "instructions": [agent_path]}
     (root / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
     # Ship the static OpenCode plugins (e.g. the learn loop) into .opencode/plugins/.
@@ -272,8 +273,7 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
             n_plugins += 1
 
     print(f"[geneseed] opencode layer: {n_agents} subagents, {n_cmds} commands, "
-          f"{n_plugins} plugin(s), opencode.json "
-          f"(instructions: {agent_path}, {context_path})")
+          f"{n_plugins} plugin(s), opencode.json (instructions: {agent_path})")
 
 
 def main() -> None:

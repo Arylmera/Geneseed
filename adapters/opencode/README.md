@@ -15,11 +15,13 @@ After implanting the harness into your repo (so `AGENT.md`, `agents/`, `skills/`
 
 - Copy [`opencode.json`](opencode.json) to the repo root (or merge its
   `instructions` array into an existing `opencode.json`). It points OpenCode's
-  `instructions` field at `AGENT.md` (which inlines the laws) and `context.json`
-  (the project-context manifest, created empty by the build) — so every session
-  starts bound by the harness *and* carrying the project's own context.
+  `instructions` field at `AGENT.md` (which inlines the laws) — so every session
+  starts bound by the harness. The project-context manifest `context.json` is **not**
+  listed here; the [context plugin](#doc-enforcement--the-context-plugin) loads it,
+  and listing it in two configs would double-load it.
 
-That's it. OpenCode loads `AGENT.md` and `context.json` as rule files on every run.
+That's it. OpenCode loads `AGENT.md` as a rule file on every run; the plugins handle
+context and memory.
 
 > **Alternative, zero-config:** OpenCode auto-loads `AGENTS.md` (plural) with no
 > config at all. If you prefer that, rename the harness entrypoint
@@ -39,7 +41,7 @@ That writes, on top of the normal bundle:
 
 ```
 your-repo/
-├── opencode.json              instructions → AGENT.md + context.json
+├── opencode.json              instructions → AGENT.md (context.json via plugin)
 ├── context.json               empty project-context manifest (git-ignore it)
 └── .opencode/
     ├── agent/                 one subagent per capability agent
@@ -57,7 +59,7 @@ your-repo/
   *project root*, not from `opencode.json`'s folder. So if the bundle lives in a
   subfolder, add `--root <repo>` — `opencode.json` and `.opencode/` are written to
   the repo root while the whole bundle (incl. `context.json`) stays in `--out`, and
-  both instruction paths are prefixed (`Harness/AGENT.md`, `Harness/context.json`):
+  the instruction path is prefixed (`["Harness/AGENT.md"]`):
   `python build.py --emit opencode --out repo/Harness --root repo`.
 
 ### Keeping it in sync — `upgrade.sh`
