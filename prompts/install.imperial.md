@@ -260,11 +260,13 @@ API references — is too large or too proprietary to live in this harness, and 
 maintained elsewhere on the machine. The `apocrypha/` directory bridges to it
 **without** breaking the harness's hermetic rule: it is **git-ignored**, so the
 documentation, and even its location, never enter the published bundle. If a
-local `apocrypha/REFERENCES.md` index exists, read it at the start of a session
-and consult the sources it lists before answering questions about this project's
-stack. Each entry is either an absolute path to a doc living elsewhere or a doc
-dropped into `apocrypha/` directly. Full convention:
-[`apocrypha/README.md`](apocrypha/README.md).
+local `apocrypha/REFERENCES.md` index exists, read that small index at the start
+of a session — then treat every source it lists as **lazy**: load a referenced
+document with your Read tool only when the task in hand actually needs it, never
+all of them up front (Lex XV). Entries are written as `@`-prefixed paths —
+absolute for a doc living elsewhere on the machine, relative for one dropped into
+`apocrypha/`; on OpenCode the `@` prefix is the native cue to load the file on
+demand. Full convention: [`apocrypha/README.md`](apocrypha/README.md).
 
 ---
 
@@ -708,9 +710,9 @@ either too large, too proprietary, or simply maintained elsewhere on the machine
 The index supports both, side by side:
 
 - **A — External pointer.** The doc stays where it already lives on the machine.
-  You record an **absolute path** to it. Nothing is copied.
+  You record an **absolute `@`-path** to it. Nothing is copied.
 - **B — Local drop.** You place a doc (or a copy) **inside this folder** and
-  reference it by **relative path**. It is git-ignored like everything here.
+  reference it by **relative `@`-path**. It is git-ignored like everything here.
 
 Prefer **A** when the doc has its own home and is updated independently; prefer
 **B** when you want a self-contained snapshot travelling with the repo checkout.
@@ -718,8 +720,13 @@ Prefer **A** when the doc has its own home and is updated independently; prefer
 ## The index — `REFERENCES.md`
 
 Create a local `REFERENCES.md` in this folder (git-ignored) and list every
-reference in one table. The agent reads it at the start of a session and consults
-the listed sources before answering questions about this project's stack.
+reference in one table. The agent reads this small index at the start of a
+session, then **lazy-loads** an individual source — with its Read tool — only when
+the task actually calls for it, never all of them up front (universal Lex XV).
+
+Write each location as an **`@`-prefixed path**. On OpenCode the `@` prefix is the
+native cue to load that file on a need-to-know basis; on other tools it is a plain
+instruction to read the path when it becomes relevant.
 
 ```markdown
 ---
@@ -730,9 +737,9 @@ name: references-index
 
 | Reference | Location | What it covers |
 | --- | --- | --- |
-| Front-end architecture | /abs/path/to/frontend-docs/        | component tree, state mgmt, routing |
-| Back-end services      | /abs/path/to/backend/README.md     | service boundaries, auth flow, queues |
-| Framework internals    | ./framework-notes.md               | (dropped here) lifecycle, gotchas, patterns |
+| Front-end architecture | @/abs/path/to/frontend-docs/README.md | component tree, state mgmt, routing |
+| Back-end services      | @/abs/path/to/backend/README.md       | service boundaries, auth flow, queues |
+| Framework internals    | @./framework-notes.md                 | (dropped here) lifecycle, gotchas, patterns |
 ```
 
 ## Rules
@@ -749,6 +756,11 @@ name: references-index
   sessions; Apocrypha points at *bodies of documentation* maintained
   elsewhere. A one-line URL or ticket belongs in Anamnesis (`type: reference`);
   a whole doc set belongs here.
+- **Lazy, not ambient.** This layer is read on demand, to respect the context
+  budget (Lex XV). If instead a *small* rule file must load on **every**
+  session, add its path to the `instructions` array in `harness.config.json` — the
+  generator folds it into the produced `opencode.json` so OpenCode always loads it
+  alongside `AGENT.md`. Keep large or occasional docs here, lazy.
 ````
 
 ### `rites/_template.md`

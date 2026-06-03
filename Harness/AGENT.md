@@ -240,11 +240,13 @@ API references — is too large or too proprietary to live in this harness, and 
 maintained elsewhere on the machine. The `references/` directory bridges to it
 **without** breaking the harness's hermetic rule: it is **git-ignored**, so the
 documentation, and even its location, never enter the published bundle. If a
-local `references/REFERENCES.md` index exists, read it at the start of a session
-and consult the sources it lists before answering questions about this project's
-stack. Each entry is either an absolute path to a doc living elsewhere or a doc
-dropped into `references/` directly. Full convention:
-[`references/README.md`](references/README.md).
+local `references/REFERENCES.md` index exists, read that small index at the start
+of a session — then treat every source it lists as **lazy**: load a referenced
+document with your Read tool only when the task in hand actually needs it, never
+all of them up front (Rule XV). Entries are written as `@`-prefixed paths —
+absolute for a doc living elsewhere on the machine, relative for one dropped into
+`references/`; on OpenCode the `@` prefix is the native cue to load the file on
+demand. Full convention: [`references/README.md`](references/README.md).
 
 ---
 

@@ -57,11 +57,34 @@ If you'd rather not run the generator, create each file by hand:
 spec. Skills become command files with `description` + `agent: build` frontmatter.
 (`.opencode/command/` and `.opencode/commands/` are both recognised.)
 
+## Pointing the agent at files beyond the Harness
+
+Two native OpenCode mechanisms, for two purposes — use whichever fits, or both:
+
+**Ambient — always loaded.** For *small, always-relevant* rule files. List their
+paths in the `instructions` array of `harness.config.json`:
+
+```json
+{ "theme": "neutral", "instructions": ["/abs/path/to/house-rules.md", "docs/*.md"] }
+```
+
+`python build.py --emit opencode` folds them into the generated `opencode.json`
+alongside `AGENT.md`. Entries may be absolute paths (a file living elsewhere on the
+machine), repo-relative paths, globs, or URLs. They cost tokens every session —
+keep this list short.
+
+**Lazy — loaded on demand.** For *large or occasional* docs, and anything that
+lives **elsewhere on the machine**. Use the git-ignored `references/` layer: list
+each doc in `references/REFERENCES.md` as an `@`-prefixed path; OpenCode reads it
+only when the task needs it (see [`references/README.md`](../../src/references/README.md)).
+This is the better default for host-specific documentation — zero token cost until
+used, and never published.
+
 ## Notes
 
 - Project config beats global; `./opencode.json` or `.opencode/opencode.json`
   both work (OpenCode walks up to the worktree root).
-- `instructions` accepts globs, e.g. add `"laws/*.md"` if you split project rules
-  out of `AGENT.md`.
+- `instructions` accepts absolute paths, repo-relative paths, globs (`"laws/*.md"`),
+  and URLs — see the ambient mechanism above.
 - OpenCode also auto-loads external skills from `~/.claude/skills/` — unrelated to
   this harness, but handy to know.

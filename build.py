@@ -113,10 +113,17 @@ def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]
 
 
 def build(theme_name: str, out: Path) -> None:
+    """Render the bundle into `out`, overwriting the files it generates.
+
+    Deliberately *additive*: it never wipes the target. The output folder may be
+    a real repository, or hold the agent's runtime `{{MEMORY}}/` (MEMORY.md + fact
+    files) and dropped `{{REFERENCES}}/` docs — none of which the build creates, so
+    none of which it may delete. Re-running refreshes the harness scaffolding in
+    place and leaves everything else untouched. (A renamed/removed source file can
+    therefore leave a stale copy behind; run into a clean folder for a pristine
+    bundle.)"""
     _, items = render_all(theme_name)
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
+    out.mkdir(parents=True, exist_ok=True)
 
     for out_rel, text, src in items:
         dest = out / out_rel
@@ -150,6 +157,21 @@ def _first_blockquote(text: str) -> str:
 
 def _is_readonly(text: str) -> bool:
     return "Read-only" in text
+
+
+def config_instructions() -> list[str]:
+    """Extra *ambient* instruction sources declared in harness.config.json under
+    an `"instructions"` array. They are folded into the generated opencode.json so
+    OpenCode always loads them alongside AGENT.md. Each entry may be an absolute
+    path (a rule file living elsewhere on the machine), a repo-relative path, a
+    glob, or a URL — OpenCode accepts all four. Use this only for small,
+    always-relevant rules; point at large/occasional docs via the {{REFERENCES}}
+    layer (lazy, on-demand) instead."""
+    if not CONFIG.exists():
+        return []
+    cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
+    extra = cfg.get("instructions", [])
+    return [str(p) for p in extra] if isinstance(extra, list) else []
 
 
 def emit_opencode(theme_name: str, out: Path) -> None:
@@ -186,9 +208,11 @@ def emit_opencode(theme_name: str, out: Path) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + body, encoding="utf-8")
 
-    config = {"$schema": "https://opencode.ai/config.json", "instructions": ["AGENT.md"]}
+    instructions = ["AGENT.md"] + [p for p in config_instructions() if p != "AGENT.md"]
+    config = {"$schema": "https://opencode.ai/config.json", "instructions": instructions}
     (out / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-    print(f"[geneseed] opencode layer: {n_agents} subagents, {n_cmds} commands, opencode.json")
+    print(f"[geneseed] opencode layer: {n_agents} subagents, {n_cmds} commands, "
+          f"opencode.json ({len(instructions)} instruction source(s))")
 
 
 def main() -> None:

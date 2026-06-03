@@ -18,9 +18,9 @@ either too large, too proprietary, or simply maintained elsewhere on the machine
 The index supports both, side by side:
 
 - **A — External pointer.** The doc stays where it already lives on the machine.
-  You record an **absolute path** to it. Nothing is copied.
+  You record an **absolute `@`-path** to it. Nothing is copied.
 - **B — Local drop.** You place a doc (or a copy) **inside this folder** and
-  reference it by **relative path**. It is git-ignored like everything here.
+  reference it by **relative `@`-path**. It is git-ignored like everything here.
 
 Prefer **A** when the doc has its own home and is updated independently; prefer
 **B** when you want a self-contained snapshot travelling with the repo checkout.
@@ -28,8 +28,13 @@ Prefer **A** when the doc has its own home and is updated independently; prefer
 ## The index — `REFERENCES.md`
 
 Create a local `REFERENCES.md` in this folder (git-ignored) and list every
-reference in one table. The agent reads it at the start of a session and consults
-the listed sources before answering questions about this project's stack.
+reference in one table. The agent reads this small index at the start of a
+session, then **lazy-loads** an individual source — with its Read tool — only when
+the task actually calls for it, never all of them up front (universal {{LAW}} XV).
+
+Write each location as an **`@`-prefixed path**. On OpenCode the `@` prefix is the
+native cue to load that file on a need-to-know basis; on other tools it is a plain
+instruction to read the path when it becomes relevant.
 
 ```markdown
 ---
@@ -40,9 +45,9 @@ name: references-index
 
 | Reference | Location | What it covers |
 | --- | --- | --- |
-| Front-end architecture | /abs/path/to/frontend-docs/        | component tree, state mgmt, routing |
-| Back-end services      | /abs/path/to/backend/README.md     | service boundaries, auth flow, queues |
-| Framework internals    | ./framework-notes.md               | (dropped here) lifecycle, gotchas, patterns |
+| Front-end architecture | @/abs/path/to/frontend-docs/README.md | component tree, state mgmt, routing |
+| Back-end services      | @/abs/path/to/backend/README.md       | service boundaries, auth flow, queues |
+| Framework internals    | @./framework-notes.md                 | (dropped here) lifecycle, gotchas, patterns |
 ```
 
 ## Rules
@@ -59,3 +64,8 @@ name: references-index
   sessions; {{REFERENCES}} points at *bodies of documentation* maintained
   elsewhere. A one-line URL or ticket belongs in {{MEMORY}} (`type: reference`);
   a whole doc set belongs here.
+- **Lazy, not ambient.** This layer is read on demand, to respect the context
+  budget ({{LAW}} XV). If instead a *small* rule file must load on **every**
+  session, add its path to the `instructions` array in `harness.config.json` — the
+  generator folds it into the produced `opencode.json` so OpenCode always loads it
+  alongside `AGENT.md`. Keep large or occasional docs here, lazy.
