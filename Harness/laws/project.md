@@ -4,7 +4,7 @@
 > universal Rules. Delete the examples and write your own.
 
 ### Branching & commits
-- _e.g. branch from `main`; never commit directly to `main`._
+- _e.g. your branching model — commit straight to `main`, or branch + PR for review._
 - _e.g. Conventional Commits (`feat:`, `fix:`, `chore:`)._
 
 ### Build, test, lint
