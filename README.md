@@ -45,8 +45,7 @@ Geneseed/
 ├── themes/               token → label maps (neutral, imperial)
 ├── rituals/harness.py    optional CLI: build · doctor · prompt · learn
 ├── prompts/              self-contained install prompts (no Python needed)
-├── adapters/             optional per-tool glue (Claude Code hooks, OpenCode config)
-└── Harness/              generated bundle — this is what you port
+└── adapters/             optional per-tool glue (Claude Code hooks, OpenCode config)
 ```
 
 ## Implant it into a repo
