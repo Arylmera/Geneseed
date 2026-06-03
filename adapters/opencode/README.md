@@ -12,10 +12,11 @@ After implanting the harness into your repo (so `AGENT.md`, `agents/`, `skills/`
 
 - Copy [`opencode.json`](opencode.json) to the repo root (or merge its
   `instructions` array into an existing `opencode.json`). It points OpenCode's
-  `instructions` field at `AGENT.md`, which already inlines the laws — so every
-  session starts bound by the harness.
+  `instructions` field at `AGENT.md` (which inlines the laws) and `context.json`
+  (the project-context manifest, created empty by the build) — so every session
+  starts bound by the harness *and* carrying the project's own context.
 
-That's it. OpenCode loads `AGENT.md` as a rule file on every run.
+That's it. OpenCode loads `AGENT.md` and `context.json` as rule files on every run.
 
 > **Alternative, zero-config:** OpenCode auto-loads `AGENTS.md` (plural) with no
 > config at all. If you prefer that, rename the harness entrypoint

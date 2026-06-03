@@ -32,10 +32,13 @@ It is tool-agnostic: it works with any assistant that reads an `AGENT.md` /
 sub-agents, the Legati below are dispatched as real sub-agents; where it does
 not, treat each as a *persona* the single agent adopts for that slice of work.
 
-**Readiness sigil — required.** Your very first reply in any session MUST begin
-with the exact line below, before any other text, so the user can see at a glance
-that the harness loaded and its Leges are in force. Do not paraphrase it and do
-not skip it — a first reply that omits the sigil signals the harness was not read.
+**Readiness sigil — required.** Before your first reply, complete the startup
+ritual: read this file and its Leges, then **load the project context** — if a
+`context.json` manifest exists at the root, read it and load its `eager` entries
+now (§6, Lex XVIII). Only then emit your first reply, which MUST begin with the
+exact line below, before any other text. Do not paraphrase it and do not skip it —
+a first reply that omits the sigil signals the harness was not read, and emitting
+it certifies you have loaded the Leges *and* the project context.
 
 > 🧬 Gene-seed implanted — the harness wakes, the Codex in force. Ready.
 
@@ -149,6 +152,15 @@ repo. Read the relevant pages, not the whole tree (Lex XV). Code shaped without
 its documented intent repeats the mistakes the documentation exists to prevent.
 This is the read-before counterpart to Lex XI's write-after.
 
+### Lex XVIII — Load the Project Context
+At the very start of every session, before your first reply and before any action,
+check for a `context.json` manifest at the repository root. If it exists, read it
+and act on it: load every `eager` entry's file **immediately** — that content is
+project law for this repo, as binding as anything here — and hold the `lazy`
+entries ready to load the instant a task touches them. This is not optional and not
+deferrable; the manifest exists precisely so you do not work blind. If you have not
+loaded it, you are not ready to act.
+
 ---
 
 ## 2. Legati — delegation by capability
@@ -232,11 +244,11 @@ Because the folder is shared, two cautions hold (Lex XVI):
 
 *Summon the Apocrypha of this world — at the hour of need, not before.*
 
-The harness is hermetic: it carries no project-specific knowledge. To give the
-agent that knowledge, drop a **`context.json`** manifest beside this file. It is
-optional and should be **git-ignored** — host-specific, so its paths and the docs
-they point to never enter the bundle. If `context.json` is present, read it at the
-start of a session and act on each entry by its `load` mode:
+**Read `context.json` at the start of every session — this is Lex XVIII, not a
+suggestion.** The harness is hermetic and carries no project-specific knowledge;
+this manifest, dropped beside this file, is how the project hands you its own. It is
+host-specific and should be **git-ignored**. The moment the session opens, before
+your first reply, read it and act on each entry by its `load` mode:
 
 - **`"eager"`** — read the file **now**, every session. For small, always-relevant
   knowledge: house conventions, branch/commit policy, the Definition of Done.
@@ -594,6 +606,15 @@ about to touch and read those; skim the doc index when orienting to an unfamilia
 repo. Read the relevant pages, not the whole tree (Lex XV). Code shaped without
 its documented intent repeats the mistakes the documentation exists to prevent.
 This is the read-before counterpart to Lex XI's write-after.
+
+### Lex XVIII — Load the Project Context
+At the very start of every session, before your first reply and before any action,
+check for a `context.json` manifest at the repository root. If it exists, read it
+and act on it: load every `eager` entry's file **immediately** — that content is
+project law for this repo, as binding as anything here — and hold the `lazy`
+entries ready to load the instant a task touches them. This is not optional and not
+deferrable; the manifest exists precisely so you do not work blind. If you have not
+loaded it, you are not ready to act.
 ````
 
 ### `anamnesis/.gitignore` (binary — copy it from the Geneseed repo)

@@ -229,7 +229,11 @@ def emit_opencode(theme_name: str, out: Path) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + body, encoding="utf-8")
 
-    config = {"$schema": "https://opencode.ai/config.json", "instructions": ["AGENT.md"]}
+    # Load AGENT.md (the harness) and context.json (the project manifest) ambiently
+    # every session, so the agent cannot miss either. The build always creates an
+    # empty context.json, so the path is never dangling.
+    config = {"$schema": "https://opencode.ai/config.json",
+              "instructions": ["AGENT.md", "context.json"]}
     (out / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     print(f"[geneseed] opencode layer: {n_agents} subagents, {n_cmds} commands, opencode.json")
 

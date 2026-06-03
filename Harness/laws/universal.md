@@ -101,3 +101,12 @@ about to touch and read those; skim the doc index when orienting to an unfamilia
 repo. Read the relevant pages, not the whole tree (Rule XV). Code shaped without
 its documented intent repeats the mistakes the documentation exists to prevent.
 This is the read-before counterpart to Rule XI's write-after.
+
+### Rule XVIII — Load the Project Context
+At the very start of every session, before your first reply and before any action,
+check for a `context.json` manifest at the repository root. If it exists, read it
+and act on it: load every `eager` entry's file **immediately** — that content is
+project law for this repo, as binding as anything here — and hold the `lazy`
+entries ready to load the instant a task touches them. This is not optional and not
+deferrable; the manifest exists precisely so you do not work blind. If you have not
+loaded it, you are not ready to act.
