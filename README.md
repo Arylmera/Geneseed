@@ -115,6 +115,41 @@ Wire `rituals/harness.py` to a git hook or CI, or use the
 - **Claude Code** — [`adapters/claude-code/`](adapters/claude-code/): SessionStart
   + Stop hook snippet.
 
+## Upgrade in place
+
+`upgrade.sh` refreshes an already-implanted bundle from the published source
+without touching your host-specific state. Run it from inside the Geneseed folder:
+
+```
+./upgrade.sh                  # track main, keep the last-built theme
+./upgrade.sh v0.1.0           # pin to a tag
+./upgrade.sh main imperial    # track main and force a theme
+```
+
+It downloads upstream, refreshes the factory files in place, and re-renders the
+bundle into a **sibling `Harness/`** (beside the Geneseed folder, at the project
+level), overwriting the files there while preserving the bundle's `memory/` and
+`context.json`. A stray bundle left *inside* the factory by an older run is removed.
+
+**Theme** is resolved by precedence: explicit arg > the bundle's `.geneseed-theme`
+marker > the local `harness.config.json` (captured *before* it is refreshed from
+upstream) > a loud warning + the upstream default. The marker lives in the
+git-ignored `Harness/`, so it does **not** travel between machines — pass the theme
+explicitly the first time on a new host (`./upgrade.sh main imperial`).
+
+**OpenCode**: if `opencode.json` or `.opencode/` already exists at the project root,
+the upgrade re-emits the OpenCode layer (subagents, commands, `opencode.json`)
+automatically — zero drift. Force it the first time with `GENESEED_EMIT=opencode`.
+See [`adapters/opencode/`](adapters/opencode/).
+
+Override locations with `GENESEED_OUT` (bundle) and `GENESEED_ROOT` (project root).
+`upgrade.sh` excludes itself from the sync (a running script must not overwrite
+itself), so to pick up a newer `upgrade.sh`, re-fetch it once:
+
+```
+curl -fsSL https://raw.githubusercontent.com/Arylmera/Geneseed/main/upgrade.sh -o upgrade.sh
+```
+
 ## Project context — `context.json`
 
 The harness ships no project-specific knowledge. To give the agent that knowledge,
