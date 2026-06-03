@@ -90,6 +90,59 @@ If you'd rather not run the generator, create each file by hand:
 spec. Skills become command files with `description` + `agent: build` frontmatter.
 (`.opencode/command/` and `.opencode/commands/` are both recognised.)
 
+## Memory loop — the `learn` plugin
+
+OpenCode has no shell-hook config like Claude Code's `Stop`; its session-end
+equivalent is a **plugin** reacting to the `session.idle` event. Geneseed ships one
+— [`plugins/geneseed-learn.js`](plugins/geneseed-learn.js) — the runtime-agnostic
+counterpart of the Claude Code learn hook. On every session end it distils durable
+memories from the conversation and writes them into the bundle's `memory/`,
+maintaining `MEMORY.md` and deduping against what is already stored.
+
+It is **self-contained**: it distils with the *same model the session already
+used* (read from the transcript), so it inherits your OpenCode provider config —
+no API key, no separate model CLI, nothing to set for the model. Trivial sessions
+are skipped and any error is swallowed, so it never blocks or disturbs a session.
+
+### Install
+
+- **Global (recommended — the bundle is used everywhere):** copy it into your user
+  plugins dir so it runs in every project:
+
+  ```
+  cp adapters/opencode/plugins/geneseed-learn.js ~/.config/opencode/plugins/
+  ```
+
+- **Per-project:** `build.py --emit opencode` (and `GENESEED_EMIT=opencode
+  ./upgrade.sh`) drops it into the repo's `.opencode/plugins/` automatically.
+
+### Point it at the memory dir
+
+The plugin writes into the first location that resolves:
+
+1. `$GENESEED_MEMORY` — an explicit memory dir;
+2. `$GENESEED_HARNESS/memory` (or `/anamnesis` for the imperial theme);
+3. `./memory` or `./Harness/memory` — when the bundle lives inside the project.
+
+Because your Harness is global (used from any directory), set `GENESEED_HARNESS`
+once to the bundle's absolute path so the plugin always writes to the same memory
+store no matter where you launch OpenCode:
+
+```
+export GENESEED_HARNESS=/abs/path/to/Harness        # e.g. in your shell profile
+```
+
+If the plugin can't read the session's model from the transcript, set a fallback
+`GENESEED_MODEL=provider/model` (e.g. `anthropic/claude-sonnet-4-...`). Otherwise
+there is nothing else to configure.
+
+> **Field-test note.** This plugin follows the published OpenCode plugin + SDK docs
+> (`session.idle`, `client.session.messages`, message `info.providerID/modelID`,
+> `client.session.prompt`), but has not been run against every OpenCode build. If a
+> field name differs in your version it degrades quietly — logs to stderr and writes
+> nothing — rather than erroring. The resolvers are isolated at the top of
+> `geneseed-learn.js` for a one-line adjustment if needed.
+
 ## Pointing the agent at files beyond the Harness
 
 Drop a **`context.json`** manifest at the bundle root (beside `AGENT.md`) and the

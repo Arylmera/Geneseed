@@ -259,8 +259,21 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     config = {"$schema": "https://opencode.ai/config.json",
               "instructions": [agent_path, context_path]}
     (root / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    # Ship the static OpenCode plugins (e.g. the learn loop) into .opencode/plugins/.
+    # They are maintained files, not rendered from src, so copy them verbatim.
+    plugin_src = ROOT / "adapters" / "opencode" / "plugins"
+    n_plugins = 0
+    if plugin_src.is_dir():
+        plugin_dst = root / ".opencode" / "plugins"
+        plugin_dst.mkdir(parents=True, exist_ok=True)
+        for js in sorted(plugin_src.glob("*.js")):
+            shutil.copy2(js, plugin_dst / js.name)
+            n_plugins += 1
+
     print(f"[geneseed] opencode layer: {n_agents} subagents, {n_cmds} commands, "
-          f"opencode.json (instructions: {agent_path}, {context_path})")
+          f"{n_plugins} plugin(s), opencode.json "
+          f"(instructions: {agent_path}, {context_path})")
 
 
 def main() -> None:
