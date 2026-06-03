@@ -52,9 +52,9 @@ your-repo/
 - Themed: add `--theme imperial` for the Warhammer vocabulary.
 - **Bundle in a subfolder?** OpenCode resolves `instructions` paths from the
   *project root*, not from `opencode.json`'s folder. So if the bundle lives in a
-  subfolder, add `--root <repo>` — `opencode.json`, `.opencode/`, and `context.json`
-  are written to the repo root (with `AGENT.md` prefixed, e.g. `Harness/AGENT.md`)
-  while the bundle stays in `--out`:
+  subfolder, add `--root <repo>` — `opencode.json` and `.opencode/` are written to
+  the repo root while the whole bundle (incl. `context.json`) stays in `--out`, and
+  both instruction paths are prefixed (`Harness/AGENT.md`, `Harness/context.json`):
   `python build.py --emit opencode --out repo/Harness --root repo`.
 
 ### Manual mapping (fallback)

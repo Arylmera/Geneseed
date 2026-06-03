@@ -138,24 +138,18 @@ def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]
     return theme, items
 
 
-def build(theme_name: str, out: Path, root: Path | None = None) -> None:
+def build(theme_name: str, out: Path) -> None:
     """Render the bundle into `out`.
 
     Before rendering, the dirs the build fully owns (`OWNED_SRC_DIRS` — laws,
     agents, skills, in their themed form) are wiped, so a renamed or removed source
     file never leaves a stale copy behind. Everything else in `out` is preserved:
     the surrounding application code, the agent's runtime `memory/` (MEMORY.md +
-    fact files, refreshed in place), and `context.json` (created once, never
-    touched again). The build therefore cleans its own footprint without ever
-    destroying the user's repository or data.
-
-    `context.json` is written to `root` — the project dir the agent runs from —
-    which defaults to `out`. Pass a separate `root` when the bundle lives in a
-    subfolder, so the manifest still lands where OpenCode and the agent look."""
-    root = root or out
+    fact files, refreshed in place), and `context.json` — written once, beside
+    AGENT.md, and never touched again. The build therefore cleans its own footprint
+    without ever destroying the user's repository or data."""
     theme, items = render_all(theme_name)
     out.mkdir(parents=True, exist_ok=True)
-    root.mkdir(parents=True, exist_ok=True)
 
     for src_dir in OWNED_SRC_DIRS:
         managed = out / theme.get(SRC_DIR_TOKENS[src_dir], src_dir)
@@ -171,7 +165,7 @@ def build(theme_name: str, out: Path, root: Path | None = None) -> None:
             shutil.copy2(src, dest)
 
     (out / ".geneseed-theme").write_text(theme_name + "\n", encoding="utf-8")
-    ensure_context_stub(root)
+    ensure_context_stub(out)
     print(f"[geneseed] built theme '{theme_name}' -> {out} ({len(items)} files)")
 
 
@@ -213,13 +207,15 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     the same source: capability agents become subagents, skills become commands,
     and an opencode.json wires AGENT.md as a rule file.
 
-    OpenCode discovers `opencode.json`, `.opencode/`, and the instruction files
-    from the project root, so those are written to `root` (default: `out`). When the
-    bundle lives in a subfolder, pass `root` = the repo root: the portable bundle
-    stays in `out`, while `opencode.json`, `.opencode/`, and `context.json` land at
-    `root`, and the instruction path to AGENT.md is prefixed accordingly."""
+    OpenCode discovers `opencode.json` and `.opencode/` from the project root, so
+    those are written to `root` (default: `out`). The portable bundle — including
+    `AGENT.md` and `context.json` — always stays together in `out`. When the bundle
+    lives in a subfolder, pass `root` = the repo root: `opencode.json` and
+    `.opencode/` land at `root`, and the instruction paths to both `AGENT.md` and
+    `context.json` are prefixed with the bundle's location so they resolve from the
+    project root."""
     root = root or out
-    build(theme_name, out, root)
+    build(theme_name, out)
     # Owned by this layer — wipe so a removed agent/skill leaves no stale subagent
     # or command file behind.
     if (root / ".opencode").is_dir():
@@ -254,16 +250,17 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
         dest.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + body, encoding="utf-8")
 
     # Load AGENT.md (the harness) and context.json (the project manifest) ambiently
-    # every session, so the agent cannot miss either. Paths are relative to `root`,
-    # the dir OpenCode resolves from; the build always creates context.json there,
-    # so the path is never dangling. A subfolder bundle gets its AGENT.md prefixed.
+    # every session, so the agent cannot miss either. Both live together in the
+    # bundle (`out`); paths are made relative to `root`, the dir OpenCode resolves
+    # from, so a subfolder bundle gets both prefixed and neither path dangles.
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
+    context_path = f"{rel}/context.json" if rel else "context.json"
     config = {"$schema": "https://opencode.ai/config.json",
-              "instructions": [agent_path, "context.json"]}
+              "instructions": [agent_path, context_path]}
     (root / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     print(f"[geneseed] opencode layer: {n_agents} subagents, {n_cmds} commands, "
-          f"opencode.json (instructions: {agent_path}, context.json)")
+          f"opencode.json (instructions: {agent_path}, {context_path})")
 
 
 def main() -> None:
@@ -280,10 +277,10 @@ def main() -> None:
                     help="files: plain bundle (default). opencode: bundle + native "
                          ".opencode/ subagents & commands + opencode.json")
     ap.add_argument("--root", default=None,
-                    help="project root the agent/OpenCode run from — where context.json, "
-                         "opencode.json and .opencode/ are placed (default: same as --out). "
-                         "Set this when the bundle lives in a subfolder, e.g. "
-                         "--out myrepo/Harness --root myrepo")
+                    help="project root the agent/OpenCode run from — where opencode.json "
+                         "and .opencode/ are placed (default: same as --out). Set this when "
+                         "the bundle lives in a subfolder, e.g. --out myrepo/Harness "
+                         "--root myrepo; instruction paths are prefixed accordingly")
     args = ap.parse_args()
 
     out = resolve_out(args.out)
@@ -291,7 +288,7 @@ def main() -> None:
     if args.emit == "opencode":
         emit_opencode(args.theme, out, root)
     else:
-        build(args.theme, out, root)
+        build(args.theme, out)
 
 
 if __name__ == "__main__":

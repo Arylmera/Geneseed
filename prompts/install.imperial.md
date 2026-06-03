@@ -34,8 +34,8 @@ not, treat each as a *persona* the single agent adopts for that slice of work.
 
 **Readiness sigil — required.** Before your first reply, complete the startup
 ritual: read this file and its Leges, then **load the project context** — if a
-`context.json` manifest exists at the root, read it and load its `eager` entries
-now (§6, Lex XVIII). Only then emit your first reply, which MUST begin with the
+`context.json` sits beside this file, read it and load its `eager` entries now
+(§6, Lex XVIII). Only then emit your first reply, which MUST begin with the
 exact line below, before any other text. Do not paraphrase it and do not skip it —
 a first reply that omits the sigil signals the harness was not read, and emitting
 it certifies you have loaded the Leges *and* the project context.
@@ -154,12 +154,13 @@ This is the read-before counterpart to Lex XI's write-after.
 
 ### Lex XVIII — Load the Project Context
 At the very start of every session, before your first reply and before any action,
-check for a `context.json` manifest at the repository root. If it exists, read it
-and act on it: load every `eager` entry's file **immediately** — that content is
-project law for this repo, as binding as anything here — and hold the `lazy`
-entries ready to load the instant a task touches them. This is not optional and not
-deferrable; the manifest exists precisely so you do not work blind. If you have not
-loaded it, you are not ready to act.
+load the project's `context.json` — the manifest that sits in the **same directory
+as this AGENT.md** (when configured for OpenCode it is loaded for you
+automatically). Read it and act on it: load every `eager` entry's file
+**immediately** — that content is project law for this repo, as binding as anything
+here — and hold the `lazy` entries ready to load the instant a task touches them.
+This is not optional and not deferrable; the manifest exists precisely so you do
+not work blind. If you have not loaded it, you are not ready to act.
 
 ---
 
@@ -246,11 +247,12 @@ Because the folder is shared, two cautions hold (Lex XVI):
 
 **Read `context.json` at the start of every session — this is Lex XVIII, not a
 suggestion.** The harness is hermetic and carries no project-specific knowledge;
-this manifest is how the project hands you its own. It lives at the **project
-root** — the directory you are working in, which may be a *parent* of this file
-when the harness sits in a subfolder. It is host-specific and should be
-**git-ignored**. The moment the session opens, before your first reply, read
-`context.json` from the project root and act on each entry by its `load` mode:
+this manifest is how the project hands you its own. It sits **right here, beside
+this AGENT.md** — they travel together, whether this folder is the repo root or a
+subfolder of it. (When configured for OpenCode it is loaded for you automatically.)
+It is host-specific and should be **git-ignored**. The moment the session opens,
+before your first reply, read the `context.json` next to this file and act on each
+entry by its `load` mode:
 
 - **`"eager"`** — read the file **now**, every session. For small, always-relevant
   knowledge: house conventions, branch/commit policy, the Definition of Done.
@@ -261,8 +263,8 @@ when the harness sits in a subfolder. It is host-specific and should be
 Each `path` may be **absolute** (a doc living anywhere on the machine) or relative
 to the repository root. This is the sanctioned escape hatch from the harness's
 hermetic rule, and it replaces baked-in project rules: point at the project's own
-files instead of editing the harness. The build drops an empty `context.json` at
-the project root on first run — its schema is in the file's own comment — and never
+files instead of editing the harness. The build drops an empty `context.json`
+beside this file on first run — its schema is in the file's own comment — and never
 overwrites it; just fill it in.
 
 ---
@@ -611,12 +613,13 @@ This is the read-before counterpart to Lex XI's write-after.
 
 ### Lex XVIII — Load the Project Context
 At the very start of every session, before your first reply and before any action,
-check for a `context.json` manifest at the repository root. If it exists, read it
-and act on it: load every `eager` entry's file **immediately** — that content is
-project law for this repo, as binding as anything here — and hold the `lazy`
-entries ready to load the instant a task touches them. This is not optional and not
-deferrable; the manifest exists precisely so you do not work blind. If you have not
-loaded it, you are not ready to act.
+load the project's `context.json` — the manifest that sits in the **same directory
+as this AGENT.md** (when configured for OpenCode it is loaded for you
+automatically). Read it and act on it: load every `eager` entry's file
+**immediately** — that content is project law for this repo, as binding as anything
+here — and hold the `lazy` entries ready to load the instant a task touches them.
+This is not optional and not deferrable; the manifest exists precisely so you do
+not work blind. If you have not loaded it, you are not ready to act.
 ````
 
 ### `anamnesis/.gitignore` (binary — copy it from the Geneseed repo)

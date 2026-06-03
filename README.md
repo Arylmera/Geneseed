@@ -78,10 +78,11 @@ rather than spread across the repo root, add `--root`:
 python build.py --emit opencode --out /path/to/your-repo/Harness --root /path/to/your-repo
 ```
 
-The portable bundle (`AGENT.md`, `laws/`, …) stays in `Harness/`, while
-`context.json`, `opencode.json`, and `.opencode/` are written to the repo root
-(with the AGENT.md path prefixed, `Harness/AGENT.md`). OpenCode resolves
-instruction paths from the project root, so without `--root` they aren't found.
+The whole bundle — `AGENT.md`, `laws/`, **and `context.json`** — stays together in
+`Harness/`. Only `opencode.json` and `.opencode/` are written to the repo root
+(OpenCode discovers them there), with both instruction paths prefixed:
+`["Harness/AGENT.md", "Harness/context.json"]`. OpenCode resolves instruction paths
+from the project root, so without `--root` they aren't found.
 
 ### B. Prompt (no Python required)
 
