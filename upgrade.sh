@@ -98,20 +98,38 @@ BUILD_ARGS=(--out "$OUT")
 if [ -n "$THEME" ]; then BUILD_ARGS+=(--theme "$THEME"); fi
 if [ "$EMIT" = "opencode" ]; then BUILD_ARGS+=(--emit opencode --root "$ROOT_DIR"); fi
 
+# Migrate host state from an OLD in-folder bundle ($HERE/Harness) to the canonical
+# $OUT *before* rebuilding. The old default rendered the bundle inside the factory;
+# the canonical location is now a sibling $OUT. That stray bundle holds host-specific
+# state — context.json and memory/ — that a fresh $OUT lacks. It MUST move across
+# while $OUT is still empty: build() always stamps an empty context.json stub, so a
+# post-build rescue would find $OUT/context.json already present and never restore
+# the real one. Copy first, then build preserves it; only fill what $OUT is missing
+# so a real $OUT is never overwritten. Finally drop the stray.
+STRAY="$HERE/Harness"
+if [ "$OUT" != "$STRAY" ] && [ -d "$STRAY" ]; then
+  mkdir -p "$OUT"
+  if [ -f "$STRAY/context.json" ] && [ ! -f "$OUT/context.json" ]; then
+    cp "$STRAY/context.json" "$OUT/context.json"
+    echo "[geneseed] rescued context.json from $STRAY -> $OUT"
+  fi
+  # memory dir is themed: memory/ (neutral) or anamnesis/ (imperial).
+  for mem in memory anamnesis; do
+    if [ -d "$STRAY/$mem" ] && [ ! -d "$OUT/$mem" ]; then
+      cp -R "$STRAY/$mem" "$OUT/$mem"
+      echo "[geneseed] rescued $mem/ from $STRAY -> $OUT"
+    fi
+  done
+  echo "[geneseed] removing stray in-folder bundle $STRAY (canonical: $OUT)"
+  rm -rf "$STRAY"
+fi
+
 echo "[geneseed] rebuilding bundle -> $OUT (theme: ${THEME:-config default}, emit: $EMIT) ..."
 python3 build.py "${BUILD_ARGS[@]}"
 if [ -n "$THEME" ]; then
   python3 rituals/harness.py doctor --theme "$THEME" || true
 else
   python3 rituals/harness.py doctor || true
-fi
-
-# A previous run may have rendered the bundle INSIDE this factory folder
-# ($HERE/Harness). The canonical location is now $OUT; drop the stray copy so
-# there are never two bundles. Never touched when it IS the target.
-if [ "$OUT" != "$HERE/Harness" ] && [ -d "$HERE/Harness" ]; then
-  echo "[geneseed] removing stray in-folder bundle $HERE/Harness (canonical: $OUT)"
-  rm -rf "$HERE/Harness"
 fi
 
 echo "[geneseed] upgrade complete."

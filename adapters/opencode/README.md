@@ -112,19 +112,20 @@ in `opencode.json`** (that `"plugin"` array is only for npm-package plugins), an
 both `.js` and `.ts` are accepted. The directory does **not** exist by default, so
 create it the first time.
 
-- **Global (recommended — the bundle is used everywhere):** drop it into your user
-  plugins dir so it runs in every project:
+- **Global (recommended — the bundle is used everywhere):** drop the plugins into
+  your user plugins dir so they run in every project. The `*.js` glob installs both
+  the learn plugin and the [context plugin](#doc-enforcement--the-context-plugin):
 
   ```
   mkdir -p ~/.config/opencode/plugins
-  cp adapters/opencode/plugins/geneseed-learn.js ~/.config/opencode/plugins/
+  cp adapters/opencode/plugins/*.js ~/.config/opencode/plugins/
   ```
 
   PowerShell:
 
   ```powershell
   New-Item -ItemType Directory -Force "$HOME\.config\opencode\plugins" | Out-Null
-  Copy-Item adapters\opencode\plugins\geneseed-learn.js "$HOME\.config\opencode\plugins\"
+  Copy-Item adapters\opencode\plugins\*.js "$HOME\.config\opencode\plugins\"
   ```
 
 - **Per-project:** `build.py --emit opencode` (and `GENESEED_EMIT=opencode
@@ -167,6 +168,30 @@ there is nothing else to configure.
 > field name differs in your version it degrades quietly — logs to stderr and writes
 > nothing — rather than erroring. The resolvers are isolated at the top of
 > `geneseed-learn.js` for a one-line adjustment if needed.
+
+## Doc enforcement — the `context` plugin
+
+OpenCode's `instructions` array loads `context.json` itself (the *manifest*), but
+not the docs it points at — so the `eager`/`lazy` distinction isn't enforced. The
+[`plugins/geneseed-context.js`](plugins/geneseed-context.js) plugin closes that gap:
+the OpenCode equivalent of the Claude Code `harness context` SessionStart hook.
+
+On the `session.created` event it reads `context.json` and **injects the contents
+of every `eager` entry** into the new session via a no-reply prompt
+(`session.prompt({ noReply: true })`) — so those docs are in context before your
+first turn, enforcing **Law XVIII**, not leaving it to agent discipline. `lazy`
+entries are only listed, to be read when a task needs them. Its output mirrors
+`rituals/harness.py context` so both enforcement paths read identically.
+
+It needs no model and writes nothing. It finds `context.json` via
+`$GENESEED_CONTEXT` > `$GENESEED_HARNESS/context.json` > `./context.json` or
+`./Harness/context.json`; relative entry paths resolve against `context.json`'s own
+directory. It skips the learn plugin's throwaway sessions and swallows every error.
+
+**Install:** the same step as the learn plugin — `cp …/plugins/*.js` copies both,
+and `build --emit opencode` drops both into `.opencode/plugins/`. The same
+field-test caveat applies (`session.created`, `session.prompt` `noReply`, and
+`session.get` follow the published docs but aren't verified against every build).
 
 ## Pointing the agent at files beyond the Harness
 

@@ -136,7 +136,10 @@ without touching your host-specific state. Run it from inside the Geneseed folde
 It downloads upstream, refreshes the factory files in place, and re-renders the
 bundle into a **sibling `Harness/`** (beside the Geneseed folder, at the project
 level), overwriting the files there while preserving the bundle's `memory/` and
-`context.json`. A stray bundle left *inside* the factory by an older run is removed.
+`context.json`. A stray bundle left *inside* the factory by an older run is removed
+— but its host-specific state (`context.json` and `memory/`) is **rescued into the
+new location first**, so migrating from the old in-folder layout never wipes your
+project-context manifest or learned memories.
 
 **Theme** is resolved by precedence: explicit arg > the bundle's `.geneseed-theme`
 marker > the local `harness.config.json` (captured *before* it is refreshed from
