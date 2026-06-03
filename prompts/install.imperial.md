@@ -13,7 +13,7 @@ path shown in each file heading, creating subfolders as needed.
 - After writing, create an empty context.json at the repo root if absent, and list the repo's docs in it.
 - When finished, list every file you created.
 
-## Files (19 text files)
+## Files (22 text files)
 
 ### `AGENT.md`
 
@@ -197,10 +197,13 @@ before improvising. Specs live in [`rites/`](rites/).
 | --- | --- |
 | [brainstorm](rites/brainstorm.md) | a new feature or design with no plan yet |
 | [plan](rites/plan.md) | a task has more than a couple of steps |
+| [parallel-agents](rites/parallel-agents.md) | several independent subtasks and a tool that runs subagents |
 | [verify](rites/verify.md) | about to claim something is done |
+| [debug](rites/debug.md) | a bug or failure to diagnose before fixing |
 | [repo-map](rites/repo-map.md) | orienting to the repo, or structure changed |
 | [commit](rites/commit.md) | staging and writing a commit |
 | [code-review](rites/code-review.md) | reviewing a diff or PR |
+| [refactor](rites/refactor.md) | improving code structure without changing behaviour |
 | [roast-me](rites/roast-me.md) | you want an artifact torn apart, brutally and actionably |
 | [create-skill](rites/create-skill.md) | a task has crystallised into a repeatable pattern |
 
@@ -784,6 +787,46 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 - A new (or extended) Rite exists, named by domain, and is listed in `AGENT.md`.
 ````
 
+### `rites/debug.md`
+
+````
+# Rite: debug
+
+> Hunt the fault by evidence — reproduce it, corner it, slay the root cause, and prove it dead.
+
+**Trigger:** a bug, test failure, crash, or behaviour that doesn't match expectation — before proposing a fix.
+
+## Procedure
+1. Reproduce it first: find the smallest input or command that triggers the failure reliably. If you can't reproduce it, gather evidence (logs, stack trace, recent diff) until you can.
+2. Isolate: binary-search the cause — narrow the input, the code path, or (for a regression) the commit range with `git bisect`. Change one variable at a time.
+3. State one hypothesis that explains ALL the evidence before touching code.
+4. Apply the smallest fix that addresses the root cause, not the symptom; resist fixing things the evidence doesn't implicate (Lex XV).
+5. Verify with the [verify Rite](verify.md): the original reproduction now passes and nothing nearby broke. Dispatch the [tester Legatus](../legati/tester.md) for a focused regression check when the blast radius is unclear.
+
+## Done when
+- The failure is reproduced, root-caused, fixed at the cause, and the reproduction passes with no new breakage.
+````
+
+### `rites/parallel-agents.md`
+
+````
+# Rite: parallel-agents
+
+> Loose many Legati upon independent tasks at once, then gather what they bring.
+
+**Trigger:** two or more independent subtasks with no shared state or ordering between them — and a tool that can run subagents.
+
+## Procedure
+1. Confirm independence: the subtasks must not depend on each other's output or write the same files. If they're sequential or share state, use [plan](plan.md) instead.
+2. Split the work into self-contained units, each with one clear goal and a defined output contract — what it must return.
+3. Dispatch each unit to its own subagent in one batch; prefer the read-only [explorer Legatus](../legati/explorer.md) for investigation so the heavy reading stays out of the main context (Lex XV).
+4. Keep the main context lean: collect each subagent's distilled result, not its working transcript.
+5. Converge: reconcile the results, resolve conflicts yourself, and verify the combined outcome. Where no subagent capability exists, run the units sequentially as personas instead.
+
+## Done when
+- Independent units ran concurrently, each returned a distilled result, and the reconciled outcome is verified.
+````
+
 ### `rites/plan.md`
 
 ````
@@ -811,6 +854,26 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 > The worklog is external memory: it lets a context-limited agent recover its
 > place after the window fills, and lets the user correct course early. Consider
 > git-ignoring `WORKLOG.md` if it should stay local to each developer.
+````
+
+### `rites/refactor.md`
+
+````
+# Rite: refactor
+
+> Reforge the structure without changing its works — one named stroke, the trials green throughout.
+
+**Trigger:** improving the structure of working code — extract, rename, inline, split, dedupe — without changing what it does.
+
+## Procedure
+1. Confirm a green baseline first: the relevant tests pass before you touch anything. No tests cover it? Add a characterisation test, or stop and say so.
+2. Name the single move you're making (extract function, rename, inline, split module…) and its scope. One move at a time.
+3. Make only that change — no behaviour changes and no new features riding along (Lex XV keeps the step focused).
+4. Re-run the same tests: behaviour must be identical. If they go red, revert and reduce the step.
+5. Commit the refactor on its own with the [commit Rite](commit.md), separate from behavioural changes, so it's easy to review and revert.
+
+## Done when
+- Structure is improved, observable behaviour is unchanged, tests are green, and the refactor is committed by itself.
 ````
 
 ### `rites/repo-map.md`
