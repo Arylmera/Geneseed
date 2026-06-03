@@ -27,10 +27,12 @@ repository. It defines the **Leges** the agent obeys, the **Legati** it can
 delegate to, the **Rites** it can run, how it keeps **Anamnesis**, and how it
 draws on the surrounding **Vault**.
 
-It is tool-agnostic: it works with any assistant that reads an `AGENT.md` /
-`AGENTS.md` / `CLAUDE.md` at the repository root. Where a tool supports
-sub-agents, the Legati below are dispatched as real sub-agents; where it does
-not, treat each as a *persona* the single agent adopts for that slice of work.
+It is tool-agnostic: it works with any assistant that reads a root instructions
+file. This entrypoint is named `AGENT.md`; a tool that only auto-loads `AGENTS.md`
+or `CLAUDE.md` just needs to be pointed here — rename or symlink this file to that
+name, or reference it from the tool's config. Where a tool supports sub-agents,
+the Legati below are dispatched as real sub-agents; where it does not, treat
+each as a *persona* the single agent adopts for that slice of work.
 
 **Readiness sigil — required.** Before your first reply, complete the startup
 ritual: read this file and its Leges, then **load the project context** — if a

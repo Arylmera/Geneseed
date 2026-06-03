@@ -5,10 +5,17 @@
 
 Geneseed distils a personal, vault-grown agent system into a generic,
 tool-agnostic harness built around a single `AGENT.md`. Implant it into a repo
-and any assistant that reads `AGENT.md` / `AGENTS.md` / `CLAUDE.md` inherits a
-set of operating **rules**, a roster of capability **agents**, runnable
-**skills**, a **memory** convention, and a **`context.json`** manifest that points
-the agent at this repository's own documentation, wherever it lives.
+and an assistant that reads it inherits a set of operating **rules**, a roster of
+capability **agents**, runnable **skills**, a **memory** convention, and a
+**`context.json`** manifest that points the agent at this repository's own
+documentation, wherever it lives.
+
+The entrypoint the build emits is named **`AGENT.md`**. Most coding assistants
+that read a root instructions file pick it up directly. A tool that *only*
+auto-loads `AGENTS.md` or `CLAUDE.md` needs a one-line pointer — rename or symlink
+`AGENT.md` to that name, or reference it from the tool's config (the OpenCode
+adapter does exactly this; Claude Code's SessionStart hook `cat`s it). Geneseed
+does not scatter duplicate entrypoint files into your repo root.
 
 ## How it works
 
@@ -150,6 +157,71 @@ itself), so to pick up a newer `upgrade.sh`, re-fetch it once:
 ```
 curl -fsSL https://raw.githubusercontent.com/Arylmera/Geneseed/main/upgrade.sh -o upgrade.sh
 ```
+
+## Windows / PowerShell
+
+The two scripts that do the real work — `build.py` and `rituals/harness.py` — are
+**pure Python, stdlib only**, so they run identically on Windows. Use them as-is
+from PowerShell (forward or back slashes both work):
+
+```powershell
+python build.py --theme neutral --target C:\path\to\your-repo
+python rituals\harness.py doctor                 # sweeps every theme
+python rituals\harness.py prompt --theme imperial --out my-prompt.md
+```
+
+The Claude Code adapter hooks are also cross-platform — the `learn` hook reads the
+session payload from stdin (no `/dev/null` redirection), so it works unchanged on
+Windows. Set `$env:GENESEED_LLM` (and, if needed, `$env:GENESEED_MEMORY`) for it
+to distil.
+
+Only `upgrade.sh` is Unix-shell-only (it uses `curl`/`unzip`). On Windows you can
+run it under **Git Bash** or **WSL**, or use this PowerShell equivalent — run it
+from **inside the Geneseed folder**. It mirrors the script: download upstream,
+refresh the factory files in place, and re-render the bundle into a sibling
+`Harness\`. Host-specific files (`context.json`, the bundle's `memory\`) are left
+untouched.
+
+```powershell
+$Ref   = 'main'   # branch or tag
+$Theme = ''       # '' = keep the last-built theme from the Harness marker
+
+$Here = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+$Out  = Join-Path (Split-Path $Here -Parent) 'Harness'
+$Tmp  = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ([guid]::NewGuid()))
+try {
+  $zip = Join-Path $Tmp 'src.zip'
+  Invoke-WebRequest "https://github.com/Arylmera/Geneseed/archive/refs/heads/$Ref.zip" -OutFile $zip
+  Expand-Archive $zip -DestinationPath $Tmp -Force
+  $New = Get-ChildItem $Tmp -Directory | Where-Object Name -like 'Geneseed-*' | Select-Object -First 1
+
+  if (-not $Theme) {
+    $marker = Get-Content (Join-Path $Out '.geneseed-theme') -ErrorAction SilentlyContinue
+    $Theme  = if ($marker) { $marker.Trim() } else { 'neutral' }
+  }
+
+  # Factory files refreshed from upstream — everything else is left alone.
+  $Sync = 'build.py','rituals','src','themes','adapters','prompts',
+          'harness.config.json','DESIGN.md','README.md','LICENSE','.gitignore'
+  foreach ($item in $Sync) {
+    $s = Join-Path $New.FullName $item
+    if (Test-Path $s) {
+      $d = Join-Path $Here $item
+      if (Test-Path $d) { Remove-Item $d -Recurse -Force }
+      Copy-Item $s $d -Recurse -Force
+    }
+  }
+
+  python build.py --out $Out --theme $Theme
+  python rituals/harness.py doctor --theme $Theme
+} finally {
+  Remove-Item $Tmp -Recurse -Force
+}
+```
+
+(The bash `upgrade.sh` extras — the OpenCode opt-in via `GENESEED_EMIT` and the
+stray in-folder bundle cleanup — are not reproduced here; pass `--emit opencode
+--root <repo>` to `build.py` directly if you need the native layer.)
 
 ## Project context — `context.json`
 

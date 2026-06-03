@@ -14,8 +14,21 @@ Merge [`settings.json`](settings.json) into your repo's `.claude/settings.json`
   `context.json` directly into the session — so Rule XVIII is enforced by the
   hook, not left to the agent to remember (lazy entries are only listed);
 - on **Stop**, runs `harness learn` over the session to capture durable memories.
+  Claude Code pipes the hook payload (with the session's `transcript_path`) to the
+  command on stdin; `learn` reads that, flattens the transcript, distils new
+  memories, and **writes them into the bundle's `memory/` while updating
+  `MEMORY.md`** — deduping against what is already stored. No `< /dev/null` and no
+  redirection: the stdin payload is the whole point.
 
-Adjust the paths if your harness bundle is not at the repository root.
+  This step is **opt-in on a model CLI**: set `GENESEED_LLM` (e.g. `claude -p`,
+  `llm`, `ollama run …`) for `learn` to actually distil. With it unset the hook is
+  a harmless no-op that just prints the prompt. Geneseed never embeds an API key.
+  If your bundle's `memory/` is not at `./memory` or `./Harness/memory`, point at
+  it with `GENESEED_MEMORY=/abs/path/to/memory`.
+
+Adjust the paths if your harness bundle is not at the repository root. On Windows
+the commands are identical (`python rituals/harness.py …`); see the **Windows /
+PowerShell** section of the top-level README.
 
 Why inject rather than instruct? Rule XVIII tells the agent to read
 `context.json` at startup, but startup rituals are exactly what agents skip. The
