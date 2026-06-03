@@ -2,8 +2,8 @@
 """Geneseed harness generator.
 
 Renders the canonical neutral source in `src/` into a themed, ready-to-port
-bundle in `dist/`. The only thing a theme changes is *terminology* (the labels
-in the prose); folder and file names in `dist/` stay neutral so any
+bundle in `Harness/`. The only thing a theme changes is *terminology* (the labels
+in the prose); folder and file names in `Harness/` stay neutral so any
 AGENT.md-aware tool can consume them unchanged.
 
 Stdlib only. No dependencies.
@@ -11,7 +11,7 @@ Stdlib only. No dependencies.
 Usage:
     python build.py                      # use default theme from harness.config.json
     python build.py --theme imperial     # render the Warhammer-flavoured bundle
-    python build.py --theme neutral --out dist
+    python build.py --theme neutral --out Harness
 """
 from __future__ import annotations
 
@@ -198,9 +198,9 @@ def main() -> None:
 
     ap = argparse.ArgumentParser(description="Render the Geneseed harness for a theme.")
     ap.add_argument("--theme", default=default_theme, help="theme name (neutral, imperial, ...)")
-    ap.add_argument("--out", "--target", dest="out", default="dist",
+    ap.add_argument("--out", "--target", dest="out", default="Harness",
                     help="output directory — absolute, or relative to the current "
-                         "directory (default: ./dist)")
+                         "directory (default: ./Harness)")
     ap.add_argument("--emit", choices=["files", "opencode"], default="files",
                     help="files: plain bundle (default). opencode: bundle + native "
                          ".opencode/ subagents & commands + opencode.json")

@@ -4,15 +4,18 @@
 
 This file is the entry point an AI coding agent reads when working in this
 repository. It defines the **Rules** the agent obeys, the **Agents** it can
-delegate to, the **Skills** it can run, and how it keeps **Memory**.
+delegate to, the **Skills** it can run, how it keeps **Memory**, and how it
+draws on the surrounding **Workspace**.
 
 It is tool-agnostic: it works with any assistant that reads an `AGENT.md` /
 `AGENTS.md` / `CLAUDE.md` at the repository root. Where a tool supports
 sub-agents, the Agents below are dispatched as real sub-agents; where it does
 not, treat each as a *persona* the single agent adopts for that slice of work.
 
-**Readiness sigil.** When you have read this file and its Rules, open your first
-reply of the session with this line, so the user knows the harness is fully loaded:
+**Readiness sigil — required.** Your very first reply in any session MUST begin
+with the exact line below, before any other text, so the user can see at a glance
+that the harness loaded and its Rules are in force. Do not paraphrase it and do
+not skip it — a first reply that omits the sigil signals the harness was not read.
 
 > ✅ Harness loaded — rules in force, agents and skills ready.
 
@@ -105,6 +108,16 @@ output instead of carrying it verbatim. Do not re-read what is already in contex
 Delegate wide reading to a sub-Agent that returns only its conclusion. A lean
 context is a faster, cheaper, more accurate agent.
 
+### Rule XVI — Know the Workspace
+The folder this harness is installed into is a shared Workspace: it holds the
+harness and, alongside it, whatever notes, data, and files already belong to this
+machine or project. That surrounding content is yours to read and learn from —
+treat it as first-class context, and index durable facts you find there into
+Memory (Rule VI). But you do not own the folder. Files you did not create
+are not harness scaffolding to move, rewrite, or delete; verify what a file is
+before touching it (Rule III) and change it only when the task calls for it
+(Rule IV).
+
 ---
 
 ## 2. Project Rules
@@ -186,7 +199,27 @@ project Rules. Full convention: [`memory/README.md`](memory/README.md).
 
 ---
 
-## 6. References — host-specific external documentation
+## 6. Workspace — the folder you live in
+
+The directory this harness is installed into is its **Workspace**, and it is
+shared. The harness files — these Rules, Agents, Skills, this file — sit
+*alongside* whatever already belongs to this machine or repository: notes, data,
+configs, documents, prior work. All of it is context you may use.
+
+After reading this file, take stock of what surrounds it. That non-harness
+content is knowledge to **read and learn from**, not scaffolding to reorganise.
+When you find a durable fact there worth keeping, index it into Memory (§5) so
+it outlives the session.
+
+Because the folder is shared, two cautions hold (Rule XVI):
+- **You do not own it.** Files you did not create are not yours to move, rename,
+  or delete unless the task explicitly requires it (Rule IV).
+- **Do not assume.** Before treating a file as harness scaffolding or as
+  disposable, verify what it actually is (Rule III).
+
+---
+
+## 7. References — host-specific external documentation
 
 Some project knowledge — framework internals, front-end / back-end architecture,
 API references — is too large or too proprietary to live in this harness, and is
@@ -201,7 +234,7 @@ dropped into `references/` directly. Full convention:
 
 ---
 
-## 7. Scripts — optional automation
+## 8. Scripts — optional automation
 
 Everything above works on agent self-discipline alone. For teams that want hard
 automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,

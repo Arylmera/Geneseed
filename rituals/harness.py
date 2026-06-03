@@ -3,7 +3,7 @@
 
 Dependency-free. Three subcommands:
 
-    harness build [--theme NAME]   render src/ -> dist/ for a theme
+    harness build [--theme NAME]   render src/ -> Harness/ for a theme
     harness doctor [--theme NAME]  validate a build: unresolved tokens, dead links
     harness learn [FILE]           distil notes/transcript into memory entries
                                    via a model CLI of your choice (no API key)
@@ -166,7 +166,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(prog="harness", description="Geneseed harness CLI")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    b = sub.add_parser("build", help="render src/ -> dist/")
+    b = sub.add_parser("build", help="render src/ -> Harness/")
     b.add_argument("--theme", default=None)
     b.set_defaults(fn=cmd_build)
 

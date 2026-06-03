@@ -14,7 +14,7 @@ host-specific external docs.
 
 One canonical source in `src/` is written in neutral tokens. A tiny,
 dependency-free generator (`build.py`) renders it into a themed bundle in
-`dist/`. A theme changes the prose vocabulary *and* the bundle's top-level folder
+`Harness/`. A theme changes the prose vocabulary *and* the bundle's top-level folder
 names (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`, `references→apocrypha`); the
 `src/` tree itself always keeps neutral names. Internal links are themed to match,
 so the bundle always resolves.
@@ -37,7 +37,7 @@ Geneseed/
 ├── build.py              generator (stdlib only)
 ├── harness.config.json   default theme + metadata
 ├── src/                  canonical source — edit here
-│   ├── AGENT.md.tmpl     the entrypoint that gets rendered to dist/AGENT.md
+│   ├── AGENT.md.tmpl     the entrypoint that gets rendered to Harness/AGENT.md
 │   ├── laws/             governance rules (universal + project stub)
 │   ├── agents/           capability specialists
 │   ├── skills/           repeatable workflows
@@ -47,7 +47,7 @@ Geneseed/
 ├── rituals/harness.py    optional CLI: build · doctor · prompt · learn
 ├── prompts/              self-contained install prompts (no Python needed)
 ├── adapters/             optional per-tool glue (Claude Code hooks, OpenCode config)
-└── dist/                 generated bundle — this is what you port
+└── Harness/              generated bundle — this is what you port
 ```
 
 ## Implant it into a repo

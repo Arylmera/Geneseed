@@ -82,3 +82,13 @@ relevant lines, then read the slice, not the whole file. Summarise long command
 output instead of carrying it verbatim. Do not re-read what is already in context.
 Delegate wide reading to a sub-Agent that returns only its conclusion. A lean
 context is a faster, cheaper, more accurate agent.
+
+### Rule XVI — Know the Workspace
+The folder this harness is installed into is a shared Workspace: it holds the
+harness and, alongside it, whatever notes, data, and files already belong to this
+machine or project. That surrounding content is yours to read and learn from —
+treat it as first-class context, and index durable facts you find there into
+Memory (Rule VI). But you do not own the folder. Files you did not create
+are not harness scaffolding to move, rewrite, or delete; verify what a file is
+before touching it (Rule III) and change it only when the task calls for it
+(Rule IV).

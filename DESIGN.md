@@ -54,10 +54,10 @@ vault or a specific tool's hooks.
 
 ## Components
 
-The `dist/` output column shows the **neutral** folder name; the imperial theme
+The `Harness/` output column shows the **neutral** folder name; the imperial theme
 renders it as the name in parentheses.
 
-| Component | Source | `dist/` output | Purpose |
+| Component | Source | `Harness/` output | Purpose |
 | --- | --- | --- | --- |
 | Entrypoint | `src/AGENT.md.tmpl` | `AGENT.md` | what the tool reads; inlines the rules, links the rest |
 | Governance | `src/laws/` | `laws/` (`leges/`) | universal rules + a project-specific stub |
