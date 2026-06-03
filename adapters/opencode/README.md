@@ -5,6 +5,9 @@
 want — the baseline is a 30-second drop-in; the native mapping turns Geneseed's
 agents and skills into real OpenCode primitives.
 
+> New to how OpenCode discovers config, instructions, and plugins — or wondering
+> why a file shows up twice? See [**HOW-OPENCODE-LOADS.md**](HOW-OPENCODE-LOADS.md).
+
 ## Baseline (instant intake)
 
 After implanting the harness into your repo (so `AGENT.md`, `agents/`, `skills/`,
