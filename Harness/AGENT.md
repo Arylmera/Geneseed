@@ -23,6 +23,8 @@ not skip it — a first reply that omits the sigil signals the harness was not r
 
 ## 1. Rules (always in force)
 
+*The rules below hold in every task, in every repository.*
+
 <!-- Canonical, runtime-agnostic laws. Themed labels are substituted at build time. -->
 
 These Rules bind the agent in every task, in every repository.
@@ -122,6 +124,8 @@ before touching it (Rule III) and change it only when the task calls for it
 
 ## 2. Project Rules
 
+*Repository-local conventions layer on top of the universal rules.*
+
 Project-specific rules live in [`laws/project.md`](laws/project.md). Read them
 before acting. They override nothing in §1 but add repository-local conventions
 (branch naming, CI, review gates, stack choices).
@@ -152,6 +156,8 @@ before acting. They override nothing in §1 but add repository-local conventions
 
 ## 3. Agents — delegation by capability
 
+*Send the right specialist instead of doing everything in one context.*
+
 Delegate focused work to a specialist rather than doing everything in one
 context. Each specialist has a single clear purpose and a defined output
 contract. Specs live in [`agents/`](agents/).
@@ -172,6 +178,8 @@ Agent that *writes* must return a summary of exactly what it changed.
 
 ## 4. Skills — repeatable workflows
 
+*Run the written procedure before improvising.*
+
 A Skill is a written procedure for a recurring task. Run the matching Skill
 before improvising. Specs live in [`skills/`](skills/).
 
@@ -190,6 +198,8 @@ When a task repeats and no Skill covers it, forge one (see `create-skill`).
 
 ## 5. Memory — durable knowledge across sessions
 
+*What is worth keeping must outlive the session in writing.*
+
 Persistent facts live in [`memory/`](memory/) — one fact per file, indexed by a
 local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision
@@ -200,6 +210,8 @@ project Rules. Full convention: [`memory/README.md`](memory/README.md).
 ---
 
 ## 6. Workspace — the folder you live in
+
+*Read where you were installed — it holds more than the harness.*
 
 The directory this harness is installed into is its **Workspace**, and it is
 shared. The harness files — these Rules, Agents, Skills, this file — sit
@@ -221,6 +233,8 @@ Because the folder is shared, two cautions hold (Rule XVI):
 
 ## 7. References — host-specific external documentation
 
+*Bridge to the larger documentation kept elsewhere on the machine.*
+
 Some project knowledge — framework internals, front-end / back-end architecture,
 API references — is too large or too proprietary to live in this harness, and is
 maintained elsewhere on the machine. The `references/` directory bridges to it
@@ -236,7 +250,13 @@ dropped into `references/` directly. Full convention:
 
 ## 8. Scripts — optional automation
 
+*Optional automation for teams that want hard enforcement.*
+
 Everything above works on agent self-discipline alone. For teams that want hard
 automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
 `harness learn`, `harness doctor`) you can wire to git hooks or CI. It is opt-in —
 the harness is fully functional without it.
+
+---
+
+*Work with discipline, keep the rules, and ship clean.*

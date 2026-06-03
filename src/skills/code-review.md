@@ -1,6 +1,6 @@
 # {{SKILL}}: code-review
 
-> Review a diff or PR for correctness first, quality second.
+> {{DESC_CODE_REVIEW}}
 
 **Trigger:** reviewing changes before merge, or the user asks for a review.
 

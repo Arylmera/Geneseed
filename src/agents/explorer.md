@@ -1,6 +1,6 @@
 # {{AGENT}}: explorer
 
-> Reads and searches widely in a throwaway context, returns only distilled findings.
+> {{DESC_EXPLORER}}
 
 ## When to dispatch
 - A question needs sweeping many files or directories, but you only want the

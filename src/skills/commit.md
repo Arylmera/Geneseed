@@ -1,6 +1,6 @@
 # {{SKILL}}: commit
 
-> Stage the right paths and write a focused commit.
+> {{DESC_COMMIT}}
 
 **Trigger:** about to commit changes.
 

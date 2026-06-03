@@ -1,6 +1,6 @@
 # {{SKILL}}: verify
 
-> Confirm work is actually done before claiming it — run the checks, read the output.
+> {{DESC_VERIFY}}
 
 **Trigger:** about to say a task is done, fixed, or passing.
 

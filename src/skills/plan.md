@@ -1,6 +1,6 @@
 # {{SKILL}}: plan
 
-> Write a plan to a file before executing a non-trivial task; track progress as you go.
+> {{DESC_PLAN}}
 
 **Trigger:** a task with more than a couple of steps, or touching several files
 (universal {{LAW}} XIV).

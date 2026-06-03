@@ -1,6 +1,6 @@
 # {{AGENT}}: reviewer
 
-> Reviews a change for correctness and quality before it merges.
+> {{DESC_REVIEWER}}
 
 ## When to dispatch
 - A change is complete and about to be committed or opened as a PR.

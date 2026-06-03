@@ -1,6 +1,6 @@
 # {{SKILL}}: create-skill
 
-> Forge a new {{SKILL}} when a task crystallises into a repeatable pattern.
+> {{DESC_CREATE_SKILL}}
 
 **Trigger:** you've done the same multi-step task more than once, or expect to.
 

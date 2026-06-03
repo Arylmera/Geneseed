@@ -23,11 +23,15 @@ not skip it — a first reply that omits the sigil signals the harness was not r
 
 ## 1. {{LAWS}} (always in force)
 
+*{{EPI_LAWS}}*
+
 <!-- INCLUDE: laws/universal.md -->
 
 ---
 
 ## 2. Project {{LAWS}}
+
+*{{EPI_PROJECT}}*
 
 Project-specific rules live in [`{{DIR_LAWS}}/project.md`]({{DIR_LAWS}}/project.md). Read them
 before acting. They override nothing in §1 but add repository-local conventions
@@ -38,6 +42,8 @@ before acting. They override nothing in §1 but add repository-local conventions
 ---
 
 ## 3. {{AGENTS}} — delegation by capability
+
+*{{EPI_AGENTS}}*
 
 Delegate focused work to a specialist rather than doing everything in one
 context. Each specialist has a single clear purpose and a defined output
@@ -59,6 +65,8 @@ contract. Specs live in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/).
 
 ## 4. {{SKILLS}} — repeatable workflows
 
+*{{EPI_SKILLS}}*
+
 A {{SKILL}} is a written procedure for a recurring task. Run the matching {{SKILL}}
 before improvising. Specs live in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/).
 
@@ -77,6 +85,8 @@ When a task repeats and no {{SKILL}} covers it, forge one (see `create-skill`).
 
 ## 5. {{MEMORY}} — durable knowledge across sessions
 
+*{{EPI_MEMORY}}*
+
 Persistent facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/) — one fact per file, indexed by a
 local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision
@@ -87,6 +97,8 @@ project {{LAWS}}. Full convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/R
 ---
 
 ## 6. {{VAULT}} — the folder you live in
+
+*{{EPI_VAULT}}*
 
 The directory this harness is installed into is its **{{VAULT}}**, and it is
 shared. The harness files — these {{LAWS}}, {{AGENTS}}, {{SKILLS}}, this file — sit
@@ -108,6 +120,8 @@ Because the folder is shared, two cautions hold ({{LAW}} XVI):
 
 ## 7. {{REFERENCES}} — host-specific external documentation
 
+*{{EPI_REFS}}*
+
 Some project knowledge — framework internals, front-end / back-end architecture,
 API references — is too large or too proprietary to live in this harness, and is
 maintained elsewhere on the machine. The `{{DIR_REFS}}/` directory bridges to it
@@ -123,7 +137,13 @@ dropped into `{{DIR_REFS}}/` directly. Full convention:
 
 ## 8. {{SCRIPTS}} — optional automation
 
+*{{EPI_SCRIPTS}}*
+
 Everything above works on agent self-discipline alone. For teams that want hard
 automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
 `harness learn`, `harness doctor`) you can wire to git hooks or CI. It is opt-in —
 the harness is fully functional without it.
+
+---
+
+*{{BENEDICTION}}*

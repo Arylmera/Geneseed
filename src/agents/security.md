@@ -1,6 +1,6 @@
 # {{AGENT}}: security
 
-> Audits changes that touch the security surface.
+> {{DESC_SECURITY}}
 
 ## When to dispatch
 - A change touches authentication, authorization, input handling, file/network

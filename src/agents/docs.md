@@ -1,6 +1,6 @@
 # {{AGENT}}: docs
 
-> Writes and updates user-facing documentation after code lands.
+> {{DESC_DOCS}}
 
 ## When to dispatch
 - A feature is complete and its README / API docs / changelog must follow.

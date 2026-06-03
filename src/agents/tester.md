@@ -1,6 +1,6 @@
 # {{AGENT}}: tester
 
-> Writes, runs, and diagnoses tests.
+> {{DESC_TESTER}}
 
 ## When to dispatch
 - A feature or fix needs test coverage.

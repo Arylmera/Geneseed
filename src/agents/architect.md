@@ -1,6 +1,6 @@
 # {{AGENT}}: architect
 
-> Produces a design or implementation plan before code is written.
+> {{DESC_ARCHITECT}}
 
 ## When to dispatch
 - A task is large, ambiguous, or touches multiple subsystems.

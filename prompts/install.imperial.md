@@ -43,6 +43,8 @@ not skip it — a first reply that omits the sigil signals the harness was not r
 
 ## 1. Leges (always in force)
 
+*A servant unbound by law is a servant already lost.*
+
 <!-- Canonical, runtime-agnostic laws. Themed labels are substituted at build time. -->
 
 These Leges bind the agent in every task, in every repository.
@@ -142,6 +144,8 @@ before touching it (Lex III) and change it only when the task calls for it
 
 ## 2. Project Leges
 
+*Each world keeps its own rites; honour them as you honour the Codex.*
+
 Project-specific rules live in [`leges/project.md`](leges/project.md). Read them
 before acting. They override nothing in §1 but add repository-local conventions
 (branch naming, CI, review gates, stack choices).
@@ -172,6 +176,8 @@ before acting. They override nothing in §1 but add repository-local conventions
 
 ## 3. Legati — delegation by capability
 
+*No commander wages every war alone — dispatch thy Legati.*
+
 Delegate focused work to a specialist rather than doing everything in one
 context. Each specialist has a single clear purpose and a defined output
 contract. Specs live in [`legati/`](legati/).
@@ -192,6 +198,8 @@ Legatus that *writes* must return a summary of exactly what it changed.
 
 ## 4. Rites — repeatable workflows
 
+*The rite remembered is the rite performed without error.*
+
 A Rite is a written procedure for a recurring task. Run the matching Rite
 before improvising. Specs live in [`rites/`](rites/).
 
@@ -210,6 +218,8 @@ When a task repeats and no Rite covers it, forge one (see `create-skill`).
 
 ## 5. Anamnesis — durable knowledge across sessions
 
+*Forget nothing of worth; the Anamnesis endures beyond the waking.*
+
 Persistent facts live in [`anamnesis/`](anamnesis/) — one fact per file, indexed by a
 local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision
@@ -220,6 +230,8 @@ project Leges. Full convention: [`anamnesis/README.md`](anamnesis/README.md).
 ---
 
 ## 6. Vault — the folder you live in
+
+*Know the ground you are planted in, for the Vault is not yours alone.*
 
 The directory this harness is installed into is its **Vault**, and it is
 shared. The harness files — these Leges, Legati, Rites, this file — sit
@@ -241,6 +253,8 @@ Because the folder is shared, two cautions hold (Lex XVI):
 
 ## 7. Apocrypha — host-specific external documentation
 
+*Seek the Apocrypha kept apart, and let none of it escape into the light.*
+
 Some project knowledge — framework internals, front-end / back-end architecture,
 API references — is too large or too proprietary to live in this harness, and is
 maintained elsewhere on the machine. The `apocrypha/` directory bridges to it
@@ -256,10 +270,16 @@ dropped into `apocrypha/` directly. Full convention:
 
 ## 8. Rituals — optional automation
 
+*Where discipline must be made iron, let the Rituals bind it.*
+
 Everything above works on agent self-discipline alone. For teams that want hard
 automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
 `harness learn`, `harness doctor`) you can wire to git hooks or CI. It is opt-in —
 the harness is fully functional without it.
+
+---
+
+*Go forth disciplined, servant — the Emperor protects, and the work endures.*
 ````
 
 ### `legati/_template.md`
@@ -294,7 +314,7 @@ the harness is fully functional without it.
 ````
 # Legatus: architect
 
-> Produces a design or implementation plan before code is written.
+> Draws the battle-plan before a single line is committed to war.
 
 ## When to dispatch
 - A task is large, ambiguous, or touches multiple subsystems.
@@ -326,7 +346,7 @@ the harness is fully functional without it.
 ````
 # Legatus: docs
 
-> Writes and updates user-facing documentation after code lands.
+> Inscribes the records for those who come after, once the work is done.
 
 ## When to dispatch
 - A feature is complete and its README / API docs / changelog must follow.
@@ -356,7 +376,7 @@ the harness is fully functional without it.
 ````
 # Legatus: explorer
 
-> Reads and searches widely in a throwaway context, returns only distilled findings.
+> Ranges far and wide through a throwaway context, returning only the distilled truth.
 
 ## When to dispatch
 - A question needs sweeping many files or directories, but you only want the
@@ -390,7 +410,7 @@ the harness is fully functional without it.
 ````
 # Legatus: reviewer
 
-> Reviews a change for correctness and quality before it merges.
+> Sits in judgement of a change — correctness first, craft second — before it may pass the gate.
 
 ## When to dispatch
 - A change is complete and about to be committed or opened as a PR.
@@ -423,7 +443,7 @@ the harness is fully functional without it.
 ````
 # Legatus: security
 
-> Audits changes that touch the security surface.
+> Wards the gates, auditing every change that touches the security surface.
 
 ## When to dispatch
 - A change touches authentication, authorization, input handling, file/network
@@ -455,7 +475,7 @@ the harness is fully functional without it.
 ````
 # Legatus: tester
 
-> Writes, runs, and diagnoses tests.
+> Forges the trials, runs them, and reads their auguries when they fail.
 
 ## When to dispatch
 - A feature or fix needs test coverage.
@@ -753,7 +773,7 @@ name: references-index
 ````
 # Rite: code-review
 
-> Review a diff or PR for correctness first, quality second.
+> Scrutinise a diff or petition — correctness above all, craft thereafter.
 
 **Trigger:** reviewing changes before merge, or the user asks for a review.
 
@@ -775,7 +795,7 @@ name: references-index
 ````
 # Rite: commit
 
-> Stage the right paths and write a focused commit.
+> Stage only what the deed touched, and seal it with a focused commit.
 
 **Trigger:** about to commit changes.
 
@@ -797,7 +817,7 @@ name: references-index
 ````
 # Rite: create-skill
 
-> Forge a new Rite when a task crystallises into a repeatable pattern.
+> Forge a new Rite when a task hardens into a pattern worth repeating.
 
 **Trigger:** you've done the same multi-step task more than once, or expect to.
 
@@ -819,7 +839,7 @@ name: references-index
 ````
 # Rite: plan
 
-> Write a plan to a file before executing a non-trivial task; track progress as you go.
+> Set down the campaign-plan before the non-trivial task; mark thy progress as the battle turns.
 
 **Trigger:** a task with more than a couple of steps, or touching several files
 (universal Lex XIV).
@@ -848,7 +868,7 @@ name: references-index
 ````
 # Rite: repo-map
 
-> Create and maintain a one-read orientation map of the repository.
+> Chart the territory — a single-read map of the repository, kept current.
 
 **Trigger:** onboarding to a repo that has no map, or after a structural change.
 
@@ -871,7 +891,7 @@ name: references-index
 ````
 # Rite: verify
 
-> Confirm work is actually done before claiming it — run the checks, read the output.
+> Prove the work is truly done before it is declared — run the trials, read the result.
 
 **Trigger:** about to say a task is done, fixed, or passing.
 

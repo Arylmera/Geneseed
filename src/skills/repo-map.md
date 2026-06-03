@@ -1,6 +1,6 @@
 # {{SKILL}}: repo-map
 
-> Create and maintain a one-read orientation map of the repository.
+> {{DESC_REPO_MAP}}
 
 **Trigger:** onboarding to a repo that has no map, or after a structural change.
 
