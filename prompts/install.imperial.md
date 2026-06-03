@@ -10,10 +10,10 @@ path shown in each file heading, creating subfolders as needed.
 
 ## Rules
 - Copy each file's content exactly — do not summarise, reflow, or edit it.
-- After writing, copy `context.example.json` to `context.json` and list the repo's docs.
+- After writing, create an empty context.json at the repo root if absent, and list the repo's docs in it.
 - When finished, list every file you created.
 
-## Files (18 text files)
+## Files (17 text files)
 
 ### `AGENT.md`
 
@@ -247,9 +247,9 @@ start of a session and act on each entry by its `load` mode:
 Each `path` may be **absolute** (a doc living anywhere on the machine) or relative
 to the repository root. This is the sanctioned escape hatch from the harness's
 hermetic rule, and it replaces baked-in project rules: point at the project's own
-files instead of editing the harness. See
-[`context.example.json`](context.example.json) for the schema; copy it to
-`context.json` to begin.
+files instead of editing the harness. The build drops an empty
+[`context.json`](context.json) here on first run — its schema is in the file's own
+comment — and never overwrites it; just fill it in.
 
 ---
 
@@ -486,31 +486,6 @@ the harness is fully functional without it.
 ## Output contract
 - The test files written/changed, the command to run them, and the actual run
   output (pass/fail counts). For diagnosis: root cause + recommended fix location.
-````
-
-### `context.example.json`
-
-````
-{
-  "_comment": "Copy this file to context.json (and git-ignore context.json — it is host-specific). It points the agent at this project's own documentation, wherever it lives. 'load': 'eager' = read every session (small, always-relevant rules); 'load': 'lazy' = read only when the task needs it (large/occasional docs). 'path' may be absolute or relative to the repo root.",
-  "context": [
-    {
-      "path": "/abs/path/to/house-rules.md",
-      "load": "eager",
-      "description": "Team coding conventions, branch/commit policy, Definition of Done."
-    },
-    {
-      "path": "C:/work/my-repo/docs/ARCHITECTURE.md",
-      "load": "lazy",
-      "description": "Back-end service boundaries, auth flow, queues — read when touching the backend."
-    },
-    {
-      "path": "./docs/frontend.md",
-      "load": "lazy",
-      "description": "Front-end architecture, relative to the repo root."
-    }
-  ]
-}
 ````
 
 ### `leges/universal.md`

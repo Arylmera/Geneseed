@@ -1,0 +1,4 @@
+{
+  "_comment": "Point the agent at this project's own documentation. Each entry: 'path' (absolute, or relative to the repo root), 'load' ('eager' = read every session for small always-relevant rules; 'lazy' = read only when the task needs it), and 'description'. This file is host-specific — git-ignore it. The build creates it once, empty, and never overwrites it.",
+  "context": []
+}

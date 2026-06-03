@@ -63,10 +63,10 @@ Drop a **`context.json`** manifest at the bundle root (beside `AGENT.md`) and th
 agent loads it dynamically — no `opencode.json` wiring needed, and it works on any
 tool. Each entry carries a `load` mode: `eager` (read every session — small,
 always-relevant rules) or `lazy` (read only when the task needs it — large or
-occasional docs, often elsewhere on the machine). Copy `context.example.json` to
-`context.json`, git-ignore it, and list your docs by absolute or repo-relative
-path. See AGENT.md §6 and
-[`context.example.json`](../../src/context.example.json) for the schema.
+occasional docs, often elsewhere on the machine). The build drops an empty
+`context.json` at the bundle root (never overwriting an existing one); git-ignore
+it and list your docs by absolute or repo-relative path. The schema is in AGENT.md
+§6 and the file's own comment.
 
 If you'd rather use OpenCode's own always-on loading for a small rule file, you can
 also add its path to the `instructions` array of `opencode.json` directly — it

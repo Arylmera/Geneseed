@@ -47,8 +47,8 @@ vault or a specific tool's hooks.
    (framework internals, front-/back-end architecture) that must not be committed
    into the portable harness. A `context.json` file at the bundle root lists those
    docs by path, each with a `load` mode (`eager` = read every session, `lazy` =
-   read on demand). Only the tracked `context.example.json` template ships; the
-   real `context.json` and the docs it points at stay on the machine. The agent
+   read on demand). The build writes an empty `context.json` once and never
+   overwrites it; that file and the docs it points at stay on the machine. The agent
    reads it dynamically — no build step, tool-agnostic — and it is distinct from
    `memory/` (atomic learned *facts*) by holding pointers to *bodies of
    documentation* maintained elsewhere. It also subsumes what a baked-in project
@@ -66,7 +66,7 @@ renders it as the name in parentheses.
 | Delegation | `src/agents/` | `agents/` (`legati/`) | capability specialists with output contracts |
 | Workflows | `src/skills/` | `skills/` (`rites/`) | repeatable procedures |
 | Memory | `src/memory/` | `memory/` (`anamnesis/`) | one-fact-per-file convention + index |
-| Context | `src/context.example.json` | `context.example.json` | template for the per-repo `context.json` manifest (git-ignored) |
+| Context | `build.py` | `context.json` | empty per-repo manifest, written once and never overwritten; git-ignore it |
 | Themes | `themes/*.json` | — | token → label maps |
 | Generator | `build.py` | — | substitution + `<!-- INCLUDE: -->` inlining |
 | Automation | `rituals/harness.py` | — | optional `build` / `doctor` / `learn` |

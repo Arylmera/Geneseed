@@ -227,9 +227,9 @@ start of a session and act on each entry by its `load` mode:
 Each `path` may be **absolute** (a doc living anywhere on the machine) or relative
 to the repository root. This is the sanctioned escape hatch from the harness's
 hermetic rule, and it replaces baked-in project rules: point at the project's own
-files instead of editing the harness. See
-[`context.example.json`](context.example.json) for the schema; copy it to
-`context.json` to begin.
+files instead of editing the harness. The build drops an empty
+[`context.json`](context.json) here on first run — its schema is in the file's own
+comment — and never overwrites it; just fill it in.
 
 ---
 

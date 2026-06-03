@@ -73,6 +73,33 @@ SRC_DIR_TOKENS = {
     "memory": "DIR_MEMORY",
 }
 
+# Dirs the build fully owns: wiped and regenerated each run so a renamed/removed
+# source file never leaves a stale copy behind. `memory` is intentionally NOT here —
+# it holds the agent's runtime MEMORY.md + fact files and is refreshed in place.
+OWNED_SRC_DIRS = ("laws", "agents", "skills")
+
+# Written once into the bundle root and never overwritten — the user's per-repo
+# pointer to its own documentation (host-specific; git-ignore it).
+CONTEXT_STUB = {
+    "_comment": (
+        "Point the agent at this project's own documentation. Each entry: 'path' "
+        "(absolute, or relative to the repo root), 'load' ('eager' = read every "
+        "session for small always-relevant rules; 'lazy' = read only when the task "
+        "needs it), and 'description'. This file is host-specific — git-ignore it. "
+        "The build creates it once, empty, and never overwrites it."
+    ),
+    "context": [],
+}
+
+
+def ensure_context_stub(out: Path) -> None:
+    """Drop an empty `context.json` at the bundle root the first time only. If the
+    user already has one, leave it completely untouched — their pointers are theirs."""
+    dest = out / "context.json"
+    if not dest.exists():
+        dest.write_text(json.dumps(CONTEXT_STUB, indent=2, ensure_ascii=False) + "\n",
+                        encoding="utf-8")
+
 
 def themed_rel(rel: Path, theme: dict) -> Path:
     """Rename the top-level folder of an output path per theme (laws -> leges …).
@@ -112,17 +139,22 @@ def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]
 
 
 def build(theme_name: str, out: Path) -> None:
-    """Render the bundle into `out`, overwriting the files it generates.
+    """Render the bundle into `out`.
 
-    Deliberately *additive*: it never wipes the target. The output folder may be
-    a real repository, or hold the agent's runtime `{{MEMORY}}/` (MEMORY.md + fact
-    files) and a host-specific `context.json` — none of which the build creates, so
-    none of which it may delete. Re-running refreshes the harness scaffolding in
-    place and leaves everything else untouched. (A renamed/removed source file can
-    therefore leave a stale copy behind; run into a clean folder for a pristine
-    bundle.)"""
-    _, items = render_all(theme_name)
+    Before rendering, the dirs the build fully owns (`OWNED_SRC_DIRS` — laws,
+    agents, skills, in their themed form) are wiped, so a renamed or removed source
+    file never leaves a stale copy behind. Everything else in `out` is preserved:
+    the surrounding application code, the agent's runtime `memory/` (MEMORY.md +
+    fact files, refreshed in place), and `context.json` (created once, never
+    touched again). The build therefore cleans its own footprint without ever
+    destroying the user's repository or data."""
+    theme, items = render_all(theme_name)
     out.mkdir(parents=True, exist_ok=True)
+
+    for src_dir in OWNED_SRC_DIRS:
+        managed = out / theme.get(SRC_DIR_TOKENS[src_dir], src_dir)
+        if managed.is_dir():
+            shutil.rmtree(managed)
 
     for out_rel, text, src in items:
         dest = out / out_rel
@@ -133,6 +165,7 @@ def build(theme_name: str, out: Path) -> None:
             shutil.copy2(src, dest)
 
     (out / ".geneseed-theme").write_text(theme_name + "\n", encoding="utf-8")
+    ensure_context_stub(out)
     print(f"[geneseed] built theme '{theme_name}' -> {out} ({len(items)} files)")
 
 
@@ -163,6 +196,10 @@ def emit_opencode(theme_name: str, out: Path) -> None:
     the same source: capability agents become subagents, skills become commands,
     and an opencode.json wires AGENT.md as a rule file."""
     build(theme_name, out)
+    # Owned by this layer — wipe so a removed agent/skill leaves no stale subagent
+    # or command file behind.
+    if (out / ".opencode").is_dir():
+        shutil.rmtree(out / ".opencode")
     _, items = render_all(theme_name)
 
     n_agents = n_cmds = 0

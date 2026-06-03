@@ -41,8 +41,7 @@ Geneseed/
 │   ├── laws/             governance rules (universal)
 │   ├── agents/           capability specialists
 │   ├── skills/           repeatable workflows
-│   ├── memory/           memory convention + index
-│   └── context.example.json  template for the per-repo context manifest
+│   └── memory/           memory convention + index
 ├── themes/               token → label maps (neutral, imperial)
 ├── rituals/harness.py    optional CLI: build · doctor · prompt · learn
 ├── prompts/              self-contained install prompts (no Python needed)
@@ -111,7 +110,8 @@ drop a **`context.json`** manifest at the bundle root (beside `AGENT.md`). It is
 optional and host-specific — **git-ignore it**; the build never touches or
 publishes it, and rebuilds leave it intact.
 
-Copy [`context.example.json`](Harness/context.example.json) and list your docs:
+The build drops an empty `context.json` at the bundle root on first run (and never
+overwrites it). Git-ignore it, then fill it in:
 
 ```json
 {
