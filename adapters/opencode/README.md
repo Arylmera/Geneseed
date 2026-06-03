@@ -36,7 +36,8 @@ That writes, on top of the normal bundle:
 
 ```
 your-repo/
-├── opencode.json              instructions → AGENT.md
+├── opencode.json              instructions → AGENT.md + context.json
+├── context.json               empty project-context manifest (git-ignore it)
 └── .opencode/
     ├── agent/                 one subagent per capability agent
     │   ├── reviewer.md  architect.md  security.md   (read-only: write/edit denied)
@@ -49,6 +50,12 @@ your-repo/
   edit: false }`; the rest keep edit access.
 - OpenCode invokes a subagent via the task tool, e.g. `subagent_type: "reviewer"`.
 - Themed: add `--theme imperial` for the Warhammer vocabulary.
+- **Bundle in a subfolder?** OpenCode resolves `instructions` paths from the
+  *project root*, not from `opencode.json`'s folder. So if the bundle lives in a
+  subfolder, add `--root <repo>` — `opencode.json`, `.opencode/`, and `context.json`
+  are written to the repo root (with `AGENT.md` prefixed, e.g. `Harness/AGENT.md`)
+  while the bundle stays in `--out`:
+  `python build.py --emit opencode --out repo/Harness --root repo`.
 
 ### Manual mapping (fallback)
 

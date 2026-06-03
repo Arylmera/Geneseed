@@ -62,8 +62,8 @@ directory, so you can render straight into the repo you want:
 python build.py --theme neutral --target /path/to/your-repo
 ```
 
-Then give the agent your repo's knowledge — copy `context.example.json` to
-`context.json` and list your docs (see **Project context** below).
+The build drops an empty `context.json` for you (at the repo root); list your
+repo's docs in it (see **Project context** below).
 
 For **OpenCode**, add `--emit opencode` to also generate native subagents,
 commands, and an `opencode.json` alongside the bundle:
@@ -71,6 +71,18 @@ commands, and an `opencode.json` alongside the bundle:
 ```
 python build.py --emit opencode --target /path/to/your-repo
 ```
+
+**Bundle in a subfolder?** To keep the harness contained (e.g. in `Harness/`)
+rather than spread across the repo root, add `--root`:
+
+```
+python build.py --emit opencode --out /path/to/your-repo/Harness --root /path/to/your-repo
+```
+
+The portable bundle (`AGENT.md`, `laws/`, …) stays in `Harness/`, while
+`context.json`, `opencode.json`, and `.opencode/` are written to the repo root
+(with the AGENT.md path prefixed, `Harness/AGENT.md`). OpenCode resolves
+instruction paths from the project root, so without `--root` they aren't found.
 
 ### B. Prompt (no Python required)
 
