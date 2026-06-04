@@ -49,23 +49,26 @@ OUT="${GENESEED_OUT:-$(dirname "$HERE")/Harness}"
 # live. Defaults to the bundle's parent; override with GENESEED_ROOT.
 ROOT_DIR="${GENESEED_ROOT:-$(dirname "$OUT")}"
 
+# OpenCode's global config dir (mirrors build.py _opencode_config_dir()).
+CFG="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"
+
 # Emit mode — plain bundle by default (just the harness, referenced by its own
 # AGENT.md, from anywhere on the machine). OPT-IN OpenCode layers:
 #   GENESEED_EMIT=opencode         per-repo .opencode/ (subagents, native skills) + opencode.json
 #   GENESEED_EMIT=opencode-global  straight into OpenCode's global config dir
 #                                  ($OPENCODE_CONFIG_DIR / ~/.config/opencode) — everything
 #                                  global, zero per-repo files (GLOBAL-HARNESS-SPEC.md)
-# Neither is ever generated automatically. The chosen mode is REMEMBERED in
-# $OUT/.geneseed-emit, so a later bare `./upgrade.sh` keeps emitting the same way.
-# Precedence: explicit env > marker > files.
-EMIT="${GENESEED_EMIT:-$(cat "$OUT/.geneseed-emit" 2>/dev/null || echo files)}"
+# Neither is ever generated automatically. build.py REMEMBERS the chosen mode in a
+# .geneseed-emit marker (global mode -> in $CFG; other modes -> in $OUT), so a later
+# bare `./upgrade.sh` keeps deploying the same way. Precedence: explicit env >
+# global-config marker > bundle marker > files.
+EMIT="${GENESEED_EMIT:-$(cat "$CFG/.geneseed-emit" 2>/dev/null || cat "$OUT/.geneseed-emit" 2>/dev/null || echo files)}"
 
 # Heads-up guard: if this run would emit the plain bundle only, but OpenCode's global
 # config dir already carries a Geneseed install (.geneseed-manifest.json), the user
 # very likely meant to refresh THAT — a bare ./upgrade.sh silently won't touch it.
-# Warn, never block. CFG resolution mirrors build.py _opencode_config_dir().
+# Warn, never block.
 if [ "$EMIT" = "files" ]; then
-  CFG="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"
   if [ -f "$CFG/.geneseed-manifest.json" ]; then
     echo "[geneseed] ⚠️  $CFG already holds a global Geneseed install (.geneseed-manifest.json)," >&2
     echo "[geneseed] ⚠️  but this run emits the plain bundle only — it will NOT refresh that global config." >&2
@@ -157,9 +160,8 @@ fi
 
 echo "[geneseed] rebuilding bundle -> $OUT (theme: ${THEME:-config default}, emit: $EMIT) ..."
 python3 build.py "${BUILD_ARGS[@]}"
-# Remember the emit mode so a later bare `./upgrade.sh` keeps deploying the same way
-# (build() always (re)creates $OUT, so this marker survives alongside .geneseed-theme).
-printf '%s\n' "$EMIT" > "$OUT/.geneseed-emit"
+# (build.py persists the .geneseed-emit marker itself — global mode in $CFG, other
+# modes in $OUT — so the mode is remembered no matter which entrypoint set it.)
 if [ -n "$THEME" ]; then
   python3 rituals/harness.py doctor --theme "$THEME" || true
 else

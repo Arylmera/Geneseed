@@ -365,24 +365,62 @@ def _opencode_config_dir() -> Path:
 GLOBAL_MANIFEST = ".geneseed-manifest.json"
 
 
-def emit_opencode_global(theme_name: str, out: Path) -> None:
+def _global_memory(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
+    """Ensure the global memory store exists at <cfg>/<themed memory dir> (memory/ or
+    anamnesis/). If it already holds files it is left alone — it carries learned
+    facts. Otherwise migrate an existing legacy bundle's memory into it (one-time, so
+    a host switching from a sibling Harness loses nothing), else seed from the src
+    template. The store is host state, never tracked in the owned-manifest."""
+    mem_name = theme.get(SRC_DIR_TOKENS["memory"], "memory")
+    mem_dir = cfg / mem_name
+    if mem_dir.is_dir() and any(mem_dir.iterdir()):
+        return f"kept {mem_name}/"
+    mem_dir.mkdir(parents=True, exist_ok=True)
+    if legacy:
+        for nm in dict.fromkeys([mem_name, "memory", "anamnesis"]):
+            src = legacy / nm
+            if src.is_dir() and any(src.iterdir()):
+                for f in src.rglob("*"):
+                    if f.is_file():
+                        dest = mem_dir / f.relative_to(src)
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(f, dest)
+                return f"migrated {nm}/ -> {mem_name}/"
+    for _out_rel, text, src in items:
+        sp = src.relative_to(SRC).as_posix().split("/")
+        if sp[0] == "memory" and len(sp) > 1:
+            dest = mem_dir / Path(*sp[1:])
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if text is not None:
+                dest.write_text(text, encoding="utf-8")
+            else:
+                shutil.copy2(src, dest)
+    return f"seeded {mem_name}/"
+
+
+def emit_opencode_global(theme_name: str, out: Path | None = None) -> None:
     """Render the harness straight into OpenCode's GLOBAL config dir — the
     "everything global, zero per-repo" deployment (GLOBAL-HARNESS-SPEC.md).
 
-    Unlike `emit_opencode`, the target dir is shared with the user's own OpenCode
-    config, so it is NEVER wiped. Instead a `.geneseed-manifest.json` tracks exactly
-    the files this layer owns; on re-emit, files we previously wrote but no longer
-    produce are removed, and the user's own agents/skills/plugins are left untouched.
+    Self-contained: it writes ONLY into <cfg> and builds NO sibling Harness bundle.
+    AGENT.md is rendered straight to <cfg>/AGENT.md, and the memory store lives at
+    <cfg>/<memory|anamnesis> (migrated once from a legacy Harness if present, else
+    seeded). Point the learn plugin at it with GENESEED_HARNESS=<cfg>.
+
+    The target dir is shared with the user's own OpenCode config, so it is NEVER
+    wiped. A `.geneseed-manifest.json` tracks exactly the files this layer owns
+    (AGENT.md, agents/, skills/, plugins/ — NOT memory); on re-emit, files we
+    previously wrote but no longer produce are removed, and the user's own
+    agents/skills/plugins (and the memory store) are left untouched.
 
     Writes: <cfg>/AGENT.md, <cfg>/agents/*.md, <cfg>/skills/<name>/SKILL.md,
-    <cfg>/plugins/*.js (single copy — kills the double-injection), and merges
-    <cfg>/opencode.json to point `instructions` at the absolute <cfg>/AGENT.md. It
-    does NOT write context.json — project docs are auto-discovered by the context
-    plugin. The portable bundle is still built at `out` so the memory store and a
-    self-contained AGENT.md exist for $GENESEED_HARNESS."""
+    <cfg>/plugins/*.js (single copy — kills the double-injection), the memory store,
+    and merges <cfg>/opencode.json to point `instructions` at the absolute
+    <cfg>/AGENT.md. It does NOT write context.json — project docs are auto-discovered
+    by the context plugin. `out`, if given, is only a migration source for an
+    existing memory store (the legacy bundle location); nothing is built there."""
     cfg = _opencode_config_dir()
-    build(theme_name, out)
-    _, items = render_all(theme_name)
+    theme, items = render_all(theme_name)
     cfg.mkdir(parents=True, exist_ok=True)
 
     # Remove files this layer owned on a previous run (stale agent/skill/plugin).
@@ -405,8 +443,10 @@ def emit_opencode_global(theme_name: str, out: Path) -> None:
                 pass
 
     owned: list[str] = []
-    shutil.copy2(out / "AGENT.md", cfg / "AGENT.md")
-    owned.append("AGENT.md")
+    agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
+    if agent_text is not None:
+        (cfg / "AGENT.md").write_text(agent_text, encoding="utf-8")
+        owned.append("AGENT.md")
 
     n_agents, n_skills, written = _write_native_layer(items, cfg / "agents", cfg / "skills")
     owned += [p.relative_to(cfg).as_posix() for p in written]
@@ -419,15 +459,19 @@ def emit_opencode_global(theme_name: str, out: Path) -> None:
             owned.append(f"plugins/{js.name}")
             n_plugins += 1
 
+    mem_status = _global_memory(cfg, theme, items, out)
+
     _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix())
 
     manifest_path.write_text(
         json.dumps({"_comment": "Files owned by Geneseed's --emit opencode-global. "
-                                "Do not edit; removed on re-emit.", "owned": sorted(owned)},
+                                "Do not edit; removed on re-emit. The memory store is "
+                                "NOT listed — it is never deleted.", "owned": sorted(owned)},
                    indent=2) + "\n", encoding="utf-8")
 
     print(f"[geneseed] opencode-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
-          f"{n_plugins} plugin(s), AGENT.md, opencode.json (no context.json — auto-discovered)")
+          f"{n_plugins} plugin(s), AGENT.md, {mem_status}, opencode.json (no context.json). "
+          f"Point the learn plugin here once:  export GENESEED_HARNESS=\"{cfg}\"")
 
 
 def main() -> None:
@@ -461,6 +505,16 @@ def main() -> None:
         emit_opencode_global(args.theme, out)
     else:
         build(args.theme, out)
+
+    # Persist the emit mode (host state) so a later bare `./upgrade.sh` keeps
+    # deploying the same way — regardless of which entrypoint chose it. Global mode's
+    # marker lives in the config dir (no Harness is built); other modes' in `out`.
+    emit_marker = (_opencode_config_dir() if args.emit == "opencode-global" else out) / ".geneseed-emit"
+    try:
+        emit_marker.parent.mkdir(parents=True, exist_ok=True)
+        emit_marker.write_text(args.emit + "\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
 if __name__ == "__main__":

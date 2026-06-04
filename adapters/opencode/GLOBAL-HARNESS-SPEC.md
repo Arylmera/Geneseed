@@ -289,18 +289,24 @@ This is the "rely on the rule" path — kept as a safety net, not the main mecha
 
 Add an emit target so the factory can render straight into the global dir.
 
-`python build.py --emit opencode-global [--theme NAME]`:
+`python build.py --emit opencode-global [--theme NAME]` — **self-contained**: it
+writes ONLY into `<cfg>` and builds **no sibling `Harness/`** (plural subdir names —
+canonical):
 
-1. Render the bundle (as `--emit opencode` does).
-2. Copy into the global config dir (**plural** subdir names — canonical):
-   - `AGENT.md` → `<cfg>/AGENT.md`
-   - `agents/*.md` → `<cfg>/agents/*.md` (read-only agents keep `tools: { write:false, edit:false }`)
-   - skills → `<cfg>/skills/<name>/SKILL.md` (**native skills**, model-invoked — see §9.1)
-   - `plugins/*.js` → `<cfg>/plugins/*.js` (**single copy** — the fix)
-3. Write/merge `<cfg>/opencode.json` with the **absolute** `AGENT.md` path.
-4. **Do not** write any `context.json` (auto-discovery is the default).
-5. Idempotent: never clobber a user-edited `opencode.json` — merge the
-   `instructions` entry only.
+1. Render `AGENT.md` straight to `<cfg>/AGENT.md` (no Harness staging/copy).
+2. `agents/*.md` → `<cfg>/agents/*.md` (read-only agents keep `tools: { write:false, edit:false }`).
+3. skills → `<cfg>/skills/<name>/SKILL.md` (**native skills**, model-invoked — see §9.1).
+4. `plugins/*.js` → `<cfg>/plugins/*.js` (**single copy** — the fix).
+5. **Memory store** → `<cfg>/memory` (or `anamnesis/`): if it already has files,
+   left alone; else migrated once from a legacy `Harness/memory` (so a host moving
+   off a sibling bundle loses nothing), else seeded from the `src/memory` template.
+   The store is **not** owned-tracked — never deleted on re-emit. Point the learn
+   plugin at it with `GENESEED_HARNESS=<cfg>`.
+6. Write/merge `<cfg>/opencode.json` with the **absolute** `AGENT.md` path; never
+   clobbers a user-edited config — merges the `instructions` entry only.
+7. **No** `context.json` (auto-discovery is the default).
+8. `.geneseed-emit` marker written in `<cfg>` (build.py persists it regardless of
+   entrypoint), so a later bare `./upgrade.sh` keeps emitting globally.
 
 ### 9.1 Skills → native `skills/` (decided)
 
@@ -341,38 +347,38 @@ git-tracked folder), else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`
 
 **One-time, on the machine that runs OpenCode.**
 
-1. **Build the bundle** (from the Geneseed folder):
+1. **Emit globally** (from the Geneseed folder). No separate bundle build — this is
+   self-contained:
    ```bash
    cd /path/to/Geneseed
-   ./upgrade.sh                       # renders ../Harness
-   export GENESEED_HARNESS="$(dirname "$PWD")/Harness"
-   echo "export GENESEED_HARNESS=\"$GENESEED_HARNESS\"" >> ~/.zshrc   # persist
+   GENESEED_EMIT=opencode-global ./upgrade-imperial.sh    # or ./upgrade.sh / --theme neutral
    ```
+   This populates `~/.config/opencode/{AGENT.md,agents/,skills/,plugins/,memory/}`,
+   wires `opencode.json` to the absolute `AGENT.md`, and remembers the mode in
+   `<cfg>/.geneseed-emit` — so every later bare `./upgrade-imperial.sh` stays global.
+   (Direct equivalent: `python build.py --emit opencode-global`.)
 
-2. **Emit globally:**
+2. **Point the learn plugin at the in-config memory store** (once):
    ```bash
-   python build.py --emit opencode-global          # add --theme imperial if wanted
+   export GENESEED_HARNESS="$HOME/.config/opencode"        # so it writes <cfg>/memory
+   echo "export GENESEED_HARNESS=\"$HOME/.config/opencode\"" >> ~/.zshrc
    ```
-   This populates `~/.config/opencode/{AGENT.md,agent/,command/,plugins/}` and
-   wires `opencode.json` to the absolute `AGENT.md`.
+   (Or `$OPENCODE_CONFIG_DIR` if you relocated the config dir.)
 
 3. **Remove every per-repo copy** (the source of the double-injection):
    ```bash
    # in each repo you previously ran --emit opencode in:
-   rm -rf .opencode/plugins .opencode/agent .opencode/command opencode.json context.json
+   rm -rf .opencode/plugins .opencode/agents .opencode/agent .opencode/skills \
+          .opencode/command opencode.json context.json
    # and confirm only ONE global plugin copy exists:
    ls ~/.config/opencode/plugins/        # geneseed-context.js + geneseed-learn.js, once each
    ```
 
-4. **(Optional) Point memory at the global store** (if not already via step 1):
-   ```bash
-   export GENESEED_MEMORY="$GENESEED_HARNESS/memory"
-   ```
-
-5. **Verify** (§11).
+4. **Verify** (§11). A stray sibling `Harness/` from an older global build is now
+   unused — safe to delete once memory has migrated into `<cfg>/memory`.
 
 **Per repo afterwards: nothing.** Open OpenCode in any repo — the global AGENT.md,
-agents, and commands load, and the context plugin auto-discovers that repo's docs.
+agents, and skills load, and the context plugin auto-discovers that repo's docs.
 Only drop a `./.harness/context.json` (§3.4) in a repo whose layout defeats the
 convention.
 

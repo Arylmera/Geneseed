@@ -223,17 +223,33 @@ global config dir:
 python build.py --emit opencode-global          # add --theme imperial if wanted
 ```
 
-This writes `AGENT.md`, `agents/`, `skills/<name>/SKILL.md`, and a single
-`plugins/` copy into `$OPENCODE_CONFIG_DIR` (else `$XDG_CONFIG_HOME/opencode`, else
-`~/.config/opencode`), and merges `opencode.json` to point `instructions` at the
-absolute `AGENT.md`. It writes **no** `context.json` — the context plugin
-auto-discovers each repo's docs. The dir is shared with your own config, so it is
-never wiped: a `.geneseed-manifest.json` tracks only the files this layer owns and
-removes stale ones on re-emit, leaving your own agents/skills/plugins untouched.
+It is **self-contained** — it writes only into the config dir (`$OPENCODE_CONFIG_DIR`,
+else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`) and builds **no sibling
+`Harness/` folder**:
+
+- `AGENT.md` rendered straight in;
+- `agents/`, `skills/<name>/SKILL.md`, and a single `plugins/` copy;
+- the **memory store** at `<cfg>/memory` (or `anamnesis/` for imperial) — migrated
+  once from a legacy `Harness/memory` if you had one, else seeded;
+- `opencode.json` merged to point `instructions` at the absolute `AGENT.md`;
+- **no** `context.json` — the context plugin auto-discovers each repo's docs.
+
+Point the learn plugin at the in-config store once:
+
+```
+export GENESEED_HARNESS="$HOME/.config/opencode"     # so it writes <cfg>/memory
+echo "export GENESEED_HARNESS=\"$HOME/.config/opencode\"" >> ~/.zshrc
+```
+
+The dir is shared with your own config, so it is never wiped: a
+`.geneseed-manifest.json` tracks only the files this layer owns (AGENT.md, agents,
+skills, plugins — **not** memory) and removes stale ones on re-emit, leaving your own
+agents/skills/plugins and the memory store untouched.
 
 Use `$OPENCODE_CONFIG_DIR` to keep the global harness in a **git-tracked** folder.
-On upgrade: `GENESEED_EMIT=opencode-global ./upgrade.sh`. Full design, setup guide,
-and acceptance checklist: [GLOBAL-HARNESS-SPEC.md](GLOBAL-HARNESS-SPEC.md).
+On upgrade: `GENESEED_EMIT=opencode-global ./upgrade.sh` (the mode is then remembered
+in `<cfg>/.geneseed-emit`, so bare `./upgrade.sh` keeps it). Full design, setup
+guide, and acceptance checklist: [GLOBAL-HARNESS-SPEC.md](GLOBAL-HARNESS-SPEC.md).
 
 ## Pointing the agent at files beyond the Harness
 
