@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -234,32 +235,28 @@ def _is_readonly(text: str) -> bool:
     return "Read-only" in text
 
 
-def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
-    """Render the standard bundle, then add an OpenCode-native layer derived from
-    the same source: capability agents become subagents, skills become commands,
-    and an opencode.json wires AGENT.md as a rule file.
+PLUGIN_SRC = ROOT / "adapters" / "opencode" / "plugins"
 
-    OpenCode discovers `opencode.json` and `.opencode/` from the project root, so
-    those are written to `root` (default: `out`). The portable bundle — including
-    `AGENT.md` and `context.json` — always stays together in `out`. When the bundle
-    lives in a subfolder, pass `root` = the repo root: `opencode.json` and
-    `.opencode/` land at `root`, and the instruction paths to both `AGENT.md` and
-    `context.json` are prefixed with the bundle's location so they resolve from the
-    project root."""
-    root = root or out
-    build(theme_name, out)
-    # Owned by this layer — wipe so a removed agent/skill leaves no stale subagent
-    # or command file behind.
-    if (root / ".opencode").is_dir():
-        shutil.rmtree(root / ".opencode")
-    _, items = render_all(theme_name)
 
-    n_agents = n_cmds = 0
+def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int, int, list[Path]]:
+    """Render capability agents and skills into OpenCode-native files.
+
+    - Agents -> `<agents_dir>/<name>.md`  (frontmatter: description, mode: subagent,
+      and read-only tool gating).
+    - Skills -> `<skills_dir>/<name>/SKILL.md`  (native skills: model-invoked via the
+      `skill` tool with progressive disclosure — NOT slash commands. Frontmatter is
+      the skill schema: name + description + compatibility. The command-only
+      `agent:` / `model:` keys are intentionally dropped; a skill runs in the current
+      agent context. See adapters/opencode/GLOBAL-HARNESS-SPEC.md §9.1.)
+
+    Keys off the SOURCE folder name (always neutral) so a theme can rename the
+    rendered bundle dirs without moving OpenCode's fixed `agents/` and `skills/`.
+    Returns (n_agents, n_skills, written_paths)."""
+    n_agents = n_skills = 0
+    written: list[Path] = []
     for _out_rel, text, src in items:
         if text is None:
             continue
-        # Key off the SOURCE folder (always neutral); the themed output name
-        # must not change OpenCode's fixed .opencode/agent and command dirs.
         sparts = src.relative_to(SRC).as_posix().split("/")
         if len(sparts) != 2 or not sparts[1].endswith(".md") or sparts[1].startswith("_"):
             continue
@@ -270,42 +267,166 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
             fm = [f"description: {json.dumps(desc)}", "mode: subagent"]
             if _is_readonly(text):
                 fm += ["tools:", "  write: false", "  edit: false"]
-            dest = root / ".opencode" / "agent" / f"{stem}.md"
+            dest = agents_dir / f"{stem}.md"
             n_agents += 1
         elif folder == "skills":
-            fm = [f"description: {json.dumps(desc)}", "agent: build"]
-            dest = root / ".opencode" / "command" / f"{stem}.md"
-            n_cmds += 1
+            fm = [f"name: {stem}", f"description: {json.dumps(desc)}", "compatibility: opencode"]
+            dest = skills_dir / stem / "SKILL.md"
+            n_skills += 1
         else:
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + body, encoding="utf-8")
+        written.append(dest)
+    return n_agents, n_skills, written
 
-    # Load AGENT.md (the harness) ambiently every session via instructions. The
-    # project manifest context.json is loaded by the context plugin on
-    # session.created — NOT listed here. Listing it too would double-load it when this
-    # config merges with a global opencode.json that also points at the bundle. Path
-    # is relative to `root` (the dir OpenCode resolves from) so a subfolder bundle
-    # still resolves.
+
+def _merge_opencode_json(path: Path, agent_path: str) -> None:
+    """Ensure `path`'s `instructions` array contains `agent_path`, preserving every
+    other key the user may have set. Never clobbers a hand-edited config — it merges
+    the one entry. A malformed existing file is replaced with a clean default."""
+    config: dict = {"$schema": "https://opencode.ai/config.json", "instructions": []}
+    if path.exists():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                config = loaded
+        except (json.JSONDecodeError, OSError):
+            pass
+    config.setdefault("$schema", "https://opencode.ai/config.json")
+    instr = config.get("instructions")
+    if not isinstance(instr, list):
+        instr = []
+    if agent_path not in instr:
+        instr.append(agent_path)
+    config["instructions"] = instr
+    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+
+def _copy_plugins(dst: Path) -> int:
+    """Copy the static OpenCode plugins (context + learn) into `dst`. They are
+    maintained files, not rendered from src, so copy them verbatim."""
+    n = 0
+    if PLUGIN_SRC.is_dir():
+        dst.mkdir(parents=True, exist_ok=True)
+        for js in sorted(PLUGIN_SRC.glob("*.js")):
+            shutil.copy2(js, dst / js.name)
+            n += 1
+    return n
+
+
+def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
+    """Render the standard bundle, then add an OpenCode-native layer derived from
+    the same source: capability agents become subagents, skills become native
+    skills, and an opencode.json wires AGENT.md as a rule file.
+
+    OpenCode discovers `opencode.json` and `.opencode/` from the project root, so
+    those are written to `root` (default: `out`). The portable bundle — including
+    `AGENT.md` and `context.json` — always stays together in `out`. When the bundle
+    lives in a subfolder, pass `root` = the repo root; the instruction path to
+    `AGENT.md` is prefixed with the bundle's location so it resolves from the project
+    root. The project manifest `context.json` is loaded by the context plugin, never
+    listed in `instructions`."""
+    root = root or out
+    build(theme_name, out)
+    # `.opencode/` is fully owned by this layer — wipe so a removed agent/skill
+    # leaves no stale file behind. (Plural dir names are canonical in OpenCode;
+    # singular is back-compat only.)
+    if (root / ".opencode").is_dir():
+        shutil.rmtree(root / ".opencode")
+    _, items = render_all(theme_name)
+
+    oc = root / ".opencode"
+    n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills")
+
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
-    config = {"$schema": "https://opencode.ai/config.json",
-              "instructions": [agent_path]}
-    (root / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    _merge_opencode_json(root / "opencode.json", agent_path)
 
-    # Ship the static OpenCode plugins (e.g. the learn loop) into .opencode/plugins/.
-    # They are maintained files, not rendered from src, so copy them verbatim.
-    plugin_src = ROOT / "adapters" / "opencode" / "plugins"
+    n_plugins = _copy_plugins(oc / "plugins")
+
+    print(f"[geneseed] opencode layer: {n_agents} subagents, {n_skills} skills, "
+          f"{n_plugins} plugin(s), opencode.json (instructions: {agent_path})")
+
+
+def _opencode_config_dir() -> Path:
+    """OpenCode's global config dir. Precedence: $OPENCODE_CONFIG_DIR (relocates the
+    whole dir — use it to keep the harness in a git-tracked folder) > $XDG_CONFIG_HOME
+    /opencode > ~/.config/opencode."""
+    env = os.environ.get("OPENCODE_CONFIG_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".config"
+    return (base / "opencode").resolve()
+
+
+GLOBAL_MANIFEST = ".geneseed-manifest.json"
+
+
+def emit_opencode_global(theme_name: str, out: Path) -> None:
+    """Render the harness straight into OpenCode's GLOBAL config dir — the
+    "everything global, zero per-repo" deployment (GLOBAL-HARNESS-SPEC.md).
+
+    Unlike `emit_opencode`, the target dir is shared with the user's own OpenCode
+    config, so it is NEVER wiped. Instead a `.geneseed-manifest.json` tracks exactly
+    the files this layer owns; on re-emit, files we previously wrote but no longer
+    produce are removed, and the user's own agents/skills/plugins are left untouched.
+
+    Writes: <cfg>/AGENT.md, <cfg>/agents/*.md, <cfg>/skills/<name>/SKILL.md,
+    <cfg>/plugins/*.js (single copy — kills the double-injection), and merges
+    <cfg>/opencode.json to point `instructions` at the absolute <cfg>/AGENT.md. It
+    does NOT write context.json — project docs are auto-discovered by the context
+    plugin. The portable bundle is still built at `out` so the memory store and a
+    self-contained AGENT.md exist for $GENESEED_HARNESS."""
+    cfg = _opencode_config_dir()
+    build(theme_name, out)
+    _, items = render_all(theme_name)
+    cfg.mkdir(parents=True, exist_ok=True)
+
+    # Remove files this layer owned on a previous run (stale agent/skill/plugin).
+    manifest_path = cfg / GLOBAL_MANIFEST
+    if manifest_path.exists():
+        try:
+            old = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", [])
+        except (json.JSONDecodeError, OSError):
+            old = []
+        for relp in old:
+            victim = cfg / relp
+            try:
+                if victim.is_file():
+                    victim.unlink()
+                    # prune an emptied skill dir
+                    if victim.name == "SKILL.md" and victim.parent != cfg \
+                            and not any(victim.parent.iterdir()):
+                        victim.parent.rmdir()
+            except OSError:
+                pass
+
+    owned: list[str] = []
+    shutil.copy2(out / "AGENT.md", cfg / "AGENT.md")
+    owned.append("AGENT.md")
+
+    n_agents, n_skills, written = _write_native_layer(items, cfg / "agents", cfg / "skills")
+    owned += [p.relative_to(cfg).as_posix() for p in written]
+
     n_plugins = 0
-    if plugin_src.is_dir():
-        plugin_dst = root / ".opencode" / "plugins"
-        plugin_dst.mkdir(parents=True, exist_ok=True)
-        for js in sorted(plugin_src.glob("*.js")):
-            shutil.copy2(js, plugin_dst / js.name)
+    if PLUGIN_SRC.is_dir():
+        (cfg / "plugins").mkdir(parents=True, exist_ok=True)
+        for js in sorted(PLUGIN_SRC.glob("*.js")):
+            shutil.copy2(js, cfg / "plugins" / js.name)
+            owned.append(f"plugins/{js.name}")
             n_plugins += 1
 
-    print(f"[geneseed] opencode layer: {n_agents} subagents, {n_cmds} commands, "
-          f"{n_plugins} plugin(s), opencode.json (instructions: {agent_path})")
+    _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix())
+
+    manifest_path.write_text(
+        json.dumps({"_comment": "Files owned by Geneseed's --emit opencode-global. "
+                                "Do not edit; removed on re-emit.", "owned": sorted(owned)},
+                   indent=2) + "\n", encoding="utf-8")
+
+    print(f"[geneseed] opencode-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
+          f"{n_plugins} plugin(s), AGENT.md, opencode.json (no context.json — auto-discovered)")
 
 
 def main() -> None:
@@ -318,9 +439,12 @@ def main() -> None:
     ap.add_argument("--out", "--target", dest="out", default="Harness",
                     help="output directory — absolute, or relative to the current "
                          "directory (default: ./Harness)")
-    ap.add_argument("--emit", choices=["files", "opencode"], default="files",
-                    help="files: plain bundle (default). opencode: bundle + native "
-                         ".opencode/ subagents & commands + opencode.json")
+    ap.add_argument("--emit", choices=["files", "opencode", "opencode-global"], default="files",
+                    help="files: plain bundle (default). opencode: bundle + per-repo "
+                         ".opencode/ subagents, native skills & opencode.json. "
+                         "opencode-global: render straight into OpenCode's global config "
+                         "dir ($OPENCODE_CONFIG_DIR / ~/.config/opencode) — everything "
+                         "global, zero per-repo files (GLOBAL-HARNESS-SPEC.md)")
     ap.add_argument("--root", default=None,
                     help="project root the agent/OpenCode run from — where opencode.json "
                          "and .opencode/ are placed (default: same as --out). Set this when "
@@ -332,6 +456,8 @@ def main() -> None:
     root = resolve_out(args.root) if args.root else out
     if args.emit == "opencode":
         emit_opencode(args.theme, out, root)
+    elif args.emit == "opencode-global":
+        emit_opencode_global(args.theme, out)
     else:
         build(args.theme, out)
 

@@ -62,23 +62,30 @@ export const MyPlugin = async ({ client, $, directory, worktree }) => ({
   **without** triggering a reply with `client.session.prompt({ path, body: { noReply: true, parts } })`.
 - **`$`** — a shell executor for running commands.
 
-## 4. Subagents & commands
+## 4. Subagents, skills & commands
 
-- `.opencode/agent/<name>.md` → a **subagent** (frontmatter: `description`,
+Subdir names are **plural** canonically (`agents/`, `skills/`, `commands/`,
+`plugins/`, …); singular (`agent/`, `command/`) is back-compat only.
+
+- `.opencode/agents/<name>.md` → a **subagent** (frontmatter: `description`,
   `mode: subagent`, optional `tools:` to restrict write/edit).
-- `.opencode/command/<name>.md` → a **slash command**.
+- `.opencode/skills/<name>/SKILL.md` → a **native skill** (frontmatter: `name`,
+  `description`) — model-invoked via the `skill` tool, progressive disclosure.
+- `.opencode/commands/<name>.md` → a **slash command** (user-invoked `/name`).
 
-Geneseed generates both from `src/` via `build.py --emit opencode` — zero drift.
+Geneseed generates subagents and native skills from `src/` via `build.py --emit
+opencode` (or globally with `--emit opencode-global`) — zero drift. It maps skills
+to native **skills**, not slash commands (same `SKILL.md` shape as Claude Code).
 
 ## 5. How Geneseed maps onto OpenCode
 
 | OpenCode mechanism | Geneseed piece |
 | --- | --- |
 | `instructions` → `AGENT.md` | the rules, loaded every session |
-| `.opencode/agent/`, `.opencode/command/` | capability agents and skills |
-| plugin on `session.created` | **context plugin** — injects the `eager` docs from `context.json` |
+| `.opencode/agents/`, `.opencode/skills/` | capability agents and native skills |
+| plugin on `session.created` | **context plugin (v2)** — auto-discovers & injects the repo's `eager` docs |
 | plugin on `session.idle` | **learn plugin** — distils memory into `memory/` |
-| `context.json` (manifest) | pointers to your own project docs |
+| `context.json` / `.harness/` (manifest) | *optional* override when discovery doesn't fit |
 
 ## 6. "Why is `context.json` (or `AGENT.md`) listed twice?"
 

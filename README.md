@@ -63,10 +63,14 @@ python build.py --emit opencode --target /path/to/your-repo
 
 That writes, alongside the bundle:
 - `opencode.json` — points OpenCode's `instructions` at `AGENT.md` (the context
-  plugin loads `context.json`, so it is not listed here — see below);
-- `.opencode/agent/` — one subagent per capability agent;
-- `.opencode/command/` — one command per skill;
+  plugin auto-discovers project docs, so no manifest is listed here — see below);
+- `.opencode/agents/` — one subagent per capability agent;
+- `.opencode/skills/<name>/SKILL.md` — one **native skill** per skill (model-invoked,
+  not a slash command — same `SKILL.md` shape as Claude Code);
 - `.opencode/plugins/` — the **learn** and **context** plugins (see below).
+
+For "everything global, zero per-repo files," use `--emit opencode-global` instead —
+it renders straight into OpenCode's config dir. See [`adapters/opencode/`](adapters/opencode/).
 
 **Keep the bundle in a subfolder.** To contain it (e.g. in `Harness/`) instead of
 spreading it across the repo root, add `--root`:
@@ -98,9 +102,11 @@ line and let the bundle's own `.gitignore` do the scoping.
 The bundle is built in one location but used from any directory. Two plugins make
 that real, both shipping in `adapters/opencode/plugins/`:
 
-- **`geneseed-context.js`** — on `session.created` it reads `context.json` and
-  **injects the contents of every `eager` doc** into the new session, enforcing the
-  project-context rule *before your first turn* (lazy entries are listed only).
+- **`geneseed-context.js`** (v2) — on `session.created` it **auto-discovers the
+  repo's docs by convention** and **injects the `eager` ones** into the new session,
+  enforcing the project-context rule *before your first turn* (lazy entries listed
+  only). No committed `context.json` needed; drop a `.harness/context.json` only to
+  override. Idempotent across stray duplicate installs.
 - **`geneseed-learn.js`** — on `session.idle` it distils durable memories from the
   conversation and writes them into the bundle's `memory/`, maintaining `MEMORY.md`
   and deduping. It distils with the **same model the session already used**, so it
@@ -120,9 +126,9 @@ echo "export GENESEED_HARNESS=\"$GENESEED_HARNESS\"" >> ~/.zshrc  # persist (run
 
 To load the rules in every project too, add the bundle's `AGENT.md` (absolute path)
 to the `instructions` array of your global `~/.config/opencode/opencode.json`. List
-**only `AGENT.md`** — the context plugin loads `context.json`; adding it to
-`instructions` as well would double-load it. Per-project, `--emit opencode` already
-writes a local `opencode.json` that does this.
+**only `AGENT.md`** — the context plugin handles project docs (auto-discovery).
+Per-project, `--emit opencode` already writes a local `opencode.json` that does
+this; or skip per-repo entirely with `--emit opencode-global`.
 
 Full detail, env overrides, and a field-test note: [`adapters/opencode/`](adapters/opencode/).
 

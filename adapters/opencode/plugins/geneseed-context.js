@@ -1,100 +1,293 @@
-// Geneseed — OpenCode project-context plugin.
+// Geneseed — OpenCode project-context plugin (v2, convention-glob).
 //
-// Enforces Law XVIII ("Load the Project Context") the way the Claude Code
-// SessionStart `harness context` hook does: on `session.created` it reads the
-// bundle's context.json and INJECTS THE CONTENTS of every `eager` entry into the
-// fresh session (via a no-reply prompt), so those docs are in context before your
-// first turn — not merely listed, not left to agent discipline. `lazy` entries are
-// only named, to be read when a task needs them.
+// Enforces Law XVIII ("Load the Project Context") by INJECTION, not instruction:
+// on `session.created` it puts the repo's documentation in context before your
+// first turn, rather than trusting the agent to read it. v2 removes the need for a
+// committed `context.json` — it AUTO-DISCOVERS the current repo's docs by
+// convention (so the harness can live entirely in the global config dir, with zero
+// per-repo files), while still honouring an explicit manifest when one exists.
 //
-// OpenCode's `instructions` array already loads context.json (the manifest) every
-// session; this plugin is what loads the docs the manifest POINTS AT. The two are
-// complementary: the manifest is the list, this is the executor.
+// Source resolution (first match wins):
+//   1. $GENESEED_CONTEXT                explicit manifest path  -> declarative mode
+//   2. <repo>/.harness/context.json     per-repo override       -> declarative mode
+//   3. <repo>/context.json              legacy per-repo manifest -> declarative mode
+//   4. (none)                           -> AUTO-DISCOVERY (convention glob)
+// A manifest may set "extend": true to run auto-discovery first, then add/override.
 //
-// Install (global — the bundle is used everywhere):
-//   cp adapters/opencode/plugins/geneseed-context.js ~/.config/opencode/plugins/
-// Per-project: build --emit opencode drops it into .opencode/plugins/.
+// Eager docs are injected in full (budget-capped, oversized ones demoted to lazy);
+// lazy docs are only listed (path + first heading) to be read on demand. Output
+// mirrors `rituals/harness.py context`. Every error is swallowed — it never blocks
+// a session. See adapters/opencode/GLOBAL-HARNESS-SPEC.md.
 //
-// Where it reads context.json — first match wins:
-//   1. $GENESEED_CONTEXT          an explicit context.json path
-//   2. $GENESEED_HARNESS/context.json
-//   3. ./context.json  or  ./Harness/context.json   (bundle inside the project)
-// Relative `path` entries resolve against context.json's own directory. Any error
-// is swallowed — it never blocks a session.
+// Install: copy into ~/.config/opencode/plugins/ (global) — `build --emit
+// opencode-global` and `--emit opencode` both place it for you. Keep ONE copy:
+// OpenCode dedups plugins by npm name+version only, so two local copies both load.
 
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 
-async function isFile(p) {
-  try { return (await fs.stat(p)).isFile() } catch { return false }
+const MARKER = "<!-- geneseed-context:v2 -->"
+
+// ---- tunable budgets (env-overridable) -------------------------------------
+const EAGER_FILE_KB = Number(process.env.GENESEED_EAGER_FILE_KB || 16)
+const EAGER_TOTAL_KB = Number(process.env.GENESEED_EAGER_TOTAL_KB || 48)
+const MAX_FILES_SCANNED = 2000
+const MAX_DEPTH = 6
+
+// ---- convention --------------------------------------------------------------
+// Root-level files injected in full. Agent-directed rules + canonical entry docs.
+const EAGER_ROOT = new Set([
+  "AGENTS.md", "AGENT.md", "CLAUDE.md", ".cursorrules",
+  "README.md", "CONTRIBUTING.md",
+])
+// Doc trees walked recursively; everything found is lazy (listed, not injected).
+const LAZY_DIRS = ["docs", "doc", "documentation", "architecture", "adr", "ADR"]
+// Never descend into these.
+const EXCLUDE_DIRS = new Set([
+  "node_modules", ".git", "dist", "build", "vendor", ".next", "target",
+  ".venv", "__pycache__", ".opencode", ".harness",
+])
+
+async function isFile(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
+async function isDir(p) { try { return (await fs.stat(p)).isDirectory() } catch { return false } }
+
+async function readJson(p) {
+  try { return JSON.parse(await fs.readFile(p, "utf8")) } catch { return null }
 }
 
-async function resolveContextFile() {
-  const explicit = process.env.GENESEED_CONTEXT
-  if (explicit && (await isFile(explicit))) return explicit
-  const bases = []
-  if (process.env.GENESEED_HARNESS) bases.push(process.env.GENESEED_HARNESS)
-  bases.push(process.cwd(), path.join(process.cwd(), "Harness"))
-  for (const base of bases) {
-    const cand = path.join(base, "context.json")
-    if (await isFile(cand)) return cand
+// Minimal glob -> RegExp: ** spans path separators, * does not.
+function globToRegExp(glob) {
+  let re = ""
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i]
+    if (c === "*") {
+      if (glob[i + 1] === "*") { re += ".*"; i++ } else { re += "[^/]*" }
+    } else if ("\\^$+?.()|[]{}".includes(c)) {
+      re += "\\" + c
+    } else {
+      re += c
+    }
   }
-  return null
+  return new RegExp("^" + re + "$")
 }
 
-// Build the injection block — mirrors `rituals/harness.py context` output so the
-// two enforcement paths read identically.
-async function buildInjection(contextFile) {
-  let data
-  try {
-    data = JSON.parse(await fs.readFile(contextFile, "utf8"))
-  } catch {
-    return null
+// First H1 / heading line of a markdown file, for the lazy listing.
+function firstHeading(text) {
+  for (const line of text.split("\n")) {
+    const s = line.trim()
+    if (s.startsWith("#")) return s.replace(/^#+\s*/, "").trim()
   }
+  return ""
+}
+
+function kb(bytes) { return (bytes / 1024).toFixed(0) }
+
+function repoRoot(ctx) {
+  return ctx?.worktree || ctx?.directory || process.cwd()
+}
+
+// ---- discovery ---------------------------------------------------------------
+async function walkMd(dir, root, depth, acc) {
+  if (depth > MAX_DEPTH || acc.length >= MAX_FILES_SCANNED) return
+  let entries
+  try { entries = await fs.readdir(dir, { withFileTypes: true }) } catch { return }
+  for (const e of entries) {
+    if (acc.length >= MAX_FILES_SCANNED) return
+    const full = path.join(dir, e.name)
+    if (e.isDirectory()) {
+      if (EXCLUDE_DIRS.has(e.name)) continue
+      await walkMd(full, root, depth + 1, acc)
+    } else if (e.isFile() && e.name.toLowerCase().endsWith(".md")) {
+      acc.push(full)
+    }
+  }
+}
+
+// Targeted convention discovery — never walks the whole tree (skips node_modules
+// etc.). Returns { eager:[{rel,abs}], lazy:[{rel,abs}] }, deduped, eager wins.
+async function discover(root) {
+  const eager = new Map()   // abs -> {rel, abs}
+  const lazy = new Map()
+  const add = (map, abs) => {
+    const rel = path.relative(root, abs).split(path.sep).join("/")
+    map.set(abs, { rel, abs })
+  }
+
+  // 1. Root-level files.
+  let rootEntries
+  try { rootEntries = await fs.readdir(root, { withFileTypes: true }) } catch { rootEntries = [] }
+  for (const e of rootEntries) {
+    if (!e.isFile()) continue
+    const abs = path.join(root, e.name)
+    if (EAGER_ROOT.has(e.name)) add(eager, abs)
+    else if (e.name.toLowerCase().endsWith(".md")) add(lazy, abs)   // misc root .md
+  }
+
+  // 2. Doc trees (recursive) -> lazy.
+  for (const d of LAZY_DIRS) {
+    const dir = path.join(root, d)
+    if (await isDir(dir)) {
+      const acc = []
+      await walkMd(dir, root, 1, acc)
+      for (const abs of acc) if (!eager.has(abs)) add(lazy, abs)
+    }
+  }
+
+  // 3. Monorepo package entry docs -> lazy.
+  for (const group of ["packages", "apps"]) {
+    const base = path.join(root, group)
+    if (!(await isDir(base))) continue
+    let pkgs
+    try { pkgs = await fs.readdir(base, { withFileTypes: true }) } catch { continue }
+    for (const p of pkgs) {
+      if (!p.isDirectory() || EXCLUDE_DIRS.has(p.name)) continue
+      const readme = path.join(base, p.name, "README.md")
+      if (await isFile(readme) && !eager.has(readme)) add(lazy, readme)
+    }
+  }
+
+  const sortByRel = (a, b) => a.rel.localeCompare(b.rel)
+  return {
+    eager: [...eager.values()].sort(sortByRel),
+    lazy: [...lazy.values()].filter((x) => !eager.has(x.abs)).sort(sortByRel),
+  }
+}
+
+// ---- declarative manifest (override / extend) --------------------------------
+// Returns { eager, lazy } from a manifest. Each entry: { path, load, description }
+// where load is eager | lazy | exclude and path may be absolute, repo-relative, or
+// a glob (a glob only reclassifies files already discovered). With "extend": true,
+// auto-discovery runs first and entries add to / override / exclude its results;
+// otherwise the manifest is the complete list (legacy semantics).
+async function fromManifest(manifestFile, root) {
+  const data = await readJson(manifestFile)
   const entries = Array.isArray(data?.context) ? data.context : []
-  const eager = entries.filter((e) => e?.load === "eager")
-  const lazy = entries.filter((e) => e?.load === "lazy")
-  if (!eager.length && !lazy.length) return null
+  const recs = new Map()   // abs -> { rel, abs, load, desc }
 
-  const baseDir = path.dirname(contextFile)
-  const out = [
-    "=== PROJECT CONTEXT (context.json) — binding for this repo per Law XVIII ===",
-    "",
-  ]
-  for (const entry of eager) {
-    const p = entry.path ?? ""
-    const desc = entry.description ?? ""
-    const target = path.isAbsolute(p) ? p : path.join(baseDir, p)
-    out.push(`----- ${p}${desc ? ` — ${desc}` : ""} -----`)
-    try {
-      out.push((await fs.readFile(target, "utf8")).replace(/\n+$/, ""))
-    } catch (e) {
-      out.push(`[context] MISSING eager file: ${e?.message ?? e}`)
-    }
-    out.push("")
+  const put = (abs, load, desc) => {
+    const rel = path.relative(root, abs).split(path.sep).join("/")
+    const prev = recs.get(abs)
+    recs.set(abs, { rel, abs, load, desc: desc || prev?.desc || "" })
   }
-  if (lazy.length) {
-    out.push("--- Lazy entries (load only when the task needs them) ---")
-    for (const entry of lazy) {
-      out.push(`  - ${entry.path ?? ""}${entry.description ? ` — ${entry.description}` : ""}`)
-    }
-    out.push("")
+
+  if (data?.extend) {
+    const d = await discover(root)
+    for (const x of d.eager) put(x.abs, "eager", "")
+    for (const x of d.lazy) put(x.abs, "lazy", "")
   }
-  return out.join("\n")
+
+  for (const entry of entries) {
+    const raw = entry?.path ?? ""
+    const load = entry?.load ?? "eager"
+    const desc = entry?.description ?? ""
+    if (!raw) continue
+    if (raw.includes("*")) {
+      const re = globToRegExp(raw)
+      for (const [abs, x] of recs) if (re.test(x.rel)) put(abs, load, desc)
+      continue   // a glob reclassifies discovered files; it does not add new ones
+    }
+    // Relative entry paths resolve against the REPO ROOT (matches the context.json
+    // stub's documented "relative to the repo root" — important when the manifest
+    // lives in .harness/, whose dir is not the root).
+    const abs = path.isAbsolute(raw) ? raw : path.resolve(root, raw)
+    put(abs, load, desc)
+  }
+
+  const eager = [], lazy = []
+  for (const x of recs.values()) {
+    if (x.load === "exclude") continue
+    ;(x.load === "lazy" ? lazy : eager).push(x)
+  }
+  const byRel = (a, b) => a.rel.localeCompare(b.rel)
+  return { eager: eager.sort(byRel), lazy: lazy.sort(byRel) }
 }
 
-export const GeneseedContext = async ({ client }) => {
-  const done = new Set()        // inject once per session
-  let warnedNoFile = false
+async function resolveSource(root) {
+  const explicit = process.env.GENESEED_CONTEXT
+  if (explicit && (await isFile(explicit))) return { mode: "manifest", file: explicit }
+  for (const rel of [path.join(".harness", "context.json"), "context.json"]) {
+    const p = path.join(root, rel)
+    if (await isFile(p)) return { mode: "manifest", file: p }
+  }
+  return { mode: "discover" }
+}
+
+// ---- injection block ---------------------------------------------------------
+async function buildBlock({ eager, lazy }, log) {
+  const out = [MARKER, "=== PROJECT CONTEXT — binding for this repo per Law XVIII ===", ""]
+  const perFile = EAGER_FILE_KB * 1024
+  const total = EAGER_TOTAL_KB * 1024
+  const demoted = []
+  let spent = 0
+  let injected = 0
+
+  for (const e of eager) {
+    let text
+    try { text = await fs.readFile(e.abs, "utf8") } catch (err) {
+      out.push(`----- ${e.rel}${e.desc ? ` — ${e.desc}` : ""} -----`)
+      out.push(`[context] MISSING eager file: ${err?.message ?? err}`, "")
+      continue
+    }
+    const size = Buffer.byteLength(text, "utf8")
+    if (size > perFile) {
+      demoted.push(`[demoted: ${e.rel} exceeded ${EAGER_FILE_KB} KB — read on demand]`)
+      log?.(`demoted ${e.rel} -> lazy (${kb(size)} KB > ${EAGER_FILE_KB} KB cap)`)
+      continue
+    }
+    if (spent + size > total) {
+      demoted.push(`[demoted: ${e.rel} — eager budget (${EAGER_TOTAL_KB} KB) reached]`)
+      continue
+    }
+    out.push(`----- ${e.rel}${e.desc ? ` — ${e.desc}` : ""} -----`)
+    out.push(text.replace(/\n+$/, ""), "")
+    spent += size
+    injected++
+  }
+
+  const lazyLines = []
+  for (const l of lazy) {
+    let head = l.desc
+    if (!head) {
+      try { head = firstHeading(await fs.readFile(l.abs, "utf8")) } catch { head = "" }
+    }
+    lazyLines.push(`  - ${l.rel}${head ? ` — ${head}` : ""}`)
+  }
+  if (lazyLines.length || demoted.length) {
+    out.push("--- Lazy entries (load only when the task needs them) ---")
+    out.push(...lazyLines)
+    if (demoted.length) out.push(...demoted.map((d) => `  ${d}`))
+    out.push("")
+  }
+  if (!injected && !lazyLines.length && !demoted.length) return null
+  return { text: out.join("\n"), injected, lazy: lazyLines.length, kb: kb(spent) }
+}
+
+// ---- cross-instance idempotency ----------------------------------------------
+async function alreadyInjected(client, sid) {
+  try {
+    const msgs = await client.session.messages({ path: { id: sid } })
+    const arr = Array.isArray(msgs) ? msgs : (msgs?.data ?? [])
+    for (const m of arr) {
+      const parts = m?.parts ?? m?.info?.parts ?? []
+      for (const p of parts) {
+        if (typeof p?.text === "string" && p.text.includes(MARKER)) return true
+      }
+    }
+  } catch {}
+  return false
+}
+
+export const GeneseedContext = async (ctx) => {
+  const { client } = ctx
+  const done = new Set()
+  const root = repoRoot(ctx)
 
   return {
     event: async ({ event }) => {
       if (!event || event.type !== "session.created") return
       const sid =
-        event.properties?.sessionID ??
-        event.payload?.sessionID ??
-        event.properties?.info?.id ??
-        event.payload?.info?.id
+        event.properties?.sessionID ?? event.payload?.sessionID ??
+        event.properties?.info?.id ?? event.payload?.info?.id
       if (!sid || done.has(sid)) return
       done.add(sid)
 
@@ -105,30 +298,37 @@ export const GeneseedContext = async ({ client }) => {
           const info = await client.session.get({ path: { id: sid } })
           title = info?.title ?? info?.data?.title ?? ""
         } catch {}
-        if (title.startsWith("geneseed-")) return
-
-        const contextFile = await resolveContextFile()
-        if (!contextFile) {
-          if (!warnedNoFile) {
-            warnedNoFile = true
-            console.error(
-              "[geneseed-context] no context.json — set $GENESEED_HARNESS or $GENESEED_CONTEXT."
-            )
-          }
+        if (title.startsWith("geneseed-")) {
+          console.error("[geneseed-context] skipped: geneseed-* session")
           return
         }
 
-        const block = await buildInjection(contextFile)
-        if (!block) return
+        if (await alreadyInjected(client, sid)) {
+          console.error("[geneseed-context] skipped: already injected (marker present)")
+          return
+        }
 
-        // noReply: inject as context without triggering a model response.
+        const src = await resolveSource(root)
+        const sets = src.mode === "manifest"
+          ? await fromManifest(src.file, root)
+          : await discover(root)
+
+        const log = (m) => console.error(`[geneseed-context] ${m}`)
+        const block = await buildBlock(sets, log)
+        if (!block) {
+          console.error(`[geneseed-context] no docs discovered in ${root}`)
+          return
+        }
+
         await client.session.prompt({
           path: { id: sid },
-          body: { noReply: true, parts: [{ type: "text", text: block }] },
+          body: { noReply: true, parts: [{ type: "text", text: block.text }] },
         })
-        console.error(`[geneseed-context] injected project context from ${contextFile}`)
+        const via = src.mode === "manifest" ? `manifest ${src.file}` : `auto-discovery [${root}]`
+        console.error(`[geneseed-context] injected: ${block.injected} eager (${block.kb} KB), `
+          + `${block.lazy} lazy listed — via ${via}`)
       } catch (err) {
-        console.error(`[geneseed-context] skipped: ${err?.message ?? err}`)
+        console.error(`[geneseed-context] error: ${err?.message ?? err}`)
       }
     },
   }

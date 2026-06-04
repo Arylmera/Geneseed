@@ -40,9 +40,12 @@ OUT="${GENESEED_OUT:-$(dirname "$HERE")/Harness}"
 ROOT_DIR="${GENESEED_ROOT:-$(dirname "$OUT")}"
 
 # Emit mode — plain bundle by default (just the harness, referenced by its own
-# AGENT.md, from anywhere on the machine). The OpenCode native layer (subagents,
-# commands, and an opencode.json at the project root) is OPT-IN ONLY: set
-# GENESEED_EMIT=opencode. It is never generated automatically.
+# AGENT.md, from anywhere on the machine). OPT-IN OpenCode layers:
+#   GENESEED_EMIT=opencode         per-repo .opencode/ (subagents, native skills) + opencode.json
+#   GENESEED_EMIT=opencode-global  straight into OpenCode's global config dir
+#                                  ($OPENCODE_CONFIG_DIR / ~/.config/opencode) — everything
+#                                  global, zero per-repo files (GLOBAL-HARNESS-SPEC.md)
+# Neither is ever generated automatically.
 EMIT="${GENESEED_EMIT:-files}"
 
 # Factory files refreshed from upstream. Everything else in the folder is left
@@ -97,6 +100,9 @@ fi
 BUILD_ARGS=(--out "$OUT")
 if [ -n "$THEME" ]; then BUILD_ARGS+=(--theme "$THEME"); fi
 if [ "$EMIT" = "opencode" ]; then BUILD_ARGS+=(--emit opencode --root "$ROOT_DIR"); fi
+# opencode-global renders into OpenCode's global config dir ($OPENCODE_CONFIG_DIR /
+# ~/.config/opencode) — no project root; the bundle still builds at $OUT for memory.
+if [ "$EMIT" = "opencode-global" ]; then BUILD_ARGS+=(--emit opencode-global); fi
 
 # Migrate host state from an OLD in-folder bundle ($HERE/Harness) to the canonical
 # $OUT *before* rebuilding. The old default rendered the bundle inside the factory;

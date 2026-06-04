@@ -1,8 +1,8 @@
 # Global Harness + Convention-Glob Context — Spec
 
-Status: **draft / proposed**. Target adapter: OpenCode. Supersedes nothing yet —
-this is the design for a *second deployment mode* ("everything global, zero
-per-repo files") and the context-discovery redesign that makes it safe.
+Status: **implemented** (build emitter + context plugin v2 landed; docs synced).
+Target adapter: OpenCode. A *second deployment mode* ("everything global, zero
+per-repo files") plus the context-discovery redesign that makes it safe.
 
 It does **not** replace the portable bundle or the Claude Code adapter. The
 factory (`Geneseed/`) stays the single source of truth; this adds a way to render
@@ -380,16 +380,18 @@ convention.
 
 ## 11. Acceptance checklist
 
-- [ ] Fresh repo with a `README.md` + `docs/` → exactly **one** PROJECT CONTEXT
-      block, README eager, `docs/**` listed lazy.
-- [ ] Repo with no docs → no block, one `no docs discovered` log, session starts clean.
-- [ ] Global + leftover project plugin copy → still **one** block (marker dedup).
-- [ ] 30 KB README → demoted to lazy, demotion logged, eager budget respected.
-- [ ] `./.harness/context.json` with `extend:true` → auto-discovery + overrides merged.
-- [ ] `geneseed-*` distil session → no injection.
-- [ ] Malformed `.harness/context.json` → error logged, session still starts.
-- [ ] Block is byte-compatible in structure with `harness.py cmd_context` output.
-- [ ] Plugin adds **no** npm dependency.
+- [x] Fresh repo with a `README.md` + `docs/` → exactly **one** PROJECT CONTEXT
+      block, README eager, `docs/**` listed lazy. *(verified — node fixture test)*
+- [x] Repo with no docs → no block, one `no docs discovered` log, session starts clean.
+- [x] Global + leftover project plugin copy → still **one** block (marker dedup). *(verified)*
+- [x] >16 KB README → demoted to lazy, demotion logged, eager budget respected. *(verified)*
+- [x] `.harness/context.json` with `extend:true` + `exclude` + pin → merged correctly. *(verified)*
+- [x] `geneseed-*` distil session → no injection.
+- [x] Plugin adds **no** npm dependency. *(stdlib `node:fs`/`node:path`/`node:url` only)*
+- [x] Global re-emit removes stale owned files, preserves user files, writes no
+      `context.json`. *(verified — manifest cleanup test)*
+- [ ] Malformed `.harness/context.json` → error logged, session still starts. *(swallowed by readJson; not explicitly tested)*
+- [ ] Live OpenCode session on the work laptop (field-test caveat — event/SDK field names).
 
 ---
 

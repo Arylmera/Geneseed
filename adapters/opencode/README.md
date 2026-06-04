@@ -30,30 +30,37 @@ context and memory.
 ## Native mapping (recommended) — generated, zero drift
 
 Turn Geneseed's capability agents into OpenCode **subagents** and its skills into
-**commands**, so they're dispatchable rather than just described in prose. The
+native **skills**, so they're dispatchable rather than just described in prose. The
 generator produces all of it from the same `src/`, so it never drifts:
 
 ```
 python build.py --emit opencode --target /path/to/your-repo
 ```
 
-That writes, on top of the normal bundle:
+That writes, on top of the normal bundle (note the **plural** dir names — canonical
+in OpenCode; singular `agent/`/`command/` is back-compat only):
 
 ```
 your-repo/
-├── opencode.json              instructions → AGENT.md (context.json via plugin)
-├── context.json               empty project-context manifest (git-ignore it)
+├── opencode.json              instructions → AGENT.md (context auto-discovered by plugin)
 └── .opencode/
-    ├── agent/                 one subagent per capability agent
+    ├── agents/                one subagent per capability agent
     │   ├── reviewer.md  architect.md  security.md   (read-only: write/edit denied)
     │   ├── tester.md    docs.md                      (may edit files)
-    └── command/               one command per skill
-        ├── commit.md  code-review.md  create-skill.md
+    ├── skills/                one native skill per skill (dir-per-skill)
+    │   ├── commit/SKILL.md  code-review/SKILL.md  create-skill/SKILL.md  …
+    └── plugins/               context + learn plugins
 ```
 
 - Read-only agents (their spec says *Read-only*) get `tools: { write: false,
   edit: false }`; the rest keep edit access.
 - OpenCode invokes a subagent via the task tool, e.g. `subagent_type: "reviewer"`.
+- **Skills are native, not slash commands** — model-invoked via the `skill` tool
+  with progressive disclosure (the agent sees each skill's `description` and loads
+  the body on demand). This is the *same `SKILL.md` shape Claude Code uses*, so the
+  one artifact serves both tools. Trade-off: no `/name` slash trigger and no
+  per-skill `agent:`/`model:` pin (a skill runs in the current agent context). See
+  [GLOBAL-HARNESS-SPEC.md](GLOBAL-HARNESS-SPEC.md) §9.1.
 - Themed: add `--theme imperial` for the Warhammer vocabulary.
 - **Bundle in a subfolder?** OpenCode resolves `instructions` paths from the
   *project root*, not from `opencode.json`'s folder. So if the bundle lives in a
@@ -90,10 +97,12 @@ with `GENESEED_OUT` (bundle) and `GENESEED_ROOT` (project root).
 ### Manual mapping (fallback)
 
 If you'd rather not run the generator, create each file by hand:
-`.opencode/agent/<name>.md` with frontmatter `description`, `mode: subagent`, and
+`.opencode/agents/<name>.md` with frontmatter `description`, `mode: subagent`, and
 (for read-only agents) `tools: { write: false, edit: false }`, body = the agent
-spec. Skills become command files with `description` + `agent: build` frontmatter.
-(`.opencode/command/` and `.opencode/commands/` are both recognised.)
+spec. Skills become native skills at `.opencode/skills/<name>/SKILL.md` with
+frontmatter `name` + `description` (+ optional `compatibility: opencode`), body =
+the skill spec. (Plural dir names are canonical; singular `agent/`/`command/` are
+back-compat aliases.)
 
 ## Memory loop — the `learn` plugin
 
@@ -167,39 +176,77 @@ If the plugin can't read the session's model from the transcript, set a fallback
 > nothing — rather than erroring. The resolvers are isolated at the top of
 > `geneseed-learn.js` for a one-line adjustment if needed.
 
-## Doc enforcement — the `context` plugin
+## Doc enforcement — the `context` plugin (v2, convention-glob)
 
-OpenCode's `instructions` array loads `context.json` itself (the *manifest*), but
-not the docs it points at — so the `eager`/`lazy` distinction isn't enforced. The
-[`plugins/geneseed-context.js`](plugins/geneseed-context.js) plugin closes that gap.
+OpenCode's `instructions` array can load a rule file, but not a tree of project
+docs with an `eager`/`lazy` split. The
+[`plugins/geneseed-context.js`](plugins/geneseed-context.js) plugin closes that gap
+— and v2 needs **no committed `context.json`**.
 
-On the `session.created` event it reads `context.json` and **injects the contents
-of every `eager` entry** into the new session via a no-reply prompt
-(`session.prompt({ noReply: true })`) — so those docs are in context before your
-first turn, enforcing **Law XVIII**, not leaving it to agent discipline. `lazy`
-entries are only listed, to be read when a task needs them. Its output mirrors
-`rituals/harness.py context` so both enforcement paths read identically.
+On `session.created` it **auto-discovers the current repo's docs by convention**
+and injects the `eager` ones into the session via a no-reply prompt
+(`session.prompt({ noReply: true })`) — so they're in context before your first
+turn, enforcing **Law XVIII** by injection, not agent discipline. This is what lets
+the harness live entirely in the global config dir with zero per-repo files.
 
-It needs no model and writes nothing. It finds `context.json` via
-`$GENESEED_CONTEXT` > `$GENESEED_HARNESS/context.json` > `./context.json` or
-`./Harness/context.json`; relative entry paths resolve against `context.json`'s own
-directory. It skips the learn plugin's throwaway sessions and swallows every error.
+- **Eager** (injected in full, budget-capped): root `AGENTS.md`/`AGENT.md`/
+  `CLAUDE.md`/`.cursorrules`, `README.md`, `CONTRIBUTING.md`.
+- **Lazy** (only listed — path + first heading, read on demand): `docs/`, `doc/`,
+  `documentation/`, `architecture/`, `adr/`, monorepo `packages/*/README.md`,
+  other root `*.md`. `node_modules`, `.git`, `dist`, `build`, … are never scanned.
+- **Budget:** per-eager-file 16 KB and total 48 KB caps (env-overridable via
+  `GENESEED_EAGER_FILE_KB` / `GENESEED_EAGER_TOTAL_KB`); an oversized eager file is
+  demoted to a lazy listing, logged — never silently truncated.
+- **Override / escape hatch:** drop a `.harness/context.json` (or `./context.json`,
+  or point `$GENESEED_CONTEXT`) to take control — same schema, plus glob `path`s,
+  `load: exclude`, and `"extend": true` to layer overrides on top of discovery.
+- **Idempotent:** writes a `<!-- geneseed-context:v2 -->` marker and skips a session
+  that already carries it — so a stray second plugin copy can't double-inject. (The
+  hard guarantee is still a single install: OpenCode dedups plugins by npm
+  name+version only, so two local copies both load.)
 
-**Install:** the same step as the learn plugin — `cp …/plugins/*.js` copies both,
-and `build --emit opencode` drops both into `.opencode/plugins/`. The same
-field-test caveat applies (`session.created`, `session.prompt` `noReply`, and
-`session.get` follow the published docs but aren't verified against every build).
+It needs no model, writes nothing, skips the learn plugin's throwaway sessions, and
+swallows every error. Output mirrors `rituals/harness.py context`.
+
+**Install:** the same step as the learn plugin — `cp …/plugins/*.js` copies both;
+`build --emit opencode` and `--emit opencode-global` place both for you. The same
+field-test caveat applies (`session.created`, `session.prompt` `noReply`,
+`session.messages`, and `session.get` follow the published docs but aren't verified
+against every build).
+
+## Global install — everything in the config dir
+
+For "the harness is global, zero per-repo files," render straight into OpenCode's
+global config dir:
+
+```
+python build.py --emit opencode-global          # add --theme imperial if wanted
+```
+
+This writes `AGENT.md`, `agents/`, `skills/<name>/SKILL.md`, and a single
+`plugins/` copy into `$OPENCODE_CONFIG_DIR` (else `$XDG_CONFIG_HOME/opencode`, else
+`~/.config/opencode`), and merges `opencode.json` to point `instructions` at the
+absolute `AGENT.md`. It writes **no** `context.json` — the context plugin
+auto-discovers each repo's docs. The dir is shared with your own config, so it is
+never wiped: a `.geneseed-manifest.json` tracks only the files this layer owns and
+removes stale ones on re-emit, leaving your own agents/skills/plugins untouched.
+
+Use `$OPENCODE_CONFIG_DIR` to keep the global harness in a **git-tracked** folder.
+On upgrade: `GENESEED_EMIT=opencode-global ./upgrade.sh`. Full design, setup guide,
+and acceptance checklist: [GLOBAL-HARNESS-SPEC.md](GLOBAL-HARNESS-SPEC.md).
 
 ## Pointing the agent at files beyond the Harness
 
-Drop a **`context.json`** manifest at the bundle root (beside `AGENT.md`) and the
-agent loads it dynamically — no `opencode.json` wiring needed, and it works on any
-tool. Each entry carries a `load` mode: `eager` (read every session — small,
-always-relevant rules) or `lazy` (read only when the task needs it — large or
-occasional docs, often elsewhere on the machine). The build drops an empty
+With the v2 context plugin you usually need **nothing here** — it auto-discovers a
+repo's docs. A **`context.json`** manifest is the *override* for when the convention
+doesn't fit: drop it at the bundle root, in `.harness/context.json`, or point
+`$GENESEED_CONTEXT` at it. Each entry carries a `load` mode: `eager` (read every
+session — small, always-relevant rules), `lazy` (read only when the task needs it),
+or `exclude`; `path` may be absolute, repo-relative, or a glob, and `"extend": true`
+layers the manifest on top of auto-discovery. The build drops an empty
 `context.json` at the bundle root (never overwriting an existing one); git-ignore
-it and list your docs by absolute or repo-relative path. The schema is in AGENT.md
-§6 and the file's own comment.
+it. The schema is in AGENT.md §6, GLOBAL-HARNESS-SPEC.md §3.4, and the file's own
+comment.
 
 If you'd rather use OpenCode's own always-on loading for a small rule file, you can
 also add its path to the `instructions` array of `opencode.json` directly — it

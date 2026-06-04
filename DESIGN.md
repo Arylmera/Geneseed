@@ -26,8 +26,9 @@ vault or a specific tool's hooks.
    (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`, defined by
    the `DIR_*` tokens). Two things stay fixed regardless of theme: the **source
    tree** under `src/` (always neutral, for sane authoring) and the **`.opencode/`
-   layer** emitted by `--emit opencode` (OpenCode requires the exact dir names
-   `agent/` and `command/`). Internal links in the bundle are themed via the same
+   layer** emitted by `--emit opencode` (OpenCode requires the fixed dir names
+   `agents/` and `skills/` — skills emit as native `skills/<name>/SKILL.md`, not
+   slash commands). Internal links in the bundle are themed via the same
    `DIR_*` tokens so they always resolve. Toggle = one flag.
 
 4. **Delegation by capability, not by folder.** The source system owned content
