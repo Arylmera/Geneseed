@@ -114,8 +114,9 @@ BUNDLE_GITIGNORE = """\
 # Project-context manifest — may hold private paths; never commit.
 context.json
 
-# Which theme this host last built (local build state, must not travel).
+# Which theme + emit mode this host last built (local build state, must not travel).
 .geneseed-theme
+.geneseed-emit
 
 # memory/ keeps its own .gitignore so learned facts stay on this machine.
 """

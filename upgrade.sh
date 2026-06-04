@@ -4,19 +4,25 @@
 #
 # Run it from inside the Geneseed folder you want to update:
 #
-#     ./upgrade.sh                  # track main, keep the last-built theme
-#     ./upgrade.sh v0.1.0           # pin to a tag
-#     ./upgrade.sh main imperial    # track main and force a theme
+#     ./upgrade.sh                                  # track main, keep last theme + emit mode
+#     ./upgrade.sh v0.1.0                           # pin to a tag
+#     ./upgrade.sh main imperial                    # track main and force a theme
+#     GENESEED_EMIT=opencode ./upgrade.sh           # per-repo .opencode/ layer
+#     GENESEED_EMIT=opencode-global ./upgrade.sh main imperial   # render into OpenCode's
+#                                                   #   global config dir (~/.config/opencode)
 #
 # It downloads the latest published source from GitHub, refreshes the factory
 # files in this folder, and re-renders the bundle BESIDE this folder (a sibling
 # directory named Harness/ at the same level as Geneseed), overwriting the files
 # already there. Override the target with GENESEED_OUT=/abs/path.
 #
-# The theme is resolved by precedence: explicit arg > the existing bundle's
-# .geneseed-theme marker > the local harness.config.json (read before it is
-# refreshed from upstream) > a loud warning + the upstream default. Your
-# host-specific files are left untouched: context.json, the bundle's memory/,
+# Both the THEME and the EMIT MODE are remembered between runs, so you only pass
+# them once — afterwards a bare `./upgrade.sh` keeps the same theme and keeps
+# emitting to the same place (e.g. the global OpenCode config dir).
+#   - Theme precedence: explicit arg > $OUT/.geneseed-theme marker > the local
+#     harness.config.json (read before SYNC) > a loud warning + the upstream default.
+#   - Emit precedence:  $GENESEED_EMIT env > $OUT/.geneseed-emit marker > files.
+# Your host-specific files are left untouched: context.json, the bundle's memory/,
 # and anything not in the SYNC list below.
 #
 # Collision-safe: GitHub serves the zip as Geneseed-<ref>.zip and unzips to a
@@ -45,8 +51,10 @@ ROOT_DIR="${GENESEED_ROOT:-$(dirname "$OUT")}"
 #   GENESEED_EMIT=opencode-global  straight into OpenCode's global config dir
 #                                  ($OPENCODE_CONFIG_DIR / ~/.config/opencode) — everything
 #                                  global, zero per-repo files (GLOBAL-HARNESS-SPEC.md)
-# Neither is ever generated automatically.
-EMIT="${GENESEED_EMIT:-files}"
+# Neither is ever generated automatically. The chosen mode is REMEMBERED in
+# $OUT/.geneseed-emit, so a later bare `./upgrade.sh` keeps emitting the same way.
+# Precedence: explicit env > marker > files.
+EMIT="${GENESEED_EMIT:-$(cat "$OUT/.geneseed-emit" 2>/dev/null || echo files)}"
 
 # Factory files refreshed from upstream. Everything else in the folder is left
 # alone — notably context.json and Harness/memory/ (your runtime state).
@@ -132,6 +140,9 @@ fi
 
 echo "[geneseed] rebuilding bundle -> $OUT (theme: ${THEME:-config default}, emit: $EMIT) ..."
 python3 build.py "${BUILD_ARGS[@]}"
+# Remember the emit mode so a later bare `./upgrade.sh` keeps deploying the same way
+# (build() always (re)creates $OUT, so this marker survives alongside .geneseed-theme).
+printf '%s\n' "$EMIT" > "$OUT/.geneseed-emit"
 if [ -n "$THEME" ]; then
   python3 rituals/harness.py doctor --theme "$THEME" || true
 else
