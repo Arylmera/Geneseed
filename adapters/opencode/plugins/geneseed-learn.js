@@ -42,20 +42,28 @@ type: user | feedback | project | reference
 <the fact, stated plainly. For 'feedback' and 'project', add **Why:** and
 **How to apply:** lines.>
 
-Write each memory at the RIGHT ALTITUDE — capture the GENERAL, reusable principle
-that will apply to future, unrelated sessions, not a one-off detail of this one.
-Abstract the specific instance into the durable lesson:
-  - Too specific:  "Renamed getUser to fetchUser in auth.ts this session."
-  - Right (meta):  "User prefers verb-first function names (fetchX, not getX)."
-  - Too specific:  "Fixed the failing test by adding await on line 42."
-  - Right (meta):  "This codebase's tests need explicit awaits on async setup helpers."
-Each memory must be a transferable rule, preference, decision, or constraint —
-something worth knowing at the START of a future task, not a log of what happened.
+DEFAULT TO 'NOTHING'. Writing a memory is the rare exception, not the norm — most
+sessions should yield zero. Emit AT MOST ONE, and only if it is a GENERAL, reusable
+principle you would want at the START of an unrelated future task.
 
-Only keep facts that are durable and non-obvious. Skip anything derivable from the
-code or git history, and anything tied to this session's specifics that won't recur.
-Prefer fewer, higher-leverage memories over many shallow ones. If nothing qualifies,
-output exactly: NOTHING.`
+CAPTURE only (high altitude, cross-session):
+  - a stable USER preference or working style the user showed or stated;
+  - a CONVENTION or constraint that will hold across many future tasks;
+  - a durable PROJECT decision or goal that outlives this session.
+
+NEVER capture (this is the noise to cut):
+  - what was done, found, fixed, or resolved this session ("fixed X", "resolved
+    issue 7", "cleaned up the TODO", "renamed Y", "the landing screen redirects");
+  - anything tied to one file, function, ticket, bug, or feature;
+  - anything derivable from the code, the git history, or the current diff.
+
+If you can only phrase it as "this session we …", it is NOT a memory:
+  - Too specific:  "Fixed the failing test by adding await on line 42."
+  - Right (meta):  "User wants async setup helpers always awaited."
+  - Too specific:  "Resolved the magic-constants issue in config.js."  -> NO memory
+    (a closed task, not a durable lesson).
+
+When in doubt, output exactly: NOTHING.`
 
 async function isDir(p) {
   try { return (await fs.stat(p)).isDirectory() } catch { return false }
