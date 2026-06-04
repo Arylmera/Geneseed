@@ -479,9 +479,16 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
     if agent_text is not None:
         # AGENT.md lists skills as flat `skills/<name>.md`, but native skills are
-        # nested `skills/<name>/SKILL.md` — rewrite the links so they resolve in the
-        # config dir. (Agent and memory links already match: agents/<name>.md, memory/.)
+        # nested `skills/<name>/SKILL.md` — rewrite the links so they resolve.
         agent_text = re.sub(r"\]\(skills/([A-Za-z0-9_-]+)\.md\)", r"](skills/\1/SKILL.md)", agent_text)
+        # Absolutise the memory references to the global store. AGENT.md is loaded
+        # from inside an arbitrary repo's cwd, so a relative `memory/` would resolve
+        # against the repo, not here — the agent could never find MEMORY.md. Point it
+        # at <cfg>/memory/ (where the learn plugin already writes) so recall works.
+        base = cfg.as_posix()
+        agent_text = (agent_text
+                      .replace("](memory/", f"]({base}/memory/")
+                      .replace("`memory/", f"`{base}/memory/"))
         (cfg / "AGENT.md").write_text(agent_text, encoding="utf-8")
         owned.append("AGENT.md")
 
