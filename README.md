@@ -16,23 +16,28 @@ dir; see [Global install](#global-install--zero-per-repo).
 
 ## How it works
 
-One canonical source in `src/` is written in neutral tokens. A tiny,
-dependency-free generator (`build.py`) renders it into a themed bundle in
-`Harness/`. A theme changes the prose vocabulary *and* the bundle's top-level folder
-names (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`); the
-`src/` tree itself always keeps neutral names. Internal links are themed to match,
-so the bundle always resolves.
+One canonical source in `src/` renders via a tiny, dependency-free generator
+(`build.py`) into a bundle in `Harness/`. **A theme controls only *voice*** — how
+the AI responds and how the prose inside the docs is written (tagline, greeting,
+epigraphs, agent/skill descriptions, the closing line). **Document structure is
+theme-independent**: section names (Rules, Agents, Skills, Memory…) and folder names
+(`laws/`, `agents/`, `skills/`, `memory/`) are always plain English, in every theme.
+So the scaffolding stays consistent and tool-friendly while the flavour lives in the
+words.
 
 ```
 python build.py                  # default theme (neutral)
-python build.py --theme imperial # Warhammer-flavoured labels
+python build.py --theme imperial # imperial voice, same neutral structure
 ```
 
 Two themes ship:
-- **neutral** — plain professional vocabulary (Rules, Agents, Skills, Memory, Context).
-- **imperial** — Warhammer 40k flavour (Codex, Legati, Rites, Anamnesis, Apocrypha).
+- **neutral** — plain professional voice.
+- **imperial** — Warhammer 40k voice: the AI responds as a servant of the Emperor,
+  with flavoured greetings and descriptions — but the sections are still Agents,
+  Skills, Rules, Memory and the folders are still `agents/`, `skills/`, ….
 
-Adding a theme is one JSON file in `themes/`.
+A theme is one JSON file in `themes/` carrying **voice tokens only** (`VOICE`,
+`TAGLINE`, `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`, `DESC_*`, `ROAST_PERSONA`).
 
 ## Layout
 

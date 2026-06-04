@@ -1,17 +1,5 @@
 {
-  "HARNESS": "Geneseed",
-  "CHARTER": "Charter",
-  "LAW": "Rule",
-  "LAWS": "Rules",
-  "AGENT": "Agent",
-  "AGENTS": "Agents",
-  "SKILL": "Skill",
-  "SKILLS": "Skills",
-  "MEMORY": "Memory",
-  "VAULT": "Workspace",
-  "CONTEXT": "Context",
-  "SCRIPT": "Script",
-  "SCRIPTS": "Scripts",
+  "VOICE": "Respond in clear, plain, professional English — concise and precise, no affectation.",
   "TAGLINE": "A portable, theme-able harness you implant into any repository to grow a disciplined AI agent.",
   "LOADED_SIGIL": "✅ Harness loaded — rules in force, agents and skills ready.",
   "EPI_LAWS": "The rules below hold in every task, in every repository.",
@@ -41,9 +29,5 @@
   "DESC_REFACTOR": "Improve code structure without changing behaviour — one named move, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Fan independent subtasks out to concurrent subagents, then converge the results.",
   "DESC_TDD": "Drive implementation with tests — write the failing test first, then the minimum code to pass.",
-  "DESC_HANDOFF": "Snapshot task state so a fresh context — or another agent — can resume in one read.",
-  "DIR_LAWS": "laws",
-  "DIR_AGENTS": "agents",
-  "DIR_SKILLS": "skills",
-  "DIR_MEMORY": "memory"
+  "DESC_HANDOFF": "Snapshot task state so a fresh context — or another agent — can resume in one read."
 }

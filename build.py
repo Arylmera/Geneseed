@@ -74,24 +74,28 @@ SRC_DIR_TOKENS = {
     "memory": "DIR_MEMORY",
 }
 
-# Tokens kept from the chosen theme when emitting for OpenCode; everything else
-# renders in the neutral (plain-English) vocabulary AND dirs. Just the session-start
-# readiness sigil — so the deployed AGENT.md reads professionally (Agents, Skills,
-# Laws, Memory; `agents/`/`skills/`/`memory/` dirs) while keeping the chosen theme's
-# greeting. Extend this tuple to keep more flavour (e.g. TAGLINE, BENEDICTION).
-GREETING_TOKENS = ("LOADED_SIGIL",)
+# Document STRUCTURE is theme-INDEPENDENT — the section names, the structural nouns,
+# and the folder names (DIR_*) are always plain English, in every theme and every
+# emit. A theme governs only VOICE: how the AI responds and how the prose inside the
+# docs is written (TAGLINE, LOADED_SIGIL, EPI_*, BENEDICTION, DESC_*, ROAST_PERSONA,
+# VOICE). So the scaffolding stays consistent and tool-friendly while the flavour
+# lives in the words. Theme files carry voice tokens only; these values are fixed.
+STRUCTURE = {
+    "HARNESS": "Geneseed", "CHARTER": "Charter",
+    "LAW": "Rule", "LAWS": "Rules",
+    "AGENT": "Agent", "AGENTS": "Agents",
+    "SKILL": "Skill", "SKILLS": "Skills",
+    "MEMORY": "Memory", "VAULT": "Workspace", "CONTEXT": "Context",
+    "SCRIPT": "Script", "SCRIPTS": "Scripts",
+    "DIR_LAWS": "laws", "DIR_AGENTS": "agents", "DIR_SKILLS": "skills", "DIR_MEMORY": "memory",
+}
 
 
-def _opencode_theme(theme_name: str) -> dict:
-    """The 'english-structure' theme used by the OpenCode emits: the neutral
-    vocabulary and dir names, with the chosen theme's greeting (GREETING_TOKENS)
-    grafted in. So `--theme imperial` for OpenCode keeps only the imperial sigil;
-    all section vocabulary and folder names stay plain English."""
-    neutral = load_theme("neutral")
-    if theme_name == "neutral":
-        return neutral
-    chosen = load_theme(theme_name)
-    return {**neutral, **{k: chosen[k] for k in GREETING_TOKENS if k in chosen}}
+def effective_theme(theme_name: str) -> dict:
+    """The token map used to render: the chosen theme's VOICE with the fixed neutral
+    STRUCTURE laid on top (structure wins, so a theme can never change section names,
+    structural nouns, or folder names — only voice/prose)."""
+    return {**load_theme(theme_name), **STRUCTURE}
 
 # Dirs the build fully owns: wiped and regenerated each run so a renamed/removed
 # source file never leaves a stale copy behind. `memory` is intentionally NOT here —
@@ -169,19 +173,17 @@ def dest_rel(rel: Path) -> Path:
     return rel
 
 
-def render_all(theme_name: str, theme: dict | None = None) -> tuple[dict, list[tuple[str, str | None, Path]]]:
+def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]]]:
     """Render every source file once. Returns (theme, items) where each item is
     (output_relpath, rendered_text_or_None, source_path). Text files carry their
     rendered text; binary files carry None text and are copied from source_path.
 
-    If `theme` (a resolved token dict) is passed it is used verbatim instead of
-    loading `theme_name` — the OpenCode emits pass an 'english-structure' theme
-    (`_opencode_theme`): neutral vocabulary + dirs with the chosen theme's greeting.
+    Renders with `effective_theme` — the chosen theme's voice over the fixed neutral
+    STRUCTURE — so section names and folder names are theme-independent everywhere.
 
     Shared by `build()` (writes to a directory) and the prompt emitter (embeds
     the text in a single self-contained prompt) so the two never drift."""
-    if theme is None:
-        theme = load_theme(theme_name)
+    theme = effective_theme(theme_name)
     items: list[tuple[str, str | None, Path]] = []
     for path in sorted(SRC.rglob("*")):
         if path.is_dir() or "__pycache__" in path.parts:
@@ -195,7 +197,7 @@ def render_all(theme_name: str, theme: dict | None = None) -> tuple[dict, list[t
     return theme, items
 
 
-def build(theme_name: str, out: Path, theme_override: dict | None = None) -> None:
+def build(theme_name: str, out: Path) -> None:
     """Render the bundle into `out`.
 
     Before rendering, the dirs the build fully owns (`OWNED_SRC_DIRS` — laws,
@@ -205,7 +207,7 @@ def build(theme_name: str, out: Path, theme_override: dict | None = None) -> Non
     fact files, refreshed in place), and `context.json` — written once, beside
     AGENT.md, and never touched again. The build therefore cleans its own footprint
     without ever destroying the user's repository or data."""
-    theme, items = render_all(theme_name, theme=theme_override)
+    theme, items = render_all(theme_name)
     out.mkdir(parents=True, exist_ok=True)
 
     for src_dir in OWNED_SRC_DIRS:
@@ -353,14 +355,13 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     root. The project manifest `context.json` is loaded by the context plugin, never
     listed in `instructions`."""
     root = root or out
-    oc_theme = _opencode_theme(theme_name)
-    build(theme_name, out, theme_override=oc_theme)
+    build(theme_name, out)
     # `.opencode/` is fully owned by this layer — wipe so a removed agent/skill
     # leaves no stale file behind. (Plural dir names are canonical in OpenCode;
     # singular is back-compat only.)
     if (root / ".opencode").is_dir():
         shutil.rmtree(root / ".opencode")
-    _, items = render_all(theme_name, theme=oc_theme)
+    _, items = render_all(theme_name)
 
     oc = root / ".opencode"
     n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills")
@@ -450,7 +451,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None) -> None:
     by the context plugin. `out`, if given, is only a migration source for an
     existing memory store (the legacy bundle location); nothing is built there."""
     cfg = _opencode_config_dir()
-    theme, items = render_all(theme_name, theme=_opencode_theme(theme_name))
+    theme, items = render_all(theme_name)
     cfg.mkdir(parents=True, exist_ok=True)
 
     # Remove files this layer owned on a previous run (stale agent/skill/plugin).

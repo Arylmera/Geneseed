@@ -20,22 +20,25 @@ vault or a specific tool's hooks.
    are expressed primarily as instructions in `AGENT.md` that the model follows.
    Scripts are a power-user convenience layered on top, never a requirement.
 
-3. **Theme covers vocabulary and the bundle's folder names.** A single neutral
-   source renders to any theme via token substitution. A theme changes both the
-   prose labels *and* the top-level folder names of the rendered bundle
-   (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`, defined by
-   the `DIR_*` tokens). The **source tree** under `src/` always stays neutral (for
-   sane authoring), and internal links in the bundle are themed via the same `DIR_*`
-   tokens so they always resolve. Toggle = one flag.
+3. **Theme is voice; structure is theme-independent.** A single neutral source
+   renders to any theme via token substitution, split into two classes:
+   - **Structure** (always plain English, every theme, every emit) — the section
+     names and structural nouns (Rules, Agents, Skills, Memory, Workspace, Context,
+     Scripts) and the folder names (`laws/`, `agents/`, `skills/`, `memory/`). These
+     live in the `STRUCTURE` map in `build.py` and are laid on top of every render,
+     so a theme can never change a name, a heading, or a path. Documents and their
+     scaffolding stay consistent and tool-friendly.
+   - **Voice** (themed) — how the AI *responds* (`VOICE` directive) and how the prose
+     *inside* the docs is written: `TAGLINE`, `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`,
+     `DESC_*`, `ROAST_PERSONA`. Theme files carry voice tokens only.
 
-   The **OpenCode layer is an exception**: the `--emit opencode` / `opencode-global`
-   targets render with `_opencode_theme` — the **neutral vocabulary AND dir names**
-   (Agents/Skills/Rules/Memory; `agents/`/`skills/`/`memory/`), with only the chosen
-   theme's greeting (`GREETING_TOKENS`, currently the readiness sigil) grafted in. So
-   the deployed config dir reads in plain English (and the dir names OpenCode fixes
-   stay consistent with `AGENT.md`'s link paths), while `--theme imperial` still
-   contributes its session-start greeting. Skills emit as native
-   `skills/<name>/SKILL.md`, not slash commands.
+   So `imperial` flavours the words and the agent's tone (the readiness sigil, the
+   epigraphs, the descriptions) while every section is still `## Agents`, every
+   folder still `agents/`, and links resolve identically across themes. The source
+   tree under `src/` stays neutral for sane authoring. Toggle = one flag.
+
+   The OpenCode emits add only: native skills at `skills/<name>/SKILL.md` (not slash
+   commands) and an `AGENT.md` skill-link rewrite to that nested path.
 
 4. **Delegation by capability, not by folder.** The source system owned content
    folders with delegate agents. For code repositories, specialists by capability
