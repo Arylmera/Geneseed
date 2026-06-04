@@ -74,6 +74,25 @@ SRC_DIR_TOKENS = {
     "memory": "DIR_MEMORY",
 }
 
+# Tokens kept from the chosen theme when emitting for OpenCode; everything else
+# renders in the neutral (plain-English) vocabulary AND dirs. Just the session-start
+# readiness sigil — so the deployed AGENT.md reads professionally (Agents, Skills,
+# Laws, Memory; `agents/`/`skills/`/`memory/` dirs) while keeping the chosen theme's
+# greeting. Extend this tuple to keep more flavour (e.g. TAGLINE, BENEDICTION).
+GREETING_TOKENS = ("LOADED_SIGIL",)
+
+
+def _opencode_theme(theme_name: str) -> dict:
+    """The 'english-structure' theme used by the OpenCode emits: the neutral
+    vocabulary and dir names, with the chosen theme's greeting (GREETING_TOKENS)
+    grafted in. So `--theme imperial` for OpenCode keeps only the imperial sigil;
+    all section vocabulary and folder names stay plain English."""
+    neutral = load_theme("neutral")
+    if theme_name == "neutral":
+        return neutral
+    chosen = load_theme(theme_name)
+    return {**neutral, **{k: chosen[k] for k in GREETING_TOKENS if k in chosen}}
+
 # Dirs the build fully owns: wiped and regenerated each run so a renamed/removed
 # source file never leaves a stale copy behind. `memory` is intentionally NOT here —
 # it holds the agent's runtime MEMORY.md + fact files and is refreshed in place.
@@ -150,14 +169,19 @@ def dest_rel(rel: Path) -> Path:
     return rel
 
 
-def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]]]:
+def render_all(theme_name: str, theme: dict | None = None) -> tuple[dict, list[tuple[str, str | None, Path]]]:
     """Render every source file once. Returns (theme, items) where each item is
     (output_relpath, rendered_text_or_None, source_path). Text files carry their
     rendered text; binary files carry None text and are copied from source_path.
 
+    If `theme` (a resolved token dict) is passed it is used verbatim instead of
+    loading `theme_name` — the OpenCode emits pass an 'english-structure' theme
+    (`_opencode_theme`): neutral vocabulary + dirs with the chosen theme's greeting.
+
     Shared by `build()` (writes to a directory) and the prompt emitter (embeds
     the text in a single self-contained prompt) so the two never drift."""
-    theme = load_theme(theme_name)
+    if theme is None:
+        theme = load_theme(theme_name)
     items: list[tuple[str, str | None, Path]] = []
     for path in sorted(SRC.rglob("*")):
         if path.is_dir() or "__pycache__" in path.parts:
@@ -171,7 +195,7 @@ def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]
     return theme, items
 
 
-def build(theme_name: str, out: Path) -> None:
+def build(theme_name: str, out: Path, theme_override: dict | None = None) -> None:
     """Render the bundle into `out`.
 
     Before rendering, the dirs the build fully owns (`OWNED_SRC_DIRS` — laws,
@@ -181,7 +205,7 @@ def build(theme_name: str, out: Path) -> None:
     fact files, refreshed in place), and `context.json` — written once, beside
     AGENT.md, and never touched again. The build therefore cleans its own footprint
     without ever destroying the user's repository or data."""
-    theme, items = render_all(theme_name)
+    theme, items = render_all(theme_name, theme=theme_override)
     out.mkdir(parents=True, exist_ok=True)
 
     for src_dir in OWNED_SRC_DIRS:
@@ -329,13 +353,14 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     root. The project manifest `context.json` is loaded by the context plugin, never
     listed in `instructions`."""
     root = root or out
-    build(theme_name, out)
+    oc_theme = _opencode_theme(theme_name)
+    build(theme_name, out, theme_override=oc_theme)
     # `.opencode/` is fully owned by this layer — wipe so a removed agent/skill
     # leaves no stale file behind. (Plural dir names are canonical in OpenCode;
     # singular is back-compat only.)
     if (root / ".opencode").is_dir():
         shutil.rmtree(root / ".opencode")
-    _, items = render_all(theme_name)
+    _, items = render_all(theme_name, theme=oc_theme)
 
     oc = root / ".opencode"
     n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills")
@@ -425,7 +450,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None) -> None:
     by the context plugin. `out`, if given, is only a migration source for an
     existing memory store (the legacy bundle location); nothing is built there."""
     cfg = _opencode_config_dir()
-    theme, items = render_all(theme_name)
+    theme, items = render_all(theme_name, theme=_opencode_theme(theme_name))
     cfg.mkdir(parents=True, exist_ok=True)
 
     # Remove files this layer owned on a previous run (stale agent/skill/plugin).
@@ -450,6 +475,10 @@ def emit_opencode_global(theme_name: str, out: Path | None = None) -> None:
     owned: list[str] = []
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
     if agent_text is not None:
+        # AGENT.md lists skills as flat `skills/<name>.md`, but native skills are
+        # nested `skills/<name>/SKILL.md` — rewrite the links so they resolve in the
+        # config dir. (Agent and memory links already match: agents/<name>.md, memory/.)
+        agent_text = re.sub(r"\]\(skills/([A-Za-z0-9_-]+)\.md\)", r"](skills/\1/SKILL.md)", agent_text)
         (cfg / "AGENT.md").write_text(agent_text, encoding="utf-8")
         owned.append("AGENT.md")
 

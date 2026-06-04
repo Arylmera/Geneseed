@@ -61,7 +61,11 @@ your-repo/
   one artifact serves both tools. Trade-off: no `/name` slash trigger and no
   per-skill `agent:`/`model:` pin (a skill runs in the current agent context). See
   [GLOBAL-HARNESS-SPEC.md](GLOBAL-HARNESS-SPEC.md) §9.1.
-- Themed: add `--theme imperial` for the Warhammer vocabulary.
+- Theming for OpenCode is **english-structure**: the emitted files use neutral
+  vocabulary and dir names (Agents/Skills/Rules/Memory; `agents/`/`skills/`/`memory/`)
+  so `AGENT.md` reads plainly and its link paths match the dirs OpenCode fixes.
+  `--theme imperial` keeps only the chosen theme's **greeting** (the readiness sigil);
+  extend `GREETING_TOKENS` in `build.py` to keep more flavour.
 - **Bundle in a subfolder?** OpenCode resolves `instructions` paths from the
   *project root*, not from `opencode.json`'s folder. So if the bundle lives in a
   subfolder, add `--root <repo>` — `opencode.json` and `.opencode/` are written to

@@ -24,12 +24,18 @@ vault or a specific tool's hooks.
    source renders to any theme via token substitution. A theme changes both the
    prose labels *and* the top-level folder names of the rendered bundle
    (`laws→leges`, `agents→legati`, `skills→rites`, `memory→anamnesis`, defined by
-   the `DIR_*` tokens). Two things stay fixed regardless of theme: the **source
-   tree** under `src/` (always neutral, for sane authoring) and the **`.opencode/`
-   layer** emitted by `--emit opencode` (OpenCode requires the fixed dir names
-   `agents/` and `skills/` — skills emit as native `skills/<name>/SKILL.md`, not
-   slash commands). Internal links in the bundle are themed via the same
-   `DIR_*` tokens so they always resolve. Toggle = one flag.
+   the `DIR_*` tokens). The **source tree** under `src/` always stays neutral (for
+   sane authoring), and internal links in the bundle are themed via the same `DIR_*`
+   tokens so they always resolve. Toggle = one flag.
+
+   The **OpenCode layer is an exception**: the `--emit opencode` / `opencode-global`
+   targets render with `_opencode_theme` — the **neutral vocabulary AND dir names**
+   (Agents/Skills/Rules/Memory; `agents/`/`skills/`/`memory/`), with only the chosen
+   theme's greeting (`GREETING_TOKENS`, currently the readiness sigil) grafted in. So
+   the deployed config dir reads in plain English (and the dir names OpenCode fixes
+   stay consistent with `AGENT.md`'s link paths), while `--theme imperial` still
+   contributes its session-start greeting. Skills emit as native
+   `skills/<name>/SKILL.md`, not slash commands.
 
 4. **Delegation by capability, not by folder.** The source system owned content
    folders with delegate agents. For code repositories, specialists by capability
