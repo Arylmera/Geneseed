@@ -33,9 +33,14 @@ PowerShell** section of the top-level README.
 Why inject rather than instruct? Rule XVIII tells the agent to read
 `context.json` at startup, but startup rituals are exactly what agents skip. The
 `harness context` hook removes the choice: the eager files' contents land in
-context before the first turn regardless of agent discipline. On tools without
-hooks (or on OpenCode, which loads `context.json` itself), the AGENT.md prose
-still carries the rule.
+context before the first turn regardless of agent discipline. On OpenCode the
+context **plugin** does the same job but auto-discovers the repo's docs (no manifest
+needed — see [`../opencode/`](../opencode/)); on tools without hooks or plugins, the
+AGENT.md prose still carries the rule.
+
+> Note: this Claude Code hook path (`harness context`) is still **manifest-driven**
+> — it injects `context.json`'s `eager` entries. The auto-discovery convention
+> currently lives in the OpenCode plugin only.
 
 ## Other tools
 

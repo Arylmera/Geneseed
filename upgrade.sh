@@ -158,14 +158,23 @@ if [ "$OUT" != "$STRAY" ] && [ -d "$STRAY" ]; then
   rm -rf "$STRAY"
 fi
 
+# Pre-emit consistency gate (BLOCKING). Validate the freshly-synced source BEFORE
+# building/emitting, so a mid-publish download — e.g. AGENT.md referencing skills not
+# yet present — REFUSES to deploy a partial harness instead of silently writing a
+# broken set you'd have to repair with a second run. Gate on the theme being built;
+# with no theme, sweep all. The doctor builds to a temp dir, so this never touches $OUT.
+echo "[geneseed] validating source (theme: ${THEME:-all}) ..."
+if [ -n "$THEME" ]; then DOC_ARGS=(--theme "$THEME"); else DOC_ARGS=(); fi
+if ! python3 rituals/harness.py doctor "${DOC_ARGS[@]}"; then
+  echo "[geneseed] ✗ source is inconsistent (dead links / unresolved tokens) — NOT emitting." >&2
+  echo "[geneseed] ✗ Usually the upstream was mid-publish. Re-run in a moment:" >&2
+  echo "[geneseed] ✗     $(basename "$0") ${*:-}" >&2
+  exit 1
+fi
+
 echo "[geneseed] rebuilding bundle -> $OUT (theme: ${THEME:-config default}, emit: $EMIT) ..."
 python3 build.py "${BUILD_ARGS[@]}"
 # (build.py persists the .geneseed-emit marker itself — global mode in $CFG, other
 # modes in $OUT — so the mode is remembered no matter which entrypoint set it.)
-if [ -n "$THEME" ]; then
-  python3 rituals/harness.py doctor --theme "$THEME" || true
-else
-  python3 rituals/harness.py doctor || true
-fi
 
 echo "[geneseed] upgrade complete."

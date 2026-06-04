@@ -5,13 +5,14 @@
 
 Geneseed distils a personal agent system into a generic harness built around a
 single `AGENT.md`. Point OpenCode at it and your agent inherits a set of operating
-**rules**, a roster of capability **agents**, runnable **skills**, a **memory**
-convention, two **plugins** that enforce doc-loading and capture memory
-automatically, and a **`context.json`** manifest that points the agent at your own
-documentation, wherever it lives on the machine.
+**rules**, a roster of capability **agents**, native **skills**, a **memory**
+convention, and two **plugins** — one that auto-discovers and injects your project's
+docs every session, one that captures durable memory automatically.
 
 The bundle is built in one place and reused from any directory — the rules, agents,
-skills, and plugins follow you into every project OpenCode opens.
+skills, and plugins follow you into every project OpenCode opens. For a zero-per-repo
+setup, `--emit opencode-global` installs the whole harness into OpenCode's config
+dir; see [Global install](#global-install--zero-per-repo).
 
 ## How it works
 
@@ -38,7 +39,10 @@ Adding a theme is one JSON file in `themes/`.
 ```
 Geneseed/
 ├── build.py              generator (stdlib only)
-├── upgrade.sh            self-upgrade from the published source
+├── upgrade.sh            self-upgrade from the published source (refreshes content)
+├── upgrade-neutral.sh    upgrade pinned to the neutral theme
+├── upgrade-imperial.sh   upgrade pinned to the imperial theme
+├── sync-self.sh          meta-updater: refreshes the orchestration scripts themselves
 ├── harness.config.json   default theme + metadata
 ├── src/                  canonical source — edit here
 │   ├── AGENT.md.tmpl     the entrypoint, rendered to Harness/AGENT.md
@@ -112,84 +116,109 @@ that real, both shipping in `adapters/opencode/plugins/`:
   and deduping. It distils with the **same model the session already used**, so it
   needs no API key and no extra config.
 
-Install both globally so they run in every project. **Run this from inside the
-Geneseed folder** — it copies the plugins and points `$GENESEED_HARNESS` at the
-sibling `../Harness` bundle, so they find your memory store and `context.json` with
-no hand-typed path:
-
-```
-mkdir -p ~/.config/opencode/plugins
-cp adapters/opencode/plugins/*.js ~/.config/opencode/plugins/
-export GENESEED_HARNESS="$(dirname "$PWD")/Harness"               # this shell
-echo "export GENESEED_HARNESS=\"$GENESEED_HARNESS\"" >> ~/.zshrc  # persist (run once)
-```
-
-To load the rules in every project too, add the bundle's `AGENT.md` (absolute path)
-to the `instructions` array of your global `~/.config/opencode/opencode.json`. List
-**only `AGENT.md`** — the context plugin handles project docs (auto-discovery).
-Per-project, `--emit opencode` already writes a local `opencode.json` that does
-this; or skip per-repo entirely with `--emit opencode-global`.
+- **Quiet by default:** the context plugin logs nothing (OpenCode renders a plugin's
+  stderr as red UI text). `GENESEED_DEBUG=1` re-enables logs; `GENESEED_CONTEXT_INJECT=off`
+  disables the visible injection block and falls back to the AGENT.md Law.
 
 Full detail, env overrides, and a field-test note: [`adapters/opencode/`](adapters/opencode/).
 
+## Global install — zero per-repo
+
+The recommended setup: render the whole harness straight into OpenCode's config dir,
+so every repo inherits it and nothing is committed into your projects.
+
+```
+GENESEED_EMIT=opencode-global ./upgrade-imperial.sh   # or ./upgrade.sh / --theme neutral
+export GENESEED_HARNESS="$HOME/.config/opencode"       # learn plugin → <cfg>/memory
+echo "export GENESEED_HARNESS=\"$HOME/.config/opencode\"" >> ~/.zshrc
+```
+
+This writes — into `$OPENCODE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/opencode`, else
+`~/.config/opencode` — and builds **no sibling `Harness/`**:
+
+- `AGENT.md`, `agents/*.md`, `skills/<name>/SKILL.md`, a single `plugins/` copy;
+- the memory store at `<cfg>/memory` (always English, never themed — migrated once
+  from a legacy `Harness/memory`/`anamnesis/` if present, else seeded);
+- `opencode.json` merged to point `instructions` at the absolute `AGENT.md`;
+- **no** `context.json` — the context plugin auto-discovers each repo's docs.
+
+It is non-destructive: a `.geneseed-manifest.json` tracks only the files it owns and
+removes stale ones on re-emit, leaving your own agents/skills/plugins and the memory
+store untouched. The emit mode is remembered in `<cfg>/.geneseed-emit`, so a later
+bare `./upgrade-imperial.sh` keeps deploying globally. Use `$OPENCODE_CONFIG_DIR` to
+keep the global harness in a git-tracked folder.
+
+**Per-repo instead?** `--emit opencode` writes `.opencode/{agents,skills,plugins}` +
+`opencode.json` into one repo. **Manual?** copy `adapters/opencode/plugins/*.js` into
+`~/.config/opencode/plugins/` and add the bundle's absolute `AGENT.md` to a global
+`opencode.json`'s `instructions`.
+
 ## Upgrade in place
 
-`upgrade.sh` refreshes an already-built bundle from the published source without
+`upgrade.sh` refreshes an already-built install from the published source without
 touching your host-specific state. Run it from inside the Geneseed folder:
 
 ```
-./upgrade.sh                  # track main, keep the last-built theme
+./upgrade.sh                  # track main; keep the remembered theme + emit mode
 ./upgrade.sh v0.1.0           # pin to a tag
-./upgrade.sh main imperial    # track main and force a theme
+./upgrade.sh main imperial    # force a theme
+./upgrade-imperial.sh         # convenience wrapper (theme pinned)
 ```
 
-It downloads upstream, refreshes the factory files in place, and re-renders the
-bundle into a **sibling `Harness/`** (beside the Geneseed folder), preserving the
-bundle's `memory/` and `context.json`. A stray bundle left *inside* the factory by
-an older layout is removed — but its `context.json` and `memory/` are **rescued into
-the new location first**, so migrating never wipes your manifest or learned memories.
+It downloads upstream, refreshes the factory files in place, **validates the synced
+source** (a blocking doctor pass — a mid-publish download that is internally
+inconsistent refuses to deploy a partial harness), then re-renders.
 
-**Theme** is resolved by precedence: explicit arg > the bundle's `.geneseed-theme`
-marker > the local `harness.config.json` (captured *before* it is refreshed from
-upstream) > a loud warning + the upstream default. The marker is git-ignored (the
-bundle's `.gitignore` excludes `.geneseed-theme`), so it does **not** travel between
-machines — pass the theme explicitly the first time on a new machine
-(`./upgrade.sh main imperial`).
+**Theme and emit mode are both remembered** between runs (`.geneseed-theme` and
+`.geneseed-emit` markers), so you pass them once and a bare `./upgrade.sh` keeps the
+same theme and keeps deploying to the same place (global config dir, per-repo, or
+plain bundle). Precedence — theme: explicit arg > marker > `harness.config.json` >
+upstream default; emit: `$GENESEED_EMIT` > global-config marker > bundle marker >
+`files`. Markers are git-ignored, so pass them explicitly the first time on a new
+machine.
 
-By default the upgrade emits only the plain bundle. To regenerate the OpenCode
-native layer (subagents, commands, plugins, `opencode.json`) on upgrade, set
-`GENESEED_EMIT=opencode`. Override locations with `GENESEED_OUT` (bundle) and
-`GENESEED_ROOT` (project root). `upgrade.sh` excludes itself from the sync, so to
-pick up a newer `upgrade.sh`, re-fetch it once:
+Emit modes: `GENESEED_EMIT=opencode-global` (recommended — see
+[Global install](#global-install--zero-per-repo)), `=opencode` (per-repo
+`.opencode/` layer), or unset (`files`, plain bundle). Override locations with
+`GENESEED_OUT` (bundle) and `GENESEED_ROOT` (project root).
+
+**Updating the scripts themselves.** `upgrade.sh` and the wrappers refresh the
+factory *content* but not themselves (rewriting a running script is unsafe). To pull
+new versions of the orchestration layer, run the meta-updater first:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/Arylmera/Geneseed/main/upgrade.sh -o upgrade.sh
+./sync-self.sh                # refreshes upgrade.sh, upgrade-<theme>.sh, sync-self.sh
 ```
 
-## Project context — `context.json`
+## Project context — auto-discovered
 
-The harness ships no project-specific knowledge. To give the agent that knowledge,
-fill in the **`context.json`** manifest beside `AGENT.md`. It is host-specific —
-**git-ignore it**; the build never touches or publishes it.
+The harness ships no project-specific knowledge. The context plugin gives the agent
+that knowledge automatically: on session start it **discovers the current repo's docs
+by convention** and injects them, so usually you configure **nothing**.
+
+- **Eager** (injected in full, budget-capped): root `AGENTS.md`/`AGENT.md`/
+  `CLAUDE.md`/`.cursorrules`, `README.md`, `CONTRIBUTING.md`.
+- **Lazy** (only listed — path + heading, read on demand): `docs/`, `doc/`,
+  `documentation/`, `architecture/`, `adr/`, monorepo `packages/*/README.md`, other
+  root `*.md`. `node_modules`, `.git`, `dist`, … are never scanned.
+
+**Override** only when the convention doesn't fit: drop a `.harness/context.json`
+(or `./context.json`, or point `$GENESEED_CONTEXT`). Same manifest, plus glob paths,
+`load: exclude`, and `"extend": true` to layer on top of discovery:
 
 ```json
 {
+  "extend": true,
   "context": [
-    { "path": "/abs/path/to/house-rules.md", "load": "eager",
-      "description": "Conventions, branch policy, Definition of Done." },
-    { "path": "~/work/repo/docs/ARCHITECTURE.md", "load": "lazy",
-      "description": "Back-end architecture — read when touching the backend." }
+    { "path": "docs/house-rules.md", "load": "eager", "description": "Branch policy, DoD." },
+    { "path": "docs/**/*.md", "load": "lazy" },
+    { "path": "internal/secrets.md", "load": "exclude" }
   ]
 }
 ```
 
-- **`eager`** — read every session (small, always-relevant rules). The context
-  plugin injects these for you.
-- **`lazy`** — read only when the task needs it (large or occasional docs).
-- `path` is absolute, or relative to `context.json`'s own directory.
-
-This replaces baked-in project rules: point at the project's own files instead of
-editing the harness.
+`path` is absolute, repo-relative, or a glob. Full schema:
+[`adapters/opencode/GLOBAL-HARNESS-SPEC.md`](adapters/opencode/GLOBAL-HARNESS-SPEC.md) §3.
 
 ## Memory
 

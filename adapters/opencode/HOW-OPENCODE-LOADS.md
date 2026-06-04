@@ -94,25 +94,32 @@ any discovered while walking up the tree. If the same file is named in two
 `instructions` arrays, it is loaded once **per source**. This is harmless (just
 duplicated context), but to clean it up, name each file in **one** config only.
 
-With the **context plugin installed you do not need `context.json` in
-`instructions` at all** — the plugin injects the `eager` docs' *contents* on
-`session.created`, which supersedes loading the bare manifest. Keep:
+Geneseed's emit lists **only `AGENT.md`** in `instructions` (never `context.json` —
+the context plugin handles project docs by auto-discovery), so the classic
+"manifest listed twice" no longer happens. Keep:
 
 ```json
-{ "instructions": ["/abs/path/to/Harness/AGENT.md"] }
+{ "instructions": ["/abs/path/to/AGENT.md"] }
 ```
 
-and let the plugin handle context. To find the duplicate source, run this from the
-repo where you see the doubling:
+If you still see `AGENT.md` loaded twice, it is named in two merged `opencode.json`
+files — find and de-dup:
 
 ```bash
 for f in ~/.config/opencode/opencode.json ./opencode.json ./.opencode/opencode.json; do
   echo "== $f =="; cat "$f" 2>/dev/null; echo
 done
-grep -rl 'context.json' ~/.config/opencode . --include='opencode.json' 2>/dev/null
 ```
 
-A common cause is a **leftover project `opencode.json`** from an earlier
-`build --emit opencode` (its `instructions` are `["AGENT.md", "context.json"]`)
-sitting alongside your global config — remove `context.json` from whichever you
-don't want.
+### The PROJECT CONTEXT block twice
+
+The modern cause of a *doubled injection* is **two copies of the context plugin**
+(global `~/.config/opencode/plugins/` + a leftover project `.opencode/plugins/`) —
+OpenCode dedups plugins by npm name+version only, so two local `.js` files both
+load. The v2 plugin guards against this with a transcript marker
+(`<!-- geneseed-context:v2 -->`) — it skips a session that already carries it — but
+the clean fix is a single install. Remove the stray project copy:
+
+```bash
+rm -rf .opencode/plugins .opencode/agents .opencode/skills .opencode/command .opencode/agent
+```

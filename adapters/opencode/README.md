@@ -82,8 +82,9 @@ cd Geneseed
 ./upgrade.sh main imperial    # force a theme while upgrading
 ```
 
-The native layer is **opt-in**. To (re)generate subagents, commands, and an
-`opencode.json` on upgrade, set `GENESEED_EMIT=opencode`:
+The native layer is **opt-in**. To (re)generate subagents, native skills, and an
+`opencode.json` on upgrade, set `GENESEED_EMIT=opencode` (or
+`GENESEED_EMIT=opencode-global` for the global install):
 
 ```
 GENESEED_EMIT=opencode ./upgrade.sh main imperial
