@@ -19,6 +19,11 @@
 // mirrors `rituals/harness.py context`. Every error is swallowed — it never blocks
 // a session. See adapters/opencode/GLOBAL-HARNESS-SPEC.md.
 //
+// Quiet: by default it logs NOTHING (OpenCode shows a plugin's stderr as red text).
+// GENESEED_DEBUG=1 re-enables discovery/inject logs. GENESEED_CONTEXT_INJECT=off
+// disables injection entirely — no visible PROJECT CONTEXT block — leaving project
+// context to the AGENT.md Law (soft, agent-discipline) instead of injection.
+//
 // Install: copy into ~/.config/opencode/plugins/ (global) — `build --emit
 // opencode-global` and `--emit opencode` both place it for you. Keep ONE copy:
 // OpenCode dedups plugins by npm name+version only, so two local copies both load.
@@ -33,6 +38,15 @@ const EAGER_FILE_KB = Number(process.env.GENESEED_EAGER_FILE_KB || 16)
 const EAGER_TOTAL_KB = Number(process.env.GENESEED_EAGER_TOTAL_KB || 48)
 const MAX_FILES_SCANNED = 2000
 const MAX_DEPTH = 6
+
+// Quiet by default — OpenCode surfaces a plugin's stderr in the UI (red text). Set
+// GENESEED_DEBUG=1 to see discovery/inject logs. Set GENESEED_CONTEXT_INJECT=off to
+// disable injection entirely and lean on the AGENT.md project-context Law instead
+// (no visible PROJECT CONTEXT block; enforcement becomes soft/agent-discipline).
+const DEBUG = !!process.env.GENESEED_DEBUG
+const INJECT_OFF = ["off", "0", "false", "no"].includes(
+  (process.env.GENESEED_CONTEXT_INJECT || "on").toLowerCase())
+function log(msg) { if (DEBUG) console.error(`[geneseed-context] ${msg}`) }
 
 // ---- convention --------------------------------------------------------------
 // Root-level files injected in full. Agent-directed rules + canonical entry docs.
@@ -213,7 +227,7 @@ async function resolveSource(root) {
 }
 
 // ---- injection block ---------------------------------------------------------
-async function buildBlock({ eager, lazy }, log) {
+async function buildBlock({ eager, lazy }) {
   const out = [MARKER, "=== PROJECT CONTEXT — binding for this repo per Law XVIII ===", ""]
   const perFile = EAGER_FILE_KB * 1024
   const total = EAGER_TOTAL_KB * 1024
@@ -231,7 +245,7 @@ async function buildBlock({ eager, lazy }, log) {
     const size = Buffer.byteLength(text, "utf8")
     if (size > perFile) {
       demoted.push(`[demoted: ${e.rel} exceeded ${EAGER_FILE_KB} KB — read on demand]`)
-      log?.(`demoted ${e.rel} -> lazy (${kb(size)} KB > ${EAGER_FILE_KB} KB cap)`)
+      log(`demoted ${e.rel} -> lazy (${kb(size)} KB > ${EAGER_FILE_KB} KB cap)`)
       continue
     }
     if (spent + size > total) {
@@ -285,6 +299,7 @@ export const GeneseedContext = async (ctx) => {
   return {
     event: async ({ event }) => {
       if (!event || event.type !== "session.created") return
+      if (INJECT_OFF) return          // opt-out: rely on the AGENT.md Law, no visible block
       const sid =
         event.properties?.sessionID ?? event.payload?.sessionID ??
         event.properties?.info?.id ?? event.payload?.info?.id
@@ -298,37 +313,26 @@ export const GeneseedContext = async (ctx) => {
           const info = await client.session.get({ path: { id: sid } })
           title = info?.title ?? info?.data?.title ?? ""
         } catch {}
-        if (title.startsWith("geneseed-")) {
-          console.error("[geneseed-context] skipped: geneseed-* session")
-          return
-        }
+        if (title.startsWith("geneseed-")) { log("skipped: geneseed-* session"); return }
 
-        if (await alreadyInjected(client, sid)) {
-          console.error("[geneseed-context] skipped: already injected (marker present)")
-          return
-        }
+        if (await alreadyInjected(client, sid)) { log("skipped: already injected (marker present)"); return }
 
         const src = await resolveSource(root)
         const sets = src.mode === "manifest"
           ? await fromManifest(src.file, root)
           : await discover(root)
 
-        const log = (m) => console.error(`[geneseed-context] ${m}`)
-        const block = await buildBlock(sets, log)
-        if (!block) {
-          console.error(`[geneseed-context] no docs discovered in ${root}`)
-          return
-        }
+        const block = await buildBlock(sets)
+        if (!block) { log(`no docs discovered in ${root}`); return }
 
         await client.session.prompt({
           path: { id: sid },
           body: { noReply: true, parts: [{ type: "text", text: block.text }] },
         })
         const via = src.mode === "manifest" ? `manifest ${src.file}` : `auto-discovery [${root}]`
-        console.error(`[geneseed-context] injected: ${block.injected} eager (${block.kb} KB), `
-          + `${block.lazy} lazy listed — via ${via}`)
+        log(`injected: ${block.injected} eager (${block.kb} KB), ${block.lazy} lazy listed — via ${via}`)
       } catch (err) {
-        console.error(`[geneseed-context] error: ${err?.message ?? err}`)
+        log(`error: ${err?.message ?? err}`)
       }
     },
   }

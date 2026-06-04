@@ -208,6 +208,14 @@ the harness live entirely in the global config dir with zero per-repo files.
 It needs no model, writes nothing, skips the learn plugin's throwaway sessions, and
 swallows every error. Output mirrors `rituals/harness.py context`.
 
+- **Quiet by default:** it logs nothing (OpenCode renders a plugin's stderr as red
+  text in the UI). `GENESEED_DEBUG=1` re-enables discovery/inject logs.
+- **Don't want the visible block?** The injection is a `noReply` prompt, which is
+  necessarily a message in the session — OpenCode has no plugin hook to add hidden
+  system context at session start. Set `GENESEED_CONTEXT_INJECT=off` to disable the
+  block entirely and fall back to the AGENT.md project-context Law (soft,
+  agent-discipline — no injection).
+
 **Install:** the same step as the learn plugin — `cp …/plugins/*.js` copies both;
 `build --emit opencode` and `--emit opencode-global` place both for you. The same
 field-test caveat applies (`session.created`, `session.prompt` `noReply`,
