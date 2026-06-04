@@ -29,6 +29,10 @@
 # Geneseed-<ref>/ folder. Both could clash with files in this directory, so all
 # downloading and extraction happens in a throwaway temp dir — nothing lands
 # here until we deliberately copy it.
+#
+# This script refreshes the factory CONTENT but NOT itself or the wrapper scripts
+# (rewriting a running script is unsafe). To update the orchestration layer itself
+# — upgrade.sh, upgrade-<theme>.sh, sync-self.sh — run ./sync-self.sh first.
 
 set -eo pipefail
 
