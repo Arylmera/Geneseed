@@ -56,6 +56,19 @@ ROOT_DIR="${GENESEED_ROOT:-$(dirname "$OUT")}"
 # Precedence: explicit env > marker > files.
 EMIT="${GENESEED_EMIT:-$(cat "$OUT/.geneseed-emit" 2>/dev/null || echo files)}"
 
+# Heads-up guard: if this run would emit the plain bundle only, but OpenCode's global
+# config dir already carries a Geneseed install (.geneseed-manifest.json), the user
+# very likely meant to refresh THAT — a bare ./upgrade.sh silently won't touch it.
+# Warn, never block. CFG resolution mirrors build.py _opencode_config_dir().
+if [ "$EMIT" = "files" ]; then
+  CFG="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"
+  if [ -f "$CFG/.geneseed-manifest.json" ]; then
+    echo "[geneseed] ⚠️  $CFG already holds a global Geneseed install (.geneseed-manifest.json)," >&2
+    echo "[geneseed] ⚠️  but this run emits the plain bundle only — it will NOT refresh that global config." >&2
+    echo "[geneseed] ⚠️  Did you mean:  GENESEED_EMIT=opencode-global $(basename "$0") ${*:-}" >&2
+  fi
+fi
+
 # Factory files refreshed from upstream. Everything else in the folder is left
 # alone — notably context.json and Harness/memory/ (your runtime state).
 SYNC=(build.py rituals src themes adapters prompts \
