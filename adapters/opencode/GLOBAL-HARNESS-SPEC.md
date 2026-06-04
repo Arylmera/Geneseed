@@ -44,8 +44,8 @@ is committed into a work repo.
 |---|---|---|
 | Entrypoint rules | `~/.config/opencode/AGENT.md` | `opencode.json` `instructions` (absolute path) |
 | Laws | inlined in `AGENT.md` (already) | via above |
-| Subagents | `~/.config/opencode/agent/*.md` | OpenCode global agent dir |
-| Commands (skills) | `~/.config/opencode/command/*.md` | OpenCode global command dir |
+| Subagents | `~/.config/opencode/agents/*.md` | OpenCode global agents dir |
+| Commands (skills) | `~/.config/opencode/commands/*.md` | OpenCode global commands dir |
 | Plugins | `~/.config/opencode/plugins/*.js` | OpenCode auto-load |
 | Memory store | `$GENESEED_HARNESS/memory` (or `$GENESEED_MEMORY`) | learn plugin |
 | Project context | **auto-discovered per repo** by the context plugin | this spec |
@@ -62,10 +62,21 @@ is committed into a work repo.
 > Use an **absolute** path. A repo-relative `"AGENT.md"` in a *global* config
 > would resolve against each repo's root and usually miss.
 
-**Assumption to verify before building:** OpenCode loads global subagents from
-`~/.config/opencode/agent/` and commands from `~/.config/opencode/command/`
-(confirmed for `plugins/` and `opencode.json`). If a build only honors project
-`.opencode/agent`, fall back to symlinking that dir at the global one.
+**Confirmed (OpenCode docs — config + plugins).** `~/.config/opencode/` loads
+`agents/`, `commands/`, `plugins/`, and `skills/`. Notes that shape this spec:
+
+- **Subdir names are plural** (`agents/`, `commands/`, `modes/`, `plugins/`,
+  `skills/`, `tools/`, `themes/`). Singular (`agent/`, `command/`) is *backwards-
+  compat only* — the current Geneseed build emits singular; the global emit (§9)
+  must write **plural**.
+- **Native `skills/` dir exists** — OpenCode has first-class skills *separate* from
+  commands. Today the harness maps skills → commands; globally we may map them →
+  `skills/` instead (§12 open question).
+- **`OPENCODE_CONFIG_DIR`** relocates the *entire* config dir (searched for
+  `agents/`, `commands/`, `modes/`, `plugins/` like `.opencode`). Use it to keep
+  the global harness in a **git-tracked** folder instead of `~/.config/opencode`.
+- **Precedence:** global config < project config < `OPENCODE_CONFIG_DIR` <
+  inline/managed. A project `opencode.json` still overrides the global one.
 
 ---
 
@@ -210,6 +221,13 @@ Two layers:
    already contains `<!-- geneseed-context:v2 -->`. This catches a global + leftover
    project copy both firing.
 
+> **Docs-confirmed why this is needed:** OpenCode dedups plugins *by npm package
+> name+version only* — "a local plugin and an npm plugin with similar names are
+> both loaded separately," and global plugins load before project plugins. Two
+> local `.js` copies (global `~/.config/opencode/plugins/` + project
+> `.opencode/plugins/`) **always** both load. So the marker check is mandatory and
+> single-install (§9–10) is the only hard guarantee.
+
 **Honest limit:** if two instances fire *simultaneously* they can both read an
 empty transcript and both inject (race). The transcript check shrinks the window
 but does not close it. The real guarantee is **single global install** — §9 emits
@@ -274,21 +292,24 @@ Add an emit target so the factory can render straight into the global dir.
 `python build.py --emit opencode-global [--theme NAME]`:
 
 1. Render the bundle (as `--emit opencode` does).
-2. Copy into `~/.config/opencode/`:
-   - `AGENT.md` → `~/.config/opencode/AGENT.md`
-   - `agents/*.md` → `~/.config/opencode/agent/*.md` (read-only agents keep `tools: { write:false, edit:false }`)
-   - `skills/*.md` → `~/.config/opencode/command/*.md`
-   - `plugins/*.js` → `~/.config/opencode/plugins/*.js` (**single copy** — the fix)
-3. Write/merge `~/.config/opencode/opencode.json` with the **absolute** `AGENT.md` path.
+2. Copy into the global config dir (**plural** subdir names — canonical):
+   - `AGENT.md` → `<cfg>/AGENT.md`
+   - `agents/*.md` → `<cfg>/agents/*.md` (read-only agents keep `tools: { write:false, edit:false }`)
+   - `skills/*.md` → `<cfg>/commands/*.md` (or `<cfg>/skills/*.md` — see §12)
+   - `plugins/*.js` → `<cfg>/plugins/*.js` (**single copy** — the fix)
+3. Write/merge `<cfg>/opencode.json` with the **absolute** `AGENT.md` path.
 4. **Do not** write any `context.json` (auto-discovery is the default).
 5. Idempotent: never clobber a user-edited `opencode.json` — merge the
    `instructions` entry only.
 
+`<cfg>` resolution: `$OPENCODE_CONFIG_DIR` if set (lets the harness live in a
+git-tracked folder), else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`.
+
 `upgrade.sh`: add `GENESEED_EMIT=opencode-global` to re-render globally on upgrade.
 
-> Honor the OS config dir: `$XDG_CONFIG_HOME/opencode` if set, else
-> `~/.config/opencode`. (On the Windows work laptop, confirm OpenCode's actual
-> config path and target that.)
+> **Windows config path: TBD.** No Windows host in use currently. When one appears,
+> confirm OpenCode's actual config dir on Windows (likely `%APPDATA%\opencode` or
+> via `$OPENCODE_CONFIG_DIR`) before emitting there.
 
 ---
 
@@ -352,9 +373,12 @@ convention.
 
 - **Not** removing the portable bundle or the per-repo `context.json` tier — both stay.
 - **Race** on simultaneous dual-instance injection is mitigated, not eliminated
-  (§4) — single install is the guarantee.
-- **Open:** confirm OpenCode global `agent/` + `command/` loading and the Windows
-  config-dir path before implementation.
+  (§4) — single install is the guarantee (docs-confirmed: local plugins never dedup).
+- **Resolved:** OpenCode global `agents/` + `commands/` + `skills/` loading is
+  confirmed (§1). Subdir names are plural (singular = back-compat).
+- **Windows config-dir path: TBD** — no Windows host currently (§9).
+- **Open:** map skills → `commands/` (current) or the native `skills/` dir? The
+  latter is more idiomatic but changes how they're invoked — decide at build time.
 - **Open:** whether eager auto-discovery of a repo's `AGENTS.md` should be dropped
   entirely (since `instructions` may already load it) or kept with path-dedup —
   spec currently keeps it with dedup.
