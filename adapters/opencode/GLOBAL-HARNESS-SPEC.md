@@ -45,7 +45,7 @@ is committed into a work repo.
 | Entrypoint rules | `~/.config/opencode/AGENT.md` | `opencode.json` `instructions` (absolute path) |
 | Laws | inlined in `AGENT.md` (already) | via above |
 | Subagents | `~/.config/opencode/agents/*.md` | OpenCode global agents dir |
-| Commands (skills) | `~/.config/opencode/commands/*.md` | OpenCode global commands dir |
+| Skills | `~/.config/opencode/skills/<name>/SKILL.md` | native `skill` tool (model-invoked) — see §9.1 |
 | Plugins | `~/.config/opencode/plugins/*.js` | OpenCode auto-load |
 | Memory store | `$GENESEED_HARNESS/memory` (or `$GENESEED_MEMORY`) | learn plugin |
 | Project context | **auto-discovered per repo** by the context plugin | this spec |
@@ -295,12 +295,36 @@ Add an emit target so the factory can render straight into the global dir.
 2. Copy into the global config dir (**plural** subdir names — canonical):
    - `AGENT.md` → `<cfg>/AGENT.md`
    - `agents/*.md` → `<cfg>/agents/*.md` (read-only agents keep `tools: { write:false, edit:false }`)
-   - `skills/*.md` → `<cfg>/commands/*.md` (or `<cfg>/skills/*.md` — see §12)
+   - skills → `<cfg>/skills/<name>/SKILL.md` (**native skills**, model-invoked — see §9.1)
    - `plugins/*.js` → `<cfg>/plugins/*.js` (**single copy** — the fix)
 3. Write/merge `<cfg>/opencode.json` with the **absolute** `AGENT.md` path.
 4. **Do not** write any `context.json` (auto-discovery is the default).
 5. Idempotent: never clobber a user-edited `opencode.json` — merge the
    `instructions` entry only.
+
+### 9.1 Skills → native `skills/` (decided)
+
+Skills emit as **native OpenCode skills**, not slash commands:
+
+- **Shape:** one directory per skill, `skills/<name>/SKILL.md` (not a flat
+  `commands/<name>.md`).
+- **Frontmatter:** skill schema — `name`, `description` (+ optional `license`,
+  `compatibility: opencode`, `metadata`). Drop the command-only `agent:` / `model:`
+  keys. Geneseed's `src/skills/*.md` frontmatter is transformed on emit.
+- **Invocation:** model-invoked via the native `skill` tool with progressive
+  disclosure (the agent sees `description`s, loads the body on demand) — **not** a
+  user-typed `/name`. Each skill's `description` is therefore trigger-critical and
+  must be written to fire at the right moment.
+- **Trade-off:** loses per-skill `agent:`/`model:` pinning that commands allowed
+  (the old `agent: build`); a skill runs in the current agent/model context. Audit
+  `src/skills/` for any that depended on it before emit.
+- **Cross-adapter win:** `SKILL.md` is the *same artifact shape Claude Code uses*,
+  and OpenCode also auto-discovers `~/.claude/skills/*/SKILL.md` and
+  `~/.agents/skills/*/SKILL.md`. One skill source can feed both tools — collapsing
+  the two divergent emit paths and killing adapter drift. Optional: emit into
+  `~/.claude/skills/` for a single dir served to Claude Code *and* OpenCode.
+- **Migration:** existing per-repo `.opencode/command/*.md` emits go stale; update
+  the adapter README, HOW-OPENCODE-LOADS, and `src/skills/_template.md`.
 
 `<cfg>` resolution: `$OPENCODE_CONFIG_DIR` if set (lets the harness live in a
 git-tracked folder), else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`.
@@ -377,8 +401,9 @@ convention.
 - **Resolved:** OpenCode global `agents/` + `commands/` + `skills/` loading is
   confirmed (§1). Subdir names are plural (singular = back-compat).
 - **Windows config-dir path: TBD** — no Windows host currently (§9).
-- **Open:** map skills → `commands/` (current) or the native `skills/` dir? The
-  latter is more idiomatic but changes how they're invoked — decide at build time.
+- **Decided:** skills emit as **native `skills/<name>/SKILL.md`** (§9.1) — model-
+  invoked, progressive disclosure, same shape as Claude Code skills. Cost: no slash
+  trigger, no per-skill `agent:`/`model:` pinning.
 - **Open:** whether eager auto-discovery of a repo's `AGENTS.md` should be dropped
   entirely (since `instructions` may already load it) or kept with path-dedup —
   spec currently keeps it with dedup.
