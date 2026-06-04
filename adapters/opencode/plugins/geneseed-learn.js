@@ -42,9 +42,20 @@ type: user | feedback | project | reference
 <the fact, stated plainly. For 'feedback' and 'project', add **Why:** and
 **How to apply:** lines.>
 
-Only keep facts that are durable and non-obvious (decisions, corrections, stable
-preferences, constraints). Skip anything derivable from the code or git history.
-If nothing qualifies, output exactly: NOTHING.`
+Write each memory at the RIGHT ALTITUDE — capture the GENERAL, reusable principle
+that will apply to future, unrelated sessions, not a one-off detail of this one.
+Abstract the specific instance into the durable lesson:
+  - Too specific:  "Renamed getUser to fetchUser in auth.ts this session."
+  - Right (meta):  "User prefers verb-first function names (fetchX, not getX)."
+  - Too specific:  "Fixed the failing test by adding await on line 42."
+  - Right (meta):  "This codebase's tests need explicit awaits on async setup helpers."
+Each memory must be a transferable rule, preference, decision, or constraint —
+something worth knowing at the START of a future task, not a log of what happened.
+
+Only keep facts that are durable and non-obvious. Skip anything derivable from the
+code or git history, and anything tied to this session's specifics that won't recur.
+Prefer fewer, higher-leverage memories over many shallow ones. If nothing qualifies,
+output exactly: NOTHING.`
 
 async function isDir(p) {
   try { return (await fs.stat(p)).isDirectory() } catch { return false }

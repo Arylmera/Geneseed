@@ -28,6 +28,7 @@
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce it, corner it, slay the root cause, and prove it dead.",
   "DESC_REFACTOR": "Reforge the structure without changing its works — one named stroke, the trials green throughout.",
   "DESC_PARALLEL_AGENTS": "Loose many specialists upon independent tasks at once, then gather what they bring.",
+  "DESC_CMUX": "Loose thy specialists into their own scrying-panes — each watched live in cmux, opened and sealed as the work begins and ends.",
   "DESC_TDD": "Let the trials lead the work — set the failing trial first, then only the code to pass it.",
   "DESC_HANDOFF": "Inscribe the state of the work so a fresh mind may take up the watch without loss."
 }

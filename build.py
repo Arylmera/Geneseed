@@ -429,7 +429,7 @@ def _global_memory(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
     return f"seeded {mem_name}/"
 
 
-def emit_opencode_global(theme_name: str, out: Path | None = None) -> None:
+def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | None = None) -> None:
     """Render the harness straight into OpenCode's GLOBAL config dir — the
     "everything global, zero per-repo" deployment (GLOBAL-HARNESS-SPEC.md).
 
@@ -449,8 +449,10 @@ def emit_opencode_global(theme_name: str, out: Path | None = None) -> None:
     and merges <cfg>/opencode.json to point `instructions` at the absolute
     <cfg>/AGENT.md. It does NOT write context.json — project docs are auto-discovered
     by the context plugin. `out`, if given, is only a migration source for an
-    existing memory store (the legacy bundle location); nothing is built there."""
-    cfg = _opencode_config_dir()
+    existing memory store (the legacy bundle location); nothing is built there.
+    `cfg` overrides the target dir (default: the resolved OpenCode config dir) — used
+    by `harness.py diff` to render an 'expected' copy into a temp dir for comparison."""
+    cfg = cfg or _opencode_config_dir()
     theme, items = render_all(theme_name)
     cfg.mkdir(parents=True, exist_ok=True)
 

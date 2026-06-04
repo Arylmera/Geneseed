@@ -28,6 +28,7 @@
   "DESC_DEBUG": "Find and fix a bug by evidence — reproduce, isolate, root-cause, verify.",
   "DESC_REFACTOR": "Improve code structure without changing behaviour — one named move, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Fan independent subtasks out to concurrent subagents, then converge the results.",
+  "DESC_CMUX": "Run and watch subagents live in cmux split panes — one pane per agent, opened and closed automatically.",
   "DESC_TDD": "Drive implementation with tests — write the failing test first, then the minimum code to pass.",
   "DESC_HANDOFF": "Snapshot task state so a fresh context — or another agent — can resume in one read."
 }

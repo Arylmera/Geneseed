@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Geneseed harness CLI — optional automation.
 
-Dependency-free. Three subcommands:
+Dependency-free. Subcommands:
 
     harness build [--theme NAME]   render src/ -> Harness/ for a theme
     harness doctor [--theme NAME]  validate the build(s): unresolved tokens, dead
@@ -11,6 +11,9 @@ Dependency-free. Three subcommands:
                                    contents (Rule XVIII enforcement; wire to a
                                    SessionStart hook so the manifest is injected,
                                    never merely requested)
+    harness diff [--target DIR]    report how a DEPLOYED global harness differs from
+                                   a fresh render of the source (back-port aid) —
+                                   --full for unified diffs, --theme to match voice
     harness learn [FILE]           distil notes/transcript into memory entries
                                    via a model CLI of your choice (no API key)
 
@@ -29,6 +32,9 @@ lines to `MEMORY.md` — maintaining the index, not just printing suggestions.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import difflib
+import io
 import json
 import os
 import re
@@ -74,9 +80,20 @@ type: user | feedback | project | reference
 <the fact, stated plainly. For 'feedback' and 'project', add **Why:** and
 **How to apply:** lines.>
 
-Only keep facts that are durable and non-obvious (decisions, corrections, stable
-preferences, constraints). Skip anything derivable from the code or git history.
-If nothing qualifies, output exactly: NOTHING.
+Write each memory at the RIGHT ALTITUDE — capture the GENERAL, reusable principle
+that will apply to future, unrelated sessions, not a one-off detail of this one.
+Abstract the specific instance into the durable lesson:
+  - Too specific:  "Renamed getUser to fetchUser in auth.ts this session."
+  - Right (meta):  "User prefers verb-first function names (fetchX, not getX)."
+  - Too specific:  "Fixed the failing test by adding await on line 42."
+  - Right (meta):  "This codebase's tests need explicit awaits on async setup helpers."
+Each memory must be a transferable rule, preference, decision, or constraint —
+something worth knowing at the START of a future task, not a log of what happened.
+
+Only keep facts that are durable and non-obvious. Skip anything derivable from the
+code or git history, and anything tied to this session's specifics that won't recur.
+Prefer fewer, higher-leverage memories over many shallow ones. If nothing qualifies,
+output exactly: NOTHING.
 """
 
 
@@ -439,6 +456,71 @@ def cmd_learn(args: argparse.Namespace) -> int:
     return proc.returncode
 
 
+def _owned_set(d: Path) -> set:
+    """The files a global Geneseed install owns, per its .geneseed-manifest.json."""
+    try:
+        data = json.loads((d / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))
+        return set(data.get("owned", []))
+    except (json.JSONDecodeError, OSError):
+        return set()
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    """Report how a DEPLOYED (ported) global harness differs from a fresh render of
+    the current source — so edits made in place can be reviewed and back-ported to
+    src/. Compares only the files Geneseed owns (per each side's manifest). Pass the
+    theme the deployment used so voice tokens line up; `--full` shows unified diffs."""
+    target = Path(args.target).expanduser() if args.target else build._opencode_config_dir()
+    if not (target / build.GLOBAL_MANIFEST).exists():
+        sys.stderr.write(
+            f"[diff] no global Geneseed install at {target} (no {build.GLOBAL_MANIFEST}). "
+            f"Pass --target, or run `--emit opencode-global` first.\n")
+        return 1
+
+    theme = args.theme
+    if not theme:
+        cfgp = ROOT / "harness.config.json"
+        theme = (json.loads(cfgp.read_text(encoding="utf-8")).get("theme", "neutral")
+                 if cfgp.exists() else "neutral")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        expected = Path(tmp) / "expected"
+        with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's own log
+            build.emit_opencode_global(theme, out=Path(tmp) / "bundle", cfg=expected)
+        edited, added, missing, diffs = [], [], [], []
+        for rel in sorted(_owned_set(target) | _owned_set(expected)):
+            a, b = target / rel, expected / rel
+            if a.is_file() and b.is_file():
+                ta = a.read_text(encoding="utf-8", errors="replace")
+                tb = b.read_text(encoding="utf-8", errors="replace")
+                if ta != tb:
+                    edited.append(rel)
+                    if args.full:
+                        diffs += list(difflib.unified_diff(
+                            tb.splitlines(), ta.splitlines(),
+                            fromfile=f"source/{rel}", tofile=f"deployed/{rel}", lineterm=""))
+            elif a.is_file():
+                added.append(rel)
+            else:
+                missing.append(rel)
+
+    print(f"[diff] deployed {target}  vs  source (theme: {theme})")
+    print(f"[diff] {len(edited)} edited, {len(added)} added-in-deployed, "
+          f"{len(missing)} missing-from-deployed")
+    for rel in edited:
+        print(f"  ~ {rel}   (edited in deployed — review to back-port)")
+    for rel in added:
+        print(f"  + {rel}   (only in deployed — your addition)")
+    for rel in missing:
+        print(f"  - {rel}   (in source, not deployed — re-emit to add)")
+    if args.full and diffs:
+        print("\n--- unified diffs (source -> deployed) ---")
+        print("\n".join(diffs))
+    elif edited:
+        print("\nRun with --full to see the line-level diffs.")
+    return 0
+
+
 def main() -> int:
     # Force UTF-8 I/O so injected docs / templates with unicode (sigils, em-dashes)
     # do not crash on a legacy code page (e.g. Windows cp1252). Dependency-free.
@@ -469,6 +551,13 @@ def main() -> int:
 
     c = sub.add_parser("context", help="print context.json eager entries for a SessionStart hook (Rule XVIII)")
     c.set_defaults(fn=cmd_context)
+
+    df = sub.add_parser("diff", help="report how a deployed global harness differs from a fresh render (back-port aid)")
+    df.add_argument("--target", default=None,
+                    help="deployed config dir (default: $OPENCODE_CONFIG_DIR / ~/.config/opencode)")
+    df.add_argument("--theme", default=None, help="theme the deployment used (default: harness.config.json)")
+    df.add_argument("--full", action="store_true", help="show unified diffs, not just the file-level summary")
+    df.set_defaults(fn=cmd_diff)
 
     le = sub.add_parser("learn", help="distil notes/transcript into memory entries")
     le.add_argument("file", nargs="?",

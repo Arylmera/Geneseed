@@ -247,6 +247,22 @@ python rituals/harness.py doctor --theme imperial
 Checks each theme's build for unresolved tokens, dead links, and non-hermetic links
 that would escape the bundle.
 
+## Review local edits — `diff`
+
+Edited the harness in place on a machine (e.g. tweaked `AGENT.md` or a skill in
+`~/.config/opencode`) and want to see what diverged from the source, to decide what
+to back-port?
+
+```
+python rituals/harness.py diff                       # deployed global harness vs source
+python rituals/harness.py diff --full                # with line-level unified diffs
+python rituals/harness.py diff --target /path --theme imperial
+```
+
+It renders a fresh copy of the source and compares the files the install owns (per
+`.geneseed-manifest.json`), reporting which are **edited**, **added in deployed**, or
+**missing**. Pass the `--theme` the deployment used so the themed voice lines up.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
