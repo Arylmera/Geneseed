@@ -145,6 +145,18 @@ context.json
 """
 
 
+def ensure_memory_index(mem_dir: Path) -> None:
+    """Create an empty `MEMORY.md` index in the memory store if absent — and NEVER
+    overwrite one (it accumulates). The store's README is the static convention;
+    MEMORY.md is the live index the agent reads (AGENT.md §4) and the learn plugin
+    appends to. A freshly-seeded or hand-emptied store would otherwise lack it, so
+    the agent is told to read a file that does not exist."""
+    if mem_dir.is_dir():
+        idx = mem_dir / "MEMORY.md"
+        if not idx.exists():
+            idx.write_text("# Memory Index\n", encoding="utf-8")
+
+
 def ensure_bundle_gitignore(out: Path) -> None:
     """Drop a bundle-root `.gitignore` once so the rendered harness (skills, laws,
     agents, AGENT.md) is committable in a host repo while context.json, the theme
@@ -226,6 +238,7 @@ def build(theme_name: str, out: Path) -> None:
     (out / ".geneseed-theme").write_text(theme_name + "\n", encoding="utf-8")
     ensure_context_stub(out)
     ensure_bundle_gitignore(out)
+    ensure_memory_index(out / theme.get(SRC_DIR_TOKENS["memory"], "memory"))
     print(f"[geneseed] built theme '{theme_name}' -> {out} ({len(items)} files)")
 
 
@@ -504,6 +517,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
             n_plugins += 1
 
     mem_status = _global_memory(cfg, theme, items, out)
+    ensure_memory_index(cfg / "memory")   # guarantee the index on every path (seed/migrate/keep)
 
     _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix())
 
