@@ -237,8 +237,9 @@ else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`) and builds **no sib
 
 - `AGENT.md` rendered straight in;
 - `agents/`, `skills/<name>/SKILL.md`, and a single `plugins/` copy;
-- the **memory store** at `<cfg>/memory` (or `anamnesis/` for imperial) — migrated
-  once from a legacy `Harness/memory` if you had one, else seeded;
+- the **memory store** at `<cfg>/memory` — always classic English, never themed
+  (like `agents/`/`skills/`); migrated once from a legacy `Harness/memory` (or a
+  themed `anamnesis/`) if you had one, else seeded;
 - `opencode.json` merged to point `instructions` at the absolute `AGENT.md`;
 - **no** `context.json` — the context plugin auto-discovers each repo's docs.
 

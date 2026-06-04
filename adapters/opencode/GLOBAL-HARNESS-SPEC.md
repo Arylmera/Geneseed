@@ -297,7 +297,8 @@ canonical):
 2. `agents/*.md` → `<cfg>/agents/*.md` (read-only agents keep `tools: { write:false, edit:false }`).
 3. skills → `<cfg>/skills/<name>/SKILL.md` (**native skills**, model-invoked — see §9.1).
 4. `plugins/*.js` → `<cfg>/plugins/*.js` (**single copy** — the fix).
-5. **Memory store** → `<cfg>/memory` (or `anamnesis/`): if it already has files,
+5. **Memory store** → `<cfg>/memory` (always classic English — never themed, like
+   `agents/`/`skills/`; a legacy themed `anamnesis/` is migrated into it): if it already has files,
    left alone; else migrated once from a legacy `Harness/memory` (so a host moving
    off a sibling bundle loses nothing), else seeded from the `src/memory` template.
    The store is **not** owned-tracked — never deleted on re-emit. Point the learn

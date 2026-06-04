@@ -366,12 +366,17 @@ GLOBAL_MANIFEST = ".geneseed-manifest.json"
 
 
 def _global_memory(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
-    """Ensure the global memory store exists at <cfg>/<themed memory dir> (memory/ or
-    anamnesis/). If it already holds files it is left alone — it carries learned
-    facts. Otherwise migrate an existing legacy bundle's memory into it (one-time, so
-    a host switching from a sibling Harness loses nothing), else seed from the src
-    template. The store is host state, never tracked in the owned-manifest."""
-    mem_name = theme.get(SRC_DIR_TOKENS["memory"], "memory")
+    """Ensure the global memory store exists at <cfg>/memory. If it already holds
+    files it is left alone — it carries learned facts. Otherwise migrate an existing
+    legacy bundle's memory into it (one-time, so a host switching from a sibling
+    Harness — even a themed `anamnesis/` — loses nothing), else seed from the src
+    template. The store is host state, never tracked in the owned-manifest.
+
+    The dir name is ALWAYS the classic English `memory/`, never themed: like
+    `agents/` and `skills/`, the OpenCode config dir uses fixed names — the theme
+    only flavors prose, not directory names. (The learn plugin resolves
+    $GENESEED_HARNESS/memory, so this is exactly where it reads/writes.)"""
+    mem_name = "memory"
     mem_dir = cfg / mem_name
     if mem_dir.is_dir() and any(mem_dir.iterdir()):
         return f"kept {mem_name}/"
