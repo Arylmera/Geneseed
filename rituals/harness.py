@@ -930,14 +930,35 @@ def _collect_setup() -> "dict | None":
     return _collect_setup_lines()
 
 
-def cmd_setup(args: argparse.Namespace) -> int:
-    """Guided install wizard — a colored curses form where supported, else line
-    prompts. Nothing is written until you confirm; offers a health check after."""
-    if not sys.stdin.isatty():
-        sys.stderr.write("[setup] needs an interactive terminal. Non-interactive? e.g.:\n"
-                         "  python build.py --emit opencode-global --theme neutral\n")
-        return 1
-    sel = _collect_setup()
+def _setup_summary_lines(theme, emit, out, root, ok):
+    """Post-build summary as (kind, text) rows. kind is ok | warn | info."""
+    agent_md = (build._opencode_config_dir() / "AGENT.md" if emit == "opencode-global"
+                else build.resolve_out(out or "Harness") / "AGENT.md")
+    lines = []
+    if ok and agent_md.exists():
+        lines.append(("ok", f"AGENT.md written to {agent_md}"))
+    elif ok:
+        lines.append(("warn", f"expected AGENT.md at {agent_md} but it is not there"))
+    else:
+        lines.append(("warn", "build failed — see the output above"))
+    if emit == "opencode-global":
+        lines.append(("info", 'learn plugin: export GENESEED_HARNESS="$HOME/.config/opencode"'))
+    elif emit == "files":
+        lines.append(("info", f"point your tool's instructions at {agent_md}"))
+    try:
+        cfg = build._opencode_config_dir()
+        if emit != "opencode-global" and (cfg / ".geneseed-manifest.json").exists():
+            lines.append(("warn", f"a global install exists at {cfg} — OpenCode loads THAT, "
+                                  f"not this build; re-run with 'opencode-global' to change it"))
+    except Exception:
+        pass
+    lines.append(("info", f"theme is now '{theme}' — start a NEW OpenCode session for the new voice"))
+    return lines
+
+
+def _setup_lines() -> int:
+    """Line-based setup (Windows / no-curses): gather, build, summary, optional doctor."""
+    sel = _collect_setup_lines()
     if not sel:
         print("[setup] cancelled — nothing written.")
         return 0
@@ -948,35 +969,33 @@ def cmd_setup(args: argparse.Namespace) -> int:
     if rc != 0:
         sys.stderr.write("[setup] build failed — no harness written (see the output above).\n")
         return rc
-    # Confirm where AGENT.md actually landed — the global emit writes it into the
-    # OpenCode config dir, not the current folder, which is easy to miss.
-    agent_md = (build._opencode_config_dir() / "AGENT.md" if emit == "opencode-global"
-                else build.resolve_out(out or "Harness") / "AGENT.md")
-    if agent_md.exists():
-        print(f"\n✓ AGENT.md written to {agent_md}")
-    else:
-        print(f"\n⚠️  expected AGENT.md at {agent_md} but it is not there — "
-              f"the build reported success but wrote nothing here; re-run or check the output above.")
-    if emit == "opencode-global":
-        print('Next: point the learn plugin at the store —\n'
-              '  export GENESEED_HARNESS="$HOME/.config/opencode"   (add to your shell profile)')
-    elif emit == "files":
-        print(f"Next: point your tool's instructions at  {agent_md}")
-    # If a global install exists but this build went elsewhere, OpenCode is probably
-    # still loading the global harness — otherwise the new theme appears not to apply.
-    try:
-        cfg = build._opencode_config_dir()
-        if emit != "opencode-global" and (cfg / ".geneseed-manifest.json").exists():
-            print(f"\n⚠️  A global install exists at {cfg} — OpenCode loads THAT, not this\n"
-                  f"   build. To change the ACTIVE harness, re-run setup and pick "
-                  f"'opencode-global'.")
-    except Exception:
-        pass
-    print(f"\nThe theme is now '{theme}'. Start a NEW OpenCode session for the new "
-          f"voice to take effect — a running session keeps the harness it loaded at start.")
+    for kind, text in _setup_summary_lines(theme, emit, out, root, True):
+        print({"ok": "✓", "warn": "!", "info": "-"}.get(kind, "-") + " " + text)
     if _confirm("\nRun a health check (doctor) now?", True):
-        return _doctor_run_ui()
+        return cmd_doctor(argparse.Namespace(theme=None, bundle=None, no_bundle=False))
     return 0
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """Guided install wizard. On a Unix terminal it is one seamless curses flow —
+    form → build → summary → health check, without leaving the TUI. Falls back to
+    line prompts on Windows / no-TTY / any curses failure."""
+    if not sys.stdin.isatty():
+        sys.stderr.write("[setup] needs an interactive terminal. Non-interactive? e.g.:\n"
+                         "  python build.py --emit opencode-global --theme neutral\n")
+        return 1
+    if not sys.platform.startswith("win"):
+        try:
+            import curses
+            import locale
+            try:
+                locale.setlocale(locale.LC_ALL, "")
+            except locale.Error:
+                pass
+            return curses.wrapper(_setup_flow)
+        except Exception as e:
+            sys.stderr.write(f"[setup] TUI unavailable ({e}); using prompts.\n")
+    return _setup_lines()
 
 
 # ---- shared curses helpers (used by the setup form and the control panel) -------
@@ -1310,10 +1329,10 @@ def _doctor_view(stdscr, curses, pal) -> None:
             else:
                 put(1 + r, 2, seg, 0)
         more = "  ▾ more" if len(flat) > top + body_h else ""
-        put(h - 1, 0, ("  ↑↓/PgUp/PgDn scroll · r re-run · q back" + more).ljust(w - 1), pal["BAR"])
+        put(h - 1, 0, ("  ↑↓/PgUp/PgDn scroll · r re-run · Enter/q close" + more).ljust(w - 1), pal["BAR"])
         stdscr.refresh()
         c = stdscr.getch()
-        if c in (ord("q"), 27):
+        if c in (ord("q"), 27, curses.KEY_ENTER, 10, 13):
             return
         elif c in (curses.KEY_DOWN, ord("j")):
             top += 1
@@ -1348,6 +1367,71 @@ def _doctor_run_ui() -> int:
         except Exception:
             pass
     return cmd_doctor(argparse.Namespace(theme=None, bundle=None, no_bundle=False))
+
+
+def _info_screen(stdscr, curses, pal, title, lines, footer) -> None:
+    """Scrollable info panel: (kind, text) rows with ok/warn/info coloring. Returns
+    on Enter/q."""
+    import textwrap
+    icon = {"ok": "✓", "warn": "!", "info": "·"}
+    attr = {"ok": pal["OK"], "warn": pal["FAIL"], "info": 0}
+    top = 0
+    while True:
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+
+        def put(y, x, s, a=0):
+            if 0 <= y < h and 0 <= x < w:
+                try:
+                    stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
+                except curses.error:
+                    pass
+
+        put(0, 0, f"  ◆ Geneseed — {title}  ".ljust(w - 1), pal["BAR"])
+        flat = []
+        for kind, text in lines:
+            for j, seg in enumerate(textwrap.wrap(text, max(10, w - 8)) or [""]):
+                flat.append((kind, f"{icon.get(kind, '·')} {seg}" if j == 0 else f"   {seg}"))
+        body_h = max(1, h - 2)
+        top = max(0, min(top, max(0, len(flat) - body_h)))
+        for r in range(body_h):
+            di = top + r
+            if di >= len(flat):
+                break
+            kind, seg = flat[di]
+            put(1 + r, 2, seg, attr.get(kind, 0))
+        put(h - 1, 0, ("  " + footer).ljust(w - 1), pal["BAR"])
+        stdscr.refresh()
+        c = stdscr.getch()
+        if c in (curses.KEY_ENTER, 10, 13, ord("q"), 27):
+            return
+        elif c in (curses.KEY_DOWN, ord("j")):
+            top += 1
+        elif c in (curses.KEY_UP, ord("k")):
+            top = max(0, top - 1)
+
+
+def _setup_flow(stdscr) -> int:
+    """One seamless curses setup: form → build → summary → health check."""
+    import curses
+    pal = _tui_palette(curses)
+    sel = _setup_tui(stdscr)
+    if not sel:
+        return 0
+    theme, emit = sel["theme"], sel["emit"]
+    out, root = sel.get("out"), sel.get("root")
+    argv = _setup_build_args(theme, emit, out, root)
+    status = _run_steps(stdscr, curses, pal,
+                        [("Build the harness", [sys.executable, str(BUILD), *argv])],
+                        heading="building")
+    ok = bool(status) and status[0] == "done"
+    _info_screen(stdscr, curses, pal, "setup complete" if ok else "setup",
+                 _setup_summary_lines(theme, emit, out, root, ok),
+                 "Enter: run health check" if ok else "Enter: close")
+    if not ok:
+        return 1
+    _doctor_view(stdscr, curses, pal)
+    return 0
 
 
 def _tui_loop(stdscr, inv: dict) -> None:
@@ -1557,7 +1641,7 @@ def _clean_line(s: str) -> str:
     return "".join(ch if (ch == "\t" or ord(ch) >= 32) else " " for ch in s)
 
 
-def _bootstrap_draw(stdscr, curses, pal, steps, status, log) -> None:
+def _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading="updating") -> None:
     stdscr.erase()
     h, w = stdscr.getmaxyx()
 
@@ -1568,7 +1652,7 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log) -> None:
             except curses.error:
                 pass
 
-    put(0, 0, "  ◆ Geneseed — updating  ".ljust(w - 1), pal["BAR"])
+    put(0, 0, f"  ◆ Geneseed — {heading}  ".ljust(w - 1), pal["BAR"])
     sym = {"pending": "-", "running": ">", "done": "+", "failed": "x"}
     for i, (title, _c) in enumerate(steps):
         st = status[i]
@@ -1590,14 +1674,14 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log) -> None:
     stdscr.refresh()
 
 
-def _run_logged(stdscr, curses, pal, steps, status, log, cmd) -> int:
-    """Run cmd, streaming its output into the progress screen's log pane."""
+def _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading="updating") -> int:
+    """Run cmd, streaming its (sanitized) output into the progress screen's log pane."""
     try:
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              text=True, bufsize=1)
     except OSError as e:
         log.append(f"[error] cannot run {cmd[0]}: {e}")
-        _bootstrap_draw(stdscr, curses, pal, steps, status, log)
+        _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
         return 1
     import time
     last = 0.0
@@ -1607,10 +1691,23 @@ def _run_logged(stdscr, curses, pal, steps, status, log, cmd) -> int:
             del log[: len(log) - 400]
         now = time.monotonic()
         if now - last > 0.06:        # throttle redraws to avoid flicker on fast output
-            _bootstrap_draw(stdscr, curses, pal, steps, status, log)
+            _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
             last = now
-    _bootstrap_draw(stdscr, curses, pal, steps, status, log)   # final frame
+    _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)   # final frame
     return p.wait()
+
+
+def _run_steps(stdscr, curses, pal, steps, heading="working") -> list:
+    """Run each (title, cmd) step in the progress UI; return the per-step status list."""
+    status = ["pending"] * len(steps)
+    log: list[str] = []
+    for i, (_title, cmd) in enumerate(steps):
+        status[i] = "running"
+        _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
+        rc = _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading)
+        status[i] = "done" if rc == 0 else "failed"
+        _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
+    return status
 
 
 def _bootstrap_progress(stdscr, here, ref) -> None:
@@ -1622,13 +1719,7 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
         curses.curs_set(0)
     steps = [("Refresh orchestration scripts", ["bash", str(here / "sync-self.sh"), ref]),
              ("Update factory & rebuild bundle", ["bash", str(here / "upgrade.sh"), ref])]
-    status = ["pending"] * len(steps)
-    log: list[str] = []
-    for i, (_title, cmd) in enumerate(steps):
-        status[i] = "running"
-        _bootstrap_draw(stdscr, curses, pal, steps, status, log)
-        status[i] = "done" if _run_logged(stdscr, curses, pal, steps, status, log, cmd) == 0 else "failed"
-        _bootstrap_draw(stdscr, curses, pal, steps, status, log)
+    status = _run_steps(stdscr, curses, pal, steps, heading="updating")
     failed = any(s == "failed" for s in status)
     h, w = stdscr.getmaxyx()
     msg = ("  a step FAILED — press any key to continue to setup  " if failed
