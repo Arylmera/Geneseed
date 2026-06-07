@@ -284,6 +284,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"[doctor] {len(problems)} problem(s) across {len(themes)} theme(s):")
         for p in problems:
             print("  -", p)
+        if any("dead link" in p for p in problems):
+            print("  tip: dead links to skills mean your source is incomplete — run "
+                  "`./geneseed update` (or re-sync src/), then re-check.")
         return 1
     print(f"[doctor] ok — {len(themes)} theme(s) clean: no unresolved tokens, no dead "
           f"links, nothing escapes the bundle; themes in parity; specs carry purpose "
@@ -1390,6 +1393,10 @@ def _doctor_view(stdscr, curses, pal) -> None:
     if problems:
         lines = [("fail", f"{len(problems)} problem(s) across {len(themes)} theme(s):"), ("", "")]
         lines += [("fail", p) for p in problems]
+        if any("dead link" in p for p in problems):
+            lines += [("", ""), ("info", "Tip: dead links to skills mean the source is "
+                                          "incomplete — run Update (./geneseed update) or re-sync "
+                                          "src/, then re-check.")]
     else:
         lines = [("ok", f"All checks passed — {len(themes)} themes clean."), ("", ""),
                  ("ok", "no unresolved tokens, dead links, or non-hermetic escapes"),
