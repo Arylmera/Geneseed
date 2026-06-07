@@ -918,6 +918,18 @@ def cmd_setup(args: argparse.Namespace) -> int:
               '  export GENESEED_HARNESS="$HOME/.config/opencode"   (add to your shell profile)')
     elif emit == "files":
         print(f"Next: point your tool's instructions at  {agent_md}")
+    # If a global install exists but this build went elsewhere, OpenCode is probably
+    # still loading the global harness — otherwise the new theme appears not to apply.
+    try:
+        cfg = build._opencode_config_dir()
+        if emit != "opencode-global" and (cfg / ".geneseed-manifest.json").exists():
+            print(f"\n⚠️  A global install exists at {cfg} — OpenCode loads THAT, not this\n"
+                  f"   build. To change the ACTIVE harness, re-run setup and pick "
+                  f"'opencode-global'.")
+    except Exception:
+        pass
+    print(f"\nThe theme is now '{theme}'. Start a NEW OpenCode session for the new "
+          f"voice to take effect — a running session keeps the harness it loaded at start.")
     if _confirm("\nRun a health check (doctor) now?", True):
         return cmd_doctor(argparse.Namespace(theme=None, bundle=None, no_bundle=False))
     return 0
