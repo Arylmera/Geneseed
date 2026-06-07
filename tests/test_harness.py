@@ -308,7 +308,7 @@ class UninstallTests(unittest.TestCase):
             instr = json.loads((cfg / "opencode.json").read_text(encoding="utf-8"))["instructions"]
             self.assertIn((cfg / "AGENT.md").as_posix(), instr)
 
-            summary = harness._uninstall_global(cfg, purge_memory=False)
+            summary = harness._uninstall_global(cfg, archive_memory=False)
 
             self.assertFalse((cfg / "AGENT.md").exists())
             self.assertFalse((cfg / "skills").exists())
@@ -322,16 +322,37 @@ class UninstallTests(unittest.TestCase):
         finally:
             shutil.rmtree(cfg.parent, ignore_errors=True)
 
-    def test_purge_memory_removes_store(self):
+    def test_archive_memory_moves_store_never_deletes(self):
         import contextlib, io
         cfg = Path(tempfile.mkdtemp()) / "cfg"
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 build.emit_opencode_global("neutral", out=Path(tempfile.mkdtemp()) / "b", cfg=cfg)
-            harness._uninstall_global(cfg, purge_memory=True)
-            self.assertFalse((cfg / "memory").exists())
+            (cfg / "memory" / "fact.md").write_text("a learned fact", encoding="utf-8")
+            summary = harness._uninstall_global(cfg, archive_memory=True)
+            self.assertFalse((cfg / "memory").exists())          # moved, not left
+            self.assertTrue((cfg / "archived-memory").is_dir())  # created beside it
+            self.assertIsNotNone(summary["archived"])
+            archived_fact = summary["archived"] / "fact.md"
+            self.assertTrue(archived_fact.is_file())             # the fact survived
+            self.assertEqual(archived_fact.read_text(encoding="utf-8"), "a learned fact")
         finally:
             shutil.rmtree(cfg.parent, ignore_errors=True)
+
+
+class ArchiveMemoryTests(unittest.TestCase):
+    def test_moves_into_timestamped_sibling(self):
+        base = Path(tempfile.mkdtemp())
+        try:
+            mem = base / "memory"
+            mem.mkdir()
+            (mem / "MEMORY.md").write_text("# Memory Index\n- [x](x.md)\n", encoding="utf-8")
+            dest = harness._archive_memory(mem)
+            self.assertFalse(mem.exists())                       # original moved away
+            self.assertEqual(dest.parent, base / "archived-memory")
+            self.assertTrue((dest / "MEMORY.md").is_file())      # contents preserved
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
 
 
 class RenderedCheckTests(unittest.TestCase):

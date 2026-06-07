@@ -20,8 +20,9 @@ Dependency-free. Subcommands:
     harness status                 print the install dashboard as text (theme, mode,
                                    counts, memory, version) — headless, any OS
     harness uninstall [--target DIR] remove a global install via its manifest (owned
-                                   files + opencode.json entry + markers); keeps
-                                   memory unless --purge-memory; --yes to skip prompt
+                                   files + opencode.json entry + markers); memory is
+                                   never deleted — kept in place, or --archive-memory
+                                   moves it to archived-memory/; --yes to skip prompt
     harness setup                  interactive, dependency-free install wizard (all OSes)
     harness tui                    full-screen curses control panel (Unix only)
     harness learn [FILE]           distil notes/transcript into memory entries
@@ -43,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime
 import difflib
 import fnmatch
 import io
@@ -956,10 +958,24 @@ def _unmerge_opencode_json(path: Path, entry: str) -> bool:
     return True
 
 
-def _uninstall_global(target: Path, purge_memory: bool) -> dict:
+def _archive_memory(memory_dir: Path) -> Path:
+    """Move a memory store into a timestamped snapshot under a sibling
+    `archived-memory/` (created if absent). Memory is NEVER deleted — only set aside,
+    so learned facts survive an uninstall and can be restored by copying back.
+    Returns the archive path."""
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    dest = memory_dir.parent / "archived-memory" / stamp
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(memory_dir), str(dest))
+    return dest
+
+
+def _uninstall_global(target: Path, archive_memory: bool) -> dict:
     """Reverse a global install at `target` using its manifest: remove owned files,
     prune emptied dirs, drop the AGENT.md entry from opencode.json, and delete the
-    markers. The memory store is kept unless purge_memory. Returns a summary dict."""
+    markers. The memory store is NEVER deleted — kept in place by default, or moved to
+    a sibling `archived-memory/<timestamp>/` when archive_memory. Returns a summary
+    dict (with `archived` = the archive path, or None)."""
     try:
         owned = json.loads((target / build.GLOBAL_MANIFEST).read_text(encoding="utf-8")).get("owned", [])
     except (json.JSONDecodeError, OSError):
@@ -989,19 +1005,19 @@ def _uninstall_global(target: Path, purge_memory: bool) -> dict:
             (target / m).unlink()
         except OSError:
             pass
-    purged = False
-    if purge_memory and (target / "memory").is_dir():
-        shutil.rmtree(target / "memory", ignore_errors=True)
-        purged = True
-    return {"removed": removed, "unmerged": unmerged, "purged": purged}
+    archived = None
+    if archive_memory and (target / "memory").is_dir():
+        archived = _archive_memory(target / "memory")
+    return {"removed": removed, "unmerged": unmerged, "archived": archived}
 
 
 def cmd_uninstall(args: argparse.Namespace) -> int:
     """Remove a global Geneseed install (the manifest-tracked opencode-global one):
     its owned files, the opencode.json instructions entry, and the markers. The
-    memory store is KEPT unless --purge-memory. Per-repo `.opencode/` installs have
-    no manifest — remove those manually (`rm -rf .opencode`, drop AGENT.md from
-    opencode.json)."""
+    memory store is NEVER deleted — kept in place by default, or moved aside to a
+    sibling `archived-memory/<timestamp>/` with --archive-memory. Per-repo `.opencode/`
+    installs have no manifest — remove those manually (`rm -rf .opencode`, drop
+    AGENT.md from opencode.json)."""
     target = Path(args.target).expanduser().resolve() if args.target else build._opencode_config_dir()
     if not (target / build.GLOBAL_MANIFEST).exists():
         sys.stderr.write(
@@ -1014,8 +1030,9 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     print("[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the "
           "opencode.json instructions entry.")
     if has_memory:
-        print("[uninstall] memory: " + ("will be DELETED (--purge-memory)" if args.purge_memory
-                                         else "KEPT — pass --purge-memory to delete it"))
+        print("[uninstall] memory: " + ("will be ARCHIVED to archived-memory/ (never deleted)"
+                                         if args.archive_memory
+                                         else "KEPT in place — pass --archive-memory to set it aside"))
     if not args.yes:
         if not sys.stdin.isatty():
             sys.stderr.write("[uninstall] refusing to proceed without --yes (non-interactive).\n")
@@ -1023,10 +1040,11 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         if not _confirm("Proceed with uninstall?", False):
             print("[uninstall] cancelled — nothing removed.")
             return 0
-    s = _uninstall_global(target, args.purge_memory)
+    s = _uninstall_global(target, args.archive_memory)
+    mem = f"archived -> {s['archived']}" if s["archived"] else "kept in place"
     print(f"[uninstall] done — removed {s['removed']} file(s); opencode.json "
-          f"{'updated' if s['unmerged'] else 'unchanged'}; memory "
-          f"{'purged' if s['purged'] else 'kept'}. Start a new OpenCode session to apply.")
+          f"{'updated' if s['unmerged'] else 'unchanged'}; memory {mem}. "
+          f"Start a new OpenCode session to apply.")
     return 0
 
 
@@ -2640,8 +2658,9 @@ def main() -> int:
     un.add_argument("--target", default=None,
                     help="config dir to uninstall from (default: the OpenCode global config dir)")
     un.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
-    un.add_argument("--purge-memory", action="store_true",
-                    help="also delete the memory store (default: keep learned facts)")
+    un.add_argument("--archive-memory", action="store_true",
+                    help="move the memory store aside to archived-memory/<timestamp>/ "
+                         "(never deleted; default keeps it in place)")
     un.set_defaults(fn=cmd_uninstall)
 
     le = sub.add_parser("learn", help="distil notes/transcript into memory entries")

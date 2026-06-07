@@ -30,14 +30,17 @@ Two lifecycle gaps in a deployed harness:
 
 ### Uninstall (`harness.py`)
 - Scoped to the **global** install (the one with a manifest). `harness uninstall
-  [--target] [--yes] [--purge-memory]`:
+  [--target] [--yes] [--archive-memory]`:
   - removes every manifest-`owned` file, prunes emptied `agents/`/`skills/`/`plugins/`
     (and per-skill dirs),
   - drops the `AGENT.md` entry from `opencode.json`'s `instructions`
     (`_unmerge_opencode_json`, every other key preserved),
   - deletes the markers (`.geneseed-manifest.json`, `.geneseed-theme`,
     `.geneseed-emit`, `.geneseed-version`),
-  - **keeps the memory store** unless `--purge-memory`.
+  - **never deletes memory.** By default the store is kept in place; with
+    `--archive-memory` it is *moved* to a sibling `archived-memory/<timestamp>/`
+    (`_archive_memory`, created if absent) so learned facts are set aside, never
+    lost. There is no memory-deletion path anywhere in the harness.
   - Confirms first; refuses non-interactive without `--yes`.
 - Per-repo `.opencode/` installs have no manifest — documented manual removal
   (`rm -rf .opencode`, drop the instructions entry).
@@ -47,7 +50,10 @@ Two lifecycle gaps in a deployed harness:
 - `VersionTests`: fingerprint deterministic + 12-hex, write/read round-trip, absent →
   None, verdict strings.
 - `UninstallTests`: a real global emit is fully removed (owned files, markers,
-  `opencode.json` un-merged) with memory kept; `--purge-memory` deletes the store.
+  `opencode.json` un-merged) with memory kept in place by default; with
+  `--archive-memory` the store is moved to `archived-memory/` and a planted fact
+  survives. `ArchiveMemoryTests`: `_archive_memory` moves into a timestamped sibling
+  and preserves contents.
 
 ## Verified
 `doctor --all` clean; 52 tests pass; CLI round-trip (emit → version "up to date" →
