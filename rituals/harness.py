@@ -1717,24 +1717,24 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading="updating")
             except curses.error:
                 pass
 
+    # Plain layout (no box-drawing frame) — matches the doctor progress screen, which
+    # renders cleanly; the ACS frame showed as tofu in some terminal fonts.
     put(0, 0, f"  ◆ Geneseed — {heading}  ".ljust(w - 1), pal["BAR"])
     sym = {"pending": "-", "running": ">", "done": "+", "failed": "x"}
     for i, (title, _c) in enumerate(steps):
         st = status[i]
         attr = pal["HEAD"] if st == "running" else (curses.A_DIM if st == "pending" else 0)
-        put(2 + i, 2, f"{sym.get(st, '·')}  {title}", attr)
+        put(2 + i, 3, f"[{sym.get(st, '-')}] {title}", attr)
     done = sum(1 for s in status if s in ("done", "failed"))
-    w_bar = max(10, min(40, w - 20))
-    put(2 + len(steps), 2,
+    w_bar = max(10, min(40, w - 22))
+    put(2 + len(steps) + 1, 3,
         f"[{_progress_bar(done / len(steps) if steps else 0.0, w_bar)}] {done}/{len(steps)}",
         pal["HEAD"])
-    top = 2 + len(steps) + 2
-    if h - top - 1 >= 3:
-        _draw_box(stdscr, curses, top, 0, h - top - 1, w, pal["FRAME"])
-        put(top, 2, " output ", pal["HEAD"])
-        inner = h - top - 3
-        for j, ln in enumerate(log[-inner:]):
-            put(top + 1 + j, 2, ln[:w - 4], curses.A_DIM)
+    top = 2 + len(steps) + 3
+    put(top, 3, "output:", pal["HEAD"])
+    inner = max(0, h - top - 2)
+    for j, ln in enumerate(log[-inner:]):
+        put(top + 1 + j, 3, ln[:w - 4], curses.A_DIM)
     put(h - 1, 0, "  working… please wait  ".ljust(w - 1), pal["BAR"])
     stdscr.refresh()
 
