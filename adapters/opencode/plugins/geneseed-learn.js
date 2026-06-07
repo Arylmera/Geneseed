@@ -1,12 +1,22 @@
 // Geneseed — OpenCode learn plugin.
 //
 // The runtime-agnostic counterpart of the Claude Code `Stop` hook: on
-// `session.idle` (OpenCode's session-end event) it distils durable memories from
-// the just-finished conversation and writes them into the bundle's memory/ dir,
-// maintaining MEMORY.md — exactly what `rituals/harness.py learn` does, but
-// self-contained in JS so no Python and no model CLI are required. It distils
-// with the SAME model the session already used (read from the transcript), so it
-// inherits your OpenCode provider config: no API key, nothing to set for the model.
+// `session.idle` it distils durable memories from the conversation and writes them
+// into the bundle's memory/ dir, maintaining MEMORY.md — exactly what
+// `rituals/harness.py learn` does, but self-contained in JS so no Python and no
+// model CLI are required. It distils with the SAME model the session already used
+// (read from the transcript), so it inherits your OpenCode provider config: no API
+// key, nothing to set for the model.
+//
+// TIMING — `session.idle` fires after EVERY turn (it is OpenCode's "session became
+// idle / response ready" signal), not only at the true end of a session. Distilling
+// on the first idle would therefore mine just turn 1 and miss the rest. So each idle
+// RE-ARMS a debounce timer (GENESEED_LEARN_DEBOUNCE_MS, default 60s) and the distil
+// runs once the session has been quiet for that long — i.e. at the real end. A
+// continued session simply re-arms and re-distils; slug dedup keeps writes
+// idempotent. (Trade-off: if OpenCode is killed inside the window the final distil
+// is lost — still strictly better than capturing only turn 1, and far cheaper than
+// re-distilling every turn.)
 //
 // Install (global — the bundle is used everywhere, so the plugin should be too):
 //   copy this file to  ~/.config/opencode/plugins/geneseed-learn.js
@@ -28,8 +38,10 @@ import * as path from "node:path"
 const MAX_NOTES_CHARS = 16000          // cap the prompt; keep the most recent tail
 const MIN_NOTES_CHARS = 200            // below this, the session is too trivial to mine
 const MEMORY_DIR_NAMES = ["memory", "anamnesis"]   // neutral + imperial
+const DEBOUNCE_MS = Number(process.env.GENESEED_LEARN_DEBOUNCE_MS || 60000)
 
-// Kept in lockstep with rituals/harness.py LEARN_PROMPT_HEAD — edit both together.
+// SINGLE SOURCE of the distil instructions: rituals/harness.py extracts this exact
+// LEARN_PROMPT_HEAD template literal at runtime, so there is nothing to keep in sync.
 const LEARN_PROMPT_HEAD = `You are distilling durable memories from the notes below. Output zero or more
 Markdown memory files in this exact format, separated by a line containing only
 '---FILE---':
@@ -186,9 +198,69 @@ async function writeMemories(output, memDir, existing) {
 }
 
 export const GeneseedLearn = async ({ client }) => {
-  const ours = new Set()   // throwaway distil sessions — never mine our own output
-  const done = new Set()   // process each real session at most once per run
+  const ours = new Set()       // throwaway distil sessions — never mine our own output
+  const timers = new Map()     // sid -> debounce timer, re-armed on each idle
+  const inFlight = new Set()   // sid currently being distilled (guards against overlap)
   let warnedNoDir = false
+
+  async function runDistill(sid) {
+    if (inFlight.has(sid)) return   // a run is already underway; the next idle re-arms
+    inFlight.add(sid)
+    try {
+      const memDir = await resolveMemoryDir()
+      if (!memDir) {
+        if (!warnedNoDir) {
+          warnedNoDir = true
+          console.error(
+            "[geneseed-learn] no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY."
+          )
+        }
+        return
+      }
+
+      const res = await client.session.messages({ path: { id: sid } })
+      const messages = Array.isArray(res) ? res : res?.data ?? []
+      let { notes, model } = flatten(messages)
+      if (notes.length < MIN_NOTES_CHARS) return
+      notes = notes.slice(-MAX_NOTES_CHARS)
+      model = model ?? envModel()
+      if (!model) {
+        console.error(
+          "[geneseed-learn] could not determine a model — set $GENESEED_MODEL=provider/model."
+        )
+        return
+      }
+
+      const existing = await existingSlugs(memDir)
+      const prompt = buildPrompt(notes, existing)
+
+      // Distil in a throwaway session with the session's own model, then drop it.
+      const session = await client.session.create({ body: { title: "geneseed-learn (auto)" } })
+      const newId = session?.id ?? session?.data?.id
+      if (newId) ours.add(newId)
+      let output = ""
+      try {
+        const reply = await client.session.prompt({
+          path: { id: newId },
+          body: { model, parts: [{ type: "text", text: prompt }] },
+        })
+        output = partsText(reply?.parts ?? reply?.data?.parts) || reply?.text || ""
+      } finally {
+        if (newId) await client.session.delete({ path: { id: newId } }).catch(() => {})
+      }
+
+      if (!output.trim() || output.trim().toUpperCase() === "NOTHING") return
+      const written = await writeMemories(output, memDir, existing)
+      if (written.length) {
+        console.error(`[geneseed-learn] wrote ${written.length} memory file(s): ${written.join(", ")}`)
+      }
+    } catch (err) {
+      // Never break the session over a memory write.
+      console.error(`[geneseed-learn] skipped: ${err?.message ?? err}`)
+    } finally {
+      inFlight.delete(sid)
+    }
+  }
 
   return {
     event: async ({ event }) => {
@@ -198,61 +270,12 @@ export const GeneseedLearn = async ({ client }) => {
         event.payload?.sessionID ??
         event.properties?.info?.id ??
         event.payload?.info?.id
-      if (!sid || ours.has(sid) || done.has(sid)) return
-      done.add(sid)
-
-      try {
-        const memDir = await resolveMemoryDir()
-        if (!memDir) {
-          if (!warnedNoDir) {
-            warnedNoDir = true
-            console.error(
-              "[geneseed-learn] no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY."
-            )
-          }
-          return
-        }
-
-        const res = await client.session.messages({ path: { id: sid } })
-        const messages = Array.isArray(res) ? res : res?.data ?? []
-        let { notes, model } = flatten(messages)
-        if (notes.length < MIN_NOTES_CHARS) return
-        notes = notes.slice(-MAX_NOTES_CHARS)
-        model = model ?? envModel()
-        if (!model) {
-          console.error(
-            "[geneseed-learn] could not determine a model — set $GENESEED_MODEL=provider/model."
-          )
-          return
-        }
-
-        const existing = await existingSlugs(memDir)
-        const prompt = buildPrompt(notes, existing)
-
-        // Distil in a throwaway session with the session's own model, then drop it.
-        const session = await client.session.create({ body: { title: "geneseed-learn (auto)" } })
-        const newId = session?.id ?? session?.data?.id
-        if (newId) ours.add(newId)
-        let output = ""
-        try {
-          const reply = await client.session.prompt({
-            path: { id: newId },
-            body: { model, parts: [{ type: "text", text: prompt }] },
-          })
-          output = partsText(reply?.parts ?? reply?.data?.parts) || reply?.text || ""
-        } finally {
-          if (newId) await client.session.delete({ path: { id: newId } }).catch(() => {})
-        }
-
-        if (!output.trim() || output.trim().toUpperCase() === "NOTHING") return
-        const written = await writeMemories(output, memDir, existing)
-        if (written.length) {
-          console.error(`[geneseed-learn] wrote ${written.length} memory file(s): ${written.join(", ")}`)
-        }
-      } catch (err) {
-        // Never break the session over a memory write.
-        console.error(`[geneseed-learn] skipped: ${err?.message ?? err}`)
-      }
+      if (!sid || ours.has(sid)) return
+      // session.idle fires after every turn — debounce so we distil once, at the real
+      // end of the session (see header note). Each idle re-arms the timer.
+      const prev = timers.get(sid)
+      if (prev) clearTimeout(prev)
+      timers.set(sid, setTimeout(() => { timers.delete(sid); runDistill(sid) }, DEBOUNCE_MS))
     },
   }
 }

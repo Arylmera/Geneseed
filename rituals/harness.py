@@ -67,42 +67,26 @@ def strip_code(text: str) -> str:
 # The tail is kept — the most recent exchanges carry the durable decisions.
 MAX_NOTES_CHARS = 16000
 
-LEARN_PROMPT_HEAD = """\
-You are distilling durable memories from the notes below. Output zero or more
-Markdown memory files in this exact format, separated by a line containing only
-'---FILE---':
+def _load_learn_prompt_head() -> str:
+    """Single source of truth for the distil instructions is the OpenCode plugin
+    (adapters/opencode/plugins/geneseed-learn.js) — the artifact that ships to the
+    primary runtime. Extract its LEARN_PROMPT_HEAD template literal at load time so
+    this CLI and the plugin can never drift (the old copy-pasted constant was a
+    standing hazard, flagged "edit both together"). Falls back to a one-line
+    instruction if the plugin is unreadable, so a Stop hook never crashes over it."""
+    js = build.PLUGIN_SRC / "geneseed-learn.js"
+    try:
+        m = re.search(r"const LEARN_PROMPT_HEAD = `([\s\S]*?)`",
+                      js.read_text(encoding="utf-8"))
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    return ("Distil at most one durable, reusable memory from the notes below. "
+            "When in doubt, output exactly: NOTHING.")
 
----
-name: <kebab-case-slug>
-description: <one-line summary>
-type: user | feedback | project | reference
----
-<the fact, stated plainly. For 'feedback' and 'project', add **Why:** and
-**How to apply:** lines.>
 
-DEFAULT TO 'NOTHING'. Writing a memory is the rare exception, not the norm — most
-sessions should yield zero. Emit AT MOST ONE, and only if it is a GENERAL, reusable
-principle you would want at the START of an unrelated future task.
-
-CAPTURE only (high altitude, cross-session):
-  - a stable USER preference or working style the user showed or stated;
-  - a CONVENTION or constraint that will hold across many future tasks;
-  - a durable PROJECT decision or goal that outlives this session.
-
-NEVER capture (this is the noise to cut):
-  - what was done, found, fixed, or resolved this session ("fixed X", "resolved
-    issue 7", "cleaned up the TODO", "renamed Y", "the landing screen redirects");
-  - anything tied to one file, function, ticket, bug, or feature;
-  - anything derivable from the code, the git history, or the current diff.
-
-If you can only phrase it as "this session we …", it is NOT a memory:
-  - Too specific:  "Fixed the failing test by adding await on line 42."
-  - Right (meta):  "User wants async setup helpers always awaited."
-  - Too specific:  "Resolved the magic-constants issue in config.js."  -> NO memory
-    (a closed task, not a durable lesson).
-
-When in doubt, output exactly: NOTHING.
-"""
+LEARN_PROMPT_HEAD = _load_learn_prompt_head()
 
 
 def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
