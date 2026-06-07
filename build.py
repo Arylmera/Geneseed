@@ -279,6 +279,31 @@ def _is_readonly(text: str) -> bool:
 PLUGIN_SRC = ROOT / "adapters" / "opencode" / "plugins"
 
 
+def _renest_skill_links(body: str) -> str:
+    """Rewrite a skill body's in-bundle relative links for the nested native layout.
+
+    Source skills are authored FLAT (`skills/<name>.md`): they link siblings as bare
+    `other.md` and reach up to agents as `../agents/x.md`. A native skill is emitted
+    one directory deeper at `skills/<name>/SKILL.md`, so those links must move:
+
+      ../agents/x.md   -> ../../agents/x.md     (one more level up)
+      verify.md        -> ../verify/SKILL.md    (sibling skill's nested file)
+      _template.md     -> ../_template.md       (the flat authoring scaffold)
+
+    Without this, every cross-skill / skill->agent link is dead in the opencode and
+    opencode-global emits (the doctor's global-emit check catches exactly these)."""
+    # 1) Links already climbing out of the dir go one level deeper. Done first so the
+    #    nested links we synthesise below are not themselves re-prefixed.
+    body = re.sub(r"\]\(\.\./", "](../../", body)
+    # 2) A bare sibling-skill link -> that sibling's nested SKILL.md. Excludes ../, /,
+    #    #, http(s), and the leading-underscore template (handled next).
+    body = re.sub(r"\]\((?!\.\.?/|https?://|/|#|_)([A-Za-z0-9][A-Za-z0-9_-]*)\.md\)",
+                  r"](../\1/SKILL.md)", body)
+    # 3) The authoring template stays a flat file beside the skill dirs.
+    body = re.sub(r"\]\(_template\.md\)", "](../_template.md)", body)
+    return body
+
+
 def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int, int, list[Path]]:
     """Render capability agents and skills into OpenCode-native files.
 
@@ -299,9 +324,22 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int,
         if text is None:
             continue
         sparts = src.relative_to(SRC).as_posix().split("/")
-        if len(sparts) != 2 or not sparts[1].endswith(".md") or sparts[1].startswith("_"):
+        if len(sparts) != 2 or not sparts[1].endswith(".md"):
             continue
-        folder, stem = sparts[0], sparts[1][:-3]
+        folder, fname = sparts[0], sparts[1]
+        target_dir = {"agents": agents_dir, "skills": skills_dir}.get(folder)
+        if target_dir is None:
+            continue
+        if fname.startswith("_"):
+            # Authoring templates (e.g. skills/_template.md) are shipped verbatim and
+            # FLAT — not wrapped as a native skill — so create-skill's link resolves
+            # and an author has the scaffold to copy. Not counted as an agent/skill.
+            dest = target_dir / fname
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(text.lstrip("\n"), encoding="utf-8")
+            written.append(dest)
+            continue
+        stem = fname[:-3]
         desc = _first_blockquote(text)
         body = text.lstrip("\n")
         if folder == "agents":
@@ -322,6 +360,7 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int,
             n_agents += 1
         elif folder == "skills":
             fm = [f"name: {stem}", f"description: {json.dumps(desc)}", "compatibility: opencode"]
+            body = _renest_skill_links(body)   # fix links broken by the nested layout
             dest = skills_dir / stem / "SKILL.md"
             n_skills += 1
         else:
@@ -505,14 +544,13 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
         # AGENT.md lists skills as flat `skills/<name>.md`, but native skills are
         # nested `skills/<name>/SKILL.md` — rewrite the links so they resolve.
         agent_text = re.sub(r"\]\(skills/([A-Za-z0-9_-]+)\.md\)", r"](skills/\1/SKILL.md)", agent_text)
-        # Absolutise the memory references to the global store. AGENT.md is loaded
-        # from inside an arbitrary repo's cwd, so a relative `memory/` would resolve
-        # against the repo, not here — the agent could never find MEMORY.md. Point it
-        # at <cfg>/memory/ (where the learn plugin already writes) so recall works.
-        base = cfg.as_posix()
-        agent_text = (agent_text
-                      .replace("](memory/", f"]({base}/memory/")
-                      .replace("`memory/", f"`{base}/memory/"))
+        # Memory links stay RELATIVE. In the global layout AGENT.md and the store are
+        # siblings (<cfg>/AGENT.md + <cfg>/memory/), so a relative `memory/` resolves
+        # correctly from AGENT.md's own location AND stays hermetic — no absolute
+        # /Users/…/.config/opencode/memory path that a markdown viewer renders as a
+        # broken link or that doctor flags as a non-hermetic escape. (The learn and
+        # context plugins locate the store via $GENESEED_HARNESS, independently of
+        # this link, so recall does not depend on absolutising it here.)
         (cfg / "AGENT.md").write_text(agent_text, encoding="utf-8")
         owned.append("AGENT.md")
 

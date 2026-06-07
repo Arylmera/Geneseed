@@ -256,6 +256,23 @@ def _themes_to_check(theme, all_themes, detected, available):
     return sorted(available)
 
 
+def _global_emit_problems(theme_name: str) -> list[str]:
+    """Validate the opencode-global emit — the RECOMMENDED install, and otherwise a
+    doctor blind spot (the files build and ./Harness were checked; the global layout
+    never was). Render it into a throwaway config dir and scan AGENT.md, the native
+    agents/skills, and the seeded memory store for unresolved tokens, dead links, and
+    non-hermetic escapes — exactly as for a files build. Labelled '<theme> global' so
+    a problem here is distinguishable from the plain build."""
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg = Path(tmp) / "cfg"
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's log
+                build.emit_opencode_global(theme_name, out=Path(tmp) / "bundle", cfg=cfg)
+        except SystemExit:
+            return [f"[{theme_name} global] build failed"]
+        return _check_build(f"{theme_name} global", cfg)
+
+
 def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False, on_progress=None):
     """Run every doctor check; return (themes, sorted_unique_problems). on_progress
     (i, total, label) is called as it advances, so a caller can draw a progress bar.
@@ -284,6 +301,7 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False, 
                 problems.append(f"[{theme_name}] build failed")
                 continue
             problems += _check_build(theme_name, out)
+            problems += _global_emit_problems(theme_name)   # also validate the global install
     if on_progress:
         on_progress(len(themes), total, "parity · authoring · bundle")
     problems += _theme_parity_problems()

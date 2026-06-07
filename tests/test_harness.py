@@ -177,6 +177,16 @@ class ResolveMemoryDirTests(unittest.TestCase):
             shutil.rmtree(work, ignore_errors=True)
 
 
+class GlobalEmitDoctorTests(unittest.TestCase):
+    def test_global_emit_is_link_clean(self):
+        """The opencode-global AGENT.md/agents/skills/memory must carry no unresolved
+        tokens, dead links, or non-hermetic escapes — memory links are relative and
+        co-located with AGENT.md, so nothing should point outside the bundle."""
+        for theme in ("neutral", "imperial"):
+            with self.subTest(theme=theme):
+                self.assertEqual(harness._global_emit_problems(theme), [])
+
+
 class RenderedCheckTests(unittest.TestCase):
     def test_fresh_build_clean_then_drift_detected(self):
         d = Path(tempfile.mkdtemp())
