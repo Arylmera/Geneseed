@@ -1061,9 +1061,32 @@ def _progress_bar(frac: float, width: int = 24) -> str:
     return "█" * filled + " " * (width - filled)
 
 
-def _menu(stdscr, curses, prompt, options, default=None):
+def _theme_preview(key):
+    """Right-panel preview lines for a theme, read live from its JSON: tagline, sigil,
+    voice, and a sample law title. Returns (kind, text) rows."""
+    try:
+        data = json.loads((build.THEMES / f"{key}.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [("dim", "(no preview available)")]
+    lines = [("title", key), ("", "")]
+    if data.get("TAGLINE"):
+        lines += [("dim", data["TAGLINE"]), ("", "")]
+    if data.get("LOADED_SIGIL"):
+        lines += [("ok", data["LOADED_SIGIL"]), ("", "")]
+    if data.get("VOICE"):
+        lines += [("", "Voice — " + data["VOICE"]), ("", "")]
+    if data.get("LEX_I"):
+        lines.append(("", "e.g.  Rule I — " + data["LEX_I"]))
+    if data.get("BENEDICTION"):
+        lines += [("", ""), ("dim", data["BENEDICTION"])]
+    return lines
+
+
+def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
     """Framed, colored single-choice menu. Returns the chosen key or None (cancel).
-    options: list of (key, label, description); the focused row's description shows."""
+    options: list of (key, label, description). With detail_fn, render two panes — the
+    list on the left and detail_fn(key)'s lines on the right; else the focused row's
+    description shows beneath the list."""
     import textwrap
     pal = _tui_palette(curses)
     curses.curs_set(0)
@@ -1087,22 +1110,62 @@ def _menu(stdscr, curses, prompt, options, default=None):
             if stdscr.getch() in (ord("q"), 27):
                 return None
             continue
-        put(0, 0, "  ◆ Geneseed setup  ".ljust(w - 1), pal["BAR"])
+        put(0, 0, f"  ◆ {prompt if detail_fn else 'Geneseed setup'}  ".ljust(w - 1), pal["BAR"])
         _draw_box(stdscr, curses, 1, 0, h - 2, w, pal["FRAME"])
-        put(2, 3, prompt, pal["TITLE"])
-        for i, (_k, label, _desc) in enumerate(options):
-            y = 4 + i
-            if y >= h - 5:
-                break
-            if i == idx:
-                put(y, 2, f" ▸ {label} ".ljust(w - 4)[:w - 4], pal["SEL"])
-            else:
-                put(y, 3, f"  {label}", 0)
-        dy = 4 + len(options) + 1
-        if dy < h - 2:
-            put(dy - 1, 2, "─" * (w - 4), pal["FRAME"])
-            for j, seg in enumerate(textwrap.wrap(options[idx][2], w - 6)[:3]):
-                put(dy + j, 3, seg, curses.A_DIM)
+
+        if detail_fn:
+            dx = max(18, min(36, w // 2))
+            try:
+                for r in range(2, h - 2):
+                    stdscr.addch(r, dx, curses.ACS_VLINE, pal["FRAME"])
+                stdscr.addch(1, dx, curses.ACS_TTEE, pal["FRAME"])
+                stdscr.addch(h - 2, dx, curses.ACS_BTEE, pal["FRAME"])
+            except curses.error:
+                pass
+            put(1, 2, " Themes ", pal["HEAD"])
+            put(1, dx + 2, " Preview ", pal["HEAD"])
+            avail = max(1, h - 4)
+            liw = dx - 2
+            ltop = idx - avail + 1 if idx >= avail else 0
+            for vi in range(avail):
+                oi = ltop + vi
+                if oi >= len(options):
+                    break
+                label = options[oi][1]
+                if oi == idx:
+                    put(2 + vi, 1, f" ▸ {label} ".ljust(liw)[:liw], pal["SEL"])
+                else:
+                    put(2 + vi, 2, f" {label}"[:liw - 1], 0)
+            rx, rw = dx + 2, max(4, w - dx - 3)
+            wrapped = []
+            for kind, text in (detail_fn(options[idx][0]) or []):
+                if not text:
+                    wrapped.append(("", ""))
+                else:
+                    for j, seg in enumerate(textwrap.wrap(text, rw) or [""]):
+                        wrapped.append((kind, seg if j == 0 else "  " + seg))
+            for r, (kind, seg) in enumerate(wrapped):
+                if 2 + r >= h - 2:
+                    break
+                a = (pal["TITLE"] if kind == "title" else pal["OK"] if kind == "ok"
+                     else curses.A_DIM if kind == "dim" else 0)
+                put(2 + r, rx, seg[:rw], a)
+        else:
+            put(2, 3, prompt, pal["TITLE"])
+            for i, (_k, label, _desc) in enumerate(options):
+                y = 4 + i
+                if y >= h - 5:
+                    break
+                if i == idx:
+                    put(y, 2, f" ▸ {label} ".ljust(w - 4)[:w - 4], pal["SEL"])
+                else:
+                    put(y, 3, f"  {label}", 0)
+            dy = 4 + len(options) + 1
+            if dy < h - 2:
+                put(dy - 1, 2, "─" * (w - 4), pal["FRAME"])
+                for j, seg in enumerate(textwrap.wrap(options[idx][2], w - 6)[:3]):
+                    put(dy + j, 3, seg, curses.A_DIM)
+
         put(h - 1, 0, "  ↑↓ move    Enter select    q cancel  ".ljust(w - 1), pal["BAR"])
         stdscr.refresh()
         c = stdscr.getch()
@@ -1173,7 +1236,7 @@ def _setup_tui(stdscr):
     theme_prompt = "Choose a theme" + (f"   (installed: {inst['theme']})" if inst["theme"] else "")
     theme = _menu(stdscr, curses, theme_prompt,
                   [(k, k, blurb or "voice theme") for k, blurb in _theme_options()],
-                  default=inst["theme"] or _default_theme())
+                  default=inst["theme"] or _default_theme(), detail_fn=_theme_preview)
     if theme is None:
         return None
     emit_prompt = "Choose an install mode" + (f"   (installed: {inst['emit']})" if inst["emit"] else "")
