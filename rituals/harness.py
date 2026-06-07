@@ -935,21 +935,31 @@ def _tui_loop(stdscr, inv: dict) -> None:
     import textwrap
 
     curses.curs_set(0)
+    try:
+        stdscr.keypad(True)
+    except curses.error:
+        pass
     color = False
     try:
         curses.start_color()
         curses.use_default_colors()
-        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_CYAN)    # header / footer bar
-        curses.init_pair(2, curses.COLOR_CYAN, -1)                    # section headers
-        curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)   # selected row
+        curses.init_pair(1, curses.COLOR_CYAN, -1)                    # frame
+        curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_CYAN)    # bars
+        curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)   # selected
         curses.init_pair(4, curses.COLOR_YELLOW, -1)                  # detail heading
+        curses.init_pair(5, curses.COLOR_MAGENTA, -1)                 # icons
         color = curses.has_colors()
     except curses.error:
         color = False
-    A_BAR = curses.color_pair(1) if color else curses.A_REVERSE
-    A_HEAD = (curses.color_pair(2) | curses.A_BOLD) if color else curses.A_BOLD
-    A_SEL = curses.color_pair(3) if color else curses.A_REVERSE
-    A_TITLE = (curses.color_pair(4) | curses.A_BOLD) if color else curses.A_BOLD
+    C_FRAME = curses.color_pair(1) if color else curses.A_DIM
+    C_BAR = (curses.color_pair(2) | curses.A_BOLD) if color else curses.A_REVERSE
+    C_SEL = (curses.color_pair(3) | curses.A_BOLD) if color else curses.A_REVERSE
+    C_TITLE = (curses.color_pair(4) | curses.A_BOLD) if color else curses.A_BOLD
+    C_ICON = curses.color_pair(5) if color else 0
+    C_HEAD = (curses.color_pair(1) | curses.A_BOLD) if color else curses.A_BOLD
+
+    ICON = {"agent": "◆", "skill": "✦", "law": "§"}
+    SECT = {"AGENTS": "⚙", "SKILLS": "✦", "LAWS": "§"}
 
     def clamp(v, lo, hi):
         return max(lo, min(v, hi))
@@ -964,54 +974,97 @@ def _tui_loop(stdscr, inv: dict) -> None:
     while True:
         stdscr.erase()
         h, w = stdscr.getmaxyx()
-        body_h = max(1, h - 2)
-        lw = clamp(w // 3, 22, 38)
-        lw = clamp(lw, 10, max(10, w - 12))
-        rx = lw + 2
-        rw = max(1, w - rx)
 
-        stdscr.addnstr(0, 0, f" Geneseed · theme: {inv['theme']} ".ljust(w), w, A_BAR)
+        def put(y, x, s, attr=0):
+            if 0 <= y < h and 0 <= x < w:
+                try:
+                    stdscr.addnstr(y, x, s, max(0, w - x - 1), attr)
+                except curses.error:
+                    pass
 
-        if sel < list_top:
-            list_top = sel
-        elif sel >= list_top + body_h:
-            list_top = sel - body_h + 1
-        list_top = clamp(list_top, 0, max(0, len(entries) - body_h))
-
-        # left: navigable list, with a vertical separator
-        for i in range(body_h):
-            ri = list_top + i
-            y = 1 + i
-            if ri < len(entries):
-                kind, label, _d = entries[ri]
-                if ri == sel:
-                    stdscr.addnstr(y, 0, (" " + label).ljust(lw)[:lw], lw, A_SEL)
-                elif kind == "head":
-                    stdscr.addnstr(y, 0, (" " + label)[:lw], lw, A_HEAD)
-                else:
-                    stdscr.addnstr(y, 0, ("   " + label)[:lw], lw, curses.A_NORMAL)
+        def ch(y, x, c, attr=0):
             try:
-                stdscr.addch(y, lw, curses.ACS_VLINE)
+                stdscr.addch(y, x, c, attr)
             except curses.error:
                 pass
 
-        # right: full detail of the selection, wrapped and scrollable
+        if h < 8 or w < 48:
+            put(0, 0, "Terminal too small — enlarge the window, or press q.", curses.A_BOLD)
+            stdscr.refresh()
+            if stdscr.getch() in (ord("q"), 27):
+                return
+            continue
+
+        dx = clamp(w // 3, 22, 40)
+        dx = clamp(dx, 18, w - 24)
+        ch_h = h - 4                 # inner rows 2 .. h-3
+        liw = dx - 1                 # left inner width  (cols 1 .. dx-1)
+        riw = w - dx - 3             # right inner width (cols dx+1 .. w-2)
+
+        # ---- title bar ----
+        put(0, 0, f"  ◆ Geneseed     theme: {inv['theme']}     {len(selectable)} entries  "
+                  .ljust(w - 1), C_BAR)
+
+        # ---- frame + divider ----
+        ch(1, 0, curses.ACS_ULCORNER, C_FRAME)
+        ch(1, w - 1, curses.ACS_URCORNER, C_FRAME)
+        ch(h - 2, 0, curses.ACS_LLCORNER, C_FRAME)
+        ch(h - 2, w - 1, curses.ACS_LRCORNER, C_FRAME)
+        try:
+            stdscr.hline(1, 1, curses.ACS_HLINE | C_FRAME, w - 2)
+            stdscr.hline(h - 2, 1, curses.ACS_HLINE | C_FRAME, w - 2)
+        except curses.error:
+            pass
+        ch(1, dx, curses.ACS_TTEE, C_FRAME)
+        ch(h - 2, dx, curses.ACS_BTEE, C_FRAME)
+        for r in range(2, h - 2):
+            ch(r, 0, curses.ACS_VLINE, C_FRAME)
+            ch(r, dx, curses.ACS_VLINE, C_FRAME)
+            ch(r, w - 1, curses.ACS_VLINE, C_FRAME)
+        put(1, 2, " Catalog ", C_HEAD)
+        put(1, dx + 2, " Detail ", C_HEAD)
+
+        # ---- left list ----
+        if sel < list_top:
+            list_top = sel
+        elif sel >= list_top + ch_h:
+            list_top = sel - ch_h + 1
+        list_top = clamp(list_top, 0, max(0, len(entries) - ch_h))
+        for i in range(ch_h):
+            ri = list_top + i
+            if ri >= len(entries):
+                break
+            y = 2 + i
+            kind, label, _d = entries[ri]
+            if kind == "head":
+                name = label.split(" (")[0]
+                put(y, 2, f"{SECT.get(name, '•')} {label}"[:liw], C_HEAD)
+            elif ri == sel:
+                put(y, 1, f" ▸ {ICON.get(kind, '•')} {label}".ljust(liw)[:liw], C_SEL)
+            else:
+                put(y, 2, f"{ICON.get(kind, '•')}", C_ICON)
+                put(y, 4, label[:liw - 3])
+
+        # ---- right detail (wrapped, scrollable) ----
         kind, label, data = entries[sel]
         wrapped: list[str] = []
         for ln in _detail_lines(kind, label, data):
-            wrapped.extend(textwrap.wrap(ln, rw) if ln else [""])
-        detail_top = clamp(detail_top, 0, max(0, len(wrapped) - body_h))
-        for i in range(body_h):
+            wrapped.extend(textwrap.wrap(ln, riw) if ln else [""])
+        detail_top = clamp(detail_top, 0, max(0, len(wrapped) - ch_h))
+        for i in range(ch_h):
             di = detail_top + i
             if di >= len(wrapped):
                 break
-            stdscr.addnstr(1 + i, rx, wrapped[di][:rw], rw,
-                           A_TITLE if di == 0 else curses.A_NORMAL)
+            put(2 + i, dx + 2, wrapped[di][:riw], C_TITLE if di == 0 else 0)
+        if detail_top > 0:
+            ch(2, w - 2, curses.ACS_UARROW, C_FRAME)
+        if len(wrapped) > detail_top + ch_h:
+            ch(h - 3, w - 2, curses.ACS_DARROW, C_FRAME)
 
-        more = "  ▾ more" if len(wrapped) > detail_top + body_h else ""
-        stdscr.addnstr(h - 1, 0,
-                       (" j/k move · PgUp/PgDn scroll · b build · d doctor · x diff · "
-                        "u update · q quit" + more).ljust(w), w, A_BAR)
+        # ---- footer ----
+        put(h - 1, 0,
+            "  ↑↓ move    PgUp/PgDn scroll    b build  d doctor  x diff  u update    q quit  "
+            .ljust(w - 1), C_BAR)
         stdscr.refresh()
 
         c = stdscr.getch()
@@ -1023,10 +1076,16 @@ def _tui_loop(stdscr, inv: dict) -> None:
         elif c in (curses.KEY_UP, ord("k")):
             sel = next((i for i in reversed(selectable) if i < sel), sel)
             detail_top = 0
+        elif c == curses.KEY_HOME:
+            sel = selectable[0] if selectable else sel
+            detail_top = 0
+        elif c == curses.KEY_END:
+            sel = selectable[-1] if selectable else sel
+            detail_top = 0
         elif c == curses.KEY_NPAGE:
-            detail_top += body_h
+            detail_top += ch_h
         elif c == curses.KEY_PPAGE:
-            detail_top = max(0, detail_top - body_h)
+            detail_top = max(0, detail_top - ch_h)
         elif c in (ord("b"), ord("d"), ord("x"), ord("u")):
             curses.def_prog_mode()
             curses.endwin()
@@ -1068,6 +1127,11 @@ def cmd_tui(args: argparse.Namespace) -> int:
         return 1
     inv = _tui_inventory(args.theme or _default_theme())
     import curses
+    import locale
+    try:
+        locale.setlocale(locale.LC_ALL, "")   # enable UTF-8 box-drawing + icons
+    except locale.Error:
+        pass
     curses.wrapper(_tui_loop, inv)
     return 0
 
