@@ -1052,10 +1052,12 @@ def _tui_palette(curses) -> dict:
 
 
 def _progress_bar(frac: float, width: int = 24) -> str:
-    # Full block (█, near-universal, single-width) on a blank track — no shade glyph
-    # or emoji that odd terminal fonts (zsh/cmux without a Nerd Font) can garble.
+    # Full block (█, near-universal, single-width) on a blank track. Set
+    # GENESEED_TUI_ASCII=1 to fall back to a pure-ASCII bar if a font garbles it.
     frac = max(0.0, min(1.0, frac))
     filled = int(round(frac * width))
+    if os.environ.get("GENESEED_TUI_ASCII"):
+        return "#" * filled + "-" * (width - filled)
     return "█" * filled + " " * (width - filled)
 
 
