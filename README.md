@@ -35,9 +35,9 @@ your own is a copy-and-edit away.
 
 | Piece | What it is |
 | --- | --- |
-| **Rules** (`laws/`) | 18 universal laws the agent obeys — secrets, scope, verify-before-assert, context economy, load-the-docs … |
+| **Rules** (`laws/`) | 19 universal laws the agent obeys — secrets, scope, verify-before-assert, context economy, load-the-docs, tool-discovery … |
 | **Agents** (6) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer` |
-| **Skills** (17) | repeatable workflows: brainstorm · plan · tdd · debug · refactor · verify · code-review · commit · **ship** · **release** · repo-map · **ingest** · handoff · roast-me · parallel-agents · cmux · create-skill |
+| **Skills** (19) | repeatable workflows: brainstorm · plan · tdd · debug · refactor · verify · code-review · **review-response** · commit · **ship** · **release** · repo-map · **ingest** · **research** · handoff · roast-me · parallel-agents · cmux · create-skill |
 | **Memory** (`memory/`) | one-fact-per-file durable knowledge, indexed by `MEMORY.md` (git-ignored, personal) |
 | **Context** | the project's own docs — auto-discovered on OpenCode, or via a `context.json` manifest |
 | **Plugins** (OpenCode) | `geneseed-context` injects project docs every session (and across compaction); `geneseed-learn` distils memory at session end |

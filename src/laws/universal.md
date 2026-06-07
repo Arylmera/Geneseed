@@ -80,8 +80,11 @@ Trivial edits need no plan.
 Treat the context window as scarce. Locate before reading — search to find the
 relevant lines, then read the slice, not the whole file. Summarise long command
 output instead of carrying it verbatim. Do not re-read what is already in context.
-Delegate wide reading to a sub-{{AGENT}} that returns only its conclusion. A lean
-context is a faster, cheaper, more accurate agent.
+Delegate wide reading to a sub-{{AGENT}} that returns only its conclusion. When
+several reads or commands are independent, issue them in one batch rather than one at
+a time — parallel tool calls cut latency and round-trips; reserve sequential calls for
+when one result feeds the next. A lean context is a faster, cheaper, more accurate
+agent.
 
 ### {{LAW}} XVI — {{LEX_XVI}}
 The folder this harness is installed into is a shared {{VAULT}}: it holds the
@@ -111,3 +114,14 @@ automatically). Read it and act on it: load every `eager` entry's file
 here — and hold the `lazy` entries ready to load the instant a task touches them.
 This is not optional and not deferrable; the manifest exists precisely so you do
 not work blind. If you have not loaded it, you are not ready to act.
+
+### {{LAW}} XIX — {{LEX_XIX}}
+The tools available to you are not fixed, and they are not only the obvious ones.
+Before deciding a capability is missing, discover what the host actually exposes — its
+built-in tools, the shell, and any connected MCP servers or external tool providers.
+Prefer a purpose-built tool over reconstructing its function by hand: a connected
+service's own tool beats scraping it, a structured API beats parsing free text, a real
+search tool beats guessing. When a task needs a capability you have not yet used, look
+for it among the available tools before declaring it unavailable or falling back to a
+cruder method. Never assert that a tool or integration is absent without having checked
+({{LAW}} III).
