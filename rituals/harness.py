@@ -39,6 +39,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -194,6 +195,50 @@ def _rendered_problems(bundle: Path) -> list[str]:
     return problems
 
 
+def _authoring_problems() -> list[str]:
+    """Author-time gates on the source specs and plugins (not rendered output):
+    every agent/skill spec must carry a one-line '>' purpose blockquote (else its
+    OpenCode `description:` renders empty); the learn-prompt literal must stay
+    extractable from the plugin (the single-source link harness.py depends on); and,
+    if node is on PATH, the plugins must pass `node --check`."""
+    problems: list[str] = []
+    for folder in ("agents", "skills"):
+        d = build.SRC / folder
+        if not d.is_dir():
+            continue
+        for spec in sorted(d.glob("*.md")):
+            if spec.name.startswith("_"):
+                continue
+            try:
+                text = spec.read_text(encoding="utf-8")
+            except OSError as e:
+                problems.append(f"[authoring] {folder}/{spec.name} unreadable: {e}")
+                continue
+            if not build._first_blockquote(text):
+                problems.append(f"[authoring] {folder}/{spec.name} has no '>' purpose line "
+                                f"(its OpenCode description would render empty)")
+    plugin = build.PLUGIN_SRC / "geneseed-learn.js"
+    try:
+        m = re.search(r"const LEARN_PROMPT_HEAD = `([\s\S]*?)`",
+                      plugin.read_text(encoding="utf-8"))
+    except OSError:
+        m = None
+    if not m:
+        problems.append("[authoring] LEARN_PROMPT_HEAD literal not found in "
+                        "geneseed-learn.js — harness.py would fall back (single source broken)")
+    elif m.group(1) != LEARN_PROMPT_HEAD:
+        problems.append("[authoring] LEARN_PROMPT_HEAD drifted between geneseed-learn.js "
+                        "and harness.py's loaded copy")
+    node = shutil.which("node")
+    if node:
+        for js in sorted(build.PLUGIN_SRC.glob("*.js")):
+            r = run([node, "--check", str(js)], capture_output=True, text=True)
+            if r.returncode != 0:
+                tail = (r.stderr.strip().splitlines() or ["syntax error"])[-1]
+                problems.append(f"[authoring] node --check failed for {js.name}: {tail}")
+    return problems
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Validate the build. With --theme, checks that one theme; without, sweeps
     EVERY theme so a token only the imperial map breaks cannot slip through."""
@@ -212,6 +257,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 continue
             problems += _check_build(theme_name, out)
     problems += _theme_parity_problems()
+    problems += _authoring_problems()
     if not args.no_bundle:
         bundle = Path(args.bundle).expanduser().resolve() if args.bundle else ROOT / "Harness"
         problems += _rendered_problems(bundle)
@@ -221,7 +267,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print("  -", p)
         return 1
     print(f"[doctor] ok — {len(themes)} theme(s) clean: no unresolved tokens, no dead "
-          f"links, nothing escapes the bundle; themes in parity; rendered bundle in sync")
+          f"links, nothing escapes the bundle; themes in parity; specs carry purpose "
+          f"lines; rendered bundle in sync")
     return 0
 
 

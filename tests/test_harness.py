@@ -123,6 +123,13 @@ class RenderedCheckTests(unittest.TestCase):
         self.assertEqual(harness._rendered_problems(ROOT / "does-not-exist"), [])
 
 
+class AuthoringGateTests(unittest.TestCase):
+    def test_real_specs_and_plugins_pass(self):
+        # Spec purpose-line + single-source-prompt checks must hold for the source
+        # tree; node --check is best-effort (skipped when node is absent).
+        self.assertEqual(harness._authoring_problems(), [])
+
+
 class DiscoverContextTests(unittest.TestCase):
     def _fixture(self, d):
         (d / "README.md").write_text("# r", encoding="utf-8")

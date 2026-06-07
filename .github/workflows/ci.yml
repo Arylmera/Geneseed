@@ -1,0 +1,24 @@
+name: ci
+
+# Validate the harness on every push and PR: doctor (unresolved tokens, dead/
+# non-hermetic links, theme-key parity, author-time spec/plugin gates, rendered-
+# bundle sync) plus the stdlib unit suite. Dependency-free — no install step.
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: doctor (every theme + parity + authoring gates)
+        run: python rituals/harness.py doctor
+      - name: unit tests
+        run: python -m unittest discover -s tests -p "test_*.py"

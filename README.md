@@ -247,9 +247,11 @@ python rituals/harness.py doctor --theme imperial
 
 Checks each theme's build for unresolved tokens, dead links, and non-hermetic links
 that would escape the bundle; that every theme defines the same voice tokens
-(theme-key parity); and that a committed bundle (e.g. `Harness/`) still matches a
-fresh render of `src/` — a drift guard, since the rendered bundle is tracked.
-`--no-bundle` skips that last check; `--bundle PATH` points it elsewhere.
+(theme-key parity); that every agent/skill spec carries a `>` purpose line and the
+plugins parse, with the learn-prompt literal still extractable (authoring gates);
+and that a committed bundle (e.g. `Harness/`) still matches a fresh render of `src/`
+— a drift guard, since the rendered bundle is tracked. `--no-bundle` skips that last
+check; `--bundle PATH` points it elsewhere.
 
 Unit tests for the generator and CLI (stdlib only — no dependencies) live in
 `tests/`:
@@ -257,6 +259,9 @@ Unit tests for the generator and CLI (stdlib only — no dependencies) live in
 ```
 python -m unittest discover -s tests
 ```
+
+CI (`.github/workflows/ci.yml`) runs `doctor` and the test suite on every push and
+pull request — no install step, since the harness is dependency-free.
 
 ## Review local edits — `diff`
 
