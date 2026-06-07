@@ -172,6 +172,26 @@ class AuthoringGateTests(unittest.TestCase):
         self.assertEqual(harness._authoring_problems(), [])
 
 
+class MemoryFactsTests(unittest.TestCase):
+    def test_lists_facts_skips_index_and_readme(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            (d / "MEMORY.md").write_text("# Memory Index\n- [a](a.md)\n- [b](b.md)\n", encoding="utf-8")
+            (d / "README.md").write_text("conv", encoding="utf-8")
+            (d / "a.md").write_text("---\nname: a\ndescription: alpha\n---\nbody A", encoding="utf-8")
+            (d / "b.md").write_text("---\nname: b\ndescription: beta\n---\nbody B", encoding="utf-8")
+            facts = harness._memory_facts(d)
+            names = sorted(f["name"] for f in facts)
+            self.assertEqual(names, ["a", "b"])
+            self.assertTrue(any(f["desc"] == "alpha" for f in facts))
+            # drop b from the index
+            harness._memory_drop_index(d, "b")
+            self.assertNotIn("(b.md)", (d / "MEMORY.md").read_text(encoding="utf-8"))
+            self.assertIn("(a.md)", (d / "MEMORY.md").read_text(encoding="utf-8"))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 class DiscoverContextTests(unittest.TestCase):
     def _fixture(self, d):
         (d / "README.md").write_text("# r", encoding="utf-8")

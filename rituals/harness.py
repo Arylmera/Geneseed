@@ -1650,6 +1650,201 @@ def _diff_view(stdscr, curses, pal) -> None:
             dtop = max(0, dtop - body_h)
 
 
+def _help_overlay(stdscr, curses, pal) -> None:
+    """Keybindings help for the browse panel."""
+    _info_screen(stdscr, curses, pal, "keys", [
+        ("info", "Up/Down or j/k    move the selection"),
+        ("info", "PgUp/PgDn         scroll the detail pane"),
+        ("info", "Home/End          jump to first / last"),
+        ("info", "/                 search (Esc clears it)"),
+        ("info", "d                 health check"),
+        ("info", "x                 review local edits (diff)"),
+        ("info", "b                 rebuild the bundle"),
+        ("info", "u                 update everything"),
+        ("info", "?                 this help"),
+        ("info", "q                 quit the panel"),
+    ], "Enter: close")
+
+
+def _memory_facts(mdir):
+    """List memory facts as {name, desc, body, path} (skips MEMORY.md / README)."""
+    facts = []
+    try:
+        paths = sorted(mdir.glob("*.md"))
+    except OSError:
+        return facts
+    for p in paths:
+        if p.stem.lower() in ("memory", "readme"):
+            continue
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        fm, _body = _frontmatter(text)
+        facts.append({"name": fm.get("name", p.stem), "desc": fm.get("description", ""),
+                      "body": text, "path": p})
+    return facts
+
+
+def _memory_drop_index(mdir, name) -> None:
+    """Remove the index line(s) referencing `name.md` from MEMORY.md."""
+    idx = mdir / "MEMORY.md"
+    try:
+        lines = idx.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+    keep = [ln for ln in lines if f"({name}.md)" not in ln]
+    if keep != lines:
+        try:
+            idx.write_text("\n".join(keep) + "\n", encoding="utf-8")
+        except OSError:
+            pass
+
+
+def _memory_view(stdscr, curses, pal) -> None:
+    """Two-pane memory browser: facts left, full content right; / search, x delete."""
+    import textwrap
+    mdir = _resolve_memory_dir(None)
+    if not mdir:
+        _info_screen(stdscr, curses, pal, "memory",
+                     [("warn", "No memory store found."),
+                      ("info", "Set GENESEED_HARNESS or GENESEED_MEMORY to point at it.")],
+                     "Enter: close")
+        return
+    facts = _memory_facts(mdir)
+    if not facts:
+        _info_screen(stdscr, curses, pal, "memory",
+                     [("ok", f"Memory is empty — {mdir}")], "Enter: close")
+        return
+    g = _bx(curses)
+    sel = dtop = 0
+    query = ""
+    filtering = confirm = False
+    while True:
+        view = [f for f in facts
+                if not query or query.lower() in (f["name"] + " " + f["desc"]).lower()]
+        if sel >= len(view):
+            sel = max(0, len(view) - 1)
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+
+        def put(y, x, s, a=0):
+            if 0 <= y < h and 0 <= x < w:
+                try:
+                    stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
+                except curses.error:
+                    pass
+
+        if h < 6 or w < 40:
+            put(0, 0, "Terminal too small.", curses.A_BOLD)
+            stdscr.refresh()
+            if stdscr.getch() in (ord("q"), 27):
+                return
+            continue
+        put(0, 0, f"  ◆ Memory  ·  {len(facts)} facts  ".ljust(w - 1), pal["BAR"])
+        dx = max(18, min(40, w // 3))
+        body_h = h - 2
+        for i in range(body_h):
+            if i >= len(view):
+                break
+            f = view[i]
+            put(1 + i, 0, f" {f['name']}".ljust(dx)[:dx], pal["SEL"] if i == sel else 0)
+        for r in range(1, h - 1):
+            try:
+                stdscr.addch(r, dx, g["v"], pal["FRAME"])
+            except curses.error:
+                pass
+        rx, rw = dx + 2, max(4, w - dx - 3)
+        body_lines = view[sel]["body"].splitlines() if view else []
+        wrapped = []
+        for ln in body_lines:
+            wrapped.extend(textwrap.wrap(ln, rw) if ln else [""])
+        dtop = max(0, min(dtop, max(0, len(wrapped) - body_h)))
+        for i in range(body_h):
+            di = dtop + i
+            if di >= len(wrapped):
+                break
+            put(1 + i, rx, wrapped[di][:rw], pal["TITLE"] if di == 0 else 0)
+        if confirm and view:
+            foot = f"  delete '{view[sel]['name']}' ?  y = yes   any other key = no  "
+        elif filtering:
+            foot = f"  search: /{query}    Enter apply · Esc clear  "
+        else:
+            foot = "  j/k file · / search · x delete · q close  "
+        put(h - 1, 0, foot.ljust(w - 1), pal["BAR"])
+        stdscr.refresh()
+
+        c = stdscr.getch()
+        if confirm:
+            if c in (ord("y"), ord("Y")) and view:
+                try:
+                    view[sel]["path"].unlink()
+                except OSError:
+                    pass
+                _memory_drop_index(mdir, view[sel]["name"])
+                facts = _memory_facts(mdir)
+                sel = dtop = 0
+            confirm = False
+            continue
+        if filtering:
+            if c in (curses.KEY_ENTER, 10, 13):
+                filtering = False
+            elif c == 27:
+                filtering = False
+                query = ""
+                sel = dtop = 0
+            elif c in (curses.KEY_BACKSPACE, 127, 8):
+                query = query[:-1]
+                sel = dtop = 0
+            elif 32 <= c < 127:
+                query += chr(c)
+                sel = dtop = 0
+            continue
+        if c == ord("q"):
+            return
+        elif c == 27:
+            if query:
+                query = ""
+                sel = dtop = 0
+            else:
+                return
+        elif c == ord("/"):
+            filtering = True
+        elif c == ord("x") and view:
+            confirm = True
+        elif c in (curses.KEY_DOWN, ord("j")):
+            sel = min(sel + 1, max(0, len(view) - 1))
+            dtop = 0
+        elif c in (curses.KEY_UP, ord("k")):
+            sel = max(0, sel - 1)
+            dtop = 0
+        elif c == curses.KEY_NPAGE:
+            dtop += body_h
+        elif c == curses.KEY_PPAGE:
+            dtop = max(0, dtop - body_h)
+
+
+def _status_view(stdscr, curses, pal) -> None:
+    """A dashboard: theme, install mode, counts, memory store, AGENT.md location."""
+    inst = _installed_defaults()
+    theme = inst["theme"] or _default_theme()
+    emit = inst["emit"] or "—"
+    mdir = _resolve_memory_dir(None)
+    nfacts = len(_memory_facts(mdir)) if mdir else 0
+    inv = _tui_inventory(theme)
+    lines = [
+        ("ok", f"theme: {theme}    (accent: {_accent_for(theme)})"),
+        ("info", f"install mode: {emit}"),
+        ("info", f"agents {len(inv['agents'])} · skills {len(inv['skills'])} · laws {len(inv['laws'])}"),
+        ("info", f"memory: {mdir if mdir else '(not found)'}  —  {nfacts} fact(s)"),
+    ]
+    if emit == "opencode-global":
+        am = build._opencode_config_dir() / "AGENT.md"
+        lines.append(("ok" if am.exists() else "warn",
+                      f"AGENT.md: {am}  ({'present' if am.exists() else 'missing'})"))
+    _info_screen(stdscr, curses, pal, "status", lines, "Enter: close")
+
+
 def _tui_loop(stdscr, inv: dict) -> None:
     import curses
     import textwrap
@@ -1672,12 +1867,26 @@ def _tui_loop(stdscr, inv: dict) -> None:
     def clamp(v, lo, hi):
         return max(lo, min(v, hi))
 
-    entries = _tui_entries(inv)
-    selectable = [i for i, (k, _l, _d) in enumerate(entries) if k != "head"]
-    sel = selectable[0] if selectable else 0
+    all_entries = _tui_entries(inv)
+    query = ""
+    filtering = False
+    sel = 0
     list_top = 0
     detail_top = 0
     harness_py = str(Path(__file__).resolve())
+
+    def _filtered():
+        if not query:
+            return all_entries
+        q = query.lower()
+        out = []
+        for k, l, d in all_entries:
+            if k == "head":
+                continue
+            hay = l.lower() + (" " + str(d.get("desc", "")) + " " + str(d.get("title", "")) if d else "")
+            if q in hay:
+                out.append((k, l, d))
+        return out
 
     while True:
         stdscr.erase()
@@ -1709,9 +1918,18 @@ def _tui_loop(stdscr, inv: dict) -> None:
         liw = dx - 1                 # left inner width  (cols 1 .. dx-1)
         riw = w - dx - 3             # right inner width (cols dx+1 .. w-2)
 
+        entries = _filtered()
+        selectable = [i for i, (k, _l, _d) in enumerate(entries) if k != "head"]
+        if not selectable:
+            sel = 0
+        elif sel not in selectable:
+            sel = selectable[0]
+
         # ---- title bar ----
-        put(0, 0, f"  ◆ Geneseed     theme: {inv['theme']}     {len(selectable)} entries  "
-                  .ljust(w - 1), C_BAR)
+        head = f"  ◆ Geneseed   theme {inv['theme']}   {len(selectable)} shown"
+        if query:
+            head += f"   /{query}"
+        put(0, 0, head.ljust(w - 1), C_BAR)
 
         # ---- frame + divider ----
         ch(1, 0, g["ul"], C_FRAME)
@@ -1754,30 +1972,60 @@ def _tui_loop(stdscr, inv: dict) -> None:
                 put(y, 4, label[:liw - 3])
 
         # ---- right detail (wrapped, scrollable) ----
-        kind, label, data = entries[sel]
-        wrapped: list[str] = []
-        for ln in _detail_lines(kind, label, data):
-            wrapped.extend(textwrap.wrap(ln, riw) if ln else [""])
-        detail_top = clamp(detail_top, 0, max(0, len(wrapped) - ch_h))
-        for i in range(ch_h):
-            di = detail_top + i
-            if di >= len(wrapped):
-                break
-            put(2 + i, dx + 2, wrapped[di][:riw], C_TITLE if di == 0 else 0)
-        if detail_top > 0:
-            ch(2, w - 2, g["up"], C_FRAME)
-        if len(wrapped) > detail_top + ch_h:
-            ch(h - 3, w - 2, g["down"], C_FRAME)
+        if not entries:
+            put(2, dx + 2, f"no matches for '{query}'", C_TITLE)
+        else:
+            kind, label, data = entries[sel]
+            wrapped: list[str] = []
+            for ln in _detail_lines(kind, label, data):
+                wrapped.extend(textwrap.wrap(ln, riw) if ln else [""])
+            detail_top = clamp(detail_top, 0, max(0, len(wrapped) - ch_h))
+            for i in range(ch_h):
+                di = detail_top + i
+                if di >= len(wrapped):
+                    break
+                put(2 + i, dx + 2, wrapped[di][:riw], C_TITLE if di == 0 else 0)
+            if detail_top > 0:
+                ch(2, w - 2, g["up"], C_FRAME)
+            if len(wrapped) > detail_top + ch_h:
+                ch(h - 3, w - 2, g["down"], C_FRAME)
 
         # ---- footer ----
-        put(h - 1, 0,
-            "  ↑↓ move    PgUp/PgDn scroll    b build  d doctor  x diff  u update    q quit  "
-            .ljust(w - 1), C_BAR)
+        if filtering:
+            put(h - 1, 0, f"  search: /{query}    Enter apply · Esc clear  ".ljust(w - 1), C_BAR)
+        else:
+            put(h - 1, 0,
+                "  j/k move  / search  ? help  d doctor  x diff  b build  u update  q quit  "
+                .ljust(w - 1), C_BAR)
         stdscr.refresh()
 
         c = stdscr.getch()
-        if c in (ord("q"), 27):
+        if filtering:
+            if c in (curses.KEY_ENTER, 10, 13):
+                filtering = False
+            elif c == 27:
+                filtering = False
+                query = ""
+                detail_top = 0
+            elif c in (curses.KEY_BACKSPACE, 127, 8):
+                query = query[:-1]
+                detail_top = 0
+            elif 32 <= c < 127:
+                query += chr(c)
+                detail_top = 0
+            continue
+        if c == ord("q"):
             return
+        elif c == 27:
+            if query:
+                query = ""
+                detail_top = 0
+            else:
+                return
+        elif c == ord("/"):
+            filtering = True
+        elif c == ord("?"):
+            _help_overlay(stdscr, curses, pal)
         elif c in (curses.KEY_DOWN, ord("j")):
             sel = next((i for i in selectable if i > sel), sel)
             detail_top = 0
@@ -1994,6 +2242,8 @@ _MENU_ACTIONS = [
     ("update", "Update only", "Refresh the scripts + factory from upstream (no setup)."),
     ("bootstrap", "Update & set up", "Pull the latest from upstream, then run the setup wizard."),
     ("build", "Rebuild bundle", "Re-render the harness from src."),
+    ("memory", "Memory", "Browse / search the memory store; delete stale facts."),
+    ("status", "Status", "Theme, install mode, counts, and the memory store."),
     ("quit", "Quit", "Leave."),
     # 'doctor' (Health check) intentionally not listed: it runs after setup and via
     # the browse panel's `d` key. The dispatch below still handles it if re-added.
@@ -2008,18 +2258,25 @@ def _main_menu(stdscr) -> int:
     hp = str(Path(__file__).resolve())
     inst = _installed_defaults()
     theme = inst["theme"] or _default_theme()
+    emit = inst["emit"] or "files"
     pal = _tui_palette(curses, _accent_for(theme))
     while True:
-        sel = _menu(stdscr, curses, f"Geneseed  ·  theme {theme}", _MENU_ACTIONS, default="bootstrap")
+        sel = _menu(stdscr, curses, f"Geneseed  ·  {theme}  ·  {emit}", _MENU_ACTIONS, default="bootstrap")
         if sel in (None, "quit"):
             return 0
         if sel == "browse":
             _tui_loop(stdscr, _tui_inventory(theme))
         elif sel == "doctor":
             _doctor_view(stdscr, curses, pal)
+        elif sel == "memory":
+            _memory_view(stdscr, curses, pal)
+        elif sel == "status":
+            _status_view(stdscr, curses, pal)
         elif sel == "setup":
             _setup_flow(stdscr)
-            theme = _installed_defaults()["theme"] or theme   # reflect a re-theme
+            inst = _installed_defaults()
+            theme = inst["theme"] or theme   # reflect a re-theme
+            emit = inst["emit"] or emit
             pal = _tui_palette(curses, _accent_for(theme))
         elif sel == "diff":
             _diff_view(stdscr, curses, pal)
