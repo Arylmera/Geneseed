@@ -820,36 +820,66 @@ def _theme_options() -> list[tuple[str, str]]:
     return opts or [("neutral", THEME_BLURBS["neutral"])]
 
 
-def cmd_setup(args: argparse.Namespace) -> int:
-    """Guided, dependency-free install wizard: answer a few prompts and it runs the
-    right build, then offers a health check. Nothing is written until you confirm."""
-    if not sys.stdin.isatty():
-        sys.stderr.write("[setup] needs an interactive terminal. Non-interactive? e.g.:\n"
-                         "  python build.py --emit opencode-global --theme neutral\n")
-        return 1
+EMIT_OPTIONS = [
+    ("opencode-global", "OpenCode global config dir — every repo inherits it (recommended)."),
+    ("opencode", "Per-repo .opencode/ layer committed into one repository."),
+    ("files", "Plain bundle for any AGENT.md tool."),
+]
+
+
+def _collect_setup_lines() -> "dict | None":
+    """Line-based selection — the cross-platform / no-curses fallback. Returns the
+    confirmed selection dict, or None if cancelled."""
     print("Geneseed setup — answer a few questions; nothing is written until you confirm.")
     theme = _ask_choice("Theme", _theme_options(), _default_theme())
-    emit = _ask_choice("Install mode",
-                       [("opencode-global", "OpenCode global config dir (recommended)"),
-                        ("opencode", "OpenCode per-repo .opencode/ layer"),
-                        ("files", "plain bundle (any AGENT.md tool)")], "opencode-global")
+    emit = _ask_choice("Install mode", EMIT_OPTIONS, "opencode-global")
     out = root = None
     if emit == "opencode":
         root = _ask("Repo root to install into", ".")
         out = root
     elif emit == "files":
         out = _ask("Output dir for the bundle", "Harness")
-
-    argv = _setup_build_args(theme, emit, out, root)
-    print("\nAbout to run:  python build.py " + " ".join(argv))
+    print("\nAbout to run:  python build.py " + " ".join(_setup_build_args(theme, emit, out, root)))
     if not _confirm("Proceed?", True):
-        print("[setup] aborted — nothing written.")
+        return None
+    return {"theme": theme, "emit": emit, "out": out, "root": root}
+
+
+def _collect_setup() -> "dict | None":
+    """Gather the install selection — a colored curses form where the terminal
+    supports it, else the line prompts. Returns the confirmed selection or None."""
+    if not sys.platform.startswith("win") and sys.stdin.isatty():
+        try:
+            import curses
+            import locale
+            try:
+                locale.setlocale(locale.LC_ALL, "")
+            except locale.Error:
+                pass
+            return curses.wrapper(_setup_tui)
+        except Exception:
+            pass  # any curses failure → fall back to the line wizard
+    return _collect_setup_lines()
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """Guided install wizard — a colored curses form where supported, else line
+    prompts. Nothing is written until you confirm; offers a health check after."""
+    if not sys.stdin.isatty():
+        sys.stderr.write("[setup] needs an interactive terminal. Non-interactive? e.g.:\n"
+                         "  python build.py --emit opencode-global --theme neutral\n")
+        return 1
+    sel = _collect_setup()
+    if not sel:
+        print("[setup] cancelled — nothing written.")
         return 0
+    theme, emit, out, root = sel["theme"], sel["emit"], sel.get("out"), sel.get("root")
+    argv = _setup_build_args(theme, emit, out, root)
+    print("Running:  python build.py " + " ".join(argv))
     rc = run([sys.executable, str(BUILD), *argv]).returncode
     if rc != 0:
         sys.stderr.write("[setup] build failed.\n")
         return rc
-
     print("\nDone.")
     if emit == "opencode-global":
         print('Next: point the learn plugin at the store —\n'
@@ -859,6 +889,190 @@ def cmd_setup(args: argparse.Namespace) -> int:
     if _confirm("\nRun a health check (doctor) now?", True):
         return cmd_doctor(argparse.Namespace(theme=None, bundle=None, no_bundle=False))
     return 0
+
+
+# ---- shared curses helpers (used by the setup form and the control panel) -------
+
+def _draw_box(stdscr, curses, y, x, hh, ww, attr=0) -> None:
+    """Draw a single-line box with ACS characters; all writes are bounds-guarded."""
+    def ch(yy, xx, c):
+        try:
+            stdscr.addch(yy, xx, c, attr)
+        except curses.error:
+            pass
+    x2, y2 = x + ww - 1, y + hh - 1
+    ch(y, x, curses.ACS_ULCORNER)
+    ch(y, x2, curses.ACS_URCORNER)
+    ch(y2, x, curses.ACS_LLCORNER)
+    ch(y2, x2, curses.ACS_LRCORNER)
+    try:
+        stdscr.hline(y, x + 1, curses.ACS_HLINE | attr, ww - 2)
+        stdscr.hline(y2, x + 1, curses.ACS_HLINE | attr, ww - 2)
+        stdscr.vline(y + 1, x, curses.ACS_VLINE | attr, hh - 2)
+        stdscr.vline(y + 1, x2, curses.ACS_VLINE | attr, hh - 2)
+    except curses.error:
+        pass
+
+
+def _tui_palette(curses) -> dict:
+    """Shared colour attributes (frame, bars, selection, headings, icons). Degrades
+    to monochrome attributes when the terminal has no colour."""
+    color = False
+    try:
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, curses.COLOR_CYAN, -1)
+        curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_CYAN)
+        curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)
+        curses.init_pair(4, curses.COLOR_YELLOW, -1)
+        curses.init_pair(5, curses.COLOR_MAGENTA, -1)
+        color = curses.has_colors()
+    except curses.error:
+        color = False
+    cp = curses.color_pair
+    return {
+        "FRAME": cp(1) if color else curses.A_DIM,
+        "BAR": (cp(2) | curses.A_BOLD) if color else curses.A_REVERSE,
+        "SEL": (cp(3) | curses.A_BOLD) if color else curses.A_REVERSE,
+        "TITLE": (cp(4) | curses.A_BOLD) if color else curses.A_BOLD,
+        "ICON": cp(5) if color else 0,
+        "HEAD": (cp(1) | curses.A_BOLD) if color else curses.A_BOLD,
+    }
+
+
+def _menu(stdscr, curses, prompt, options, default=None):
+    """Framed, colored single-choice menu. Returns the chosen key or None (cancel).
+    options: list of (key, label, description); the focused row's description shows."""
+    import textwrap
+    pal = _tui_palette(curses)
+    curses.curs_set(0)
+    idx = 0
+    if default is not None:
+        idx = next((i for i, (k, _l, _d) in enumerate(options) if k == default), 0)
+    while True:
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+
+        def put(y, x, s, a=0):
+            if 0 <= y < h and 0 <= x < w:
+                try:
+                    stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
+                except curses.error:
+                    pass
+
+        if h < 9 or w < 44:
+            put(0, 0, "Terminal too small — enlarge, or press q.", curses.A_BOLD)
+            stdscr.refresh()
+            if stdscr.getch() in (ord("q"), 27):
+                return None
+            continue
+        put(0, 0, "  ◆ Geneseed setup  ".ljust(w - 1), pal["BAR"])
+        _draw_box(stdscr, curses, 1, 0, h - 2, w, pal["FRAME"])
+        put(2, 3, prompt, pal["TITLE"])
+        for i, (_k, label, _desc) in enumerate(options):
+            y = 4 + i
+            if y >= h - 5:
+                break
+            if i == idx:
+                put(y, 2, f" ▸ {label} ".ljust(w - 4)[:w - 4], pal["SEL"])
+            else:
+                put(y, 3, f"  {label}", 0)
+        dy = 4 + len(options) + 1
+        if dy < h - 2:
+            put(dy - 1, 2, "─" * (w - 4), pal["FRAME"])
+            for j, seg in enumerate(textwrap.wrap(options[idx][2], w - 6)[:3]):
+                put(dy + j, 3, seg, curses.A_DIM)
+        put(h - 1, 0, "  ↑↓ move    Enter select    q cancel  ".ljust(w - 1), pal["BAR"])
+        stdscr.refresh()
+        c = stdscr.getch()
+        if c in (ord("q"), 27):
+            return None
+        elif c in (curses.KEY_UP, ord("k")):
+            idx = (idx - 1) % len(options)
+        elif c in (curses.KEY_DOWN, ord("j")):
+            idx = (idx + 1) % len(options)
+        elif c in (curses.KEY_ENTER, 10, 13, ord(" ")):
+            return options[idx][0]
+
+
+def _text_input(stdscr, curses, prompt, default=""):
+    """Framed single-line text input. Returns the entered string (default if empty),
+    or None on Esc."""
+    pal = _tui_palette(curses)
+    curses.curs_set(1)
+    buf = list(default)
+    try:
+        while True:
+            stdscr.erase()
+            h, w = stdscr.getmaxyx()
+
+            def put(y, x, s, a=0):
+                if 0 <= y < h and 0 <= x < w:
+                    try:
+                        stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
+                    except curses.error:
+                        pass
+
+            if h < 7 or w < 30:
+                put(0, 0, "Terminal too small.", curses.A_BOLD)
+                stdscr.refresh()
+                if stdscr.getch() == 27:
+                    return None
+                continue
+            put(0, 0, "  ◆ Geneseed setup  ".ljust(w - 1), pal["BAR"])
+            _draw_box(stdscr, curses, 1, 0, h - 2, w, pal["FRAME"])
+            put(2, 3, prompt, pal["TITLE"])
+            s = "".join(buf)
+            put(4, 3, "› " + s, 0)
+            put(h - 1, 0, "  type a value    Enter accept    Esc cancel  ".ljust(w - 1), pal["BAR"])
+            try:
+                stdscr.move(4, min(w - 2, 5 + len(s)))
+            except curses.error:
+                pass
+            stdscr.refresh()
+            c = stdscr.getch()
+            if c == 27:
+                return None
+            elif c in (curses.KEY_ENTER, 10, 13):
+                return "".join(buf).strip() or default
+            elif c in (curses.KEY_BACKSPACE, 127, 8):
+                if buf:
+                    buf.pop()
+            elif 32 <= c < 127:
+                buf.append(chr(c))
+    finally:
+        curses.curs_set(0)
+
+
+def _setup_tui(stdscr):
+    """Curses install form: theme → mode → (target) → confirm. Returns the selection
+    dict, or None if cancelled at any step."""
+    import curses
+    theme = _menu(stdscr, curses, "Choose a theme",
+                  [(k, k, blurb or "voice theme") for k, blurb in _theme_options()],
+                  default=_default_theme())
+    if theme is None:
+        return None
+    emit = _menu(stdscr, curses, "Choose an install mode",
+                 [(k, k, d) for k, d in EMIT_OPTIONS], default="opencode-global")
+    if emit is None:
+        return None
+    out = root = None
+    if emit == "opencode":
+        root = _text_input(stdscr, curses, "Repo root to install into", ".")
+        if root is None:
+            return None
+        out = root
+    elif emit == "files":
+        out = _text_input(stdscr, curses, "Output directory for the bundle", "Harness")
+        if out is None:
+            return None
+    target = out or root
+    summary = f"theme = {theme}     mode = {emit}" + (f"     target = {target}" if target else "")
+    choice = _menu(stdscr, curses, "Ready to build the harness?",
+                   [("go", "Build now", summary),
+                    ("cancel", "Cancel", "Make no changes and exit.")], default="go")
+    return {"theme": theme, "emit": emit, "out": out, "root": root} if choice == "go" else None
 
 
 # Law heading in the rendered laws file, e.g. "### Rule XVIII — Load the Project Context".
@@ -939,24 +1153,9 @@ def _tui_loop(stdscr, inv: dict) -> None:
         stdscr.keypad(True)
     except curses.error:
         pass
-    color = False
-    try:
-        curses.start_color()
-        curses.use_default_colors()
-        curses.init_pair(1, curses.COLOR_CYAN, -1)                    # frame
-        curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_CYAN)    # bars
-        curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)   # selected
-        curses.init_pair(4, curses.COLOR_YELLOW, -1)                  # detail heading
-        curses.init_pair(5, curses.COLOR_MAGENTA, -1)                 # icons
-        color = curses.has_colors()
-    except curses.error:
-        color = False
-    C_FRAME = curses.color_pair(1) if color else curses.A_DIM
-    C_BAR = (curses.color_pair(2) | curses.A_BOLD) if color else curses.A_REVERSE
-    C_SEL = (curses.color_pair(3) | curses.A_BOLD) if color else curses.A_REVERSE
-    C_TITLE = (curses.color_pair(4) | curses.A_BOLD) if color else curses.A_BOLD
-    C_ICON = curses.color_pair(5) if color else 0
-    C_HEAD = (curses.color_pair(1) | curses.A_BOLD) if color else curses.A_BOLD
+    pal = _tui_palette(curses)
+    C_FRAME, C_BAR, C_SEL = pal["FRAME"], pal["BAR"], pal["SEL"]
+    C_TITLE, C_ICON, C_HEAD = pal["TITLE"], pal["ICON"], pal["HEAD"]
 
     ICON = {"agent": "◆", "skill": "✦", "law": "§"}
     SECT = {"AGENTS": "⚙", "SKILLS": "✦", "LAWS": "§"}

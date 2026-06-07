@@ -19,8 +19,9 @@ internals see [adapters/opencode/](adapters/opencode/README.md).
 ## Choose your path
 
 **Easiest:** run `./geneseed setup` (or `python rituals/harness.py setup`) for a
-guided, dependency-free wizard — it asks for a theme and install mode, runs the right
-build, and offers a health check. It works on every OS. Prefer to do it by hand?
+guided, dependency-free wizard — a colored curses form on a Unix terminal (plain
+text prompts elsewhere) that asks for a theme and install mode, runs the right build,
+and offers a health check. It works on every OS. Prefer to do it by hand?
 Pick a path below. Already installed and want to refresh first? **`./geneseed
 bootstrap`** updates everything from upstream (sync + upgrade) and then runs the
 wizard — one command, start to finish. Bare **`./geneseed`** does exactly this: it
