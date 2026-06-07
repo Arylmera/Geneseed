@@ -32,5 +32,6 @@
   "DESC_TDD": "Drive implementation with tests — write the failing test first, then the minimum code to pass.",
   "DESC_HANDOFF": "Snapshot task state so a fresh context — or another agent — can resume in one read.",
   "DESC_SHIP": "Open a pull request with a structured body, or finish and merge a branch, once the change is verified.",
-  "DESC_RELEASE": "Cut a release — bump the version, update the changelog, and tag — keeping all three in sync."
+  "DESC_RELEASE": "Cut a release — bump the version, update the changelog, and tag — keeping all three in sync.",
+  "DESC_INGEST": "Convert a PDF, Office, or web document into clean markdown before reading it."
 }
