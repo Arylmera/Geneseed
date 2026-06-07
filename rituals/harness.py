@@ -707,59 +707,74 @@ def _owned_set(d: Path) -> set:
         return set()
 
 
-def cmd_diff(args: argparse.Namespace) -> int:
-    """Report how a DEPLOYED (ported) global harness differs from a fresh render of
-    the current source — so edits made in place can be reviewed and back-ported to
-    src/. Compares only the files Geneseed owns (per each side's manifest). Pass the
-    theme the deployment used so voice tokens line up; `--full` shows unified diffs."""
-    target = Path(args.target).expanduser() if args.target else build._opencode_config_dir()
+def _diff_collect(target=None, theme=None):
+    """Compute the deployed-vs-source diff. Returns (target, theme, files) where files
+    is a sorted list of {rel, status (edited|added|missing), diff (unified lines)} —
+    or None when there is no deployed global install at target."""
+    target = Path(target).expanduser() if target else build._opencode_config_dir()
     if not (target / build.GLOBAL_MANIFEST).exists():
-        sys.stderr.write(
-            f"[diff] no global Geneseed install at {target} (no {build.GLOBAL_MANIFEST}). "
-            f"Pass --target, or run `--emit opencode-global` first.\n")
-        return 1
-
-    theme = args.theme
+        return target, theme, None
     if not theme:
         cfgp = ROOT / "harness.config.json"
         theme = (json.loads(cfgp.read_text(encoding="utf-8")).get("theme", "neutral")
                  if cfgp.exists() else "neutral")
-
+    files = []
     with tempfile.TemporaryDirectory() as tmp:
         expected = Path(tmp) / "expected"
         with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's own log
             build.emit_opencode_global(theme, out=Path(tmp) / "bundle", cfg=expected)
-        edited, added, missing, diffs = [], [], [], []
         for rel in sorted(_owned_set(target) | _owned_set(expected)):
             a, b = target / rel, expected / rel
             if a.is_file() and b.is_file():
                 ta = a.read_text(encoding="utf-8", errors="replace")
                 tb = b.read_text(encoding="utf-8", errors="replace")
                 if ta != tb:
-                    edited.append(rel)
-                    if args.full:
-                        diffs += list(difflib.unified_diff(
-                            tb.splitlines(), ta.splitlines(),
-                            fromfile=f"source/{rel}", tofile=f"deployed/{rel}", lineterm=""))
+                    diff = list(difflib.unified_diff(
+                        tb.splitlines(), ta.splitlines(),
+                        fromfile=f"source/{rel}", tofile=f"deployed/{rel}", lineterm=""))
+                    files.append({"rel": rel, "status": "edited", "diff": diff})
             elif a.is_file():
-                added.append(rel)
+                body = a.read_text(encoding="utf-8", errors="replace").splitlines()
+                files.append({"rel": rel, "status": "added",
+                              "diff": ["(only in deployed — your addition)", ""]
+                              + ["+" + ln for ln in body]})
             else:
-                missing.append(rel)
+                files.append({"rel": rel, "status": "missing",
+                              "diff": ["(in source, not deployed — re-emit to add)"]})
+    files.sort(key=lambda f: f["rel"])
+    return target, theme, files
 
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    """Report how a DEPLOYED (ported) global harness differs from a fresh render of
+    the current source — so edits made in place can be reviewed and back-ported to
+    src/. `--full` shows the unified diffs. (The browse panel / main menu show this
+    interactively, file-by-file.)"""
+    target, theme, files = _diff_collect(args.target, args.theme)
+    if files is None:
+        sys.stderr.write(
+            f"[diff] no global Geneseed install at {target} (no {build.GLOBAL_MANIFEST}). "
+            f"Pass --target, or run `--emit opencode-global` first.\n")
+        return 1
+    edited = [f for f in files if f["status"] == "edited"]
+    added = [f for f in files if f["status"] == "added"]
+    missing = [f for f in files if f["status"] == "missing"]
     print(f"[diff] deployed {target}  vs  source (theme: {theme})")
     print(f"[diff] {len(edited)} edited, {len(added)} added-in-deployed, "
           f"{len(missing)} missing-from-deployed")
-    for rel in edited:
-        print(f"  ~ {rel}   (edited in deployed — review to back-port)")
-    for rel in added:
-        print(f"  + {rel}   (only in deployed — your addition)")
-    for rel in missing:
-        print(f"  - {rel}   (in source, not deployed — re-emit to add)")
-    if args.full and diffs:
-        print("\n--- unified diffs (source -> deployed) ---")
-        print("\n".join(diffs))
+    for f in edited:
+        print(f"  ~ {f['rel']}   (edited in deployed — review to back-port)")
+    for f in added:
+        print(f"  + {f['rel']}   (only in deployed — your addition)")
+    for f in missing:
+        print(f"  - {f['rel']}   (in source, not deployed — re-emit to add)")
+    if args.full:
+        for f in edited:
+            print(f"\n--- {f['rel']} (source -> deployed) ---")
+            print("\n".join(f["diff"]))
     elif edited:
         print("\nRun with --full to see the line-level diffs.")
+    return 0
     return 0
 
 
@@ -1535,6 +1550,106 @@ def _setup_flow(stdscr) -> int:
     return 0
 
 
+def _diff_view(stdscr, curses, pal) -> None:
+    """Two-pane review of local edits: changed files on the left, the selected file's
+    colored unified diff on the right (j/k file, PgUp/PgDn scroll, q close)."""
+    target, _theme, files = _diff_collect()
+    if files is None:
+        _info_screen(stdscr, curses, pal, "review local edits",
+                     [("warn", f"No deployed global install at {target}."),
+                      ("info", "Diff compares a deployed global harness against a fresh render of src.")],
+                     "Enter: close")
+        return
+    if not files:
+        _info_screen(stdscr, curses, pal, "review local edits",
+                     [("ok", "No differences — the deployed harness matches source.")],
+                     "Enter: close")
+        return
+    g = _bx(curses)
+    sym = {"edited": "~", "added": "+", "missing": "-"}
+    sel = 0
+    dtop = 0
+    list_top = 0
+    while True:
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+
+        def put(y, x, s, a=0):
+            if 0 <= y < h and 0 <= x < w:
+                try:
+                    stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
+                except curses.error:
+                    pass
+
+        if h < 6 or w < 40:
+            put(0, 0, "Terminal too small.", curses.A_BOLD)
+            stdscr.refresh()
+            if stdscr.getch() in (ord("q"), 27):
+                return
+            continue
+        put(0, 0, f"  ◆ Review local edits  ·  {len(files)} changed  ".ljust(w - 1), pal["BAR"])
+        dx = max(16, min(40, w // 3))
+        body_h = h - 2
+        if sel < list_top:
+            list_top = sel
+        elif sel >= list_top + body_h:
+            list_top = sel - body_h + 1
+        list_top = max(0, min(list_top, max(0, len(files) - body_h)))
+        for i in range(body_h):
+            fi = list_top + i
+            if fi >= len(files):
+                break
+            f = files[fi]
+            st = f["status"]
+            if fi == sel:
+                attr = pal["SEL"]
+            elif st == "added":
+                attr = pal["OK"]
+            elif st == "missing":
+                attr = pal["FAIL"]
+            else:
+                attr = pal["TITLE"]
+            put(1 + i, 0, f" {sym[st]} {f['rel']}".ljust(dx)[:dx], attr)
+        for r in range(1, h - 1):
+            try:
+                stdscr.addch(r, dx, g["v"], pal["FRAME"])
+            except curses.error:
+                pass
+        diff = files[sel]["diff"]
+        rx, rw = dx + 2, max(4, w - dx - 3)
+        dtop = max(0, min(dtop, max(0, len(diff) - body_h)))
+        for i in range(body_h):
+            di = dtop + i
+            if di >= len(diff):
+                break
+            ln = diff[di]
+            if ln[:3] in ("+++", "---") or ln.startswith("@@"):
+                a = pal["TITLE"]
+            elif ln.startswith("+"):
+                a = pal["OK"]
+            elif ln.startswith("-"):
+                a = pal["FAIL"]
+            else:
+                a = 0
+            put(1 + i, rx, ln[:rw], a)
+        more = "  more" if len(diff) > dtop + body_h else ""
+        put(h - 1, 0, ("  j/k file · PgUp/PgDn scroll · q close" + more).ljust(w - 1), pal["BAR"])
+        stdscr.refresh()
+        c = stdscr.getch()
+        if c in (ord("q"), 27, curses.KEY_ENTER, 10, 13):
+            return
+        elif c in (curses.KEY_DOWN, ord("j")):
+            sel = min(sel + 1, len(files) - 1)
+            dtop = 0
+        elif c in (curses.KEY_UP, ord("k")):
+            sel = max(sel - 1, 0)
+            dtop = 0
+        elif c == curses.KEY_NPAGE:
+            dtop += body_h
+        elif c == curses.KEY_PPAGE:
+            dtop = max(0, dtop - body_h)
+
+
 def _tui_loop(stdscr, inv: dict) -> None:
     import curses
     import textwrap
@@ -1681,12 +1796,14 @@ def _tui_loop(stdscr, inv: dict) -> None:
             detail_top = max(0, detail_top - ch_h)
         elif c == ord("d"):
             _doctor_view(stdscr, curses, pal)          # in-TUI health check with progress bar
-        elif c in (ord("b"), ord("x"), ord("u")):
+        elif c == ord("x"):
+            _diff_view(stdscr, curses, pal)            # in-TUI review of local edits
+        elif c in (ord("b"), ord("u")):
             curses.def_prog_mode()
             curses.endwin()
             if c == ord("b"):
                 run([sys.executable, str(BUILD)])
-            elif c == ord("u"):
+            else:
                 # Update everything (sync + upgrade) — network op, so confirm first.
                 root = Path(harness_py).resolve().parent.parent
                 try:
@@ -1696,8 +1813,6 @@ def _tui_loop(stdscr, inv: dict) -> None:
                 if ans[:1] == "y":
                     run(["bash", str(root / "sync-self.sh")])
                     run(["bash", str(root / "upgrade.sh")])
-            else:
-                run([sys.executable, harness_py, "diff"])
             try:
                 input("\n[press Enter to return to the panel] ")
             except EOFError:
@@ -1906,10 +2021,12 @@ def _main_menu(stdscr) -> int:
             _setup_flow(stdscr)
             theme = _installed_defaults()["theme"] or theme   # reflect a re-theme
             pal = _tui_palette(curses, _accent_for(theme))
-        elif sel in ("build", "diff"):
+        elif sel == "diff":
+            _diff_view(stdscr, curses, pal)
+        elif sel == "build":
             curses.def_prog_mode()
             curses.endwin()
-            run([sys.executable, str(BUILD)] if sel == "build" else [sys.executable, hp, "diff"])
+            run([sys.executable, str(BUILD)])
             try:
                 input("\n[press Enter to return to the menu] ")
             except EOFError:
