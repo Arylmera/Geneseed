@@ -1547,6 +1547,16 @@ def cmd_tui(args: argparse.Namespace) -> int:
 
 # ---- bootstrap: update everything with a curses progress screen, then setup -------
 
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+
+
+def _clean_line(s: str) -> str:
+    """Strip ANSI escapes and control characters from streamed subprocess output so
+    they can't garble the curses log pane."""
+    s = ANSI_RE.sub("", s)
+    return "".join(ch if (ch == "\t" or ord(ch) >= 32) else " " for ch in s)
+
+
 def _bootstrap_draw(stdscr, curses, pal, steps, status, log) -> None:
     stdscr.erase()
     h, w = stdscr.getmaxyx()
@@ -1565,8 +1575,9 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log) -> None:
         attr = pal["HEAD"] if st == "running" else (curses.A_DIM if st == "pending" else 0)
         put(2 + i, 2, f"{sym.get(st, '·')}  {title}", attr)
     done = sum(1 for s in status if s in ("done", "failed"))
+    w_bar = max(10, min(40, w - 20))
     put(2 + len(steps), 2,
-        f"[{_progress_bar(done / len(steps) if steps else 0.0, 24)}] {done}/{len(steps)}",
+        f"[{_progress_bar(done / len(steps) if steps else 0.0, w_bar)}] {done}/{len(steps)}",
         pal["HEAD"])
     top = 2 + len(steps) + 2
     if h - top - 1 >= 3:
@@ -1588,11 +1599,17 @@ def _run_logged(stdscr, curses, pal, steps, status, log, cmd) -> int:
         log.append(f"[error] cannot run {cmd[0]}: {e}")
         _bootstrap_draw(stdscr, curses, pal, steps, status, log)
         return 1
+    import time
+    last = 0.0
     for line in p.stdout or []:
-        log.append(line.rstrip("\n"))
+        log.append(_clean_line(line.rstrip("\n")))
         if len(log) > 400:
             del log[: len(log) - 400]
-        _bootstrap_draw(stdscr, curses, pal, steps, status, log)
+        now = time.monotonic()
+        if now - last > 0.06:        # throttle redraws to avoid flicker on fast output
+            _bootstrap_draw(stdscr, curses, pal, steps, status, log)
+            last = now
+    _bootstrap_draw(stdscr, curses, pal, steps, status, log)   # final frame
     return p.wait()
 
 
@@ -1612,14 +1629,19 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
         _bootstrap_draw(stdscr, curses, pal, steps, status, log)
         status[i] = "done" if _run_logged(stdscr, curses, pal, steps, status, log, cmd) == 0 else "failed"
         _bootstrap_draw(stdscr, curses, pal, steps, status, log)
+    failed = any(s == "failed" for s in status)
     h, w = stdscr.getmaxyx()
+    msg = ("  a step FAILED — press any key to continue to setup  " if failed
+           else "  update complete — continuing to setup…  ")
     try:
-        stdscr.addnstr(h - 1, 0, "  update complete — press any key to continue to setup  "
-                       .ljust(w - 1), max(0, w - 1), pal["BAR"])
+        stdscr.addnstr(h - 1, 0, msg.ljust(w - 1), max(0, w - 1), pal["BAR"])
     except curses.error:
         pass
     stdscr.refresh()
-    stdscr.getch()
+    if failed:
+        stdscr.getch()          # pause so the error is readable
+    else:
+        curses.napms(700)       # brief beat, then continue automatically
 
 
 def _bootstrap_plain(here, ref) -> None:
