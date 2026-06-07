@@ -820,10 +820,30 @@ def _theme_options() -> list[tuple[str, str]]:
     return opts or [("neutral", THEME_BLURBS["neutral"])]
 
 
+def _theme_from_agent(agent_md: Path) -> "str | None":
+    """Infer a deployed harness's theme by matching each theme's unique LOADED_SIGIL
+    line in its AGENT.md — so an install made before .geneseed-theme markers existed
+    (or one whose marker was lost) is still recognised."""
+    try:
+        text = agent_md.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for tf in sorted(build.THEMES.glob("*.json")):
+        try:
+            sig = json.loads(tf.read_text(encoding="utf-8")).get("LOADED_SIGIL", "")
+        except (json.JSONDecodeError, OSError):
+            continue
+        if sig and sig in text:
+            return tf.stem
+    return None
+
+
 def _installed_defaults() -> dict:
     """Best-effort detection of the CURRENT install's theme + emit, so the wizard can
-    pre-select them. Reads the .geneseed-theme / .geneseed-emit markers from the global
-    config dir first (the recommended install), then common bundle locations."""
+    pre-select them. Prefers the .geneseed-* markers; falls back to inferring the theme
+    from a deployed AGENT.md's sigil and the emit from a global manifest — so installs
+    predating the markers are still recognised. Checks the global config dir first
+    (the recommended install), then common bundle locations."""
     found = {"theme": None, "emit": None}
     candidates = []
     try:
@@ -832,14 +852,21 @@ def _installed_defaults() -> dict:
         pass
     candidates += [ROOT / "Harness", ROOT.parent / "Harness", Path.cwd() / "Harness"]
     for base in candidates:
-        for key, marker in (("theme", ".geneseed-theme"), ("emit", ".geneseed-emit")):
-            if found[key] is None:
-                try:
-                    p = base / marker
-                    if p.is_file():
-                        found[key] = p.read_text(encoding="utf-8").strip() or None
-                except OSError:
-                    pass
+        try:
+            if found["emit"] is None:
+                em = base / ".geneseed-emit"
+                if em.is_file():
+                    found["emit"] = em.read_text(encoding="utf-8").strip() or None
+                elif (base / ".geneseed-manifest.json").is_file():
+                    found["emit"] = "opencode-global"
+            if found["theme"] is None:
+                tm = base / ".geneseed-theme"
+                if tm.is_file():
+                    found["theme"] = tm.read_text(encoding="utf-8").strip() or None
+                else:
+                    found["theme"] = _theme_from_agent(base / "AGENT.md")
+        except OSError:
+            pass
     return found
 
 
@@ -1382,6 +1409,114 @@ def cmd_tui(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---- bootstrap: update everything with a curses progress screen, then setup -------
+
+def _bootstrap_draw(stdscr, curses, pal, steps, status, log) -> None:
+    stdscr.erase()
+    h, w = stdscr.getmaxyx()
+
+    def put(y, x, s, a=0):
+        if 0 <= y < h and 0 <= x < w:
+            try:
+                stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
+            except curses.error:
+                pass
+
+    put(0, 0, "  ◆ Geneseed — updating  ".ljust(w - 1), pal["BAR"])
+    sym = {"pending": "·", "running": "▶", "done": "✓", "failed": "✗"}
+    for i, (title, _c) in enumerate(steps):
+        st = status[i]
+        attr = pal["HEAD"] if st == "running" else (curses.A_DIM if st == "pending" else 0)
+        put(2 + i, 2, f"{sym.get(st, '·')}  {title}", attr)
+    top = 2 + len(steps) + 1
+    if h - top - 1 >= 3:
+        _draw_box(stdscr, curses, top, 0, h - top - 1, w, pal["FRAME"])
+        put(top, 2, " output ", pal["HEAD"])
+        inner = h - top - 3
+        for j, ln in enumerate(log[-inner:]):
+            put(top + 1 + j, 2, ln[:w - 4], curses.A_DIM)
+    put(h - 1, 0, "  working… please wait  ".ljust(w - 1), pal["BAR"])
+    stdscr.refresh()
+
+
+def _run_logged(stdscr, curses, pal, steps, status, log, cmd) -> int:
+    """Run cmd, streaming its output into the progress screen's log pane."""
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, bufsize=1)
+    except OSError as e:
+        log.append(f"[error] cannot run {cmd[0]}: {e}")
+        _bootstrap_draw(stdscr, curses, pal, steps, status, log)
+        return 1
+    for line in p.stdout or []:
+        log.append(line.rstrip("\n"))
+        if len(log) > 400:
+            del log[: len(log) - 400]
+        _bootstrap_draw(stdscr, curses, pal, steps, status, log)
+    return p.wait()
+
+
+def _bootstrap_progress(stdscr, here, ref) -> None:
+    import curses
+    pal = _tui_palette(curses)
+    curses.curs_set(0)
+    if ref is None:
+        ref = _text_input(stdscr, curses, "Update from which upstream ref?", "main") or "main"
+        curses.curs_set(0)
+    steps = [("Refresh orchestration scripts", ["bash", str(here / "sync-self.sh"), ref]),
+             ("Update factory & rebuild bundle", ["bash", str(here / "upgrade.sh"), ref])]
+    status = ["pending"] * len(steps)
+    log: list[str] = []
+    for i, (_title, cmd) in enumerate(steps):
+        status[i] = "running"
+        _bootstrap_draw(stdscr, curses, pal, steps, status, log)
+        status[i] = "done" if _run_logged(stdscr, curses, pal, steps, status, log, cmd) == 0 else "failed"
+        _bootstrap_draw(stdscr, curses, pal, steps, status, log)
+    h, w = stdscr.getmaxyx()
+    try:
+        stdscr.addnstr(h - 1, 0, "  update complete — press any key to continue to setup  "
+                       .ljust(w - 1), max(0, w - 1), pal["BAR"])
+    except curses.error:
+        pass
+    stdscr.refresh()
+    stdscr.getch()
+
+
+def _bootstrap_plain(here, ref) -> None:
+    """Non-curses fallback: run the update steps with plain output (never fatal)."""
+    r = ref or "main"
+    print("[geneseed] refreshing orchestration scripts ...")
+    run(["bash", str(here / "sync-self.sh"), r])
+    print("[geneseed] updating factory + rebuilding ...")
+    run(["bash", str(here / "upgrade.sh"), r])
+
+
+def cmd_bootstrap(args: argparse.Namespace) -> int:
+    """Update everything (sync scripts + upgrade), shown in a curses progress screen
+    where supported, then hand off to a FRESH setup process so the wizard runs the
+    just-updated code. `--no-setup` stops after the update."""
+    here = Path(__file__).resolve().parent.parent
+    if (not sys.platform.startswith("win")) and sys.stdin.isatty():
+        try:
+            import curses
+            import locale
+            try:
+                locale.setlocale(locale.LC_ALL, "")
+            except locale.Error:
+                pass
+            curses.wrapper(_bootstrap_progress, here, args.ref)
+        except Exception as e:
+            sys.stderr.write(f"[bootstrap] progress UI unavailable ({e}); running plainly.\n")
+            _bootstrap_plain(here, args.ref)
+    else:
+        _bootstrap_plain(here, args.ref)
+    if not args.no_setup:
+        # Re-exec the freshly-updated harness so setup uses the new code (this running
+        # process still holds the pre-update modules in memory).
+        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve()), "setup"])
+    return 0
+
+
 def main() -> int:
     # Force UTF-8 I/O so injected docs / templates with unicode (sigils, em-dashes)
     # do not crash on a legacy code page (e.g. Windows cp1252). Dependency-free.
@@ -1440,6 +1575,14 @@ def main() -> int:
     tu = sub.add_parser("tui", help="full-screen curses control panel (Unix)")
     tu.add_argument("--theme", default=None, help="theme to show (default: harness.config.json)")
     tu.set_defaults(fn=cmd_tui)
+
+    bs = sub.add_parser("bootstrap", help="update everything (sync + upgrade) with a "
+                                          "progress UI, then run setup")
+    bs.add_argument("ref", nargs="?", default=None,
+                    help="upstream ref (default: main; asked interactively if omitted)")
+    bs.add_argument("extra", nargs="*", help=argparse.SUPPRESS)  # tolerate a legacy [theme] arg
+    bs.add_argument("--no-setup", action="store_true", help="update only; skip the setup wizard")
+    bs.set_defaults(fn=cmd_bootstrap)
 
     args = ap.parse_args()
     return args.fn(args)
