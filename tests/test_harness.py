@@ -528,5 +528,36 @@ class DiscoverContextTests(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class TuiHelperTests(unittest.TestCase):
+    def test_clamp_keeps_window_in_range(self):
+        # plenty of room → no scroll
+        self.assertEqual(harness._clamp(0, 5, 10), 0)
+        self.assertEqual(harness._clamp(7, 5, 10), 0)     # total < view → pinned to 0
+        # more rows than fit → clamp to last full window
+        self.assertEqual(harness._clamp(0, 100, 10), 0)
+        self.assertEqual(harness._clamp(95, 100, 10), 90)
+        self.assertEqual(harness._clamp(-4, 100, 10), 0)  # never negative
+
+    def test_wrap_lines_preserves_blanks_and_wraps(self):
+        out = harness._wrap_lines(["short", "", "a b c d e f g"], 5)
+        self.assertEqual(out[0], "short")
+        self.assertEqual(out[1], "")                      # blank line kept
+        self.assertGreater(len(out), 3)                   # long line wrapped to >1 row
+        # degenerate width never raises
+        self.assertEqual(harness._wrap_lines([""], 0), [""])
+
+    def test_glyphs_honour_ascii_mode(self):
+        uni = harness._glyphs(False)
+        asc = harness._glyphs(True)
+        self.assertEqual(set(uni), set(asc))              # same keys both modes
+        self.assertEqual(uni["sel"], "▸")
+        self.assertEqual(asc["sel"], ">")
+        # ASCII mode must emit only ASCII (the whole point of the flag)
+        self.assertTrue(all(ord(c) < 128 for v in asc.values() for c in v))
+        # the back-compat aliases track the table
+        self.assertEqual(harness._SEL_G, harness._GLYPH["sel"])
+        self.assertEqual(harness._MORE_G, harness._GLYPH["down"])
+
+
 if __name__ == "__main__":
     unittest.main()

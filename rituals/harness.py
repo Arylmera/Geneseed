@@ -1355,8 +1355,103 @@ def cmd_setup(args: argparse.Namespace) -> int:
 # ---- shared curses helpers (used by the setup form and the control panel) -------
 
 _TUI_ASCII = bool(os.environ.get("GENESEED_TUI_ASCII"))
-_SEL_G = ">" if _TUI_ASCII else "▸"
-_MORE_G = "v" if _TUI_ASCII else "▾"
+
+# One glyph table for the whole TUI — every non-ASCII glyph swaps to a plain-ASCII
+# stand-in when GENESEED_TUI_ASCII is set (for fonts that render them as tofu). This is
+# the single source of truth: screens read from `_GLYPH` and never hardcode a glyph.
+def _glyphs(ascii_mode):
+    """The TUI glyph table for the given mode — unicode by default, plain-ASCII
+    stand-ins when ascii_mode is set. Pure, so it is unit-tested."""
+    return {
+        "sel":   ">" if ascii_mode else "▸",
+        "up":    "^" if ascii_mode else "▴",
+        "down":  "v" if ascii_mode else "▾",
+        "head":  "*" if ascii_mode else "◆",
+        "agent": "@" if ascii_mode else "◆",
+        "skill": "*" if ascii_mode else "✦",
+        "law":   "#" if ascii_mode else "§",
+    }
+
+
+_GLYPH = _glyphs(_TUI_ASCII)
+_SEL_G = _GLYPH["sel"]       # back-compat aliases
+_MORE_G = _GLYPH["down"]
+
+
+def _put(stdscr, y, x, s, attr=0):
+    """The one bounds-guarded draw primitive for every TUI screen. Clips to the window
+    and swallows the edge-cell curses.error so a write to the last column never crashes."""
+    import curses
+    h, w = stdscr.getmaxyx()
+    if 0 <= y < h and 0 <= x < w:
+        try:
+            stdscr.addnstr(y, x, s, max(0, w - x - 1), attr)
+        except curses.error:
+            pass
+
+
+def _topbar(stdscr, pal, text):
+    """Top title bar (row 0), with the consistent badge glyph."""
+    _, w = stdscr.getmaxyx()
+    _put(stdscr, 0, 0, f"  {_GLYPH['head']} {text}  ".ljust(w - 1), pal["BAR"])
+
+
+def _botbar(stdscr, pal, hints):
+    """Bottom hint bar (row h-1). `hints` is a ready string, or a list of (key, label)
+    pairs joined uniformly so every screen's footer reads the same way."""
+    h, w = stdscr.getmaxyx()
+    text = hints if isinstance(hints, str) else " · ".join(f"{k} {lbl}" for k, lbl in hints)
+    _put(stdscr, h - 1, 0, f"  {text}  ".ljust(w - 1), pal["BAR"])
+
+
+def _clamp(top, total, view_h):
+    """Clamp a scroll offset so the [top, top+view_h) window stays inside `total` rows."""
+    return max(0, min(top, max(0, total - view_h)))
+
+
+def _wrap_lines(lines, width):
+    """Flatten raw lines into width-wrapped display lines (blank lines preserved)."""
+    import textwrap
+    out = []
+    for ln in lines:
+        if ln:
+            out.extend(textwrap.wrap(ln, max(1, width)) or [""])
+        else:
+            out.append("")
+    return out
+
+
+def _too_small(stdscr, min_h, min_w):
+    """Draw the 'enlarge the window' guard and return True when the terminal is below
+    the minimum; the caller then refreshes, reads a key, and continues/returns."""
+    import curses
+    h, w = stdscr.getmaxyx()
+    if h < min_h or w < min_w:
+        _put(stdscr, 0, 0, "Terminal too small — enlarge the window, or press q.", curses.A_BOLD)
+        return True
+    return False
+
+
+def _vdiv(stdscr, pal, dx, y0, y1):
+    """Vertical divider at column dx over rows [y0, y1) — the two-pane split."""
+    import curses
+    g = _bx(curses)
+    for r in range(y0, y1):
+        try:
+            stdscr.addch(r, dx, g["v"], pal["FRAME"])
+        except curses.error:
+            pass
+
+
+def _scrollbar(stdscr, pal, x, y0, view_h, top, total):
+    """Consistent ▴/▾ scroll markers at column x: ▴ at the top row when scrolled down,
+    ▾ at the last visible row when more remains below. No-op when everything fits."""
+    if total <= view_h:
+        return
+    if top > 0:
+        _put(stdscr, y0, x, _GLYPH["up"], pal["FRAME"])
+    if top + view_h < total:
+        _put(stdscr, y0 + view_h - 1, x, _GLYPH["down"], pal["FRAME"])
 
 
 def _bx(curses) -> dict:
@@ -1481,19 +1576,14 @@ def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, a=0):
-            if 0 <= y < h and 0 <= x < w:
-                try:
-                    stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
-                except curses.error:
-                    pass
+            _put(stdscr, y, x, s, a)
 
-        if h < 9 or w < 44:
-            put(0, 0, "Terminal too small — enlarge, or press q.", curses.A_BOLD)
+        if _too_small(stdscr, 9, 44):
             stdscr.refresh()
             if stdscr.getch() in (ord("q"), 27):
                 return None
             continue
-        put(0, 0, f"  ◆ {prompt}  ".ljust(w - 1), pal["BAR"])
+        _topbar(stdscr, pal, prompt)
         _draw_box(stdscr, curses, 1, 0, h - 2, w, pal["FRAME"])
 
         if detail_fn:
@@ -1517,7 +1607,7 @@ def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
                     break
                 label = options[oi][1]
                 if oi == idx:
-                    put(2 + vi, 1, f" ▸ {label} ".ljust(liw)[:liw], pal["SEL"])
+                    put(2 + vi, 1, f" {_GLYPH['sel']} {label} ".ljust(liw)[:liw], pal["SEL"])
                 else:
                     put(2 + vi, 2, f" {label}"[:liw - 1], 0)
             rx, rw = dx + 2, max(4, w - dx - 3)
@@ -1549,7 +1639,7 @@ def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
                 for j, seg in enumerate(textwrap.wrap(options[idx][2], w - 6)[:3]):
                     put(dy + j, 3, seg, curses.A_DIM)
 
-        put(h - 1, 0, "  ↑↓ move    Enter select    q cancel  ".ljust(w - 1), pal["BAR"])
+        _botbar(stdscr, pal, "↑↓ move · Enter select · q cancel")
         stdscr.refresh()
         c = stdscr.getch()
         if c in (ord("q"), 27):
@@ -1574,24 +1664,19 @@ def _text_input(stdscr, curses, prompt, default=""):
             h, w = stdscr.getmaxyx()
 
             def put(y, x, s, a=0):
-                if 0 <= y < h and 0 <= x < w:
-                    try:
-                        stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
-                    except curses.error:
-                        pass
+                _put(stdscr, y, x, s, a)
 
-            if h < 7 or w < 30:
-                put(0, 0, "Terminal too small.", curses.A_BOLD)
+            if _too_small(stdscr, 7, 30):
                 stdscr.refresh()
                 if stdscr.getch() == 27:
                     return None
                 continue
-            put(0, 0, "  ◆ Geneseed setup  ".ljust(w - 1), pal["BAR"])
+            _topbar(stdscr, pal, "Geneseed setup")
             _draw_box(stdscr, curses, 1, 0, h - 2, w, pal["FRAME"])
             put(2, 3, prompt, pal["TITLE"])
             s = "".join(buf)
             put(4, 3, "› " + s, 0)
-            put(h - 1, 0, "  type a value    Enter accept    Esc cancel  ".ljust(w - 1), pal["BAR"])
+            _botbar(stdscr, pal, "type a value · Enter accept · Esc cancel")
             try:
                 stdscr.move(4, min(w - 2, 5 + len(s)))
             except curses.error:
@@ -1720,12 +1805,7 @@ def _doctor_view(stdscr, curses, pal) -> None:
     import textwrap
 
     def put(y, x, s, a=0):
-        h, w = stdscr.getmaxyx()
-        if 0 <= y < h and 0 <= x < w:
-            try:
-                stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
-            except curses.error:
-                pass
+        _put(stdscr, y, x, s, a)
 
     state = {"i": 0, "total": 1, "label": "starting"}
 
@@ -1733,11 +1813,11 @@ def _doctor_view(stdscr, curses, pal) -> None:
         state.update(i=i, total=total, label=label)
         stdscr.erase()
         h, w = stdscr.getmaxyx()
-        put(0, 0, "  ◆ Geneseed — health check  ".ljust(w - 1), pal["BAR"])
+        _topbar(stdscr, pal, "Geneseed — health check")
         frac = i / total if total else 0.0
         put(2, 3, f"Validating:  {label}", pal["TITLE"])
         put(4, 3, f"[{_progress_bar(frac, max(10, min(40, w - 22)))}] {int(frac * 100):3d}%", pal["HEAD"])
-        put(h - 1, 0, "  please wait…  ".ljust(w - 1), pal["BAR"])
+        _botbar(stdscr, pal, "please wait…")
         stdscr.refresh()
 
     themes, problems = _doctor_collect(on_progress=on_progress)
@@ -1759,7 +1839,7 @@ def _doctor_view(stdscr, curses, pal) -> None:
     while True:
         stdscr.erase()
         h, w = stdscr.getmaxyx()
-        put(0, 0, "  ◆ Geneseed — health check  ".ljust(w - 1), pal["BAR"])
+        _topbar(stdscr, pal, "Geneseed — health check")
         flat = []
         for kind, text in lines:
             if not text:
@@ -1768,7 +1848,7 @@ def _doctor_view(stdscr, curses, pal) -> None:
             for j, seg in enumerate(textwrap.wrap(text, max(10, w - 8)) or [""]):
                 flat.append((kind, seg if j == 0 else "  " + seg))
         body_h = max(1, h - 2)
-        top = max(0, min(top, max(0, len(flat) - body_h)))
+        top = _clamp(top, len(flat), body_h)
         for r in range(body_h):
             di = top + r
             if di >= len(flat):
@@ -1780,8 +1860,8 @@ def _doctor_view(stdscr, curses, pal) -> None:
                 put(1 + r, 2, f"✗ {seg}", pal["FAIL"])
             else:
                 put(1 + r, 2, seg, 0)
-        more = "  ▾ more" if len(flat) > top + body_h else ""
-        put(h - 1, 0, ("  ↑↓/PgUp/PgDn scroll · r re-run · Enter/q close" + more).ljust(w - 1), pal["BAR"])
+        _scrollbar(stdscr, pal, w - 1, 1, body_h, top, len(flat))
+        _botbar(stdscr, pal, "↑↓/PgUp/PgDn scroll · r re-run · Enter/q close")
         stdscr.refresh()
         c = stdscr.getch()
         if c in (ord("q"), 27, curses.KEY_ENTER, 10, 13):
@@ -1833,26 +1913,23 @@ def _info_screen(stdscr, curses, pal, title, lines, footer) -> None:
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, a=0):
-            if 0 <= y < h and 0 <= x < w:
-                try:
-                    stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
-                except curses.error:
-                    pass
+            _put(stdscr, y, x, s, a)
 
-        put(0, 0, f"  ◆ Geneseed — {title}  ".ljust(w - 1), pal["BAR"])
+        _topbar(stdscr, pal, f"Geneseed — {title}")
         flat = []
         for kind, text in lines:
             for j, seg in enumerate(textwrap.wrap(text, max(10, w - 8)) or [""]):
                 flat.append((kind, f"{icon.get(kind, '·')} {seg}" if j == 0 else f"   {seg}"))
         body_h = max(1, h - 2)
-        top = max(0, min(top, max(0, len(flat) - body_h)))
+        top = _clamp(top, len(flat), body_h)
         for r in range(body_h):
             di = top + r
             if di >= len(flat):
                 break
             kind, seg = flat[di]
             put(1 + r, 2, seg, attr.get(kind, 0))
-        put(h - 1, 0, ("  " + footer).ljust(w - 1), pal["BAR"])
+        _scrollbar(stdscr, pal, w - 1, 1, body_h, top, len(flat))
+        _botbar(stdscr, pal, footer)
         stdscr.refresh()
         c = stdscr.getch()
         if c in (curses.KEY_ENTER, 10, 13, ord("q"), 27):
@@ -1901,7 +1978,6 @@ def _diff_view(stdscr, curses, pal) -> None:
                      [("ok", "No differences — the deployed harness matches source.")],
                      "Enter: close")
         return
-    g = _bx(curses)
     sym = {"edited": "~", "added": "+", "missing": "-"}
     sel = 0
     dtop = 0
@@ -1911,26 +1987,21 @@ def _diff_view(stdscr, curses, pal) -> None:
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, a=0):
-            if 0 <= y < h and 0 <= x < w:
-                try:
-                    stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
-                except curses.error:
-                    pass
+            _put(stdscr, y, x, s, a)
 
-        if h < 6 or w < 40:
-            put(0, 0, "Terminal too small.", curses.A_BOLD)
+        if _too_small(stdscr, 6, 40):
             stdscr.refresh()
             if stdscr.getch() in (ord("q"), 27):
                 return
             continue
-        put(0, 0, f"  ◆ Review local edits  ·  {len(files)} changed  ".ljust(w - 1), pal["BAR"])
+        _topbar(stdscr, pal, f"Review local edits  ·  {len(files)} changed")
         dx = max(16, min(40, w // 3))
         body_h = h - 2
         if sel < list_top:
             list_top = sel
         elif sel >= list_top + body_h:
             list_top = sel - body_h + 1
-        list_top = max(0, min(list_top, max(0, len(files) - body_h)))
+        list_top = _clamp(list_top, len(files), body_h)
         for i in range(body_h):
             fi = list_top + i
             if fi >= len(files):
@@ -1946,14 +2017,10 @@ def _diff_view(stdscr, curses, pal) -> None:
             else:
                 attr = pal["TITLE"]
             put(1 + i, 0, f" {sym[st]} {f['rel']}".ljust(dx)[:dx], attr)
-        for r in range(1, h - 1):
-            try:
-                stdscr.addch(r, dx, g["v"], pal["FRAME"])
-            except curses.error:
-                pass
+        _vdiv(stdscr, pal, dx, 1, h - 1)
         diff = files[sel]["diff"]
         rx, rw = dx + 2, max(4, w - dx - 3)
-        dtop = max(0, min(dtop, max(0, len(diff) - body_h)))
+        dtop = _clamp(dtop, len(diff), body_h)
         for i in range(body_h):
             di = dtop + i
             if di >= len(diff):
@@ -1968,8 +2035,8 @@ def _diff_view(stdscr, curses, pal) -> None:
             else:
                 a = 0
             put(1 + i, rx, ln[:rw], a)
-        more = "  more" if len(diff) > dtop + body_h else ""
-        put(h - 1, 0, ("  j/k file · PgUp/PgDn scroll · q close" + more).ljust(w - 1), pal["BAR"])
+        _scrollbar(stdscr, pal, w - 1, 1, body_h, dtop, len(diff))
+        _botbar(stdscr, pal, "j/k file · PgUp/PgDn scroll · q close")
         stdscr.refresh()
         c = stdscr.getch()
         if c in (ord("q"), 27, curses.KEY_ENTER, 10, 13):
@@ -2052,7 +2119,6 @@ def _memory_view(stdscr, curses, pal) -> None:
         _info_screen(stdscr, curses, pal, "memory",
                      [("ok", f"Memory is empty — {mdir}")], "Enter: close")
         return
-    g = _bx(curses)
     sel = dtop = 0
     query = ""
     filtering = confirm = False
@@ -2065,19 +2131,14 @@ def _memory_view(stdscr, curses, pal) -> None:
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, a=0):
-            if 0 <= y < h and 0 <= x < w:
-                try:
-                    stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
-                except curses.error:
-                    pass
+            _put(stdscr, y, x, s, a)
 
-        if h < 6 or w < 40:
-            put(0, 0, "Terminal too small.", curses.A_BOLD)
+        if _too_small(stdscr, 6, 40):
             stdscr.refresh()
             if stdscr.getch() in (ord("q"), 27):
                 return
             continue
-        put(0, 0, f"  ◆ Memory  ·  {len(facts)} facts  ".ljust(w - 1), pal["BAR"])
+        _topbar(stdscr, pal, f"Memory  ·  {len(facts)} facts")
         dx = max(18, min(40, w // 3))
         body_h = h - 2
         for i in range(body_h):
@@ -2085,17 +2146,13 @@ def _memory_view(stdscr, curses, pal) -> None:
                 break
             f = view[i]
             put(1 + i, 0, f" {f['name']}".ljust(dx)[:dx], pal["SEL"] if i == sel else 0)
-        for r in range(1, h - 1):
-            try:
-                stdscr.addch(r, dx, g["v"], pal["FRAME"])
-            except curses.error:
-                pass
+        _vdiv(stdscr, pal, dx, 1, h - 1)
         rx, rw = dx + 2, max(4, w - dx - 3)
         body_lines = view[sel]["body"].splitlines() if view else []
         wrapped = []
         for ln in body_lines:
             wrapped.extend(textwrap.wrap(ln, rw) if ln else [""])
-        dtop = max(0, min(dtop, max(0, len(wrapped) - body_h)))
+        dtop = _clamp(dtop, len(wrapped), body_h)
         for i in range(body_h):
             di = dtop + i
             if di >= len(wrapped):
@@ -2107,7 +2164,8 @@ def _memory_view(stdscr, curses, pal) -> None:
             foot = f"  search: /{query}    Enter apply · Esc clear  "
         else:
             foot = "  j/k file · / search · x delete · q close  "
-        put(h - 1, 0, foot.ljust(w - 1), pal["BAR"])
+        _scrollbar(stdscr, pal, w - 1, 1, body_h, dtop, len(wrapped))
+        _botbar(stdscr, pal, foot.strip())
         stdscr.refresh()
 
         c = stdscr.getch()
@@ -2195,8 +2253,8 @@ def _tui_loop(stdscr, inv: dict) -> None:
 
     # Single-width BMP glyphs only — no emoji-presentation chars (e.g. ⚙/⏳) that
     # render double-width and break alignment in some terminal fonts.
-    ICON = {"agent": "◆", "skill": "✦", "law": "§"}
-    SECT = {"AGENTS": "◆", "SKILLS": "✦", "LAWS": "§"}
+    ICON = {"agent": _GLYPH["agent"], "skill": _GLYPH["skill"], "law": _GLYPH["law"]}
+    SECT = {"AGENTS": _GLYPH["agent"], "SKILLS": _GLYPH["skill"], "LAWS": _GLYPH["law"]}
 
     def clamp(v, lo, hi):
         return max(lo, min(v, hi))
@@ -2227,11 +2285,7 @@ def _tui_loop(stdscr, inv: dict) -> None:
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, attr=0):
-            if 0 <= y < h and 0 <= x < w:
-                try:
-                    stdscr.addnstr(y, x, s, max(0, w - x - 1), attr)
-                except curses.error:
-                    pass
+            _put(stdscr, y, x, s, attr)
 
         def ch(y, x, c, attr=0):
             try:
@@ -2239,8 +2293,7 @@ def _tui_loop(stdscr, inv: dict) -> None:
             except curses.error:
                 pass
 
-        if h < 8 or w < 48:
-            put(0, 0, "Terminal too small — enlarge the window, or press q.", curses.A_BOLD)
+        if _too_small(stdscr, 8, 48):
             stdscr.refresh()
             if stdscr.getch() in (ord("q"), 27):
                 return
@@ -2260,10 +2313,10 @@ def _tui_loop(stdscr, inv: dict) -> None:
             sel = selectable[0]
 
         # ---- title bar ----
-        head = f"  ◆ Geneseed   theme {inv['theme']}   {len(selectable)} shown"
+        head = f"Geneseed   theme {inv['theme']}   {len(selectable)} shown"
         if query:
             head += f"   /{query}"
-        put(0, 0, head.ljust(w - 1), C_BAR)
+        _topbar(stdscr, pal, head)
 
         # ---- frame + divider ----
         ch(1, 0, g["ul"], C_FRAME)
@@ -2300,7 +2353,7 @@ def _tui_loop(stdscr, inv: dict) -> None:
                 name = label.split(" (")[0]
                 put(y, 2, f"{SECT.get(name, '•')} {label}"[:liw], C_HEAD)
             elif ri == sel:
-                put(y, 1, f" ▸ {ICON.get(kind, '•')} {label}".ljust(liw)[:liw], C_SEL)
+                put(y, 1, f" {_GLYPH['sel']} {ICON.get(kind, '•')} {label}".ljust(liw)[:liw], C_SEL)
             else:
                 put(y, 2, f"{ICON.get(kind, '•')}", C_ICON)
                 put(y, 4, label[:liw - 3])
@@ -2310,27 +2363,21 @@ def _tui_loop(stdscr, inv: dict) -> None:
             put(2, dx + 2, f"no matches for '{query}'", C_TITLE)
         else:
             kind, label, data = entries[sel]
-            wrapped: list[str] = []
-            for ln in _detail_lines(kind, label, data):
-                wrapped.extend(textwrap.wrap(ln, riw) if ln else [""])
-            detail_top = clamp(detail_top, 0, max(0, len(wrapped) - ch_h))
+            wrapped = _wrap_lines(_detail_lines(kind, label, data), riw)
+            detail_top = _clamp(detail_top, len(wrapped), ch_h)
             for i in range(ch_h):
                 di = detail_top + i
                 if di >= len(wrapped):
                     break
                 put(2 + i, dx + 2, wrapped[di][:riw], C_TITLE if di == 0 else 0)
-            if detail_top > 0:
-                ch(2, w - 2, g["up"], C_FRAME)
-            if len(wrapped) > detail_top + ch_h:
-                ch(h - 3, w - 2, g["down"], C_FRAME)
+            _scrollbar(stdscr, pal, w - 2, 2, ch_h, detail_top, len(wrapped))
 
         # ---- footer ----
         if filtering:
-            put(h - 1, 0, f"  search: /{query}    Enter apply · Esc clear  ".ljust(w - 1), C_BAR)
+            _botbar(stdscr, pal, f"search: /{query}    Enter apply · Esc clear")
         else:
-            put(h - 1, 0,
-                "  j/k move  / search  ? help  d doctor  x diff  b build  u update  q quit  "
-                .ljust(w - 1), C_BAR)
+            _botbar(stdscr, pal,
+                    "j/k move · / search · ? help · d doctor · x diff · b build · u update · q quit")
         stdscr.refresh()
 
         c = stdscr.getch()
@@ -2445,15 +2492,11 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading="updating")
     h, w = stdscr.getmaxyx()
 
     def put(y, x, s, a=0):
-        if 0 <= y < h and 0 <= x < w:
-            try:
-                stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
-            except curses.error:
-                pass
+        _put(stdscr, y, x, s, a)
 
     # Plain layout (no box-drawing frame) — matches the doctor progress screen, which
     # renders cleanly; the ACS frame showed as tofu in some terminal fonts.
-    put(0, 0, f"  ◆ Geneseed — {heading}  ".ljust(w - 1), pal["BAR"])
+    _topbar(stdscr, pal, f"Geneseed — {heading}")
     sym = {"pending": "-", "running": ">", "done": "+", "failed": "x"}
     for i, (title, _c) in enumerate(steps):
         st = status[i]
@@ -2469,7 +2512,7 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading="updating")
     inner = max(0, h - top - 2)
     for j, ln in enumerate(log[-inner:]):
         put(top + 1 + j, 3, ln[:w - 4], curses.A_DIM)
-    put(h - 1, 0, "  working… please wait  ".ljust(w - 1), pal["BAR"])
+    _botbar(stdscr, pal, "working… please wait")
     stdscr.refresh()
 
 
