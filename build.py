@@ -293,29 +293,14 @@ def _strip_capability_links(text: str) -> str:
     return CAPABILITY_LINK_RE.sub(r"\1", text)
 
 
-def _renest_skill_links(body: str) -> str:
-    """Rewrite a skill body's in-bundle relative links for the nested native layout.
-
-    Source skills are authored FLAT (`skills/<name>.md`): they link siblings as bare
-    `other.md` and reach up to agents as `../agents/x.md`. A native skill is emitted
-    one directory deeper at `skills/<name>/SKILL.md`, so those links must move:
-
-      ../agents/x.md   -> ../../agents/x.md     (one more level up)
-      verify.md        -> ../verify/SKILL.md    (sibling skill's nested file)
-      _template.md     -> ../_template.md       (the flat authoring scaffold)
-
-    Without this, every cross-skill / skill->agent link is dead in the opencode and
-    opencode-global emits (the doctor's global-emit check catches exactly these)."""
-    # 1) Links already climbing out of the dir go one level deeper. Done first so the
-    #    nested links we synthesise below are not themselves re-prefixed.
-    body = re.sub(r"\]\(\.\./", "](../../", body)
-    # 2) A bare sibling-skill link -> that sibling's nested SKILL.md. Excludes ../, /,
-    #    #, http(s), and the leading-underscore template (handled next).
-    body = re.sub(r"\]\((?!\.\.?/|https?://|/|#|_)([A-Za-z0-9][A-Za-z0-9_-]*)\.md\)",
-                  r"](../\1/SKILL.md)", body)
-    # 3) The authoring template stays a flat file beside the skill dirs.
-    body = re.sub(r"\]\(_template\.md\)", "](../_template.md)", body)
-    return body
+def _strip_skill_body_links(body: str) -> str:
+    """Reduce a native skill body's capability cross-links to plain text — same
+    rationale as AGENT.md's tables: OpenCode invokes skills via the `skill` tool and
+    never follows these hrefs. Removes every RELATIVE markdown link to a `.md` spec
+    (sibling skills like `verify.md`, `../agents/x.md`, the `_template.md` scaffold),
+    keeping the link TEXT; external URLs are untouched. This makes the native emits
+    link-clean by construction — no fragile path-nesting rewrite to maintain."""
+    return re.sub(r"\[([^\]]+)\]\((?!https?://|/|#)[^)\s]*\.md(?:#[^)\s]*)?\)", r"\1", body)
 
 
 def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int, int, list[Path]]:
@@ -346,8 +331,9 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int,
             continue
         if fname.startswith("_"):
             # Authoring templates (e.g. skills/_template.md) are shipped verbatim and
-            # FLAT — not wrapped as a native skill — so create-skill's link resolves
-            # and an author has the scaffold to copy. Not counted as an agent/skill.
+            # FLAT — not wrapped as a native skill — so an author following create-skill
+            # ("Copy _template.md") has the scaffold on disk. Not counted as an
+            # agent/skill, and not discovered by OpenCode (it scans <name>/SKILL.md).
             dest = target_dir / fname
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(text.lstrip("\n"), encoding="utf-8")
@@ -374,7 +360,7 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int,
             n_agents += 1
         elif folder == "skills":
             fm = [f"name: {stem}", f"description: {json.dumps(desc)}", "compatibility: opencode"]
-            body = _renest_skill_links(body)   # fix links broken by the nested layout
+            body = _strip_skill_body_links(body)   # OpenCode never follows these — plain text
             dest = skills_dir / stem / "SKILL.md"
             n_skills += 1
         else:

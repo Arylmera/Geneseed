@@ -187,6 +187,40 @@ class GlobalEmitDoctorTests(unittest.TestCase):
                 self.assertEqual(harness._global_emit_problems(theme), [])
 
 
+class SkillBodyDelinkTests(unittest.TestCase):
+    REL_MD = re.compile(r"\]\((?!https?://)[^)\s]*\.md")
+
+    def test_pure_strips_relative_md_links_keeps_urls(self):
+        s = ("run [verify](verify.md) if unsure; via the [refactor Skill](refactor.md);\n"
+             "dispatch the [reviewer Agent](../agents/reviewer.md); copy "
+             "[`_template.md`](_template.md); see [docs](https://example.com/x.md).")
+        out = build._strip_skill_body_links(s)
+        self.assertIn("run verify if unsure", out)
+        self.assertIn("the refactor Skill", out)
+        self.assertIn("the reviewer Agent", out)
+        self.assertIn("copy `_template.md`", out)
+        self.assertNotRegex(out, self.REL_MD)                 # no relative .md links
+        self.assertIn("[docs](https://example.com/x.md)", out)  # external URL kept
+
+    def test_native_skill_body_delinked_portable_kept(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        cfg = Path(tempfile.mkdtemp()) / "cfg"
+        try:
+            build.build("neutral", d)
+            # portable bundle keeps the in-body link
+            self.assertRegex((d / "skills" / "ship.md").read_text(encoding="utf-8"), self.REL_MD)
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_opencode_global("neutral", out=Path(tempfile.mkdtemp()) / "b", cfg=cfg)
+            # native skill is plain text
+            native = (cfg / "skills" / "ship" / "SKILL.md").read_text(encoding="utf-8")
+            self.assertNotRegex(native, self.REL_MD)
+            self.assertIn("verify", native)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+            shutil.rmtree(cfg.parent, ignore_errors=True)
+
+
 class CapabilityLinkStripTests(unittest.TestCase):
     PER_ROW = re.compile(r"\]\((?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
 

@@ -32,12 +32,14 @@ global emit at all. Three distinct defects:
   siblings in the global layout (`<cfg>/AGENT.md` + `<cfg>/memory/`), so relative
   `memory/` links are correct *and* hermetic. Plugins locate the store via
   `$GENESEED_HARNESS`, so recall does not depend on the link.
-- **Nested-skill links (`build.py`):** `_renest_skill_links(body)` rewrites a
-  skill body for the deeper path — `../x` → `../../x`, bare `sibling.md` →
-  `../sibling/SKILL.md`, `_template.md` → `../_template.md`. Applied in
-  `_write_native_layer` (shared by both opencode emits, so both are fixed). The
-  authoring templates (`_template.md`) are now shipped verbatim and flat into the
-  native dir so the link resolves and authors have the scaffold.
+- **In-skill-body links (`build.py`):** native skill bodies are *de-linked*, the
+  same way as the AGENT.md tables — `_strip_skill_body_links(body)` reduces every
+  relative `.md` cross-link (sibling skills, `../agents/x.md`, `_template.md`) to
+  plain text, applied in `_write_native_layer` (shared by both opencode emits). This
+  retires the earlier path-nesting rewrite (`_renest_skill_links`) entirely: the
+  native emits are link-clean by construction, nothing to renest, nothing to break.
+  The authoring template (`_template.md`) is still shipped verbatim and flat so an
+  author following create-skill's "Copy `_template.md`" has the scaffold on disk.
 
 ## Tests
 - `GlobalEmitDoctorTests`: the `opencode-global` emit is token/link/escape-clean for
@@ -56,8 +58,9 @@ flat siblings that resolve and a human may browse them).
   untouched. Applied to `out/AGENT.md` in `emit_opencode` and to `agent_text` in
   `emit_opencode_global` (replacing the old nested-path rewrite — nothing left to
   break). The trigger column and the section folder pointers are preserved.
-- In-skill-body cross-links (inside SKILL.md) are unchanged — still renested so they
-  resolve; they are skill prose, not the AGENT.md tables.
+- In-skill-body cross-links (inside SKILL.md) are de-linked too, by the same
+  rationale — see `_strip_skill_body_links` above. The link text stays, so the prose
+  still reads ("run verify if unsure", "the reviewer Agent").
 
 ## Result
 `doctor --all` reports 8 themes clean, now including the global emit. The OpenCode
