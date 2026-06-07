@@ -207,8 +207,9 @@ The skill never installs a converter silently — if none is present it reports 
    sits in the plugins dir.
 4. **Harness health** — `python rituals/harness.py doctor` should print `ok`.
 
-On a Unix terminal, `./geneseed tui` opens a full-screen, colorized panel to browse
-the agents, skills, and laws and run build/doctor/diff (and `u` to update) with a
+On a Unix terminal, `./geneseed tui` opens a two-pane, colorized panel — agents,
+skills, and laws listed on the left, the selected item's full spec on the right
+(PgUp/PgDn to scroll it) — and runs build/doctor/diff (and `u` to update) with a
 keystroke.
 
 ## Upgrade

@@ -141,21 +141,28 @@ class SetupArgsTests(unittest.TestCase):
 
 
 class TuiInventoryTests(unittest.TestCase):
-    def test_counts_and_descriptions(self):
+    def test_counts_and_bodies(self):
         inv = harness._tui_inventory("neutral")
         self.assertEqual(len(inv["agents"]), 6)
         self.assertEqual(len(inv["skills"]), 17)
         self.assertEqual(len(inv["laws"]), 18)
-        self.assertTrue(all(desc for _n, desc in inv["agents"]))
-        self.assertTrue(all(desc for _n, desc in inv["skills"]))
+        self.assertTrue(all(e["desc"] and e["body"] for e in inv["agents"]))
+        self.assertTrue(all(e["desc"] and e["body"] for e in inv["skills"]))
+        self.assertTrue(all(l["title"] and l["body"] for l in inv["laws"]))
 
-    def test_lines_have_headers_and_items(self):
-        rows = harness._tui_lines(harness._tui_inventory("neutral"))
-        kinds = {k for k, _ in rows}
-        self.assertEqual(kinds, {"head", "item"})
-        heads = [t for k, t in rows if k == "head"]
+    def test_entries_and_detail(self):
+        inv = harness._tui_inventory("neutral")
+        rows = harness._tui_entries(inv)
+        kinds = {k for k, _l, _d in rows}
+        self.assertEqual(kinds, {"head", "agent", "skill", "law"})
+        heads = [l for k, l, _d in rows if k == "head"]
         self.assertTrue(any(h.startswith("AGENTS") for h in heads))
-        self.assertTrue(any(h.startswith("LAWS") for h in heads))
+        # selecting a law yields multi-line detail (title + body)
+        law_row = next(r for r in rows if r[0] == "law")
+        self.assertGreater(len(harness._detail_lines(*law_row)), 2)
+        # an agent's detail is its full rendered spec
+        agent_row = next(r for r in rows if r[0] == "agent")
+        self.assertTrue(any("##" in ln or "When" in ln for ln in harness._detail_lines(*agent_row)))
 
 
 class AuthoringGateTests(unittest.TestCase):

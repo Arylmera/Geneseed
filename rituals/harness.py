@@ -865,105 +865,168 @@ def cmd_setup(args: argparse.Namespace) -> int:
 LAW_HEADING_RE = re.compile(r"^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$")
 
 
+def _parse_laws(text: str) -> list[dict]:
+    """Split the rendered laws file into {num, title, body} entries."""
+    laws: list[dict] = []
+    cur: dict | None = None
+    for line in text.splitlines():
+        m = LAW_HEADING_RE.match(line)
+        if m:
+            if cur:
+                laws.append(cur)
+            cur = {"num": m.group(1), "title": m.group(2), "body": ""}
+        elif cur is not None:
+            cur["body"] += line + "\n"
+    if cur:
+        laws.append(cur)
+    for law in laws:
+        law["body"] = law["body"].strip()
+    return laws
+
+
 def _tui_inventory(theme_name: str) -> dict:
-    """Render-accurate inventory for the TUI (pure — unit-tested): agents and skills
-    with their one-line purpose, plus the laws with their titles."""
+    """Render-accurate inventory for the TUI (pure — unit-tested): each agent and
+    skill with its one-line purpose AND full rendered spec, plus the laws with their
+    titles and bodies. Powers the two-pane browser (list + detail)."""
     _t, items = build.render_all(theme_name)
-    agents: list[tuple[str, str]] = []
-    skills: list[tuple[str, str]] = []
-    laws: list[tuple[str, str]] = []
+    agents: list[dict] = []
+    skills: list[dict] = []
+    laws: list[dict] = []
     for _out_rel, text, src in items:
         if text is None:
             continue
         parts = src.relative_to(build.SRC).as_posix().split("/")
         if len(parts) == 2 and parts[1].endswith(".md") and not parts[1].startswith("_"):
-            entry = (parts[1][:-3], build._first_blockquote(text))
+            entry = {"name": parts[1][:-3], "desc": build._first_blockquote(text), "body": text}
             if parts[0] == "agents":
                 agents.append(entry)
             elif parts[0] == "skills":
                 skills.append(entry)
         if parts[-1] == "universal.md":
-            for line in text.splitlines():
-                m = LAW_HEADING_RE.match(line)
-                if m:
-                    laws.append((m.group(1), m.group(2)))
-    agents.sort()
-    skills.sort()
+            laws = _parse_laws(text)
+    agents.sort(key=lambda e: e["name"])
+    skills.sort(key=lambda e: e["name"])
     return {"agents": agents, "skills": skills, "laws": laws, "theme": theme_name}
 
 
-def _tui_lines(inv: dict) -> list[tuple[str, str]]:
-    """Flatten the inventory into (kind, text) rows. kind is 'head' or 'item'."""
-    rows: list[tuple[str, str]] = []
-    for label, key in (("AGENTS", "agents"), ("SKILLS", "skills")):
-        rows.append(("head", f"{label} ({len(inv[key])})"))
-        for name, desc in inv[key]:
-            rows.append(("item", f"  {name:<15}{desc}"))
-    rows.append(("head", f"LAWS ({len(inv['laws'])})"))
-    for num, title in inv["laws"]:
-        rows.append(("item", f"  {num:<6}{title}"))
+def _tui_entries(inv: dict) -> list[tuple[str, str, object]]:
+    """Ordered (kind, label, data) rows for the left list. kind 'head' is a section
+    divider (not selectable); 'agent' | 'skill' | 'law' carry their data dict."""
+    rows: list[tuple[str, str, object]] = [("head", f"AGENTS ({len(inv['agents'])})", None)]
+    rows += [("agent", e["name"], e) for e in inv["agents"]]
+    rows.append(("head", f"SKILLS ({len(inv['skills'])})", None))
+    rows += [("skill", e["name"], e) for e in inv["skills"]]
+    rows.append(("head", f"LAWS ({len(inv['laws'])})", None))
+    rows += [("law", f"Rule {e['num']} — {e['title']}", e) for e in inv["laws"]]
     return rows
+
+
+def _detail_lines(kind: str, label: str, data) -> list[str]:
+    """Right-pane content for the selected entry."""
+    if kind == "law":
+        return [label, ""] + (data["body"].splitlines() if data else [])
+    if kind in ("agent", "skill") and data:
+        return data["body"].splitlines()
+    return [label]
 
 
 def _tui_loop(stdscr, inv: dict) -> None:
     import curses
+    import textwrap
+
     curses.curs_set(0)
     color = False
     try:
         curses.start_color()
         curses.use_default_colors()
-        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_CYAN)    # title / footer bar
+        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_CYAN)    # header / footer bar
         curses.init_pair(2, curses.COLOR_CYAN, -1)                    # section headers
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)   # selected row
+        curses.init_pair(4, curses.COLOR_YELLOW, -1)                  # detail heading
         color = curses.has_colors()
     except curses.error:
         color = False
-    bar = curses.color_pair(1) if color else curses.A_REVERSE
-    head_attr = (curses.color_pair(2) | curses.A_BOLD) if color else curses.A_BOLD
-    sel_attr = curses.color_pair(3) if color else curses.A_REVERSE
+    A_BAR = curses.color_pair(1) if color else curses.A_REVERSE
+    A_HEAD = (curses.color_pair(2) | curses.A_BOLD) if color else curses.A_BOLD
+    A_SEL = curses.color_pair(3) if color else curses.A_REVERSE
+    A_TITLE = (curses.color_pair(4) | curses.A_BOLD) if color else curses.A_BOLD
 
-    rows = _tui_lines(inv)
-    items = [i for i, (k, _t) in enumerate(rows) if k == "item"]
-    sel = items[0] if items else 0
-    top = 0
-    title = f" Geneseed — theme: {inv['theme']}  ·  {len(items)} entries "
-    footer = " j/k move · b build · d doctor · x diff · u update · q quit "
+    def clamp(v, lo, hi):
+        return max(lo, min(v, hi))
+
+    entries = _tui_entries(inv)
+    selectable = [i for i, (k, _l, _d) in enumerate(entries) if k != "head"]
+    sel = selectable[0] if selectable else 0
+    list_top = 0
+    detail_top = 0
     harness_py = str(Path(__file__).resolve())
 
     while True:
         stdscr.erase()
         h, w = stdscr.getmaxyx()
         body_h = max(1, h - 2)
-        if sel < top:
-            top = sel
-        elif sel >= top + body_h:
-            top = sel - body_h + 1
-        top = max(0, min(top, max(0, len(rows) - body_h)))
-        stdscr.addnstr(0, 0, title.ljust(w), w, bar)
+        lw = clamp(w // 3, 22, 38)
+        lw = clamp(lw, 10, max(10, w - 12))
+        rx = lw + 2
+        rw = max(1, w - rx)
+
+        stdscr.addnstr(0, 0, f" Geneseed · theme: {inv['theme']} ".ljust(w), w, A_BAR)
+
+        if sel < list_top:
+            list_top = sel
+        elif sel >= list_top + body_h:
+            list_top = sel - body_h + 1
+        list_top = clamp(list_top, 0, max(0, len(entries) - body_h))
+
+        # left: navigable list, with a vertical separator
         for i in range(body_h):
-            ri = top + i
-            if ri >= len(rows):
+            ri = list_top + i
+            y = 1 + i
+            if ri < len(entries):
+                kind, label, _d = entries[ri]
+                if ri == sel:
+                    stdscr.addnstr(y, 0, (" " + label).ljust(lw)[:lw], lw, A_SEL)
+                elif kind == "head":
+                    stdscr.addnstr(y, 0, (" " + label)[:lw], lw, A_HEAD)
+                else:
+                    stdscr.addnstr(y, 0, ("   " + label)[:lw], lw, curses.A_NORMAL)
+            try:
+                stdscr.addch(y, lw, curses.ACS_VLINE)
+            except curses.error:
+                pass
+
+        # right: full detail of the selection, wrapped and scrollable
+        kind, label, data = entries[sel]
+        wrapped: list[str] = []
+        for ln in _detail_lines(kind, label, data):
+            wrapped.extend(textwrap.wrap(ln, rw) if ln else [""])
+        detail_top = clamp(detail_top, 0, max(0, len(wrapped) - body_h))
+        for i in range(body_h):
+            di = detail_top + i
+            if di >= len(wrapped):
                 break
-            kind, txt = rows[ri]
-            if ri == sel:
-                stdscr.addnstr(1 + i, 0, txt.ljust(w - 1)[:w - 1], w - 1, sel_attr)
-            else:
-                stdscr.addnstr(1 + i, 0, txt[:w - 1], w - 1,
-                               head_attr if kind == "head" else curses.A_NORMAL)
-        stdscr.addnstr(h - 1, 0, footer.ljust(w), w, bar)
+            stdscr.addnstr(1 + i, rx, wrapped[di][:rw], rw,
+                           A_TITLE if di == 0 else curses.A_NORMAL)
+
+        more = "  ▾ more" if len(wrapped) > detail_top + body_h else ""
+        stdscr.addnstr(h - 1, 0,
+                       (" j/k move · PgUp/PgDn scroll · b build · d doctor · x diff · "
+                        "u update · q quit" + more).ljust(w), w, A_BAR)
         stdscr.refresh()
 
         c = stdscr.getch()
         if c in (ord("q"), 27):
             return
         elif c in (curses.KEY_DOWN, ord("j")):
-            sel = next((i for i in items if i > sel), sel)
+            sel = next((i for i in selectable if i > sel), sel)
+            detail_top = 0
         elif c in (curses.KEY_UP, ord("k")):
-            sel = next((i for i in reversed(items) if i < sel), sel)
+            sel = next((i for i in reversed(selectable) if i < sel), sel)
+            detail_top = 0
         elif c == curses.KEY_NPAGE:
-            sel = next((i for i in reversed(items) if i <= sel + body_h), sel)
+            detail_top += body_h
         elif c == curses.KEY_PPAGE:
-            sel = next((i for i in items if i >= sel - body_h), sel)
+            detail_top = max(0, detail_top - body_h)
         elif c in (ord("b"), ord("d"), ord("x"), ord("u")):
             curses.def_prog_mode()
             curses.endwin()
@@ -986,7 +1049,7 @@ def _tui_loop(stdscr, inv: dict) -> None:
             except EOFError:
                 pass
             curses.reset_prog_mode()
-            stdscr.refresh()
+        # KEY_RESIZE and any other key fall through and re-render
 
 
 def cmd_tui(args: argparse.Namespace) -> int:
