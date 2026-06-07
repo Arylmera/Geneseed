@@ -1873,14 +1873,15 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
 
 
 _MENU_ACTIONS = [
-    ("bootstrap", "Update & set up", "Pull the latest from upstream, then run the setup wizard."),
-    ("setup", "Set up / re-theme", "Pick a theme and install mode, then build."),
     ("browse", "Browse", "Agents, skills and laws, with their full specs."),
-    ("doctor", "Health check", "Validate themes, parity, links, and the bundle."),
-    ("update", "Update only", "Refresh the scripts + factory from upstream (no setup)."),
-    ("build", "Rebuild bundle", "Re-render the harness from src."),
     ("diff", "Review local edits", "Compare a deployed harness against source."),
+    ("setup", "Set up / re-theme", "Pick a theme and install mode, then build."),
+    ("update", "Update only", "Refresh the scripts + factory from upstream (no setup)."),
+    ("bootstrap", "Update & set up", "Pull the latest from upstream, then run the setup wizard."),
+    ("build", "Rebuild bundle", "Re-render the harness from src."),
     ("quit", "Quit", "Leave."),
+    # 'doctor' (Health check) intentionally not listed: it runs after setup and via
+    # the browse panel's `d` key. The dispatch below still handles it if re-added.
 ]
 
 
