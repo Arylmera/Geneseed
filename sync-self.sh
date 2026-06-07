@@ -25,7 +25,7 @@ main() {
   local HERE; HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
   # The orchestration layer this updater owns (everything upgrade.sh's SYNC skips).
-  local SCRIPTS=(upgrade.sh sync-self.sh geneseed)
+  local SCRIPTS=(upgrade.sh sync-self.sh geneseed bootstrap)
 
   local TMP; TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' RETURN

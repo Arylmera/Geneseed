@@ -2,19 +2,23 @@
 #
 # Geneseed — front door. One launcher for everything.
 #
-#     ./geneseed                 open the control panel (TUI)
-#     ./geneseed setup           guided, dependency-free install wizard
-#     ./geneseed build [args]    render the bundle
-#     ./geneseed doctor [args]   validate (themes, parity, authoring, drift)
-#     ./geneseed diff [args]     compare a deployed harness against source
+#     ./geneseed                          open the control panel (TUI)
+#     ./geneseed setup                    guided, dependency-free install wizard
+#     ./geneseed bootstrap [ref] [theme]  update everything, then run setup
+#     ./geneseed update    [ref] [theme]  update everything (sync + upgrade), no setup
+#     ./geneseed build [args]             render the bundle
+#     ./geneseed doctor [args]            validate (themes, parity, authoring, drift)
+#     ./geneseed diff [args]              compare a deployed harness against source
 #     ./geneseed context|learn|prompt [args]
-#     ./geneseed upgrade [ref] [theme]   self-upgrade from the published source
-#     ./geneseed sync-self [ref]         refresh the launcher + upgrade scripts
+#     ./geneseed upgrade [ref] [theme]    self-upgrade from the published source
+#     ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
 #     ./geneseed help
 #
-# Thin wrapper over `python3 rituals/harness.py <cmd>` (+ the upgrade scripts). It
-# adds no dependencies — just a shorter way in. On Windows, call the Python CLI
-# directly: `python rituals/harness.py <cmd>`.
+# Thin wrapper over `python3 rituals/harness.py <cmd>` (+ the scripts). No deps. On
+# Windows, call the Python CLI directly: `python rituals/harness.py <cmd>`.
+#
+# `bootstrap`/`update` exec into the bootstrap script so this launcher is replaced
+# before sync-self rewrites it on disk.
 
 set -eo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,6 +29,12 @@ case "$cmd" in
   tui|setup|build|doctor|diff|context|learn|prompt)
     exec "$PY" "$HERE/rituals/harness.py" "$@"
     ;;
+  bootstrap)
+    shift; exec "$HERE/bootstrap" "$@"
+    ;;
+  update)
+    shift; exec "$HERE/bootstrap" --no-setup "$@"
+    ;;
   upgrade)
     shift; exec "$HERE/upgrade.sh" "$@"
     ;;
@@ -32,7 +42,17 @@ case "$cmd" in
     shift; exec "$HERE/sync-self.sh" "$@"
     ;;
   -h|--help|help)
-    sed -n '3,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    cat <<'USAGE'
+geneseed — front door for the Geneseed harness
+
+  ./geneseed                          open the control panel (TUI)
+  ./geneseed setup                    guided install wizard
+  ./geneseed bootstrap [ref] [theme]  update everything, then run setup
+  ./geneseed update    [ref] [theme]  update everything (sync + upgrade)
+  ./geneseed build|doctor|diff|context|learn|prompt [args]
+  ./geneseed upgrade [ref] [theme]    self-upgrade from the published source
+  ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
+USAGE
     ;;
   *)
     echo "geneseed: unknown command '$cmd' — try: ./geneseed help" >&2

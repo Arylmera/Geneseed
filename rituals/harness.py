@@ -927,7 +927,7 @@ def _tui_loop(stdscr, inv: dict) -> None:
     sel = items[0] if items else 0
     top = 0
     title = f" Geneseed — theme: {inv['theme']}  ·  {len(items)} entries "
-    footer = " up/down or j/k move · b build · d doctor · x diff · q quit "
+    footer = " j/k move · b build · d doctor · x diff · u update · q quit "
     harness_py = str(Path(__file__).resolve())
 
     while True:
@@ -964,11 +964,21 @@ def _tui_loop(stdscr, inv: dict) -> None:
             sel = next((i for i in reversed(items) if i <= sel + body_h), sel)
         elif c == curses.KEY_PPAGE:
             sel = next((i for i in items if i >= sel - body_h), sel)
-        elif c in (ord("b"), ord("d"), ord("x")):
+        elif c in (ord("b"), ord("d"), ord("x"), ord("u")):
             curses.def_prog_mode()
             curses.endwin()
             if c == ord("b"):
                 run([sys.executable, str(BUILD)])
+            elif c == ord("u"):
+                # Update everything (sync + upgrade) — network op, so confirm first.
+                root = Path(harness_py).resolve().parent.parent
+                try:
+                    ans = input("Update everything from upstream (sync + upgrade)? [y/N] ").strip().lower()
+                except EOFError:
+                    ans = ""
+                if ans[:1] == "y":
+                    run(["bash", str(root / "sync-self.sh")])
+                    run(["bash", str(root / "upgrade.sh")])
             else:
                 run([sys.executable, harness_py, "doctor" if c == ord("d") else "diff"])
             try:

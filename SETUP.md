@@ -21,7 +21,9 @@ internals see [adapters/opencode/](adapters/opencode/README.md).
 **Easiest:** run `./geneseed setup` (or `python rituals/harness.py setup`) for a
 guided, dependency-free wizard — it asks for a theme and install mode, runs the right
 build, and offers a health check. It works on every OS. Prefer to do it by hand?
-Pick a path below.
+Pick a path below. Already installed and want to refresh first? **`./geneseed
+bootstrap`** updates everything from upstream (sync + upgrade) and then runs the
+wizard — one command, start to finish.
 
 | Path | Use when |
 | --- | --- |
@@ -216,8 +218,10 @@ agents, skills, and laws and run build/doctor/diff with a keystroke.
 
 It downloads the published source, validates it (a blocking `doctor` pass), then
 re-renders in place — leaving host state (memory, `context.json`, markers) untouched.
-Theme and emit mode are remembered between runs. To update the launcher and upgrade
-scripts themselves first: `./geneseed sync-self`.
+Theme and emit mode are remembered between runs. Or do it all in one:
+`./geneseed update` chains sync-self + upgrade, and `./geneseed bootstrap` then
+continues into the setup wizard. (To refresh only the launcher and upgrade scripts:
+`./geneseed sync-self`.)
 
 **Reviewing local edits** — if you tweaked the deployed harness in place and want to
 see what diverged from source (to back-port):

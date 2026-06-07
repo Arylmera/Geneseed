@@ -32,7 +32,8 @@
 #
 # This script refreshes the factory CONTENT but NOT itself or the launcher
 # (rewriting a running script is unsafe). To update the orchestration layer itself
-# — upgrade.sh, sync-self.sh, geneseed — run ./sync-self.sh first.
+# — upgrade.sh, sync-self.sh, geneseed, bootstrap — run ./sync-self.sh first, or just
+# `./geneseed update` (which chains sync-self + upgrade in one go).
 
 set -eo pipefail
 

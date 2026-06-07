@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+#
+# Geneseed bootstrap — one command to update everything, then (re)configure.
+#
+#     ./geneseed bootstrap [ref] [theme]    update everything, then run setup
+#     ./geneseed update    [ref] [theme]    update everything only (sync + upgrade)
+#     ./bootstrap [--no-setup] [ref] [theme]
+#
+# It chains the updaters in the correct order, then hands off to the wizard:
+#   1. sync-self.sh — refresh the orchestration scripts (geneseed, upgrade.sh,
+#      sync-self.sh, and this file) from the published source;
+#   2. upgrade.sh   — refresh the factory content and re-render the bundle;
+#   3. setup        — the interactive install wizard (skipped with --no-setup).
+#
+# Steps 1 and 2 are non-fatal: a failed sync or upgrade warns and the run continues,
+# so a network hiccup never strands you before setup.
+#
+# Self-update-safe: the whole body is a function called on the final line, so bash
+# has read every byte before sync-self can overwrite this file mid-run. Env vars
+# (GENESEED_EMIT, GENESEED_OUT, …) pass straight through to upgrade.sh.
+
+set -eo pipefail
+
+main() {
+  local run_setup=1
+  if [ "${1:-}" = "--no-setup" ]; then run_setup=0; shift; fi
+  local REF="${1:-main}"
+  local THEME="${2:-}"
+  local HERE; HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  echo "[geneseed] 1/3 — refreshing orchestration scripts ..."
+  "$HERE/sync-self.sh" "$REF" || echo "[geneseed] ⚠️  sync-self failed; continuing with the upgrade." >&2
+
+  echo "[geneseed] 2/3 — updating factory content and rebuilding ..."
+  "$HERE/upgrade.sh" "$REF" "$THEME" || echo "[geneseed] ⚠️  upgrade failed; setup may surface the cause." >&2
+
+  if [ "$run_setup" -eq 1 ]; then
+    echo "[geneseed] 3/3 — launching setup ..."
+    python3 "$HERE/rituals/harness.py" setup
+  else
+    echo "[geneseed] update complete (setup skipped)."
+  fi
+}
+
+# Single final line: bash reads `main "$@"; exit $?` in full before running main, so
+# an in-flight overwrite of this file by sync-self is safe. DO NOT add lines below.
+main "$@"; exit $?

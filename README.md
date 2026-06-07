@@ -67,6 +67,7 @@ run `./geneseed`. (No bash? `python rituals/harness.py setup` / `… tui`.)
 Geneseed/
 ├── build.py              generator (stdlib only)
 ├── geneseed              launcher: `./geneseed` opens the TUI; dispatches CLI + upgrade
+├── bootstrap             one-shot: update everything (sync + upgrade), then run setup
 ├── upgrade.sh            self-upgrade from the published source
 ├── sync-self.sh          meta-updater: refreshes the launcher + upgrade scripts
 ├── harness.config.json   default theme + metadata
@@ -98,8 +99,9 @@ fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs both on every push 
 ## Keeping it current
 
 ```
-./geneseed upgrade     # refresh from the published source; remembers theme + emit mode
-./geneseed sync-self   # update the launcher + upgrade scripts themselves
+./geneseed update      # everything in one: refresh the scripts + content, then rebuild
+./geneseed bootstrap   # update everything, then drop into the setup wizard
+./geneseed upgrade     # just the content refresh (remembers theme + emit mode)
 ```
 
 Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
