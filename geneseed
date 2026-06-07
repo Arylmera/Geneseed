@@ -31,7 +31,7 @@ PY="${PYTHON:-python3}"
 if [ "$#" -eq 0 ]; then set -- menu; fi
 cmd="$1"
 case "$cmd" in
-  menu|tui|setup|build|doctor|diff|context|learn|prompt)
+  menu|tui|setup|build|doctor|diff|context|learn|prompt|version|uninstall)
     exec "$PY" "$HERE/rituals/harness.py" "$@"
     ;;
   bootstrap)
@@ -56,6 +56,8 @@ geneseed — front door for the Geneseed harness
   ./geneseed bootstrap [ref] [theme]  update everything, then run setup
   ./geneseed update    [ref] [theme]  update everything (sync + upgrade)
   ./geneseed build|doctor|diff|context|learn|prompt [args]
+  ./geneseed version                  installed vs current-source fingerprint
+  ./geneseed uninstall [--yes]        remove a global install (keeps memory)
   ./geneseed upgrade [ref] [theme]    self-upgrade from the published source
   ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
 USAGE

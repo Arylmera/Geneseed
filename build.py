@@ -16,6 +16,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import datetime
+import hashlib
 import json
 import os
 import re
@@ -27,6 +29,7 @@ ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
 CONFIG = ROOT / "harness.config.json"
 THEMES = ROOT / "themes"
+VERSION_MARKER = ".geneseed-version"
 
 TOKEN_RE = re.compile(r"\{\{([A-Z_]+)\}\}")
 INCLUDE_RE = re.compile(r"^[ \t]*<!--[ \t]*INCLUDE:[ \t]*(?P<path>[^ \t]+)[ \t]*-->[ \t]*$", re.M)
@@ -213,6 +216,42 @@ def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]
     return theme, items
 
 
+def source_fingerprint() -> str:
+    """A short, deterministic content hash of the harness SOURCE — every file under
+    src/, themes/, and the OpenCode plugins. Theme- and emit-independent: it
+    identifies *which Geneseed* you have, so a stamped install can be compared against
+    the source it was built from (see `harness version`). Stdlib only."""
+    h = hashlib.sha256()
+    files: list[Path] = []
+    for r in (SRC, THEMES, PLUGIN_SRC):
+        if r.is_dir():
+            files += [p for p in r.rglob("*")
+                      if p.is_file() and "__pycache__" not in p.parts]
+    for p in sorted(files, key=lambda x: x.relative_to(ROOT).as_posix()):
+        h.update(p.relative_to(ROOT).as_posix().encode("utf-8") + b"\0")
+        h.update(p.read_bytes() + b"\0")
+    return h.hexdigest()[:12]
+
+
+def write_version(out: Path) -> str:
+    """Stamp <out>/.geneseed-version with the source fingerprint + build date, so a
+    deployed harness records which source produced it. Returns the fingerprint."""
+    fp = source_fingerprint()
+    (out / VERSION_MARKER).write_text(
+        f"{fp} (built {datetime.date.today().isoformat()})\n", encoding="utf-8")
+    return fp
+
+
+def read_version(path: Path) -> "str | None":
+    """The fingerprint token recorded in a deployed harness's .geneseed-version (the
+    first whitespace-delimited token), or None if absent/empty/unreadable."""
+    try:
+        txt = (path / VERSION_MARKER).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return txt.split()[0] if txt else None
+
+
 def build(theme_name: str, out: Path) -> None:
     """Render the bundle into `out`.
 
@@ -240,6 +279,7 @@ def build(theme_name: str, out: Path) -> None:
             shutil.copy2(src, dest)
 
     (out / ".geneseed-theme").write_text(theme_name + "\n", encoding="utf-8")
+    write_version(out)
     ensure_context_stub(out)
     ensure_bundle_gitignore(out)
     ensure_memory_index(out / theme.get(SRC_DIR_TOKENS["memory"], "memory"))
@@ -575,6 +615,8 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     mem_status = _global_memory(cfg, theme, items, out)
     ensure_memory_index(cfg / "memory")   # guarantee the index on every path (seed/migrate/keep)
 
+    write_version(cfg)
+    owned.append(VERSION_MARKER)
     _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix())
 
     manifest_path.write_text(

@@ -2,6 +2,7 @@
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import json
 import re
 import shutil
 import sys
@@ -249,6 +250,70 @@ class CapabilityLinkStripTests(unittest.TestCase):
             self.assertNotRegex((cfg / "AGENT.md").read_text(encoding="utf-8"), self.PER_ROW)
         finally:
             shutil.rmtree(d, ignore_errors=True)
+            shutil.rmtree(cfg.parent, ignore_errors=True)
+
+
+class VersionTests(unittest.TestCase):
+    def test_fingerprint_deterministic_and_short(self):
+        fp = build.source_fingerprint()
+        self.assertEqual(fp, build.source_fingerprint())   # stable across calls
+        self.assertRegex(fp, r"^[0-9a-f]{12}$")
+
+    def test_write_then_read_roundtrip(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            fp = build.write_version(d)
+            self.assertEqual(build.read_version(d), fp)
+            self.assertIn("built", (d / build.VERSION_MARKER).read_text(encoding="utf-8"))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_read_version_absent_is_none(self):
+        self.assertIsNone(build.read_version(Path(tempfile.mkdtemp())))
+
+    def test_verdict(self):
+        self.assertIn("no Geneseed install", harness._version_verdict(None, "abc"))
+        self.assertIn("up to date", harness._version_verdict("abc", "abc"))
+        self.assertIn("differs", harness._version_verdict("old", "new"))
+
+
+class UninstallTests(unittest.TestCase):
+    def test_global_uninstall_removes_owned_keeps_memory(self):
+        import contextlib, io
+        cfg = Path(tempfile.mkdtemp()) / "cfg"
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_opencode_global("neutral", out=Path(tempfile.mkdtemp()) / "b", cfg=cfg)
+            # sanity: a real install exists
+            self.assertTrue((cfg / "AGENT.md").is_file())
+            self.assertTrue((cfg / "skills" / "ship" / "SKILL.md").is_file())
+            self.assertTrue((cfg / "memory").is_dir())
+            instr = json.loads((cfg / "opencode.json").read_text(encoding="utf-8"))["instructions"]
+            self.assertIn((cfg / "AGENT.md").as_posix(), instr)
+
+            summary = harness._uninstall_global(cfg, purge_memory=False)
+
+            self.assertFalse((cfg / "AGENT.md").exists())
+            self.assertFalse((cfg / "skills").exists())
+            self.assertFalse((cfg / "agents").exists())
+            self.assertFalse((cfg / build.GLOBAL_MANIFEST).exists())
+            self.assertFalse((cfg / build.VERSION_MARKER).exists())
+            self.assertTrue((cfg / "memory").is_dir())          # memory kept
+            self.assertTrue(summary["unmerged"])
+            instr2 = json.loads((cfg / "opencode.json").read_text(encoding="utf-8"))["instructions"]
+            self.assertNotIn((cfg / "AGENT.md").as_posix(), instr2)
+        finally:
+            shutil.rmtree(cfg.parent, ignore_errors=True)
+
+    def test_purge_memory_removes_store(self):
+        import contextlib, io
+        cfg = Path(tempfile.mkdtemp()) / "cfg"
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_opencode_global("neutral", out=Path(tempfile.mkdtemp()) / "b", cfg=cfg)
+            harness._uninstall_global(cfg, purge_memory=True)
+            self.assertFalse((cfg / "memory").exists())
+        finally:
             shutil.rmtree(cfg.parent, ignore_errors=True)
 
 

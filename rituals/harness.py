@@ -15,6 +15,11 @@ Dependency-free. Subcommands:
     harness diff [--target DIR]    report how a DEPLOYED global harness differs from
                                    a fresh render of the source (back-port aid) —
                                    --full for unified diffs, --theme to match voice
+    harness version [--target DIR] show the current source fingerprint vs the
+                                   deployed install's, and whether they match
+    harness uninstall [--target DIR] remove a global install via its manifest (owned
+                                   files + opencode.json entry + markers); keeps
+                                   memory unless --purge-memory; --yes to skip prompt
     harness setup                  interactive, dependency-free install wizard (all OSes)
     harness tui                    full-screen curses control panel (Unix only)
     harness learn [FILE]           distil notes/transcript into memory entries
@@ -844,6 +849,129 @@ def cmd_diff(args: argparse.Namespace) -> int:
     elif edited:
         print("\nRun with --full to see the line-level diffs.")
     return 0
+    return 0
+
+
+# ---- version + uninstall (deployed-install lifecycle) ----------------------------
+
+def _version_verdict(installed: "str | None", current: str) -> str:
+    """One-line verdict comparing a deployed fingerprint to the current source."""
+    if installed is None:
+        return "no Geneseed install detected to compare"
+    if installed == current:
+        return "up to date with this source"
+    return ("installed build differs from the current source — run "
+            "`./geneseed update` (or rebuild) to apply it")
+
+
+def cmd_version(args: argparse.Namespace) -> int:
+    """Show the current source fingerprint vs the deployed install's, and whether
+    they match. Network-free: it compares against the source tree this CLI runs from
+    (`upgrade` is what pulls newer source from upstream)."""
+    current = build.source_fingerprint()
+    target = Path(args.target).expanduser().resolve() if args.target else build._opencode_config_dir()
+    installed = build.read_version(target)
+    if installed is None:                       # fall back to common bundle locations
+        for base in (ROOT / "Harness", Path.cwd() / "Harness", Path.cwd()):
+            v = build.read_version(base)
+            if v:
+                installed, target = v, base
+                break
+    print(f"[version] source:    {current}   ({ROOT})")
+    print(f"[version] installed: {installed or '(none found)'}"
+          + (f"   ({target})" if installed else ""))
+    print(f"[version] {_version_verdict(installed, current)}")
+    return 0
+
+
+def _unmerge_opencode_json(path: Path, entry: str) -> bool:
+    """Remove `entry` from opencode.json's `instructions`, leaving every other key
+    intact. Returns True if the file was changed."""
+    if not path.exists():
+        return False
+    try:
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    instr = cfg.get("instructions")
+    if not isinstance(instr, list) or entry not in instr:
+        return False
+    cfg["instructions"] = [i for i in instr if i != entry]
+    path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    return True
+
+
+def _uninstall_global(target: Path, purge_memory: bool) -> dict:
+    """Reverse a global install at `target` using its manifest: remove owned files,
+    prune emptied dirs, drop the AGENT.md entry from opencode.json, and delete the
+    markers. The memory store is kept unless purge_memory. Returns a summary dict."""
+    try:
+        owned = json.loads((target / build.GLOBAL_MANIFEST).read_text(encoding="utf-8")).get("owned", [])
+    except (json.JSONDecodeError, OSError):
+        owned = []
+    removed = 0
+    for rel in owned:
+        victim = target / rel
+        try:
+            if victim.is_file():
+                victim.unlink()
+                removed += 1
+                if victim.name == "SKILL.md" and victim.parent != target \
+                        and not any(victim.parent.iterdir()):
+                    victim.parent.rmdir()
+        except OSError:
+            pass
+    for d in ("agents", "skills", "plugins"):
+        p = target / d
+        try:
+            if p.is_dir() and not any(p.iterdir()):
+                p.rmdir()
+        except OSError:
+            pass
+    unmerged = _unmerge_opencode_json(target / "opencode.json", (target / "AGENT.md").as_posix())
+    for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit", build.VERSION_MARKER):
+        try:
+            (target / m).unlink()
+        except OSError:
+            pass
+    purged = False
+    if purge_memory and (target / "memory").is_dir():
+        shutil.rmtree(target / "memory", ignore_errors=True)
+        purged = True
+    return {"removed": removed, "unmerged": unmerged, "purged": purged}
+
+
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    """Remove a global Geneseed install (the manifest-tracked opencode-global one):
+    its owned files, the opencode.json instructions entry, and the markers. The
+    memory store is KEPT unless --purge-memory. Per-repo `.opencode/` installs have
+    no manifest — remove those manually (`rm -rf .opencode`, drop AGENT.md from
+    opencode.json)."""
+    target = Path(args.target).expanduser().resolve() if args.target else build._opencode_config_dir()
+    if not (target / build.GLOBAL_MANIFEST).exists():
+        sys.stderr.write(
+            f"[uninstall] no global Geneseed install at {target} (no {build.GLOBAL_MANIFEST}).\n"
+            f"[uninstall] per-repo installs: rm -rf .opencode and drop AGENT.md from "
+            f"opencode.json's instructions.\n")
+        return 1
+    has_memory = (target / "memory").is_dir()
+    print(f"[uninstall] target: {target}")
+    print("[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the "
+          "opencode.json instructions entry.")
+    if has_memory:
+        print("[uninstall] memory: " + ("will be DELETED (--purge-memory)" if args.purge_memory
+                                         else "KEPT — pass --purge-memory to delete it"))
+    if not args.yes:
+        if not sys.stdin.isatty():
+            sys.stderr.write("[uninstall] refusing to proceed without --yes (non-interactive).\n")
+            return 1
+        if not _confirm("Proceed with uninstall?", False):
+            print("[uninstall] cancelled — nothing removed.")
+            return 0
+    s = _uninstall_global(target, args.purge_memory)
+    print(f"[uninstall] done — removed {s['removed']} file(s); opencode.json "
+          f"{'updated' if s['unmerged'] else 'unchanged'}; memory "
+          f"{'purged' if s['purged'] else 'kept'}. Start a new OpenCode session to apply.")
     return 0
 
 
@@ -2445,6 +2573,20 @@ def main() -> int:
                     "(default: auto-detected from the deployed marker/sigil)")
     df.add_argument("--full", action="store_true", help="show unified diffs, not just the file-level summary")
     df.set_defaults(fn=cmd_diff)
+
+    ve = sub.add_parser("version", help="show installed vs current-source fingerprint and whether they match")
+    ve.add_argument("--target", default=None,
+                    help="deployed dir to check (default: the OpenCode global config dir)")
+    ve.set_defaults(fn=cmd_version)
+
+    un = sub.add_parser("uninstall",
+                        help="remove a global Geneseed install (manifest-tracked); keeps memory unless --purge-memory")
+    un.add_argument("--target", default=None,
+                    help="config dir to uninstall from (default: the OpenCode global config dir)")
+    un.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    un.add_argument("--purge-memory", action="store_true",
+                    help="also delete the memory store (default: keep learned facts)")
+    un.set_defaults(fn=cmd_uninstall)
 
     le = sub.add_parser("learn", help="distil notes/transcript into memory entries")
     le.add_argument("file", nargs="?",
