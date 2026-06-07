@@ -627,7 +627,11 @@ def _read_notes(raw: str) -> str:
 def _resolve_memory_dir(explicit: str | None) -> Path | None:
     """Find the bundle's memory directory so learn can dedup and index in place.
     Precedence: --memory arg > $GENESEED_MEMORY > a memory/ (or anamnesis/) dir
-    beside the CWD or under ./Harness. None => stdout-only mode (no writes)."""
+    beside the CWD or under ./Harness > $GENESEED_HARNESS/memory > the OpenCode
+    GLOBAL config dir's memory/. The last two matter for the recommended
+    opencode-global install, whose store lives in ~/.config/opencode (not beside
+    any repo) — without them, running learn / the memory browser from an arbitrary
+    repo wrongly reports 'no memory store'. None => stdout-only mode (no writes)."""
     if explicit:
         p = Path(explicit)
         return p if p.is_dir() else None
@@ -635,7 +639,15 @@ def _resolve_memory_dir(explicit: str | None) -> Path | None:
     if env and Path(env).is_dir():
         return Path(env)
     cwd = Path.cwd()
-    for base in (cwd, cwd / "Harness"):
+    bases = [cwd, cwd / "Harness"]
+    gh = os.environ.get("GENESEED_HARNESS")
+    if gh:
+        bases.append(Path(gh).expanduser())
+    try:
+        bases.append(build._opencode_config_dir())  # the global install's store
+    except Exception:
+        pass
+    for base in bases:
         for name in MEMORY_DIR_NAMES:
             cand = base / name
             if cand.is_dir():

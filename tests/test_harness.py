@@ -151,6 +151,32 @@ class ThemeDetectionTests(unittest.TestCase):
             sorted(self.AVAIL))
 
 
+class ResolveMemoryDirTests(unittest.TestCase):
+    def test_falls_back_to_geneseed_harness_store(self):
+        """A global install's store lives in $GENESEED_HARNESS/memory, not beside the
+        repo — the resolver must find it from an unrelated cwd."""
+        import os
+        store = Path(tempfile.mkdtemp())
+        (store / "memory").mkdir()
+        work = Path(tempfile.mkdtemp())          # a cwd with no memory/ of its own
+        old_cwd = Path.cwd()
+        saved = {k: os.environ.get(k) for k in ("GENESEED_HARNESS", "GENESEED_MEMORY")}
+        try:
+            os.chdir(work)
+            os.environ.pop("GENESEED_MEMORY", None)
+            os.environ["GENESEED_HARNESS"] = str(store)
+            self.assertEqual(harness._resolve_memory_dir(None), store / "memory")
+        finally:
+            os.chdir(old_cwd)
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+            shutil.rmtree(store, ignore_errors=True)
+            shutil.rmtree(work, ignore_errors=True)
+
+
 class RenderedCheckTests(unittest.TestCase):
     def test_fresh_build_clean_then_drift_detected(self):
         d = Path(tempfile.mkdtemp())
