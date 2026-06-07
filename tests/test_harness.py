@@ -123,6 +123,41 @@ class RenderedCheckTests(unittest.TestCase):
         self.assertEqual(harness._rendered_problems(ROOT / "does-not-exist"), [])
 
 
+class SetupArgsTests(unittest.TestCase):
+    def test_global_omits_out_and_root(self):
+        self.assertEqual(
+            harness._setup_build_args("neutral", "opencode-global", "x", "y"),
+            ["--theme", "neutral", "--emit", "opencode-global"])
+
+    def test_files_includes_out(self):
+        self.assertEqual(
+            harness._setup_build_args("imperial", "files", "Bundle", None),
+            ["--theme", "imperial", "--emit", "files", "--out", "Bundle"])
+
+    def test_opencode_includes_out_and_root(self):
+        self.assertEqual(
+            harness._setup_build_args("neutral", "opencode", "repo", "repo"),
+            ["--theme", "neutral", "--emit", "opencode", "--out", "repo", "--root", "repo"])
+
+
+class TuiInventoryTests(unittest.TestCase):
+    def test_counts_and_descriptions(self):
+        inv = harness._tui_inventory("neutral")
+        self.assertEqual(len(inv["agents"]), 6)
+        self.assertEqual(len(inv["skills"]), 17)
+        self.assertEqual(len(inv["laws"]), 18)
+        self.assertTrue(all(desc for _n, desc in inv["agents"]))
+        self.assertTrue(all(desc for _n, desc in inv["skills"]))
+
+    def test_lines_have_headers_and_items(self):
+        rows = harness._tui_lines(harness._tui_inventory("neutral"))
+        kinds = {k for k, _ in rows}
+        self.assertEqual(kinds, {"head", "item"})
+        heads = [t for k, t in rows if k == "head"]
+        self.assertTrue(any(h.startswith("AGENTS") for h in heads))
+        self.assertTrue(any(h.startswith("LAWS") for h in heads))
+
+
 class AuthoringGateTests(unittest.TestCase):
     def test_real_specs_and_plugins_pass(self):
         # Spec purpose-line + single-source-prompt checks must hold for the source

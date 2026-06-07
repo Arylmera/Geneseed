@@ -18,6 +18,10 @@ internals see [adapters/opencode/](adapters/opencode/README.md).
 
 ## Choose your path
 
+**Easiest:** run `python rituals/harness.py setup` for a guided, dependency-free
+wizard — it asks for a theme and install mode, runs the right build, and offers a
+health check. It works on every OS. Prefer to do it by hand? Pick a path below.
+
 | Path | Use when |
 | --- | --- |
 | [A — OpenCode, global](#path-a--opencode-global-recommended) | **Recommended.** One install, every repo inherits it, nothing committed into projects. |
@@ -194,6 +198,9 @@ The skill never installs a converter silently — if none is present it reports 
    silence means it didn't load — re-check the filename, `.js` extension, and that it
    sits in the plugins dir.
 4. **Harness health** — `python rituals/harness.py doctor` should print `ok`.
+
+On a Unix terminal, `python rituals/harness.py tui` opens a full-screen panel to
+browse the agents, skills, and laws and run build/doctor/diff with a keystroke.
 
 ## Upgrade
 

@@ -55,6 +55,10 @@ Open OpenCode in any repo — the first reply opens with the readiness sigil and
 project's docs are already in context. **Other tools (Claude Code, plain `AGENT.md`),
 per-repo installs, configuration, and troubleshooting: [SETUP.md](SETUP.md).**
 
+Prefer a guided install? Run `python rituals/harness.py setup` — it asks a few
+questions and runs the right build for you. For a full-screen browser of the agents,
+skills, and laws (Unix), `python rituals/harness.py tui`.
+
 ## Layout
 
 ```
@@ -70,7 +74,7 @@ Geneseed/
 │   ├── skills/           repeatable workflows
 │   └── memory/           memory convention + index
 ├── themes/               voice token maps (neutral, imperial)
-├── rituals/harness.py    optional CLI: build · doctor · context · learn · prompt · diff
+├── rituals/harness.py    optional CLI: build · doctor · context · learn · prompt · diff · setup · tui
 ├── tests/                stdlib unit tests
 ├── adapters/             per-tool glue (opencode/, claude-code/)
 └── .github/workflows/    CI: doctor + tests

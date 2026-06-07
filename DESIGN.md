@@ -79,7 +79,7 @@ renders it as the name in parentheses.
 | Context | `build.py` | `context.json` | empty per-repo manifest, written once and never overwritten; git-ignore it |
 | Themes | `themes/*.json` | — | token → label maps |
 | Generator | `build.py` | — | substitution + `<!-- INCLUDE: -->` inlining |
-| Automation | `rituals/harness.py` | — | optional `build` / `doctor` / `context` / `learn` / `prompt` / `diff` |
+| Automation | `rituals/harness.py` | — | optional `build` / `doctor` / `context` / `learn` / `prompt` / `diff` / `setup` / `tui` |
 | Adapters | `adapters/` | — | optional per-tool glue (hooks) |
 
 ## Generator contract

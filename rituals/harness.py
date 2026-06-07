@@ -14,6 +14,8 @@ Dependency-free. Subcommands:
     harness diff [--target DIR]    report how a DEPLOYED global harness differs from
                                    a fresh render of the source (back-port aid) —
                                    --full for unified diffs, --theme to match voice
+    harness setup                  interactive, dependency-free install wizard (all OSes)
+    harness tui                    full-screen curses control panel (Unix only)
     harness learn [FILE]           distil notes/transcript into memory entries
                                    via a model CLI of your choice (no API key)
 
@@ -741,6 +743,217 @@ def cmd_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---- interactive: setup wizard + curses control panel ----------------------
+
+def _ask(prompt: str, default: str = "") -> str:
+    suffix = f" [{default}]" if default else ""
+    try:
+        ans = input(f"{prompt}{suffix}: ").strip()
+    except EOFError:
+        return default
+    return ans or default
+
+
+def _confirm(prompt: str, default: bool = True) -> bool:
+    ans = _ask(f"{prompt} ({'Y/n' if default else 'y/N'})").lower()
+    return default if not ans else ans[0] == "y"
+
+
+def _ask_choice(prompt: str, options: list[tuple[str, str]], default: str) -> str:
+    """Print numbered options; return the chosen key (default on empty/invalid)."""
+    print(f"\n{prompt}:")
+    for i, (key, desc) in enumerate(options, 1):
+        print(f"  {i}) {key} — {desc}" + ("   (default)" if key == default else ""))
+    default_idx = str(next(i for i, (k, _) in enumerate(options, 1) if k == default))
+    raw = _ask("Choose", default_idx)
+    try:
+        idx = int(raw)
+        if 1 <= idx <= len(options):
+            return options[idx - 1][0]
+    except ValueError:
+        for key, _ in options:
+            if raw == key:
+                return key
+    return default
+
+
+def _setup_build_args(theme: str, emit: str, out: str | None = None,
+                      root: str | None = None) -> list[str]:
+    """The build.py argv for a wizard selection (pure — unit-tested). The global
+    emit takes no out/root; the others may."""
+    argv = ["--theme", theme, "--emit", emit]
+    if emit != "opencode-global":
+        if out:
+            argv += ["--out", out]
+        if root:
+            argv += ["--root", root]
+    return argv
+
+
+def _default_theme() -> str:
+    if build.CONFIG.exists():
+        try:
+            return json.loads(build.CONFIG.read_text(encoding="utf-8")).get("theme", "neutral")
+        except (json.JSONDecodeError, OSError):
+            pass
+    return "neutral"
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """Guided, dependency-free install wizard: answer a few prompts and it runs the
+    right build, then offers a health check. Nothing is written until you confirm."""
+    if not sys.stdin.isatty():
+        sys.stderr.write("[setup] needs an interactive terminal. Non-interactive? e.g.:\n"
+                         "  python build.py --emit opencode-global --theme neutral\n")
+        return 1
+    print("Geneseed setup — answer a few questions; nothing is written until you confirm.")
+    theme = _ask_choice("Theme", [("neutral", "plain professional voice"),
+                                  ("imperial", "Warhammer 40k voice")], _default_theme())
+    emit = _ask_choice("Install mode",
+                       [("opencode-global", "OpenCode global config dir (recommended)"),
+                        ("opencode", "OpenCode per-repo .opencode/ layer"),
+                        ("files", "plain bundle (any AGENT.md tool)")], "opencode-global")
+    out = root = None
+    if emit == "opencode":
+        root = _ask("Repo root to install into", ".")
+        out = root
+    elif emit == "files":
+        out = _ask("Output dir for the bundle", "Harness")
+
+    argv = _setup_build_args(theme, emit, out, root)
+    print("\nAbout to run:  python build.py " + " ".join(argv))
+    if not _confirm("Proceed?", True):
+        print("[setup] aborted — nothing written.")
+        return 0
+    rc = run([sys.executable, str(BUILD), *argv]).returncode
+    if rc != 0:
+        sys.stderr.write("[setup] build failed.\n")
+        return rc
+
+    print("\nDone.")
+    if emit == "opencode-global":
+        print('Next: point the learn plugin at the store —\n'
+              '  export GENESEED_HARNESS="$HOME/.config/opencode"   (add to your shell profile)')
+    elif emit == "files":
+        print(f"Next: point your tool's instructions at  {out or 'Harness'}/AGENT.md")
+    if _confirm("\nRun a health check (doctor) now?", True):
+        return cmd_doctor(argparse.Namespace(theme=None, bundle=None, no_bundle=False))
+    return 0
+
+
+# Law heading in the rendered laws file, e.g. "### Rule XVIII — Load the Project Context".
+LAW_HEADING_RE = re.compile(r"^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$")
+
+
+def _tui_inventory(theme_name: str) -> dict:
+    """Render-accurate inventory for the TUI (pure — unit-tested): agents and skills
+    with their one-line purpose, plus the laws with their titles."""
+    _t, items = build.render_all(theme_name)
+    agents: list[tuple[str, str]] = []
+    skills: list[tuple[str, str]] = []
+    laws: list[tuple[str, str]] = []
+    for _out_rel, text, src in items:
+        if text is None:
+            continue
+        parts = src.relative_to(build.SRC).as_posix().split("/")
+        if len(parts) == 2 and parts[1].endswith(".md") and not parts[1].startswith("_"):
+            entry = (parts[1][:-3], build._first_blockquote(text))
+            if parts[0] == "agents":
+                agents.append(entry)
+            elif parts[0] == "skills":
+                skills.append(entry)
+        if parts[-1] == "universal.md":
+            for line in text.splitlines():
+                m = LAW_HEADING_RE.match(line)
+                if m:
+                    laws.append((m.group(1), m.group(2)))
+    agents.sort()
+    skills.sort()
+    return {"agents": agents, "skills": skills, "laws": laws, "theme": theme_name}
+
+
+def _tui_lines(inv: dict) -> list[tuple[str, str]]:
+    """Flatten the inventory into (kind, text) rows. kind is 'head' or 'item'."""
+    rows: list[tuple[str, str]] = []
+    for label, key in (("AGENTS", "agents"), ("SKILLS", "skills")):
+        rows.append(("head", f"{label} ({len(inv[key])})"))
+        for name, desc in inv[key]:
+            rows.append(("item", f"  {name:<15}{desc}"))
+    rows.append(("head", f"LAWS ({len(inv['laws'])})"))
+    for num, title in inv["laws"]:
+        rows.append(("item", f"  {num:<6}{title}"))
+    return rows
+
+
+def _tui_loop(stdscr, inv: dict) -> None:
+    import curses
+    curses.curs_set(0)
+    rows = _tui_lines(inv)
+    top = 0
+    title = f" Geneseed — theme: {inv['theme']} "
+    footer = " up/down or j/k scroll · b build · d doctor · x diff · q quit "
+    harness_py = str(Path(__file__).resolve())
+    while True:
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+        body_h = max(1, h - 2)
+        top = max(0, min(top, max(0, len(rows) - body_h)))
+        stdscr.addnstr(0, 0, title.ljust(w), w, curses.A_REVERSE)
+        for i in range(body_h):
+            ri = top + i
+            if ri >= len(rows):
+                break
+            kind, txt = rows[ri]
+            stdscr.addnstr(1 + i, 0, txt[:w - 1], w - 1,
+                           curses.A_BOLD if kind == "head" else curses.A_NORMAL)
+        stdscr.addnstr(h - 1, 0, footer.ljust(w), w, curses.A_REVERSE)
+        stdscr.refresh()
+        c = stdscr.getch()
+        if c in (ord("q"), 27):
+            return
+        elif c in (curses.KEY_DOWN, ord("j")):
+            top += 1
+        elif c in (curses.KEY_UP, ord("k")):
+            top -= 1
+        elif c == curses.KEY_NPAGE:
+            top += body_h
+        elif c == curses.KEY_PPAGE:
+            top -= body_h
+        elif c in (ord("b"), ord("d"), ord("x")):
+            curses.def_prog_mode()
+            curses.endwin()
+            if c == ord("b"):
+                run([sys.executable, str(BUILD)])
+            else:
+                run([sys.executable, harness_py, "doctor" if c == ord("d") else "diff"])
+            try:
+                input("\n[press Enter to return to the panel] ")
+            except EOFError:
+                pass
+            curses.reset_prog_mode()
+            stdscr.refresh()
+
+
+def cmd_tui(args: argparse.Namespace) -> int:
+    """Full-screen curses control panel: browse agents/skills/laws and run
+    build/doctor/diff. Unix only (stdlib curses); degrades with a clear message."""
+    if sys.platform.startswith("win"):
+        print("[tui] the curses panel needs a Unix terminal. Use `harness setup` instead.")
+        return 1
+    if not sys.stdin.isatty():
+        print("[tui] not an interactive terminal. Use `harness setup`, `doctor`, or `build`.")
+        return 1
+    try:
+        import curses  # noqa: F401  (availability probe)
+    except ImportError:
+        print("[tui] curses is unavailable in this Python. Use `harness setup`.")
+        return 1
+    inv = _tui_inventory(args.theme or _default_theme())
+    import curses
+    curses.wrapper(_tui_loop, inv)
+    return 0
+
+
 def main() -> int:
     # Force UTF-8 I/O so injected docs / templates with unicode (sigils, em-dashes)
     # do not crash on a legacy code page (e.g. Windows cp1252). Dependency-free.
@@ -792,6 +1005,13 @@ def main() -> int:
                     help="bundle memory dir to dedup against and index into "
                          "(default: $GENESEED_MEMORY, else ./memory or ./Harness/memory)")
     le.set_defaults(fn=cmd_learn)
+
+    su = sub.add_parser("setup", help="interactive install wizard (dependency-free, all OSes)")
+    su.set_defaults(fn=cmd_setup)
+
+    tu = sub.add_parser("tui", help="full-screen curses control panel (Unix)")
+    tu.add_argument("--theme", default=None, help="theme to show (default: harness.config.json)")
+    tu.set_defaults(fn=cmd_tui)
 
     args = ap.parse_args()
     return args.fn(args)
