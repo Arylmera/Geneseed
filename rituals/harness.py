@@ -241,16 +241,18 @@ def _authoring_problems() -> list[str]:
     return problems
 
 
-def cmd_doctor(args: argparse.Namespace) -> int:
-    """Validate the build. With --theme, checks that one theme; without, sweeps
-    EVERY theme so a token only the imperial map breaks cannot slip through."""
-    themes = [args.theme] if args.theme else sorted(p.stem for p in build.THEMES.glob("*.json"))
+def _doctor_collect(theme=None, bundle=None, no_bundle=False, on_progress=None):
+    """Run every doctor check; return (themes, sorted_unique_problems). on_progress
+    (i, total, label) is called as it advances, so a caller can draw a progress bar."""
+    themes = [theme] if theme else sorted(p.stem for p in build.THEMES.glob("*.json"))
     if not themes:
-        print("[doctor] no themes found")
-        return 1
+        return [], ["[doctor] no themes found"]
+    total = len(themes) + 1
     problems: list[str] = []
     with tempfile.TemporaryDirectory() as tmp:
-        for theme_name in themes:
+        for i, theme_name in enumerate(themes):
+            if on_progress:
+                on_progress(i, total, f"theme: {theme_name}")
             out = Path(tmp) / theme_name
             rc = run([sys.executable, str(BUILD), "--theme", theme_name, "--out", str(out)],
                      cwd=ROOT, capture_output=True, text=True).returncode
@@ -258,14 +260,29 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 problems.append(f"[{theme_name}] build failed")
                 continue
             problems += _check_build(theme_name, out)
+    if on_progress:
+        on_progress(len(themes), total, "parity · authoring · bundle")
     problems += _theme_parity_problems()
     problems += _authoring_problems()
-    if not args.no_bundle:
-        bundle = Path(args.bundle).expanduser().resolve() if args.bundle else ROOT / "Harness"
-        problems += _rendered_problems(bundle)
+    if not no_bundle:
+        b = Path(bundle).expanduser().resolve() if bundle else ROOT / "Harness"
+        problems += _rendered_problems(b)
+    if on_progress:
+        on_progress(total, total, "done")
+    return themes, sorted(set(problems))
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Validate the build. With --theme, checks that one theme; without, sweeps
+    EVERY theme so a token only one theme map breaks cannot slip through."""
+    themes, problems = _doctor_collect(theme=args.theme, bundle=args.bundle,
+                                       no_bundle=args.no_bundle)
+    if not themes:
+        print(problems[0] if problems else "[doctor] no themes found")
+        return 1
     if problems:
         print(f"[doctor] {len(problems)} problem(s) across {len(themes)} theme(s):")
-        for p in sorted(set(problems)):
+        for p in problems:
             print("  -", p)
         return 1
     print(f"[doctor] ok — {len(themes)} theme(s) clean: no unresolved tokens, no dead "
@@ -997,6 +1014,8 @@ def _tui_palette(curses) -> dict:
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)
         curses.init_pair(4, curses.COLOR_YELLOW, -1)
         curses.init_pair(5, curses.COLOR_MAGENTA, -1)
+        curses.init_pair(6, curses.COLOR_GREEN, -1)
+        curses.init_pair(7, curses.COLOR_RED, -1)
         color = curses.has_colors()
     except curses.error:
         color = False
@@ -1008,7 +1027,15 @@ def _tui_palette(curses) -> dict:
         "TITLE": (cp(4) | curses.A_BOLD) if color else curses.A_BOLD,
         "ICON": cp(5) if color else 0,
         "HEAD": (cp(1) | curses.A_BOLD) if color else curses.A_BOLD,
+        "OK": (cp(6) | curses.A_BOLD) if color else curses.A_BOLD,
+        "FAIL": (cp(7) | curses.A_BOLD) if color else curses.A_BOLD,
     }
+
+
+def _progress_bar(frac: float, width: int = 24) -> str:
+    frac = max(0.0, min(1.0, frac))
+    filled = int(round(frac * width))
+    return "█" * filled + "░" * (width - filled)
 
 
 def _menu(stdscr, curses, prompt, options, default=None):
@@ -1218,6 +1245,86 @@ def _detail_lines(kind: str, label: str, data) -> list[str]:
     return [label]
 
 
+def _doctor_view(stdscr, curses, pal) -> None:
+    """Run the health check with a progress bar, then show a colored ✓/✗ result list
+    (scrollable; 'r' re-runs, 'q' returns)."""
+    import textwrap
+
+    def put(y, x, s, a=0):
+        h, w = stdscr.getmaxyx()
+        if 0 <= y < h and 0 <= x < w:
+            try:
+                stdscr.addnstr(y, x, s, max(0, w - x - 1), a)
+            except curses.error:
+                pass
+
+    state = {"i": 0, "total": 1, "label": "starting"}
+
+    def on_progress(i, total, label):
+        state.update(i=i, total=total, label=label)
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+        put(0, 0, "  ◆ Geneseed — health check  ".ljust(w - 1), pal["BAR"])
+        frac = i / total if total else 0.0
+        put(2, 3, f"⏳ Validating…  {label}", pal["TITLE"])
+        put(4, 3, f"[{_progress_bar(frac, max(10, min(40, w - 22)))}] {int(frac * 100):3d}%", pal["HEAD"])
+        put(h - 1, 0, "  please wait…  ".ljust(w - 1), pal["BAR"])
+        stdscr.refresh()
+
+    themes, problems = _doctor_collect(on_progress=on_progress)
+    if problems:
+        lines = [("fail", f"{len(problems)} problem(s) across {len(themes)} theme(s):"), ("", "")]
+        lines += [("fail", p) for p in problems]
+    else:
+        lines = [("ok", f"All checks passed — {len(themes)} themes clean."), ("", ""),
+                 ("ok", "no unresolved tokens, dead links, or non-hermetic escapes"),
+                 ("ok", "every theme defines the same voice tokens (parity)"),
+                 ("ok", "every spec has a purpose line; plugins parse; prompt extractable"),
+                 ("ok", "rendered bundle matches a fresh render of src")]
+
+    top = 0
+    while True:
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+        put(0, 0, "  ◆ Geneseed — health check  ".ljust(w - 1), pal["BAR"])
+        flat = []
+        for kind, text in lines:
+            if not text:
+                flat.append(("", ""))
+                continue
+            for j, seg in enumerate(textwrap.wrap(text, max(10, w - 8)) or [""]):
+                flat.append((kind, seg if j == 0 else "  " + seg))
+        body_h = max(1, h - 2)
+        top = max(0, min(top, max(0, len(flat) - body_h)))
+        for r in range(body_h):
+            di = top + r
+            if di >= len(flat):
+                break
+            kind, seg = flat[di]
+            if kind == "ok":
+                put(1 + r, 2, f"✓ {seg}", pal["OK"])
+            elif kind == "fail":
+                put(1 + r, 2, f"✗ {seg}", pal["FAIL"])
+            else:
+                put(1 + r, 2, seg, 0)
+        more = "  ▾ more" if len(flat) > top + body_h else ""
+        put(h - 1, 0, ("  ↑↓/PgUp/PgDn scroll · r re-run · q back" + more).ljust(w - 1), pal["BAR"])
+        stdscr.refresh()
+        c = stdscr.getch()
+        if c in (ord("q"), 27):
+            return
+        elif c in (curses.KEY_DOWN, ord("j")):
+            top += 1
+        elif c in (curses.KEY_UP, ord("k")):
+            top = max(0, top - 1)
+        elif c == curses.KEY_NPAGE:
+            top += body_h
+        elif c == curses.KEY_PPAGE:
+            top = max(0, top - body_h)
+        elif c == ord("r"):
+            return _doctor_view(stdscr, curses, pal)
+
+
 def _tui_loop(stdscr, inv: dict) -> None:
     import curses
     import textwrap
@@ -1359,7 +1466,9 @@ def _tui_loop(stdscr, inv: dict) -> None:
             detail_top += ch_h
         elif c == curses.KEY_PPAGE:
             detail_top = max(0, detail_top - ch_h)
-        elif c in (ord("b"), ord("d"), ord("x"), ord("u")):
+        elif c == ord("d"):
+            _doctor_view(stdscr, curses, pal)          # in-TUI health check with progress bar
+        elif c in (ord("b"), ord("x"), ord("u")):
             curses.def_prog_mode()
             curses.endwin()
             if c == ord("b"):
@@ -1375,7 +1484,7 @@ def _tui_loop(stdscr, inv: dict) -> None:
                     run(["bash", str(root / "sync-self.sh")])
                     run(["bash", str(root / "upgrade.sh")])
             else:
-                run([sys.executable, harness_py, "doctor" if c == ord("d") else "diff"])
+                run([sys.executable, harness_py, "diff"])
             try:
                 input("\n[press Enter to return to the panel] ")
             except EOFError:
@@ -1428,7 +1537,11 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log) -> None:
         st = status[i]
         attr = pal["HEAD"] if st == "running" else (curses.A_DIM if st == "pending" else 0)
         put(2 + i, 2, f"{sym.get(st, '·')}  {title}", attr)
-    top = 2 + len(steps) + 1
+    done = sum(1 for s in status if s in ("done", "failed"))
+    put(2 + len(steps), 2,
+        f"[{_progress_bar(done / len(steps) if steps else 0.0, 24)}] {done}/{len(steps)}",
+        pal["HEAD"])
+    top = 2 + len(steps) + 2
     if h - top - 1 >= 3:
         _draw_box(stdscr, curses, top, 0, h - top - 1, w, pal["FRAME"])
         put(top, 2, " output ", pal["HEAD"])
