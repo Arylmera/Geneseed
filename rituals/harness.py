@@ -975,7 +975,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     print(f"\nThe theme is now '{theme}'. Start a NEW OpenCode session for the new "
           f"voice to take effect — a running session keeps the harness it loaded at start.")
     if _confirm("\nRun a health check (doctor) now?", True):
-        return cmd_doctor(argparse.Namespace(theme=None, bundle=None, no_bundle=False))
+        return _doctor_run_ui()
     return 0
 
 
@@ -1033,9 +1033,11 @@ def _tui_palette(curses) -> dict:
 
 
 def _progress_bar(frac: float, width: int = 24) -> str:
+    # Full block (█, near-universal, single-width) on a blank track — no shade glyph
+    # or emoji that odd terminal fonts (zsh/cmux without a Nerd Font) can garble.
     frac = max(0.0, min(1.0, frac))
     filled = int(round(frac * width))
-    return "█" * filled + "░" * (width - filled)
+    return "█" * filled + " " * (width - filled)
 
 
 def _menu(stdscr, curses, prompt, options, default=None):
@@ -1266,7 +1268,7 @@ def _doctor_view(stdscr, curses, pal) -> None:
         h, w = stdscr.getmaxyx()
         put(0, 0, "  ◆ Geneseed — health check  ".ljust(w - 1), pal["BAR"])
         frac = i / total if total else 0.0
-        put(2, 3, f"⏳ Validating…  {label}", pal["TITLE"])
+        put(2, 3, f"Validating:  {label}", pal["TITLE"])
         put(4, 3, f"[{_progress_bar(frac, max(10, min(40, w - 22)))}] {int(frac * 100):3d}%", pal["HEAD"])
         put(h - 1, 0, "  please wait…  ".ljust(w - 1), pal["BAR"])
         stdscr.refresh()
@@ -1325,6 +1327,29 @@ def _doctor_view(stdscr, curses, pal) -> None:
             return _doctor_view(stdscr, curses, pal)
 
 
+def _doctor_screen(stdscr) -> None:
+    import curses
+    _doctor_view(stdscr, curses, _tui_palette(curses))
+
+
+def _doctor_run_ui() -> int:
+    """Show the health check in the curses view where supported, else run the classic
+    text doctor. Used by the setup wizard's 'Run a health check now?' prompt."""
+    if (not sys.platform.startswith("win")) and sys.stdin.isatty():
+        try:
+            import curses
+            import locale
+            try:
+                locale.setlocale(locale.LC_ALL, "")
+            except locale.Error:
+                pass
+            curses.wrapper(_doctor_screen)
+            return 0
+        except Exception:
+            pass
+    return cmd_doctor(argparse.Namespace(theme=None, bundle=None, no_bundle=False))
+
+
 def _tui_loop(stdscr, inv: dict) -> None:
     import curses
     import textwrap
@@ -1338,8 +1363,10 @@ def _tui_loop(stdscr, inv: dict) -> None:
     C_FRAME, C_BAR, C_SEL = pal["FRAME"], pal["BAR"], pal["SEL"]
     C_TITLE, C_ICON, C_HEAD = pal["TITLE"], pal["ICON"], pal["HEAD"]
 
+    # Single-width BMP glyphs only — no emoji-presentation chars (e.g. ⚙/⏳) that
+    # render double-width and break alignment in some terminal fonts.
     ICON = {"agent": "◆", "skill": "✦", "law": "§"}
-    SECT = {"AGENTS": "⚙", "SKILLS": "✦", "LAWS": "§"}
+    SECT = {"AGENTS": "◆", "SKILLS": "✦", "LAWS": "§"}
 
     def clamp(v, lo, hi):
         return max(lo, min(v, hi))
@@ -1532,7 +1559,7 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log) -> None:
                 pass
 
     put(0, 0, "  ◆ Geneseed — updating  ".ljust(w - 1), pal["BAR"])
-    sym = {"pending": "·", "running": "▶", "done": "✓", "failed": "✗"}
+    sym = {"pending": "-", "running": ">", "done": "+", "failed": "x"}
     for i, (title, _c) in enumerate(steps):
         st = status[i]
         attr = pal["HEAD"] if st == "running" else (curses.A_DIM if st == "pending" else 0)
