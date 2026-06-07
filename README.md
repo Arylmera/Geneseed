@@ -26,8 +26,9 @@ python build.py                  # default theme (neutral)
 python build.py --theme imperial # Warhammer 40k voice, identical structure
 ```
 
-Two themes ship: **neutral** (plain professional voice) and **imperial** (40k
-flavour). A theme is one JSON file in `themes/` carrying voice tokens only.
+Six themes ship — **neutral**, **imperial** (Warhammer 40k), **military**,
+**pirate**, **wizard**, and **cyberpunk** — and a theme is just one JSON file in
+`themes/` carrying voice tokens only, so adding your own is a copy-and-edit away.
 
 ## What you get
 

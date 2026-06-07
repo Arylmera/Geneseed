@@ -763,7 +763,8 @@ def _ask_choice(prompt: str, options: list[tuple[str, str]], default: str) -> st
     """Print numbered options; return the chosen key (default on empty/invalid)."""
     print(f"\n{prompt}:")
     for i, (key, desc) in enumerate(options, 1):
-        print(f"  {i}) {key} — {desc}" + ("   (default)" if key == default else ""))
+        label = f"{key} — {desc}" if desc else key
+        print(f"  {i}) {label}" + ("   (default)" if key == default else ""))
     default_idx = str(next(i for i, (k, _) in enumerate(options, 1) if k == default))
     raw = _ask("Choose", default_idx)
     try:
@@ -799,6 +800,24 @@ def _default_theme() -> str:
     return "neutral"
 
 
+# Short blurbs for the setup wizard's theme picker; any theme without one just shows
+# its name. Themes are discovered from themes/*.json, so a new theme appears with no
+# code change — only an (optional) line here for a friendlier label.
+THEME_BLURBS = {
+    "neutral": "plain professional voice",
+    "imperial": "Warhammer 40k",
+    "military": "ops / SOP / radio-brevity",
+    "pirate": "high-seas crew",
+    "wizard": "arcane grimoire",
+    "cyberpunk": "netrunner",
+}
+
+
+def _theme_options() -> list[tuple[str, str]]:
+    opts = [(p.stem, THEME_BLURBS.get(p.stem, "")) for p in sorted(build.THEMES.glob("*.json"))]
+    return opts or [("neutral", THEME_BLURBS["neutral"])]
+
+
 def cmd_setup(args: argparse.Namespace) -> int:
     """Guided, dependency-free install wizard: answer a few prompts and it runs the
     right build, then offers a health check. Nothing is written until you confirm."""
@@ -807,8 +826,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
                          "  python build.py --emit opencode-global --theme neutral\n")
         return 1
     print("Geneseed setup — answer a few questions; nothing is written until you confirm.")
-    theme = _ask_choice("Theme", [("neutral", "plain professional voice"),
-                                  ("imperial", "Warhammer 40k voice")], _default_theme())
+    theme = _ask_choice("Theme", _theme_options(), _default_theme())
     emit = _ask_choice("Install mode",
                        [("opencode-global", "OpenCode global config dir (recommended)"),
                         ("opencode", "OpenCode per-repo .opencode/ layer"),
