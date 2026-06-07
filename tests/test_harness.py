@@ -97,6 +97,60 @@ class ThemeParityTests(unittest.TestCase):
         self.assertEqual(harness._theme_parity_problems(), [])
 
 
+class ThemeDetectionTests(unittest.TestCase):
+    AVAIL = ["cyberpunk", "gamer", "imperial", "military", "neutral",
+             "pirate", "sports", "wizard"]
+
+    def test_marker_wins(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            (d / ".geneseed-theme").write_text("imperial\n", encoding="utf-8")
+            self.assertEqual(harness._theme_of_dir(d), "imperial")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_falls_back_to_sigil(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            build.build("imperial", d)
+            (d / ".geneseed-theme").unlink()        # force the sigil path
+            self.assertEqual(harness._theme_of_dir(d), "imperial")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_none_when_undetectable(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            self.assertIsNone(harness._theme_of_dir(d))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_explicit_theme_wins(self):
+        self.assertEqual(
+            harness._themes_to_check("pirate", False, "imperial", self.AVAIL),
+            ["pirate"])
+
+    def test_scopes_to_detected(self):
+        self.assertEqual(
+            harness._themes_to_check(None, False, "imperial", self.AVAIL),
+            ["imperial"])
+
+    def test_all_sweeps_every_theme(self):
+        self.assertEqual(
+            harness._themes_to_check(None, True, "imperial", self.AVAIL),
+            sorted(self.AVAIL))
+
+    def test_sweeps_when_detected_is_unknown_or_absent(self):
+        # nothing installed (fresh clone) -> full sweep
+        self.assertEqual(
+            harness._themes_to_check(None, False, None, self.AVAIL),
+            sorted(self.AVAIL))
+        # a detected name not among available themes -> full sweep, not a dead theme
+        self.assertEqual(
+            harness._themes_to_check(None, False, "ghost", self.AVAIL),
+            sorted(self.AVAIL))
+
+
 class RenderedCheckTests(unittest.TestCase):
     def test_fresh_build_clean_then_drift_detected(self):
         d = Path(tempfile.mkdtemp())

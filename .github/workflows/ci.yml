@@ -19,6 +19,6 @@ jobs:
         with:
           node-version: "20"
       - name: doctor (every theme + parity + authoring gates)
-        run: python rituals/harness.py doctor
+        run: python rituals/harness.py doctor --all
       - name: unit tests
         run: python -m unittest discover -s tests -p "test_*.py"

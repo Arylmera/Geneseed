@@ -4,9 +4,10 @@
 Dependency-free. Subcommands:
 
     harness build [--theme NAME]   render src/ -> Harness/ for a theme
-    harness doctor [--theme NAME]  validate the build(s): unresolved tokens, dead
+    harness doctor [--theme NAME]  validate the build: unresolved tokens, dead
                                    links, and non-hermetic links that escape the
-                                   bundle. Sweeps every theme unless one is named
+                                   bundle. Defaults to the installed theme; --all
+                                   sweeps every theme (parity is checked in all modes)
     harness context                resolve context.json and print eager entries'
                                    contents (Rule XVIII enforcement; wire to a
                                    SessionStart hook so the manifest is injected,
@@ -241,12 +242,35 @@ def _authoring_problems() -> list[str]:
     return problems
 
 
-def _doctor_collect(theme=None, bundle=None, no_bundle=False, on_progress=None):
+def _themes_to_check(theme, all_themes, detected, available):
+    """Which themes doctor validates. An explicit --theme wins. Otherwise, unless
+    --all forces the full maintainer sweep, scope to the theme THIS host installed
+    (detected from the deployed marker/sigil) so a user who installed one theme is
+    not buried under the same problem echoed across all eight. Falls back to the
+    full sweep when nothing is installed (a fresh clone) or the detected theme is
+    unknown — so a maintainer in a clean checkout still gets full coverage."""
+    if theme:
+        return [theme]
+    if not all_themes and detected and detected in available:
+        return [detected]
+    return sorted(available)
+
+
+def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False, on_progress=None):
     """Run every doctor check; return (themes, sorted_unique_problems). on_progress
-    (i, total, label) is called as it advances, so a caller can draw a progress bar."""
-    themes = [theme] if theme else sorted(p.stem for p in build.THEMES.glob("*.json"))
-    if not themes:
+    (i, total, label) is called as it advances, so a caller can draw a progress bar.
+
+    Theme scope: with no explicit `theme` and without `all_themes`, validation is
+    scoped to the installed theme (detected from the deployed bundle), not the full
+    sweep — see `_themes_to_check`. The cross-theme PARITY check below runs
+    regardless of scope, so the guarantee that motivated the sweep (a voice token
+    present in one theme map but missing in another) is never lost."""
+    available = [p.stem for p in build.THEMES.glob("*.json")]
+    if not available:
         return [], ["[doctor] no themes found"]
+    # Only probe the deployed install when we actually need it (no theme / not --all).
+    detected = None if (theme or all_themes) else _installed_defaults().get("theme")
+    themes = _themes_to_check(theme, all_themes, detected, available)
     total = len(themes) + 1
     problems: list[str] = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -273,13 +297,19 @@ def _doctor_collect(theme=None, bundle=None, no_bundle=False, on_progress=None):
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
-    """Validate the build. With --theme, checks that one theme; without, sweeps
-    EVERY theme so a token only one theme map breaks cannot slip through."""
-    themes, problems = _doctor_collect(theme=args.theme, bundle=args.bundle,
-                                       no_bundle=args.no_bundle)
+    """Validate the build. With --theme, checks that one theme. With no theme it
+    scopes to the INSTALLED theme (so a one-theme install is not buried under the
+    same issue repeated across all eight); pass --all for the full maintainer sweep
+    of every theme. The cross-theme parity check runs in every mode."""
+    all_themes = getattr(args, "all", False)
+    themes, problems = _doctor_collect(theme=args.theme, all_themes=all_themes,
+                                       bundle=args.bundle, no_bundle=args.no_bundle)
     if not themes:
         print(problems[0] if problems else "[doctor] no themes found")
         return 1
+    scoped = not args.theme and not all_themes and len(themes) == 1
+    note = (f"  (scoped to installed theme '{themes[0]}'; run with --all to sweep "
+            f"every theme)" if scoped else "")
     if problems:
         print(f"[doctor] {len(problems)} problem(s) across {len(themes)} theme(s):")
         for p in problems:
@@ -287,10 +317,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if any("dead link" in p for p in problems):
             print("  tip: dead links to skills mean your source is incomplete — run "
                   "`./geneseed update` (or re-sync src/), then re-check.")
+        if note:
+            print(note)
         return 1
     print(f"[doctor] ok — {len(themes)} theme(s) clean: no unresolved tokens, no dead "
           f"links, nothing escapes the bundle; themes in parity; specs carry purpose "
           f"lines; rendered bundle in sync")
+    if note:
+        print(note)
     return 0
 
 
@@ -715,6 +749,11 @@ def _diff_collect(target=None, theme=None):
     if not (target / build.GLOBAL_MANIFEST).exists():
         return target, theme, None
     if not theme:
+        # Render the 'expected' copy in the theme the deployment ACTUALLY uses, so
+        # themed wording is not reported as a difference — only genuine local edits
+        # surface. Fall back to the configured/neutral theme only if undetectable.
+        theme = _theme_of_dir(target)
+    if not theme:
         cfgp = ROOT / "harness.config.json"
         theme = (json.loads(cfgp.read_text(encoding="utf-8")).get("theme", "neutral")
                  if cfgp.exists() else "neutral")
@@ -873,6 +912,22 @@ def _theme_from_agent(agent_md: Path) -> "str | None":
     return None
 
 
+def _theme_of_dir(d: Path) -> "str | None":
+    """The theme a deployed harness in `d` was built with: the `.geneseed-theme`
+    marker if present, else inferred from its AGENT.md sigil. Single source of theme
+    detection — used by install detection, the doctor's default scope, and the diff's
+    'expected' render so each compares against the theme actually deployed."""
+    try:
+        marker = d / ".geneseed-theme"
+        if marker.is_file():
+            name = marker.read_text(encoding="utf-8").strip()
+            if name:
+                return name
+    except OSError:
+        pass
+    return _theme_from_agent(d / "AGENT.md")
+
+
 def _installed_defaults() -> dict:
     """Best-effort detection of the CURRENT install's theme + emit, so the wizard can
     pre-select them. Prefers the .geneseed-* markers; falls back to inferring the theme
@@ -895,11 +950,7 @@ def _installed_defaults() -> dict:
                 elif (base / ".geneseed-manifest.json").is_file():
                     found["emit"] = "opencode-global"
             if found["theme"] is None:
-                tm = base / ".geneseed-theme"
-                if tm.is_file():
-                    found["theme"] = tm.read_text(encoding="utf-8").strip() or None
-                else:
-                    found["theme"] = _theme_from_agent(base / "AGENT.md")
+                found["theme"] = _theme_of_dir(base)
         except OSError:
             pass
     return found
@@ -990,7 +1041,9 @@ def _setup_lines() -> int:
     for kind, text in _setup_summary_lines(theme, emit, out, root, True):
         print({"ok": "✓", "warn": "!", "info": "-"}.get(kind, "-") + " " + text)
     if _confirm("\nRun a health check (doctor) now?", True):
-        return cmd_doctor(argparse.Namespace(theme=None, bundle=None, no_bundle=False))
+        # Scope to the theme we just installed — no full-sweep noise post-install.
+        return cmd_doctor(argparse.Namespace(theme=theme, all=False,
+                                             bundle=None, no_bundle=False))
     return 0
 
 
@@ -1482,7 +1535,7 @@ def _doctor_run_ui() -> int:
             return 0
         except Exception:
             pass
-    return cmd_doctor(argparse.Namespace(theme=None, bundle=None, no_bundle=False))
+    return cmd_doctor(argparse.Namespace(theme=None, all=False, bundle=None, no_bundle=False))
 
 
 def _info_screen(stdscr, curses, pal, title, lines, footer) -> None:
@@ -2333,10 +2386,14 @@ def main() -> int:
     b.set_defaults(fn=cmd_build)
 
     d = sub.add_parser("doctor",
-                       help="validate every theme's build: unresolved tokens, dead "
-                            "links, non-hermetic escapes, theme-key parity, and that a "
-                            "committed bundle matches src (--theme NAME for just one)")
+                       help="validate the build: unresolved tokens, dead links, "
+                            "non-hermetic escapes, theme-key parity, and that a "
+                            "committed bundle matches src. Defaults to the INSTALLED "
+                            "theme (--theme NAME for one, --all to sweep every theme)")
     d.add_argument("--theme", default=None)
+    d.add_argument("--all", action="store_true",
+                   help="sweep EVERY theme (maintainer full check / CI), not just the "
+                        "installed one — the default scopes to the installed theme")
     d.add_argument("--bundle", default=None,
                    help="committed bundle to check for drift vs a fresh render (default: ./Harness)")
     d.add_argument("--no-bundle", action="store_true",
@@ -2354,7 +2411,8 @@ def main() -> int:
     df = sub.add_parser("diff", help="report how a deployed global harness differs from a fresh render (back-port aid)")
     df.add_argument("--target", default=None,
                     help="deployed config dir (default: $OPENCODE_CONFIG_DIR / ~/.config/opencode)")
-    df.add_argument("--theme", default=None, help="theme the deployment used (default: harness.config.json)")
+    df.add_argument("--theme", default=None, help="theme the deployment used "
+                    "(default: auto-detected from the deployed marker/sigil)")
     df.add_argument("--full", action="store_true", help="show unified diffs, not just the file-level summary")
     df.set_defaults(fn=cmd_diff)
 

@@ -103,7 +103,11 @@ NEW="$(find "$TMP" -maxdepth 1 -type d -iname 'geneseed-*' | head -n1)"
 # broken until a second run. Validate in the temp dir; on failure, nothing here is
 # modified — just retry once upstream is consistent.
 echo "[geneseed] validating downloaded source ..."
-if ! python3 "$NEW/rituals/harness.py" doctor; then
+# --all: this gate validates the SOURCE we are about to apply across every theme,
+# not the user's installed one (doctor's default scope now). _installed_defaults
+# also probes the real global config dir, so a bare `doctor` could wrongly scope to
+# an existing install — force the full sweep.
+if ! python3 "$NEW/rituals/harness.py" doctor --all; then
   echo "[geneseed] ✗ downloaded source is inconsistent — NOT applying it." >&2
   echo "[geneseed] ✗ Upstream was likely mid-publish; re-run in a moment:" >&2
   echo "[geneseed] ✗     $(basename "$0") ${*:-}" >&2
