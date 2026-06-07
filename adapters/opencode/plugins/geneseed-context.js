@@ -38,6 +38,11 @@ const EAGER_FILE_KB = Number(process.env.GENESEED_EAGER_FILE_KB || 16)
 const EAGER_TOTAL_KB = Number(process.env.GENESEED_EAGER_TOTAL_KB || 48)
 const MAX_FILES_SCANNED = 2000
 const MAX_DEPTH = 6
+// Bounds on lazy-listing cost: read at most this many headings per session, and only
+// the head of each file (enough for an H1) rather than the whole thing — a large
+// docs/ tree must not cost one full-file read per entry on every session start.
+const LAZY_HEADING_LIMIT = Number(process.env.GENESEED_LAZY_HEADINGS || 64)
+const HEADING_SLICE_BYTES = 4096
 
 // Quiet by default — OpenCode surfaces a plugin's stderr in the UI (red text). Set
 // GENESEED_DEBUG=1 to see discovery/inject logs. Set GENESEED_CONTEXT_INJECT=off to
@@ -92,6 +97,22 @@ function firstHeading(text) {
     if (s.startsWith("#")) return s.replace(/^#+\s*/, "").trim()
   }
   return ""
+}
+
+// Read only the head of a file (enough to find an H1) instead of the whole thing —
+// bounds per-file cost when listing a large docs/ tree.
+async function readHeadSlice(p, max = HEADING_SLICE_BYTES) {
+  let fh
+  try {
+    fh = await fs.open(p, "r")
+    const buf = Buffer.alloc(max)
+    const { bytesRead } = await fh.read(buf, 0, max, 0)
+    return buf.subarray(0, bytesRead).toString("utf8")
+  } catch {
+    return ""
+  } finally {
+    if (fh) await fh.close().catch(() => {})
+  }
 }
 
 function kb(bytes) { return (bytes / 1024).toFixed(0) }
@@ -259,10 +280,14 @@ async function buildBlock({ eager, lazy }) {
   }
 
   const lazyLines = []
+  let headingsRead = 0
   for (const l of lazy) {
     let head = l.desc
-    if (!head) {
-      try { head = firstHeading(await fs.readFile(l.abs, "utf8")) } catch { head = "" }
+    // Only crack open files we have no description for, and cap how many — bounded by
+    // a head-slice read so a big docs/ tree stays cheap on every session start.
+    if (!head && headingsRead < LAZY_HEADING_LIMIT) {
+      head = firstHeading(await readHeadSlice(l.abs))
+      headingsRead++
     }
     lazyLines.push(`  - ${l.rel}${head ? ` — ${head}` : ""}`)
   }

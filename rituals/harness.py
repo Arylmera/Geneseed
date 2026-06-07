@@ -140,6 +140,59 @@ def _check_build(theme_name: str, out: Path) -> list[str]:
     return problems
 
 
+def _theme_parity_problems() -> list[str]:
+    """Every theme must define the same VOICE keys. A token present in one theme but
+    absent from another renders as a raw {{TOKEN}} only in the files that use it, and
+    only under that theme — a plain build can miss it. Compare the maps directly."""
+    themes: dict[str, dict] = {}
+    for p in sorted(build.THEMES.glob("*.json")):
+        try:
+            themes[p.stem] = json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            return [f"[themes] {p.name} unreadable: {e}"]
+    if len(themes) < 2:
+        return []
+    allkeys = set().union(*(set(t) for t in themes.values()))
+    problems: list[str] = []
+    for name, t in themes.items():
+        for k in sorted(allkeys - set(t)):
+            problems.append(f"[themes] '{name}' missing key {{{k}}} (defined in another theme)")
+    return problems
+
+
+def _rendered_problems(bundle: Path) -> list[str]:
+    """A committed bundle (e.g. ./Harness) must match a fresh render of src/ for its
+    own recorded theme, or it has silently drifted — doctor's tmp builds never touch
+    it. Render src/ in memory and compare only the files that come FROM src/ (AGENT.md,
+    the laws, agents, skills, memory/README…). Host-state files (context.json,
+    MEMORY.md, the .geneseed-* markers) are created once and never rendered, so they
+    are not in the render set and are correctly ignored."""
+    if not bundle.is_dir():
+        return []
+    marker = bundle / ".geneseed-theme"
+    if marker.exists():
+        theme_name = marker.read_text(encoding="utf-8").strip()
+    elif build.CONFIG.exists():
+        theme_name = json.loads(build.CONFIG.read_text(encoding="utf-8")).get("theme", "neutral")
+    else:
+        theme_name = "neutral"
+    try:
+        _theme, items = build.render_all(theme_name)
+    except SystemExit:
+        return [f"[rendered] cannot render theme '{theme_name}' for {bundle.name}/"]
+    problems: list[str] = []
+    for out_rel, text, src in items:
+        dest = bundle / out_rel
+        if not dest.exists():
+            problems.append(f"[rendered] {bundle.name}/{out_rel} missing — rebuild the bundle")
+        elif text is not None:
+            if dest.read_text(encoding="utf-8") != text:
+                problems.append(f"[rendered] {bundle.name}/{out_rel} stale (differs from a fresh render) — rebuild")
+        elif dest.read_bytes() != src.read_bytes():
+            problems.append(f"[rendered] {bundle.name}/{out_rel} stale — rebuild")
+    return problems
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Validate the build. With --theme, checks that one theme; without, sweeps
     EVERY theme so a token only the imperial map breaks cannot slip through."""
@@ -157,13 +210,17 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 problems.append(f"[{theme_name}] build failed")
                 continue
             problems += _check_build(theme_name, out)
+    problems += _theme_parity_problems()
+    if not args.no_bundle:
+        bundle = Path(args.bundle).expanduser().resolve() if args.bundle else ROOT / "Harness"
+        problems += _rendered_problems(bundle)
     if problems:
         print(f"[doctor] {len(problems)} problem(s) across {len(themes)} theme(s):")
         for p in sorted(set(problems)):
             print("  -", p)
         return 1
-    print(f"[doctor] ok — {len(themes)} theme(s) clean: no unresolved tokens, "
-          f"no dead links, nothing escapes the bundle")
+    print(f"[doctor] ok — {len(themes)} theme(s) clean: no unresolved tokens, no dead "
+          f"links, nothing escapes the bundle; themes in parity; rendered bundle in sync")
     return 0
 
 
@@ -532,8 +589,13 @@ def main() -> int:
 
     d = sub.add_parser("doctor",
                        help="validate every theme's build: unresolved tokens, dead "
-                            "links, non-hermetic escapes (--theme NAME for just one)")
+                            "links, non-hermetic escapes, theme-key parity, and that a "
+                            "committed bundle matches src (--theme NAME for just one)")
     d.add_argument("--theme", default=None)
+    d.add_argument("--bundle", default=None,
+                   help="committed bundle to check for drift vs a fresh render (default: ./Harness)")
+    d.add_argument("--no-bundle", action="store_true",
+                   help="skip the committed-bundle drift check")
     d.set_defaults(fn=cmd_doctor)
 
     p = sub.add_parser("prompt", help="emit a self-contained install prompt (no Python needed to use it)")

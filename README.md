@@ -56,7 +56,8 @@ Geneseed/
 │   ├── skills/           repeatable workflows
 │   └── memory/           memory convention + index
 ├── themes/               token → label maps (neutral, imperial)
-├── rituals/harness.py    optional CLI: build · doctor · prompt · learn
+├── rituals/harness.py    optional CLI: build · doctor · prompt · learn · diff
+├── tests/                stdlib unit tests (python -m unittest discover -s tests)
 └── adapters/opencode/    opencode.json + the learn & context plugins
 ```
 
@@ -245,7 +246,17 @@ python rituals/harness.py doctor --theme imperial
 ```
 
 Checks each theme's build for unresolved tokens, dead links, and non-hermetic links
-that would escape the bundle.
+that would escape the bundle; that every theme defines the same voice tokens
+(theme-key parity); and that a committed bundle (e.g. `Harness/`) still matches a
+fresh render of `src/` — a drift guard, since the rendered bundle is tracked.
+`--no-bundle` skips that last check; `--bundle PATH` points it elsewhere.
+
+Unit tests for the generator and CLI (stdlib only — no dependencies) live in
+`tests/`:
+
+```
+python -m unittest discover -s tests
+```
 
 ## Review local edits — `diff`
 
