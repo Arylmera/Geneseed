@@ -52,8 +52,11 @@ your-repo/
     └── plugins/               context + learn plugins
 ```
 
-- Read-only agents (their spec says *Read-only*) get `tools: { write: false,
-  edit: false }`; the rest keep edit access.
+- Read-only agents (their spec says *Read-only*) get an OpenCode `permission` block
+  — `edit: deny`, `webfetch: deny`, and `bash: deny`, so a read-only agent can't
+  mutate via the shell either. One that must run read-only commands (tests, linters,
+  scanners) declares `<!-- bash: allow -->` in its spec, which gates bash to `ask`
+  instead. The rest keep edit access.
 - OpenCode invokes a subagent via the task tool, e.g. `subagent_type: "reviewer"`.
 - **Skills are native, not slash commands** — model-invoked via the `skill` tool
   with progressive disclosure (the agent sees each skill's `description` and loads
@@ -105,8 +108,8 @@ with `GENESEED_OUT` (bundle) and `GENESEED_ROOT` (project root).
 
 If you'd rather not run the generator, create each file by hand:
 `.opencode/agents/<name>.md` with frontmatter `description`, `mode: subagent`, and
-(for read-only agents) `tools: { write: false, edit: false }`, body = the agent
-spec. Skills become native skills at `.opencode/skills/<name>/SKILL.md` with
+(for read-only agents) a `permission:` block (`edit: deny`, `webfetch: deny`, and
+`bash: deny` — or `bash: ask` if it runs read-only commands), body = the agent spec. Skills become native skills at `.opencode/skills/<name>/SKILL.md` with
 frontmatter `name` + `description` (+ optional `compatibility: opencode`), body =
 the skill spec. (Plural dir names are canonical; singular `agent/`/`command/` are
 back-compat aliases.)
@@ -176,12 +179,12 @@ export GENESEED_HARNESS=/abs/path/to/Harness        # e.g. in your shell profile
 If the plugin can't read the session's model from the transcript, set a fallback
 `GENESEED_MODEL=provider/model`. Otherwise there is nothing else to configure.
 
-> **Field-test note.** This plugin follows the published OpenCode plugin + SDK docs
-> (`session.idle`, `client.session.messages`, message `info.providerID/modelID`,
-> `client.session.prompt`), but has not been run against every OpenCode build. If a
-> field name differs in your version it degrades quietly — logs to stderr and writes
-> nothing — rather than erroring. The resolvers are isolated at the top of
-> `geneseed-learn.js` for a one-line adjustment if needed.
+> **Field-test note.** This plugin uses `session.idle`, `client.session.messages`,
+> message `info.providerID/modelID`, and `client.session.prompt` — all confirmed
+> against the current OpenCode plugin + SDK docs. Field names can still shift between
+> versions; if one differs it degrades quietly — logs to stderr and writes nothing —
+> rather than erroring. The resolvers are isolated at the top of `geneseed-learn.js`
+> for a one-line adjustment if needed.
 
 ## Doc enforcement — the `context` plugin (v2, convention-glob)
 
@@ -211,6 +214,11 @@ the harness live entirely in the global config dir with zero per-repo files.
   that already carries it — so a stray second plugin copy can't double-inject. (The
   hard guarantee is still a single install: OpenCode dedups plugins by npm
   name+version only, so two local copies both load.)
+- **Survives compaction:** on the experimental `session.compacting` hook it re-pushes
+  the eager docs into the compaction context, so the project context (Law XVIII)
+  persists when a long session is summarised. The `AGENT.md` rules already survive —
+  they load via `instructions`, not the conversation — so only the injected project
+  context needs re-pushing.
 
 It needs no model, writes nothing, skips the learn plugin's throwaway sessions, and
 swallows every error. Output mirrors `rituals/harness.py context`.
@@ -224,10 +232,10 @@ swallows every error. Output mirrors `rituals/harness.py context`.
   agent-discipline — no injection).
 
 **Install:** the same step as the learn plugin — `cp …/plugins/*.js` copies both;
-`build --emit opencode` and `--emit opencode-global` place both for you. The same
-field-test caveat applies (`session.created`, `session.prompt` `noReply`,
-`session.messages`, and `session.get` follow the published docs but aren't verified
-against every build).
+`build --emit opencode` and `--emit opencode-global` place both for you. It uses
+`session.created`, `session.prompt` `noReply`, `session.messages`, `session.get`,
+and the experimental `session.compacting` hook — all confirmed against the current
+OpenCode docs; it degrades quietly if a field differs in your build.
 
 ## Global install — everything in the config dir
 

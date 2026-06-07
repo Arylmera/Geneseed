@@ -13,6 +13,10 @@
 
 ## Allowed tools
 - Read-only vs write. List the operations this {{AGENT}} may perform.
+- Say "**Read-only.**" here for a non-mutating agent: the OpenCode emit then denies
+  edit, webfetch, and bash. If it must run read-only commands (tests, linters,
+  scanners), add the marker `<!-- bash: allow -->` in this section to gate bash to
+  "ask" instead of denying it outright.
 
 ## Procedure
 1. Step-by-step method this {{AGENT}} follows.

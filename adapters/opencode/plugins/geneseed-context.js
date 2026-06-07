@@ -301,6 +301,16 @@ async function buildBlock({ eager, lazy }) {
   return { text: out.join("\n"), injected, lazy: lazyLines.length, kb: kb(spent) }
 }
 
+// Resolve the eager/lazy sets (manifest or auto-discovery) and render the injection
+// block — shared by the session.created injection and the compaction hook.
+async function resolveBlock(root) {
+  const src = await resolveSource(root)
+  const sets = src.mode === "manifest"
+    ? await fromManifest(src.file, root)
+    : await discover(root)
+  return { block: await buildBlock(sets), src }
+}
+
 // ---- cross-instance idempotency ----------------------------------------------
 async function alreadyInjected(client, sid) {
   try {
@@ -342,12 +352,7 @@ export const GeneseedContext = async (ctx) => {
 
         if (await alreadyInjected(client, sid)) { log("skipped: already injected (marker present)"); return }
 
-        const src = await resolveSource(root)
-        const sets = src.mode === "manifest"
-          ? await fromManifest(src.file, root)
-          : await discover(root)
-
-        const block = await buildBlock(sets)
+        const { block, src } = await resolveBlock(root)
         if (!block) { log(`no docs discovered in ${root}`); return }
 
         await client.session.prompt({
@@ -358,6 +363,25 @@ export const GeneseedContext = async (ctx) => {
         log(`injected: ${block.injected} eager (${block.kb} KB), ${block.lazy} lazy listed — via ${via}`)
       } catch (err) {
         log(`error: ${err?.message ?? err}`)
+      }
+    },
+
+    // Survive compaction. The session.created injection above is a conversation
+    // message, so OpenCode summarises it away when a long session compacts (the
+    // AGENT.md rules persist — they load via opencode.json `instructions`, not the
+    // conversation). Re-push the eager docs into the compaction context so the
+    // project context — Law XVIII — outlives the summary. Experimental OpenCode hook;
+    // if it is absent in a build this key is simply never called.
+    "experimental.session.compacting": async (_input, output) => {
+      if (INJECT_OFF) return
+      try {
+        const { block } = await resolveBlock(root)
+        if (block && output && Array.isArray(output.context)) {
+          output.context.push(block.text)
+          log(`compaction: re-pushed ${block.injected} eager doc(s)`)
+        }
+      } catch (err) {
+        log(`compaction error: ${err?.message ?? err}`)
       }
     },
   }

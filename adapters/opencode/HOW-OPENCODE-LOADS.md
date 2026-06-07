@@ -2,7 +2,8 @@
 
 A reference for what OpenCode reads at startup, how Geneseed plugs into each
 mechanism, and why a file can appear **listed twice**. Field names and event lists
-follow the published OpenCode plugin + SDK docs and can shift between versions.
+are confirmed against the current OpenCode plugin + SDK docs; they can still shift
+between versions, and the plugins degrade quietly if one does.
 
 ## 1. Config discovery & merge
 
@@ -68,7 +69,8 @@ Subdir names are **plural** canonically (`agents/`, `skills/`, `commands/`,
 `plugins/`, …); singular (`agent/`, `command/`) is back-compat only.
 
 - `.opencode/agents/<name>.md` → a **subagent** (frontmatter: `description`,
-  `mode: subagent`, optional `tools:` to restrict write/edit).
+  `mode: subagent`, optional `permission:` to deny edit/bash/webfetch — Geneseed uses
+  this to make read-only agents truly read-only, shell included).
 - `.opencode/skills/<name>/SKILL.md` → a **native skill** (frontmatter: `name`,
   `description`) — model-invoked via the `skill` tool, progressive disclosure.
 - `.opencode/commands/<name>.md` → a **slash command** (user-invoked `/name`).
@@ -84,7 +86,8 @@ to native **skills**, not slash commands (same `SKILL.md` shape as Claude Code).
 | `instructions` → `AGENT.md` | the rules, loaded every session |
 | `.opencode/agents/`, `.opencode/skills/` | capability agents and native skills |
 | plugin on `session.created` | **context plugin (v2)** — auto-discovers & injects the repo's `eager` docs |
-| plugin on `session.idle` | **learn plugin** — distils memory into `memory/` |
+| plugin on `experimental.session.compacting` | **context plugin** — re-pushes the `eager` docs so they survive compaction |
+| plugin on `session.idle` | **learn plugin** — distils memory into `memory/` (debounced to fire once, at session end) |
 | `context.json` / `.harness/` (manifest) | *optional* override when discovery doesn't fit |
 
 ## 6. "Why is `context.json` (or `AGENT.md`) listed twice?"

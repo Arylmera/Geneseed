@@ -306,7 +306,17 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int,
         if folder == "agents":
             fm = [f"description: {json.dumps(desc)}", "mode: subagent"]
             if _is_readonly(text):
-                fm += ["tools:", "  write: false", "  edit: false"]
+                # A "Read-only" agent must not be able to mutate the repo — and that
+                # includes the shell: `tools: {write,edit: false}` alone still leaves
+                # `bash` open, through which a read-only agent could write or fetch.
+                # Use OpenCode's permission model. bash is denied by default; a spec
+                # that genuinely runs read-only commands (tests, linters, scanners)
+                # opts in with the `<!-- bash: allow -->` marker (then gated to ask).
+                fm += ["permission:", "  edit: deny", "  webfetch: deny"]
+                if "<!-- bash: allow -->" in text:
+                    fm += ["  bash:", '    "*": ask']
+                else:
+                    fm += ["  bash: deny"]
             dest = agents_dir / f"{stem}.md"
             n_agents += 1
         elif folder == "skills":

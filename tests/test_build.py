@@ -74,5 +74,28 @@ class BuildRoundTripTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class NativeLayerTests(unittest.TestCase):
+    def test_readonly_agents_get_permission_block(self):
+        _t, items = build.render_all("neutral")
+        d = Path(tempfile.mkdtemp())
+        try:
+            build._write_native_layer(items, d / "agents", d / "skills")
+            reviewer = (d / "agents" / "reviewer.md").read_text(encoding="utf-8")
+            explorer = (d / "agents" / "explorer.md").read_text(encoding="utf-8")
+            tester = (d / "agents" / "tester.md").read_text(encoding="utf-8")
+            # read-only agents get a permission block denying edit + webfetch
+            self.assertIn("permission:", reviewer)
+            self.assertIn("edit: deny", reviewer)
+            self.assertIn("webfetch: deny", reviewer)
+            # reviewer runs tests -> bash gated to ask; explorer -> bash denied
+            self.assertIn('"*": ask', reviewer)
+            self.assertIn("bash: deny", explorer)
+            self.assertNotIn('"*": ask', explorer)
+            # tester edits test files -> not read-only -> no permission block
+            self.assertNotIn("permission:", tester)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

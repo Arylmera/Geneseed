@@ -16,6 +16,8 @@
 ## Allowed tools
 - **Read-only.** May read code, run the test suite and linters, inspect history.
 - Does not edit code; it reports.
+<!-- bash: allow -->
+
 
 ## Procedure
 1. Confirm the change actually does what the task required (read the spec/issue).

@@ -15,6 +15,8 @@
 
 ## Allowed tools
 - **Read-only.** May run dependency/secret scanners. Reports; does not patch.
+<!-- bash: allow -->
+
 
 ## Procedure
 1. Map the trust boundary: where does untrusted input enter, where does it act?
