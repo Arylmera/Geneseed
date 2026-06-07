@@ -277,6 +277,23 @@ class VersionTests(unittest.TestCase):
         self.assertIn("differs", harness._version_verdict("old", "new"))
 
 
+class StatusDataTests(unittest.TestCase):
+    def test_reports_counts_version_and_keys(self):
+        d = harness._status_data()
+        # counts match the rendered inventory
+        self.assertEqual(d["agents"], 6)
+        self.assertEqual(d["skills"], 17)
+        self.assertEqual(d["laws"], 18)
+        # version fields present and well-formed
+        self.assertRegex(d["source_fp"], r"^[0-9a-f]{12}$")
+        self.assertIsInstance(d["version_verdict"], str)
+        self.assertTrue(d["version_verdict"])
+        # the structural keys the command/TUI rely on are all present
+        for k in ("theme", "accent", "emit", "memory_dir", "facts",
+                  "installed_fp", "agent_md", "agent_md_present"):
+            self.assertIn(k, d)
+
+
 class UninstallTests(unittest.TestCase):
     def test_global_uninstall_removes_owned_keeps_memory(self):
         import contextlib, io

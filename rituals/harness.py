@@ -17,6 +17,8 @@ Dependency-free. Subcommands:
                                    --full for unified diffs, --theme to match voice
     harness version [--target DIR] show the current source fingerprint vs the
                                    deployed install's, and whether they match
+    harness status                 print the install dashboard as text (theme, mode,
+                                   counts, memory, version) — headless, any OS
     harness uninstall [--target DIR] remove a global install via its manifest (owned
                                    files + opencode.json entry + markers); keeps
                                    memory unless --purge-memory; --yes to skip prompt
@@ -881,6 +883,59 @@ def cmd_version(args: argparse.Namespace) -> int:
     print(f"[version] installed: {installed or '(none found)'}"
           + (f"   ({target})" if installed else ""))
     print(f"[version] {_version_verdict(installed, current)}")
+    return 0
+
+
+def _status_data() -> dict:
+    """Gather everything the status dashboard reports — the single source for both the
+    headless `status` command and the TUI panel, so the two never drift. Detects the
+    installed theme/emit, counts agents/skills/laws, locates the memory store and
+    counts facts, and compares the deployed version fingerprint to the source."""
+    inst = _installed_defaults()
+    theme = inst["theme"] or _default_theme()
+    mdir = _resolve_memory_dir(None)
+    inv = _tui_inventory(theme)
+    try:
+        cfg = build._opencode_config_dir()
+    except Exception:
+        cfg = None
+    source_fp = build.source_fingerprint()
+    installed_fp = ver_target = None
+    candidates = ([cfg] if cfg else []) + [ROOT / "Harness", Path.cwd() / "Harness", Path.cwd()]
+    for base in candidates:
+        v = build.read_version(base)
+        if v:
+            installed_fp, ver_target = v, base
+            break
+    agent_md = (cfg / "AGENT.md") if (inst["emit"] == "opencode-global" and cfg) else None
+    return {
+        "theme": theme, "accent": _accent_for(theme), "emit": inst["emit"] or "—",
+        "agents": len(inv["agents"]), "skills": len(inv["skills"]), "laws": len(inv["laws"]),
+        "memory_dir": str(mdir) if mdir else None, "facts": len(_memory_facts(mdir)) if mdir else 0,
+        "source_fp": source_fp, "installed_fp": installed_fp,
+        "version_target": str(ver_target) if ver_target else None,
+        "version_verdict": _version_verdict(installed_fp, source_fp),
+        "agent_md": str(agent_md) if agent_md else None,
+        "agent_md_present": bool(agent_md and agent_md.exists()),
+    }
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    """Print the install dashboard as plain text — theme, install mode, component
+    counts, memory store, version vs source, and (for a global install) AGENT.md.
+    The headless equivalent of the TUI status panel, so Windows / CI / no-TTY hosts
+    can see it too."""
+    d = _status_data()
+    print(f"[status] theme:        {d['theme']}   (accent: {d['accent']})")
+    print(f"[status] install mode: {d['emit']}")
+    print(f"[status] components:   {d['agents']} agents · {d['skills']} skills · {d['laws']} laws")
+    print(f"[status] memory:       {d['memory_dir'] or '(not found)'}   ({d['facts']} fact(s))")
+    print(f"[status] version:      installed {d['installed_fp'] or '(none found)'}  ·  "
+          f"source {d['source_fp']}")
+    print(f"[status]               {d['version_verdict']}")
+    if d["agent_md"]:
+        print(f"[status] AGENT.md:     {d['agent_md']}  "
+              f"({'present' if d['agent_md_present'] else 'MISSING'})")
     return 0
 
 
@@ -2036,23 +2091,21 @@ def _memory_view(stdscr, curses, pal) -> None:
 
 
 def _status_view(stdscr, curses, pal) -> None:
-    """A dashboard: theme, install mode, counts, memory store, AGENT.md location."""
-    inst = _installed_defaults()
-    theme = inst["theme"] or _default_theme()
-    emit = inst["emit"] or "—"
-    mdir = _resolve_memory_dir(None)
-    nfacts = len(_memory_facts(mdir)) if mdir else 0
-    inv = _tui_inventory(theme)
+    """A dashboard: theme, install mode, counts, memory, version, AGENT.md location.
+    Shares `_status_data()` with the headless `status` command so they never drift."""
+    d = _status_data()
+    up_to_date = "up to date" in d["version_verdict"]
     lines = [
-        ("ok", f"theme: {theme}    (accent: {_accent_for(theme)})"),
-        ("info", f"install mode: {emit}"),
-        ("info", f"agents {len(inv['agents'])} · skills {len(inv['skills'])} · laws {len(inv['laws'])}"),
-        ("info", f"memory: {mdir if mdir else '(not found)'}  —  {nfacts} fact(s)"),
+        ("ok", f"theme: {d['theme']}    (accent: {d['accent']})"),
+        ("info", f"install mode: {d['emit']}"),
+        ("info", f"agents {d['agents']} · skills {d['skills']} · laws {d['laws']}"),
+        ("info", f"memory: {d['memory_dir'] or '(not found)'}  —  {d['facts']} fact(s)"),
+        ("info", f"version: installed {d['installed_fp'] or '(none)'} · source {d['source_fp']}"),
+        ("ok" if up_to_date else "warn", d["version_verdict"]),
     ]
-    if emit == "opencode-global":
-        am = build._opencode_config_dir() / "AGENT.md"
-        lines.append(("ok" if am.exists() else "warn",
-                      f"AGENT.md: {am}  ({'present' if am.exists() else 'missing'})"))
+    if d["agent_md"]:
+        lines.append(("ok" if d["agent_md_present"] else "warn",
+                      f"AGENT.md: {d['agent_md']}  ({'present' if d['agent_md_present'] else 'missing'})"))
     _info_screen(stdscr, curses, pal, "status", lines, "Enter: close")
 
 
@@ -2578,6 +2631,9 @@ def main() -> int:
     ve.add_argument("--target", default=None,
                     help="deployed dir to check (default: the OpenCode global config dir)")
     ve.set_defaults(fn=cmd_version)
+
+    st = sub.add_parser("status", help="print the install dashboard as text (theme, mode, counts, memory, version)")
+    st.set_defaults(fn=cmd_status)
 
     un = sub.add_parser("uninstall",
                         help="remove a global Geneseed install (manifest-tracked); keeps memory unless --purge-memory")
