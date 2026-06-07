@@ -97,6 +97,19 @@ unzip -q "$TMP/src.zip" -d "$TMP"
 NEW="$(find "$TMP" -maxdepth 1 -type d -iname 'geneseed-*' | head -n1)"
 [ -n "$NEW" ] || { echo "[geneseed] no Geneseed-* folder in the archive" >&2; exit 1; }
 
+# Validate the DOWNLOADED source before touching anything in $HERE. The old order
+# copied first and validated after, so a bad/stale upstream snapshot (e.g. AGENT.md
+# referencing a skill whose file isn't present) would half-apply and leave the tree
+# broken until a second run. Validate in the temp dir; on failure, nothing here is
+# modified — just retry once upstream is consistent.
+echo "[geneseed] validating downloaded source ..."
+if ! python3 "$NEW/rituals/harness.py" doctor; then
+  echo "[geneseed] ✗ downloaded source is inconsistent — NOT applying it." >&2
+  echo "[geneseed] ✗ Upstream was likely mid-publish; re-run in a moment:" >&2
+  echo "[geneseed] ✗     $(basename "$0") ${*:-}" >&2
+  exit 1
+fi
+
 # Capture the theme the LOCAL config asks for *before* SYNC overwrites
 # harness.config.json with upstream's (which ships neutral). Fallback only —
 # the bundle's own .geneseed-theme marker still wins over this.
