@@ -77,8 +77,9 @@ SRC_DIR_TOKENS = {
 # Document STRUCTURE is theme-INDEPENDENT — the section names, the structural nouns,
 # and the folder names (DIR_*) are always plain English, in every theme and every
 # emit. A theme governs only VOICE: how the AI responds and how the prose inside the
-# docs is written (TAGLINE, LOADED_SIGIL, EPI_*, BENEDICTION, DESC_*, ROAST_PERSONA,
-# VOICE). So the scaffolding stays consistent and tool-friendly while the flavour
+# docs is written (VOICE, TAGLINE, LOADED_SIGIL, EPI_*, BENEDICTION, DESC_*,
+# ROAST_PERSONA, the law titles LEX_*, and the section intros INTRO_*). So the
+# scaffolding stays consistent and tool-friendly while the flavour
 # lives in the words. Theme files carry voice tokens only; these values are fixed.
 STRUCTURE = {
     "HARNESS": "Geneseed", "CHARTER": "Charter",

@@ -30,7 +30,9 @@ vault or a specific tool's hooks.
      scaffolding stay consistent and tool-friendly.
    - **Voice** (themed) — how the AI *responds* (`VOICE` directive) and how the prose
      *inside* the docs is written: `TAGLINE`, `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`,
-     `DESC_*`, `ROAST_PERSONA`. Theme files carry voice tokens only.
+     `DESC_*`, `ROAST_PERSONA`, the law titles `LEX_*`, and the section intros
+     `INTRO_*`. Theme files carry voice tokens only. (Law *numbers* and section
+     *names* stay structural; only the law's title text and the intro prose are voice.)
 
    So `imperial` flavours the words and the agent's tone (the readiness sigil, the
    epigraphs, the descriptions) while every section is still `## Agents`, every

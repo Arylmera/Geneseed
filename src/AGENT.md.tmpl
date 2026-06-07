@@ -2,8 +2,7 @@
 
 > {{TAGLINE}}
 
-This file is the entry point an AI coding agent reads when working in this
-repository. It defines the **{{LAWS}}** the agent obeys, the **{{AGENTS}}** it can
+{{INTRO_DOC}} It defines the **{{LAWS}}** the agent obeys, the **{{AGENTS}}** it can
 delegate to, the **{{SKILLS}}** it can run, how it keeps **{{MEMORY}}**, and how it
 draws on the surrounding **{{VAULT}}**.
 
@@ -41,9 +40,7 @@ names, and file/folder names are always plain English.
 
 *{{EPI_AGENTS}}*
 
-Delegate focused work to a specialist rather than doing everything in one
-context. Each specialist has a single clear purpose and a defined output
-contract. Specs live in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/).
+{{INTRO_AGENTS}} Specs live in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/).
 
 | {{AGENT}} | Use it when… |
 | --- | --- |
@@ -63,8 +60,7 @@ contract. Specs live in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/).
 
 *{{EPI_SKILLS}}*
 
-A {{SKILL}} is a written procedure for a recurring task. Run the matching {{SKILL}}
-before improvising. Specs live in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/).
+{{INTRO_SKILLS}} Specs live in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/).
 
 | {{SKILL}} | Trigger |
 | --- | --- |
@@ -107,8 +103,7 @@ convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
 
 *{{EPI_VAULT}}*
 
-The directory this harness is installed into is its **{{VAULT}}**, and it is
-shared. The harness files — these {{LAWS}}, {{AGENTS}}, {{SKILLS}}, this file — sit
+{{INTRO_WORKSPACE}} The harness files — these {{LAWS}}, {{AGENTS}}, {{SKILLS}}, this file — sit
 *alongside* whatever already belongs to this machine or repository: notes, data,
 configs, documents, prior work. All of it is context you may use.
 
@@ -157,7 +152,7 @@ overwrites it; just fill it in.
 
 *{{EPI_SCRIPTS}}*
 
-Everything above works on agent self-discipline alone. For teams that want hard
+{{INTRO_SCRIPTS}} For teams that want hard
 automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
 `harness doctor`, `harness context`, `harness learn`, plus `harness prompt`,
 `harness diff`, a guided `harness setup` wizard, and a curses `harness tui`) you can
