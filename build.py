@@ -144,6 +144,9 @@ BUNDLE_GITIGNORE = """\
 # Project-context manifest — may hold private paths; never commit.
 context.json
 
+# Per-agent model/temperature overrides — host-specific; never commit.
+agent-overrides.json
+
 # Which theme + emit mode this host last built (local build state, must not travel).
 .geneseed-theme
 .geneseed-emit
@@ -343,7 +346,7 @@ def _strip_skill_body_links(body: str) -> str:
     return re.sub(r"\[([^\]]+)\]\((?!https?://|/|#)[^)\s]*\.md(?:#[^)\s]*)?\)", r"\1", body)
 
 
-def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int, int, list[Path]]:
+def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=None) -> tuple[int, int, list[Path]]:
     """Render capability agents and skills into OpenCode-native files.
 
     - Agents -> `<agents_dir>/<name>.md`  (frontmatter: description, mode: subagent,
@@ -357,6 +360,7 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int,
     Keys off the SOURCE folder name (always neutral) so a theme can rename the
     rendered bundle dirs without moving OpenCode's fixed `agents/` and `skills/`.
     Returns (n_agents, n_skills, written_paths)."""
+    overrides = overrides or {}
     n_agents = n_skills = 0
     written: list[Path] = []
     for _out_rel, text, src in items:
@@ -384,6 +388,14 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path) -> tuple[int,
         body = text.lstrip("\n")
         if folder == "agents":
             fm = [f"description: {json.dumps(desc)}", "mode: subagent"]
+            # Per-agent overrides (O2): emit model/temperature ONLY when configured;
+            # with no override the line is omitted so the agent inherits the host's
+            # current model as-is. Empty agent-overrides.json => zero change.
+            ov = overrides.get(stem) or {}
+            if ov.get("model"):
+                fm.append(f"model: {ov['model']}")
+            if ov.get("temperature") is not None:
+                fm.append(f"temperature: {ov['temperature']}")
             if _is_readonly(text):
                 # A "Read-only" agent must not be able to mutate the repo — and that
                 # includes the shell: `tools: {write,edit: false}` alone still leaves
@@ -430,6 +442,18 @@ def _merge_opencode_json(path: Path, agent_path: str) -> None:
     if agent_path not in instr:
         instr.append(agent_path)
     config["instructions"] = instr
+    # O5: a minimal, non-destructive default permission policy — ASK before the few
+    # genuinely irreversible bash patterns (Laws I/IV). Added ONLY when the user has no
+    # `permission` key at all; never overwrites an existing policy. Unmatched commands
+    # keep OpenCode's default (allow), so normal work is unaffected.
+    if "permission" not in config:
+        config["permission"] = {
+            "bash": {
+                "rm -rf *": "ask",
+                "git push --force*": "ask",
+                "git push -f*": "ask",
+            }
+        }
     path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
 
@@ -443,6 +467,97 @@ def _copy_plugins(dst: Path) -> int:
             shutil.copy2(js, dst / js.name)
             n += 1
     return n
+
+
+# ---- O2/O4/O7: opt-in, non-destructive OpenCode-native extras ------------------
+
+AGENT_OVERRIDES_STUB = {
+    "_comment": (
+        "Per-agent model/temperature overrides for OpenCode. EMPTY = every agent "
+        "inherits OpenCode's current model as-is (the default — nothing changes). Add "
+        "entries keyed by agent name, e.g. "
+        "\"reviewer\": {\"model\": \"anthropic/claude-haiku-4-5\", \"temperature\": 0.1}. "
+        "Host-specific; git-ignored. A future TUI screen edits this — rebuild to apply."
+    ),
+    "agents": {},
+}
+
+PRIMARY_AGENT_SRC = ROOT / "adapters" / "opencode" / "agents" / "orchestrator.md"
+
+# O7: skills also exposed as /slash commands when GENESEED_COMMANDS is set. The hot set
+# — the workflows worth a one-keystroke trigger. Any name absent from src/ is skipped.
+COMMAND_SET = ["commit", "plan", "code-review", "review-response",
+               "verify", "ship", "debug", "research"]
+
+
+def _truthy_env(name: str) -> bool:
+    return (os.environ.get(name) or "").lower() in ("1", "on", "true", "yes")
+
+
+def _load_agent_overrides(base: Path) -> dict:
+    """Per-agent overrides from <base>/agent-overrides.json: {name: {model?, temperature?}}.
+    Returns {} when the file is absent or malformed, so agents inherit the host model."""
+    try:
+        data = json.loads((base / "agent-overrides.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    agents = data.get("agents") if isinstance(data, dict) else None
+    return agents if isinstance(agents, dict) else {}
+
+
+def ensure_agent_overrides_stub(base: Path) -> None:
+    """Drop an empty agent-overrides.json once (never overwrite) — the host's editable,
+    git-ignored model-routing map. Empty by default => no behaviour change."""
+    dest = base / "agent-overrides.json"
+    if not dest.exists():
+        dest.write_text(json.dumps(AGENT_OVERRIDES_STUB, indent=2, ensure_ascii=False) + "\n",
+                        encoding="utf-8")
+
+
+def _write_primary_agent(agents_dir: Path, overrides: dict) -> "Path | None":
+    """Emit the opt-in `mode: primary` orchestrator (GENESEED_PRIMARY). Off by default so
+    the host's current default agent is untouched. Returns the written path or None."""
+    if not _truthy_env("GENESEED_PRIMARY") or not PRIMARY_AGENT_SRC.is_file():
+        return None
+    body = PRIMARY_AGENT_SRC.read_text(encoding="utf-8").lstrip("\n")
+    desc = "Primary orchestrator — works by the harness Rules and delegates to the capability subagents."
+    fm = [f"description: {json.dumps(desc)}", "mode: primary"]
+    ov = overrides.get("orchestrator") or {}
+    if ov.get("model"):
+        fm.append(f"model: {ov['model']}")
+    if ov.get("temperature") is not None:
+        fm.append(f"temperature: {ov['temperature']}")
+    dest = agents_dir / "orchestrator.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + body, encoding="utf-8")
+    return dest
+
+
+def _write_command_layer(items, command_dir: Path) -> list[Path]:
+    """Emit the opt-in /slash commands (GENESEED_COMMANDS) for the hot skill set. Each
+    wraps the rendered skill body (de-linked, like the native skills). Off by default."""
+    if not _truthy_env("GENESEED_COMMANDS"):
+        return []
+    by_name = {}
+    for _out_rel, text, src in items:
+        if text is None:
+            continue
+        sp = src.relative_to(SRC).as_posix().split("/")
+        if len(sp) == 2 and sp[0] == "skills" and sp[1].endswith(".md") and not sp[1].startswith("_"):
+            by_name[sp[1][:-3]] = text
+    written: list[Path] = []
+    for name in COMMAND_SET:
+        text = by_name.get(name)
+        if text is None:
+            continue
+        desc = _first_blockquote(text)
+        body = _strip_skill_body_links(text.lstrip("\n"))
+        dest = command_dir / f"{name}.md"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text("---\n" + f"description: {json.dumps(desc)}\n" + "---\n\n" + body,
+                        encoding="utf-8")
+        written.append(dest)
+    return written
 
 
 def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
@@ -473,8 +588,13 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
         shutil.rmtree(root / ".opencode")
     _, items = render_all(theme_name)
 
+    ensure_agent_overrides_stub(out)
+    overrides = _load_agent_overrides(out)
+
     oc = root / ".opencode"
-    n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills")
+    n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills", overrides)
+    primary = _write_primary_agent(oc / "agents", overrides)
+    commands = _write_command_layer(items, oc / "command")
 
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
@@ -482,8 +602,10 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
 
     n_plugins = _copy_plugins(oc / "plugins")
 
+    extras = ([f"primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
+    extra = (" + " + ", ".join(extras)) if extras else ""
     print(f"[geneseed] opencode layer: {n_agents} subagents, {n_skills} skills, "
-          f"{n_plugins} plugin(s), opencode.json (instructions: {agent_path})")
+          f"{n_plugins} plugin(s), opencode.json (instructions: {agent_path}){extra}")
 
 
 def _opencode_config_dir() -> Path:
@@ -601,8 +723,15 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
         (cfg / "AGENT.md").write_text(agent_text, encoding="utf-8")
         owned.append("AGENT.md")
 
-    n_agents, n_skills, written = _write_native_layer(items, cfg / "agents", cfg / "skills")
+    ensure_agent_overrides_stub(cfg)
+    overrides = _load_agent_overrides(cfg)
+    n_agents, n_skills, written = _write_native_layer(items, cfg / "agents", cfg / "skills", overrides)
     owned += [p.relative_to(cfg).as_posix() for p in written]
+    primary = _write_primary_agent(cfg / "agents", overrides)
+    if primary:
+        owned.append(primary.relative_to(cfg).as_posix())
+    commands = _write_command_layer(items, cfg / "command")
+    owned += [p.relative_to(cfg).as_posix() for p in commands]
 
     n_plugins = 0
     if PLUGIN_SRC.is_dir():
@@ -625,9 +754,11 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
                                 "NOT listed — it is never deleted.", "owned": sorted(owned)},
                    indent=2) + "\n", encoding="utf-8")
 
+    extras = (["primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
+    extra = (" + " + ", ".join(extras)) if extras else ""
     print(f"[geneseed] opencode-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
-          f"{n_plugins} plugin(s), AGENT.md, {mem_status}, opencode.json (no context.json). "
-          f"Point the learn plugin here once:  export GENESEED_HARNESS=\"{cfg}\"")
+          f"{n_plugins} plugin(s), AGENT.md, {mem_status}, opencode.json (no context.json){extra}. "
+          f"The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.")
 
 
 def main() -> None:

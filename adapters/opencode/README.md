@@ -258,10 +258,13 @@ else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`) and builds **no sib
 - `opencode.json` merged to point `instructions` at the absolute `AGENT.md`;
 - **no** `context.json` — the context plugin auto-discovers each repo's docs.
 
-Point the learn plugin at the in-config store once:
+The learn plugin now **auto-locates** the in-config store: it resolves `memory/`
+relative to its own file (`<cfg>/plugins/geneseed-learn.js` → `<cfg>/memory`), so the
+`export GENESEED_HARNESS` step is **optional**. Set it only to point the plugin at a
+*different* store:
 
 ```
-export GENESEED_HARNESS="$HOME/.config/opencode"     # so it writes <cfg>/memory
+export GENESEED_HARNESS="$HOME/.config/opencode"     # optional override
 echo "export GENESEED_HARNESS=\"$HOME/.config/opencode\"" >> ~/.zshrc
 ```
 
@@ -291,6 +294,39 @@ comment.
 If you'd rather use OpenCode's own always-on loading for a small rule file, you can
 also add its path to the `instructions` array of `opencode.json` directly — it
 accepts absolute paths, repo-relative paths, globs, and URLs.
+
+## Newer OpenCode integrations
+
+These exploit OpenCode features beyond the baseline. **All default to today's
+behaviour** — nothing changes the machine's current agent/model unless you opt in.
+
+- **Per-agent model routing** (`agent-overrides.json`). The build drops an empty,
+  git-ignored `agent-overrides.json` at the bundle/config root. Empty ⇒ every agent
+  inherits OpenCode's current model **as-is**. Add entries to pin a model/temperature
+  per agent (e.g. route the read-only `reviewer`/`explorer` to a cheaper model):
+  ```json
+  { "agents": { "reviewer": { "model": "anthropic/claude-haiku-4-5", "temperature": 0.1 } } }
+  ```
+  Re-emit to apply. (A future TUI screen will edit this map.) Unlisted agents emit no
+  `model:` line, so they inherit.
+- **Runtime guard plugin** (`geneseed-guard.js`, installed with the others). Enforces
+  the safety Laws at the tool boundary: **blocks** writes to private-key/credential
+  files (Law I) and catastrophic shell like `rm -rf /` (Law IV); **warns** on `.env`
+  writes and force-push. `GENESEED_GUARD=off` disables it, `=warn` downgrades blocks to
+  warnings.
+- **Invisible context injection** (`GENESEED_CONTEXT_TRANSFORM=1`). Switches the context
+  plugin from a visible `session.created` message to `experimental.chat.messages.transform`,
+  so the PROJECT CONTEXT block no longer appears in the conversation and survives
+  compaction inherently. Off by default; experimental OpenCode hook — verify on your build.
+- **Default permissions.** A fresh `opencode.json` gets a minimal policy that **asks**
+  before `rm -rf *` and `git push --force*`. Added only when you have no `permission`
+  key — an existing policy is never touched.
+- **Primary agent** (`GENESEED_PRIMARY=1`). Emits a `mode: primary` orchestrator that
+  works by the Rules and delegates to the capability subagents. Off by default (it can
+  change which agent is your default, so it stays opt-in).
+- **Slash commands** (`GENESEED_COMMANDS=1`). Also emits `.opencode/command/<name>.md`
+  for the hot skill set (commit, plan, code-review, review-response, verify, ship, debug,
+  research) so they get `/name` triggers, alongside the native skills. Off by default.
 
 ## Notes
 

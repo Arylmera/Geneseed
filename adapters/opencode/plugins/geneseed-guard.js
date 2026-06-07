@@ -1,0 +1,88 @@
+// Geneseed — OpenCode runtime guard plugin.
+//
+// Enforces the safety Laws at the tool boundary (`tool.execute.before`), the same
+// "enforce by injection, don't just instruct" stance as the context plugin:
+//   - Law I  (Sealed Secrets):  block writes to private-key / credential files.
+//   - Law IV (Deletion Is Deliberate):  block catastrophic shell commands.
+// High-confidence patterns only, so legitimate work is never caught. Borderline cases
+// (.env edits, force-push) are WARNED, not blocked.
+//
+// GENESEED_GUARD=off    disable entirely.
+// GENESEED_GUARD=warn   downgrade every block to a warning (log, but allow).
+//
+// Install: dropped into the plugins dir by `build --emit opencode[-global]` (the *.js
+// glob), exactly like the context and learn plugins. Errors never break a tool call.
+
+const MODE = (process.env.GENESEED_GUARD || "on").toLowerCase()
+const OFF = ["off", "0", "false", "no"].includes(MODE)
+const WARN_ONLY = MODE === "warn"
+
+function log(msg) { console.error(`[geneseed-guard] ${msg}`) }
+
+// Files the agent must not write (secrets / private keys) → BLOCK.
+const SECRET_RE = [
+  /(^|\/)id_(rsa|ed25519|ecdsa|dsa)(\.pub)?$/i,
+  /\.(pem|key|p12|pfx|kdbx|keystore|jks)$/i,
+  /(^|\/)\.aws\/credentials$/i,
+  /(^|\/)\.ssh\//i,
+  /(^|\/)\.npmrc$/i,
+  /(^|\/)\.pypirc$/i,
+]
+// .env files are often edited legitimately → WARN, don't hard-block.
+const SECRET_WARN_RE = [/(^|\/)\.env(\.[\w.-]+)?$/i]
+
+// Catastrophic, effectively irreversible shell → BLOCK.
+const SHELL_BLOCK_RE = [
+  /\brm\s+-[a-z]*r[a-z]*f?[a-z]*\s+(--no-preserve-root\s+)?\/(\s|$)/, // rm -rf /
+  /\brm\s+-[a-z]*r[a-z]*f?[a-z]*\s+~(\/)?(\s|$)/,                     // rm -rf ~
+  /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,                         // fork bomb
+  /\bmkfs\.\w+\s+\/dev\//,                                            // format a device
+  /\bdd\b[^\n]*\bof=\/dev\/(sd|nvme|hd|disk)/,                        // dd over a raw disk
+]
+// History-rewriting / irreversible git ops → WARN.
+const SHELL_WARN_RE = [/\bgit\s+push\b[^\n]*(--force\b|-f\b)/, /\bgit\s+reset\s+--hard\b/]
+
+function pickPath(args) {
+  for (const k of ["filePath", "path", "file", "target", "filename"]) {
+    if (args && typeof args[k] === "string") return args[k]
+  }
+  return ""
+}
+function pickCommand(args) {
+  for (const k of ["command", "cmd", "script"]) {
+    if (args && typeof args[k] === "string") return args[k]
+  }
+  return ""
+}
+
+export const GeneseedGuard = async () => {
+  return {
+    "tool.execute.before": async (input, output) => {
+      if (OFF) return
+      const tool = (input?.tool || input?.name || "").toLowerCase()
+      const args = output?.args || input?.args || {}
+      const deny = (why) => {
+        if (WARN_ONLY) { log(`WARN (would block): ${why}`); return false }
+        log(`BLOCKED: ${why}`)
+        throw new Error(`[geneseed-guard] blocked: ${why} — set GENESEED_GUARD=off to allow`)
+      }
+      try {
+        if (tool === "write" || tool === "edit" || tool === "patch") {
+          const p = pickPath(args)
+          if (p && SECRET_RE.some((re) => re.test(p))) { deny(`write to secret/key file ${p} (Law I)`); return }
+          if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Law I)`)
+        } else if (tool === "bash" || tool === "shell") {
+          const c = pickCommand(args)
+          if (c && SHELL_BLOCK_RE.some((re) => re.test(c))) { deny(`catastrophic command (Law IV): ${c.slice(0, 80)}`); return }
+          if (c && SHELL_WARN_RE.some((re) => re.test(c))) log(`WARN: irreversible op — confirm intent (Law IV): ${c.slice(0, 80)}`)
+        }
+      } catch (err) {
+        // Our own deny must propagate; any inspection error must never break a tool call.
+        if (err && String(err.message || "").startsWith("[geneseed-guard]")) throw err
+        log(`inspect error (ignored): ${err?.message ?? err}`)
+      }
+    },
+  }
+}
+
+export default GeneseedGuard

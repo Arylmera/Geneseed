@@ -34,6 +34,12 @@
 
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
+import { fileURLToPath } from "node:url"
+
+// The plugin's own directory. In the global install the layout is
+// <cfg>/plugins/geneseed-learn.js beside <cfg>/memory, so the store can be found
+// relative to this file — no manual `export GENESEED_HARNESS` needed.
+const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 const MAX_NOTES_CHARS = 16000          // cap the prompt; keep the most recent tail
 const MIN_NOTES_CHARS = 200            // below this, the session is too trivial to mine
@@ -87,7 +93,8 @@ async function resolveMemoryDir() {
   const harness = process.env.GENESEED_HARNESS
   const bases = []
   if (harness) bases.push(harness)
-  bases.push(process.cwd(), path.join(process.cwd(), "Harness"))
+  // The plugin's own dir (global install: <cfg>/plugins → <cfg>/memory) and the repo.
+  bases.push(path.resolve(PLUGIN_DIR, ".."), process.cwd(), path.join(process.cwd(), "Harness"))
   for (const base of bases) {
     for (const name of MEMORY_DIR_NAMES) {
       const cand = path.join(base, name)

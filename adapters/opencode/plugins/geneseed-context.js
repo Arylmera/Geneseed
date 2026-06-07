@@ -51,6 +51,13 @@ const HEADING_SLICE_BYTES = 4096
 const DEBUG = !!process.env.GENESEED_DEBUG
 const INJECT_OFF = ["off", "0", "false", "no"].includes(
   (process.env.GENESEED_CONTEXT_INJECT || "on").toLowerCase())
+// Opt-in invisible delivery: when on, inject the context into each request's message
+// array via `experimental.chat.messages.transform` instead of a visible session.created
+// noReply message — no PROJECT CONTEXT block shows in the conversation, and it survives
+// compaction inherently (re-sent per request). Default OFF → today's behaviour is
+// unchanged. Experimental OpenCode hook; verify it on your build before relying on it.
+const TRANSFORM = ["1", "on", "true", "yes"].includes(
+  (process.env.GENESEED_CONTEXT_TRANSFORM || "").toLowerCase())
 function log(msg) { if (DEBUG) console.error(`[geneseed-context] ${msg}`) }
 
 // ---- convention --------------------------------------------------------------
@@ -311,6 +318,19 @@ async function resolveBlock(root) {
   return { block: await buildBlock(sets), src }
 }
 
+// Per-process cache of the rendered block text for the transform path (root is fixed
+// per plugin instance). Recomputed at most once per TTL so doc edits are picked up.
+let _blockCache = { text: null, at: 0 }
+const BLOCK_TTL_MS = 30000
+async function cachedBlockText(root) {
+  const now = Date.now()
+  if (_blockCache.text !== null && now - _blockCache.at < BLOCK_TTL_MS) return _blockCache.text
+  let text = ""
+  try { const { block } = await resolveBlock(root); text = block?.text || "" } catch {}
+  _blockCache = { text, at: now }
+  return text
+}
+
 // ---- cross-instance idempotency ----------------------------------------------
 async function alreadyInjected(client, sid) {
   try {
@@ -335,6 +355,7 @@ export const GeneseedContext = async (ctx) => {
     event: async ({ event }) => {
       if (!event || event.type !== "session.created") return
       if (INJECT_OFF) return          // opt-out: rely on the AGENT.md Law, no visible block
+      if (TRANSFORM) return           // invisible delivery via messages.transform handles it
       const sid =
         event.properties?.sessionID ?? event.payload?.sessionID ??
         event.properties?.info?.id ?? event.payload?.info?.id
@@ -373,7 +394,7 @@ export const GeneseedContext = async (ctx) => {
     // project context — Law XVIII — outlives the summary. Experimental OpenCode hook;
     // if it is absent in a build this key is simply never called.
     "experimental.session.compacting": async (_input, output) => {
-      if (INJECT_OFF) return
+      if (INJECT_OFF || TRANSFORM) return   // transform re-injects each request; nothing to patch
       try {
         const { block } = await resolveBlock(root)
         if (block && output && Array.isArray(output.context)) {
@@ -382,6 +403,32 @@ export const GeneseedContext = async (ctx) => {
         }
       } catch (err) {
         log(`compaction error: ${err?.message ?? err}`)
+      }
+    },
+
+    // Invisible delivery (opt-in, GENESEED_CONTEXT_TRANSFORM=1). Prepend the context to
+    // each request's outgoing message array — no persisted/visible session message, and
+    // it survives compaction because it is re-sent every request. Experimental OpenCode
+    // hook; never called on a build that lacks it, so the default path is unaffected.
+    "experimental.chat.messages.transform": async (_input, output) => {
+      if (INJECT_OFF || !TRANSFORM) return
+      try {
+        if (!output || !Array.isArray(output.messages) || !output.messages.length) return
+        const sid = output.messages[0]?.info?.sessionID
+        // Already present this request? (idempotent across plugin copies / retries.)
+        const present = output.messages.some((m) =>
+          (m?.parts ?? []).some((p) => typeof p?.text === "string" && p.text.includes(MARKER)))
+        if (present) return
+        const text = await cachedBlockText(root)
+        if (!text) return
+        const stamp = Date.now()
+        output.messages.unshift({
+          info: { id: `geneseed-context-${stamp}`, role: "user", sessionID: sid, time: { created: stamp } },
+          parts: [{ id: `geneseed-context-part-${stamp}`, type: "text", text }],
+        })
+        log("transform: injected context invisibly")
+      } catch (err) {
+        log(`transform error: ${err?.message ?? err}`)
       }
     },
   }

@@ -97,5 +97,78 @@ class NativeLayerTests(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class OpencodeExtrasTests(unittest.TestCase):
+    def _items(self):
+        _t, items = build.render_all("neutral")
+        return items
+
+    def test_load_agent_overrides_missing_and_parsed(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            self.assertEqual(build._load_agent_overrides(d), {})          # absent -> {}
+            (d / "agent-overrides.json").write_text(
+                '{"agents": {"reviewer": {"model": "x/y", "temperature": 0.1}}}', encoding="utf-8")
+            ov = build._load_agent_overrides(d)
+            self.assertEqual(ov["reviewer"]["model"], "x/y")
+            # malformed -> {} (never throws, agents just inherit)
+            (d / "agent-overrides.json").write_text("{ not json", encoding="utf-8")
+            self.assertEqual(build._load_agent_overrides(d), {})
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_overrides_emit_model_only_when_set(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            ov = {"reviewer": {"model": "anthropic/claude-haiku-4-5", "temperature": 0.1}}
+            build._write_native_layer(self._items(), d / "agents", d / "skills", ov)
+            reviewer = (d / "agents" / "reviewer.md").read_text(encoding="utf-8")
+            tester = (d / "agents" / "tester.md").read_text(encoding="utf-8")
+            self.assertIn("model: anthropic/claude-haiku-4-5", reviewer)
+            self.assertIn("temperature: 0.1", reviewer)
+            self.assertNotIn("model:", tester)                           # no override -> inherits
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_primary_and_commands_are_opt_in(self):
+        import os
+        d = Path(tempfile.mkdtemp())
+        try:
+            items = self._items()
+            os.environ.pop("GENESEED_PRIMARY", None)
+            os.environ.pop("GENESEED_COMMANDS", None)
+            self.assertIsNone(build._write_primary_agent(d / "agents", {}))   # off by default
+            self.assertEqual(build._write_command_layer(items, d / "command"), [])
+            os.environ["GENESEED_PRIMARY"] = "1"
+            os.environ["GENESEED_COMMANDS"] = "1"
+            try:
+                p = build._write_primary_agent(d / "agents", {})
+                self.assertIsNotNone(p)
+                self.assertIn("mode: primary", p.read_text(encoding="utf-8"))
+                cmds = build._write_command_layer(items, d / "command")
+                self.assertTrue(any(c.name == "commit.md" for c in cmds))
+            finally:
+                os.environ.pop("GENESEED_PRIMARY", None)
+                os.environ.pop("GENESEED_COMMANDS", None)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_default_permission_added_only_when_absent(self):
+        import json as _json
+        d = Path(tempfile.mkdtemp())
+        try:
+            cfg = d / "opencode.json"
+            build._merge_opencode_json(cfg, "AGENT.md")                  # fresh -> gets default
+            data = _json.loads(cfg.read_text(encoding="utf-8"))
+            self.assertIn("permission", data)
+            self.assertEqual(data["permission"]["bash"]["rm -rf *"], "ask")
+            # an existing policy is never overwritten
+            cfg.write_text('{"permission": {"bash": "allow"}}', encoding="utf-8")
+            build._merge_opencode_json(cfg, "AGENT.md")
+            data = _json.loads(cfg.read_text(encoding="utf-8"))
+            self.assertEqual(data["permission"]["bash"], "allow")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
