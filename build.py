@@ -30,6 +30,9 @@ THEMES = ROOT / "themes"
 
 TOKEN_RE = re.compile(r"\{\{([A-Z_]+)\}\}")
 INCLUDE_RE = re.compile(r"^[ \t]*<!--[ \t]*INCLUDE:[ \t]*(?P<path>[^ \t]+)[ \t]*-->[ \t]*$", re.M)
+# A per-row agent/skill table link, e.g. `[reviewer](agents/reviewer.md)`. The folder
+# pointers `](agents/)` / `](skills/)` (no `.md`) and `](memory/…)` never match.
+CAPABILITY_LINK_RE = re.compile(r"\[([^\]]+)\]\((?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
 
 TEXT_SUFFIXES = {".md", ".tmpl", ".json", ".txt", ".yml", ".yaml"}
 
@@ -279,6 +282,17 @@ def _is_readonly(text: str) -> bool:
 PLUGIN_SRC = ROOT / "adapters" / "opencode" / "plugins"
 
 
+def _strip_capability_links(text: str) -> str:
+    """Reduce AGENT.md's per-row agent/skill table links to plain names — for the
+    OpenCode emits only. OpenCode loads agents and skills by native discovery
+    (HOW-OPENCODE-LOADS §4), so these hrefs are navigation-only, never followed, and
+    were the recurring dead-link source. The table keeps its names + trigger text and
+    the section intros keep their `agents/` / `skills/` folder pointer; only the
+    per-row spec links are removed. The portable `files` emit keeps the links (its
+    specs are flat siblings that resolve)."""
+    return CAPABILITY_LINK_RE.sub(r"\1", text)
+
+
 def _renest_skill_links(body: str) -> str:
     """Rewrite a skill body's in-bundle relative links for the nested native layout.
 
@@ -419,6 +433,13 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     listed in `instructions`."""
     root = root or out
     build(theme_name, out)
+    # OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
+    # plain names (the portable build keeps them). The bundle's flat specs still exist
+    # beside it — this is a deliberate de-link, not a fix for a broken target.
+    agent_md = out / "AGENT.md"
+    if agent_md.is_file():
+        agent_md.write_text(_strip_capability_links(agent_md.read_text(encoding="utf-8")),
+                            encoding="utf-8")
     # `.opencode/` is fully owned by this layer — wipe so a removed agent/skill
     # leaves no stale file behind. (Plural dir names are canonical in OpenCode;
     # singular is back-compat only.)
@@ -541,9 +562,9 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     owned: list[str] = []
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
     if agent_text is not None:
-        # AGENT.md lists skills as flat `skills/<name>.md`, but native skills are
-        # nested `skills/<name>/SKILL.md` — rewrite the links so they resolve.
-        agent_text = re.sub(r"\]\(skills/([A-Za-z0-9_-]+)\.md\)", r"](skills/\1/SKILL.md)", agent_text)
+        # OpenCode loads agents/skills natively, so drop AGENT.md's per-row spec links
+        # to plain names (no nested-path rewrite to maintain, nothing to break).
+        agent_text = _strip_capability_links(agent_text)
         # Memory links stay RELATIVE. In the global layout AGENT.md and the store are
         # siblings (<cfg>/AGENT.md + <cfg>/memory/), so a relative `memory/` resolves
         # correctly from AGENT.md's own location AND stays hermetic — no absolute

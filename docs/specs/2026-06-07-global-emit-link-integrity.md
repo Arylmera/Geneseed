@@ -43,5 +43,23 @@ global emit at all. Three distinct defects:
 - `GlobalEmitDoctorTests`: the `opencode-global` emit is token/link/escape-clean for
   neutral and imperial (would fail on any of the three defects above).
 
+## Follow-up: de-link AGENT.md tables in the OpenCode emits
+
+OpenCode loads agents/skills by native discovery (HOW-OPENCODE-LOADS §4), so
+AGENT.md's per-row table links are navigation-only and never followed — and they
+were the recurring dead-link source. Decision: **drop the per-row links in the
+OpenCode emits only** (the portable `files` emit keeps them, since its specs are
+flat siblings that resolve and a human may browse them).
+
+- `build._strip_capability_links(text)` reduces `[name](agents|skills/x.md)` to
+  plain `name`; folder pointers (`](agents/)`, `](skills/)`) and memory links are
+  untouched. Applied to `out/AGENT.md` in `emit_opencode` and to `agent_text` in
+  `emit_opencode_global` (replacing the old nested-path rewrite — nothing left to
+  break). The trigger column and the section folder pointers are preserved.
+- In-skill-body cross-links (inside SKILL.md) are unchanged — still renested so they
+  resolve; they are skill prose, not the AGENT.md tables.
+
 ## Result
-`doctor --all` reports 8 themes clean, now including the global emit.
+`doctor --all` reports 8 themes clean, now including the global emit. The OpenCode
+AGENT.md carries no per-row spec links (nothing to break); the portable build keeps
+them.

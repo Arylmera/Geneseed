@@ -187,6 +187,37 @@ class GlobalEmitDoctorTests(unittest.TestCase):
                 self.assertEqual(harness._global_emit_problems(theme), [])
 
 
+class CapabilityLinkStripTests(unittest.TestCase):
+    PER_ROW = re.compile(r"\]\((?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
+
+    def test_pure_strips_per_row_keeps_folder_and_memory(self):
+        s = ("| [reviewer](agents/reviewer.md) | when ready |\n"
+             "| [brainstorm](skills/brainstorm.md) | new design |\n"
+             "Specs live in [`agents/`](agents/) and [`skills/`](skills/).\n"
+             "Facts live in [`memory/`](memory/).")
+        out = build._strip_capability_links(s)
+        self.assertIn("| reviewer | when ready |", out)
+        self.assertIn("| brainstorm | new design |", out)
+        self.assertNotRegex(out, self.PER_ROW)        # per-row spec links gone
+        self.assertIn("](agents/)", out)              # folder pointers kept
+        self.assertIn("](skills/)", out)
+        self.assertIn("](memory/)", out)              # memory links untouched
+
+    def test_files_emit_keeps_links_global_strips_them(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        cfg = Path(tempfile.mkdtemp()) / "cfg"
+        try:
+            build.build("neutral", d)
+            self.assertRegex((d / "AGENT.md").read_text(encoding="utf-8"), self.PER_ROW)
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_opencode_global("neutral", out=Path(tempfile.mkdtemp()) / "b", cfg=cfg)
+            self.assertNotRegex((cfg / "AGENT.md").read_text(encoding="utf-8"), self.PER_ROW)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+            shutil.rmtree(cfg.parent, ignore_errors=True)
+
+
 class RenderedCheckTests(unittest.TestCase):
     def test_fresh_build_clean_then_drift_detected(self):
         d = Path(tempfile.mkdtemp())
