@@ -585,6 +585,15 @@ def main() -> None:
     except OSError:
         pass
 
+    # build() already drops a .geneseed-theme marker in `out`; the global emit renders
+    # into the config dir without calling build(), so record the theme there too —
+    # so tools (e.g. the setup wizard) can detect the installed theme later.
+    if args.emit == "opencode-global":
+        try:
+            (_opencode_config_dir() / ".geneseed-theme").write_text(args.theme + "\n", encoding="utf-8")
+        except OSError:
+            pass
+
 
 if __name__ == "__main__":
     main()

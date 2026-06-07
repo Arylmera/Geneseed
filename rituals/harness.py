@@ -820,6 +820,29 @@ def _theme_options() -> list[tuple[str, str]]:
     return opts or [("neutral", THEME_BLURBS["neutral"])]
 
 
+def _installed_defaults() -> dict:
+    """Best-effort detection of the CURRENT install's theme + emit, so the wizard can
+    pre-select them. Reads the .geneseed-theme / .geneseed-emit markers from the global
+    config dir first (the recommended install), then common bundle locations."""
+    found = {"theme": None, "emit": None}
+    candidates = []
+    try:
+        candidates.append(build._opencode_config_dir())
+    except Exception:
+        pass
+    candidates += [ROOT / "Harness", ROOT.parent / "Harness", Path.cwd() / "Harness"]
+    for base in candidates:
+        for key, marker in (("theme", ".geneseed-theme"), ("emit", ".geneseed-emit")):
+            if found[key] is None:
+                try:
+                    p = base / marker
+                    if p.is_file():
+                        found[key] = p.read_text(encoding="utf-8").strip() or None
+                except OSError:
+                    pass
+    return found
+
+
 EMIT_OPTIONS = [
     ("opencode-global", "OpenCode global config dir — every repo inherits it (recommended)."),
     ("opencode", "Per-repo .opencode/ layer committed into one repository."),
@@ -831,8 +854,9 @@ def _collect_setup_lines() -> "dict | None":
     """Line-based selection — the cross-platform / no-curses fallback. Returns the
     confirmed selection dict, or None if cancelled."""
     print("Geneseed setup — answer a few questions; nothing is written until you confirm.")
-    theme = _ask_choice("Theme", _theme_options(), _default_theme())
-    emit = _ask_choice("Install mode", EMIT_OPTIONS, "opencode-global")
+    inst = _installed_defaults()
+    theme = _ask_choice("Theme", _theme_options(), inst["theme"] or _default_theme())
+    emit = _ask_choice("Install mode", EMIT_OPTIONS, inst["emit"] or "opencode-global")
     out = root = None
     if emit == "opencode":
         root = _ask("Repo root to install into", ".")
@@ -1048,13 +1072,16 @@ def _setup_tui(stdscr):
     """Curses install form: theme → mode → (target) → confirm. Returns the selection
     dict, or None if cancelled at any step."""
     import curses
-    theme = _menu(stdscr, curses, "Choose a theme",
+    inst = _installed_defaults()
+    theme_prompt = "Choose a theme" + (f"   (installed: {inst['theme']})" if inst["theme"] else "")
+    theme = _menu(stdscr, curses, theme_prompt,
                   [(k, k, blurb or "voice theme") for k, blurb in _theme_options()],
-                  default=_default_theme())
+                  default=inst["theme"] or _default_theme())
     if theme is None:
         return None
-    emit = _menu(stdscr, curses, "Choose an install mode",
-                 [(k, k, d) for k, d in EMIT_OPTIONS], default="opencode-global")
+    emit_prompt = "Choose an install mode" + (f"   (installed: {inst['emit']})" if inst["emit"] else "")
+    emit = _menu(stdscr, curses, emit_prompt,
+                 [(k, k, d) for k, d in EMIT_OPTIONS], default=inst["emit"] or "opencode-global")
     if emit is None:
         return None
     out = root = None
