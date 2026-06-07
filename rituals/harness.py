@@ -922,22 +922,74 @@ def _status_data() -> dict:
     }
 
 
-def cmd_status(args: argparse.Namespace) -> int:
-    """Print the install dashboard as plain text — theme, install mode, component
-    counts, memory store, version vs source, and (for a global install) AGENT.md.
-    The headless equivalent of the TUI status panel, so Windows / CI / no-TTY hosts
-    can see it too."""
-    d = _status_data()
-    print(f"[status] theme:        {d['theme']}   (accent: {d['accent']})")
-    print(f"[status] install mode: {d['emit']}")
-    print(f"[status] components:   {d['agents']} agents · {d['skills']} skills · {d['laws']} laws")
-    print(f"[status] memory:       {d['memory_dir'] or '(not found)'}   ({d['facts']} fact(s))")
-    print(f"[status] version:      installed {d['installed_fp'] or '(none found)'}  ·  "
-          f"source {d['source_fp']}")
-    print(f"[status]               {d['version_verdict']}")
+_ANSI = {"red": "31", "green": "32", "yellow": "33", "blue": "34",
+         "magenta": "35", "cyan": "36", "white": "37"}
+
+
+def _color_enabled() -> bool:
+    """ANSI only when writing to a real terminal and not muted by NO_COLOR / dumb."""
+    return (sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+            and os.environ.get("TERM") != "dumb")
+
+
+def _status_lines(d: dict, color: bool = False) -> list[str]:
+    """Render the status dashboard as a framed, aligned panel. Pure — returns the
+    lines. `color` adds ANSI (accent frame + bold title, green/amber/dim verdict).
+    GENESEED_TUI_ASCII swaps every non-ASCII glyph (box-drawing, ◆ · ✓ —) for a plain
+    equivalent so fonts that tofu them still render and align."""
+    asc = _TUI_ASCII
+    H, V = ("-", "|") if asc else ("─", "│")
+    TL, TR, BL, BR, LT, RT = (("+",) * 6 if asc else ("┌", "┐", "└", "┘", "├", "┤"))
+    DOT = "-" if asc else "·"               # inline separator
+    badge = "*" if asc else "◆"
+    emdash = "-" if asc else "—"
+
+    up = "up to date" in d["version_verdict"]
+    none_inst = d["installed_fp"] is None
+    mark = ("OK" if asc else "✓") if up else (("-" if asc else "·") if none_inst else "!")
+    vcode = "32" if up else ("2" if none_inst else "33")
+
+    rows = [
+        ("theme", f"{d['theme']}  (accent: {d['accent']})"),
+        ("install", d["emit"]),
+        ("components", f"{d['agents']} agents {DOT} {d['skills']} skills {DOT} {d['laws']} laws"),
+        ("memory", f"{d['memory_dir'] or '(not found)'}  "
+                   f"({d['facts']} fact{'' if d['facts'] == 1 else 's'})"),
+        ("version", f"{d['installed_fp'] or '(none)'}  {DOT}  source {d['source_fp']}"),
+    ]
     if d["agent_md"]:
-        print(f"[status] AGENT.md:     {d['agent_md']}  "
-              f"({'present' if d['agent_md_present'] else 'MISSING'})")
+        rows.append(("AGENT.md",
+                     f"{d['agent_md']}  ({'present' if d['agent_md_present'] else 'MISSING'})"))
+
+    label_w = max(len(k) for k, _ in rows)
+    body = [f"  {k.ljust(label_w)}   {v}" for k, v in rows]
+    verdict = f"  {mark} {d['version_verdict']}"
+    title = f" {badge} Geneseed {emdash} status "
+    width = max([len(b) for b in body] + [len(verdict), len(title) + 2])
+
+    ac = _ANSI.get(d["accent"], "36")
+
+    def c(s: str, code: str) -> str:
+        return f"\x1b[{code}m{s}\x1b[0m" if color else s
+
+    top = (c(TL + H, ac) + c(title, f"{ac};1") + c(H * (width - len(title) - 1) + TR, ac)
+           if color else TL + H + title + H * (width - len(title) - 1) + TR)
+    edge = c(V, ac)
+    lines = [top]
+    lines += [edge + b.ljust(width) + edge for b in body]
+    lines.append(c(LT + H * width + RT, ac))
+    lines.append(edge + c(verdict.ljust(width), vcode) + edge)
+    lines.append(c(BL + H * width + BR, ac))
+    return lines
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    """Print the install dashboard — theme, install mode, component counts, memory
+    store, version vs source, and (for a global install) AGENT.md — as a framed,
+    aligned panel. The headless equivalent of the TUI status view, so Windows / CI /
+    no-TTY hosts can see it too (color is auto-disabled when piped)."""
+    for line in _status_lines(_status_data(), color=_color_enabled()):
+        print(line)
     return 0
 
 

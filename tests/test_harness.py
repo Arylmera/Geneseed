@@ -294,6 +294,26 @@ class StatusDataTests(unittest.TestCase):
             self.assertIn(k, d)
 
 
+class StatusRenderTests(unittest.TestCase):
+    def test_framed_box_is_uniform_width_and_complete(self):
+        lines = harness._status_lines(harness._status_data(), color=False)
+        self.assertGreaterEqual(len(lines), 7)
+        self.assertEqual(len({len(ln) for ln in lines}), 1)   # every line same width (no ANSI)
+        self.assertIn(lines[0][0], "┌+")                       # top frame
+        self.assertIn(lines[-1][0], "└+")                      # bottom frame
+        blob = "\n".join(lines)
+        for token in ("Geneseed", "theme", "components", "version", "source"):
+            self.assertIn(token, blob)
+
+    def test_color_adds_ansi_without_changing_line_count(self):
+        d = harness._status_data()
+        plain = harness._status_lines(d, color=False)
+        colored = harness._status_lines(d, color=True)
+        self.assertEqual(len(plain), len(colored))
+        self.assertNotIn("\x1b[", "".join(plain))
+        self.assertIn("\x1b[", "".join(colored))
+
+
 class UninstallTests(unittest.TestCase):
     def test_global_uninstall_removes_owned_keeps_memory(self):
         import contextlib, io
