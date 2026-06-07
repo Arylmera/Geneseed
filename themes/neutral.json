@@ -30,5 +30,7 @@
   "DESC_PARALLEL_AGENTS": "Fan independent subtasks out to concurrent subagents, then converge the results.",
   "DESC_CMUX": "Run and watch subagents live in cmux split panes — one pane per agent, opened and closed automatically.",
   "DESC_TDD": "Drive implementation with tests — write the failing test first, then the minimum code to pass.",
-  "DESC_HANDOFF": "Snapshot task state so a fresh context — or another agent — can resume in one read."
+  "DESC_HANDOFF": "Snapshot task state so a fresh context — or another agent — can resume in one read.",
+  "DESC_SHIP": "Open a pull request with a structured body, or finish and merge a branch, once the change is verified.",
+  "DESC_RELEASE": "Cut a release — bump the version, update the changelog, and tag — keeping all three in sync."
 }

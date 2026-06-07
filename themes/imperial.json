@@ -30,5 +30,7 @@
   "DESC_PARALLEL_AGENTS": "Loose many specialists upon independent tasks at once, then gather what they bring.",
   "DESC_CMUX": "Loose your specialists into their own scrying-panes — each watched live in cmux, opened and sealed as the work begins and ends.",
   "DESC_TDD": "Let the trials lead the work — set the failing trial first, then only the code to pass it.",
-  "DESC_HANDOFF": "Inscribe the state of the work so a fresh mind may take up the watch without loss."
+  "DESC_HANDOFF": "Inscribe the state of the work so a fresh mind may take up the watch without loss.",
+  "DESC_SHIP": "Send the finished work to the gate — a pull request well-formed, or the branch merged once the trials are passed.",
+  "DESC_RELEASE": "Proclaim a new version — raise the number, inscribe the chronicle, seal it with a tag, all three in accord."
 }
