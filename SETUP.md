@@ -18,9 +18,10 @@ internals see [adapters/opencode/](adapters/opencode/README.md).
 
 ## Choose your path
 
-**Easiest:** run `python rituals/harness.py setup` for a guided, dependency-free
-wizard — it asks for a theme and install mode, runs the right build, and offers a
-health check. It works on every OS. Prefer to do it by hand? Pick a path below.
+**Easiest:** run `./geneseed setup` (or `python rituals/harness.py setup`) for a
+guided, dependency-free wizard — it asks for a theme and install mode, runs the right
+build, and offers a health check. It works on every OS. Prefer to do it by hand?
+Pick a path below.
 
 | Path | Use when |
 | --- | --- |
@@ -199,27 +200,27 @@ The skill never installs a converter silently — if none is present it reports 
    sits in the plugins dir.
 4. **Harness health** — `python rituals/harness.py doctor` should print `ok`.
 
-On a Unix terminal, `python rituals/harness.py tui` opens a full-screen panel to
-browse the agents, skills, and laws and run build/doctor/diff with a keystroke.
+On a Unix terminal, `./geneseed` opens a full-screen, colorized panel to browse the
+agents, skills, and laws and run build/doctor/diff with a keystroke.
 
 ## Upgrade
 
 ```
-./upgrade.sh                  # track main; keep the remembered theme + emit mode
-./upgrade.sh v0.1.0           # pin to a tag
-./upgrade.sh main imperial    # force a theme
+./geneseed upgrade                 # track main; keep the remembered theme + emit mode
+./geneseed upgrade v0.1.0          # pin to a tag
+./geneseed upgrade main imperial   # force a theme
 ```
 
 It downloads the published source, validates it (a blocking `doctor` pass), then
 re-renders in place — leaving host state (memory, `context.json`, markers) untouched.
-Theme and emit mode are remembered between runs. To update the upgrade scripts
-themselves first: `./sync-self.sh`.
+Theme and emit mode are remembered between runs. To update the launcher and upgrade
+scripts themselves first: `./geneseed sync-self`.
 
 **Reviewing local edits** — if you tweaked the deployed harness in place and want to
 see what diverged from source (to back-port):
 
 ```
-python rituals/harness.py diff            # --full for line-level diffs
+./geneseed diff            # --full for line-level diffs
 ```
 
 ## Troubleshooting

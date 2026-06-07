@@ -30,9 +30,9 @@
 # downloading and extraction happens in a throwaway temp dir — nothing lands
 # here until we deliberately copy it.
 #
-# This script refreshes the factory CONTENT but NOT itself or the wrapper scripts
+# This script refreshes the factory CONTENT but NOT itself or the launcher
 # (rewriting a running script is unsafe). To update the orchestration layer itself
-# — upgrade.sh, upgrade-<theme>.sh, sync-self.sh — run ./sync-self.sh first.
+# — upgrade.sh, sync-self.sh, geneseed — run ./sync-self.sh first.
 
 set -eo pipefail
 
@@ -79,7 +79,7 @@ fi
 # Factory files refreshed from upstream. Everything else in the folder is left
 # alone — notably context.json and Harness/memory/ (your runtime state).
 SYNC=(build.py rituals src themes adapters prompts \
-      harness.config.json DESIGN.md README.md LICENSE .gitignore)
+      harness.config.json DESIGN.md README.md SETUP.md LICENSE .gitignore)
 
 # --- work in a temp dir so the zip and its Geneseed-<ref>/ folder can never
 #     collide with the folder we are standing in ---------------------------

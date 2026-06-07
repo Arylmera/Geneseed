@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Geneseed meta-updater — refresh the ORCHESTRATION scripts that `upgrade.sh` does
-# not (and cannot safely) refresh itself: `upgrade.sh`, the per-theme wrappers, and
+# not (and cannot safely) refresh itself: `upgrade.sh`, the `geneseed` launcher, and
 # this script.
 #
 #     ./sync-self.sh            # track main
@@ -25,7 +25,7 @@ main() {
   local HERE; HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
   # The orchestration layer this updater owns (everything upgrade.sh's SYNC skips).
-  local SCRIPTS=(upgrade.sh upgrade-neutral.sh upgrade-imperial.sh sync-self.sh)
+  local SCRIPTS=(upgrade.sh sync-self.sh geneseed)
 
   local TMP; TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' RETURN

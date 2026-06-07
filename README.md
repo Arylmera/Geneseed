@@ -55,17 +55,18 @@ Open OpenCode in any repo — the first reply opens with the readiness sigil and
 project's docs are already in context. **Other tools (Claude Code, plain `AGENT.md`),
 per-repo installs, configuration, and troubleshooting: [SETUP.md](SETUP.md).**
 
-Prefer a guided install? Run `python rituals/harness.py setup` — it asks a few
-questions and runs the right build for you. For a full-screen browser of the agents,
-skills, and laws (Unix), `python rituals/harness.py tui`.
+Prefer a guided install? Run `./geneseed setup` — it asks a few questions and runs
+the right build for you. For the full-screen, colorized control panel (Unix), just
+run `./geneseed`. (No bash? `python rituals/harness.py setup` / `… tui`.)
 
 ## Layout
 
 ```
 Geneseed/
 ├── build.py              generator (stdlib only)
-├── upgrade.sh            self-upgrade from the published source (+ -neutral / -imperial)
-├── sync-self.sh          meta-updater: refreshes the orchestration scripts themselves
+├── geneseed              launcher: `./geneseed` opens the TUI; dispatches CLI + upgrade
+├── upgrade.sh            self-upgrade from the published source
+├── sync-self.sh          meta-updater: refreshes the launcher + upgrade scripts
 ├── harness.config.json   default theme + metadata
 ├── src/                  canonical source — edit here
 │   ├── AGENT.md.tmpl     the entrypoint, rendered to AGENT.md
@@ -95,8 +96,8 @@ fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs both on every push 
 ## Keeping it current
 
 ```
-./upgrade.sh          # refresh from the published source; remembers theme + emit mode
-./sync-self.sh        # update the upgrade scripts themselves
+./geneseed upgrade     # refresh from the published source; remembers theme + emit mode
+./geneseed sync-self   # update the launcher + upgrade scripts themselves
 ```
 
 Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).

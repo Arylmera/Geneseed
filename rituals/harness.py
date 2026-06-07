@@ -888,37 +888,62 @@ def _tui_lines(inv: dict) -> list[tuple[str, str]]:
 def _tui_loop(stdscr, inv: dict) -> None:
     import curses
     curses.curs_set(0)
+    color = False
+    try:
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_CYAN)    # title / footer bar
+        curses.init_pair(2, curses.COLOR_CYAN, -1)                    # section headers
+        curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)   # selected row
+        color = curses.has_colors()
+    except curses.error:
+        color = False
+    bar = curses.color_pair(1) if color else curses.A_REVERSE
+    head_attr = (curses.color_pair(2) | curses.A_BOLD) if color else curses.A_BOLD
+    sel_attr = curses.color_pair(3) if color else curses.A_REVERSE
+
     rows = _tui_lines(inv)
+    items = [i for i, (k, _t) in enumerate(rows) if k == "item"]
+    sel = items[0] if items else 0
     top = 0
-    title = f" Geneseed — theme: {inv['theme']} "
-    footer = " up/down or j/k scroll · b build · d doctor · x diff · q quit "
+    title = f" Geneseed — theme: {inv['theme']}  ·  {len(items)} entries "
+    footer = " up/down or j/k move · b build · d doctor · x diff · q quit "
     harness_py = str(Path(__file__).resolve())
+
     while True:
         stdscr.erase()
         h, w = stdscr.getmaxyx()
         body_h = max(1, h - 2)
+        if sel < top:
+            top = sel
+        elif sel >= top + body_h:
+            top = sel - body_h + 1
         top = max(0, min(top, max(0, len(rows) - body_h)))
-        stdscr.addnstr(0, 0, title.ljust(w), w, curses.A_REVERSE)
+        stdscr.addnstr(0, 0, title.ljust(w), w, bar)
         for i in range(body_h):
             ri = top + i
             if ri >= len(rows):
                 break
             kind, txt = rows[ri]
-            stdscr.addnstr(1 + i, 0, txt[:w - 1], w - 1,
-                           curses.A_BOLD if kind == "head" else curses.A_NORMAL)
-        stdscr.addnstr(h - 1, 0, footer.ljust(w), w, curses.A_REVERSE)
+            if ri == sel:
+                stdscr.addnstr(1 + i, 0, txt.ljust(w - 1)[:w - 1], w - 1, sel_attr)
+            else:
+                stdscr.addnstr(1 + i, 0, txt[:w - 1], w - 1,
+                               head_attr if kind == "head" else curses.A_NORMAL)
+        stdscr.addnstr(h - 1, 0, footer.ljust(w), w, bar)
         stdscr.refresh()
+
         c = stdscr.getch()
         if c in (ord("q"), 27):
             return
         elif c in (curses.KEY_DOWN, ord("j")):
-            top += 1
+            sel = next((i for i in items if i > sel), sel)
         elif c in (curses.KEY_UP, ord("k")):
-            top -= 1
+            sel = next((i for i in reversed(items) if i < sel), sel)
         elif c == curses.KEY_NPAGE:
-            top += body_h
+            sel = next((i for i in reversed(items) if i <= sel + body_h), sel)
         elif c == curses.KEY_PPAGE:
-            top -= body_h
+            sel = next((i for i in items if i >= sel - body_h), sel)
         elif c in (ord("b"), ord("d"), ord("x")):
             curses.def_prog_mode()
             curses.endwin()

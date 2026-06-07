@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# Geneseed — front door. One launcher for everything.
+#
+#     ./geneseed                 open the control panel (TUI)
+#     ./geneseed setup           guided, dependency-free install wizard
+#     ./geneseed build [args]    render the bundle
+#     ./geneseed doctor [args]   validate (themes, parity, authoring, drift)
+#     ./geneseed diff [args]     compare a deployed harness against source
+#     ./geneseed context|learn|prompt [args]
+#     ./geneseed upgrade [ref] [theme]   self-upgrade from the published source
+#     ./geneseed sync-self [ref]         refresh the launcher + upgrade scripts
+#     ./geneseed help
+#
+# Thin wrapper over `python3 rituals/harness.py <cmd>` (+ the upgrade scripts). It
+# adds no dependencies — just a shorter way in. On Windows, call the Python CLI
+# directly: `python rituals/harness.py <cmd>`.
+
+set -eo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="${PYTHON:-python3}"
+
+cmd="${1:-tui}"
+case "$cmd" in
+  tui|setup|build|doctor|diff|context|learn|prompt)
+    exec "$PY" "$HERE/rituals/harness.py" "$@"
+    ;;
+  upgrade)
+    shift; exec "$HERE/upgrade.sh" "$@"
+    ;;
+  sync-self)
+    shift; exec "$HERE/sync-self.sh" "$@"
+    ;;
+  -h|--help|help)
+    sed -n '3,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    ;;
+  *)
+    echo "geneseed: unknown command '$cmd' — try: ./geneseed help" >&2
+    exit 2
+    ;;
+esac
