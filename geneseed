@@ -2,7 +2,8 @@
 #
 # Geneseed — front door. One launcher for everything.
 #
-#     ./geneseed                          open the control panel (TUI)
+#     ./geneseed                          update everything, then run setup (bootstrap)
+#     ./geneseed tui                      open the control panel (TUI)
 #     ./geneseed setup                    guided, dependency-free install wizard
 #     ./geneseed bootstrap [ref] [theme]  update everything, then run setup
 #     ./geneseed update    [ref] [theme]  update everything (sync + upgrade), no setup
@@ -14,8 +15,11 @@
 #     ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
 #     ./geneseed help
 #
-# Thin wrapper over `python3 rituals/harness.py <cmd>` (+ the scripts). No deps. On
-# Windows, call the Python CLI directly: `python rituals/harness.py <cmd>`.
+# Bare `./geneseed` runs bootstrap: with no args it asks for the upstream ref
+# interactively (default: main) and the theme is chosen in the setup wizard — so you
+# never have to pass them on the command line. Thin wrapper over
+# `python3 rituals/harness.py <cmd>` (+ the scripts); no deps. On Windows, call the
+# Python CLI directly: `python rituals/harness.py <cmd>`.
 #
 # `bootstrap`/`update` exec into the bootstrap script so this launcher is replaced
 # before sync-self rewrites it on disk.
@@ -24,28 +28,29 @@ set -eo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PY="${PYTHON:-python3}"
 
-cmd="${1:-tui}"
+cmd="${1:-bootstrap}"
 case "$cmd" in
   tui|setup|build|doctor|diff|context|learn|prompt)
     exec "$PY" "$HERE/rituals/harness.py" "$@"
     ;;
   bootstrap)
-    shift; exec "$HERE/bootstrap" "$@"
+    shift || true; exec "$HERE/bootstrap" "$@"
     ;;
   update)
-    shift; exec "$HERE/bootstrap" --no-setup "$@"
+    shift || true; exec "$HERE/bootstrap" --no-setup "$@"
     ;;
   upgrade)
-    shift; exec "$HERE/upgrade.sh" "$@"
+    shift || true; exec "$HERE/upgrade.sh" "$@"
     ;;
   sync-self)
-    shift; exec "$HERE/sync-self.sh" "$@"
+    shift || true; exec "$HERE/sync-self.sh" "$@"
     ;;
   -h|--help|help)
     cat <<'USAGE'
 geneseed — front door for the Geneseed harness
 
-  ./geneseed                          open the control panel (TUI)
+  ./geneseed                          update everything, then run setup (bootstrap)
+  ./geneseed tui                      open the control panel (TUI)
   ./geneseed setup                    guided install wizard
   ./geneseed bootstrap [ref] [theme]  update everything, then run setup
   ./geneseed update    [ref] [theme]  update everything (sync + upgrade)

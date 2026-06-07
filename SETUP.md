@@ -23,7 +23,9 @@ guided, dependency-free wizard — it asks for a theme and install mode, runs th
 build, and offers a health check. It works on every OS. Prefer to do it by hand?
 Pick a path below. Already installed and want to refresh first? **`./geneseed
 bootstrap`** updates everything from upstream (sync + upgrade) and then runs the
-wizard — one command, start to finish.
+wizard — one command, start to finish. Bare **`./geneseed`** does exactly this: it
+asks for the upstream ref (default `main`), updates, and continues into setup, where
+you pick the theme — so you never pass ref or theme on the command line.
 
 | Path | Use when |
 | --- | --- |
@@ -205,8 +207,9 @@ The skill never installs a converter silently — if none is present it reports 
    sits in the plugins dir.
 4. **Harness health** — `python rituals/harness.py doctor` should print `ok`.
 
-On a Unix terminal, `./geneseed` opens a full-screen, colorized panel to browse the
-agents, skills, and laws and run build/doctor/diff with a keystroke.
+On a Unix terminal, `./geneseed tui` opens a full-screen, colorized panel to browse
+the agents, skills, and laws and run build/doctor/diff (and `u` to update) with a
+keystroke.
 
 ## Upgrade
 

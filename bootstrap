@@ -6,6 +6,10 @@
 #     ./geneseed update    [ref] [theme]    update everything only (sync + upgrade)
 #     ./bootstrap [--no-setup] [ref] [theme]
 #
+# With NO ref/theme and a terminal (the bare `./geneseed` path), it asks for the
+# upstream ref interactively (default: main); the theme is chosen later in the setup
+# wizard — so you never pass either on the command line.
+#
 # It chains the updaters in the correct order, then hands off to the wizard:
 #   1. sync-self.sh — refresh the orchestration scripts (geneseed, upgrade.sh,
 #      sync-self.sh, and this file) from the published source;
@@ -24,8 +28,17 @@ set -eo pipefail
 main() {
   local run_setup=1
   if [ "${1:-}" = "--no-setup" ]; then run_setup=0; shift; fi
-  local REF="${1:-main}"
-  local THEME="${2:-}"
+  local REF THEME
+  if [ "$#" -eq 0 ] && [ -t 0 ]; then
+    # Bare + interactive: ask for the ref; the theme is chosen later in setup.
+    printf 'Update from which upstream ref? [main]: '
+    local ans; read -r ans || ans=""
+    REF="${ans:-main}"
+    THEME=""
+  else
+    REF="${1:-main}"
+    THEME="${2:-}"
+  fi
   local HERE; HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
   echo "[geneseed] 1/3 — refreshing orchestration scripts ..."

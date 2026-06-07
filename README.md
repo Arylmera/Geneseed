@@ -58,15 +58,16 @@ project's docs are already in context. **Other tools (Claude Code, plain `AGENT.
 per-repo installs, configuration, and troubleshooting: [SETUP.md](SETUP.md).**
 
 Prefer a guided install? Run `./geneseed setup` — it asks a few questions and runs
-the right build for you. For the full-screen, colorized control panel (Unix), just
-run `./geneseed`. (No bash? `python rituals/harness.py setup` / `… tui`.)
+the right build for you. Bare **`./geneseed`** runs the full bootstrap: it asks for
+the upstream ref, updates everything, then runs setup. For the colorized control
+panel (Unix), `./geneseed tui`. (No bash? `python rituals/harness.py setup` / `… tui`.)
 
 ## Layout
 
 ```
 Geneseed/
 ├── build.py              generator (stdlib only)
-├── geneseed              launcher: `./geneseed` opens the TUI; dispatches CLI + upgrade
+├── geneseed              launcher: bare `./geneseed` = bootstrap; `tui`, CLI, upgrade subcommands
 ├── bootstrap             one-shot: update everything (sync + upgrade), then run setup
 ├── upgrade.sh            self-upgrade from the published source
 ├── sync-self.sh          meta-updater: refreshes the launcher + upgrade scripts
