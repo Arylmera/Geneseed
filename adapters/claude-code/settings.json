@@ -2,9 +2,15 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume|clear",
+        "matcher": "startup|clear",
         "hooks": [
           { "type": "command", "command": "cat AGENT.md" },
+          { "type": "command", "command": "python rituals/harness.py context" }
+        ]
+      },
+      {
+        "matcher": "resume",
+        "hooks": [
           { "type": "command", "command": "python rituals/harness.py context" }
         ]
       }

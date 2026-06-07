@@ -9,10 +9,13 @@ self-discipline.
 Merge [`settings.json`](settings.json) into your repo's `.claude/settings.json`
 (or your user settings). It:
 
-- on **SessionStart**, prints `AGENT.md` so the harness is in context from the
-  first turn, then runs `harness context` to **inject** the `eager` entries of
-  `context.json` directly into the session — so Rule XVIII is enforced by the
-  hook, not left to the agent to remember (lazy entries are only listed);
+- on **SessionStart** (`startup`/`clear` only — a fresh context), prints `AGENT.md`
+  so the harness is in context from the first turn, then runs `harness context` to
+  **inject the project context** directly into the session — so Rule XVIII is enforced
+  by the hook, not left to the agent to remember (lazy entries are only listed). On
+  **`resume`** it runs `harness context` *without* re-`cat`ting `AGENT.md`: the resumed
+  conversation already carries the harness, so re-injecting the static file each resume
+  is pure token waste — only the (possibly changed) project context is refreshed;
 - on **Stop**, runs `harness learn` over the session to capture durable memories.
   Claude Code pipes the hook payload (with the session's `transcript_path`) to the
   command on stdin; `learn` reads that, flattens the transcript, distils new
@@ -30,17 +33,19 @@ Adjust the paths if your harness bundle is not at the repository root. On Window
 the commands are identical (`python rituals/harness.py …`); see the **Windows /
 PowerShell** section of the top-level README.
 
-Why inject rather than instruct? Rule XVIII tells the agent to read
-`context.json` at startup, but startup rituals are exactly what agents skip. The
+Why inject rather than instruct? Rule XVIII tells the agent to read the project
+context at startup, but startup rituals are exactly what agents skip. The
 `harness context` hook removes the choice: the eager files' contents land in
-context before the first turn regardless of agent discipline. On OpenCode the
-context **plugin** does the same job but auto-discovers the repo's docs (no manifest
-needed — see [`../opencode/`](../opencode/)); on tools without hooks or plugins, the
-AGENT.md prose still carries the rule.
+context before the first turn regardless of agent discipline. On tools without
+hooks or plugins, the AGENT.md prose still carries the rule.
 
-> Note: this Claude Code hook path (`harness context`) is still **manifest-driven**
-> — it injects `context.json`'s `eager` entries. The auto-discovery convention
-> currently lives in the OpenCode plugin only.
+> **Auto-discovery (parity with OpenCode).** `harness context` no longer needs a
+> hand-filled `context.json`: with no manifest (or just the empty stub) it
+> **auto-discovers the repo's docs by convention** — root `AGENTS.md`/`AGENT.md`/
+> `CLAUDE.md`/`README.md`/`CONTRIBUTING.md` injected eager, `docs/`/`adr/`/monorepo
+> package READMEs listed lazy — using the same convention as the OpenCode context
+> plugin. A `context.json` still overrides, and `"extend": true` layers a manifest
+> on top of discovery.
 
 ## Other tools
 

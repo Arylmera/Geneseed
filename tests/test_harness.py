@@ -123,5 +123,63 @@ class RenderedCheckTests(unittest.TestCase):
         self.assertEqual(harness._rendered_problems(ROOT / "does-not-exist"), [])
 
 
+class DiscoverContextTests(unittest.TestCase):
+    def _fixture(self, d):
+        (d / "README.md").write_text("# r", encoding="utf-8")
+        (d / "CONTRIBUTING.md").write_text("# c", encoding="utf-8")
+        (d / "notes.md").write_text("# n", encoding="utf-8")
+        (d / "docs").mkdir()
+        (d / "docs" / "guide.md").write_text("# g", encoding="utf-8")
+        (d / "node_modules").mkdir()
+        (d / "node_modules" / "junk.md").write_text("x", encoding="utf-8")
+        (d / "packages" / "foo").mkdir(parents=True)
+        (d / "packages" / "foo" / "README.md").write_text("# foo", encoding="utf-8")
+
+    def test_convention_discovery(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            self._fixture(d)
+            eager, lazy = harness._discover_context(d)
+            enames = {Path(e["path"]).name for e in eager}
+            lnames = {Path(l["path"]).name for l in lazy}
+            self.assertIn("README.md", enames)
+            self.assertIn("CONTRIBUTING.md", enames)
+            self.assertIn("notes.md", lnames)      # misc root .md -> lazy
+            self.assertIn("guide.md", lnames)      # docs/ tree -> lazy
+            self.assertNotIn("junk.md", lnames)    # node_modules never scanned
+            self.assertTrue(any(Path(l["path"]).parent.name == "foo" for l in lazy))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_empty_manifest_falls_back_to_discovery(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            self._fixture(d)
+            (d / "context.json").write_text('{"context": []}', encoding="utf-8")
+            eager, _lazy, source = harness._resolve_context_sets(d)
+            self.assertTrue(any(Path(e["path"]).name == "README.md" for e in eager))
+            self.assertIn("auto-discovery", source)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_manifest_extend_layers_on_discovery(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            self._fixture(d)
+            (d / "house.md").write_text("# house rules", encoding="utf-8")
+            (d / "context.json").write_text(
+                '{"extend": true, "context": ['
+                '{"path": "house.md", "load": "eager", "description": "house rules"}]}',
+                encoding="utf-8",
+            )
+            eager, _lazy, source = harness._resolve_context_sets(d)
+            enames = {Path(e["path"]).name for e in eager}
+            self.assertIn("README.md", enames)   # from discovery
+            self.assertIn("house.md", enames)    # from manifest, layered on top
+            self.assertNotIn("auto-discovery", source)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
