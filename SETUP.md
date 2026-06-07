@@ -22,11 +22,10 @@ internals see [adapters/opencode/](adapters/opencode/README.md).
 guided, dependency-free wizard — a colored curses form on a Unix terminal (plain
 text prompts elsewhere) that asks for a theme and install mode, runs the right build,
 and offers a health check. It works on every OS. Prefer to do it by hand?
-Pick a path below. Already installed and want to refresh first? **`./geneseed
-bootstrap`** updates everything from upstream (sync + upgrade) and then runs the
-wizard — one command, start to finish. Bare **`./geneseed`** does exactly this: it
-asks for the upstream ref (default `main`), updates, and continues into setup, where
-you pick the theme — so you never pass ref or theme on the command line.
+Pick a path below. Already installed? Bare **`./geneseed`** opens an interactive
+**main menu** — choose *Update & set up*, *Set up / re-theme*, *Browse*, *Health
+check*, *Build*, or *Diff* and it runs that flow. **`./geneseed bootstrap`** jumps
+straight to update-then-setup; **`./geneseed setup`** straight to the wizard.
 
 | Path | Use when |
 | --- | --- |

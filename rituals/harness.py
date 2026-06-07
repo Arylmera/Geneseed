@@ -1001,6 +1001,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
 # ---- shared curses helpers (used by the setup form and the control panel) -------
 
 _TUI_ASCII = bool(os.environ.get("GENESEED_TUI_ASCII"))
+_SEL_G = ">" if _TUI_ASCII else "▸"
+_MORE_G = "v" if _TUI_ASCII else "▾"
 
 
 def _bx(curses) -> dict:
@@ -1137,7 +1139,7 @@ def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
             if stdscr.getch() in (ord("q"), 27):
                 return None
             continue
-        put(0, 0, f"  ◆ {prompt if detail_fn else 'Geneseed setup'}  ".ljust(w - 1), pal["BAR"])
+        put(0, 0, f"  ◆ {prompt}  ".ljust(w - 1), pal["BAR"])
         _draw_box(stdscr, curses, 1, 0, h - 2, w, pal["FRAME"])
 
         if detail_fn:
@@ -1179,18 +1181,17 @@ def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
                      else curses.A_DIM if kind == "dim" else 0)
                 put(2 + r, rx, seg[:rw], a)
         else:
-            put(2, 3, prompt, pal["TITLE"])
             for i, (_k, label, _desc) in enumerate(options):
-                y = 4 + i
+                y = 2 + i
                 if y >= h - 5:
                     break
                 if i == idx:
-                    put(y, 2, f" ▸ {label} ".ljust(w - 4)[:w - 4], pal["SEL"])
+                    put(y, 2, f" {_SEL_G} {label} ".ljust(w - 4)[:w - 4], pal["SEL"])
                 else:
                     put(y, 3, f"  {label}", 0)
-            dy = 4 + len(options) + 1
+            dy = 2 + len(options) + 1
             if dy < h - 2:
-                put(dy - 1, 2, "─" * (w - 4), pal["FRAME"])
+                put(dy - 1, 2, ("-" if _TUI_ASCII else "─") * (w - 4), pal["FRAME"])
                 for j, seg in enumerate(textwrap.wrap(options[idx][2], w - 6)[:3]):
                     put(dy + j, 3, seg, curses.A_DIM)
 
@@ -1864,6 +1865,74 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+_MENU_ACTIONS = [
+    ("bootstrap", "Update & set up", "Pull the latest from upstream, then run the setup wizard."),
+    ("setup", "Set up / re-theme", "Pick a theme and install mode, then build."),
+    ("browse", "Browse", "Agents, skills and laws, with their full specs."),
+    ("doctor", "Health check", "Validate themes, parity, links, and the bundle."),
+    ("update", "Update only", "Refresh the scripts + factory from upstream (no setup)."),
+    ("build", "Rebuild bundle", "Re-render the harness from src."),
+    ("diff", "Review local edits", "Compare a deployed harness against source."),
+    ("quit", "Quit", "Leave."),
+]
+
+
+def _main_menu(stdscr) -> int:
+    """The hub for a bare `./geneseed`: pick any action. In-TUI ones return here;
+    update/bootstrap re-exec a fresh process (they change the code on disk)."""
+    import curses
+    here = Path(__file__).resolve().parent.parent
+    hp = str(Path(__file__).resolve())
+    inst = _installed_defaults()
+    theme = inst["theme"] or _default_theme()
+    pal = _tui_palette(curses, _accent_for(theme))
+    while True:
+        sel = _menu(stdscr, curses, f"Geneseed  ·  theme {theme}", _MENU_ACTIONS, default="bootstrap")
+        if sel in (None, "quit"):
+            return 0
+        if sel == "browse":
+            _tui_loop(stdscr, _tui_inventory(theme))
+        elif sel == "doctor":
+            _doctor_view(stdscr, curses, pal)
+        elif sel == "setup":
+            _setup_flow(stdscr)
+            theme = _installed_defaults()["theme"] or theme   # reflect a re-theme
+            pal = _tui_palette(curses, _accent_for(theme))
+        elif sel in ("build", "diff"):
+            curses.def_prog_mode()
+            curses.endwin()
+            run([sys.executable, str(BUILD)] if sel == "build" else [sys.executable, hp, "diff"])
+            try:
+                input("\n[press Enter to return to the menu] ")
+            except EOFError:
+                pass
+            curses.reset_prog_mode()
+        elif sel in ("update", "bootstrap"):
+            _bootstrap_progress(stdscr, here, None)
+            curses.endwin()
+            os.execv(sys.executable, [sys.executable, hp, "setup" if sel == "bootstrap" else "menu"])
+
+
+def cmd_menu(args: argparse.Namespace) -> int:
+    """Interactive main menu — the default for a bare `./geneseed`. Falls back to a
+    one-line command list off a TTY / on Windows / if curses is unavailable."""
+    if sys.platform.startswith("win") or not sys.stdin.isatty():
+        print("Geneseed — run one of:  setup · bootstrap · update · build · doctor · diff · tui")
+        print("On a Unix terminal, `./geneseed` opens an interactive menu of these.")
+        return 0
+    try:
+        import curses
+        import locale
+        try:
+            locale.setlocale(locale.LC_ALL, "")
+        except locale.Error:
+            pass
+        return curses.wrapper(_main_menu)
+    except Exception as e:
+        sys.stderr.write(f"[menu] TUI unavailable ({e}).\n")
+        return 1
+
+
 def main() -> int:
     # Force UTF-8 I/O so injected docs / templates with unicode (sigils, em-dashes)
     # do not crash on a legacy code page (e.g. Windows cp1252). Dependency-free.
@@ -1922,6 +1991,9 @@ def main() -> int:
     tu = sub.add_parser("tui", help="full-screen curses control panel (Unix)")
     tu.add_argument("--theme", default=None, help="theme to show (default: harness.config.json)")
     tu.set_defaults(fn=cmd_tui)
+
+    me = sub.add_parser("menu", help="interactive main menu (the default for ./geneseed)")
+    me.set_defaults(fn=cmd_menu)
 
     bs = sub.add_parser("bootstrap", help="update everything (sync + upgrade) with a "
                                           "progress UI, then run setup")

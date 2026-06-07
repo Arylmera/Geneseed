@@ -2,8 +2,8 @@
 #
 # Geneseed — front door. One launcher for everything.
 #
-#     ./geneseed                          update everything, then run setup (bootstrap)
-#     ./geneseed tui                      open the control panel (TUI)
+#     ./geneseed                          open the interactive main menu (pick any action)
+#     ./geneseed tui                      open the control panel (browse)
 #     ./geneseed setup                    guided, dependency-free install wizard
 #     ./geneseed bootstrap [ref] [theme]  update everything, then run setup
 #     ./geneseed update    [ref] [theme]  update everything (sync + upgrade), no setup
@@ -15,9 +15,8 @@
 #     ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
 #     ./geneseed help
 #
-# Bare `./geneseed` runs bootstrap: with no args it asks for the upstream ref
-# interactively (default: main) and the theme is chosen in the setup wizard — so you
-# never have to pass them on the command line. Thin wrapper over
+# Bare `./geneseed` opens an interactive main menu listing every action (update,
+# setup, browse, doctor, build, diff …) — just run it and pick. Thin wrapper over
 # `python3 rituals/harness.py <cmd>` (+ the scripts); no deps. On Windows, call the
 # Python CLI directly: `python rituals/harness.py <cmd>`.
 #
@@ -28,9 +27,11 @@ set -eo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PY="${PYTHON:-python3}"
 
-cmd="${1:-bootstrap}"
+# Bare `./geneseed` opens the interactive main menu.
+if [ "$#" -eq 0 ]; then set -- menu; fi
+cmd="$1"
 case "$cmd" in
-  tui|setup|build|doctor|diff|context|learn|prompt)
+  menu|tui|setup|build|doctor|diff|context|learn|prompt)
     exec "$PY" "$HERE/rituals/harness.py" "$@"
     ;;
   bootstrap)
@@ -49,8 +50,8 @@ case "$cmd" in
     cat <<'USAGE'
 geneseed — front door for the Geneseed harness
 
-  ./geneseed                          update everything, then run setup (bootstrap)
-  ./geneseed tui                      open the control panel (TUI)
+  ./geneseed                          open the interactive main menu (pick any action)
+  ./geneseed tui                      open the control panel (browse)
   ./geneseed setup                    guided install wizard
   ./geneseed bootstrap [ref] [theme]  update everything, then run setup
   ./geneseed update    [ref] [theme]  update everything (sync + upgrade)
