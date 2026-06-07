@@ -116,8 +116,8 @@ Paste it into any capable agent on the target machine — no Python, no build st
 ### Theme
 
 Choose any theme in `themes/` — `neutral` (plain), `imperial` (Warhammer 40k),
-`military`, `pirate`, `wizard`, or `cyberpunk` — with `--theme NAME` (the wizard
-lists them for you). It is remembered in a `.geneseed-theme` marker, so later
+`military`, `pirate`, `wizard`, `cyberpunk`, `gamer`, or `sports` (play-by-play) —
+with `--theme NAME` (the wizard lists them for you). It is remembered in a `.geneseed-theme` marker, so later
 upgrades keep it. Adding your own is one JSON file of voice tokens; `doctor` checks
 every theme defines the same keys.
 

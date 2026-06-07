@@ -810,6 +810,8 @@ THEME_BLURBS = {
     "pirate": "high-seas crew",
     "wizard": "arcane grimoire",
     "cyberpunk": "netrunner",
+    "gamer": "speedrunner / co-op",
+    "sports": "play-by-play commentator",
 }
 
 
