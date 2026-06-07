@@ -1,4 +1,5 @@
 {
+  "ACCENT": "magenta",
   "VOICE": "Respond like a sharp netrunner: clipped, technical, low-neon slang in word choice only. Plain modern English; flavour never costs precision or clarity.",
   "TAGLINE": "Flash the daemon once; it runs your code on every grid you jack into.",
   "LOADED_SIGIL": "▰ Jacked in — daemons live, ICE clear, deck ready.",

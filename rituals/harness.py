@@ -1000,36 +1000,63 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 # ---- shared curses helpers (used by the setup form and the control panel) -------
 
+_TUI_ASCII = bool(os.environ.get("GENESEED_TUI_ASCII"))
+
+
+def _bx(curses) -> dict:
+    """Line/box glyphs — ASCII (+ - |) when GENESEED_TUI_ASCII is set (for fonts that
+    render ACS box-drawing as tofu), else ACS line glyphs."""
+    if _TUI_ASCII:
+        return {"ul": "+", "ur": "+", "ll": "+", "lr": "+", "ttee": "+", "btee": "+",
+                "h": ord("-"), "v": ord("|"), "up": "^", "down": "v"}
+    return {"ul": curses.ACS_ULCORNER, "ur": curses.ACS_URCORNER, "ll": curses.ACS_LLCORNER,
+            "lr": curses.ACS_LRCORNER, "ttee": curses.ACS_TTEE, "btee": curses.ACS_BTEE,
+            "h": curses.ACS_HLINE, "v": curses.ACS_VLINE, "up": curses.ACS_UARROW,
+            "down": curses.ACS_DARROW}
+
+
+def _accent_for(theme: str) -> str:
+    """The ACCENT colour name a theme declares (default cyan)."""
+    try:
+        return json.loads((build.THEMES / f"{theme}.json").read_text(encoding="utf-8")).get("ACCENT", "cyan")
+    except (OSError, json.JSONDecodeError):
+        return "cyan"
+
+
 def _draw_box(stdscr, curses, y, x, hh, ww, attr=0) -> None:
-    """Draw a single-line box with ACS characters; all writes are bounds-guarded."""
+    """Single-line box; ASCII when GENESEED_TUI_ASCII, else ACS glyphs. Bounds-guarded."""
+    g = _bx(curses)
+
     def ch(yy, xx, c):
         try:
             stdscr.addch(yy, xx, c, attr)
         except curses.error:
             pass
     x2, y2 = x + ww - 1, y + hh - 1
-    ch(y, x, curses.ACS_ULCORNER)
-    ch(y, x2, curses.ACS_URCORNER)
-    ch(y2, x, curses.ACS_LLCORNER)
-    ch(y2, x2, curses.ACS_LRCORNER)
+    ch(y, x, g["ul"]); ch(y, x2, g["ur"]); ch(y2, x, g["ll"]); ch(y2, x2, g["lr"])
     try:
-        stdscr.hline(y, x + 1, curses.ACS_HLINE | attr, ww - 2)
-        stdscr.hline(y2, x + 1, curses.ACS_HLINE | attr, ww - 2)
-        stdscr.vline(y + 1, x, curses.ACS_VLINE | attr, hh - 2)
-        stdscr.vline(y + 1, x2, curses.ACS_VLINE | attr, hh - 2)
+        stdscr.hline(y, x + 1, g["h"] | attr, ww - 2)
+        stdscr.hline(y2, x + 1, g["h"] | attr, ww - 2)
+        stdscr.vline(y + 1, x, g["v"] | attr, hh - 2)
+        stdscr.vline(y + 1, x2, g["v"] | attr, hh - 2)
     except curses.error:
         pass
 
 
-def _tui_palette(curses) -> dict:
-    """Shared colour attributes (frame, bars, selection, headings, icons). Degrades
-    to monochrome attributes when the terminal has no colour."""
+def _tui_palette(curses, accent="cyan") -> dict:
+    """Shared colour attributes (frame, bars, selection, headings, icons). The frame /
+    bar / header colour follows the theme ACCENT. Degrades to monochrome attributes
+    when the terminal has no colour."""
+    cols = {"cyan": curses.COLOR_CYAN, "yellow": curses.COLOR_YELLOW, "red": curses.COLOR_RED,
+            "green": curses.COLOR_GREEN, "magenta": curses.COLOR_MAGENTA,
+            "blue": curses.COLOR_BLUE, "white": curses.COLOR_WHITE}
+    acc = cols.get(accent, curses.COLOR_CYAN)
     color = False
     try:
         curses.start_color()
         curses.use_default_colors()
-        curses.init_pair(1, curses.COLOR_CYAN, -1)
-        curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_CYAN)
+        curses.init_pair(1, acc, -1)
+        curses.init_pair(2, curses.COLOR_BLACK, acc)
         curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)
         curses.init_pair(4, curses.COLOR_YELLOW, -1)
         curses.init_pair(5, curses.COLOR_MAGENTA, -1)
@@ -1056,7 +1083,7 @@ def _progress_bar(frac: float, width: int = 24) -> str:
     # GENESEED_TUI_ASCII=1 to fall back to a pure-ASCII bar if a font garbles it.
     frac = max(0.0, min(1.0, frac))
     filled = int(round(frac * width))
-    if os.environ.get("GENESEED_TUI_ASCII"):
+    if _TUI_ASCII:
         return "#" * filled + "-" * (width - filled)
     return "█" * filled + " " * (width - filled)
 
@@ -1115,11 +1142,12 @@ def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
 
         if detail_fn:
             dx = max(18, min(36, w // 2))
+            g = _bx(curses)
             try:
                 for r in range(2, h - 2):
-                    stdscr.addch(r, dx, curses.ACS_VLINE, pal["FRAME"])
-                stdscr.addch(1, dx, curses.ACS_TTEE, pal["FRAME"])
-                stdscr.addch(h - 2, dx, curses.ACS_BTEE, pal["FRAME"])
+                    stdscr.addch(r, dx, g["v"], pal["FRAME"])
+                stdscr.addch(1, dx, g["ttee"], pal["FRAME"])
+                stdscr.addch(h - 2, dx, g["btee"], pal["FRAME"])
             except curses.error:
                 pass
             put(1, 2, " Themes ", pal["HEAD"])
@@ -1508,7 +1536,8 @@ def _tui_loop(stdscr, inv: dict) -> None:
         stdscr.keypad(True)
     except curses.error:
         pass
-    pal = _tui_palette(curses)
+    pal = _tui_palette(curses, _accent_for(inv.get("theme", "neutral")))
+    g = _bx(curses)
     C_FRAME, C_BAR, C_SEL = pal["FRAME"], pal["BAR"], pal["SEL"]
     C_TITLE, C_ICON, C_HEAD = pal["TITLE"], pal["ICON"], pal["HEAD"]
 
@@ -1562,21 +1591,21 @@ def _tui_loop(stdscr, inv: dict) -> None:
                   .ljust(w - 1), C_BAR)
 
         # ---- frame + divider ----
-        ch(1, 0, curses.ACS_ULCORNER, C_FRAME)
-        ch(1, w - 1, curses.ACS_URCORNER, C_FRAME)
-        ch(h - 2, 0, curses.ACS_LLCORNER, C_FRAME)
-        ch(h - 2, w - 1, curses.ACS_LRCORNER, C_FRAME)
+        ch(1, 0, g["ul"], C_FRAME)
+        ch(1, w - 1, g["ur"], C_FRAME)
+        ch(h - 2, 0, g["ll"], C_FRAME)
+        ch(h - 2, w - 1, g["lr"], C_FRAME)
         try:
-            stdscr.hline(1, 1, curses.ACS_HLINE | C_FRAME, w - 2)
-            stdscr.hline(h - 2, 1, curses.ACS_HLINE | C_FRAME, w - 2)
+            stdscr.hline(1, 1, g["h"] | C_FRAME, w - 2)
+            stdscr.hline(h - 2, 1, g["h"] | C_FRAME, w - 2)
         except curses.error:
             pass
-        ch(1, dx, curses.ACS_TTEE, C_FRAME)
-        ch(h - 2, dx, curses.ACS_BTEE, C_FRAME)
+        ch(1, dx, g["ttee"], C_FRAME)
+        ch(h - 2, dx, g["btee"], C_FRAME)
         for r in range(2, h - 2):
-            ch(r, 0, curses.ACS_VLINE, C_FRAME)
-            ch(r, dx, curses.ACS_VLINE, C_FRAME)
-            ch(r, w - 1, curses.ACS_VLINE, C_FRAME)
+            ch(r, 0, g["v"], C_FRAME)
+            ch(r, dx, g["v"], C_FRAME)
+            ch(r, w - 1, g["v"], C_FRAME)
         put(1, 2, " Catalog ", C_HEAD)
         put(1, dx + 2, " Detail ", C_HEAD)
 
@@ -1613,9 +1642,9 @@ def _tui_loop(stdscr, inv: dict) -> None:
                 break
             put(2 + i, dx + 2, wrapped[di][:riw], C_TITLE if di == 0 else 0)
         if detail_top > 0:
-            ch(2, w - 2, curses.ACS_UARROW, C_FRAME)
+            ch(2, w - 2, g["up"], C_FRAME)
         if len(wrapped) > detail_top + ch_h:
-            ch(h - 3, w - 2, curses.ACS_DARROW, C_FRAME)
+            ch(h - 3, w - 2, g["down"], C_FRAME)
 
         # ---- footer ----
         put(h - 1, 0,
