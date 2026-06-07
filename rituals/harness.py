@@ -902,14 +902,22 @@ def cmd_setup(args: argparse.Namespace) -> int:
     print("Running:  python build.py " + " ".join(argv))
     rc = run([sys.executable, str(BUILD), *argv]).returncode
     if rc != 0:
-        sys.stderr.write("[setup] build failed.\n")
+        sys.stderr.write("[setup] build failed — no harness written (see the output above).\n")
         return rc
-    print("\nDone.")
+    # Confirm where AGENT.md actually landed — the global emit writes it into the
+    # OpenCode config dir, not the current folder, which is easy to miss.
+    agent_md = (build._opencode_config_dir() / "AGENT.md" if emit == "opencode-global"
+                else build.resolve_out(out or "Harness") / "AGENT.md")
+    if agent_md.exists():
+        print(f"\n✓ AGENT.md written to {agent_md}")
+    else:
+        print(f"\n⚠️  expected AGENT.md at {agent_md} but it is not there — "
+              f"the build reported success but wrote nothing here; re-run or check the output above.")
     if emit == "opencode-global":
         print('Next: point the learn plugin at the store —\n'
               '  export GENESEED_HARNESS="$HOME/.config/opencode"   (add to your shell profile)')
     elif emit == "files":
-        print(f"Next: point your tool's instructions at  {out or 'Harness'}/AGENT.md")
+        print(f"Next: point your tool's instructions at  {agent_md}")
     if _confirm("\nRun a health check (doctor) now?", True):
         return cmd_doctor(argparse.Namespace(theme=None, bundle=None, no_bundle=False))
     return 0
