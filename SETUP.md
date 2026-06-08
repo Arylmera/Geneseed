@@ -305,6 +305,34 @@ instead — it does the same job:
 echo 'geneseed() { "'"$PWD"'/geneseed" "$@"; }' >> ~/.zshrc   # or ~/.bashrc
 ```
 
+## Headless / CI (OpenCode)
+
+Once the harness is installed (Path A or B), OpenCode can run **non-interactively** —
+no TUI — so the harness's agents, rules, and skills apply in scripts and pipelines:
+
+```
+opencode run "review the staged diff and list any correctness bugs"   # one-shot, prints to stdout
+opencode run -m anthropic/claude-sonnet-4-5 "…"                       # pin a model for the run
+cat issue.md | opencode run "triage this and propose a fix plan"      # pipe input in
+```
+
+`opencode run` loads the same `opencode.json` (so `instructions` → `AGENT.md`, the
+permission gates, and any per-agent overrides all take effect) and the same
+`.opencode/` agents/skills/plugins. Useful for CI checks, cron jobs, or scripting a
+capability agent. Notes:
+
+- **Permissions still gate.** The consent-before-push / `rm -rf` `ask` rules will
+  *block* in a non-interactive run (nothing to answer the prompt). For CI, set the
+  specific commands you want to `"allow"` in your own `permission.bash` map, or scope
+  the run to read-only work — don't blanket-disable the guards.
+- **`--pure`** runs OpenCode ignoring local/global config — handy to reproduce a bug
+  without the harness in the way, or to confirm a behaviour is the harness's doing.
+- The **learn** plugin (`session.idle` → memory) and **context** plugin still load in
+  headless runs; set `GENESEED_GUARD=warn`/`off` or `GENESEED_DEBUG=1` per the
+  [adapter README](adapters/opencode/README.md) if a run needs different behaviour.
+
+This is a usage note, not an emitted feature — the harness writes nothing for it.
+
 ## Upgrade
 
 ```

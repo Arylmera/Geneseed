@@ -790,6 +790,45 @@ class TuiHelperTests(unittest.TestCase):
             harness._TUI_ASCII = saved
 
 
+class OpencodeAgentColorAndThemeTests(unittest.TestCase):
+    """Agent display colours must be valid OpenCode named slots, and the emitted theme
+    must be a complete, valid, accent-tinted JSON."""
+
+    _SLOTS = {"primary", "secondary", "accent", "success", "warning", "error", "info"}
+
+    def test_agent_colors_are_valid_named_slots(self):
+        for v in build.AGENT_COLORS.values():
+            self.assertIn(v, self._SLOTS)
+
+    def test_theme_json_complete_and_accent_tinted(self):
+        t = build._theme_json({"ACCENT": "cyan"})
+        self.assertEqual(t["$schema"], "https://opencode.ai/theme.json")
+        theme = t["theme"]
+        for k in ("primary", "secondary", "accent", "error", "warning", "success",
+                  "info", "text", "background", "border", "syntaxKeyword"):
+            self.assertIn(k, theme)
+        self.assertEqual(theme["accent"], 6)        # cyan -> ANSI 6
+        self.assertEqual(theme["primary"], 6)
+        # every value is a bare ANSI int (0-255) or the literal "none" — both valid
+        for v in theme.values():
+            self.assertTrue(v == "none" or (isinstance(v, int) and 0 <= v <= 255), v)
+        self.assertEqual(build._theme_json({})["theme"]["accent"], 6)  # unknown -> cyan
+
+    def test_global_emit_writes_branded_theme_and_agent_color(self):
+        import contextlib, io, json as _json
+        cfg = Path(tempfile.mkdtemp()) / "cfg"
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_opencode_global("neutral", out=Path(tempfile.mkdtemp()) / "b", cfg=cfg)
+            theme_file = cfg / "themes" / "geneseed-neutral.json"
+            self.assertTrue(theme_file.is_file())
+            self.assertIn("theme", _json.loads(theme_file.read_text(encoding="utf-8")))
+            reviewer = (cfg / "agents" / "reviewer.md").read_text(encoding="utf-8")
+            self.assertIn("color: warning", reviewer)   # role -> semantic slot
+        finally:
+            shutil.rmtree(cfg.parent, ignore_errors=True)
+
+
 class McpServerListingTests(unittest.TestCase):
     """The MCP screen must show user-added servers, not only the built-in presets."""
 

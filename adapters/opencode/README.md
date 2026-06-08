@@ -305,12 +305,23 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
 - **Per-agent model routing** (`agent-overrides.json`). The build drops an empty,
   git-ignored `agent-overrides.json` at the bundle/config root. Empty ⇒ every agent
   inherits OpenCode's current model **as-is**. Add entries to pin a model/temperature
-  per agent (e.g. route the read-only `reviewer`/`explorer` to a cheaper model):
+  per agent (e.g. route the read-only `reviewer`/`explorer` to a cheaper model). Each
+  entry also accepts `variant` (reasoning effort, e.g. `"high"`) and `steps` (a max
+  tool-iteration cap — a runaway-loop safety net):
   ```json
-  { "agents": { "reviewer": { "model": "anthropic/claude-haiku-4-5", "temperature": 0.1 } } }
+  { "agents": { "reviewer": { "model": "anthropic/claude-haiku-4-5", "temperature": 0.1, "variant": "high", "steps": 20 } } }
   ```
-  Re-emit to apply. (A future TUI screen will edit this map.) Unlisted agents emit no
-  `model:` line, so they inherit.
+  Re-emit to apply. (A future TUI screen will edit this map.) Unlisted keys are omitted,
+  so the agent inherits OpenCode's defaults.
+- **Agent colours.** Each capability agent is emitted with a `color:` set to an OpenCode
+  *named theme slot* — architect=`primary`, reviewer=`warning`, tester=`success`,
+  docs=`info`, security=`error`, explorer=`accent`, council seats=`secondary` — so the
+  agent switcher and subagent output are colour-coded, and the colour tracks whatever
+  OpenCode theme you run (portable, never a raw hex). Cosmetic.
+- **Branded theme** (`/theme geneseed-<theme>`). The emit writes a complete OpenCode
+  theme at `.opencode/themes/geneseed-<theme>.json` (global: `<cfg>/themes/`), tinted by
+  the harness theme's accent using terminal-native ANSI colours (always valid, no host
+  palette). Select it with e.g. `/theme geneseed-imperial`; ignore it otherwise.
 - **Runtime guard plugin** (`geneseed-guard.js`, installed with the others). Enforces
   the safety Laws at the tool boundary: **blocks** writes to private-key/credential
   files (Law I) and catastrophic shell like `rm -rf /` (Law IV); **warns** on `.env`

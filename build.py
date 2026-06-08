@@ -395,6 +395,64 @@ def _strip_skill_body_links(body: str) -> str:
     return re.sub(r"\[([^\]]+)\]\((?!https?://|/|#)[^)\s]*\.md(?:#[^)\s]*)?\)", r"\1", body)
 
 
+# Per-capability-agent display colour. Values are OpenCode's NAMED theme slots
+# (primary/secondary/accent/success/warning/error/info) — NOT raw colour names — so the
+# colour tracks whatever theme the host has active and stays portable. Council seats and
+# any unlisted agent fall to 'secondary'. Cosmetic only (the agent switcher / subagent UI).
+AGENT_COLORS = {
+    "architect": "primary", "reviewer": "warning", "tester": "success",
+    "docs": "info", "security": "error", "explorer": "accent",
+}
+
+# ANSI colour-name -> integer (0-7), the universally-rendered terminal colours. Used to
+# tint an emitted OpenCode theme from a Geneseed theme's single ACCENT token.
+_ANSI = {"black": 0, "red": 1, "green": 2, "yellow": 3,
+         "blue": 4, "magenta": 5, "cyan": 6, "white": 7}
+
+
+def _theme_json(theme: dict) -> dict:
+    """A COMPLETE, terminal-native OpenCode theme tinted by the harness theme's ACCENT.
+
+    Geneseed themes carry only an accent colour, not a full palette, so this fills every
+    OpenCode theme slot with ANSI colour integers (0-7, rendered by every terminal) and
+    'none' backgrounds (the terminal's own) — always valid, no host palette, hermetic.
+    The accent-family slots take the theme's accent; semantics (ok/warn/err) use the
+    conventional ANSI green/yellow/red. Values are bare ANSI ints / 'none' (both
+    documented-valid), so no `defs` block or dark/light variants are needed."""
+    acc = _ANSI.get(str(theme.get("ACCENT", "cyan")).lower(), 6)
+    GRAY, GREEN, RED, YEL, MAG, NONE = 8, 2, 1, 3, 5, "none"
+    t = {
+        "primary": acc, "secondary": MAG, "accent": acc,
+        "error": RED, "warning": YEL, "success": GREEN, "info": acc,
+        "text": NONE, "textMuted": GRAY,
+        "background": NONE, "backgroundPanel": NONE, "backgroundElement": NONE,
+        "border": GRAY, "borderActive": acc, "borderSubtle": GRAY,
+        "diffAdded": GREEN, "diffRemoved": RED, "diffContext": GRAY,
+        "diffHunkHeader": acc, "diffHighlightAdded": GREEN, "diffHighlightRemoved": RED,
+        "diffAddedBg": NONE, "diffRemovedBg": NONE, "diffContextBg": NONE,
+        "diffLineNumber": GRAY, "diffAddedLineNumberBg": NONE, "diffRemovedLineNumberBg": NONE,
+        "markdownText": NONE, "markdownHeading": acc, "markdownLink": MAG,
+        "markdownLinkText": acc, "markdownCode": GREEN, "markdownBlockQuote": GRAY,
+        "markdownEmph": YEL, "markdownStrong": YEL, "markdownHorizontalRule": GRAY,
+        "markdownListItem": acc, "markdownListEnumeration": acc, "markdownImage": MAG,
+        "markdownImageText": acc, "markdownCodeBlock": NONE,
+        "syntaxComment": GRAY, "syntaxKeyword": MAG, "syntaxFunction": acc,
+        "syntaxVariable": NONE, "syntaxString": GREEN, "syntaxNumber": MAG,
+        "syntaxType": acc, "syntaxOperator": MAG, "syntaxPunctuation": NONE,
+    }
+    return {"$schema": "https://opencode.ai/theme.json", "theme": t}
+
+
+def _write_theme(themes_dir: Path, theme_name: str, theme: dict) -> Path:
+    """Emit the branded OpenCode theme as <themes_dir>/geneseed-<theme>.json (selectable
+    with `/theme geneseed-<theme>`). The geneseed- prefix avoids clashing with a built-in
+    theme name. Returns the written path."""
+    themes_dir.mkdir(parents=True, exist_ok=True)
+    dest = themes_dir / f"geneseed-{theme_name}.json"
+    dest.write_text(json.dumps(_theme_json(theme), indent=2) + "\n", encoding="utf-8")
+    return dest
+
+
 def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=None) -> tuple[int, int, list[Path]]:
     """Render capability agents and skills into OpenCode-native files.
 
@@ -438,14 +496,23 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
         body = text.lstrip("\n")
         if folder == "agents":
             fm = [f"description: {json.dumps(desc)}", "mode: subagent"]
-            # Per-agent overrides (O2): emit model/temperature ONLY when configured;
-            # with no override the line is omitted so the agent inherits the host's
-            # current model as-is. Empty agent-overrides.json => zero change.
+            # Per-agent display colour — one of OpenCode's NAMED theme slots (never a raw
+            # hex/ANSI name), so it follows whatever theme the host has active and stays
+            # portable. Capability roles get distinct semantic slots; everything else (the
+            # council seats) shares 'secondary'. Cosmetic only.
+            fm.append(f"color: {AGENT_COLORS.get(stem, 'secondary')}")
+            # Per-agent overrides (O2): emit model/temperature/variant/steps ONLY when
+            # configured; with no override the line is omitted so the agent inherits the
+            # host's current model as-is. Empty agent-overrides.json => zero change.
             ov = overrides.get(stem) or {}
             if ov.get("model"):
                 fm.append(f"model: {ov['model']}")
             if ov.get("temperature") is not None:
                 fm.append(f"temperature: {ov['temperature']}")
+            if ov.get("variant"):
+                fm.append(f"variant: {ov['variant']}")
+            if ov.get("steps") is not None:
+                fm.append(f"steps: {ov['steps']}")
             if _is_readonly(text):
                 # A "Read-only" agent must not be able to mutate the repo — and that
                 # includes the shell: `tools: {write,edit: false}` alone still leaves
@@ -527,10 +594,12 @@ def _copy_plugins(dst: Path) -> int:
 
 AGENT_OVERRIDES_STUB = {
     "_comment": (
-        "Per-agent model/temperature overrides for OpenCode. EMPTY = every agent "
-        "inherits OpenCode's current model as-is (the default — nothing changes). Add "
-        "entries keyed by agent name, e.g. "
-        "\"reviewer\": {\"model\": \"anthropic/claude-haiku-4-5\", \"temperature\": 0.1}. "
+        "Per-agent OpenCode overrides. EMPTY = every agent inherits OpenCode's current "
+        "model as-is (the default — nothing changes). Add entries keyed by agent name; "
+        "supported keys: model, temperature, variant (reasoning effort, e.g. \"high\"), "
+        "steps (max tool-iterations — a runaway-loop cap). e.g. "
+        "\"reviewer\": {\"model\": \"anthropic/claude-haiku-4-5\", \"temperature\": 0.1, "
+        "\"variant\": \"high\", \"steps\": 20}. "
         "Host-specific; git-ignored. A future TUI screen edits this — rebuild to apply."
     ),
     "agents": {},
@@ -575,12 +644,16 @@ def _write_primary_agent(agents_dir: Path, overrides: dict) -> "Path | None":
         return None
     body = PRIMARY_AGENT_SRC.read_text(encoding="utf-8").lstrip("\n")
     desc = "Primary orchestrator — works by the harness Rules and delegates to the capability subagents."
-    fm = [f"description: {json.dumps(desc)}", "mode: primary"]
+    fm = [f"description: {json.dumps(desc)}", "mode: primary", "color: primary"]
     ov = overrides.get("orchestrator") or {}
     if ov.get("model"):
         fm.append(f"model: {ov['model']}")
     if ov.get("temperature") is not None:
         fm.append(f"temperature: {ov['temperature']}")
+    if ov.get("variant"):
+        fm.append(f"variant: {ov['variant']}")
+    if ov.get("steps") is not None:
+        fm.append(f"steps: {ov['steps']}")
     dest = agents_dir / "orchestrator.md"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + body, encoding="utf-8")
@@ -640,7 +713,7 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     # singular is back-compat only.)
     if (root / ".opencode").is_dir():
         shutil.rmtree(root / ".opencode")
-    _, items = render_all(theme_name)
+    theme, items = render_all(theme_name)
 
     ensure_agent_overrides_stub(out)
     overrides = _load_agent_overrides(out)
@@ -649,6 +722,7 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills", overrides)
     primary = _write_primary_agent(oc / "agents", overrides)
     commands = _write_command_layer(items, oc / "command")
+    _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
 
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
@@ -781,6 +855,8 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
         owned.append(primary.relative_to(cfg).as_posix())
     commands = _write_command_layer(items, cfg / "command")
     owned += [p.relative_to(cfg).as_posix() for p in commands]
+    theme_file = _write_theme(cfg / "themes", theme_name, theme)   # branded /theme
+    owned.append(theme_file.relative_to(cfg).as_posix())
 
     n_plugins = 0
     if PLUGIN_SRC.is_dir():
