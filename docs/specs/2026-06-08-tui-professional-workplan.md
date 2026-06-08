@@ -15,15 +15,17 @@
 > verified by unit tests + `--help` import + `doctor`; **visual QA requires a Unix
 > terminal** (the work machine), as with both prior TUI specs.
 >
-> **Status (2026-06-08): EXECUTED, commits `2a019ed..a03d0b5`.** Phases 0–6 landed
-> bar two items deferred for visual QA (can't verify curses from Windows): **2.5**
-> (`_mcp_view` frame — risks an off-by-one row overlap I can't see) and **4.2**
-> (threaded/select bootstrap spinner during silent subprocess steps — risks a hang
-> in the `update` flow). **5.2** (smoothed interpolation) and **3.5** (dual-state
-> focus borders) were dropped on judgement — see the end of each phase. 91 unittests
-> pass; `doctor --all` clean; `--help` imports clean. **Visual QA still required** on
-> a Unix terminal across all three tiers (default / `GENESEED_TUI_PLAIN` /
-> `GENESEED_TUI_ASCII`) for every touched screen.
+> **Status (2026-06-08): FULLY EXECUTED, commits `2a019ed..HEAD`.** Every actionable
+> task landed, including the two originally deferred: **2.5** (`_mcp_view` now framed,
+> content reflowed inside the box) and **4.2** (`_run_logged` polls the pipe on an
+> 80 ms `select` timeout so the spinner ticks during silent subprocess steps; main
+> thread keeps sole ownership of curses; `os.read` gives a clean EOF; readline
+> fallback for any non-`select` platform). Only **5.2** (smoothed interpolation) and
+> **3.5** (dual-state focus borders) were dropped on judgement — see the end of each
+> phase. 91 unittests pass; `doctor --all` clean; `--help` imports clean.
+> **Visual QA still required** on a Unix terminal across all three tiers (default /
+> `GENESEED_TUI_PLAIN` / `GENESEED_TUI_ASCII`) — especially the new `_mcp_view` frame
+> (row reflow done blind) and the bootstrap spinner during a real `update`.
 
 ## Verdict
 

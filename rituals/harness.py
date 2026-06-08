@@ -2678,27 +2678,30 @@ def _mcp_view(stdscr, curses, pal) -> None:
                 return
             continue
         _topbar(stdscr, pal, "Geneseed — MCP servers (OpenCode)")
-        put(1, 2, f"target: {label}", pal["HEAD"])
-        put(2, 2, f"{path}  ({'exists' if path.exists() else 'will be created'})", curses.A_DIM)
+        # Frame the panel (the one interactive screen that had no border). The box spans
+        # rows 1..h-2; all content sits inside it (rows 2..h-3, cols 2..w-3).
+        _draw_box(stdscr, curses, 1, 0, h - 2, w, pal["FRAME"])
+        put(2, 2, f"target: {label}", pal["HEAD"])
+        put(3, 2, f"{path}  ({'exists' if path.exists() else 'will be created'})", curses.A_DIM)
         for i, nm in enumerate(names):
             st = _mcp_state(config, nm)
             mark = _mark({"enabled": "mcp_on", "disabled": "mcp_off", "absent": "mcp_absent"}[st])
             row = f"{mark} {_MCP_PRESETS[nm]['label']}  ({st})"
-            y = 4 + i
-            if y >= h - 6:
+            y = 5 + i
+            if y >= h - 7:
                 break
             if i == sel:
                 put(y, 2, _fit(f" {_SEL_G} {row} ", w - 4), pal["SEL"])
             else:
-                put(y, 3, f"  {row}", 0)
-        dy = 4 + min(len(names), max(1, h - 10)) + 1
-        if dy < h - 2:
+                put(y, 3, _truncd(f"  {row}", w - 4), 0)
+        dy = 5 + min(len(names), max(1, h - 13)) + 1
+        if dy < h - 3:
             _hline(stdscr, pal, dy - 1, 2, w - 4)
             for j, seg in enumerate(textwrap.wrap(_MCP_PRESETS[names[sel]]["desc"], w - 6)[:4]):
-                if dy + j < h - 2:
+                if dy + j < h - 3:
                     put(dy + j, 3, seg, curses.A_DIM)
         if msg:
-            put(h - 2, 2, msg[:w - 4], pal["OK"])
+            put(h - 3, 2, _truncd(msg, w - 4), pal["OK"])
         _botbar(stdscr, pal,
                 "↑↓ move · Enter add/remove · e enable/disable · t target · q back")
         stdscr.refresh()
@@ -3032,15 +3035,48 @@ def _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading="updating"
         _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
         return 1
     import time
+    import select
     last = 0.0
-    for line in p.stdout or []:
-        log.append(_clean_line(line.rstrip("\n")))
-        if len(log) > 400:
-            del log[: len(log) - 400]
-        now = time.monotonic()
-        if now - last > 0.06:        # throttle redraws to avoid flicker on fast output
-            _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
-            last = now
+
+    def _emit_lines(buf: str) -> str:
+        while "\n" in buf:
+            line, buf = buf.split("\n", 1)
+            log.append(_clean_line(line))
+            if len(log) > 400:
+                del log[: len(log) - 400]
+        return buf
+
+    fd = p.stdout.fileno() if p.stdout else None
+    if fd is not None and hasattr(select, "select"):
+        # Poll the pipe with an 80 ms timeout so the screen redraws — and the spinner
+        # advances — even while a step produces NO output (the silent-step freeze). Only
+        # this main thread touches curses; os.read on the raw fd gives a clean EOF.
+        buf = ""
+        while True:
+            r, _w, _e = select.select([fd], [], [], 0.08)
+            if r:
+                try:
+                    chunk = os.read(fd, 4096)
+                except OSError:
+                    chunk = b""
+                if not chunk:
+                    break                       # subprocess closed stdout → done
+                buf = _emit_lines(buf + chunk.decode("utf-8", "replace"))
+            now = time.monotonic()
+            if (not r) or now - last > 0.06:     # tick on idle; throttle on busy output
+                _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
+                last = now
+        if buf:
+            log.append(_clean_line(buf))
+    else:                                        # no pipe select (non-Unix) — stream plainly
+        for line in p.stdout or []:
+            log.append(_clean_line(line.rstrip("\n")))
+            if len(log) > 400:
+                del log[: len(log) - 400]
+            now = time.monotonic()
+            if now - last > 0.06:
+                _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
+                last = now
     _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)   # final frame
     return p.wait()
 
