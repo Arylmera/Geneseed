@@ -2727,7 +2727,7 @@ def _mcp_view(stdscr, curses, pal) -> None:
         if msg:
             put(h - 3, 2, _truncd(msg, w - 4), pal["OK"])
         _botbar(stdscr, pal,
-                "↑↓ move · Enter add/remove · e enable/disable · t target · q back")
+                "↑↓ move · Enter add / enable-disable · x remove · t target · q back")
         stdscr.refresh()
         c = stdscr.getch()
         if c in (ord("q"), 27):
@@ -2739,25 +2739,31 @@ def _mcp_view(stdscr, curses, pal) -> None:
         elif c in (ord("t"), ord("T")):
             ti, msg = (ti + 1) % len(targets), ""
         elif c in (curses.KEY_ENTER, 10, 13, ord(" ")):
-            nm = names[sel]
-            if _mcp_state(config, nm) == "absent" and nm in _MCP_PRESETS:
-                config = _mcp_apply(config, nm, dict(_MCP_PRESETS[nm]["block"]))
-                msg = f"added {nm} → {label} ({path})"
-            elif _mcp_state(config, nm) != "absent":
-                config = _mcp_apply(config, nm, None)
-                msg = f"removed {nm} from {label} ({path})"
-            else:
-                msg = f"{nm} has no preset block to add"
-            _mcp_save(path, config)
-        elif c in (ord("e"), ord("E")):
+            # Primary toggle — NON-destructive: an absent preset is added (enabled), a
+            # present server flips its OpenCode `enabled` flag in place. Disabling keeps
+            # the whole block so it can be turned back on without re-entering the config.
             nm = names[sel]
             st = _mcp_state(config, nm)
             if st == "absent":
-                msg = "add it first (Enter), then enable/disable"
+                if nm in _MCP_PRESETS:
+                    config = _mcp_apply(config, nm, dict(_MCP_PRESETS[nm]["block"]))
+                    msg = f"added {nm} (enabled) → {label}"
+                else:
+                    msg = f"{nm} has no preset block to add"
             else:
                 config = _mcp_set_enabled(config, nm, st == "disabled")
-                _mcp_save(path, config)
                 msg = f"{nm} {'enabled' if st == 'disabled' else 'disabled'} in {label}"
+            _mcp_save(path, config)
+        elif c in (ord("x"), ord("X")):
+            # Explicit, destructive: delete the server's config block entirely. Use Enter
+            # to merely disable; reach for this only to drop the server for good.
+            nm = names[sel]
+            if _mcp_state(config, nm) != "absent":
+                config = _mcp_apply(config, nm, None)
+                _mcp_save(path, config)
+                msg = f"removed {nm} from {label} (config deleted)"
+            else:
+                msg = f"{nm} is not in {label}"
 
 
 def _tui_loop(stdscr, inv: dict) -> None:
