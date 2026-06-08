@@ -1107,6 +1107,27 @@ def _mcp_default_target(targets: "list[tuple[str, Path]]") -> int:
     return next((i for i, (label, _p) in enumerate(targets) if label == prefer), 0)
 
 
+def _mcp_known_names(config: dict) -> list:
+    """Server names to show in the MCP screen: the built-in presets first, then any
+    server already present in THIS config that isn't a preset — so user-added servers
+    (gitlab, filesystem, …) are visible and manageable, not just the presets. Pure."""
+    names = list(_MCP_PRESETS)
+    present = list((config.get("mcp") or {}).keys()) if isinstance(config, dict) else []
+    names += [n for n in present if n not in _MCP_PRESETS]
+    return names
+
+
+def _mcp_meta(name: str) -> "tuple[str, str]":
+    """(label, description) for a server row: the preset's metadata when known, else the
+    bare server name and a generic note (a server discovered in the config, not a
+    Geneseed preset — still toggleable/removable). Pure."""
+    p = _MCP_PRESETS.get(name)
+    if p:
+        return p["label"], p["desc"]
+    return name, ("User-defined MCP server (not a Geneseed preset). It lives in this "
+                  "config already — 'e' enables/disables it, Enter removes it.")
+
+
 def _archive_memory(memory_dir: Path) -> Path:
     """Move a memory store into a timestamped snapshot under a sibling
     `archived-memory/` (created if absent). Memory is NEVER deleted — only set aside,
@@ -2662,10 +2683,13 @@ def _mcp_view(stdscr, curses, pal) -> None:
     import textwrap
     targets = _mcp_targets()
     ti, sel, msg = _mcp_default_target(targets), 0, ""
-    names = list(_MCP_PRESETS)
     while True:
         label, path = targets[ti]
         config = _mcp_load(path)
+        # Recompute per frame: presets + servers already in THIS target's config, so a
+        # target switch (t) or an add/remove is reflected and user-added servers appear.
+        names = _mcp_known_names(config)
+        sel = min(sel, len(names) - 1)
         _clear_frame(stdscr)
         h, w = stdscr.getmaxyx()
 
@@ -2686,7 +2710,7 @@ def _mcp_view(stdscr, curses, pal) -> None:
         for i, nm in enumerate(names):
             st = _mcp_state(config, nm)
             mark = _mark({"enabled": "mcp_on", "disabled": "mcp_off", "absent": "mcp_absent"}[st])
-            row = f"{mark} {_MCP_PRESETS[nm]['label']}  ({st})"
+            row = f"{mark} {_mcp_meta(nm)[0]}  ({st})"
             y = 5 + i
             if y >= h - 7:
                 break
@@ -2697,7 +2721,7 @@ def _mcp_view(stdscr, curses, pal) -> None:
         dy = 5 + min(len(names), max(1, h - 13)) + 1
         if dy < h - 3:
             _hline(stdscr, pal, dy - 1, 2, w - 4)
-            for j, seg in enumerate(textwrap.wrap(_MCP_PRESETS[names[sel]]["desc"], w - 6)[:4]):
+            for j, seg in enumerate(textwrap.wrap(_mcp_meta(names[sel])[1], w - 6)[:4]):
                 if dy + j < h - 3:
                     put(dy + j, 3, seg, curses.A_DIM)
         if msg:
@@ -2716,12 +2740,14 @@ def _mcp_view(stdscr, curses, pal) -> None:
             ti, msg = (ti + 1) % len(targets), ""
         elif c in (curses.KEY_ENTER, 10, 13, ord(" ")):
             nm = names[sel]
-            if _mcp_state(config, nm) == "absent":
+            if _mcp_state(config, nm) == "absent" and nm in _MCP_PRESETS:
                 config = _mcp_apply(config, nm, dict(_MCP_PRESETS[nm]["block"]))
                 msg = f"added {nm} → {label} ({path})"
-            else:
+            elif _mcp_state(config, nm) != "absent":
                 config = _mcp_apply(config, nm, None)
                 msg = f"removed {nm} from {label} ({path})"
+            else:
+                msg = f"{nm} has no preset block to add"
             _mcp_save(path, config)
         elif c in (ord("e"), ord("E")):
             nm = names[sel]

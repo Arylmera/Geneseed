@@ -790,6 +790,32 @@ class TuiHelperTests(unittest.TestCase):
             harness._TUI_ASCII = saved
 
 
+class McpServerListingTests(unittest.TestCase):
+    """The MCP screen must show user-added servers, not only the built-in presets."""
+
+    def test_known_names_unions_presets_with_config_servers(self):
+        cfg = {"mcp": {"gitlab": {"type": "local"}, "filesystem": {"type": "local"},
+                       "markitdown": {"type": "local"}}}
+        names = harness._mcp_known_names(cfg)
+        # presets come first, then the user-added servers that aren't presets
+        self.assertEqual(names[0], "markitdown")            # the one preset
+        self.assertIn("gitlab", names)
+        self.assertIn("filesystem", names)
+        # no duplicates even though markitdown is both a preset and in the config
+        self.assertEqual(len(names), len(set(names)))
+
+    def test_known_names_handles_empty_or_missing_mcp(self):
+        self.assertEqual(harness._mcp_known_names({}), list(harness._MCP_PRESETS))
+        self.assertEqual(harness._mcp_known_names({"mcp": {}}), list(harness._MCP_PRESETS))
+
+    def test_meta_falls_back_for_unknown_server(self):
+        label, desc = harness._mcp_meta("gitlab")
+        self.assertEqual(label, "gitlab")                   # bare name, no KeyError
+        self.assertTrue(desc)
+        plabel, _ = harness._mcp_meta("markitdown")
+        self.assertEqual(plabel, harness._MCP_PRESETS["markitdown"]["label"])
+
+
 class SourceCompletenessGateTests(unittest.TestCase):
     """A partial src/ — an interrupted sync, or an AGENT.md table row whose spec file
     is missing — must ABORT the emit before any write, not produce an AGENT.md full of
