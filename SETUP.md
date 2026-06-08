@@ -24,7 +24,8 @@ text prompts elsewhere) that asks for a theme and install mode, runs the right b
 and offers a health check. It works on every OS. Prefer to do it by hand?
 Pick a path below. Already installed? Bare **`./geneseed`** opens an interactive
 **main menu** — choose *Update & set up*, *Set up / re-theme*, *Browse*, *Health
-check*, *Build*, or *Diff* and it runs that flow. **`./geneseed bootstrap`** jumps
+check*, *Build*, *Diff*, or *MCP servers* (toggle MarkItDown & other MCP servers
+into your OpenCode config) and it runs that flow. **`./geneseed bootstrap`** jumps
 straight to update-then-setup; **`./geneseed setup`** straight to the wizard.
 
 | Path | Use when |
@@ -220,6 +221,9 @@ per-repo) under the `mcp` key, alongside any servers you already have:
 
 If `markitdown-mcp` is not on PATH in the shell OpenCode launches from, use the
 zero-install uv form instead: `"command": ["uvx", "markitdown-mcp"]`.
+
+Prefer not to hand-edit JSON? `./geneseed` → **MCP servers** toggles this exact block
+into your project or global `opencode.json` (and enables/disables it) for you.
 
 **4. Verify.** Restart OpenCode, then `opencode mcp` should list `markitdown` connected.
 The `ingest` skill auto-prefers an MCP converter when one is exposed, so a prompt like
