@@ -93,6 +93,17 @@ renders it as the name in parentheses.
 - Unknown tokens are left visible (debugging aid); `doctor` flags them.
 - Stdlib only; no third-party dependencies, ever.
 
+The "stdlib only" rule is **load-bearing for everything on the critical path** — the
+generator (`build.py`), and every install/validate command (`setup`, `bootstrap`,
+`build`, `doctor`, `diff`, `context`, `learn`, `prompt`, `status`) — so the bundle stays
+hermetic (Decision 5) and the harness installs and runs on a bare `python3`, any OS, no
+`pip`. The one sanctioned exception is a **purely optional, lazily-imported view**: the
+control panel (`menu`/`tui`) uses [Textual](https://textual.textualize.io/) when it is
+installed and silently falls back to the bundled stdlib `curses` panel otherwise. It is
+never imported at module load, never required, and never on the install path — so the
+dependency-free guarantee is intact whether or not Textual is present. `GENESEED_TUI_CURSES=1`
+forces the curses panel even when Textual is available.
+
 ## Explicitly out of scope
 
 Graph/index generation, web-clipping pipelines, session-classification capture,
