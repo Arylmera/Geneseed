@@ -1,8 +1,10 @@
 # Geneseed — Setup Guide
 
-From zero to a working harness. Pick the path that matches your tool, then configure
-and verify. For the conceptual overview see the [README](README.md); for OpenCode
-internals see [adapters/opencode/](adapters/opencode/README.md).
+From bare repository to a disciplined agent in a few minutes. You pick a **theme** —
+the voice and vocabulary the harness wears — and an **install mode**; the build implants
+the gene-seed and the agent wakes speaking in that voice. Pick the path that matches your
+tool, then configure and verify. For the conceptual overview see the [README](README.md);
+for OpenCode internals see [adapters/opencode/](adapters/opencode/README.md).
 
 ## Prerequisites
 
@@ -20,8 +22,12 @@ internals see [adapters/opencode/](adapters/opencode/README.md).
 
 **Easiest:** run `./geneseed setup` (or `python rituals/harness.py setup`) for a
 guided, dependency-free wizard — a colored curses form on a Unix terminal (plain
-text prompts elsewhere) that asks for a theme and install mode, runs the right build,
-and offers a health check. It works on every OS. Prefer to do it by hand?
+text prompts elsewhere). As you move through the theme picker it **previews each
+theme live** — its tagline, loaded-sigil, and voice — so you hear the flavour before
+you choose; once you pick, the wizard speaks in that theme's accent through confirm
+and build, and the install ends on the theme's own **banner and benediction**. It
+asks for a theme and install mode, runs the right build, and offers a health check.
+It works on every OS. Prefer to do it by hand?
 Pick a path below. Already installed? Bare **`./geneseed`** opens an interactive
 **main menu** — choose *Update & set up*, *Set up / re-theme*, *Browse*, *Health
 check*, *Build*, *Diff*, or *Settings* (a submenu for MCP servers — toggle MarkItDown

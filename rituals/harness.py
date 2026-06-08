@@ -1806,13 +1806,34 @@ def _theme_preview(key):
     return lines
 
 
-def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
+def _theme_flair(theme: str) -> dict:
+    """The voice elements the setup chrome speaks in once a theme is chosen, read live
+    from its JSON (pure — unit-tested): accent colour, tagline, loaded-sigil, banner
+    rows, and benediction. Every field degrades to an empty string / list when the
+    theme omits it, so the caller falls back to plain text instead of crashing. This is
+    what carries the theme rework's 'voice, vocabulary, and a banner' into the wizard's
+    confirm and success screens — the same flavour the rendered bundle now wears."""
+    try:
+        data = json.loads((build.THEMES / f"{theme}.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    return {
+        "accent": data.get("ACCENT", "cyan"),
+        "tagline": data.get("TAGLINE", ""),
+        "sigil": data.get("LOADED_SIGIL", ""),
+        "banner": data.get("BANNER", "").splitlines(),
+        "benediction": data.get("BENEDICTION", ""),
+    }
+
+
+def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None, accent="cyan"):
     """Framed, colored single-choice menu. Returns the chosen key or None (cancel).
     options: list of (key, label, description). With detail_fn, render two panes — the
     list on the left and detail_fn(key)'s lines on the right; else the focused row's
-    description shows beneath the list."""
+    description shows beneath the list. `accent` tints the frame/bars/headings — pass a
+    theme's ACCENT to make a post-selection screen speak in that theme's colour."""
     import textwrap
-    pal = _tui_palette(curses)
+    pal = _tui_palette(curses, accent)
     curses.curs_set(0)
     idx = 0
     if default is not None:
@@ -1969,10 +1990,16 @@ def _setup_tui(stdscr):
         if out is None:
             return None
     target = out or root
+    flair = _theme_flair(theme)
     summary = f"theme = {theme}     mode = {emit}" + (f"     target = {target}" if target else "")
-    choice = _menu(stdscr, curses, "Ready to build the harness?",
+    # Once a theme is chosen the confirm step speaks in its voice: the tagline is the
+    # prompt and the accent tints the frame, so you feel the flavour you're about to
+    # implant before committing to the build.
+    prompt = flair["tagline"] or "Ready to build the harness?"
+    choice = _menu(stdscr, curses, prompt,
                    [("go", "Build now", summary),
-                    ("cancel", "Cancel", "Make no changes and exit.")], default="go")
+                    ("cancel", "Cancel", "Make no changes and exit.")],
+                   default="go", accent=flair["accent"])
     return {"theme": theme, "emit": emit, "out": out, "root": root} if choice == "go" else None
 
 
@@ -2152,7 +2179,11 @@ def _info_screen(stdscr, curses, pal, title, lines, footer) -> None:
     on Enter/q."""
     import textwrap
     icon = {"ok": _mark("ok"), "warn": _mark("warn"), "info": _mark("info")}
-    attr = {"ok": pal["OK"], "warn": pal["FAIL"], "info": 0}
+    # 'art' / 'dim' are flavour rows (banner, sigil, benediction): no status icon, no
+    # wrap — pre-formatted lines drawn raw (clipped, not reflowed) so a theme banner
+    # keeps its shape, in the accent ('art') or dimmed ('dim').
+    attr = {"ok": pal["OK"], "warn": pal["FAIL"], "info": 0,
+            "art": pal["HEAD"], "dim": curses.A_DIM}
     top = 0
     while True:
         _clear_frame(stdscr)
@@ -2164,6 +2195,9 @@ def _info_screen(stdscr, curses, pal, title, lines, footer) -> None:
         _topbar(stdscr, pal, f"Geneseed — {title}")
         flat = []
         for kind, text in lines:
+            if kind in ("art", "dim"):
+                flat.append((kind, text))                      # raw, no icon, no wrap
+                continue
             for j, seg in enumerate(textwrap.wrap(text, max(10, w - 8)) or [""]):
                 flat.append((kind, f"{icon.get(kind, '·')} {seg}" if j == 0 else f"   {seg}"))
         body_h = max(1, h - 2)
@@ -2195,18 +2229,56 @@ def _setup_flow(stdscr) -> int:
         return 0
     theme, emit = sel["theme"], sel["emit"]
     out, root = sel.get("out"), sel.get("root")
+    # The theme is locked in now: repaint the rest of the flow (build → summary →
+    # health check) in its accent so the chrome matches the harness being grown.
+    flair = _theme_flair(theme)
+    pal = _tui_palette(curses, accent=flair["accent"])
     argv = _setup_build_args(theme, emit, out, root)
     status = _run_steps(stdscr, curses, pal,
                         [("Build the harness", [sys.executable, str(BUILD), *argv])],
                         heading="building")
     ok = bool(status) and status[0] == "done"
-    _info_screen(stdscr, curses, pal, "setup complete" if ok else "setup",
-                 _setup_summary_lines(theme, emit, out, root, ok),
+    _info_screen(stdscr, curses, pal, _setup_done_title(flair, ok),
+                 _setup_done_lines(flair, theme, emit, out, root, ok),
                  "Enter: run health check" if ok else "Enter: close")
     if not ok:
         return 1
     _doctor_view(stdscr, curses, pal)
     return 0
+
+
+def _setup_done_title(flair: dict, ok: bool) -> str:
+    """Title for the post-build screen — the sigil's own opening words on success
+    (e.g. 'Gene-seed implanted'), else a plain fallback."""
+    if not ok:
+        return "setup"
+    sig = flair["sigil"]
+    if sig:
+        head = re.split(r"\s+[—–-]\s+", sig, maxsplit=1)[0]
+        # Drop any leading emoji/symbol run (and its spacing) so the title bar's own
+        # badge isn't doubled — every theme's sigil opens with a different glyph.
+        head = re.sub(r"^[\W_]+", "", head, flags=re.UNICODE).strip()
+        if head:
+            return head[:48].lower()
+    return "setup complete"
+
+
+def _setup_done_lines(flair: dict, theme, emit, out, root, ok) -> list:
+    """Post-build rows. On success the theme's banner crowns the screen and its
+    benediction closes it, with the factual install summary between — the same
+    voice/banner treatment the rendered bundle wears. On failure: just the facts."""
+    facts = _setup_summary_lines(theme, emit, out, root, ok)
+    if not ok:
+        return facts
+    rows: list = []
+    if flair["banner"]:
+        rows += [("art", ln) for ln in flair["banner"]] + [("art", "")]
+    if flair["sigil"]:
+        rows += [("art", flair["sigil"]), ("art", "")]
+    rows += facts
+    if flair["benediction"]:
+        rows += [("art", ""), ("dim", flair["benediction"])]
+    return rows
 
 
 def _diff_view(stdscr, curses, pal) -> None:

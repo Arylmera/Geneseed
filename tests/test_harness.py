@@ -508,6 +508,60 @@ class SetupArgsTests(unittest.TestCase):
             ["--theme", "neutral", "--emit", "opencode", "--out", "repo", "--root", "repo"])
 
 
+class SetupFlairTests(unittest.TestCase):
+    """The setup wizard speaks in the chosen theme's voice once a theme is picked —
+    accent-tinted chrome, a banner/sigil on success, the benediction to close."""
+
+    VALID_ACCENTS = {"cyan", "yellow", "red", "green", "magenta", "blue", "white"}
+
+    def _themes(self):
+        return [p.stem for p in sorted(build.THEMES.glob("*.json"))]
+
+    def test_every_theme_supplies_full_flair(self):
+        # Parity: each theme must give the wizard a usable voice, not blanks.
+        for t in self._themes():
+            f = harness._theme_flair(t)
+            self.assertIn(f["accent"], self.VALID_ACCENTS, t)
+            self.assertTrue(f["tagline"], t)
+            self.assertTrue(f["sigil"], t)
+            self.assertTrue(f["banner"] and all(isinstance(ln, str) for ln in f["banner"]), t)
+            self.assertTrue(f["benediction"], t)
+
+    def test_missing_theme_degrades_safely(self):
+        f = harness._theme_flair("no-such-theme")
+        self.assertEqual(f["accent"], "cyan")
+        self.assertEqual(f["tagline"], "")
+        self.assertEqual(f["banner"], [])
+
+    def test_done_title_from_sigil_on_success_plain_on_failure(self):
+        # Every theme's sigil opens with a different glyph; the title must strip it so
+        # the bar's own badge isn't doubled — check the whole set, not just one theme.
+        for t in self._themes():
+            f = harness._theme_flair(t)
+            title = harness._setup_done_title(f, True)
+            self.assertNotEqual(title, "setup", t)
+            self.assertEqual(title, title.lower(), t)       # title-bar styling, lowercased
+            self.assertTrue(title[0].isalnum(), (t, title))  # no leading emoji/symbol
+            self.assertEqual(harness._setup_done_title(f, False), "setup", t)
+
+    def test_done_lines_crown_success_with_banner_and_benediction(self):
+        f = harness._theme_flair("imperial")
+        rows = harness._setup_done_lines(f, "imperial", "files", "Bundle", None, True)
+        kinds = [k for k, _t in rows]
+        self.assertIn("art", kinds)                     # banner/sigil rows present
+        self.assertEqual(rows[-1][0], "dim")            # benediction closes the screen
+        self.assertEqual(rows[-1][1], f["benediction"])
+        # the factual install summary is still in the middle
+        facts = harness._setup_summary_lines("imperial", "files", "Bundle", None, True)
+        self.assertTrue(set(facts).issubset(set(rows)))
+
+    def test_done_lines_failure_is_just_facts(self):
+        f = harness._theme_flair("imperial")
+        rows = harness._setup_done_lines(f, "imperial", "files", "Bundle", None, False)
+        self.assertEqual(rows, harness._setup_summary_lines("imperial", "files", "Bundle", None, False))
+        self.assertNotIn("art", [k for k, _t in rows])
+
+
 class TuiInventoryTests(unittest.TestCase):
     def test_counts_and_bodies(self):
         inv = harness._tui_inventory("neutral")
