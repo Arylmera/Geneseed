@@ -1487,6 +1487,21 @@ def _put(stdscr, y, x, s, attr=0):
             pass
 
 
+def _clear_frame(stdscr):
+    """Erase the frame *and* force a full physical repaint on the next refresh.
+
+    A plain `erase()` does a diff-based update: ncurses repaints only the cells it
+    thinks changed. That leaves ghosts behind in two common cases — content from a
+    different prior screen, and the trailing half of a double-width glyph (the themed
+    sigils/emoji, the `·`/box-drawing characters) that a single-width blank doesn't
+    cover. These screens redraw only on a keypress (`getch` blocks between frames), so
+    a guaranteed full repaint per frame costs nothing and is flicker-free — unlike a
+    continuously animating loop. `clearok(True)` is reset by the refresh it triggers,
+    so it is set each frame."""
+    stdscr.erase()
+    stdscr.clearok(True)
+
+
 def _topbar(stdscr, pal, text):
     """Top title bar (row 0), with the consistent badge glyph."""
     _, w = stdscr.getmaxyx()
@@ -1669,7 +1684,7 @@ def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
     if default is not None:
         idx = next((i for i, (k, _l, _d) in enumerate(options) if k == default), 0)
     while True:
-        stdscr.erase()
+        _clear_frame(stdscr)
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, a=0):
@@ -1757,7 +1772,7 @@ def _text_input(stdscr, curses, prompt, default=""):
     buf = list(default)
     try:
         while True:
-            stdscr.erase()
+            _clear_frame(stdscr)
             h, w = stdscr.getmaxyx()
 
             def put(y, x, s, a=0):
@@ -1908,7 +1923,7 @@ def _doctor_view(stdscr, curses, pal) -> None:
 
     def on_progress(i, total, label):
         state.update(i=i, total=total, label=label)
-        stdscr.erase()
+        _clear_frame(stdscr)
         h, w = stdscr.getmaxyx()
         _topbar(stdscr, pal, "Geneseed — health check")
         frac = i / total if total else 0.0
@@ -1934,7 +1949,7 @@ def _doctor_view(stdscr, curses, pal) -> None:
 
     top = 0
     while True:
-        stdscr.erase()
+        _clear_frame(stdscr)
         h, w = stdscr.getmaxyx()
         _topbar(stdscr, pal, "Geneseed — health check")
         flat = []
@@ -2006,7 +2021,7 @@ def _info_screen(stdscr, curses, pal, title, lines, footer) -> None:
     attr = {"ok": pal["OK"], "warn": pal["FAIL"], "info": 0}
     top = 0
     while True:
-        stdscr.erase()
+        _clear_frame(stdscr)
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, a=0):
@@ -2080,7 +2095,7 @@ def _diff_view(stdscr, curses, pal) -> None:
     dtop = 0
     list_top = 0
     while True:
-        stdscr.erase()
+        _clear_frame(stdscr)
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, a=0):
@@ -2224,7 +2239,7 @@ def _memory_view(stdscr, curses, pal) -> None:
                 if not query or query.lower() in (f["name"] + " " + f["desc"]).lower()]
         if sel >= len(view):
             sel = max(0, len(view) - 1)
-        stdscr.erase()
+        _clear_frame(stdscr)
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, a=0):
@@ -2346,7 +2361,7 @@ def _mcp_view(stdscr, curses, pal) -> None:
     while True:
         label, path = targets[ti]
         config = _mcp_load(path)
-        stdscr.erase()
+        _clear_frame(stdscr)
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, a=0):
@@ -2455,7 +2470,7 @@ def _tui_loop(stdscr, inv: dict) -> None:
         return out
 
     while True:
-        stdscr.erase()
+        _clear_frame(stdscr)
         h, w = stdscr.getmaxyx()
 
         def put(y, x, s, attr=0):
