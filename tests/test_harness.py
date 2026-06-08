@@ -662,6 +662,44 @@ class TuiHelperTests(unittest.TestCase):
         self.assertEqual(harness._SEL_G, harness._GLYPH["sel"])
         self.assertEqual(harness._MORE_G, harness._GLYPH["down"])
 
+    def test_dwidth_counts_emoji_and_cjk_as_two_columns(self):
+        # plain ASCII is one column each; box-drawing/§/• stay single-width
+        self.assertEqual(harness._dwidth("abc"), 3)
+        self.assertEqual(harness._dwidth("─§•"), 3)
+        # supplementary-plane emoji and CJK occupy two columns each
+        self.assertEqual(harness._dwidth("🧬"), 2)
+        self.assertEqual(harness._dwidth("🧬x"), 3)
+        self.assertEqual(harness._dwidth("世界"), 4)
+        # a U+FE0F presentation selector promotes its single-width base to two
+        self.assertEqual(harness._dwidth("⚠️"), 2)
+        # combining marks add nothing
+        self.assertEqual(harness._dwidth("é"), 1)
+
+    def test_fit_pads_and_truncs_by_display_width(self):
+        # pads to the exact column count (not str length)
+        self.assertEqual(harness._fit("ab", 5), "ab   ")
+        self.assertEqual(harness._dwidth(harness._fit("🧬x", 6)), 6)
+        # truncates by columns, never splitting a wide glyph mid-cell
+        self.assertEqual(harness._fit("🧬🧬", 3), "🧬 ")   # one emoji (2) + pad to 3
+        self.assertEqual(harness._truncd("abcdef", 3), "abc")
+        self.assertEqual(harness._truncd("x", 0), "")
+
+    def test_icon_and_mark_honour_display_tier(self):
+        # ASCII mode → pure ASCII for both icons and status marks
+        self.assertTrue(all(ord(c) < 128 for c in (
+            harness._ICONS[k][2] for k in harness._ICONS)))
+        self.assertTrue(all(ord(c) < 128 for c in (
+            harness._MARKS[k][2] for k in harness._MARKS)))
+        # every emoji icon is a single, double-width codepoint so _fit's math is exact
+        for emoji, _sym, _asc in harness._ICONS.values():
+            self.assertEqual(harness._dwidth(emoji), 2, emoji)
+
+    def test_logo_lines_form_a_rectangular_block(self):
+        rows = harness._logo_lines()
+        self.assertEqual(len(rows), 5)
+        widths = {harness._dwidth(r) for r in rows}
+        self.assertEqual(len(widths), 1)                  # every row the same width
+
 
 class SourceCompletenessGateTests(unittest.TestCase):
     """A partial src/ — an interrupted sync, or an AGENT.md table row whose spec file
