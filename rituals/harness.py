@@ -1474,6 +1474,139 @@ _GLYPH = _glyphs(_TUI_ASCII)
 _SEL_G = _GLYPH["sel"]       # back-compat aliases
 _MORE_G = _GLYPH["down"]
 
+# Two display tiers layered on top of GENESEED_TUI_ASCII:
+#   GENESEED_TUI_PLAIN  — calm, deterministic look: keep unicode box/symbols but drop
+#                         the colourful emoji and all motion (good for CI/screenshots).
+#   (default)           — full emoji icons + the splash/spinner animation.
+# GENESEED_TUI_ASCII still wins (pure ASCII, no emoji, no box-drawing, no motion).
+_TUI_PLAIN = bool(os.environ.get("GENESEED_TUI_PLAIN"))
+_TUI_EMOJI = not (_TUI_ASCII or _TUI_PLAIN)
+_TUI_ANIM = _TUI_EMOJI
+
+
+def _dwidth(s: str) -> int:
+    """Display width of `s` in terminal columns. East-Asian wide/fullwidth and every
+    emoji codepoint (the supplementary symbol planes) occupy two columns; combining
+    marks occupy zero; a U+FE0F emoji-presentation selector promotes the preceding
+    single-width base to two (so ⚠️/ℹ️ measure correctly). Pure — unit-tested. This is
+    what lets emoji live in framed/padded screens without shearing the alignment."""
+    import unicodedata
+    w = 0
+    prev = 0
+    for ch in s:
+        if ch == "️":            # emoji-presentation selector: base becomes wide
+            if prev == 1:
+                w += 1
+                prev = 2
+            continue
+        if ch == "︎":            # text-presentation selector: leave the base as-is
+            continue
+        if unicodedata.combining(ch):
+            prev = 0
+            continue
+        cw = 2 if (ord(ch) >= 0x1F000 or unicodedata.east_asian_width(ch) in ("W", "F")) else 1
+        w += cw
+        prev = cw
+    return w
+
+
+def _truncd(s: str, width: int) -> str:
+    """Truncate `s` to at most `width` display columns (never splits a glyph)."""
+    if width <= 0:
+        return ""
+    if _dwidth(s) <= width:
+        return s
+    out, w = "", 0
+    for ch in s:
+        cw = _dwidth(ch)
+        if w + cw > width:
+            break
+        out += ch
+        w += cw
+    return out
+
+
+def _fit(s: str, width: int) -> str:
+    """Truncate to `width` display columns, then pad with spaces to exactly `width`.
+    The display-width-aware replacement for `f"…".ljust(width)[:width]` so an emoji
+    (two columns, one `str` char) can't drift a selection bar or a pane divider. Pure."""
+    s = _truncd(s, width)
+    return s + " " * max(0, width - _dwidth(s))
+
+
+# Action / section icons, three tiers picked by mode: emoji (default), unicode symbol
+# (GENESEED_TUI_PLAIN), ASCII (GENESEED_TUI_ASCII). Every emoji is a single-codepoint,
+# supplementary-plane glyph (display width 2, no FE0F variants) so _fit's math is exact.
+_ICONS = {
+    "browse":    ("📖", "▤", "#"),
+    "diff":      ("🔍", "≈", "~"),
+    "setup":     ("🎨", "◈", "*"),
+    "update":    ("🔄", "↻", "@"),
+    "bootstrap": ("🚀", "⇧", "^"),
+    "build":     ("🔨", "⚒", "+"),
+    "memory":    ("🧠", "❖", "&"),
+    "status":    ("📊", "▦", "="),
+    "settings":  ("🔧", "⚙", "%"),
+    "quit":      ("🚪", "✕", "x"),
+    "doctor":    ("🩺", "✚", "+"),
+    "mcp":       ("🔌", "⊕", "&"),
+    "link":      ("🔗", "∞", "&"),
+    "unlink":    ("🔓", "∝", "-"),
+    "uninstall": ("🗑", "⊗", "x"),
+    "back":      ("🔙", "←", "<"),
+    "agent":     ("🤖", "◆", "@"),
+    "skill":     ("✨", "✦", "*"),
+    "law":       ("📜", "§", "#"),
+}
+
+
+def _icon(name: str) -> str:
+    """The icon for `name` in the active display tier (emoji / symbol / ASCII)."""
+    emoji, sym, asc = _ICONS.get(name, ("•", "•", "*"))
+    return asc if _TUI_ASCII else (emoji if _TUI_EMOJI else sym)
+
+
+_MARKS = {"ok": ("✅", "✓", "+"), "fail": ("❌", "✗", "x"),
+          "warn": ("⚠️", "!", "!"), "info": ("ℹ️", "·", "-")}
+
+
+def _mark(kind: str) -> str:
+    """Status glyph for ok/fail/warn/info in the active tier. Used by the result panes
+    so they honour GENESEED_TUI_ASCII (the old hardcoded ✓/✗ ignored it)."""
+    emoji, sym, asc = _MARKS.get(kind, ("•", "·", "-"))
+    return asc if _TUI_ASCII else (emoji if _TUI_EMOJI else sym)
+
+
+_SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"          # braille spinner (single-width BMP), ASCII fallback below
+
+
+def _spin(i: int) -> str:
+    """One spinner frame for tick `i` — a braille whirl, or `|/-\\` under ASCII mode."""
+    frames = "|/-\\" if _TUI_ASCII else _SPIN
+    return frames[i % len(frames)]
+
+
+# Block-letter masks for the GENESEED splash logo (5 rows, '#' = ink). Compact, hand
+# tuned to ~7 cols/letter so the eight-letter word fits ~52 columns.
+_LOGO_FONT = {
+    "G": [" ### ", "#    ", "# ## ", "#  # ", " ### "],
+    "E": ["#### ", "#    ", "###  ", "#    ", "#### "],
+    "N": ["#   #", "##  #", "# # #", "#  ##", "#   #"],
+    "S": [" ####", "#    ", " ### ", "    #", "#### "],
+    "D": ["###  ", "#  # ", "#   #", "#  # ", "###  "],
+}
+
+
+def _logo_lines() -> list[str]:
+    """The 'GENESEED' wordmark as 5 text rows (filled with the full-block glyph), or an
+    ASCII '#'-rendered version under GENESEED_TUI_ASCII. Letters joined by a space gap."""
+    ink = "#" if _TUI_ASCII else "█"
+    rows = []
+    for r in range(5):
+        cells = [_LOGO_FONT[c][r].replace("#", ink) for c in "GENESEED"]
+        rows.append(" ".join(cells))
+    return rows
+
 
 def _put(stdscr, y, x, s, attr=0):
     """The one bounds-guarded draw primitive for every TUI screen. Clips to the window
@@ -1503,9 +1636,10 @@ def _clear_frame(stdscr):
 
 
 def _topbar(stdscr, pal, text):
-    """Top title bar (row 0), with the consistent badge glyph."""
+    """Top title bar (row 0), with the consistent badge glyph (🧬 in emoji mode)."""
     _, w = stdscr.getmaxyx()
-    _put(stdscr, 0, 0, f"  {_GLYPH['head']} {text}  ".ljust(w - 1), pal["BAR"])
+    badge = "🧬" if _TUI_EMOJI else _GLYPH["head"]
+    _put(stdscr, 0, 0, _fit(f"  {badge} {text}  ", w - 1), pal["BAR"])
 
 
 def _botbar(stdscr, pal, hints):
@@ -1513,7 +1647,7 @@ def _botbar(stdscr, pal, hints):
     pairs joined uniformly so every screen's footer reads the same way."""
     h, w = stdscr.getmaxyx()
     text = hints if isinstance(hints, str) else " · ".join(f"{k} {lbl}" for k, lbl in hints)
-    _put(stdscr, h - 1, 0, f"  {text}  ".ljust(w - 1), pal["BAR"])
+    _put(stdscr, h - 1, 0, _fit(f"  {text}  ", w - 1), pal["BAR"])
 
 
 def _clamp(top, total, view_h):
@@ -1719,9 +1853,9 @@ def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
                     break
                 label = options[oi][1]
                 if oi == idx:
-                    put(2 + vi, 1, f" {_GLYPH['sel']} {label} ".ljust(liw)[:liw], pal["SEL"])
+                    put(2 + vi, 1, _fit(f" {_GLYPH['sel']} {label} ", liw), pal["SEL"])
                 else:
-                    put(2 + vi, 2, f" {label}"[:liw - 1], 0)
+                    put(2 + vi, 2, _truncd(f" {label}", liw - 1), 0)
             rx, rw = dx + 2, max(4, w - dx - 3)
             wrapped = []
             for kind, text in (detail_fn(options[idx][0]) or []):
@@ -1742,9 +1876,9 @@ def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None):
                 if y >= h - 5:
                     break
                 if i == idx:
-                    put(y, 2, f" {_SEL_G} {label} ".ljust(w - 4)[:w - 4], pal["SEL"])
+                    put(y, 2, _fit(f" {_SEL_G} {label} ", w - 4), pal["SEL"])
                 else:
-                    put(y, 3, f"  {label}", 0)
+                    put(y, 3, _truncd(f"  {label}", w - 4), 0)
             dy = 2 + len(options) + 1
             if dy < h - 2:
                 put(dy - 1, 2, ("-" if _TUI_ASCII else "─") * (w - 4), pal["FRAME"])
@@ -1927,7 +2061,7 @@ def _doctor_view(stdscr, curses, pal) -> None:
         h, w = stdscr.getmaxyx()
         _topbar(stdscr, pal, "Geneseed — health check")
         frac = i / total if total else 0.0
-        put(2, 3, f"Validating:  {label}", pal["TITLE"])
+        put(2, 3, f"{_spin(i)} Validating:  {label}", pal["TITLE"])
         put(4, 3, f"[{_progress_bar(frac, max(10, min(40, w - 22)))}] {int(frac * 100):3d}%", pal["HEAD"])
         _botbar(stdscr, pal, "please wait…")
         stdscr.refresh()
@@ -1967,9 +2101,9 @@ def _doctor_view(stdscr, curses, pal) -> None:
                 break
             kind, seg = flat[di]
             if kind == "ok":
-                put(1 + r, 2, f"✓ {seg}", pal["OK"])
+                put(1 + r, 2, f"{_mark('ok')} {seg}", pal["OK"])
             elif kind == "fail":
-                put(1 + r, 2, f"✗ {seg}", pal["FAIL"])
+                put(1 + r, 2, f"{_mark('fail')} {seg}", pal["FAIL"])
             else:
                 put(1 + r, 2, seg, 0)
         _scrollbar(stdscr, pal, w - 1, 1, body_h, top, len(flat))
@@ -2017,7 +2151,7 @@ def _info_screen(stdscr, curses, pal, title, lines, footer) -> None:
     """Scrollable info panel: (kind, text) rows with ok/warn/info coloring. Returns
     on Enter/q."""
     import textwrap
-    icon = {"ok": "✓", "warn": "!", "info": "·"}
+    icon = {"ok": _mark("ok"), "warn": _mark("warn"), "info": _mark("info")}
     attr = {"ok": pal["OK"], "warn": pal["FAIL"], "info": 0}
     top = 0
     while True:
@@ -2178,6 +2312,9 @@ def _help_overlay(stdscr, curses, pal) -> None:
         ("info", "u                 update everything"),
         ("info", "?                 this help"),
         ("info", "q                 quit the panel"),
+        ("info", ""),
+        ("info", "Appearance:  GENESEED_TUI_PLAIN=1 drops emoji + animation (calm look);"),
+        ("info", "             GENESEED_TUI_ASCII=1 forces pure ASCII (tofu-font fallback)."),
     ], "Enter: close")
 
 
@@ -2436,14 +2573,15 @@ def _tui_loop(stdscr, inv: dict) -> None:
     except curses.error:
         pass
     pal = _tui_palette(curses, _accent_for(inv.get("theme", "neutral")))
+    _maybe_splash(stdscr, curses, pal, inv.get("theme", "neutral"))
     g = _bx(curses)
     C_FRAME, C_BAR, C_SEL = pal["FRAME"], pal["BAR"], pal["SEL"]
     C_TITLE, C_ICON, C_HEAD = pal["TITLE"], pal["ICON"], pal["HEAD"]
 
-    # Single-width BMP glyphs only — no emoji-presentation chars (e.g. ⚙/⏳) that
-    # render double-width and break alignment in some terminal fonts.
-    ICON = {"agent": _GLYPH["agent"], "skill": _GLYPH["skill"], "law": _GLYPH["law"]}
-    SECT = {"AGENTS": _GLYPH["agent"], "SKILLS": _GLYPH["skill"], "LAWS": _GLYPH["law"]}
+    # Mode-aware icons; emoji are double-width but every draw below pads/truncates with
+    # the display-width-aware _fit/_truncd, so alignment holds regardless of glyph width.
+    ICON = {"agent": _icon("agent"), "skill": _icon("skill"), "law": _icon("law")}
+    SECT = {"AGENTS": _icon("agent"), "SKILLS": _icon("skill"), "LAWS": _icon("law")}
 
     def clamp(v, lo, hi):
         return max(lo, min(v, hi))
@@ -2540,12 +2678,14 @@ def _tui_loop(stdscr, inv: dict) -> None:
             kind, label, _d = entries[ri]
             if kind == "head":
                 name = label.split(" (")[0]
-                put(y, 2, f"{SECT.get(name, '•')} {label}"[:liw], C_HEAD)
+                put(y, 2, _truncd(f"{SECT.get(name, '•')} {label}", liw), C_HEAD)
             elif ri == sel:
-                put(y, 1, f" {_GLYPH['sel']} {ICON.get(kind, '•')} {label}".ljust(liw)[:liw], C_SEL)
+                put(y, 1, _fit(f" {_GLYPH['sel']} {ICON.get(kind, '•')} {label}", liw), C_SEL)
             else:
-                put(y, 2, f"{ICON.get(kind, '•')}", C_ICON)
-                put(y, 4, label[:liw - 3])
+                ic = ICON.get(kind, "•")
+                lx = 2 + _dwidth(ic) + 1                 # icon, one space, then the label
+                put(y, 2, ic, C_ICON)
+                put(y, lx, _truncd(label, liw - lx + 1))
 
         # ---- right detail (wrapped, scrollable) ----
         if not entries:
@@ -2686,11 +2826,19 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading="updating")
     # Plain layout (no box-drawing frame) — matches the doctor progress screen, which
     # renders cleanly; the ACS frame showed as tofu in some terminal fonts.
     _topbar(stdscr, pal, f"Geneseed — {heading}")
-    sym = {"pending": "-", "running": ">", "done": "+", "failed": "x"}
+    _bootstrap_draw.tick = getattr(_bootstrap_draw, "tick", 0) + 1
+    tick = _bootstrap_draw.tick
+
+    def step_mark(st):
+        if st == "running":
+            return _spin(tick)
+        if _TUI_ASCII:
+            return {"pending": "-", "done": "+", "failed": "x"}.get(st, "-")
+        return {"pending": "·", "done": "✓", "failed": "✗"}.get(st, "·")
     for i, (title, _c) in enumerate(steps):
         st = status[i]
         attr = pal["HEAD"] if st == "running" else (curses.A_DIM if st == "pending" else 0)
-        put(2 + i, 3, f"[{sym.get(st, '-')}] {title}", attr)
+        put(2 + i, 3, f"[{step_mark(st)}] {title}", attr)
     done = sum(1 for s in status if s in ("done", "failed"))
     w_bar = max(10, min(40, w - 22))
     put(2 + len(steps) + 1, 3,
@@ -2701,7 +2849,7 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading="updating")
     inner = max(0, h - top - 2)
     for j, ln in enumerate(log[-inner:]):
         put(top + 1 + j, 3, ln[:w - 4], curses.A_DIM)
-    _botbar(stdscr, pal, "working… please wait")
+    _botbar(stdscr, pal, f"{_spin(tick)} working… please wait")
     stdscr.refresh()
 
 
@@ -2801,7 +2949,9 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
-_MENU_ACTIONS = [
+# (key, label, description). Labels carry a leading mode-aware icon (emoji / symbol /
+# ASCII) so the menu reads at a glance; the icon never affects the returned key.
+_MENU_ACTIONS_RAW = [
     ("browse", "Browse", "Agents, skills and laws, with their full specs."),
     ("diff", "Review local edits", "Compare a deployed harness against source."),
     ("setup", "Set up / re-theme", "Pick a theme and install mode, then build."),
@@ -2815,16 +2965,18 @@ _MENU_ACTIONS = [
     # 'doctor' (Health check) intentionally not listed: it runs after setup and via
     # the browse panel's `d` key. The dispatch below still handles it if re-added.
 ]
+_MENU_ACTIONS = [(k, f"{_icon(k)}  {lbl}", d) for (k, lbl, d) in _MENU_ACTIONS_RAW]
 
 
 # The Settings submenu groups configuration actions reached from the main menu.
-_SETTINGS_ACTIONS = [
+_SETTINGS_ACTIONS_RAW = [
     ("mcp", "MCP servers", "Wire document conversion (MarkItDown) & other MCP servers into OpenCode."),
     ("link", "Run from anywhere", "Put `geneseed` on your PATH so it runs from any directory."),
     ("unlink", "Remove from PATH", "Remove the `geneseed` launcher symlink from your PATH."),
     ("uninstall", "Uninstall harness", "Remove a global Geneseed install (memory is kept, never deleted)."),
     ("back", "Back", "Return to the main menu."),
 ]
+_SETTINGS_ACTIONS = [(k, f"{_icon(k)}  {lbl}", d) for (k, lbl, d) in _SETTINGS_ACTIONS_RAW]
 
 
 def _settings_menu(stdscr, curses, pal, here) -> None:
@@ -2851,6 +3003,70 @@ def _settings_menu(stdscr, curses, pal, here) -> None:
             curses.reset_prog_mode()
 
 
+_SPLASH_SHOWN = False
+
+
+def _splash(stdscr, curses, pal, theme_data) -> None:
+    """A brief, skippable intro: the GENESEED wordmark reveals row by row in the accent
+    colour, a strand sweeps beneath it, then the theme sigil fades in — then it clears
+    to the menu. No-op under GENESEED_TUI_PLAIN/_ASCII (motion off) or when the terminal
+    is too small to frame the wordmark. Any keypress skips straight to the menu."""
+    if not _TUI_ANIM:
+        return
+    h, w = stdscr.getmaxyx()
+    logo = _logo_lines()
+    lw = _dwidth(logo[0])
+    if h < 14 or w < lw + 4:
+        return
+    sigil = (theme_data.get("LOADED_SIGIL") or theme_data.get("TAGLINE") or "").strip()
+    y0 = max(1, (h - len(logo) - 4) // 2)
+    lx = max(0, (w - lw) // 2)
+    sy = y0 + len(logo) + 1
+    curses.curs_set(0)
+    stdscr.nodelay(True)
+    try:
+        for i in range(len(logo)):                       # 1) reveal the wordmark
+            stdscr.erase()
+            for j in range(i + 1):
+                _put(stdscr, y0 + j, lx, logo[j], pal["TITLE"])
+            stdscr.refresh()
+            if stdscr.getch() != -1:
+                raise StopIteration
+            curses.napms(70)
+        dash = "-" if _TUI_ASCII else "─"
+        for step in range(1, lw // 2 + 2):               # 2) strand sweeps across
+            _put(stdscr, sy, lx, _truncd(dash * (step * 2), lw), pal["FRAME"])
+            stdscr.refresh()
+            if stdscr.getch() != -1:
+                raise StopIteration
+            curses.napms(14)
+        if sigil:                                        # 3) sigil settles beneath
+            _put(stdscr, sy + 2, max(0, (w - _dwidth(sigil)) // 2),
+                 _truncd(sigil, w - 2), pal["OK"])
+            stdscr.refresh()
+        curses.napms(420)
+    except StopIteration:
+        pass
+    finally:
+        stdscr.nodelay(False)
+        stdscr.erase()
+        stdscr.clearok(True)
+
+
+def _maybe_splash(stdscr, curses, pal, theme) -> None:
+    """Show the intro animation at most once per process (guarded so re-entering the
+    menu or the browse panel doesn't replay it)."""
+    global _SPLASH_SHOWN
+    if _SPLASH_SHOWN:
+        return
+    _SPLASH_SHOWN = True
+    try:
+        data = json.loads((build.THEMES / f"{theme}.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    _splash(stdscr, curses, pal, data)
+
+
 def _main_menu(stdscr) -> int:
     """The hub for a bare `./geneseed`: pick any action. In-TUI ones return here;
     update/bootstrap re-exec a fresh process (they change the code on disk)."""
@@ -2861,6 +3077,7 @@ def _main_menu(stdscr) -> int:
     theme = inst["theme"] or _default_theme()
     emit = inst["emit"] or "files"
     pal = _tui_palette(curses, _accent_for(theme))
+    _maybe_splash(stdscr, curses, pal, theme)
     while True:
         sel = _menu(stdscr, curses, f"Geneseed  ·  {theme}  ·  {emit}", _MENU_ACTIONS, default="bootstrap")
         if sel in (None, "quit"):
