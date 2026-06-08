@@ -281,7 +281,7 @@ class StatusDataTests(unittest.TestCase):
     def test_reports_counts_version_and_keys(self):
         d = harness._status_data()
         # counts match the rendered inventory
-        self.assertEqual(d["agents"], 10)
+        self.assertEqual(d["agents"], 16)
         self.assertEqual(d["skills"], 20)
         self.assertEqual(d["laws"], 20)
         # version fields present and well-formed
@@ -511,7 +511,7 @@ class SetupArgsTests(unittest.TestCase):
 class TuiInventoryTests(unittest.TestCase):
     def test_counts_and_bodies(self):
         inv = harness._tui_inventory("neutral")
-        self.assertEqual(len(inv["agents"]), 10)
+        self.assertEqual(len(inv["agents"]), 16)
         self.assertEqual(len(inv["skills"]), 20)
         self.assertEqual(len(inv["laws"]), 20)
         self.assertTrue(all(e["desc"] and e["body"] for e in inv["agents"]))
