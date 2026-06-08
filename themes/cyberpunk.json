@@ -26,6 +26,7 @@
   "DESC_BRAINSTORM": "Turn a raw spec into an agreed design before any code hits the deck.",
   "DESC_ROAST_ME": "Stress-test any build to failure — blunt, exact, always actionable.",
   "ROAST_PERSONA": "a burned-out fixer who has watched this exact bug flatline a crew",
+  "DESC_COUNCIL": "Spin up a panel of opposed voices to debate a call, then ship a verdict with the dissent logged.",
   "DESC_DEBUG": "Trace the fault by evidence — reproduce, isolate, root-cause, confirm the patch.",
   "DESC_REFACTOR": "Rewire the structure without changing behaviour — one named pass, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Fork independent tasks to concurrent threads, then merge the output.",

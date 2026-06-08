@@ -26,6 +26,7 @@
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed game plan before any code is run.",
   "DESC_ROAST_ME": "Hard post-game breakdown of any work — blunt, exact, always actionable.",
   "ROAST_PERSONA": "a veteran color commentator who has called this exact blunder cost a championship",
+  "DESC_COUNCIL": "Bring a panel of opposing voices to debate the call, then deliver the verdict with the dissent on the tape.",
   "DESC_DEBUG": "Break down the fault on tape — reproduce, isolate, root-cause, confirm the fix.",
   "DESC_REFACTOR": "Rework the formation without changing the result — one named move, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Send several players on independent plays at once, then regroup the results.",
