@@ -443,13 +443,17 @@ def _merge_opencode_json(path: Path, agent_path: str) -> None:
         instr.append(agent_path)
     config["instructions"] = instr
     # O5: a minimal, non-destructive default permission policy — ASK before the few
-    # genuinely irreversible bash patterns (Laws I/IV). Added ONLY when the user has no
-    # `permission` key at all; never overwrites an existing policy. Unmatched commands
-    # keep OpenCode's default (allow), so normal work is unaffected.
+    # genuinely irreversible or outward-facing bash patterns (Laws I/IV/XX). `git push*`
+    # gates EVERY push so the agent never shares code unprompted (Law XX's host-level
+    # backstop); the `--force`/`-f` entries are kept as explicit, more-specific markers.
+    # Added ONLY when the user has no `permission` key at all; never overwrites an
+    # existing policy. Unmatched commands keep OpenCode's default (allow), so normal
+    # local work (edits, builds, tests, commits on a feature branch) is unaffected.
     if "permission" not in config:
         config["permission"] = {
             "bash": {
                 "rm -rf *": "ask",
+                "git push*": "ask",
                 "git push --force*": "ask",
                 "git push -f*": "ask",
             }

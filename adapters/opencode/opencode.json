@@ -1,6 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "instructions": ["AGENT.md"],
+  "permission": {
+    "bash": {
+      "rm -rf *": "ask",
+      "git push*": "ask",
+      "git push --force*": "ask",
+      "git push -f*": "ask"
+    }
+  },
   "mcp": {
     "markitdown": {
       "type": "local",

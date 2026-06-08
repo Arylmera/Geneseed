@@ -319,8 +319,12 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   so the PROJECT CONTEXT block no longer appears in the conversation and survives
   compaction inherently. Off by default; experimental OpenCode hook — verify on your build.
 - **Default permissions.** A fresh `opencode.json` gets a minimal policy that **asks**
-  before `rm -rf *` and `git push --force*`. Added only when you have no `permission`
-  key — an existing policy is never touched.
+  before `rm -rf *` and **every `git push`** (the host-level backstop for the
+  consent-before-push Rule — the agent never shares code unprompted; force-push is
+  also called out explicitly). Added only when you have no `permission` key — an
+  existing policy is never touched. Routine local work (edits, builds, tests, commits)
+  is unaffected; to allow frictionless feature-branch pushes, set `"git push*"` to
+  `"allow"` in your own `permission.bash` map.
 - **Primary agent** (`GENESEED_PRIMARY=1`). Emits a `mode: primary` orchestrator that
   works by the Rules and delegates to the capability subagents. Off by default (it can
   change which agent is your default, so it stays opt-in).
