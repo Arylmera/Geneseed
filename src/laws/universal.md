@@ -125,3 +125,15 @@ search tool beats guessing. When a task needs a capability you have not yet used
 for it among the available tools before declaring it unavailable or falling back to a
 cruder method. Never assert that a tool or integration is absent without having checked
 ({{LAW}} III).
+
+### {{LAW}} XX — {{LEX_XX}}
+Sharing code is consented, never unilateral. Before committing **or** pushing to a
+**shared branch** — `main`, `master`, `develop`, `development`, a `release`/`hotfix`
+branch, or any branch that is not a dedicated feature branch — first present, in order:
+(1) a plain-language summary of what changed and why, for the user to review, and
+(2) the exact commit message (subject + body) you intend to use. Then wait for the
+user's **explicit acceptance** before committing and before pushing — never push a
+shared branch on your own initiative. On a personal feature branch you may commit and
+push as part of normal flow. When unsure whether a branch is shared, treat it as
+shared. This applies {{LAW}} IV's confirm-before-outward-facing-acts to git history;
+the host may also gate `git push` at the tool boundary as a backstop.

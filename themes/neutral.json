@@ -56,6 +56,7 @@
   "LEX_XVII": "Read the Docs First",
   "LEX_XVIII": "Load the Project Context",
   "LEX_XIX": "Tool Discovery",
+  "LEX_XX": "Consent Before Push",
   "INTRO_DOC": "This file is the entry point an AI coding agent reads when working in this repository.",
   "INTRO_AGENTS": "Delegate focused work to a specialist rather than doing everything in one context. Each specialist has a single clear purpose and a defined output contract.",
   "INTRO_SKILLS": "A Skill is a written procedure for a recurring task. Run the matching Skill before improvising.",

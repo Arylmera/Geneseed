@@ -12,7 +12,9 @@ request or merge the branch.
 2. Confirm the branch carries only this change's commits and is rebased/updated on
    the base branch; resolve any divergence before opening.
 3. Push the branch. Opening a PR or merging is **outward-facing** — get explicit
-   confirmation first unless already authorized (universal {{LAW}} IV).
+   confirmation first unless already authorized (universal {{LAW}} IV). Pushing a
+   *shared* branch (not a feature branch) needs the {{LAW}} XX consent gate too:
+   present the change summary + commit message and wait for explicit acceptance.
 4. Open the PR with a structured body: *what* changed and *why*, *how it was
    tested*, and any risk or follow-up. Link the issue it closes; keep the title an
    imperative one-line summary.

@@ -56,6 +56,7 @@
   "LEX_XVII": "Read the Specs First · Read the Docs First",
   "LEX_XVIII": "Load the Job Data · Load the Project Context",
   "LEX_XIX": "Scan Your Toolkit · Tool Discovery",
+  "LEX_XX": "Authorize the Upload · Consent Before Push",
   "INTRO_DOC": "This file is the boot sequence a coding daemon reads when it jacks into this repository.",
   "INTRO_AGENTS": "Spin the right daemon for focused work instead of running the whole job on one thread; each has one function and returns a clean log of what it changed.",
   "INTRO_SKILLS": "A Skill is a proven routine for a recurring task. Run the matching routine before you freestyle.",

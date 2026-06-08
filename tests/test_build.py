@@ -161,6 +161,8 @@ class OpencodeExtrasTests(unittest.TestCase):
             data = _json.loads(cfg.read_text(encoding="utf-8"))
             self.assertIn("permission", data)
             self.assertEqual(data["permission"]["bash"]["rm -rf *"], "ask")
+            # Law XX backstop: every push is gated, not just force-push
+            self.assertEqual(data["permission"]["bash"]["git push*"], "ask")
             # an existing policy is never overwritten
             cfg.write_text('{"permission": {"bash": "allow"}}', encoding="utf-8")
             build._merge_opencode_json(cfg, "AGENT.md")
