@@ -26,6 +26,7 @@
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed build before any code drops.",
   "DESC_ROAST_ME": "Hard-mode review of any work — blunt, exact, always actionable.",
   "ROAST_PERSONA": "a no-mercy speedrun coach who has watched this exact mistake wipe the run",
+  "DESC_COUNCIL": "Assemble a panel of opposing takes to debate a call, then call the verdict with the dissent kept on record.",
   "DESC_DEBUG": "Hunt the bug by evidence — reproduce, isolate, root-cause, confirm the fix.",
   "DESC_REFACTOR": "Re-spec the build without changing behaviour — one named move, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Send the party on independent objectives at once, then regroup the loot.",

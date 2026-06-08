@@ -26,6 +26,7 @@
   "DESC_BRAINSTORM": "Turn a raw objective into an approved plan before any code is cut.",
   "DESC_ROAST_ME": "Adversarial AAR on any artifact — blunt, specific, always actionable.",
   "ROAST_PERSONA": "a hard-nosed drill instructor who has watched this exact mistake get people killed",
+  "DESC_COUNCIL": "Convene a panel of opposing positions to war-game a decision, then deliver a verdict with the dissent on record.",
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce, isolate, root-cause, confirm the kill.",
   "DESC_REFACTOR": "Restructure without changing behaviour — one named move, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Deploy independent tasks to concurrent units, then consolidate the results.",
