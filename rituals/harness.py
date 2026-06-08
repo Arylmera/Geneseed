@@ -1092,6 +1092,21 @@ def _mcp_targets() -> "list[tuple[str, Path]]":
     return targets
 
 
+def _mcp_default_target(targets: "list[tuple[str, Path]]") -> int:
+    """Pick which target the screen opens on. The strongest signal is which config
+    file already exists — that's the one OpenCode actually reads — so if exactly one
+    is present, land there (this is what stops edits going to a stray `<cwd>/
+    opencode.json` while the user watches the global file). If none or both exist,
+    follow the detected install mode: a global install opens on the global config,
+    otherwise the project."""
+    existing = [i for i, (_l, p) in enumerate(targets) if p.exists()]
+    if len(existing) == 1:
+        return existing[0]
+    prefer = "global config" if (_installed_defaults().get("emit") or "") == \
+        "opencode-global" else "this project"
+    return next((i for i, (label, _p) in enumerate(targets) if label == prefer), 0)
+
+
 def _archive_memory(memory_dir: Path) -> Path:
     """Move a memory store into a timestamped snapshot under a sibling
     `archived-memory/` (created if absent). Memory is NEVER deleted — only set aside,
@@ -2326,7 +2341,7 @@ def _mcp_view(stdscr, curses, pal) -> None:
     anything else the file already holds."""
     import textwrap
     targets = _mcp_targets()
-    ti, sel, msg = 0, 0, ""
+    ti, sel, msg = _mcp_default_target(targets), 0, ""
     names = list(_MCP_PRESETS)
     while True:
         label, path = targets[ti]
@@ -2380,10 +2395,10 @@ def _mcp_view(stdscr, curses, pal) -> None:
             nm = names[sel]
             if _mcp_state(config, nm) == "absent":
                 config = _mcp_apply(config, nm, dict(_MCP_PRESETS[nm]["block"]))
-                msg = f"added {nm} → {path.name}"
+                msg = f"added {nm} → {label} ({path})"
             else:
                 config = _mcp_apply(config, nm, None)
-                msg = f"removed {nm} from {path.name}"
+                msg = f"removed {nm} from {label} ({path})"
             _mcp_save(path, config)
         elif c in (ord("e"), ord("E")):
             nm = names[sel]
@@ -2393,7 +2408,7 @@ def _mcp_view(stdscr, curses, pal) -> None:
             else:
                 config = _mcp_set_enabled(config, nm, st == "disabled")
                 _mcp_save(path, config)
-                msg = f"{nm} {'enabled' if st == 'disabled' else 'disabled'}"
+                msg = f"{nm} {'enabled' if st == 'disabled' else 'disabled'} in {label}"
 
 
 def _tui_loop(stdscr, inv: dict) -> None:

@@ -445,6 +445,36 @@ class McpServerTests(unittest.TestCase):
         self.assertEqual(off["mcp"]["markitdown"]["type"], "local")   # other fields kept
         self.assertEqual(harness._mcp_set_enabled({}, "markitdown", True), {})  # absent no-op
 
+    def test_default_target_lands_on_the_one_config_that_exists(self):
+        # The bug this guards: edits silently went to a stray <cwd>/opencode.json while
+        # the user watched the global file. When exactly one config exists, open there.
+        d = Path(tempfile.mkdtemp())
+        try:
+            proj, glob = d / "proj.json", d / "glob.json"
+            glob.write_text("{}", encoding="utf-8")          # only the global exists
+            targets = [("this project", proj), ("global config", glob)]
+            self.assertEqual(harness._mcp_default_target(targets), 1)   # -> global
+            proj.write_text("{}", encoding="utf-8")
+            glob.unlink()                                    # now only the project
+            self.assertEqual(harness._mcp_default_target(targets), 0)   # -> project
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_default_target_follows_install_mode_when_ambiguous(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            targets = [("this project", d / "a.json"), ("global config", d / "b.json")]
+            orig = harness._installed_defaults
+            try:                                             # neither file exists
+                harness._installed_defaults = lambda: {"emit": "opencode-global"}
+                self.assertEqual(harness._mcp_default_target(targets), 1)   # -> global
+                harness._installed_defaults = lambda: {"emit": "files"}
+                self.assertEqual(harness._mcp_default_target(targets), 0)   # -> project
+            finally:
+                harness._installed_defaults = orig
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
     def test_load_save_roundtrip_and_malformed(self):
         d = Path(tempfile.mkdtemp())
         try:
