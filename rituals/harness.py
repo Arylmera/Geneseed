@@ -2822,6 +2822,7 @@ _SETTINGS_ACTIONS = [
     ("mcp", "MCP servers", "Wire document conversion (MarkItDown) & other MCP servers into OpenCode."),
     ("link", "Run from anywhere", "Put `geneseed` on your PATH so it runs from any directory."),
     ("unlink", "Remove from PATH", "Remove the `geneseed` launcher symlink from your PATH."),
+    ("uninstall", "Uninstall harness", "Remove a global Geneseed install (memory is kept, never deleted)."),
     ("back", "Back", "Return to the main menu."),
 ]
 
@@ -2836,9 +2837,10 @@ def _settings_menu(stdscr, curses, pal, here) -> None:
             return
         if sel == "mcp":
             _mcp_view(stdscr, curses, pal)
-        elif sel in ("link", "unlink"):
-            # Shell out to the launcher's own `link`/`unlink` (PATH symlink); it
-            # lives at the repo root and prints whether the dir is on PATH.
+        elif sel in ("link", "unlink", "uninstall"):
+            # Shell out to the launcher's own command: link/unlink manage the PATH
+            # symlink; uninstall removes a global install (it prompts on the restored
+            # terminal and keeps memory). The launcher lives at the repo root.
             curses.def_prog_mode()
             curses.endwin()
             run(["bash", str(here / "geneseed"), sel])
