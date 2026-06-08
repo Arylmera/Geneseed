@@ -24,10 +24,20 @@ class SubstituteTests(unittest.TestCase):
 
 class ThemeStructureTests(unittest.TestCase):
     def test_structure_overrides_theme_voice(self):
-        # A theme can never rename a section/structural noun/folder.
+        # A theme can never rename a folder, the harness name, or a rare technical noun.
         t = build.effective_theme("imperial")
-        self.assertEqual(t["LAW"], "Rule")
         self.assertEqual(t["DIR_AGENTS"], "agents")
+        self.assertEqual(t["HARNESS"], "Geneseed")
+        self.assertEqual(t["CONTEXT"], "Context")
+
+    def test_vocabulary_nouns_are_themed(self):
+        # Prose nouns ARE themed now: neutral keeps the plain words, imperial differs.
+        self.assertEqual(build.effective_theme("neutral")["LAW"], "Rule")
+        self.assertEqual(build.effective_theme("neutral")["VAULT"], "Workspace")
+        self.assertEqual(build.effective_theme("imperial")["LAW"], "Dictate")
+        self.assertEqual(build.effective_theme("imperial")["SKILL"], "Rite")
+        # but the folder is still neutral even when the prose noun is themed
+        self.assertEqual(build.effective_theme("imperial")["DIR_SKILLS"], "skills")
 
     def test_themed_rel_neutral_is_identity(self):
         t = build.effective_theme("neutral")

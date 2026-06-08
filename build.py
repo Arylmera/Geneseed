@@ -80,28 +80,26 @@ SRC_DIR_TOKENS = {
     "memory": "DIR_MEMORY",
 }
 
-# Document STRUCTURE is theme-INDEPENDENT — the section names, the structural nouns,
-# and the folder names (DIR_*) are always plain English, in every theme and every
-# emit. A theme governs only VOICE: how the AI responds and how the prose inside the
-# docs is written (VOICE, TAGLINE, LOADED_SIGIL, EPI_*, BENEDICTION, DESC_*,
-# ROAST_PERSONA, the law titles LEX_*, and the section intros INTRO_*). So the
-# scaffolding stays consistent and tool-friendly while the flavour
-# lives in the words. Theme files carry voice tokens only; these values are fixed.
+# Document STRUCTURE is theme-INDEPENDENT — the section *layout*, the harness name, the
+# law *numbers*, the folder names (DIR_*), and a few rare technical nouns are always
+# plain English, in every theme and every emit, so paths, links, and headings never
+# move and tooling stays stable. A theme governs VOICE *and* the prose VOCABULARY: how
+# the AI responds (VOICE) and the words the docs use for the core nouns — LAW(S),
+# AGENT(S), SKILL(S), MEMORY, VAULT — which each theme defines for itself (neutral keeps
+# the plain words, so neutral output is unchanged). Folder names stay neutral via DIR_*,
+# so e.g. imperial calls them "Rites" in prose while the directory is still `skills/`.
 STRUCTURE = {
-    "HARNESS": "Geneseed", "CHARTER": "Charter",
-    "LAW": "Rule", "LAWS": "Rules",
-    "AGENT": "Agent", "AGENTS": "Agents",
-    "SKILL": "Skill", "SKILLS": "Skills",
-    "MEMORY": "Memory", "VAULT": "Workspace", "CONTEXT": "Context",
+    "HARNESS": "Geneseed", "CHARTER": "Charter", "CONTEXT": "Context",
     "SCRIPT": "Script", "SCRIPTS": "Scripts",
     "DIR_LAWS": "laws", "DIR_AGENTS": "agents", "DIR_SKILLS": "skills", "DIR_MEMORY": "memory",
 }
 
 
 def effective_theme(theme_name: str) -> dict:
-    """The token map used to render: the chosen theme's VOICE with the fixed neutral
-    STRUCTURE laid on top (structure wins, so a theme can never change section names,
-    structural nouns, or folder names — only voice/prose)."""
+    """The token map used to render: the chosen theme's VOICE + VOCABULARY with the fixed
+    neutral STRUCTURE laid on top (structure wins, so a theme can never change a section
+    layout, the harness name, a folder name, or a law number — only the prose words and
+    the agent's tone)."""
     return {**load_theme(theme_name), **STRUCTURE}
 
 # Dirs the build fully owns: wiped and regenerated each run so a renamed/removed

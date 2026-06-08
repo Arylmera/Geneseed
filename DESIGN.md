@@ -20,23 +20,25 @@ vault or a specific tool's hooks.
    are expressed primarily as instructions in `AGENT.md` that the model follows.
    Scripts are a power-user convenience layered on top, never a requirement.
 
-3. **Theme is voice; structure is theme-independent.** A single neutral source
-   renders to any theme via token substitution, split into two classes:
+3. **Theme is voice + vocabulary; the scaffolding is theme-independent.** A single
+   neutral source renders to any theme via token substitution, split into two classes:
    - **Structure** (always plain English, every theme, every emit) — the section
-     names and structural nouns (Rules, Agents, Skills, Memory, Workspace, Context,
-     Scripts) and the folder names (`laws/`, `agents/`, `skills/`, `memory/`). These
-     live in the `STRUCTURE` map in `build.py` and are laid on top of every render,
-     so a theme can never change a name, a heading, or a path. Documents and their
-     scaffolding stay consistent and tool-friendly.
-   - **Voice** (themed) — how the AI *responds* (`VOICE` directive) and how the prose
-     *inside* the docs is written: `TAGLINE`, `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`,
-     `DESC_*`, `ROAST_PERSONA`, the law titles `LEX_*`, and the section intros
-     `INTRO_*`. Theme files carry voice tokens only. (Law *numbers* and section
-     *names* stay structural; only the law's title text and the intro prose are voice.)
+     *layout*, the harness name (`HARNESS`), the law *numbers*, a few rare technical
+     nouns (`Context`, `Scripts`, `Charter`), and the folder names (`laws/`, `agents/`,
+     `skills/`, `memory/` via `DIR_*`). These live in the `STRUCTURE` map in `build.py`
+     and are laid on top of every render, so a theme can never move a path, a link, or
+     a heading number. Tooling stays stable.
+   - **Voice + vocabulary** (themed) — how the AI *responds* (`VOICE`), a top `BANNER`,
+     and the prose words the docs use: the core nouns `LAW(S)`/`AGENT(S)`/`SKILL(S)`/
+     `MEMORY`/`VAULT`, plus `TAGLINE`, `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`, `DESC_*`,
+     `ROAST_PERSONA`, the law titles `LEX_*`, and the section intros `INTRO_*`. Each
+     theme defines its own nouns; **neutral keeps the plain words** (Rule, Agent, Skill,
+     Memory, Workspace), so neutral output is unchanged.
 
-   So `imperial` flavours the words and the agent's tone (the readiness sigil, the
-   epigraphs, the descriptions) while every section is still `## Agents`, every
-   folder still `agents/`, and links resolve identically across themes. The source
+   So `imperial` flavours the agent's tone *and* the page — the banner, the readiness
+   sigil, the epigraphs, and the words themselves (the laws read as *Dictates*, agents
+   as *Adepts*, skills as *Rites*) — while every folder is still `agents/`/`skills/`,
+   law numbers stay `XVIII`, and links resolve identically across themes. The source
    tree under `src/` stays neutral for sane authoring. Toggle = one flag.
 
    The OpenCode emits add only: native skills at `skills/<name>/SKILL.md` (not slash

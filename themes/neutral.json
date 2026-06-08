@@ -61,5 +61,14 @@
   "INTRO_AGENTS": "Delegate focused work to a specialist rather than doing everything in one context. Each specialist has a single clear purpose and a defined output contract.",
   "INTRO_SKILLS": "A Skill is a written procedure for a recurring task. Run the matching Skill before improvising.",
   "INTRO_WORKSPACE": "The directory this harness is installed into is its **Workspace**, and it is shared.",
-  "INTRO_SCRIPTS": "Everything above works on agent self-discipline alone."
+  "INTRO_SCRIPTS": "Everything above works on agent self-discipline alone.",
+  "BANNER": "────────────────────────────────────────────────────\n  ✅  GENESEED — disciplined AI harness\n────────────────────────────────────────────────────",
+  "LAW": "Rule",
+  "LAWS": "Rules",
+  "AGENT": "Agent",
+  "AGENTS": "Agents",
+  "SKILL": "Skill",
+  "SKILLS": "Skills",
+  "MEMORY": "Memory",
+  "VAULT": "Workspace"
 }

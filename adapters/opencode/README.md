@@ -64,13 +64,15 @@ your-repo/
   one artifact serves both tools. Trade-off: no `/name` slash trigger and no
   per-skill `agent:`/`model:` pin (a skill runs in the current agent context). See
   [GLOBAL-HARNESS-SPEC.md](GLOBAL-HARNESS-SPEC.md) §9.1.
-- Theming: structure is always plain English (Agents/Skills/Rules/Memory;
-  `agents/`/`skills/`/`memory/`) so `AGENT.md` reads plainly and its link paths match
-  the dirs OpenCode fixes — that holds for *every* emit, not just OpenCode. A theme
-  changes only **voice** (the AI's tone + the prose inside the docs); `--theme
-  imperial` gives the imperial voice over the same neutral scaffolding. The only
-  OpenCode-specific touch is rewriting `AGENT.md`'s skill links to the nested
-  `skills/<name>/SKILL.md` form.
+- Theming: the *scaffolding* is always plain English — folder names
+  (`agents/`/`skills/`/`memory/`), link paths, section layout, and law numbers stay
+  fixed so `AGENT.md`'s links match the dirs OpenCode fixes (every emit, not just
+  OpenCode). A theme changes the AI's **voice** *and* the prose **vocabulary**: the
+  core nouns are themed (imperial reads *Dictates*/*Adepts*/*Rites*, with a themed
+  banner and sigil), while **neutral keeps the plain words** (Rules/Agents/Skills). So
+  `--theme imperial` flavours both the tone and the page over the same neutral
+  scaffolding. The only OpenCode-specific touch is rewriting `AGENT.md`'s skill links
+  to the nested `skills/<name>/SKILL.md` form.
 - **Bundle in a subfolder?** OpenCode resolves `instructions` paths from the
   *project root*, not from `opencode.json`'s folder. So if the bundle lives in a
   subfolder, add `--root <repo>` — `opencode.json` and `.opencode/` are written to
