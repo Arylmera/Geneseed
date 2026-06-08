@@ -55,9 +55,17 @@ never move.
 | [docs]({{DIR_AGENTS}}/docs.md) | code is done and user-facing docs/READMEs must follow |
 | [security]({{DIR_AGENTS}}/security.md) | a change touches auth, input handling, secrets, or dependencies |
 | [explorer]({{DIR_AGENTS}}/explorer.md) | you must sweep many files for an answer but only want the conclusion |
+| [advocate]({{DIR_AGENTS}}/advocate.md) | a council debate needs the strongest case **for** the motion argued in isolation |
+| [skeptic]({{DIR_AGENTS}}/skeptic.md) | a council debate needs a devil's advocate to attack the motion's failure modes |
+| [pragmatist]({{DIR_AGENTS}}/pragmatist.md) | a council debate needs the cost, effort, and complexity weighed against the payoff |
+| [steward]({{DIR_AGENTS}}/steward.md) | a council debate needs the long-term architecture, debt, and maintainability defended |
 
 **Rule of delegation:** read-only investigation can be dispatched freely; any
 {{AGENT}} that *writes* must return a summary of exactly what it changed.
+
+The last four — `advocate`, `skeptic`, `pragmatist`, `steward` — are the standing
+**council**: read-only debate seats that argue an assigned stance, convened together
+by the [council {{SKILL}}]({{DIR_SKILLS}}/council.md) rather than dispatched alone.
 
 ---
 

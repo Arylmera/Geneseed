@@ -36,7 +36,7 @@ your own is a copy-and-edit away.
 | Piece | What it is |
 | --- | --- |
 | **Rules** (`laws/`) | 19 universal laws the agent obeys — secrets, scope, verify-before-assert, context economy, load-the-docs, tool-discovery … |
-| **Agents** (6) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer` |
+| **Agents** (10) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer` — plus a debate **council**: `advocate`, `skeptic`, `pragmatist`, `steward` |
 | **Skills** (20) | repeatable workflows: brainstorm · plan · tdd · debug · refactor · verify · code-review · **review-response** · commit · **ship** · **release** · repo-map · **ingest** · **research** · handoff · roast-me · **council** · parallel-agents · cmux · create-skill |
 | **Memory** (`memory/`) | one-fact-per-file durable knowledge, indexed by `MEMORY.md` (git-ignored, personal) |
 | **Context** | the project's own docs — auto-discovered on OpenCode, or via a `context.json` manifest |
