@@ -619,6 +619,20 @@ class DiscoverContextTests(unittest.TestCase):
 
 
 class TuiHelperTests(unittest.TestCase):
+    def test_clear_frame_erases_and_forces_full_repaint(self):
+        # Guards the leftover/ghost fix: every interactive frame must both erase and
+        # mark the window for a full physical repaint (clearok(True)).
+        class FakeWin:
+            def __init__(self):
+                self.calls = []
+            def erase(self):
+                self.calls.append("erase")
+            def clearok(self, flag):
+                self.calls.append(("clearok", flag))
+        win = FakeWin()
+        harness._clear_frame(win)
+        self.assertEqual(win.calls, ["erase", ("clearok", True)])
+
     def test_clamp_keeps_window_in_range(self):
         # plenty of room → no scroll
         self.assertEqual(harness._clamp(0, 5, 10), 0)
