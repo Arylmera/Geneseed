@@ -849,6 +849,47 @@ class TextualFrontEndTests(unittest.TestCase):
         asyncio.run(drive())
 
 
+class InstallRetryTests(unittest.TestCase):
+    """A failing install/update step must auto-retry, then STOP — never silently run a
+    later step (or setup) on top of a broken one."""
+
+    def test_retry_plain_succeeds_on_first_try(self):
+        self.assertTrue(harness._retry_plain("ok", ["true"], attempts=1))
+
+    def test_retry_plain_fails_after_exhausting_attempts(self):
+        import time
+        from unittest import mock
+        with mock.patch.object(time, "sleep") as slept:        # don't actually wait
+            self.assertFalse(harness._retry_plain("no", ["false"], attempts=3))
+        self.assertEqual(slept.call_count, 2)                  # backoff between the 3 tries
+
+    def test_bootstrap_plain_stops_at_first_failed_step(self):
+        from unittest import mock
+        calls = []
+
+        def fake(label, cmd, attempts=3):
+            calls.append(label)
+            return "refreshing" not in label                   # the sync step fails
+
+        with mock.patch.object(harness, "_retry_plain", side_effect=fake):
+            ok = harness._bootstrap_plain(Path("/nonexistent"), "main")
+        self.assertFalse(ok)
+        self.assertEqual(len(calls), 1)                        # upgrade.sh never attempted
+
+    def test_bootstrap_plain_runs_all_steps_on_success(self):
+        from unittest import mock
+        calls = []
+
+        def fake(label, cmd, attempts=3):
+            calls.append(label)
+            return True
+
+        with mock.patch.object(harness, "_retry_plain", side_effect=fake):
+            ok = harness._bootstrap_plain(Path("/x"), "main")
+        self.assertTrue(ok)
+        self.assertEqual(len(calls), 2)                        # sync + upgrade
+
+
 def setattr_many(mod, saved):
     mod.ROOT, mod.SRC, mod.THEMES, mod.PLUGIN_SRC, mod.CONFIG = saved
 
