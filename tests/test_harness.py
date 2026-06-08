@@ -663,5 +663,57 @@ class TuiHelperTests(unittest.TestCase):
         self.assertEqual(harness._MORE_G, harness._GLYPH["down"])
 
 
+class SourceCompletenessGateTests(unittest.TestCase):
+    """A partial src/ — an interrupted sync, or an AGENT.md table row whose spec file
+    is missing — must ABORT the emit before any write, not produce an AGENT.md full of
+    dead links (and, for the global emit, delete the previously-good copies)."""
+
+    def _isolated(self) -> Path:
+        """Copy the source into a temp tree and point build.* at it, restoring the
+        real paths on teardown — so a removed spec never touches the real repo."""
+        work = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, work, ignore_errors=True)
+        shutil.copytree(build.SRC, work / "src")
+        shutil.copytree(build.THEMES, work / "themes")
+        shutil.copytree(build.PLUGIN_SRC, work / "plugins")
+        saved = (build.ROOT, build.SRC, build.THEMES, build.PLUGIN_SRC, build.CONFIG)
+        self.addCleanup(lambda: setattr_many(build, saved))
+        build.ROOT, build.SRC, build.THEMES = work, work / "src", work / "themes"
+        build.PLUGIN_SRC, build.CONFIG = work / "plugins", work / "harness.config.json"
+        return work
+
+    def test_complete_source_passes_gate(self):
+        self._isolated()
+        _theme, items = build.render_all("neutral")
+        self.assertEqual(build._missing_referenced_specs(items), [])
+
+    def test_missing_skill_aborts_build_without_writing(self):
+        work = self._isolated()
+        (work / "src" / "skills" / "council.md").unlink()
+        _theme, items = build.render_all("neutral")
+        self.assertIn("skills/council.md", build._missing_referenced_specs(items))
+        with self.assertRaises(SystemExit):
+            build.build("neutral", work / "out")
+        self.assertFalse((work / "out" / "AGENT.md").exists())   # nothing emitted
+
+    def test_missing_agent_aborts_global_emit_and_preserves_install(self):
+        import contextlib, io
+        work = self._isolated()
+        cfg = work / "cfg"
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode_global("neutral", out=work / "bundle", cfg=cfg)
+        self.assertTrue((cfg / "agents" / "operator.md").exists())
+        (work / "src" / "agents" / "operator.md").unlink()       # simulate partial src
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            build.emit_opencode_global("neutral", out=work / "bundle", cfg=cfg)
+        # write-before-delete + the gate: the previously-good install is untouched
+        self.assertTrue((cfg / "agents" / "operator.md").exists())
+        self.assertTrue((cfg / "skills" / "council" / "SKILL.md").exists())
+
+
+def setattr_many(mod, saved):
+    mod.ROOT, mod.SRC, mod.THEMES, mod.PLUGIN_SRC, mod.CONFIG = saved
+
+
 if __name__ == "__main__":
     unittest.main()

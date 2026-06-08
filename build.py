@@ -264,6 +264,7 @@ def build(theme_name: str, out: Path) -> None:
     AGENT.md, and never touched again. The build therefore cleans its own footprint
     without ever destroying the user's repository or data."""
     theme, items = render_all(theme_name)
+    assert_source_complete(items, context=f"theme '{theme_name}'")
     out.mkdir(parents=True, exist_ok=True)
 
     for src_dir in OWNED_SRC_DIRS:
@@ -318,6 +319,49 @@ def _first_blockquote(text: str) -> str:
 
 def _is_readonly(text: str) -> bool:
     return "Read-only" in text
+
+
+def _missing_referenced_specs(items) -> list[str]:
+    """Specs that AGENT.md links to but src/ does not provide.
+
+    AGENT.md's agent/skill tables are hand-authored, while the spec files are globbed
+    from src/ — so the two can fall out of sync: a row added without its file, or, far
+    more often, a partial or interrupted source sync (an aborted `cp -R`, a truncated
+    download). Emitting in that state writes an AGENT.md that points at files that were
+    never generated — dead links — and the global emit's cleanup would delete the
+    previously-good copies too. Detect it from the rendered items, before any write."""
+    agent = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
+    if agent is None:
+        return []
+    missing: list[str] = []
+    for m in CAPABILITY_LINK_RE.finditer(agent):
+        target = m.group(0).rsplit("](", 1)[1].rstrip(")")   # e.g. 'agents/advocate.md'
+        folder, _slash, fname = target.partition("/")
+        if folder in ("agents", "skills") and not (SRC / folder / fname).is_file():
+            missing.append(target)
+    return sorted(set(missing))
+
+
+def assert_source_complete(items, *, context: str = "") -> None:
+    """Refuse to emit when AGENT.md references specs that src/ doesn't provide — BEFORE
+    any destructive write. A clear failure that leaves the existing install intact beats
+    a half-generated bundle full of dead links (and a global re-emit that deletes the
+    good copies). This is the gate `upgrade.sh` runs on the download, brought into the
+    build itself so direct `build.py`, `harness build`, and the `setup` wizard are
+    guarded too — not just the upgrade path."""
+    missing = _missing_referenced_specs(items)
+    if not missing:
+        return
+    where = f" ({context})" if context else ""
+    sys.stderr.write(
+        f"[geneseed] ✗ source is incomplete{where}: AGENT.md references "
+        f"{len(missing)} spec(s) with no file under src/:\n"
+        + "".join(f"    - {m}\n" for m in missing)
+        + "[geneseed] ✗ Refusing to emit — a partial source would write dead links "
+        "and a global re-emit would delete the good copies in an existing install.\n"
+        "[geneseed] ✗ Re-sync the source (./geneseed update, or re-run the upgrade) "
+        "and try again.\n")
+    raise SystemExit(1)
 
 
 PLUGIN_SRC = ROOT / "adapters" / "opencode" / "plugins"
@@ -688,26 +732,21 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     by `harness.py diff` to render an 'expected' copy into a temp dir for comparison."""
     cfg = cfg or _opencode_config_dir()
     theme, items = render_all(theme_name)
+    assert_source_complete(items, context="opencode-global")
     cfg.mkdir(parents=True, exist_ok=True)
 
-    # Remove files this layer owned on a previous run (stale agent/skill/plugin).
+    # Files this layer owned on a previous run — read now, but pruned only AFTER the new
+    # set is fully written (below). Write-before-delete: a failed or partial write can
+    # never remove a still-needed file, so a re-emit can only improve the install, never
+    # degrade it. (With assert_source_complete above, an incomplete source aborts before
+    # this point and never touches the existing bundle.)
     manifest_path = cfg / GLOBAL_MANIFEST
+    old_owned: list[str] = []
     if manifest_path.exists():
         try:
-            old = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", [])
+            old_owned = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", [])
         except (json.JSONDecodeError, OSError):
-            old = []
-        for relp in old:
-            victim = cfg / relp
-            try:
-                if victim.is_file():
-                    victim.unlink()
-                    # prune an emptied skill dir
-                    if victim.name == "SKILL.md" and victim.parent != cfg \
-                            and not any(victim.parent.iterdir()):
-                        victim.parent.rmdir()
-            except OSError:
-                pass
+            old_owned = []
 
     owned: list[str] = []
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
@@ -749,6 +788,20 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     write_version(cfg)
     owned.append(VERSION_MARKER)
     _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix())
+
+    # Now that the whole current set is on disk, remove only what we owned before but
+    # no longer produce (a removed agent/skill, a disabled primary/command). Everything
+    # current was just (over)written above, so a live file is never momentarily absent.
+    for relp in sorted(set(old_owned) - set(owned)):
+        victim = cfg / relp
+        try:
+            if victim.is_file():
+                victim.unlink()
+                if victim.name == "SKILL.md" and victim.parent != cfg \
+                        and not any(victim.parent.iterdir()):
+                    victim.parent.rmdir()
+        except OSError:
+            pass
 
     manifest_path.write_text(
         json.dumps({"_comment": "Files owned by Geneseed's --emit opencode-global. "
