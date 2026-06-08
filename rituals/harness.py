@@ -24,8 +24,7 @@ Dependency-free. Subcommands:
                                    never deleted — kept in place, or --archive-memory
                                    moves it to archived-memory/; --yes to skip prompt
     harness setup                  interactive, dependency-free install wizard (all OSes)
-    harness tui                    full-screen control panel — Textual if installed
-                                   (any OS), else stdlib curses (Unix)
+    harness tui                    full-screen curses control panel (Unix only)
     harness learn [FILE]           distil notes/transcript into memory entries
                                    via a model CLI of your choice (no API key)
 
@@ -2852,56 +2851,21 @@ def _tui_loop(stdscr, inv: dict) -> None:
         # KEY_RESIZE and any other key fall through and re-render
 
 
-def _textual_available() -> bool:
-    """True when the optional Textual front-end can be used. Honours an opt-out
-    (GENESEED_TUI_CURSES=1 forces the stdlib curses panel) and needs Textual installed.
-    The dependency-free curses panel stays the fallback when this returns False."""
-    if os.environ.get("GENESEED_TUI_CURSES"):
-        return False
-    try:
-        import textual  # noqa: F401
-        return True
-    except ImportError:
-        return False
-
-
-def _launch_textual(theme: str, start: str = "menu") -> "int | None":
-    """Run the optional Textual control panel; return its exit code, or None when
-    Textual isn't usable so the caller falls back to the curses panel."""
-    if not _textual_available():
-        return None
-    here = str(Path(__file__).resolve().parent)
-    if here not in sys.path:
-        sys.path.insert(0, here)
-    try:
-        import tui_textual
-    except Exception as e:                       # a broken optional dep must never be fatal
-        sys.stderr.write(f"[tui] Textual front-end unavailable ({e}); using the classic panel.\n")
-        return None
-    return tui_textual.run(sys.modules[__name__], theme, start=start)
-
-
 def cmd_tui(args: argparse.Namespace) -> int:
-    """Full-screen control panel: browse agents/skills/laws and run build/doctor/diff.
-    Uses the optional Textual front-end when installed (any OS), else the stdlib curses
-    panel (Unix only); degrades with a clear message."""
+    """Full-screen curses control panel: browse agents/skills/laws and run
+    build/doctor/diff. Unix only (stdlib curses); degrades with a clear message."""
+    if sys.platform.startswith("win"):
+        print("[tui] the curses panel needs a Unix terminal. Use `harness setup` instead.")
+        return 1
     if not sys.stdin.isatty():
         print("[tui] not an interactive terminal. Use `harness setup`, `doctor`, or `build`.")
-        return 1
-    theme = args.theme or _default_theme()
-    rc = _launch_textual(theme, start="browse")
-    if rc is not None:
-        return rc
-    if sys.platform.startswith("win"):
-        print("[tui] the curses panel needs a Unix terminal. Install `textual` for a "
-              "cross-platform panel, or use `harness setup`.")
         return 1
     try:
         import curses  # noqa: F401  (availability probe)
     except ImportError:
         print("[tui] curses is unavailable in this Python. Use `harness setup`.")
         return 1
-    inv = _tui_inventory(theme)
+    inv = _tui_inventory(args.theme or _default_theme())
     import curses
     import locale
     try:
@@ -2984,45 +2948,20 @@ def _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading="updating"
     return p.wait()
 
 
-def _run_steps(stdscr, curses, pal, steps, heading="working", attempts=3) -> list:
-    """Run each (title, cmd) step in the progress UI. Each step is retried up to
-    `attempts` times with exponential backoff, so a transient failure (a network blip,
-    a CDN snapshot still catching up) self-heals without a manual re-run. If a step
-    still fails after every attempt, the chain STOPS — the remaining steps stay
-    `pending` rather than running on top of a broken one. Returns the per-step status
-    list (so the caller can tell success from failure)."""
-    import time
+def _run_steps(stdscr, curses, pal, steps, heading="working") -> list:
+    """Run each (title, cmd) step in the progress UI; return the per-step status list."""
     status = ["pending"] * len(steps)
     log: list[str] = []
-    for i, (title, cmd) in enumerate(steps):
-        delay = 2
-        for attempt in range(1, attempts + 1):
-            status[i] = "running"
-            _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
-            rc = _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading)
-            if rc == 0:
-                status[i] = "done"
-                break
-            if attempt < attempts:
-                log.append(f"[geneseed] '{title}' failed (rc={rc}) — retrying in {delay}s "
-                           f"(attempt {attempt + 1}/{attempts}) ...")
-                _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
-                time.sleep(delay)
-                delay *= 2
-            else:
-                status[i] = "failed"
-                log.append(f"[geneseed] FAILED: '{title}' after {attempts} attempts "
-                           f"(rc={rc}) — see the output above.")
+    for i, (_title, cmd) in enumerate(steps):
+        status[i] = "running"
         _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
-        if status[i] == "failed":
-            break                        # stop the chain — never run a later step on a broken one
+        rc = _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading)
+        status[i] = "done" if rc == 0 else "failed"
+        _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
     return status
 
 
-def _bootstrap_progress(stdscr, here, ref) -> bool:
-    """Run the update steps (each auto-retried) and report whether they ALL succeeded.
-    Returns True on full success, False if a step failed — the caller then skips setup
-    rather than running it on top of a broken update."""
+def _bootstrap_progress(stdscr, here, ref) -> None:
     import curses
     pal = _tui_palette(curses)
     curses.curs_set(0)
@@ -3032,64 +2971,35 @@ def _bootstrap_progress(stdscr, here, ref) -> bool:
     steps = [("Refresh orchestration scripts", ["bash", str(here / "sync-self.sh"), ref]),
              ("Update factory & rebuild bundle", ["bash", str(here / "upgrade.sh"), ref])]
     status = _run_steps(stdscr, curses, pal, steps, heading="updating")
-    ok = all(s == "done" for s in status)
+    failed = any(s == "failed" for s in status)
     h, w = stdscr.getmaxyx()
-    msg = ("  update complete — continuing…  " if ok
-           else "  update FAILED — fix the error above, then re-run · setup skipped · press any key  ")
+    msg = ("  a step FAILED — press any key to continue to setup  " if failed
+           else "  update complete — continuing to setup…  ")
     try:
         stdscr.addnstr(h - 1, 0, msg.ljust(w - 1), max(0, w - 1), pal["BAR"])
     except curses.error:
         pass
     stdscr.refresh()
-    if ok:
-        curses.napms(700)       # brief beat, then continue automatically
+    if failed:
+        stdscr.getch()          # pause so the error is readable
     else:
-        stdscr.getch()          # pause so the captured error is readable
-    return ok
+        curses.napms(700)       # brief beat, then continue automatically
 
 
-def _retry_plain(label, cmd, attempts=3) -> bool:
-    """Run `cmd` with plain output, retrying up to `attempts` times with exponential
-    backoff. Returns True on success, False once every attempt has failed."""
-    import time
-    delay = 2
-    for attempt in range(1, attempts + 1):
-        print(f"[geneseed] {label} (attempt {attempt}/{attempts}) ...")
-        try:
-            rc = subprocess.run(cmd).returncode
-        except OSError as e:
-            print(f"[geneseed] cannot run {cmd[0]}: {e}")
-            rc = 127
-        if rc == 0:
-            return True
-        if attempt < attempts:
-            print(f"[geneseed] failed (rc={rc}) — retrying in {delay}s ...")
-            time.sleep(delay)
-            delay *= 2
-    print(f"[geneseed] FAILED: {label} after {attempts} attempts.")
-    return False
-
-
-def _bootstrap_plain(here, ref) -> bool:
-    """Non-curses fallback: run the update steps with plain output, each auto-retried.
-    Stops on the first step that fails (so a broken update never cascades) and reports
-    whether everything succeeded."""
+def _bootstrap_plain(here, ref) -> None:
+    """Non-curses fallback: run the update steps with plain output (never fatal)."""
     r = ref or "main"
-    if not _retry_plain("refreshing orchestration scripts", ["bash", str(here / "sync-self.sh"), r]):
-        return False
-    if not _retry_plain("updating factory + rebuilding", ["bash", str(here / "upgrade.sh"), r]):
-        return False
-    return True
+    print("[geneseed] refreshing orchestration scripts ...")
+    run(["bash", str(here / "sync-self.sh"), r])
+    print("[geneseed] updating factory + rebuilding ...")
+    run(["bash", str(here / "upgrade.sh"), r])
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> int:
     """Update everything (sync scripts + upgrade), shown in a curses progress screen
     where supported, then hand off to a FRESH setup process so the wizard runs the
-    just-updated code. Each update step auto-retries; if the update fails, setup is
-    SKIPPED (it would otherwise run on top of a broken update) and a non-zero code is
-    returned. `--no-setup` stops after the update either way."""
+    just-updated code. `--no-setup` stops after the update."""
     here = Path(__file__).resolve().parent.parent
-    ok = True
     if (not sys.platform.startswith("win")) and sys.stdin.isatty():
         try:
             import curses
@@ -3098,16 +3008,12 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
                 locale.setlocale(locale.LC_ALL, "")
             except locale.Error:
                 pass
-            ok = bool(curses.wrapper(_bootstrap_progress, here, args.ref))
+            curses.wrapper(_bootstrap_progress, here, args.ref)
         except Exception as e:
             sys.stderr.write(f"[bootstrap] progress UI unavailable ({e}); running plainly.\n")
-            ok = _bootstrap_plain(here, args.ref)
+            _bootstrap_plain(here, args.ref)
     else:
-        ok = _bootstrap_plain(here, args.ref)
-    if not ok:
-        sys.stderr.write("[bootstrap] update did not complete — fix the error above and "
-                         "re-run. Setup was skipped so it never runs on a broken update.\n")
-        return 1
+        _bootstrap_plain(here, args.ref)
     if not args.no_setup:
         # Re-exec the freshly-updated harness so setup uses the new code (this running
         # process still holds the pre-update modules in memory).
@@ -3276,28 +3182,17 @@ def _main_menu(stdscr) -> int:
                 pass
             curses.reset_prog_mode()
         elif sel in ("update", "bootstrap"):
-            ok = _bootstrap_progress(stdscr, here, None)
+            _bootstrap_progress(stdscr, here, None)
             curses.endwin()
-            # On a FAILED update, never hand off to setup (it would run on broken code) —
-            # re-exec back into the menu so the user can read the error and retry.
-            nxt = "setup" if (sel == "bootstrap" and ok) else "menu"
-            os.execv(sys.executable, [sys.executable, hp, nxt])
+            os.execv(sys.executable, [sys.executable, hp, "setup" if sel == "bootstrap" else "menu"])
 
 
 def cmd_menu(args: argparse.Namespace) -> int:
-    """Interactive main menu — the default for a bare `./geneseed`. Prefers the optional
-    Textual front-end (any OS), falls back to the stdlib curses menu, then to a one-line
-    command list off a TTY / on Windows without Textual / if curses is unavailable."""
-    if not sys.stdin.isatty():
+    """Interactive main menu — the default for a bare `./geneseed`. Falls back to a
+    one-line command list off a TTY / on Windows / if curses is unavailable."""
+    if sys.platform.startswith("win") or not sys.stdin.isatty():
         print("Geneseed — run one of:  setup · bootstrap · update · build · doctor · diff · tui")
-        print("On an interactive terminal, `./geneseed` opens a menu of these.")
-        return 0
-    rc = _launch_textual(args.theme or _default_theme(), start="menu")
-    if rc is not None:
-        return rc
-    if sys.platform.startswith("win"):
-        print("Geneseed — run one of:  setup · bootstrap · update · build · doctor · diff · tui")
-        print("Install `textual` (pip install textual) for an interactive panel on Windows.")
+        print("On a Unix terminal, `./geneseed` opens an interactive menu of these.")
         return 0
     try:
         import curses
@@ -3390,13 +3285,11 @@ def main() -> int:
     su = sub.add_parser("setup", help="interactive install wizard (dependency-free, all OSes)")
     su.set_defaults(fn=cmd_setup)
 
-    tu = sub.add_parser("tui", help="full-screen control panel (Textual if installed, "
-                                    "else curses on Unix)")
+    tu = sub.add_parser("tui", help="full-screen curses control panel (Unix)")
     tu.add_argument("--theme", default=None, help="theme to show (default: harness.config.json)")
     tu.set_defaults(fn=cmd_tui)
 
     me = sub.add_parser("menu", help="interactive main menu (the default for ./geneseed)")
-    me.add_argument("--theme", default=None, help="theme to show (default: harness.config.json)")
     me.set_defaults(fn=cmd_menu)
 
     bs = sub.add_parser("bootstrap", help="update everything (sync + upgrade) with a "

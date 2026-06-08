@@ -21,5 +21,12 @@
 2. Write for the stated audience; lead with what the reader needs to do.
 3. Keep examples runnable; update any example that the change broke.
 
+## Model
+Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
+- `sonnet` — prose generation does not need the top tier.
+
 ## Output contract
-- The doc files written/updated and a one-line note of what changed and why.
+- The doc files written/updated, a one-line note of what changed and why,
+  confirmation that any code examples were run as written, and an explicit list of
+  any surfaces left un-updated (so the caller can close the gap rather than assume
+  none exists).

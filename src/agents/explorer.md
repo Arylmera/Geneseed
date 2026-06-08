@@ -24,6 +24,10 @@
 2. Read only the slices that matter; follow references outward as needed.
 3. Synthesize — return findings, not raw dumps.
 
+## Model
+Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
+- `sonnet` — read-only fan-out; a wide search must never be routed to an expensive model (universal {{LAW}} XV).
+
 ## Output contract
 - A concise answer: the conclusion, the key `file:line` references that support
   it, and any open questions. Never the full contents of what was read.

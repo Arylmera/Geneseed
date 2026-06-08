@@ -58,15 +58,22 @@ def substitute(text: str, theme: dict) -> str:
     return TOKEN_RE.sub(repl, text)
 
 
-def render_file(path: Path, theme: dict) -> str:
-    """Render one source file: inline INCLUDE directives, then substitute tokens."""
+def render_file(path: Path, theme: dict, _visiting: "frozenset[Path]" = frozenset()) -> str:
+    """Render one source file: inline INCLUDE directives, then substitute tokens.
+
+    `_visiting` carries the chain of files currently being inlined, so a circular
+    INCLUDE (a -> b -> a, or a file including itself) is caught and reported as a
+    visible marker instead of recursing until Python raises RecursionError."""
+    here = path.resolve()
     text = path.read_text(encoding="utf-8")
 
     def inline(m: re.Match) -> str:
         target = (SRC / m.group("path")).resolve()
         if not target.exists():
             return f"<!-- MISSING INCLUDE: {m.group('path')} -->"
-        return render_file(target, theme).rstrip("\n")
+        if target == here or target in _visiting:
+            return f"<!-- CIRCULAR INCLUDE: {m.group('path')} -->"
+        return render_file(target, theme, _visiting | {here}).rstrip("\n")
 
     text = INCLUDE_RE.sub(inline, text)
     return substitute(text, theme)
@@ -382,7 +389,7 @@ def _strip_skill_body_links(body: str) -> str:
     """Reduce a native skill body's capability cross-links to plain text — same
     rationale as AGENT.md's tables: OpenCode invokes skills via the `skill` tool and
     never follows these hrefs. Removes every RELATIVE markdown link to a `.md` spec
-    (sibling skills like `verify.md`, `../agents/x.md`, the `_template.md` scaffold),
+    (sibling skills like `tdd.md`, `../agents/x.md`, the `_template.md` scaffold),
     keeping the link TEXT; external URLs are untouched. This makes the native emits
     link-clean by construction — no fragile path-nesting rewrite to maintain."""
     return re.sub(r"\[([^\]]+)\]\((?!https?://|/|#)[^)\s]*\.md(?:#[^)\s]*)?\)", r"\1", body)
@@ -417,8 +424,9 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
             continue
         if fname.startswith("_"):
             # Authoring templates (e.g. skills/_template.md) are shipped verbatim and
-            # FLAT — not wrapped as a native skill — so an author following create-skill
-            # ("Copy _template.md") has the scaffold on disk. Not counted as an
+            # FLAT — not wrapped as a native skill — so an author following the
+            # _template.md authoring note ("Copy this file") has the scaffold on disk.
+            # Not counted as an
             # agent/skill, and not discovered by OpenCode (it scans <name>/SKILL.md).
             dest = target_dir / fname
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -533,7 +541,7 @@ PRIMARY_AGENT_SRC = ROOT / "adapters" / "opencode" / "agents" / "orchestrator.md
 # O7: skills also exposed as /slash commands when GENESEED_COMMANDS is set. The hot set
 # — the workflows worth a one-keystroke trigger. Any name absent from src/ is skipped.
 COMMAND_SET = ["commit", "plan", "code-review", "review-response",
-               "verify", "ship", "debug", "research"]
+               "ship", "debug", "research"]
 
 
 def _truthy_env(name: str) -> bool:

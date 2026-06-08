@@ -24,6 +24,10 @@
    unsafe deserialization, path traversal, vulnerable dependencies.
 3. Confirm no secret is committed (universal {{LAW}} I).
 
+## Model
+Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
+- `sonnet` for the scan; escalate to `opus` only when a finding needs deep exploit reasoning.
+
 ## Output contract
 - Findings as `severity — location — issue — remediation`, highest severity
   first. End with: safe to ship / fix-required. State if no issues were found.

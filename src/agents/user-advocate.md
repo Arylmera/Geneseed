@@ -21,5 +21,9 @@
 2. Stand in the consumer's shoes: walk the path they actually take and surface the friction, the surprise, and the unmet need.
 3. Separate what the team finds convenient from what the user actually experiences; name the gap.
 
+## Model
+Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
+- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal {{LAW}} XV).
+
 ## Output contract
 - The consumer's verdict: who is affected, the experience win or harm, the friction it introduces, and the one thing they would actually ask for. Grounded in the real surface, not assumed.

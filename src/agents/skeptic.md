@@ -21,5 +21,9 @@
 2. Steelman the proposal first (universal {{LAW}} VIII), then break *that* — the failure modes, the risks, and the load-bearing assumptions no one has checked.
 3. Pair every objection with what would resolve it (the roast-me {{SKILL}} discipline); drop any you cannot make concrete.
 
+## Model
+Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
+- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal {{LAW}} XV).
+
 ## Output contract
 - Severity-ranked objections (fatal → significant → minor), each as `claim — what's wrong — what would resolve it`, grounded in `file:line` or facts, ending with the single risk that should sink the motion if any does.

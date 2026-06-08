@@ -6,8 +6,10 @@
 request or merge the branch.
 
 ## Procedure
-1. Confirm the work is actually done before shipping — tests green, behaviour
-   checked (run [verify](verify.md) if unsure; universal {{LAW}} III).
+1. Confirm the work is actually done before shipping. Find the project's Definition
+   of Done — its test, lint, and build commands (often pointed at from
+   `context.json`); if it is undefined, ask rather than assume. Run those checks and
+   read the actual output (universal {{LAW}} III); state what you ran and its result.
    Never ship on an unproven claim.
 2. Confirm the branch carries only this change's commits and is rebased/updated on
    the base branch; resolve any divergence before opening.

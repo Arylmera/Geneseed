@@ -55,6 +55,16 @@ function pickCommand(args) {
   return ""
 }
 
+// Tool-name classes, matched as SUBSTRINGS so a host's variant names
+// (write_file, str_replace_editor, apply_patch, run_command, execute_bash, …) are
+// still covered as the tool surface evolves. Over-matching the class is harmless:
+// the inner guards act only when a real path/command argument is present AND matches
+// a high-confidence secret/catastrophe pattern, so a misclassified tool with no such
+// argument simply does nothing.
+const WRITE_TOOLS = ["write", "edit", "patch", "create", "save", "insert", "replace"]
+const SHELL_TOOLS = ["bash", "shell", "exec", "command", "terminal", "run"]
+const hasAny = (name, parts) => parts.some((s) => name.includes(s))
+
 export const GeneseedGuard = async () => {
   return {
     "tool.execute.before": async (input, output) => {
@@ -67,11 +77,11 @@ export const GeneseedGuard = async () => {
         throw new Error(`[geneseed-guard] blocked: ${why} — set GENESEED_GUARD=off to allow`)
       }
       try {
-        if (tool === "write" || tool === "edit" || tool === "patch") {
+        if (hasAny(tool, WRITE_TOOLS)) {
           const p = pickPath(args)
           if (p && SECRET_RE.some((re) => re.test(p))) { deny(`write to secret/key file ${p} (Law I)`); return }
           if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Law I)`)
-        } else if (tool === "bash" || tool === "shell") {
+        } else if (hasAny(tool, SHELL_TOOLS)) {
           const c = pickCommand(args)
           if (c && SHELL_BLOCK_RE.some((re) => re.test(c))) { deny(`catastrophic command (Law IV): ${c.slice(0, 80)}`); return }
           if (c && SHELL_WARN_RE.some((re) => re.test(c))) log(`WARN: irreversible op — confirm intent (Law IV): ${c.slice(0, 80)}`)

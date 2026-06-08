@@ -25,6 +25,10 @@
 3. Then quality: duplication, unclear naming, dead code, oversized units.
 4. Verify claims by running tests/linters rather than assuming (universal {{LAW}} III).
 
+## Model
+Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
+- `sonnet` for the correctness + quality pass; the caller may escalate to `opus` when the change is architecturally subtle.
+
 ## Output contract
 - A list of findings, each as `file:line — problem — suggested fix`, ordered
   correctness-first. End with a one-line verdict: ship / fix-then-ship / block.

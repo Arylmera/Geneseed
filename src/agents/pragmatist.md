@@ -21,5 +21,9 @@
 2. Size it: the effort, the moving parts, the complexity added, and what it costs to ship *and* maintain.
 3. Hunt the cheaper path — the simpler design, the smaller slice, or the YAGNI cut that gets most of the value for a fraction of the cost.
 
+## Model
+Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
+- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal {{LAW}} XV).
+
 ## Output contract
 - A feasibility read: a rough effort/complexity estimate, the cheapest viable path, what to cut, and a one-line lean — worth it / not worth it / worth it only if — with the assumption that lean rests on.

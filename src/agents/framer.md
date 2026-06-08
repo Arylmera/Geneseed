@@ -21,5 +21,9 @@
 2. Test whether the motion addresses that need or only a symptom of it; ask what problem it would leave unsolved.
 3. If the framing is off, offer the reframed problem — the question the council should actually be debating.
 
+## Model
+Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
+- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal {{LAW}} XV).
+
 ## Output contract
 - The framing read: the real problem in one line, whether the motion fits it, the reframe if the framing is wrong, and the question the council should be debating instead.

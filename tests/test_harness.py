@@ -192,11 +192,11 @@ class SkillBodyDelinkTests(unittest.TestCase):
     REL_MD = re.compile(r"\]\((?!https?://)[^)\s]*\.md")
 
     def test_pure_strips_relative_md_links_keeps_urls(self):
-        s = ("run [verify](verify.md) if unsure; via the [refactor Skill](refactor.md);\n"
+        s = ("run [ship](ship.md) if unsure; via the [refactor Skill](refactor.md);\n"
              "dispatch the [reviewer Agent](../agents/reviewer.md); copy "
              "[`_template.md`](_template.md); see [docs](https://example.com/x.md).")
         out = build._strip_skill_body_links(s)
-        self.assertIn("run verify if unsure", out)
+        self.assertIn("run ship if unsure", out)
         self.assertIn("the refactor Skill", out)
         self.assertIn("the reviewer Agent", out)
         self.assertIn("copy `_template.md`", out)
@@ -209,14 +209,14 @@ class SkillBodyDelinkTests(unittest.TestCase):
         cfg = Path(tempfile.mkdtemp()) / "cfg"
         try:
             build.build("neutral", d)
-            # portable bundle keeps the in-body link
-            self.assertRegex((d / "skills" / "ship.md").read_text(encoding="utf-8"), self.REL_MD)
+            # portable bundle keeps the in-body link (tdd links refactor.md + commit.md)
+            self.assertRegex((d / "skills" / "tdd.md").read_text(encoding="utf-8"), self.REL_MD)
             with contextlib.redirect_stdout(io.StringIO()):
                 build.emit_opencode_global("neutral", out=Path(tempfile.mkdtemp()) / "b", cfg=cfg)
             # native skill is plain text
-            native = (cfg / "skills" / "ship" / "SKILL.md").read_text(encoding="utf-8")
+            native = (cfg / "skills" / "tdd" / "SKILL.md").read_text(encoding="utf-8")
             self.assertNotRegex(native, self.REL_MD)
-            self.assertIn("verify", native)
+            self.assertIn("refactor", native)
         finally:
             shutil.rmtree(d, ignore_errors=True)
             shutil.rmtree(cfg.parent, ignore_errors=True)
@@ -282,7 +282,7 @@ class StatusDataTests(unittest.TestCase):
         d = harness._status_data()
         # counts match the rendered inventory
         self.assertEqual(d["agents"], 16)
-        self.assertEqual(d["skills"], 20)
+        self.assertEqual(d["skills"], 19)
         self.assertEqual(d["laws"], 20)
         # version fields present and well-formed
         self.assertRegex(d["source_fp"], r"^[0-9a-f]{12}$")
@@ -566,7 +566,7 @@ class TuiInventoryTests(unittest.TestCase):
     def test_counts_and_bodies(self):
         inv = harness._tui_inventory("neutral")
         self.assertEqual(len(inv["agents"]), 16)
-        self.assertEqual(len(inv["skills"]), 20)
+        self.assertEqual(len(inv["skills"]), 19)
         self.assertEqual(len(inv["laws"]), 20)
         self.assertTrue(all(e["desc"] and e["body"] for e in inv["agents"]))
         self.assertTrue(all(e["desc"] and e["body"] for e in inv["skills"]))
@@ -801,93 +801,6 @@ class SourceCompletenessGateTests(unittest.TestCase):
         # write-before-delete + the gate: the previously-good install is untouched
         self.assertTrue((cfg / "agents" / "operator.md").exists())
         self.assertTrue((cfg / "skills" / "council" / "SKILL.md").exists())
-
-
-def _has_textual() -> bool:
-    import importlib.util
-    try:
-        return importlib.util.find_spec("textual") is not None
-    except (ImportError, ValueError):          # absent / broken parent → treat as absent
-        return False
-
-
-class TextualFrontEndTests(unittest.TestCase):
-    """The optional Textual panel must be exactly that — optional. harness must import
-    and run its dependency-free paths with no textual present, and honour the opt-out."""
-
-    def test_harness_imports_without_textual_at_top_level(self):
-        # The critical path stays dependency-free: textual is imported lazily, never at
-        # module load, so `import harness` works on a bare interpreter (as CI runs it).
-        src = (ROOT / "rituals" / "harness.py").read_text(encoding="utf-8")
-        top_level = [ln for ln in src.splitlines()
-                     if ln.startswith(("import textual", "from textual"))]
-        self.assertEqual(top_level, [], "textual must not be imported at module top level")
-
-    def test_available_honours_curses_opt_out(self):
-        import os
-        from unittest import mock
-        with mock.patch.dict(os.environ, {"GENESEED_TUI_CURSES": "1"}):
-            self.assertFalse(harness._textual_available())
-
-    @unittest.skipUnless(_has_textual(), "textual not installed")
-    def test_textual_screens_mount_and_browse_populates(self):
-        import asyncio
-        import tui_textual as T
-
-        async def drive():
-            app = T.GeneseedApp(harness, "neutral", start="menu")
-            async with app.run_test(size=(100, 32)) as pilot:
-                await pilot.pause()
-                self.assertEqual(type(app.screen).__name__, "MenuScreen")
-                app.push_screen(T.BrowseScreen())
-                await pilot.pause()
-                await pilot.pause()
-                tree = app.screen.query_one("#catalog")
-                # AGENTS / SKILLS / LAWS sections, all populated from the live inventory
-                self.assertEqual(len(tree.root.children), 3)
-                app.exit(0)
-        asyncio.run(drive())
-
-
-class InstallRetryTests(unittest.TestCase):
-    """A failing install/update step must auto-retry, then STOP — never silently run a
-    later step (or setup) on top of a broken one."""
-
-    def test_retry_plain_succeeds_on_first_try(self):
-        self.assertTrue(harness._retry_plain("ok", ["true"], attempts=1))
-
-    def test_retry_plain_fails_after_exhausting_attempts(self):
-        import time
-        from unittest import mock
-        with mock.patch.object(time, "sleep") as slept:        # don't actually wait
-            self.assertFalse(harness._retry_plain("no", ["false"], attempts=3))
-        self.assertEqual(slept.call_count, 2)                  # backoff between the 3 tries
-
-    def test_bootstrap_plain_stops_at_first_failed_step(self):
-        from unittest import mock
-        calls = []
-
-        def fake(label, cmd, attempts=3):
-            calls.append(label)
-            return "refreshing" not in label                   # the sync step fails
-
-        with mock.patch.object(harness, "_retry_plain", side_effect=fake):
-            ok = harness._bootstrap_plain(Path("/nonexistent"), "main")
-        self.assertFalse(ok)
-        self.assertEqual(len(calls), 1)                        # upgrade.sh never attempted
-
-    def test_bootstrap_plain_runs_all_steps_on_success(self):
-        from unittest import mock
-        calls = []
-
-        def fake(label, cmd, attempts=3):
-            calls.append(label)
-            return True
-
-        with mock.patch.object(harness, "_retry_plain", side_effect=fake):
-            ok = harness._bootstrap_plain(Path("/x"), "main")
-        self.assertTrue(ok)
-        self.assertEqual(len(calls), 2)                        # sync + upgrade
 
 
 def setattr_many(mod, saved):

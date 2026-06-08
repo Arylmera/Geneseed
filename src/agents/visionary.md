@@ -21,5 +21,9 @@
 2. Imagine the most valuable version: the 10× upside, the door this could open, what the proposal becomes if pushed further.
 3. Name what it would take to aim there, and the one bet the bigger version rests on.
 
+## Model
+Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
+- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal {{LAW}} XV).
+
 ## Output contract
 - The bold case: the transformative upside in a line, what the motion could become if pushed, the capability it would unlock, and the single bet it depends on. No timid hedging.

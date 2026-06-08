@@ -21,5 +21,9 @@
 2. Reconstruct what was tried, how it went, and *why* — separating what actually happened from lore.
 3. Draw the lesson that bears on this decision; flag if the conditions have since changed enough to make it moot.
 
+## Model
+Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
+- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal {{LAW}} XV).
+
 ## Output contract
 - The precedent: what was tried before, how it went and why, and the lesson for this decision — cited to `file:line` or commits where found, with a note if circumstances have changed.

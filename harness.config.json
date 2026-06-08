@@ -1,4 +1,5 @@
 {
+  "_comment": "version is a human-readable release label only; the canonical identity of an installed harness is the source fingerprint stamped in .geneseed-version (see `harness version`), not this string.",
   "theme": "neutral",
   "product": "Geneseed",
   "version": "0.1.0"

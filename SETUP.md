@@ -275,24 +275,6 @@ skills, and laws listed on the left, the selected item's full spec on the right
 (PgUp/PgDn to scroll it) — and runs build/doctor/diff (and `u` to update) with a
 keystroke.
 
-### Optional: a modern panel (Textual)
-
-The panel above is the **dependency-free** stdlib `curses` UI — it needs nothing
-installed and is the default. If you want a richer, mouse-driven panel — Markdown-
-rendered specs, a command palette, smoother scrolling, and (bonus) a TUI **on Windows**
-too — install the optional [Textual](https://textual.textualize.io/) front-end:
-
-```
-pip install textual          # optional; the harness stays dependency-free without it
-```
-
-With Textual present, `./geneseed` and `./geneseed tui` use it automatically; remove it
-(or set `GENESEED_TUI_CURSES=1`) to fall back to the classic curses panel. Either way,
-`setup` / `bootstrap` / `build` / `doctor` always run on a bare `python3` — Textual only
-ever powers the *browse/menu* experience, never the install path. Appearance of the
-curses panel is still tunable with `GENESEED_TUI_PLAIN=1` (calm, no emoji/animation) and
-`GENESEED_TUI_ASCII=1` (pure ASCII, for fonts that tofu box-drawing).
-
 ## Run `geneseed` from anywhere
 
 By default you invoke the launcher as `./geneseed` from inside the repo. To call it

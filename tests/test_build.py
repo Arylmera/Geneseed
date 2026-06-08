@@ -84,6 +84,35 @@ class BuildRoundTripTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class CircularIncludeTests(unittest.TestCase):
+    """INCLUDE resolution must catch a cycle and emit a visible marker rather than
+    recursing until Python raises RecursionError."""
+
+    def _render_in_temp_src(self, files: dict, entry: str) -> str:
+        tmp = Path(tempfile.mkdtemp())
+        orig = build.SRC
+        try:
+            build.SRC = tmp
+            for name, body in files.items():
+                (tmp / name).write_text(body, encoding="utf-8")
+            return build.render_file(tmp / entry, {})
+        finally:
+            build.SRC = orig
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_mutual_cycle_is_marked(self):
+        out = self._render_in_temp_src(
+            {"a.md": "A\n<!-- INCLUDE: b.md -->\n", "b.md": "B\n<!-- INCLUDE: a.md -->\n"},
+            "a.md",
+        )
+        self.assertIn("<!-- CIRCULAR INCLUDE: a.md -->", out)
+        self.assertIn("B", out)  # b is inlined once before the cycle back to a is caught
+
+    def test_self_include_is_marked(self):
+        out = self._render_in_temp_src({"s.md": "S\n<!-- INCLUDE: s.md -->\n"}, "s.md")
+        self.assertIn("<!-- CIRCULAR INCLUDE: s.md -->", out)
+
+
 class NativeLayerTests(unittest.TestCase):
     def test_readonly_agents_get_permission_block(self):
         _t, items = build.render_all("neutral")
