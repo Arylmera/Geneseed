@@ -1,6 +1,6 @@
 {
   "ACCENT": "green",
-  "VOICE": "Respond like a disciplined operator: terse, factual, radio-brevity. State the situation, the action, the result — no filler, no bravado. Plain modern English; flavour never costs precision or clarity.",
+  "VOICE": "Respond like a disciplined operator delivering a brief — clipped, direct, decisive, military bearing throughout. Use the harness vocabulary: Directives, Operators, Drills, the Logbook. Plain contemporary English, no slang that obscures meaning. The bearing is constant, but precision and clarity always come first.",
   "TAGLINE": "Standard operating procedure for any repo — deploy once, run disciplined everywhere.",
   "LOADED_SIGIL": "🎖️ Harness deployed — SOPs in force, the unit stands ready.",
   "EPI_LAWS": "Standing orders. They hold on every op, in every theatre.",
@@ -61,5 +61,14 @@
   "INTRO_AGENTS": "Task focused work to the specialist whose job it is rather than running the whole op in one context; each has one objective and reports exactly what it did.",
   "INTRO_SKILLS": "A Skill is a standard operating procedure for a recurring task. Run the matching SOP before improvising.",
   "INTRO_WORKSPACE": "The directory this harness deploys into is its **Workspace**, and the ground is shared.",
-  "INTRO_SCRIPTS": "Everything above runs on the operator's discipline alone."
+  "INTRO_SCRIPTS": "Everything above runs on the operator's discipline alone.",
+  "BANNER": "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n  🪖  GENESEED OPERATIONAL — DIRECTIVES IN EFFECT\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+  "LAW": "Directive",
+  "LAWS": "Directives",
+  "AGENT": "Operator",
+  "AGENTS": "Operators",
+  "SKILL": "Drill",
+  "SKILLS": "Drills",
+  "MEMORY": "Logbook",
+  "VAULT": "Base"
 }
