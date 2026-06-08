@@ -1464,7 +1464,6 @@ def _glyphs(ascii_mode):
         "up":    "^" if ascii_mode else "▴",
         "down":  "v" if ascii_mode else "▾",
         "head":  "*" if ascii_mode else "◆",
-        "agent": "@" if ascii_mode else "◆",
         "skill": "*" if ascii_mode else "✦",
         "law":   "#" if ascii_mode else "§",
     }
@@ -1557,6 +1556,7 @@ _ICONS = {
     "agent":     ("🤖", "◆", "@"),
     "skill":     ("✨", "✦", "*"),
     "law":       ("📜", "§", "#"),
+    "badge":     ("🧬", "⬡", "G"),
 }
 
 
@@ -1567,7 +1567,13 @@ def _icon(name: str) -> str:
 
 
 _MARKS = {"ok": ("✅", "✓", "+"), "fail": ("❌", "✗", "x"),
-          "warn": ("⚠️", "!", "!"), "info": ("ℹ️", "·", "-")}
+          "warn": ("⚠️", "!", "!"), "info": ("ℹ️", "·", "-"),
+          # in-progress / not-yet-run step marker (the bootstrap/doctor step list)
+          "pending": ("·", "·", "-"),
+          # diff file-status — same semantics as git M/A/D, tier-aware so ASCII honours it
+          "edited": ("📝", "~", "~"), "added": ("🆕", "+", "+"), "missing": ("🗑", "-", "-"),
+          # MCP server state in _mcp_view (on / off / not-installed)
+          "mcp_on": ("🟢", "●", "x"), "mcp_off": ("⚪", "○", "~"), "mcp_absent": ("⚫", "·", " ")}
 
 
 def _mark(kind: str) -> str:
@@ -1581,7 +1587,12 @@ _SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"          # braille spinner (single-widt
 
 
 def _spin(i: int) -> str:
-    """One spinner frame for tick `i` — a braille whirl, or `|/-\\` under ASCII mode."""
+    """One spinner frame for tick `i` — a braille whirl in the animated (emoji) tier,
+    `|/-\\` under ASCII. In the calm tiers (PLAIN, or any non-animated mode) motion is
+    suppressed: a static dot, so a per-keypress redraw never flickers a braille glyph
+    where the tier contract promises no motion."""
+    if not _TUI_ANIM:
+        return "-" if _TUI_ASCII else "·"
     frames = "|/-\\" if _TUI_ASCII else _SPIN
     return frames[i % len(frames)]
 
@@ -1620,6 +1631,26 @@ def _put(stdscr, y, x, s, attr=0):
             pass
 
 
+def _addch(stdscr, y, x, c, attr=0):
+    """Bounds-guarded single-cell draw — the `addch` sibling of `_put`. Clips to the
+    window and swallows the edge-cell curses.error, so the box/divider primitives never
+    crash on the last row/column. One source for the try/except every screen duplicated."""
+    import curses
+    h, w = stdscr.getmaxyx()
+    if 0 <= y < h and 0 <= x < w:
+        try:
+            stdscr.addch(y, x, c, attr)
+        except curses.error:
+            pass
+
+
+def _hline(stdscr, pal, y, x, w, attr=None):
+    """A horizontal rule of `w` display columns at (y, x): ACS ─, or ASCII `-` under
+    GENESEED_TUI_ASCII. One source for the inline `("-" if _TUI_ASCII else "─")*n` rules."""
+    ch = "-" if _TUI_ASCII else "─"
+    _put(stdscr, y, x, ch * max(0, w), pal["FRAME"] if attr is None else attr)
+
+
 def _clear_frame(stdscr):
     """Erase the frame *and* force a full physical repaint on the next refresh.
 
@@ -1638,7 +1669,7 @@ def _clear_frame(stdscr):
 def _topbar(stdscr, pal, text):
     """Top title bar (row 0), with the consistent badge glyph (🧬 in emoji mode)."""
     _, w = stdscr.getmaxyx()
-    badge = "🧬" if _TUI_EMOJI else _GLYPH["head"]
+    badge = _icon("badge")
     _put(stdscr, 0, 0, _fit(f"  {badge} {text}  ", w - 1), pal["BAR"])
 
 
@@ -1683,10 +1714,7 @@ def _vdiv(stdscr, pal, dx, y0, y1):
     import curses
     g = _bx(curses)
     for r in range(y0, y1):
-        try:
-            stdscr.addch(r, dx, g["v"], pal["FRAME"])
-        except curses.error:
-            pass
+        _addch(stdscr, r, dx, g["v"], pal["FRAME"])
 
 
 def _scrollbar(stdscr, pal, x, y0, view_h, top, total):
@@ -1725,10 +1753,7 @@ def _draw_box(stdscr, curses, y, x, hh, ww, attr=0) -> None:
     g = _bx(curses)
 
     def ch(yy, xx, c):
-        try:
-            stdscr.addch(yy, xx, c, attr)
-        except curses.error:
-            pass
+        _addch(stdscr, yy, xx, c, attr)
     x2, y2 = x + ww - 1, y + hh - 1
     ch(y, x, g["ul"]); ch(y, x2, g["ur"]); ch(y2, x, g["ll"]); ch(y2, x2, g["lr"])
     try:
@@ -1759,6 +1784,7 @@ def _tui_palette(curses, accent="cyan") -> dict:
         curses.init_pair(5, curses.COLOR_MAGENTA, -1)
         curses.init_pair(6, curses.COLOR_GREEN, -1)
         curses.init_pair(7, curses.COLOR_RED, -1)
+        curses.init_pair(8, curses.COLOR_YELLOW, -1)
         color = curses.has_colors()
     except curses.error:
         color = False
@@ -1772,17 +1798,30 @@ def _tui_palette(curses, accent="cyan") -> dict:
         "HEAD": (cp(1) | curses.A_BOLD) if color else curses.A_BOLD,
         "OK": (cp(6) | curses.A_BOLD) if color else curses.A_BOLD,
         "FAIL": (cp(7) | curses.A_BOLD) if color else curses.A_BOLD,
+        # WARN is yellow (distinct from red FAIL) so a warning never reads as a failure;
+        # MUTED is the dim attribute, formalised as a named slot for hints/secondary text.
+        "WARN": (cp(8) | curses.A_BOLD) if color else curses.A_BOLD,
+        "MUTED": curses.A_DIM,
     }
 
 
+_BAR_EIGHTHS = " ▏▎▍▌▋▊▉█"   # 0..8 eighths of a cell — sub-character resolution
+
+
 def _progress_bar(frac: float, width: int = 24) -> str:
-    # Full block (█, near-universal, single-width) on a blank track. Set
-    # GENESEED_TUI_ASCII=1 to fall back to a pure-ASCII bar if a font garbles it.
+    """A determinate bar exactly `width` display columns wide. In the emoji/plain tiers
+    it fills at 8-eighths sub-cell resolution (one partial block at the frontier) so the
+    bar advances smoothly instead of jumping a whole cell at a time; ASCII falls back to
+    a #/- bar (set GENESEED_TUI_ASCII=1 if a font garbles the block glyphs)."""
     frac = max(0.0, min(1.0, frac))
-    filled = int(round(frac * width))
     if _TUI_ASCII:
+        filled = int(round(frac * width))
         return "#" * filled + "-" * (width - filled)
-    return "█" * filled + " " * (width - filled)
+    eighths = int(round(frac * width * 8))
+    full, rem = divmod(eighths, 8)
+    if full >= width:
+        return "█" * width
+    return "█" * full + _BAR_EIGHTHS[rem] + " " * (width - full - 1)
 
 
 def _theme_preview(key):
@@ -1902,7 +1941,7 @@ def _menu(stdscr, curses, prompt, options, default=None, detail_fn=None, accent=
                     put(y, 3, _truncd(f"  {label}", w - 4), 0)
             dy = 2 + len(options) + 1
             if dy < h - 2:
-                put(dy - 1, 2, ("-" if _TUI_ASCII else "─") * (w - 4), pal["FRAME"])
+                _hline(stdscr, pal, dy - 1, 2, w - 4)
                 for j, seg in enumerate(textwrap.wrap(options[idx][2], w - 6)[:3]):
                     put(dy + j, 3, seg, curses.A_DIM)
 
@@ -2080,20 +2119,57 @@ def _doctor_view(stdscr, curses, pal) -> None:
     def put(y, x, s, a=0):
         _put(stdscr, y, x, s, a)
 
+    import threading
     state = {"i": 0, "total": 1, "label": "starting"}
 
-    def on_progress(i, total, label):
-        state.update(i=i, total=total, label=label)
+    def draw_progress(tick):
         _clear_frame(stdscr)
         h, w = stdscr.getmaxyx()
         _topbar(stdscr, pal, "Geneseed — health check")
-        frac = i / total if total else 0.0
-        put(2, 3, f"{_spin(i)} Validating:  {label}", pal["TITLE"])
+        frac = state["i"] / state["total"] if state["total"] else 0.0
+        put(2, 3, f"{_spin(tick)} Validating:  {state['label']}", pal["TITLE"])
         put(4, 3, f"[{_progress_bar(frac, max(10, min(40, w - 22)))}] {int(frac * 100):3d}%", pal["HEAD"])
         _botbar(stdscr, pal, "please wait…")
         stdscr.refresh()
 
-    themes, problems = _doctor_collect(on_progress=on_progress)
+    def on_progress(i, total, label):
+        # Data only in the animated tier (the clock loop below owns drawing). In the
+        # calm tiers there is no ticker thread, so draw per-check right here.
+        state.update(i=i, total=total, label=label)
+        if not _TUI_ANIM:
+            draw_progress(0)
+
+    result = {}
+    if _TUI_ANIM:
+        # Run the collect on a worker thread and redraw the spinner on an 80 ms clock
+        # (~12.5 fps, the canonical braille rate) so a slow check (e.g. the bundle-drift
+        # render) animates instead of appearing hung. Only the MAIN thread touches
+        # curses; the worker only renders/compares and updates the plain `state` dict
+        # (GIL-atomic, no lock needed).
+        done = threading.Event()
+
+        def _work():
+            try:
+                result["v"] = _doctor_collect(on_progress=on_progress)
+            except Exception as e:               # never leave the UI hung on a crash
+                result["v"] = ([], [f"health check crashed: {e}"])
+            finally:
+                done.set()
+
+        worker = threading.Thread(target=_work, daemon=True)
+        worker.start()
+        stdscr.timeout(80)
+        tick = 0
+        while not done.is_set():
+            draw_progress(tick)
+            stdscr.getch()          # blocks up to 80 ms, then returns -1 → next frame
+            tick += 1
+        worker.join()
+        stdscr.timeout(-1)          # restore blocking getch for the result list below
+    else:
+        draw_progress(0)
+        result["v"] = _doctor_collect(on_progress=on_progress)
+    themes, problems = result["v"]
     if problems:
         lines = [("fail", f"{len(problems)} problem(s) across {len(themes)} theme(s):"), ("", "")]
         lines += [("fail", p) for p in problems]
@@ -2131,6 +2207,10 @@ def _doctor_view(stdscr, curses, pal) -> None:
                 put(1 + r, 2, f"{_mark('ok')} {seg}", pal["OK"])
             elif kind == "fail":
                 put(1 + r, 2, f"{_mark('fail')} {seg}", pal["FAIL"])
+            elif kind == "warn":
+                put(1 + r, 2, f"{_mark('warn')} {seg}", pal["WARN"])
+            elif kind == "info":
+                put(1 + r, 2, f"{_mark('info')} {seg}", pal["MUTED"])
             else:
                 put(1 + r, 2, seg, 0)
         _scrollbar(stdscr, pal, w - 1, 1, body_h, top, len(flat))
@@ -2182,7 +2262,7 @@ def _info_screen(stdscr, curses, pal, title, lines, footer) -> None:
     # 'art' / 'dim' are flavour rows (banner, sigil, benediction): no status icon, no
     # wrap — pre-formatted lines drawn raw (clipped, not reflowed) so a theme banner
     # keeps its shape, in the accent ('art') or dimmed ('dim').
-    attr = {"ok": pal["OK"], "warn": pal["FAIL"], "info": 0,
+    attr = {"ok": pal["OK"], "warn": pal["WARN"], "info": pal["MUTED"],
             "art": pal["HEAD"], "dim": curses.A_DIM}
     top = 0
     while True:
@@ -2284,6 +2364,16 @@ def _setup_done_lines(flair: dict, theme, emit, out, root, ok) -> list:
 def _diff_view(stdscr, curses, pal) -> None:
     """Two-pane review of local edits: changed files on the left, the selected file's
     colored unified diff on the right (j/k file, PgUp/PgDn scroll, q close)."""
+    # One-shot "computing…" frame so the multi-second _diff_collect() (renders the whole
+    # harness into a temp dir to compare) never shows a blank screen. No loop — the
+    # results overwrite it on the first real frame; the spinner glyph is tier-gated.
+    _clear_frame(stdscr)
+    _topbar(stdscr, pal, "Review local edits")
+    h, w = stdscr.getmaxyx()
+    msg = f"{_spin(0)} computing diff" + ("..." if _TUI_ASCII else "…")
+    _put(stdscr, max(2, h // 2), max(2, (w - _dwidth(msg)) // 2), msg, pal["MUTED"])
+    _botbar(stdscr, pal, "")
+    stdscr.refresh()
     target, _theme, files = _diff_collect()
     if files is None:
         _info_screen(stdscr, curses, pal, "review local edits",
@@ -2296,7 +2386,6 @@ def _diff_view(stdscr, curses, pal) -> None:
                      [("ok", "No differences — the deployed harness matches source.")],
                      "Enter: close")
         return
-    sym = {"edited": "~", "added": "+", "missing": "-"}
     sel = 0
     dtop = 0
     list_top = 0
@@ -2334,7 +2423,7 @@ def _diff_view(stdscr, curses, pal) -> None:
                 attr = pal["FAIL"]
             else:
                 attr = pal["TITLE"]
-            put(1 + i, 0, f" {sym[st]} {f['rel']}".ljust(dx)[:dx], attr)
+            put(1 + i, 0, _fit(f" {_mark(st)} {f['rel']}", dx), attr)
         _vdiv(stdscr, pal, dx, 1, h - 1)
         diff = files[sel]["diff"]
         rx, rw = dx + 2, max(4, w - dx - 3)
@@ -2440,7 +2529,7 @@ def _memory_view(stdscr, curses, pal) -> None:
         _info_screen(stdscr, curses, pal, "memory",
                      [("ok", f"Memory is empty — {mdir}")], "Enter: close")
         return
-    sel = dtop = 0
+    sel = dtop = list_top = 0
     query = ""
     filtering = confirm = False
     while True:
@@ -2462,11 +2551,18 @@ def _memory_view(stdscr, curses, pal) -> None:
         _topbar(stdscr, pal, f"Memory  ·  {len(facts)} facts")
         dx = max(18, min(40, w // 3))
         body_h = h - 2
+        if sel < list_top:
+            list_top = sel
+        elif sel >= list_top + body_h:
+            list_top = sel - body_h + 1
+        list_top = _clamp(list_top, len(view), body_h)
         for i in range(body_h):
-            if i >= len(view):
+            fi = list_top + i
+            if fi >= len(view):
                 break
-            f = view[i]
-            put(1 + i, 0, f" {f['name']}".ljust(dx)[:dx], pal["SEL"] if i == sel else 0)
+            f = view[fi]
+            put(1 + i, 0, _fit(f" {_icon('memory')} {f['name']}", dx), pal["SEL"] if fi == sel else 0)
+        _scrollbar(stdscr, pal, dx - 1, 1, body_h, list_top, len(view))
         _vdiv(stdscr, pal, dx, 1, h - 1)
         rx, rw = dx + 2, max(4, w - dx - 3)
         body_lines = view[sel]["body"].splitlines() if view else []
@@ -2478,7 +2574,7 @@ def _memory_view(stdscr, curses, pal) -> None:
             di = dtop + i
             if di >= len(wrapped):
                 break
-            put(1 + i, rx, wrapped[di][:rw], pal["TITLE"] if di == 0 else 0)
+            put(1 + i, rx, wrapped[di][:rw], pal["HEAD"] if di == 0 else 0)
         if confirm and view:
             foot = f"  delete '{view[sel]['name']}' ?  y = yes   any other key = no  "
         elif filtering:
@@ -2586,18 +2682,18 @@ def _mcp_view(stdscr, curses, pal) -> None:
         put(2, 2, f"{path}  ({'exists' if path.exists() else 'will be created'})", curses.A_DIM)
         for i, nm in enumerate(names):
             st = _mcp_state(config, nm)
-            mark = {"enabled": "[x]", "disabled": "[~]", "absent": "[ ]"}[st]
+            mark = _mark({"enabled": "mcp_on", "disabled": "mcp_off", "absent": "mcp_absent"}[st])
             row = f"{mark} {_MCP_PRESETS[nm]['label']}  ({st})"
             y = 4 + i
             if y >= h - 6:
                 break
             if i == sel:
-                put(y, 2, f" {_SEL_G} {row} ".ljust(w - 4)[:w - 4], pal["SEL"])
+                put(y, 2, _fit(f" {_SEL_G} {row} ", w - 4), pal["SEL"])
             else:
                 put(y, 3, f"  {row}", 0)
         dy = 4 + min(len(names), max(1, h - 10)) + 1
         if dy < h - 2:
-            put(dy - 1, 2, ("-" if _TUI_ASCII else "─") * (w - 4), pal["FRAME"])
+            _hline(stdscr, pal, dy - 1, 2, w - 4)
             for j, seg in enumerate(textwrap.wrap(_MCP_PRESETS[names[sel]]["desc"], w - 6)[:4]):
                 if dy + j < h - 2:
                     put(dy + j, 3, seg, curses.A_DIM)
@@ -2889,7 +2985,7 @@ def _clean_line(s: str) -> str:
 
 
 def _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading="updating") -> None:
-    stdscr.erase()
+    _clear_frame(stdscr)   # full repaint so a narrowing spinner leaves no double-width ghost
     h, w = stdscr.getmaxyx()
 
     def put(y, x, s, a=0):
@@ -2904,13 +3000,14 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading="updating")
     def step_mark(st):
         if st == "running":
             return _spin(tick)
-        if _TUI_ASCII:
-            return {"pending": "-", "done": "+", "failed": "x"}.get(st, "-")
-        return {"pending": "·", "done": "✓", "failed": "✗"}.get(st, "·")
+        return {"pending": _mark("pending"), "done": _mark("ok"),
+                "failed": _mark("fail")}.get(st, _mark("pending"))
     for i, (title, _c) in enumerate(steps):
         st = status[i]
         attr = pal["HEAD"] if st == "running" else (curses.A_DIM if st == "pending" else 0)
-        put(2 + i, 3, f"[{step_mark(st)}] {title}", attr)
+        # _fit the mark to a fixed 2 columns so a width-2 emoji mark and a width-1 dot
+        # leave every step title starting at the same column (no per-row jitter).
+        put(2 + i, 3, f"{_fit(step_mark(st), 2)} {title}", attr)
     done = sum(1 for s in status if s in ("done", "failed"))
     w_bar = max(10, min(40, w - 22))
     put(2 + len(steps) + 1, 3,
@@ -2972,13 +3069,9 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
              ("Update factory & rebuild bundle", ["bash", str(here / "upgrade.sh"), ref])]
     status = _run_steps(stdscr, curses, pal, steps, heading="updating")
     failed = any(s == "failed" for s in status)
-    h, w = stdscr.getmaxyx()
-    msg = ("  a step FAILED — press any key to continue to setup  " if failed
-           else "  update complete — continuing to setup…  ")
-    try:
-        stdscr.addnstr(h - 1, 0, msg.ljust(w - 1), max(0, w - 1), pal["BAR"])
-    except curses.error:
-        pass
+    msg = ("a step FAILED — press any key to continue to setup" if failed
+           else "update complete — continuing to setup…")
+    _botbar(stdscr, pal, msg)
     stdscr.refresh()
     if failed:
         stdscr.getch()          # pause so the error is readable
@@ -3106,17 +3199,21 @@ def _splash(stdscr, curses, pal, theme_data) -> None:
                 raise StopIteration
             curses.napms(70)
         dash = "-" if _TUI_ASCII else "─"
-        for step in range(1, lw // 2 + 2):               # 2) strand sweeps across
+        steps = lw // 2 + 2
+        # Width-stable: the strand sweep totals ~700 ms on any terminal width (8–20 ms
+        # per step) instead of running longer the wider the wordmark.
+        step_ms = max(8, min(20, 700 // max(1, steps)))
+        for step in range(1, steps):                     # 2) strand sweeps across
             _put(stdscr, sy, lx, _truncd(dash * (step * 2), lw), pal["FRAME"])
             stdscr.refresh()
             if stdscr.getch() != -1:
                 raise StopIteration
-            curses.napms(14)
-        if sigil:                                        # 3) sigil settles beneath
-            _put(stdscr, sy + 2, max(0, (w - _dwidth(sigil)) // 2),
-                 _truncd(sigil, w - 2), pal["OK"])
+            curses.napms(step_ms)
+        if sigil:                                        # 3) sigil settles beneath, in
+            _put(stdscr, sy + 2, max(0, (w - _dwidth(sigil)) // 2),  # the theme accent
+                 _truncd(sigil, w - 2), pal["HEAD"])
             stdscr.refresh()
-        curses.napms(420)
+        curses.napms(280)
     except StopIteration:
         pass
     finally:
@@ -3173,14 +3270,16 @@ def _main_menu(stdscr) -> int:
         elif sel == "diff":
             _diff_view(stdscr, curses, pal)
         elif sel == "build":
-            curses.def_prog_mode()
-            curses.endwin()
-            run([sys.executable, str(BUILD)])
-            try:
-                input("\n[press Enter to return to the menu] ")
-            except EOFError:
-                pass
-            curses.reset_prog_mode()
+            # Stay inside curses with the progress UI (same path as the setup flow),
+            # instead of dropping to a bare shell and an input() pause.
+            status = _run_steps(stdscr, curses, pal,
+                                [("Build the harness", [sys.executable, str(BUILD)])],
+                                heading="building")
+            ok = bool(status) and status[0] == "done"
+            _info_screen(stdscr, curses, pal, "build",
+                         [("ok", "Build complete.")] if ok else
+                         [("fail", "Build failed — see the output above.")],
+                         "Enter: close")
         elif sel in ("update", "bootstrap"):
             _bootstrap_progress(stdscr, here, None)
             curses.endwin()
@@ -3191,8 +3290,9 @@ def cmd_menu(args: argparse.Namespace) -> int:
     """Interactive main menu — the default for a bare `./geneseed`. Falls back to a
     one-line command list off a TTY / on Windows / if curses is unavailable."""
     if sys.platform.startswith("win") or not sys.stdin.isatty():
-        print("Geneseed — run one of:  setup · bootstrap · update · build · doctor · diff · tui")
-        print("On a Unix terminal, `./geneseed` opens an interactive menu of these.")
+        print("Geneseed — no interactive menu here. Get started with:  python harness.py setup")
+        print("Other commands:  bootstrap · update · build · doctor · diff · tui")
+        print("On a Unix terminal, a bare `./geneseed` opens the interactive menu of these.")
         return 0
     try:
         import curses

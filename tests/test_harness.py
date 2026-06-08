@@ -754,6 +754,41 @@ class TuiHelperTests(unittest.TestCase):
         widths = {harness._dwidth(r) for r in rows}
         self.assertEqual(len(widths), 1)                  # every row the same width
 
+    def test_spin_is_static_when_motion_off(self):
+        # The calm tiers (PLAIN / non-animated) must not emit a braille glyph — _spin
+        # returns a tick-independent static mark so a per-keypress redraw never flickers.
+        saved = (harness._TUI_ANIM, harness._TUI_ASCII)
+        try:
+            harness._TUI_ANIM, harness._TUI_ASCII = False, False
+            self.assertEqual(harness._spin(0), "·")
+            self.assertEqual(harness._spin(7), "·")        # independent of the tick
+            harness._TUI_ASCII = True
+            self.assertEqual(harness._spin(3), "-")
+            harness._TUI_ANIM, harness._TUI_ASCII = True, False
+            self.assertIn(harness._spin(0), harness._SPIN)  # animated tier whirls
+        finally:
+            harness._TUI_ANIM, harness._TUI_ASCII = saved
+
+    def test_new_icon_and_mark_keys_present_and_ascii_pure(self):
+        self.assertIn("badge", harness._ICONS)
+        for k in ("pending", "edited", "added", "missing", "mcp_on", "mcp_off", "mcp_absent"):
+            self.assertIn(k, harness._MARKS)
+            self.assertTrue(all(ord(c) < 128 for c in harness._MARKS[k][2]))  # ASCII tier pure
+
+    def test_progress_bar_is_exact_width_at_sub_cell_resolution(self):
+        # The bar is always exactly `width` display columns, at any fraction, so it
+        # never drifts the surrounding layout — even mid-cell (eighths) fills.
+        for frac in (0.0, 0.03, 0.1, 0.5, 0.99, 1.0):
+            self.assertEqual(harness._dwidth(harness._progress_bar(frac, 24)), 24)
+        saved = harness._TUI_ASCII
+        try:
+            harness._TUI_ASCII = True
+            bar = harness._progress_bar(0.5, 10)
+            self.assertEqual(len(bar), 10)
+            self.assertTrue(set(bar) <= set("#-"))         # ASCII tier stays #/-
+        finally:
+            harness._TUI_ASCII = saved
+
 
 class SourceCompletenessGateTests(unittest.TestCase):
     """A partial src/ — an interrupted sync, or an AGENT.md table row whose spec file
