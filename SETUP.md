@@ -24,7 +24,8 @@ text prompts elsewhere) that asks for a theme and install mode, runs the right b
 and offers a health check. It works on every OS. Prefer to do it by hand?
 Pick a path below. Already installed? Bare **`./geneseed`** opens an interactive
 **main menu** — choose *Update & set up*, *Set up / re-theme*, *Browse*, *Health
-check*, *Build*, or *Diff* and it runs that flow. **`./geneseed bootstrap`** jumps
+check*, *Build*, *Diff*, or *MCP servers* (toggle MarkItDown & other MCP servers
+into your OpenCode config) and it runs that flow. **`./geneseed bootstrap`** jumps
 straight to update-then-setup; **`./geneseed setup`** straight to the wizard.
 
 | Path | Use when |
@@ -167,11 +168,66 @@ The `ingest` skill teaches the agent to convert a PDF/Word/PPTX/Excel/HTML file 
 URL to markdown before reading it — discovery and the read-the-docs law only see
 markdown. Install one converter and the skill uses it:
 
-- **MarkItDown** (Microsoft) — broadest (`pip install markitdown`), or its MCP server;
+- **MarkItDown** (Microsoft) — broadest (`pip install markitdown`), or its MCP server
+  (see [MarkItDown via MCP](#markitdown-via-mcp-opencode) below — preferred on an
+  MCP-capable host: zero per-call install, one low-cost tool);
 - **Pandoc** — excellent for Office/HTML (single binary);
 - **Docling** (IBM) — best for complex tables / scanned PDFs.
 
 The skill never installs a converter silently — if none is present it reports which to add.
+
+#### MarkItDown via MCP (OpenCode)
+
+Wire Microsoft's MarkItDown in as a **local MCP server** so the agent can convert
+PDF / Word / Excel / PowerPoint / HTML → Markdown on demand, exposing a single tool
+`convert_to_markdown(uri)` (`uri` accepts `file:`, `http:`, `https:`, or `data:`).
+The server runs locally and, once installed, does not hit PyPI again.
+
+**1. Install the server** (pipx keeps it in its own venv):
+
+```
+brew install pipx && pipx ensurepath        # macOS;  Debian/Ubuntu: sudo apt install pipx && pipx ensurepath
+pipx install markitdown-mcp
+markitdown-mcp --help                        # verify it resolves
+```
+
+Optional OCR / image / audio extras (must land in the *same* venv):
+`pipx inject markitdown-mcp "markitdown[all]"` — needed for scanned/image-only PDFs,
+which otherwise return empty.
+
+**2. Corporate TLS (only on a network with SSL inspection).** pipx uses **uv** as its
+backend; uv ships its own root CAs and ignores the OS trust store, so a proxy's
+internal CA fails with `invalid peer certificate: UnknownIssuer`. Point uv at the OS
+trust store *before* installing — don't disable verification:
+
+```
+echo 'export UV_SYSTEM_CERTS=true' >> ~/.zshrc && source ~/.zshrc   # older uv: UV_NATIVE_TLS=true
+# fallback: export SSL_CERT_FILE=/path/to/corporate-root-ca.pem
+```
+
+**3. Register it in `opencode.json`** — Geneseed's
+[`adapters/opencode/opencode.json`](adapters/opencode/opencode.json) already carries
+this block; merge it into your config (global `~/.config/opencode/opencode.json` or
+per-repo) under the `mcp` key, alongside any servers you already have:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "markitdown": { "type": "local", "command": ["markitdown-mcp"], "enabled": true }
+  }
+}
+```
+
+If `markitdown-mcp` is not on PATH in the shell OpenCode launches from, use the
+zero-install uv form instead: `"command": ["uvx", "markitdown-mcp"]`.
+
+Prefer not to hand-edit JSON? `./geneseed` → **MCP servers** toggles this exact block
+into your project or global `opencode.json` (and enables/disables it) for you.
+
+**4. Verify.** Restart OpenCode, then `opencode mcp` should list `markitdown` connected.
+The `ingest` skill auto-prefers an MCP converter when one is exposed, so a prompt like
+*"convert file:///path/to/spec.pdf to markdown"* now just works.
 
 ### Environment knobs
 

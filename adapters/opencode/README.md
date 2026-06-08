@@ -328,6 +328,27 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   for the hot skill set (commit, plan, code-review, review-response, verify, ship, debug,
   research) so they get `/name` triggers, alongside the native skills. Off by default.
 
+## MCP servers — document conversion (MarkItDown)
+
+OpenCode loads MCP servers from the `mcp` key of `opencode.json`. The baseline
+[`opencode.json`](opencode.json) registers one **local** server — Microsoft's
+**MarkItDown** — so the `ingest` skill can convert PDF / Office / HTML → Markdown
+through a single low-cost tool, `convert_to_markdown(uri)`, instead of shelling out
+to a converter:
+
+```json
+"mcp": {
+  "markitdown": { "type": "local", "command": ["markitdown-mcp"], "enabled": true }
+}
+```
+
+It's a *reference* entry, not a hard dependency: install the server with
+`pipx install markitdown-mcp` (or swap the command to `["uvx", "markitdown-mcp"]` for
+the zero-install uv form), or drop the block if you don't want it — the skill falls
+back to a CLI converter (MarkItDown / Pandoc / Docling) and never installs one
+silently. Full runbook, including the corporate-TLS (`UV_SYSTEM_CERTS`) step and the
+OCR extras: [SETUP.md → MarkItDown via MCP](../../SETUP.md#markitdown-via-mcp-opencode).
+
 ## Notes
 
 - Project config beats global; `./opencode.json` or `.opencode/opencode.json`

@@ -1010,6 +1010,88 @@ def _unmerge_opencode_json(path: Path, entry: str) -> bool:
     return True
 
 
+# ---- MCP servers (OpenCode) -------------------------------------------------
+# Known, ready-to-wire MCP server presets the TUI can toggle into an opencode.json.
+# Each `block` is written verbatim under the config's `mcp` key. Registering a server
+# only points OpenCode at a command — the user still installs the tool itself (the
+# harness never installs a converter silently; see SETUP.md → "MarkItDown via MCP").
+_MCP_PRESETS = {
+    "markitdown": {
+        "label": "MarkItDown",
+        "desc": "PDF / Office / HTML -> Markdown for the ingest skill. Install it with "
+                "`pipx install markitdown-mcp` (or switch the command to "
+                "[\"uvx\", \"markitdown-mcp\"]). Exposes one tool: convert_to_markdown(uri).",
+        "block": {"type": "local", "command": ["markitdown-mcp"], "enabled": True},
+    },
+}
+
+
+def _mcp_apply(config: dict, name: str, block: "dict | None") -> dict:
+    """Pure: return a copy of `config` with MCP server `name` set to `block`, or
+    removed when `block` is None. Never touches another key; drops an emptied `mcp`
+    map; keeps `$schema` so a freshly created file is valid."""
+    cfg = dict(config)
+    cfg.setdefault("$schema", "https://opencode.ai/config.json")
+    servers = dict(cfg.get("mcp") or {})
+    if block is None:
+        servers.pop(name, None)
+    else:
+        servers[name] = block
+    if servers:
+        cfg["mcp"] = servers
+    else:
+        cfg.pop("mcp", None)
+    return cfg
+
+
+def _mcp_state(config: dict, name: str) -> str:
+    """'enabled' | 'disabled' | 'absent' for server `name`. A server with no explicit
+    `enabled` key counts as enabled (OpenCode's default)."""
+    server = (config.get("mcp") or {}).get(name)
+    if not isinstance(server, dict):
+        return "absent"
+    return "enabled" if server.get("enabled", True) else "disabled"
+
+
+def _mcp_set_enabled(config: dict, name: str, enabled: bool) -> dict:
+    """Pure: flip a present server's `enabled` flag. No-op when the server is absent."""
+    server = (config.get("mcp") or {}).get(name)
+    if not isinstance(server, dict):
+        return config
+    block = dict(server)
+    block["enabled"] = enabled
+    return _mcp_apply(config, name, block)
+
+
+def _mcp_load(path: Path) -> dict:
+    """Read an opencode.json into a dict; {} if missing or malformed."""
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _mcp_save(path: Path, config: dict) -> None:
+    """Write `config` back as pretty JSON (the same shape build.py emits)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+
+def _mcp_targets() -> "list[tuple[str, Path]]":
+    """Candidate opencode.json files to manage, most-local first: the current project's,
+    then OpenCode's global config dir. Both are offered whether or not they exist yet —
+    choosing one creates it on first write."""
+    targets = [("this project", Path.cwd() / "opencode.json")]
+    try:
+        targets.append(("global config", build._opencode_config_dir() / "opencode.json"))
+    except Exception:
+        pass
+    return targets
+
+
 def _archive_memory(memory_dir: Path) -> Path:
     """Move a memory store into a timestamped snapshot under a sibling
     `archived-memory/` (created if absent). Memory is NEVER deleted — only set aside,
@@ -2237,6 +2319,83 @@ def _status_view(stdscr, curses, pal) -> None:
     _info_screen(stdscr, curses, pal, "status", lines, "Enter: close")
 
 
+def _mcp_view(stdscr, curses, pal) -> None:
+    """Toggle known MCP servers into an OpenCode config. Each change rewrites the
+    chosen opencode.json non-destructively — only the `mcp` block is touched — so a
+    server is wired in (or out) without disturbing `instructions`, `permission`, or
+    anything else the file already holds."""
+    import textwrap
+    targets = _mcp_targets()
+    ti, sel, msg = 0, 0, ""
+    names = list(_MCP_PRESETS)
+    while True:
+        label, path = targets[ti]
+        config = _mcp_load(path)
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+
+        def put(y, x, s, a=0):
+            _put(stdscr, y, x, s, a)
+
+        if _too_small(stdscr, 11, 44):
+            stdscr.refresh()
+            if stdscr.getch() in (ord("q"), 27):
+                return
+            continue
+        _topbar(stdscr, pal, "Geneseed — MCP servers (OpenCode)")
+        put(1, 2, f"target: {label}", pal["HEAD"])
+        put(2, 2, f"{path}  ({'exists' if path.exists() else 'will be created'})", curses.A_DIM)
+        for i, nm in enumerate(names):
+            st = _mcp_state(config, nm)
+            mark = {"enabled": "[x]", "disabled": "[~]", "absent": "[ ]"}[st]
+            row = f"{mark} {_MCP_PRESETS[nm]['label']}  ({st})"
+            y = 4 + i
+            if y >= h - 6:
+                break
+            if i == sel:
+                put(y, 2, f" {_SEL_G} {row} ".ljust(w - 4)[:w - 4], pal["SEL"])
+            else:
+                put(y, 3, f"  {row}", 0)
+        dy = 4 + min(len(names), max(1, h - 10)) + 1
+        if dy < h - 2:
+            put(dy - 1, 2, ("-" if _TUI_ASCII else "─") * (w - 4), pal["FRAME"])
+            for j, seg in enumerate(textwrap.wrap(_MCP_PRESETS[names[sel]]["desc"], w - 6)[:4]):
+                if dy + j < h - 2:
+                    put(dy + j, 3, seg, curses.A_DIM)
+        if msg:
+            put(h - 2, 2, msg[:w - 4], pal["OK"])
+        _botbar(stdscr, pal,
+                "↑↓ move · Enter add/remove · e enable/disable · t target · q back")
+        stdscr.refresh()
+        c = stdscr.getch()
+        if c in (ord("q"), 27):
+            return
+        elif c in (curses.KEY_DOWN, ord("j")):
+            sel, msg = (sel + 1) % len(names), ""
+        elif c in (curses.KEY_UP, ord("k")):
+            sel, msg = (sel - 1) % len(names), ""
+        elif c in (ord("t"), ord("T")):
+            ti, msg = (ti + 1) % len(targets), ""
+        elif c in (curses.KEY_ENTER, 10, 13, ord(" ")):
+            nm = names[sel]
+            if _mcp_state(config, nm) == "absent":
+                config = _mcp_apply(config, nm, dict(_MCP_PRESETS[nm]["block"]))
+                msg = f"added {nm} → {path.name}"
+            else:
+                config = _mcp_apply(config, nm, None)
+                msg = f"removed {nm} from {path.name}"
+            _mcp_save(path, config)
+        elif c in (ord("e"), ord("E")):
+            nm = names[sel]
+            st = _mcp_state(config, nm)
+            if st == "absent":
+                msg = "add it first (Enter), then enable/disable"
+            else:
+                config = _mcp_set_enabled(config, nm, st == "disabled")
+                _mcp_save(path, config)
+                msg = f"{nm} {'enabled' if st == 'disabled' else 'disabled'}"
+
+
 def _tui_loop(stdscr, inv: dict) -> None:
     import curses
     import textwrap
@@ -2620,6 +2779,7 @@ _MENU_ACTIONS = [
     ("bootstrap", "Update & set up", "Pull the latest from upstream, then run the setup wizard."),
     ("build", "Rebuild bundle", "Re-render the harness from src."),
     ("memory", "Memory", "Browse / search the memory store; delete stale facts."),
+    ("mcp", "MCP servers", "Wire document conversion (MarkItDown) & other MCP servers into OpenCode."),
     ("status", "Status", "Theme, install mode, counts, and the memory store."),
     ("quit", "Quit", "Leave."),
     # 'doctor' (Health check) intentionally not listed: it runs after setup and via
@@ -2647,6 +2807,8 @@ def _main_menu(stdscr) -> int:
             _doctor_view(stdscr, curses, pal)
         elif sel == "memory":
             _memory_view(stdscr, curses, pal)
+        elif sel == "mcp":
+            _mcp_view(stdscr, curses, pal)
         elif sel == "status":
             _status_view(stdscr, curses, pal)
         elif sel == "setup":

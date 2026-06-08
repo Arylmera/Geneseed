@@ -169,6 +169,24 @@ class OpencodeExtrasTests(unittest.TestCase):
         finally:
             shutil.rmtree(d, ignore_errors=True)
 
+    def test_merge_preserves_mcp_block(self):
+        # The markitdown MCP server (and any user-added server) lives under `mcp`;
+        # a re-emit must never clobber it — only `instructions` is merged in.
+        import json as _json
+        d = Path(tempfile.mkdtemp())
+        try:
+            cfg = d / "opencode.json"
+            cfg.write_text(_json.dumps({
+                "mcp": {"markitdown": {"type": "local",
+                                       "command": ["markitdown-mcp"], "enabled": True}}
+            }), encoding="utf-8")
+            build._merge_opencode_json(cfg, "AGENT.md")
+            data = _json.loads(cfg.read_text(encoding="utf-8"))
+            self.assertEqual(data["mcp"]["markitdown"]["command"], ["markitdown-mcp"])
+            self.assertIn("AGENT.md", data["instructions"])
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

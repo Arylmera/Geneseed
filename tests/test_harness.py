@@ -401,6 +401,66 @@ class RenderedCheckTests(unittest.TestCase):
         self.assertEqual(harness._rendered_problems(ROOT / "does-not-exist"), [])
 
 
+class McpServerTests(unittest.TestCase):
+    """The pure logic behind the TUI's MCP-servers screen: toggling a server block in
+    an opencode.json without disturbing anything else."""
+
+    def test_apply_adds_and_preserves_other_keys(self):
+        cfg = {"$schema": "x", "instructions": ["AGENT.md"],
+               "permission": {"bash": "allow"}}
+        block = harness._MCP_PRESETS["markitdown"]["block"]
+        out = harness._mcp_apply(cfg, "markitdown", block)
+        self.assertEqual(out["mcp"]["markitdown"]["command"], ["markitdown-mcp"])
+        self.assertEqual(out["instructions"], ["AGENT.md"])      # untouched
+        self.assertEqual(out["permission"], {"bash": "allow"})   # untouched
+        self.assertEqual(cfg.get("mcp"), None)                   # input not mutated
+
+    def test_apply_remove_drops_empty_mcp_map(self):
+        cfg = {"mcp": {"markitdown": {"type": "local"}}}
+        out = harness._mcp_apply(cfg, "markitdown", None)
+        self.assertNotIn("mcp", out)                             # emptied map removed
+        self.assertIn("$schema", out)                            # still a valid file
+
+    def test_apply_remove_keeps_other_servers(self):
+        cfg = {"mcp": {"markitdown": {"type": "local"}, "other": {"type": "local"}}}
+        out = harness._mcp_apply(cfg, "markitdown", None)
+        self.assertEqual(list(out["mcp"]), ["other"])
+
+    def test_state_reports_enabled_disabled_absent(self):
+        self.assertEqual(harness._mcp_state({}, "markitdown"), "absent")
+        self.assertEqual(
+            harness._mcp_state({"mcp": {"markitdown": {"enabled": True}}}, "markitdown"),
+            "enabled")
+        self.assertEqual(
+            harness._mcp_state({"mcp": {"markitdown": {"enabled": False}}}, "markitdown"),
+            "disabled")
+        # no explicit flag == OpenCode's default (enabled)
+        self.assertEqual(
+            harness._mcp_state({"mcp": {"markitdown": {}}}, "markitdown"), "enabled")
+
+    def test_set_enabled_toggles_only_that_server(self):
+        cfg = {"mcp": {"markitdown": {"type": "local", "enabled": True}}}
+        off = harness._mcp_set_enabled(cfg, "markitdown", False)
+        self.assertFalse(off["mcp"]["markitdown"]["enabled"])
+        self.assertEqual(off["mcp"]["markitdown"]["type"], "local")   # other fields kept
+        self.assertEqual(harness._mcp_set_enabled({}, "markitdown", True), {})  # absent no-op
+
+    def test_load_save_roundtrip_and_malformed(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            path = d / "opencode.json"
+            self.assertEqual(harness._mcp_load(path), {})            # missing -> {}
+            cfg = harness._mcp_apply({}, "markitdown",
+                                     harness._MCP_PRESETS["markitdown"]["block"])
+            harness._mcp_save(path, cfg)
+            self.assertEqual(harness._mcp_load(path)["mcp"]["markitdown"]["command"],
+                             ["markitdown-mcp"])
+            path.write_text("{not json", encoding="utf-8")
+            self.assertEqual(harness._mcp_load(path), {})            # malformed -> {}
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 class SetupArgsTests(unittest.TestCase):
     def test_global_omits_out_and_root(self):
         self.assertEqual(
