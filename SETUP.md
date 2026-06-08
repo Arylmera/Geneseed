@@ -268,6 +268,34 @@ skills, and laws listed on the left, the selected item's full spec on the right
 (PgUp/PgDn to scroll it) — and runs build/doctor/diff (and `u` to update) with a
 keystroke.
 
+## Run `geneseed` from anywhere
+
+By default you invoke the launcher as `./geneseed` from inside the repo. To call it
+like any other command — plain `geneseed` from any directory — put it on your `PATH`:
+
+```
+./geneseed link                    # symlink into ~/.local/bin (no sudo); pass a dir to override
+./geneseed link /usr/local/bin     # e.g. a system-wide bin dir (may prompt for sudo)
+```
+
+`link` creates a symlink to the launcher and tells you whether the target dir is on
+your `PATH` (and, if not, the one line to add it). The launcher resolves symlinks, so
+it still finds `rituals/harness.py` and the sibling scripts no matter where the link
+lives. Once it's on `PATH`, drop the `./`:
+
+```
+geneseed            # the interactive main menu, from any directory
+geneseed build      # …and every subcommand
+```
+
+Remove the symlink with `./geneseed unlink` (it clears `geneseed` links from `PATH`
+and the common bin dirs). Prefer a shell function over a symlink? Add one to your rc
+instead — it does the same job:
+
+```
+echo 'geneseed() { "'"$PWD"'/geneseed" "$@"; }' >> ~/.zshrc   # or ~/.bashrc
+```
+
 ## Upgrade
 
 ```

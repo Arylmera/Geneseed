@@ -68,6 +68,7 @@ Prefer to jump straight in? `./geneseed setup` (guided install) or `./geneseed t
 Geneseed/
 ├── build.py              generator (stdlib only)
 ├── geneseed              launcher: bare `./geneseed` = interactive main menu; + subcommands
+│                         (`./geneseed link` puts it on PATH so `geneseed` runs from anywhere)
 ├── bootstrap             one-shot: update everything (sync + upgrade), then run setup
 ├── upgrade.sh            self-upgrade from the published source
 ├── sync-self.sh          meta-updater: refreshes the launcher + upgrade scripts

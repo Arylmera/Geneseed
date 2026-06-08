@@ -13,6 +13,8 @@
 #     ./geneseed context|learn|prompt [args]
 #     ./geneseed upgrade [ref] [theme]    self-upgrade from the published source
 #     ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
+#     ./geneseed link [dir]               put `geneseed` on PATH (run it from anywhere)
+#     ./geneseed unlink                   remove the on-PATH launcher symlink
 #     ./geneseed help
 #
 # Bare `./geneseed` opens an interactive main menu listing every action (update,
@@ -24,7 +26,16 @@
 # before sync-self rewrites it on disk.
 
 set -eo pipefail
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve through symlinks so the launcher works when invoked via a symlink on
+# PATH (see `geneseed link`): HERE must be the real repo dir, not the link's dir,
+# or rituals/harness.py and the sibling scripts would not be found.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  dir="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  case "$SOURCE" in /*) ;; *) SOURCE="$dir/$SOURCE" ;; esac
+done
+HERE="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 PY="${PYTHON:-python3}"
 
 # Bare `./geneseed` opens the interactive main menu.
@@ -46,6 +57,59 @@ case "$cmd" in
   sync-self)
     shift || true; exec "$HERE/sync-self.sh" "$@"
     ;;
+  link)
+    # Put `geneseed` on PATH so it runs from any directory (not just ./geneseed).
+    # Symlinks into a bin dir — default ~/.local/bin (no sudo), else /usr/local/bin.
+    shift || true
+    target_dir="${1:-}"
+    if [ -z "$target_dir" ]; then
+      if [ -d "$HOME/.local/bin" ] || mkdir -p "$HOME/.local/bin" 2>/dev/null; then
+        target_dir="$HOME/.local/bin"
+      else
+        target_dir="/usr/local/bin"
+      fi
+    fi
+    mkdir -p "$target_dir" 2>/dev/null || true
+    dest="$target_dir/geneseed"
+    if ! ln -sf "$HERE/geneseed" "$dest" 2>/dev/null; then
+      if command -v sudo >/dev/null 2>&1 && sudo ln -sf "$HERE/geneseed" "$dest"; then
+        :
+      else
+        echo "geneseed: could not write $dest — pick a writable dir, e.g.:" >&2
+        echo "  ./geneseed link \"\$HOME/.local/bin\"" >&2
+        exit 1
+      fi
+    fi
+    echo "geneseed: linked $dest -> $HERE/geneseed"
+    case ":$PATH:" in
+      *":$target_dir:"*)
+        echo "geneseed: '$target_dir' is on PATH — run 'geneseed' from anywhere." ;;
+      *)
+        echo "geneseed: NOTE '$target_dir' is not on your PATH. Add it, e.g.:"
+        echo "  echo 'export PATH=\"$target_dir:\$PATH\"' >> ~/.zshrc   # or ~/.bashrc"
+        echo "  then restart your shell." ;;
+    esac
+    ;;
+  unlink)
+    # Remove geneseed symlinks created by `link` from PATH + the common bin dirs.
+    shift || true
+    removed=0
+    seen=" "
+    for d in "$HOME/.local/bin" "/usr/local/bin" $(printf '%s' "$PATH" | tr ':' ' '); do
+      case "$seen" in *" $d "*) continue ;; esac
+      seen="$seen$d "
+      f="$d/geneseed"
+      [ -L "$f" ] || continue
+      case "$(basename "$(readlink "$f")")" in
+        geneseed) ;;
+        *) continue ;;
+      esac
+      if rm -f "$f" 2>/dev/null || { command -v sudo >/dev/null 2>&1 && sudo rm -f "$f"; }; then
+        echo "geneseed: removed $f"; removed=1
+      fi
+    done
+    [ "$removed" -eq 0 ] && echo "geneseed: no linked launcher found on PATH"
+    ;;
   -h|--help|help)
     cat <<'USAGE'
 geneseed — front door for the Geneseed harness
@@ -61,6 +125,11 @@ geneseed — front door for the Geneseed harness
   ./geneseed uninstall [--yes]        remove a global install (keeps memory)
   ./geneseed upgrade [ref] [theme]    self-upgrade from the published source
   ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
+  ./geneseed link [dir]               put `geneseed` on PATH so it runs from any directory
+                                      (default ~/.local/bin; pass a dir to override)
+  ./geneseed unlink                   remove the on-PATH launcher symlink
+
+Once linked and on PATH, drop the leading `./` — just `geneseed`, `geneseed build`, etc.
 USAGE
     ;;
   *)
