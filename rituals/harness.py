@@ -2984,20 +2984,45 @@ def _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading="updating"
     return p.wait()
 
 
-def _run_steps(stdscr, curses, pal, steps, heading="working") -> list:
-    """Run each (title, cmd) step in the progress UI; return the per-step status list."""
+def _run_steps(stdscr, curses, pal, steps, heading="working", attempts=3) -> list:
+    """Run each (title, cmd) step in the progress UI. Each step is retried up to
+    `attempts` times with exponential backoff, so a transient failure (a network blip,
+    a CDN snapshot still catching up) self-heals without a manual re-run. If a step
+    still fails after every attempt, the chain STOPS — the remaining steps stay
+    `pending` rather than running on top of a broken one. Returns the per-step status
+    list (so the caller can tell success from failure)."""
+    import time
     status = ["pending"] * len(steps)
     log: list[str] = []
-    for i, (_title, cmd) in enumerate(steps):
-        status[i] = "running"
+    for i, (title, cmd) in enumerate(steps):
+        delay = 2
+        for attempt in range(1, attempts + 1):
+            status[i] = "running"
+            _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
+            rc = _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading)
+            if rc == 0:
+                status[i] = "done"
+                break
+            if attempt < attempts:
+                log.append(f"[geneseed] '{title}' failed (rc={rc}) — retrying in {delay}s "
+                           f"(attempt {attempt + 1}/{attempts}) ...")
+                _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
+                time.sleep(delay)
+                delay *= 2
+            else:
+                status[i] = "failed"
+                log.append(f"[geneseed] FAILED: '{title}' after {attempts} attempts "
+                           f"(rc={rc}) — see the output above.")
         _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
-        rc = _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading)
-        status[i] = "done" if rc == 0 else "failed"
-        _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
+        if status[i] == "failed":
+            break                        # stop the chain — never run a later step on a broken one
     return status
 
 
-def _bootstrap_progress(stdscr, here, ref) -> None:
+def _bootstrap_progress(stdscr, here, ref) -> bool:
+    """Run the update steps (each auto-retried) and report whether they ALL succeeded.
+    Returns True on full success, False if a step failed — the caller then skips setup
+    rather than running it on top of a broken update."""
     import curses
     pal = _tui_palette(curses)
     curses.curs_set(0)
@@ -3007,35 +3032,64 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
     steps = [("Refresh orchestration scripts", ["bash", str(here / "sync-self.sh"), ref]),
              ("Update factory & rebuild bundle", ["bash", str(here / "upgrade.sh"), ref])]
     status = _run_steps(stdscr, curses, pal, steps, heading="updating")
-    failed = any(s == "failed" for s in status)
+    ok = all(s == "done" for s in status)
     h, w = stdscr.getmaxyx()
-    msg = ("  a step FAILED — press any key to continue to setup  " if failed
-           else "  update complete — continuing to setup…  ")
+    msg = ("  update complete — continuing…  " if ok
+           else "  update FAILED — fix the error above, then re-run · setup skipped · press any key  ")
     try:
         stdscr.addnstr(h - 1, 0, msg.ljust(w - 1), max(0, w - 1), pal["BAR"])
     except curses.error:
         pass
     stdscr.refresh()
-    if failed:
-        stdscr.getch()          # pause so the error is readable
-    else:
+    if ok:
         curses.napms(700)       # brief beat, then continue automatically
+    else:
+        stdscr.getch()          # pause so the captured error is readable
+    return ok
 
 
-def _bootstrap_plain(here, ref) -> None:
-    """Non-curses fallback: run the update steps with plain output (never fatal)."""
+def _retry_plain(label, cmd, attempts=3) -> bool:
+    """Run `cmd` with plain output, retrying up to `attempts` times with exponential
+    backoff. Returns True on success, False once every attempt has failed."""
+    import time
+    delay = 2
+    for attempt in range(1, attempts + 1):
+        print(f"[geneseed] {label} (attempt {attempt}/{attempts}) ...")
+        try:
+            rc = subprocess.run(cmd).returncode
+        except OSError as e:
+            print(f"[geneseed] cannot run {cmd[0]}: {e}")
+            rc = 127
+        if rc == 0:
+            return True
+        if attempt < attempts:
+            print(f"[geneseed] failed (rc={rc}) — retrying in {delay}s ...")
+            time.sleep(delay)
+            delay *= 2
+    print(f"[geneseed] FAILED: {label} after {attempts} attempts.")
+    return False
+
+
+def _bootstrap_plain(here, ref) -> bool:
+    """Non-curses fallback: run the update steps with plain output, each auto-retried.
+    Stops on the first step that fails (so a broken update never cascades) and reports
+    whether everything succeeded."""
     r = ref or "main"
-    print("[geneseed] refreshing orchestration scripts ...")
-    run(["bash", str(here / "sync-self.sh"), r])
-    print("[geneseed] updating factory + rebuilding ...")
-    run(["bash", str(here / "upgrade.sh"), r])
+    if not _retry_plain("refreshing orchestration scripts", ["bash", str(here / "sync-self.sh"), r]):
+        return False
+    if not _retry_plain("updating factory + rebuilding", ["bash", str(here / "upgrade.sh"), r]):
+        return False
+    return True
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> int:
     """Update everything (sync scripts + upgrade), shown in a curses progress screen
     where supported, then hand off to a FRESH setup process so the wizard runs the
-    just-updated code. `--no-setup` stops after the update."""
+    just-updated code. Each update step auto-retries; if the update fails, setup is
+    SKIPPED (it would otherwise run on top of a broken update) and a non-zero code is
+    returned. `--no-setup` stops after the update either way."""
     here = Path(__file__).resolve().parent.parent
+    ok = True
     if (not sys.platform.startswith("win")) and sys.stdin.isatty():
         try:
             import curses
@@ -3044,12 +3098,16 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
                 locale.setlocale(locale.LC_ALL, "")
             except locale.Error:
                 pass
-            curses.wrapper(_bootstrap_progress, here, args.ref)
+            ok = bool(curses.wrapper(_bootstrap_progress, here, args.ref))
         except Exception as e:
             sys.stderr.write(f"[bootstrap] progress UI unavailable ({e}); running plainly.\n")
-            _bootstrap_plain(here, args.ref)
+            ok = _bootstrap_plain(here, args.ref)
     else:
-        _bootstrap_plain(here, args.ref)
+        ok = _bootstrap_plain(here, args.ref)
+    if not ok:
+        sys.stderr.write("[bootstrap] update did not complete — fix the error above and "
+                         "re-run. Setup was skipped so it never runs on a broken update.\n")
+        return 1
     if not args.no_setup:
         # Re-exec the freshly-updated harness so setup uses the new code (this running
         # process still holds the pre-update modules in memory).
@@ -3218,9 +3276,12 @@ def _main_menu(stdscr) -> int:
                 pass
             curses.reset_prog_mode()
         elif sel in ("update", "bootstrap"):
-            _bootstrap_progress(stdscr, here, None)
+            ok = _bootstrap_progress(stdscr, here, None)
             curses.endwin()
-            os.execv(sys.executable, [sys.executable, hp, "setup" if sel == "bootstrap" else "menu"])
+            # On a FAILED update, never hand off to setup (it would run on broken code) —
+            # re-exec back into the menu so the user can read the error and retry.
+            nxt = "setup" if (sel == "bootstrap" and ok) else "menu"
+            os.execv(sys.executable, [sys.executable, hp, nxt])
 
 
 def cmd_menu(args: argparse.Namespace) -> int:
