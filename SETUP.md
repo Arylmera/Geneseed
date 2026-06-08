@@ -24,8 +24,9 @@ text prompts elsewhere) that asks for a theme and install mode, runs the right b
 and offers a health check. It works on every OS. Prefer to do it by hand?
 Pick a path below. Already installed? Bare **`./geneseed`** opens an interactive
 **main menu** — choose *Update & set up*, *Set up / re-theme*, *Browse*, *Health
-check*, *Build*, *Diff*, or *MCP servers* (toggle MarkItDown & other MCP servers
-into your OpenCode config) and it runs that flow. **`./geneseed bootstrap`** jumps
+check*, *Build*, *Diff*, or *Settings* (a submenu for MCP servers — toggle MarkItDown
+& other MCP servers into your OpenCode config — and the PATH install) and it runs that
+flow. **`./geneseed bootstrap`** jumps
 straight to update-then-setup; **`./geneseed setup`** straight to the wizard.
 
 | Path | Use when |
@@ -222,7 +223,7 @@ per-repo) under the `mcp` key, alongside any servers you already have:
 If `markitdown-mcp` is not on PATH in the shell OpenCode launches from, use the
 zero-install uv form instead: `"command": ["uvx", "markitdown-mcp"]`.
 
-Prefer not to hand-edit JSON? `./geneseed` → **MCP servers** toggles this exact block
+Prefer not to hand-edit JSON? `./geneseed` → **Settings** → **MCP servers** toggles this exact block
 into your project or global `opencode.json` (and enables/disables it) for you.
 
 **4. Verify.** Restart OpenCode, then `opencode mcp` should list `markitdown` connected.
@@ -267,6 +268,36 @@ On a Unix terminal, `./geneseed tui` opens a two-pane, colorized panel — agent
 skills, and laws listed on the left, the selected item's full spec on the right
 (PgUp/PgDn to scroll it) — and runs build/doctor/diff (and `u` to update) with a
 keystroke.
+
+## Run `geneseed` from anywhere
+
+By default you invoke the launcher as `./geneseed` from inside the repo. To call it
+like any other command — plain `geneseed` from any directory — put it on your `PATH`:
+
+```
+./geneseed link                    # symlink into ~/.local/bin (no sudo); pass a dir to override
+./geneseed link /usr/local/bin     # e.g. a system-wide bin dir (may prompt for sudo)
+```
+
+(Or, in the TUI: `./geneseed` → **Settings** → **Run from anywhere** / **Remove from PATH**.)
+
+`link` creates a symlink to the launcher and tells you whether the target dir is on
+your `PATH` (and, if not, the one line to add it). The launcher resolves symlinks, so
+it still finds `rituals/harness.py` and the sibling scripts no matter where the link
+lives. Once it's on `PATH`, drop the `./`:
+
+```
+geneseed            # the interactive main menu, from any directory
+geneseed build      # …and every subcommand
+```
+
+Remove the symlink with `./geneseed unlink` (it clears `geneseed` links from `PATH`
+and the common bin dirs). Prefer a shell function over a symlink? Add one to your rc
+instead — it does the same job:
+
+```
+echo 'geneseed() { "'"$PWD"'/geneseed" "$@"; }' >> ~/.zshrc   # or ~/.bashrc
+```
 
 ## Upgrade
 

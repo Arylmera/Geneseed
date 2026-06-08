@@ -58,7 +58,8 @@ project's docs are already in context. **Other tools (Claude Code, plain `AGENT.
 per-repo installs, configuration, and troubleshooting: [SETUP.md](SETUP.md).**
 
 Bare **`./geneseed`** opens an interactive **main menu** of every action — update,
-setup/re-theme, browse, health check, build, diff, MCP servers — so you just run it and pick.
+setup/re-theme, browse, health check, build, diff, and **Settings** (MCP servers,
+run-from-anywhere) — so you just run it and pick.
 Prefer to jump straight in? `./geneseed setup` (guided install) or `./geneseed tui`
 (the browse panel). (No bash? `python rituals/harness.py menu` / `setup` / `tui`.)
 
@@ -68,6 +69,7 @@ Prefer to jump straight in? `./geneseed setup` (guided install) or `./geneseed t
 Geneseed/
 ├── build.py              generator (stdlib only)
 ├── geneseed              launcher: bare `./geneseed` = interactive main menu; + subcommands
+│                         (`./geneseed link` puts it on PATH so `geneseed` runs from anywhere)
 ├── bootstrap             one-shot: update everything (sync + upgrade), then run setup
 ├── upgrade.sh            self-upgrade from the published source
 ├── sync-self.sh          meta-updater: refreshes the launcher + upgrade scripts

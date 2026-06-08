@@ -2809,12 +2809,44 @@ _MENU_ACTIONS = [
     ("bootstrap", "Update & set up", "Pull the latest from upstream, then run the setup wizard."),
     ("build", "Rebuild bundle", "Re-render the harness from src."),
     ("memory", "Memory", "Browse / search the memory store; delete stale facts."),
-    ("mcp", "MCP servers", "Wire document conversion (MarkItDown) & other MCP servers into OpenCode."),
     ("status", "Status", "Theme, install mode, counts, and the memory store."),
+    ("settings", "Settings", "Configuration: MCP servers and the PATH install (run from anywhere)."),
     ("quit", "Quit", "Leave."),
     # 'doctor' (Health check) intentionally not listed: it runs after setup and via
     # the browse panel's `d` key. The dispatch below still handles it if re-added.
 ]
+
+
+# The Settings submenu groups configuration actions reached from the main menu.
+_SETTINGS_ACTIONS = [
+    ("mcp", "MCP servers", "Wire document conversion (MarkItDown) & other MCP servers into OpenCode."),
+    ("link", "Run from anywhere", "Put `geneseed` on your PATH so it runs from any directory."),
+    ("unlink", "Remove from PATH", "Remove the `geneseed` launcher symlink from your PATH."),
+    ("back", "Back", "Return to the main menu."),
+]
+
+
+def _settings_menu(stdscr, curses, pal, here) -> None:
+    """Settings submenu — configuration actions (MCP servers, PATH install). The
+    in-TUI ones return here; link/unlink shell out to the launcher's own commands.
+    Returns to the main menu on Back / cancel."""
+    while True:
+        sel = _menu(stdscr, curses, "Geneseed  ·  Settings", _SETTINGS_ACTIONS, default="mcp")
+        if sel in (None, "back"):
+            return
+        if sel == "mcp":
+            _mcp_view(stdscr, curses, pal)
+        elif sel in ("link", "unlink"):
+            # Shell out to the launcher's own `link`/`unlink` (PATH symlink); it
+            # lives at the repo root and prints whether the dir is on PATH.
+            curses.def_prog_mode()
+            curses.endwin()
+            run(["bash", str(here / "geneseed"), sel])
+            try:
+                input("\n[press Enter to return to settings] ")
+            except EOFError:
+                pass
+            curses.reset_prog_mode()
 
 
 def _main_menu(stdscr) -> int:
@@ -2837,8 +2869,8 @@ def _main_menu(stdscr) -> int:
             _doctor_view(stdscr, curses, pal)
         elif sel == "memory":
             _memory_view(stdscr, curses, pal)
-        elif sel == "mcp":
-            _mcp_view(stdscr, curses, pal)
+        elif sel == "settings":
+            _settings_menu(stdscr, curses, pal, here)
         elif sel == "status":
             _status_view(stdscr, curses, pal)
         elif sel == "setup":
