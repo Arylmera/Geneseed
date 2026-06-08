@@ -30,14 +30,30 @@ main() {
   local TMP; TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' RETURN
 
+  # SHA-pin the archive (content-addressed, never a mid-publish partial) with a ref
+  # fallback, and retry the download so a transient CDN hiccup self-heals instead of
+  # forcing a re-run. sync-self only swaps the small orchestration scripts, so it runs
+  # no doctor gate — but the same moving-target caveats apply to the fetch itself.
   echo "[geneseed] fetching orchestration scripts from $REPO@$REF ..."
-  curl -fsSL "https://github.com/$REPO/archive/refs/heads/$REF.zip" -o "$TMP/src.zip" \
-    || curl -fsSL "https://github.com/$REPO/archive/refs/tags/$REF.zip" -o "$TMP/src.zip" \
-    || { echo "[geneseed] download failed for ref '$REF'" >&2; return 1; }
-  unzip -q "$TMP/src.zip" -d "$TMP"
-
-  local NEW; NEW="$(find "$TMP" -maxdepth 1 -type d -iname 'geneseed-*' | head -n1)"
-  [ -n "$NEW" ] || { echo "[geneseed] no Geneseed-* folder in the archive" >&2; return 1; }
+  local sha url NEW="" i delay=2
+  for ((i = 1; i <= 4; i++)); do
+    sha="$(curl -fsSL -H 'Accept: application/vnd.github.sha' \
+            "https://api.github.com/repos/$REPO/commits/$REF" 2>/dev/null | tr -d '[:space:]' || true)"
+    case "$sha" in *[!0-9a-f]* | "") sha="" ;; esac
+    [ "${#sha}" -eq 40 ] || sha=""
+    if [ -n "$sha" ]; then url="https://github.com/$REPO/archive/$sha.zip"
+    else url="https://github.com/$REPO/archive/refs/heads/$REF.zip"; fi
+    rm -rf "$TMP"/src.zip "$TMP"/geneseed-* 2>/dev/null || true
+    if { curl -fsSL "$url" -o "$TMP/src.zip" 2>/dev/null \
+          || curl -fsSL "https://github.com/$REPO/archive/refs/tags/$REF.zip" -o "$TMP/src.zip" 2>/dev/null; } \
+       && unzip -q "$TMP/src.zip" -d "$TMP" >/dev/null 2>&1; then
+      NEW="$(find "$TMP" -maxdepth 1 -type d -iname 'geneseed-*' | head -n1)"
+      if [ -n "$NEW" ]; then break; fi
+    fi
+    echo "[geneseed]   download attempt $i failed — retrying ..." >&2
+    if [ "$i" -lt 4 ]; then sleep "$delay"; delay=$((delay * 2)); fi
+  done
+  [ -n "$NEW" ] || { echo "[geneseed] download failed for ref '$REF' after retries" >&2; return 1; }
 
   local changed=0
   for s in "${SCRIPTS[@]}"; do

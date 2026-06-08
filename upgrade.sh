@@ -82,35 +82,69 @@ fi
 SYNC=(build.py rituals src themes adapters prompts \
       harness.config.json DESIGN.md README.md SETUP.md LICENSE .gitignore)
 
+# --- fetch the source: SHA-pinned and retried -----------------------------------
+# `main` is a moving target served through GitHub's archive CDN, which can lag HEAD by
+# minutes after a push — even handing out a mid-publish snapshot where AGENT.md already
+# lists a skill whose file is not yet in the zip. That snapshot fails the doctor gate
+# below, which (correctly) refuses it — but a bare abort made the USER re-run by hand
+# (the "had to run it 3 times" symptom). Two defences close that:
+#   1. SHA-pin: resolve REF -> commit SHA via the API and pull the content-addressed
+#      archive/<sha>.zip, which only exists once the commit is fully published — never
+#      half-baked. Falls back to the ref archive if the API is unreachable/rate-limited.
+#   2. Retry: download + validate up to ATTEMPTS times with backoff, so a snapshot still
+#      catching up self-heals instead of stopping the run.
+resolve_sha() {                          # echo the 40-hex commit SHA for ref $1, or nothing
+  local s
+  s="$(curl -fsSL -H 'Accept: application/vnd.github.sha' \
+        "https://api.github.com/repos/$REPO/commits/$1" 2>/dev/null | tr -d '[:space:]' || true)"
+  case "$s" in *[!0-9a-f]* | "") return 1 ;; esac
+  [ "${#s}" -eq 40 ] || return 1
+  printf '%s' "$s"
+}
+
+fetch_source() {                         # download+extract REF into dir $1; echo the Geneseed-* path
+  local dest="$1" sha url dir
+  sha="$(resolve_sha "$REF" || true)"
+  if [ -n "$sha" ]; then url="https://github.com/$REPO/archive/$sha.zip"
+  else url="https://github.com/$REPO/archive/refs/heads/$REF.zip"; fi
+  curl -fsSL "$url" -o "$dest/src.zip" 2>/dev/null \
+    || curl -fsSL "https://github.com/$REPO/archive/refs/tags/$REF.zip" -o "$dest/src.zip" 2>/dev/null \
+    || return 1
+  unzip -q "$dest/src.zip" -d "$dest" >/dev/null 2>&1 || return 1
+  dir="$(find "$dest" -maxdepth 1 -type d -iname 'geneseed-*' | head -n1)"
+  [ -n "$dir" ] && printf '%s' "$dir"
+}
+
 # --- work in a temp dir so the zip and its Geneseed-<ref>/ folder can never
 #     collide with the folder we are standing in ---------------------------
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "[geneseed] downloading $REPO@$REF ..."
-curl -fsSL "https://github.com/$REPO/archive/refs/heads/$REF.zip" -o "$TMP/src.zip" \
-  || curl -fsSL "https://github.com/$REPO/archive/refs/tags/$REF.zip" -o "$TMP/src.zip" \
-  || { echo "[geneseed] download failed for ref '$REF'" >&2; exit 1; }
+# Validate the DOWNLOADED source (across every theme — `--all` — so the gate checks the
+# source we are about to apply, not the user's installed one; _installed_defaults probes
+# the real global config dir, so a bare `doctor` could wrongly scope to an existing
+# install) BEFORE touching $HERE. On failure nothing here is modified; we re-download a
+# fresh snapshot (the CDN usually catches up within seconds) and only give up after
+# ATTEMPTS — so a mid-publish window no longer forces a manual re-run.
+NEW=""; ATTEMPTS=4; delay=2
+for ((i = 1; i <= ATTEMPTS; i++)); do
+  work="$TMP/try$i"; mkdir -p "$work"
+  echo "[geneseed] downloading $REPO@$REF (attempt $i/$ATTEMPTS) ..."
+  cand="$(fetch_source "$work" || true)"
+  if [ -n "$cand" ] && [ -d "$cand" ]; then
+    echo "[geneseed] validating downloaded source ..."
+    if python3 "$cand/rituals/harness.py" doctor --all; then NEW="$cand"; break; fi
+    echo "[geneseed] ⚠️  snapshot inconsistent (likely a mid-publish cache) — retrying ..." >&2
+  else
+    echo "[geneseed] ⚠️  download/extract failed — retrying ..." >&2
+  fi
+  if [ "$i" -lt "$ATTEMPTS" ]; then sleep "$delay"; delay=$((delay * 2)); fi
+done
 
-echo "[geneseed] extracting ..."
-unzip -q "$TMP/src.zip" -d "$TMP"
-NEW="$(find "$TMP" -maxdepth 1 -type d -iname 'geneseed-*' | head -n1)"
-[ -n "$NEW" ] || { echo "[geneseed] no Geneseed-* folder in the archive" >&2; exit 1; }
-
-# Validate the DOWNLOADED source before touching anything in $HERE. The old order
-# copied first and validated after, so a bad/stale upstream snapshot (e.g. AGENT.md
-# referencing a skill whose file isn't present) would half-apply and leave the tree
-# broken until a second run. Validate in the temp dir; on failure, nothing here is
-# modified — just retry once upstream is consistent.
-echo "[geneseed] validating downloaded source ..."
-# --all: this gate validates the SOURCE we are about to apply across every theme,
-# not the user's installed one (doctor's default scope now). _installed_defaults
-# also probes the real global config dir, so a bare `doctor` could wrongly scope to
-# an existing install — force the full sweep.
-if ! python3 "$NEW/rituals/harness.py" doctor --all; then
-  echo "[geneseed] ✗ downloaded source is inconsistent — NOT applying it." >&2
-  echo "[geneseed] ✗ Upstream was likely mid-publish; re-run in a moment:" >&2
-  echo "[geneseed] ✗     $(basename "$0") ${*:-}" >&2
+if [ -z "$NEW" ]; then
+  echo "[geneseed] ✗ could not obtain a consistent source after $ATTEMPTS attempts." >&2
+  echo "[geneseed] ✗ Upstream may still be publishing — try again shortly, or pin a tag:" >&2
+  echo "[geneseed] ✗     $(basename "$0") v<x.y.z>" >&2
   exit 1
 fi
 
