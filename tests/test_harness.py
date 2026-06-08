@@ -803,6 +803,52 @@ class SourceCompletenessGateTests(unittest.TestCase):
         self.assertTrue((cfg / "skills" / "council" / "SKILL.md").exists())
 
 
+def _has_textual() -> bool:
+    import importlib.util
+    try:
+        return importlib.util.find_spec("textual") is not None
+    except (ImportError, ValueError):          # absent / broken parent → treat as absent
+        return False
+
+
+class TextualFrontEndTests(unittest.TestCase):
+    """The optional Textual panel must be exactly that — optional. harness must import
+    and run its dependency-free paths with no textual present, and honour the opt-out."""
+
+    def test_harness_imports_without_textual_at_top_level(self):
+        # The critical path stays dependency-free: textual is imported lazily, never at
+        # module load, so `import harness` works on a bare interpreter (as CI runs it).
+        src = (ROOT / "rituals" / "harness.py").read_text(encoding="utf-8")
+        top_level = [ln for ln in src.splitlines()
+                     if ln.startswith(("import textual", "from textual"))]
+        self.assertEqual(top_level, [], "textual must not be imported at module top level")
+
+    def test_available_honours_curses_opt_out(self):
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"GENESEED_TUI_CURSES": "1"}):
+            self.assertFalse(harness._textual_available())
+
+    @unittest.skipUnless(_has_textual(), "textual not installed")
+    def test_textual_screens_mount_and_browse_populates(self):
+        import asyncio
+        import tui_textual as T
+
+        async def drive():
+            app = T.GeneseedApp(harness, "neutral", start="menu")
+            async with app.run_test(size=(100, 32)) as pilot:
+                await pilot.pause()
+                self.assertEqual(type(app.screen).__name__, "MenuScreen")
+                app.push_screen(T.BrowseScreen())
+                await pilot.pause()
+                await pilot.pause()
+                tree = app.screen.query_one("#catalog")
+                # AGENTS / SKILLS / LAWS sections, all populated from the live inventory
+                self.assertEqual(len(tree.root.children), 3)
+                app.exit(0)
+        asyncio.run(drive())
+
+
 def setattr_many(mod, saved):
     mod.ROOT, mod.SRC, mod.THEMES, mod.PLUGIN_SRC, mod.CONFIG = saved
 

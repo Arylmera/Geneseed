@@ -24,7 +24,8 @@ Dependency-free. Subcommands:
                                    never deleted — kept in place, or --archive-memory
                                    moves it to archived-memory/; --yes to skip prompt
     harness setup                  interactive, dependency-free install wizard (all OSes)
-    harness tui                    full-screen curses control panel (Unix only)
+    harness tui                    full-screen control panel — Textual if installed
+                                   (any OS), else stdlib curses (Unix)
     harness learn [FILE]           distil notes/transcript into memory entries
                                    via a model CLI of your choice (no API key)
 
@@ -2851,21 +2852,56 @@ def _tui_loop(stdscr, inv: dict) -> None:
         # KEY_RESIZE and any other key fall through and re-render
 
 
+def _textual_available() -> bool:
+    """True when the optional Textual front-end can be used. Honours an opt-out
+    (GENESEED_TUI_CURSES=1 forces the stdlib curses panel) and needs Textual installed.
+    The dependency-free curses panel stays the fallback when this returns False."""
+    if os.environ.get("GENESEED_TUI_CURSES"):
+        return False
+    try:
+        import textual  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _launch_textual(theme: str, start: str = "menu") -> "int | None":
+    """Run the optional Textual control panel; return its exit code, or None when
+    Textual isn't usable so the caller falls back to the curses panel."""
+    if not _textual_available():
+        return None
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    try:
+        import tui_textual
+    except Exception as e:                       # a broken optional dep must never be fatal
+        sys.stderr.write(f"[tui] Textual front-end unavailable ({e}); using the classic panel.\n")
+        return None
+    return tui_textual.run(sys.modules[__name__], theme, start=start)
+
+
 def cmd_tui(args: argparse.Namespace) -> int:
-    """Full-screen curses control panel: browse agents/skills/laws and run
-    build/doctor/diff. Unix only (stdlib curses); degrades with a clear message."""
-    if sys.platform.startswith("win"):
-        print("[tui] the curses panel needs a Unix terminal. Use `harness setup` instead.")
-        return 1
+    """Full-screen control panel: browse agents/skills/laws and run build/doctor/diff.
+    Uses the optional Textual front-end when installed (any OS), else the stdlib curses
+    panel (Unix only); degrades with a clear message."""
     if not sys.stdin.isatty():
         print("[tui] not an interactive terminal. Use `harness setup`, `doctor`, or `build`.")
+        return 1
+    theme = args.theme or _default_theme()
+    rc = _launch_textual(theme, start="browse")
+    if rc is not None:
+        return rc
+    if sys.platform.startswith("win"):
+        print("[tui] the curses panel needs a Unix terminal. Install `textual` for a "
+              "cross-platform panel, or use `harness setup`.")
         return 1
     try:
         import curses  # noqa: F401  (availability probe)
     except ImportError:
         print("[tui] curses is unavailable in this Python. Use `harness setup`.")
         return 1
-    inv = _tui_inventory(args.theme or _default_theme())
+    inv = _tui_inventory(theme)
     import curses
     import locale
     try:
@@ -3188,11 +3224,19 @@ def _main_menu(stdscr) -> int:
 
 
 def cmd_menu(args: argparse.Namespace) -> int:
-    """Interactive main menu — the default for a bare `./geneseed`. Falls back to a
-    one-line command list off a TTY / on Windows / if curses is unavailable."""
-    if sys.platform.startswith("win") or not sys.stdin.isatty():
+    """Interactive main menu — the default for a bare `./geneseed`. Prefers the optional
+    Textual front-end (any OS), falls back to the stdlib curses menu, then to a one-line
+    command list off a TTY / on Windows without Textual / if curses is unavailable."""
+    if not sys.stdin.isatty():
         print("Geneseed — run one of:  setup · bootstrap · update · build · doctor · diff · tui")
-        print("On a Unix terminal, `./geneseed` opens an interactive menu of these.")
+        print("On an interactive terminal, `./geneseed` opens a menu of these.")
+        return 0
+    rc = _launch_textual(args.theme or _default_theme(), start="menu")
+    if rc is not None:
+        return rc
+    if sys.platform.startswith("win"):
+        print("Geneseed — run one of:  setup · bootstrap · update · build · doctor · diff · tui")
+        print("Install `textual` (pip install textual) for an interactive panel on Windows.")
         return 0
     try:
         import curses
@@ -3285,11 +3329,13 @@ def main() -> int:
     su = sub.add_parser("setup", help="interactive install wizard (dependency-free, all OSes)")
     su.set_defaults(fn=cmd_setup)
 
-    tu = sub.add_parser("tui", help="full-screen curses control panel (Unix)")
+    tu = sub.add_parser("tui", help="full-screen control panel (Textual if installed, "
+                                    "else curses on Unix)")
     tu.add_argument("--theme", default=None, help="theme to show (default: harness.config.json)")
     tu.set_defaults(fn=cmd_tui)
 
     me = sub.add_parser("menu", help="interactive main menu (the default for ./geneseed)")
+    me.add_argument("--theme", default=None, help="theme to show (default: harness.config.json)")
     me.set_defaults(fn=cmd_menu)
 
     bs = sub.add_parser("bootstrap", help="update everything (sync + upgrade) with a "
