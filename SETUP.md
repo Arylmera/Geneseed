@@ -25,8 +25,8 @@ and offers a health check. It works on every OS. Prefer to do it by hand?
 Pick a path below. Already installed? Bare **`./geneseed`** opens an interactive
 **main menu** — choose *Update & set up*, *Set up / re-theme*, *Browse*, *Health
 check*, *Build*, *Diff*, or *Settings* (a submenu for MCP servers — toggle MarkItDown
-& other MCP servers into your OpenCode config — and the PATH install) and it runs that
-flow. **`./geneseed bootstrap`** jumps
+& other MCP servers into your OpenCode config — the PATH install, and uninstall) and it
+runs that flow. **`./geneseed bootstrap`** jumps
 straight to update-then-setup; **`./geneseed setup`** straight to the wizard.
 
 | Path | Use when |

@@ -59,7 +59,7 @@ per-repo installs, configuration, and troubleshooting: [SETUP.md](SETUP.md).**
 
 Bare **`./geneseed`** opens an interactive **main menu** of every action — update,
 setup/re-theme, browse, health check, build, diff, and **Settings** (MCP servers,
-run-from-anywhere) — so you just run it and pick.
+run-from-anywhere, uninstall) — so you just run it and pick.
 Prefer to jump straight in? `./geneseed setup` (guided install) or `./geneseed tui`
 (the browse panel). (No bash? `python rituals/harness.py menu` / `setup` / `tui`.)
 
