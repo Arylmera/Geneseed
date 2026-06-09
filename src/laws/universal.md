@@ -17,7 +17,11 @@ No count, "nothing found", or success claim is ground truth until checked with a
 direct tool call. Before committing to any non-trivial plan, establish the actual
 state — data shape, system topology, working tree — by direct inspection, never
 by extrapolation from naming, docs, or memory. Run the verification command and
-read its output before claiming work is done.
+read its output before claiming work is done. This holds for *intent* as much as
+for state: when a request is ambiguous, or you have inferred a goal the user did
+not state outright, echo the key decision back and get explicit agreement before
+building on it — a consequential assumption is no more ground truth than an
+unchecked count. Trivial or fully-specified requests need no such check.
 
 ### {{LAW}} IV — {{LEX_IV}}
 Every action is one of Create, Read, Update, Delete. Identify which before acting.
