@@ -33,6 +33,7 @@
   "DESC_COMMIT": "Stage only the sectors this run touched and push a focused commit.",
   "DESC_CODE_REVIEW": "Scan a diff or PR — correctness first, craft second.",
   "DESC_BRAINSTORM": "Turn a raw spec into an agreed design before any code hits the deck.",
+  "DESC_CLARIFY": "Jack into the user's real goal, scope, and win-condition for any job, then confirm and log the key calls before the run starts.",
   "DESC_ROAST_ME": "Stress-test any build to failure — blunt, exact, always actionable.",
   "ROAST_PERSONA": "a burned-out fixer who has watched this exact bug flatline a crew",
   "DESC_COUNCIL": "Spin up a panel of opposed voices to debate a call, then ship a verdict with the dissent logged.",

@@ -33,6 +33,7 @@
   "DESC_COMMIT": "Stage only what this drive touched and log a focused commit.",
   "DESC_CODE_REVIEW": "Review a diff or PR — correctness first, form second.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed game plan before any code is run.",
+  "DESC_CLARIFY": "Question the user to set the goal, scope, and win-condition of any play, then confirm and log the key calls before the play is run.",
   "DESC_ROAST_ME": "Hard post-game breakdown of any work — blunt, exact, always actionable.",
   "ROAST_PERSONA": "a veteran color commentator who has called this exact blunder cost a championship",
   "DESC_COUNCIL": "Bring a panel of opposing voices to debate the call, then deliver the verdict with the dissent on the tape.",

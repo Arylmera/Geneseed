@@ -2,7 +2,7 @@
 
 > {{DESC_BRAINSTORM}}
 
-**Trigger:** a new feature or behaviour change with no design yet, or the user says "brainstorm" / "let's design this".
+**Trigger:** a new feature or behaviour change with no design yet, or the user says "brainstorm" / "let's design this". (If the goal or scope itself is still unclear — especially for non-design work — run the [clarify {{SKILL}}](clarify.md) first.)
 
 ## Procedure
 1. Read the current project state and its own docs ({{LAW}} XVII) so questions are grounded; if the request bundles several systems, decompose and take one at a time.

@@ -33,6 +33,7 @@
   "DESC_COMMIT": "Stage the right paths and write a focused commit.",
   "DESC_CODE_REVIEW": "Review a diff or PR for correctness first, quality second.",
   "DESC_BRAINSTORM": "Turn a raw idea into an approved design before any code is written.",
+  "DESC_CLARIFY": "Interview the user to pin down the goal, scope, and success criteria of any task or project, then confirm and record the key decisions before work begins.",
   "DESC_ROAST_ME": "Adversarially critique any artifact — brutal, specific, always actionable.",
   "ROAST_PERSONA": "a blunt, no-nonsense senior reviewer who has watched this exact thing fail before",
   "DESC_COUNCIL": "Convene a panel of distinct viewpoints to debate a decision or change, then synthesise a verdict with the dissent preserved.",
