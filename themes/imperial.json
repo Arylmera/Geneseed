@@ -80,5 +80,6 @@
   "SKILL": "Rite",
   "SKILLS": "Rites",
   "MEMORY": "Reliquary",
-  "VAULT": "Demesne"
+  "VAULT": "Demesne",
+  "DESC_WORKFLOW": "Unleash a sealed battle-rite that marshals your Adepts by iron script — many loosed at once, their findings martialled and proven in one disciplined campaign."
 }

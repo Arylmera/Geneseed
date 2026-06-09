@@ -226,12 +226,12 @@ def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]
 
 def source_fingerprint() -> str:
     """A short, deterministic content hash of the harness SOURCE — every file under
-    src/, themes/, and the OpenCode plugins. Theme- and emit-independent: it
+    src/, themes/, the OpenCode plugins, and the saved workflows. Theme- and emit-independent: it
     identifies *which Geneseed* you have, so a stamped install can be compared against
     the source it was built from (see `harness version`). Stdlib only."""
     h = hashlib.sha256()
     files: list[Path] = []
-    for r in (SRC, THEMES, PLUGIN_SRC):
+    for r in (SRC, THEMES, PLUGIN_SRC, WORKFLOW_SRC):
         if r.is_dir():
             files += [p for p in r.rglob("*")
                       if p.is_file() and "__pycache__" not in p.parts]
@@ -372,6 +372,7 @@ def assert_source_complete(items, *, context: str = "") -> None:
 
 
 PLUGIN_SRC = ROOT / "adapters" / "opencode" / "plugins"
+WORKFLOW_SRC = ROOT / "adapters" / "opencode" / "workflows"
 
 
 def _strip_capability_links(text: str) -> str:
@@ -579,12 +580,25 @@ def _merge_opencode_json(path: Path, agent_path: str) -> None:
 
 
 def _copy_plugins(dst: Path) -> int:
-    """Copy the static OpenCode plugins (context + learn) into `dst`. They are
-    maintained files, not rendered from src, so copy them verbatim."""
+    """Copy the static OpenCode plugins (context, learn, guard, workflow) into `dst`.
+    They are maintained files, not rendered from src, so copy them verbatim."""
     n = 0
     if PLUGIN_SRC.is_dir():
         dst.mkdir(parents=True, exist_ok=True)
         for js in sorted(PLUGIN_SRC.glob("*.js")):
+            shutil.copy2(js, dst / js.name)
+            n += 1
+    return n
+
+
+def _copy_workflows(dst: Path) -> int:
+    """Copy the saved, code-driven workflow scripts (incl. the `_runtime.js` core) into
+    `dst`. They sit beside the plugins dir so `geneseed-workflow.js` resolves them via a
+    relative `../workflows/` path. Maintained files, copied verbatim like the plugins."""
+    n = 0
+    if WORKFLOW_SRC.is_dir():
+        dst.mkdir(parents=True, exist_ok=True)
+        for js in sorted(WORKFLOW_SRC.glob("*.js")):
             shutil.copy2(js, dst / js.name)
             n += 1
     return n
@@ -729,11 +743,13 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     _merge_opencode_json(root / "opencode.json", agent_path)
 
     n_plugins = _copy_plugins(oc / "plugins")
+    n_workflows = _copy_workflows(oc / "workflows")
 
     extras = ([f"primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
     extra = (" + " + ", ".join(extras)) if extras else ""
     print(f"[geneseed] opencode layer: {n_agents} subagents, {n_skills} skills, "
-          f"{n_plugins} plugin(s), opencode.json (instructions: {agent_path}){extra}")
+          f"{n_plugins} plugin(s), {n_workflows} workflow file(s), "
+          f"opencode.json (instructions: {agent_path}){extra}")
 
 
 def _opencode_config_dir() -> Path:
@@ -866,6 +882,14 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
             owned.append(f"plugins/{js.name}")
             n_plugins += 1
 
+    n_workflows = 0
+    if WORKFLOW_SRC.is_dir():
+        (cfg / "workflows").mkdir(parents=True, exist_ok=True)
+        for js in sorted(WORKFLOW_SRC.glob("*.js")):
+            shutil.copy2(js, cfg / "workflows" / js.name)
+            owned.append(f"workflows/{js.name}")
+            n_workflows += 1
+
     mem_status = _global_memory(cfg, theme, items, out)
     ensure_memory_index(cfg / "memory")   # guarantee the index on every path (seed/migrate/keep)
 
@@ -896,7 +920,8 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     extras = (["primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
     extra = (" + " + ", ".join(extras)) if extras else ""
     print(f"[geneseed] opencode-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
-          f"{n_plugins} plugin(s), AGENT.md, {mem_status}, opencode.json (no context.json){extra}. "
+          f"{n_plugins} plugin(s), {n_workflows} workflow file(s), AGENT.md, {mem_status}, "
+          f"opencode.json (no context.json){extra}. "
           f"The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.")
 
 

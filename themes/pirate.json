@@ -80,5 +80,6 @@
   "SKILL": "Knack",
   "SKILLS": "Knacks",
   "MEMORY": "Logbook",
-  "VAULT": "Hold"
+  "VAULT": "Hold",
+  "DESC_WORKFLOW": "Run a saved set o orders that drives yer crew by the chart — many sent out at once, their plunder gathered an checked in one clean voyage."
 }

@@ -80,5 +80,6 @@
   "SKILL": "Spell",
   "SKILLS": "Spells",
   "MEMORY": "Grimoire",
-  "VAULT": "Sanctum"
+  "VAULT": "Sanctum",
+  "DESC_WORKFLOW": "Invoke a saved ritual that binds your familiars by inscribed rite — many sent at once, their auguries gathered and proven in one deterministic casting."
 }

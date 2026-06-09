@@ -80,5 +80,6 @@
   "SKILL": "Program",
   "SKILLS": "Programs",
   "MEMORY": "Datastore",
-  "VAULT": "Grid"
+  "VAULT": "Grid",
+  "DESC_WORKFLOW": "Jack in a saved routine that drives your daemons on rails — parallel forks, staged pipelines, and verification, all in one deterministic run."
 }

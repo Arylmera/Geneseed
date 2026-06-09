@@ -80,5 +80,6 @@
   "SKILL": "Drill",
   "SKILLS": "Drills",
   "MEMORY": "Logbook",
-  "VAULT": "Base"
+  "VAULT": "Base",
+  "DESC_WORKFLOW": "Execute a saved op-order that commands your units by the numbers — parallel sweeps, staged phases, and confirmation, in one deterministic mission."
 }

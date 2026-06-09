@@ -80,5 +80,6 @@
   "SKILL": "Skill",
   "SKILLS": "Skills",
   "MEMORY": "Memory",
-  "VAULT": "Workspace"
+  "VAULT": "Workspace",
+  "DESC_WORKFLOW": "Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass."
 }

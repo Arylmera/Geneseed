@@ -282,7 +282,7 @@ class StatusDataTests(unittest.TestCase):
         d = harness._status_data()
         # counts match the rendered inventory
         self.assertEqual(d["agents"], 16)
-        self.assertEqual(d["skills"], 19)
+        self.assertEqual(d["skills"], 20)
         self.assertEqual(d["laws"], 20)
         # version fields present and well-formed
         self.assertRegex(d["source_fp"], r"^[0-9a-f]{12}$")
@@ -566,7 +566,7 @@ class TuiInventoryTests(unittest.TestCase):
     def test_counts_and_bodies(self):
         inv = harness._tui_inventory("neutral")
         self.assertEqual(len(inv["agents"]), 16)
-        self.assertEqual(len(inv["skills"]), 19)
+        self.assertEqual(len(inv["skills"]), 20)
         self.assertEqual(len(inv["laws"]), 20)
         self.assertTrue(all(e["desc"] and e["body"] for e in inv["agents"]))
         self.assertTrue(all(e["desc"] and e["body"] for e in inv["skills"]))
@@ -868,10 +868,13 @@ class SourceCompletenessGateTests(unittest.TestCase):
         shutil.copytree(build.SRC, work / "src")
         shutil.copytree(build.THEMES, work / "themes")
         shutil.copytree(build.PLUGIN_SRC, work / "plugins")
-        saved = (build.ROOT, build.SRC, build.THEMES, build.PLUGIN_SRC, build.CONFIG)
+        shutil.copytree(build.WORKFLOW_SRC, work / "workflows")
+        saved = (build.ROOT, build.SRC, build.THEMES, build.PLUGIN_SRC, build.CONFIG,
+                 build.WORKFLOW_SRC)
         self.addCleanup(lambda: setattr_many(build, saved))
         build.ROOT, build.SRC, build.THEMES = work, work / "src", work / "themes"
         build.PLUGIN_SRC, build.CONFIG = work / "plugins", work / "harness.config.json"
+        build.WORKFLOW_SRC = work / "workflows"
         return work
 
     def test_complete_source_passes_gate(self):
@@ -904,7 +907,7 @@ class SourceCompletenessGateTests(unittest.TestCase):
 
 
 def setattr_many(mod, saved):
-    mod.ROOT, mod.SRC, mod.THEMES, mod.PLUGIN_SRC, mod.CONFIG = saved
+    mod.ROOT, mod.SRC, mod.THEMES, mod.PLUGIN_SRC, mod.CONFIG, mod.WORKFLOW_SRC = saved
 
 
 if __name__ == "__main__":

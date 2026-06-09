@@ -80,5 +80,6 @@
   "SKILL": "Combo",
   "SKILLS": "Combos",
   "MEMORY": "Checkpoint",
-  "VAULT": "Server"
+  "VAULT": "Server",
+  "DESC_WORKFLOW": "Run a saved combo that scripts your party — fan out, chain the stages, and verify the clear, all in one deterministic rotation."
 }
