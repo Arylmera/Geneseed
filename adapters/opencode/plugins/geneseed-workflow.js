@@ -102,6 +102,19 @@ export const GeneseedWorkflow = async (ctx) => {
     console.error(`[geneseed-workflow] loaded — tool 'workflow' registered, ${names.length} workflow(s) [${names.join(", ") || "none"}] from ${WORKFLOWS_DIR}${warn}`)
   } catch (e) { console.error(`[geneseed-workflow] loaded but could not list workflows: ${e?.message || e}`) }
 
+  // Normalize the `args` parameter. OpenCode's tool layer can deliver a structured
+  // object param as a JSON STRING (or drop it) when the schema is untyped — so coerce
+  // a string back to an object and reject non-object shapes to `{}`. Without this, the
+  // workflow script's `args` arrives empty and every `args.foo` read is undefined.
+  const normalizeArgs = (raw) => {
+    let a = raw ?? {}
+    if (typeof a === "string") {
+      try { a = JSON.parse(a) } catch { a = {} }
+    }
+    if (a == null || typeof a !== "object" || Array.isArray(a)) a = {}
+    return a
+  }
+
   const execute = async (argv) => {
     const name = (argv?.name || "").trim()
     const available = await listWorkflows()
@@ -127,7 +140,7 @@ export const GeneseedWorkflow = async (ctx) => {
     try { ({ createRuntime } = await import(pathToFileURL(path.join(WORKFLOWS_DIR, "_runtime.js")).href)) }
     catch (e) { return `Workflow runtime unavailable: ${e?.message || e}` }
 
-    const rt = createRuntime({ client, directory, worktree, args: argv?.args ?? {}, log: sink })
+    const rt = createRuntime({ client, directory, worktree, args: normalizeArgs(argv?.args), log: sink })
     let result, failed = null
     try { result = await wf.run(rt) }
     catch (e) { failed = e; sink(`✗ workflow error: ${e?.stack || e?.message || e}`) }
@@ -149,7 +162,10 @@ export const GeneseedWorkflow = async (ctx) => {
     args: toolHelper
       ? {
           name: toolHelper.schema.string().optional().describe("saved workflow name; omit to list available"),
-          args: toolHelper.schema.any().optional().describe("inputs passed to the workflow script as `args`"),
+          // record(any) — an OBJECT with arbitrary keys. NOT schema.any(): an untyped
+          // `any` emits an empty ({}) JSON-schema property, which providers drop or
+          // flatten to a string, so the workflow script's `args` arrives empty.
+          args: toolHelper.schema.record(toolHelper.schema.any()).optional().describe("inputs object (arbitrary keys) passed to the workflow script as `args`"),
         }
       : {
           name: { type: "string", description: "saved workflow name; omit to list available" },
