@@ -361,7 +361,7 @@ def assert_source_complete(items, *, context: str = "") -> None:
         return
     where = f" ({context})" if context else ""
     sys.stderr.write(
-        f"[geneseed] ✗ source is incomplete{where}: AGENT.md references "
+        f"[geneseed][E-INCOMPLETE] ✗ source is incomplete{where}: AGENT.md references "
         f"{len(missing)} spec(s) with no file under src/:\n"
         + "".join(f"    - {m}\n" for m in missing)
         + "[geneseed] ✗ Refusing to emit — a partial source would write dead links "

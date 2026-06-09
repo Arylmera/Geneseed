@@ -41,6 +41,32 @@ REPO="Arylmera/Geneseed"
 REF="${1:-main}"                                   # branch or tag (default: main)
 THEME_ARG="${2:-}"                                 # optional: force a theme (neutral|imperial|…)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="${PYTHON:-python3}"
+
+# --- install diagnostics ---------------------------------------------------------
+# Every failure prints a TAGGED code ([geneseed][E-*]) and is appended to a persistent
+# log, so a screenshot of the terminal (or the log file) is enough to diagnose + fix.
+# Override the log path with GENESEED_LOG.
+LOG="${GENESEED_LOG:-$HOME/.geneseed-install.log}"
+: > "$LOG" 2>/dev/null || { LOG="${TMPDIR:-/tmp}/geneseed-install.log"; : > "$LOG" 2>/dev/null || LOG="/dev/null"; }
+log() { printf '%s\n' "$*"; printf '%s\n' "$*" >> "$LOG" 2>/dev/null || true; }
+die() { local code="$1"; shift; log "[geneseed][$code] ✗ $*"; log "[geneseed] ── full install log: $LOG"; exit 1; }
+doctor_legend() {
+  log "[geneseed] doctor problem legend — what the lines above mean / how to fix:"
+  log "  • 'dead link'          → a skill/agent body links a sibling as <dir>/<name>.md; use the BARE <name>.md (source bug)"
+  log "  • 'unresolved token'   → a {{TOKEN}} is missing from a theme; add it to ALL 8 theme JSONs"
+  log "  • 'incomplete source'  → AGENT.md lists a skill whose file isn't in this snapshot (usually a mid-publish cache — retry)"
+  log "  • 'stale' / 'missing'  → the rendered Harness/ is out of sync (rebuild locally; harmless on a fresh download)"
+  log "  • 'parity'             → the themes disagree on which tokens exist"
+  log "  • 'escapes the bundle' → an absolute or ../ path leaked into a rendered file"
+}
+# Catch-all: an unguarded failure still names itself instead of dying silently.
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then printf "[geneseed][E-UNEXPECTED] ✗ install aborted (exit %s). Full log: %s\n" "$rc" "$LOG" >&2; fi' ERR
+
+# Preconditions — fail early and BY NAME, not with a cryptic mid-run error.
+_missing=""
+for _t in "$PY" curl unzip; do command -v "$_t" >/dev/null 2>&1 || _missing="$_missing $_t"; done
+[ -n "$_missing" ] && die E-DEPS "missing required tool(s):$_missing — install python3, curl, and unzip, then re-run."
 
 # Render the bundle BESIDE the Geneseed folder by default (a sibling dir named
 # Harness/), so AGENT.md sits at the project level. Override with GENESEED_OUT.
@@ -126,32 +152,44 @@ trap 'rm -rf "$TMP"' EXIT
 # install) BEFORE touching $HERE. On failure nothing here is modified; we re-download a
 # fresh snapshot (the CDN usually catches up within seconds) and only give up after
 # ATTEMPTS — so a mid-publish window no longer forces a manual re-run.
-NEW=""; ATTEMPTS=4; delay=2
+NEW=""; ATTEMPTS=4; delay=2; prev_sig=""
 for ((i = 1; i <= ATTEMPTS; i++)); do
   work="$TMP/try$i"; mkdir -p "$work"
-  echo "[geneseed] downloading $REPO@$REF (attempt $i/$ATTEMPTS) ..."
+  log "[geneseed] downloading $REPO@$REF (attempt $i/$ATTEMPTS) ..."
   cand="$(fetch_source "$work" || true)"
-  if [ -n "$cand" ] && [ -d "$cand" ]; then
-    echo "[geneseed] validating downloaded source ..."
-    if python3 "$cand/rituals/harness.py" doctor --all; then NEW="$cand"; break; fi
-    echo "[geneseed] ⚠️  snapshot inconsistent (likely a mid-publish cache) — retrying ..." >&2
-  else
-    echo "[geneseed] ⚠️  download/extract failed — retrying ..." >&2
+  if [ -z "$cand" ] || [ ! -d "$cand" ]; then
+    log "[geneseed][E-DOWNLOAD] ⚠️  download or extract failed (attempt $i/$ATTEMPTS) — check network / curl / unzip."
+    if [ "$i" -lt "$ATTEMPTS" ]; then sleep "$delay"; delay=$((delay * 2)); fi
+    continue
   fi
+  log "[geneseed] validating downloaded source (doctor --all) ..."
+  if doctor_out="$("$PY" "$cand/rituals/harness.py" doctor --all 2>&1)"; then
+    printf '%s\n' "$doctor_out" | tee -a "$LOG"
+    NEW="$cand"; break
+  fi
+  printf '%s\n' "$doctor_out" | tee -a "$LOG"
+  # A real source defect fails IDENTICALLY on every retry; a mid-publish cache lag
+  # changes (missing files appear) between attempts. If the SAME problems repeat, stop
+  # early and name it — don't burn all attempts and then wrongly blame "publishing".
+  sig="$(printf '%s\n' "$doctor_out" | grep -E '^[[:space:]]*-[[:space:]]' | sort -u || true)"
+  if [ -n "$sig" ] && [ "$sig" = "$prev_sig" ]; then
+    doctor_legend
+    die E-DOCTOR "the downloaded source FAILS validation with the SAME problems twice — this is a SOURCE DEFECT, not a publish-cache lag. Fix the problems listed above (also in $LOG); retrying will not help."
+  fi
+  prev_sig="$sig"
+  log "[geneseed] ⚠️  validation failed (attempt $i/$ATTEMPTS) — may be a mid-publish cache; retrying ..."
   if [ "$i" -lt "$ATTEMPTS" ]; then sleep "$delay"; delay=$((delay * 2)); fi
 done
 
 if [ -z "$NEW" ]; then
-  echo "[geneseed] ✗ could not obtain a consistent source after $ATTEMPTS attempts." >&2
-  echo "[geneseed] ✗ Upstream may still be publishing — try again shortly, or pin a tag:" >&2
-  echo "[geneseed] ✗     $(basename "$0") v<x.y.z>" >&2
-  exit 1
+  doctor_legend
+  die E-NOSRC "could not obtain a source that passes validation after $ATTEMPTS attempts. If the problems above repeat, it is a SOURCE bug (report them). If they differ or mention 'incomplete', upstream may still be publishing — retry shortly, or pin a tag:  $(basename "$0") v<x.y.z>"
 fi
 
 # Capture the theme the LOCAL config asks for *before* SYNC overwrites
 # harness.config.json with upstream's (which ships neutral). Fallback only —
 # the bundle's own .geneseed-theme marker still wins over this.
-CONFIG_THEME="$(python3 -c 'import json,sys
+CONFIG_THEME="$("$PY" -c 'import json,sys
 d=json.load(open(sys.argv[1]));print(d.get("theme",""))' "$HERE/harness.config.json" 2>/dev/null || true)"
 
 echo "[geneseed] refreshing factory files in $HERE ..."
@@ -213,9 +251,11 @@ fi
 # (The downloaded source was already validated with doctor before it was applied —
 # see "validating downloaded source" above — so no second gate is needed here.)
 
-echo "[geneseed] rebuilding bundle -> $OUT (theme: ${THEME:-config default}, emit: $EMIT) ..."
-python3 build.py "${BUILD_ARGS[@]}"
+log "[geneseed] rebuilding bundle -> $OUT (theme: ${THEME:-config default}, emit: $EMIT) ..."
+if ! "$PY" build.py "${BUILD_ARGS[@]}" 2>&1 | tee -a "$LOG"; then
+  die E-BUILD "the bundle build FAILED (theme: ${THEME:-default}, emit: $EMIT). The build output is above and in $LOG."
+fi
 # (build.py persists the .geneseed-emit marker itself — global mode in $CFG, other
 # modes in $OUT — so the mode is remembered no matter which entrypoint set it.)
 
-echo "[geneseed] upgrade complete."
+log "[geneseed] ✓ upgrade complete. (full log: $LOG)"
