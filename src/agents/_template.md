@@ -21,12 +21,6 @@
 ## Procedure
 1. Step-by-step method this {{AGENT}} follows.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- Which tier the caller should route this {{AGENT}} to, and when to escalate. Read-only
-  investigation and debate seats belong on a cheap tier (universal {{LAW}} XV); reserve
-  the strongest model for genuine design/judgement work.
-
 ## Output contract
 - The exact shape of what this {{AGENT}} returns to the caller (e.g. a list of
   findings with file:line, a verdict, a summary of changes made).

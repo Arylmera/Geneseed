@@ -21,9 +21,5 @@
 2. Pre-mortem the 3am incident: how it fails under load, whether you can see it failing (metrics, logs), and how you roll it back.
 3. Weigh the standing cost — the on-call burden, the toil, the new ways to be paged — against the benefit.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal {{LAW}} XV).
-
 ## Output contract
 - An operability read: how it fails in production, what it needs to run safely (metrics, alerts, rollback), the on-call burden it adds, and a ship / hold-for-guardrails lean with the reason.

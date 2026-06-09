@@ -23,10 +23,6 @@
 2. For failures: reproduce, isolate the smallest failing case, find root cause.
 3. Cover edge cases and error paths, not just the happy path.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — writing and running tests is mechanical enough for the cheaper tier.
-
 ## Output contract
 - The test files written/changed, the command to run them, and the actual run
   output (pass/fail counts). For diagnosis: root cause + recommended fix location.

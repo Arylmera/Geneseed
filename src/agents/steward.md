@@ -21,9 +21,5 @@
 2. Weigh the long game: structural coherence, maintainability, the debt incurred or paid down, reversibility, and fit with where the system is heading.
 3. Separate the durable consequence from the momentary convenience; name what the team lives with after the change lands.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal {{LAW}} XV).
-
 ## Output contract
 - A long-term verdict: the structural benefits and risks, the debt this incurs or retires, how reversible it is, and a one-line keep-it-healthy recommendation with the trade-off it accepts.

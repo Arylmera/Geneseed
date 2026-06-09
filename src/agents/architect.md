@@ -22,10 +22,6 @@
 3. Break the chosen approach into isolated units, each with one purpose and a
    clear interface, ordered so each step is independently verifiable.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `opus` — design and trade-off judgement is the one place the stronger model earns its cost; a caller may downgrade for a small, well-scoped design.
-
 ## Output contract
 - A plan: the approach chosen and why, the affected files, and an ordered list of
   steps — each written as `N. <file or module> — <the change> — <how to verify it>`,

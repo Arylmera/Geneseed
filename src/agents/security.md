@@ -17,16 +17,11 @@
 - **Read-only.** May run dependency/secret scanners. Reports; does not patch.
 <!-- bash: allow -->
 
-
 ## Procedure
 1. Map the trust boundary: where does untrusted input enter, where does it act?
 2. Check for the common classes: injection, broken auth/authz, secret exposure,
    unsafe deserialization, path traversal, vulnerable dependencies.
 3. Confirm no secret is committed (universal {{LAW}} I).
-
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` for the scan; escalate to `opus` only when a finding needs deep exploit reasoning.
 
 ## Output contract
 - Findings as `severity — location — issue — remediation`, highest severity
