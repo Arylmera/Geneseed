@@ -1439,6 +1439,11 @@ def _setup_lines() -> int:
     if rc != 0:
         sys.stderr.write("[setup] build failed — no harness written (see the output above).\n")
         return rc
+    try:
+        import theme_anim
+        theme_anim.play_line(theme, True)        # themed install animation (motion → reveal card)
+    except Exception:
+        pass                                     # cosmetic only — never block a successful install
     for kind, text in _setup_summary_lines(theme, emit, out, root, True):
         print({"ok": "✓", "warn": "!", "info": "-"}.get(kind, "-") + " " + text)
     if _confirm("\nRun a health check (doctor) now?", True):
@@ -2321,8 +2326,58 @@ def _info_screen(stdscr, curses, pal, title, lines, footer) -> None:
             top = max(0, top - 1)
 
 
+def _themed_reveal(stdscr, curses, pal, theme) -> None:
+    """Curses install flourish: scroll the theme's ASCII sprite across the screen once
+    (pose-cycled, over its ground line), then hand off to the done screen. Skippable
+    with any key. Never raises — a render hiccup just ends the animation early."""
+    try:
+        import theme_anim
+    except Exception:
+        return
+    art = theme_anim.art_for(theme)
+    poses, ground, title = art["sprite"], art.get("ground", ""), art["title"]
+    h = max((len(p) for p in poses), default=0)
+    spw = max((len(r) for p in poses for r in p), default=0)
+    stdscr.nodelay(True)
+    try:
+        _h, w = stdscr.getmaxyx()
+        for i in range(w + spw + 1):
+            _clear_frame(stdscr)
+            _topbar(stdscr, pal, "Geneseed")
+            _put(stdscr, 1, max(1, (w - len(title)) // 2), title[: w - 2], pal["HEAD"])
+            base = 3
+            pose = poses[(i // 3) % len(poses)]
+            x = w - i                                # enter from the right, travel left
+            for r in range(h):
+                row = pose[r] if r < len(pose) else ""
+                if x >= 0:
+                    seg = row[: max(0, w - 1 - x)]
+                    if seg:
+                        _put(stdscr, base + r, x, seg)
+                else:
+                    seg = row[-x:][: w - 1]
+                    if seg:
+                        _put(stdscr, base + r, 0, seg)
+            if ground:
+                g = ground * ((w // max(1, len(ground))) + 2)
+                off = i % len(ground)
+                _put(stdscr, base + h, 0, g[off:off + w - 1], curses.A_DIM)
+            _botbar(stdscr, pal, "any key to continue")
+            stdscr.refresh()
+            curses.napms(22)
+            if stdscr.getch() != -1:
+                break
+    except Exception:
+        pass
+    finally:
+        try:
+            stdscr.nodelay(False)
+        except Exception:
+            pass
+
+
 def _setup_flow(stdscr) -> int:
-    """One seamless curses setup: form → build → summary → health check."""
+    """One seamless curses setup: form → build → reveal → summary → health check."""
     import curses
     pal = _tui_palette(curses)
     sel = _setup_tui(stdscr)
@@ -2339,6 +2394,8 @@ def _setup_flow(stdscr) -> int:
                         [("Build the harness", [sys.executable, str(BUILD), *argv])],
                         heading="building")
     ok = bool(status) and status[0] == "done"
+    if ok:
+        _themed_reveal(stdscr, curses, pal, theme)   # themed install flourish before the summary
     _info_screen(stdscr, curses, pal, _setup_done_title(flair, ok),
                  _setup_done_lines(flair, theme, emit, out, root, ok),
                  "Enter: run health check" if ok else "Enter: close")
