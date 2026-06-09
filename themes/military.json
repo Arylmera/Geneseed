@@ -35,6 +35,7 @@
   "DESC_BRAINSTORM": "Turn a raw objective into an approved plan before any code is cut.",
   "DESC_CLARIFY": "Debrief the user to fix the objective, scope, and success criteria of any mission, then confirm and log the key decisions before tasking the work.",
   "DESC_ROAST_ME": "Adversarial AAR on any artifact — blunt, specific, always actionable.",
+  "DESC_FRESH_EYES": "Task a clean-slate inspector briefed only on the original objective and the delivered work; it sets the pass criteria blind, then rules mission-met or not — uncontaminated by the operator's own confidence.",
   "ROAST_PERSONA": "a hard-nosed drill instructor who has watched this exact mistake get people killed",
   "DESC_COUNCIL": "Convene a panel of opposing positions to war-game a decision, then deliver a verdict with the dissent on record.",
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce, isolate, root-cause, confirm the kill.",

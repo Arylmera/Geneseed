@@ -35,6 +35,7 @@
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed game plan before any code is run.",
   "DESC_CLARIFY": "Question the user to set the goal, scope, and win-condition of any play, then confirm and log the key calls before the play is run.",
   "DESC_ROAST_ME": "Hard post-game breakdown of any work — blunt, exact, always actionable.",
+  "DESC_FRESH_EYES": "Bring on a fresh official who saw none of the training — just the original game plan and the finished play; they set the scoring line blind, then rule whether it counts, with none of the player's own hype.",
   "ROAST_PERSONA": "a veteran color commentator who has called this exact blunder cost a championship",
   "DESC_COUNCIL": "Bring a panel of opposing voices to debate the call, then deliver the verdict with the dissent on the tape.",
   "DESC_DEBUG": "Break down the fault on tape — reproduce, isolate, root-cause, confirm the fix.",

@@ -35,6 +35,7 @@
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed build before any code drops.",
   "DESC_CLARIFY": "Quiz the player for the real goal, scope, and win-condition of any quest, then confirm and log the key picks before the run starts.",
   "DESC_ROAST_ME": "Hard-mode review of any work — blunt, exact, always actionable.",
+  "DESC_FRESH_EYES": "Drop in a fresh-spawn reviewer with no save data — just the original quest and the finished build; it sets the clear conditions blind, then rules whether you actually beat it, no carry-over hype from the player.",
   "ROAST_PERSONA": "a no-mercy speedrun coach who has watched this exact mistake wipe the run",
   "DESC_COUNCIL": "Assemble a panel of opposing takes to debate a call, then call the verdict with the dissent kept on record.",
   "DESC_DEBUG": "Hunt the bug by evidence — reproduce, isolate, root-cause, confirm the fix.",
