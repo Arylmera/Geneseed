@@ -162,10 +162,11 @@ export const GeneseedWorkflow = async (ctx) => {
     args: toolHelper
       ? {
           name: toolHelper.schema.string().optional().describe("saved workflow name; omit to list available"),
-          // record(any) — an OBJECT with arbitrary keys. NOT schema.any(): an untyped
-          // `any` emits an empty ({}) JSON-schema property, which providers drop or
-          // flatten to a string, so the workflow script's `args` arrives empty.
-          args: toolHelper.schema.record(toolHelper.schema.any()).optional().describe("inputs object (arbitrary keys) passed to the workflow script as `args`"),
+          // Keep this `any()` — it's the only param shape known to register cleanly on
+          // this OpenCode build (record()/object schemas wedged tool registration → every
+          // session message stuck "queued"). The provider may still deliver the object as
+          // a JSON string or empty; normalizeArgs() in execute() recovers both cases.
+          args: toolHelper.schema.any().optional().describe("inputs passed to the workflow script as `args` (object, or a JSON object string)"),
         }
       : {
           name: { type: "string", description: "saved workflow name; omit to list available" },
