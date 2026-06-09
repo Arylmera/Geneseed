@@ -214,6 +214,13 @@ export const GeneseedLearn = async ({ client }) => {
     if (inFlight.has(sid)) return   // a run is already underway; the next idle re-arms
     inFlight.add(sid)
     try {
+      // Native subagent child sessions are task fragments, not user sessions —
+      // distilling them pollutes memory with partial, low-altitude facts. Skip
+      // anything that carries a parent link (field absent → treated as top-level).
+      const info = await client.session.get?.({ path: { id: sid } }).catch(() => null)
+      const meta = info?.data ?? info
+      if (meta?.parentID ?? meta?.parentId) return
+
       const memDir = await resolveMemoryDir()
       if (!memDir) {
         if (!warnedNoDir) {

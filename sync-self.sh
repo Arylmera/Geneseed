@@ -22,7 +22,15 @@ set -eo pipefail
 main() {
   local REPO="Arylmera/Geneseed"
   local REF="${1:-main}"
-  local HERE; HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # Resolve through symlinks like the geneseed launcher does — when invoked via a
+  # `geneseed link` symlink, HERE must be the real repo dir or SCRIPTS land elsewhere.
+  local SOURCE="${BASH_SOURCE[0]}" dir
+  while [ -h "$SOURCE" ]; do
+    dir="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    case "$SOURCE" in /*) ;; *) SOURCE="$dir/$SOURCE" ;; esac
+  done
+  local HERE; HERE="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 
   # The orchestration layer this updater owns (everything upgrade.sh's SYNC skips).
   local SCRIPTS=(upgrade.sh sync-self.sh geneseed bootstrap)

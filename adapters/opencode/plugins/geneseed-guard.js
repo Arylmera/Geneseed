@@ -81,7 +81,10 @@ export const GeneseedGuard = async () => {
           const p = pickPath(args)
           if (p && SECRET_RE.some((re) => re.test(p))) { deny(`write to secret/key file ${p} (Law I)`); return }
           if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Law I)`)
-        } else if (hasAny(tool, SHELL_TOOLS)) {
+        }
+        // NOT else-if: a compound tool name (e.g. exec_and_save) can match both
+        // classes, and the shell check must still run after the write check.
+        if (hasAny(tool, SHELL_TOOLS)) {
           const c = pickCommand(args)
           if (c && SHELL_BLOCK_RE.some((re) => re.test(c))) { deny(`catastrophic command (Law IV): ${c.slice(0, 80)}`); return }
           if (c && SHELL_WARN_RE.some((re) => re.test(c))) log(`WARN: irreversible op — confirm intent (Law IV): ${c.slice(0, 80)}`)

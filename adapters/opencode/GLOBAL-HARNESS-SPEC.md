@@ -352,11 +352,11 @@ git-tracked folder), else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`
    self-contained:
    ```bash
    cd /path/to/Geneseed
-   GENESEED_EMIT=opencode-global ./upgrade-imperial.sh    # or ./upgrade.sh / --theme neutral
+   GENESEED_EMIT=opencode-global ./upgrade.sh main imperial    # or any other theme
    ```
    This populates `~/.config/opencode/{AGENT.md,agents/,skills/,plugins/,memory/}`,
    wires `opencode.json` to the absolute `AGENT.md`, and remembers the mode in
-   `<cfg>/.geneseed-emit` — so every later bare `./upgrade-imperial.sh` stays global.
+   `<cfg>/.geneseed-emit` — so every later bare `./upgrade.sh` stays global.
    (Direct equivalent: `python build.py --emit opencode-global`.)
 
 2. **Point the learn plugin at the in-config memory store** (once):

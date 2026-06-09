@@ -95,6 +95,20 @@ test("budget exhaustion throws on the next agent call", async () => {
   await assert.rejects(() => rt.agent("p"), /token budget/)
 })
 
+test("agent returns null when the child session cannot be created", async () => {
+  // This is the null the saved workflows must guard against before interpolating
+  // a phase result into the next prompt (see research-plan-implement.js).
+  const client = { session: {
+    create: async () => { throw new Error("server down") },
+    prompt: async () => ({}),
+  } }
+  const rt = createRuntime({ client })
+  assert.equal(await rt.agent("p1"), null)
+  // Unguarded interpolation of that null reads as the literal string "null".
+  const research = await rt.agent("p2")
+  assert.ok(`Ground it in: ${research}`.includes("null"))
+})
+
 test("extractJson pulls JSON from a fenced reply", () => {
   assert.deepEqual(extractJson('here:\n```json\n{"a":1}\n```\nthanks'), { a: 1 })
   assert.deepEqual(extractJson('prefix {"b":[1,2]} suffix'), { b: [1, 2] })

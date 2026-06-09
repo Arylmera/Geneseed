@@ -41,7 +41,15 @@ REPO="Arylmera/Geneseed"
 REF="${1:-main}"                                   # branch or tag (default: main)
 THEME_ARG="${2:-}"                                 # optional: force a theme (neutral|imperial|…)
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PY="${PYTHON:-python3}"
+# Probe for an interpreter that actually RUNS — on Windows Git Bash, `python3` can
+# resolve to the Microsoft Store alias stub (exists, prints a hint, exits non-zero).
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  for c in python3 python py; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'pass' >/dev/null 2>&1; then PY="$c"; break; fi
+  done
+  PY="${PY:-python3}"
+fi
 
 # --- install diagnostics ---------------------------------------------------------
 # Every failure prints a TAGGED code ([geneseed][E-*]) and is appended to a persistent
@@ -193,10 +201,15 @@ CONFIG_THEME="$("$PY" -c 'import json,sys
 d=json.load(open(sys.argv[1]));print(d.get("theme",""))' "$HERE/harness.config.json" 2>/dev/null || true)"
 
 echo "[geneseed] refreshing factory files in $HERE ..."
+# Stage each item fully before swapping it in: a kill between the old `rm -rf` and
+# `cp -R` would leave the item permanently missing. With copy→rm→mv the vulnerable
+# window shrinks to two instant directory renames instead of a full tree copy.
 for item in "${SYNC[@]}"; do
   if [ -e "$NEW/$item" ]; then
+    rm -rf "$HERE/$item.geneseed-new"
+    cp -R "$NEW/$item" "$HERE/$item.geneseed-new"
     rm -rf "$HERE/$item"
-    cp -R "$NEW/$item" "$HERE/$item"
+    mv "$HERE/$item.geneseed-new" "$HERE/$item"
   fi
 done
 

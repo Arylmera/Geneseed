@@ -579,27 +579,34 @@ def _merge_opencode_json(path: Path, agent_path: str) -> None:
     path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
 
-def _copy_plugins(dst: Path) -> int:
+def _copy_plugins(dst: Path, owned: list | None = None) -> int:
     """Copy the static OpenCode plugins (context, learn, guard, workflow) into `dst`.
-    They are maintained files, not rendered from src, so copy them verbatim."""
+    They are maintained files, not rendered from src, so copy them verbatim. When the
+    caller tracks an ownership manifest (the global emit), pass `owned` and each copy
+    is appended to it as `plugins/<name>`."""
     n = 0
     if PLUGIN_SRC.is_dir():
         dst.mkdir(parents=True, exist_ok=True)
         for js in sorted(PLUGIN_SRC.glob("*.js")):
             shutil.copy2(js, dst / js.name)
+            if owned is not None:
+                owned.append(f"plugins/{js.name}")
             n += 1
     return n
 
 
-def _copy_workflows(dst: Path) -> int:
+def _copy_workflows(dst: Path, owned: list | None = None) -> int:
     """Copy the saved, code-driven workflow scripts (incl. the `_runtime.js` core) into
     `dst`. They sit beside the plugins dir so `geneseed-workflow.js` resolves them via a
-    relative `../workflows/` path. Maintained files, copied verbatim like the plugins."""
+    relative `../workflows/` path. Maintained files, copied verbatim like the plugins;
+    `owned` works as in `_copy_plugins` (entries land as `workflows/<name>`)."""
     n = 0
     if WORKFLOW_SRC.is_dir():
         dst.mkdir(parents=True, exist_ok=True)
         for js in sorted(WORKFLOW_SRC.glob("*.js")):
             shutil.copy2(js, dst / js.name)
+            if owned is not None:
+                owned.append(f"workflows/{js.name}")
             n += 1
     return n
 
@@ -874,21 +881,8 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     theme_file = _write_theme(cfg / "themes", theme_name, theme)   # branded /theme
     owned.append(theme_file.relative_to(cfg).as_posix())
 
-    n_plugins = 0
-    if PLUGIN_SRC.is_dir():
-        (cfg / "plugins").mkdir(parents=True, exist_ok=True)
-        for js in sorted(PLUGIN_SRC.glob("*.js")):
-            shutil.copy2(js, cfg / "plugins" / js.name)
-            owned.append(f"plugins/{js.name}")
-            n_plugins += 1
-
-    n_workflows = 0
-    if WORKFLOW_SRC.is_dir():
-        (cfg / "workflows").mkdir(parents=True, exist_ok=True)
-        for js in sorted(WORKFLOW_SRC.glob("*.js")):
-            shutil.copy2(js, cfg / "workflows" / js.name)
-            owned.append(f"workflows/{js.name}")
-            n_workflows += 1
+    n_plugins = _copy_plugins(cfg / "plugins", owned)
+    n_workflows = _copy_workflows(cfg / "workflows", owned)
 
     mem_status = _global_memory(cfg, theme, items, out)
     ensure_memory_index(cfg / "memory")   # guarantee the index on every path (seed/migrate/keep)
@@ -900,6 +894,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     # Now that the whole current set is on disk, remove only what we owned before but
     # no longer produce (a removed agent/skill, a disabled primary/command). Everything
     # current was just (over)written above, so a live file is never momentarily absent.
+    prune_failed = []
     for relp in sorted(set(old_owned) - set(owned)):
         victim = cfg / relp
         try:
@@ -908,8 +903,13 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
                 if victim.name == "SKILL.md" and victim.parent != cfg \
                         and not any(victim.parent.iterdir()):
                     victim.parent.rmdir()
-        except OSError:
-            pass
+        except OSError as e:
+            prune_failed.append(f"{relp} ({e})")
+    if prune_failed:
+        # A locked/permission-blocked file stays on disk but is no longer in the
+        # manifest — name it so the user can remove it by hand.
+        print("[geneseed] WARN: could not remove stale owned file(s): "
+              + ", ".join(prune_failed), file=sys.stderr)
 
     manifest_path.write_text(
         json.dumps({"_comment": "Files owned by Geneseed's --emit opencode-global. "

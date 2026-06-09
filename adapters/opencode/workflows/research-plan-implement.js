@@ -21,12 +21,16 @@ export default async function run(rt) {
     `Summarise the key findings, trade-offs, and any sources.`,
     { label: "research", phase: "Research", agent: "explorer" },
   )
+  // agent() returns null on child failure — stop the cascade instead of
+  // interpolating the literal string "null" into the next phase's prompt.
+  if (!research) return { error: "research phase failed — see trace", topic }
 
   phase("Plan")
   const plan = await agent(
     `Design a concrete implementation plan for: ${topic}.\n\nGround it in this research:\n${research}`,
     { label: "plan", phase: "Plan", agent: "architect" },
   )
+  if (!plan) return { error: "plan phase failed — see trace", topic, research }
 
   phase("Implement")
   const implementation = await agent(

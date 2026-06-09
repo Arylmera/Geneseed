@@ -36,7 +36,16 @@ while [ -h "$SOURCE" ]; do
   case "$SOURCE" in /*) ;; *) SOURCE="$dir/$SOURCE" ;; esac
 done
 HERE="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-PY="${PYTHON:-python3}"
+# Pick the first interpreter that actually RUNS — on Windows Git Bash, `python3`
+# resolves to the Microsoft Store alias stub, which exists on PATH but only prints
+# an install hint and exits non-zero. $PYTHON still overrides everything.
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  for c in python3 python py; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'pass' >/dev/null 2>&1; then PY="$c"; break; fi
+  done
+  PY="${PY:-python3}"
+fi
 
 # Bare `./geneseed` opens the interactive main menu.
 if [ "$#" -eq 0 ]; then set -- menu; fi

@@ -190,6 +190,9 @@ export function createRuntime(ctx) {
   const trace = []
   const emit = (line) => { trace.push(line); if (typeof sink === "function") sink(line) }
 
+  // Budget meters OUTPUT tokens only (deliberate, per the v1 spec): output is what
+  // the workflow author controls via prompt design; input varies with repo size and
+  // would make the same script exhaust wildly different budgets across machines.
   const budget = {
     get total() { return budgetTotal },
     spent: () => spent,

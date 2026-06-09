@@ -15,4 +15,13 @@
 
 set -eo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${PYTHON:-python3}" "$HERE/rituals/harness.py" bootstrap "$@"
+# Probe for an interpreter that actually RUNS — on Windows Git Bash, `python3` can
+# resolve to the Microsoft Store alias stub (exists, prints a hint, exits non-zero).
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  for c in python3 python py; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'pass' >/dev/null 2>&1; then PY="$c"; break; fi
+  done
+  PY="${PY:-python3}"
+fi
+exec "$PY" "$HERE/rituals/harness.py" bootstrap "$@"

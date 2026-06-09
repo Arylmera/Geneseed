@@ -137,8 +137,9 @@ both `.js` and `.ts` are accepted. The directory does **not** exist by default, 
 create it the first time.
 
 - **Global (recommended — the bundle is used everywhere):** **run this from inside
-  the Geneseed folder.** It installs both the learn plugin and the
-  [context plugin](#doc-enforcement--the-context-plugin) (the `*.js` glob), and
+  the Geneseed folder.** It installs all four plugins — learn, the
+  [context plugin](#doc-enforcement--the-context-plugin), guard, and workflow
+  (the `*.js` glob) — and
   points `$GENESEED_HARNESS` at the sibling bundle `upgrade.sh` builds at
   `../Harness` — so the plugins find your memory store and `context.json` with no
   hand-typed path:
@@ -233,11 +234,36 @@ swallows every error. Output mirrors `rituals/harness.py context`.
   block entirely and fall back to the AGENT.md project-context Law (soft,
   agent-discipline — no injection).
 
-**Install:** the same step as the learn plugin — `cp …/plugins/*.js` copies both;
-`build --emit opencode` and `--emit opencode-global` place both for you. It uses
+**Install:** the same step as the learn plugin — `cp …/plugins/*.js` copies all
+four plugins (context, learn, guard, workflow); `build --emit opencode` and
+`--emit opencode-global` place them for you. It uses
 `session.created`, `session.prompt` `noReply`, `session.messages`, `session.get`,
 and the experimental `session.compacting` hook — all confirmed against the current
 OpenCode docs; it degrades quietly if a field differs in your build.
+
+## Workflow tool — the `workflow` plugin
+
+[`plugins/geneseed-workflow.js`](plugins/geneseed-workflow.js) registers ONE custom
+tool, `workflow`, that runs saved, code-driven orchestration scripts — the
+deterministic counterpart to the model-driven `council` / `parallel-agents` skills:
+the script, not the model, drives the control flow.
+
+- **Saved scripts only (v1):** the tool loads `<name>.js` from the sibling
+  `workflows/` dir (`.opencode/workflows/` per-repo, `<config>/workflows/` global;
+  override with `GENESEED_WORKFLOWS_DIR`). No model-authored scripts are eval'd.
+- **Call shape:** `workflow({ name, args })` — call with no name to list what is
+  available. Shipped: `council`, `review`, `research-plan-implement`.
+- **Runtime API** ([`workflows/_runtime.js`](workflows/_runtime.js)): scripts get
+  `agent()`, `parallel()`, `pipeline()`, `phase()`, `log()`, `budget`, `args`.
+  Child work runs as real OpenCode sessions (created, prompted, then deleted);
+  concurrency is capped at `min(16, cores − 2)`; `budget` meters output tokens.
+- **Synchronous and contained:** the tool blocks until the workflow finishes; a
+  phase-by-phase trace plus the full result land in
+  `.geneseed/workflow-runs/<runId>.log`. Failures are reported, never thrown into
+  the session. `GENESEED_DEBUG=1` enables stderr logging.
+
+The matching `workflow` **skill** (in the rendered bundle) teaches the agent when
+to reach for the tool; the plugin is what actually executes the scripts.
 
 ## Global install — everything in the config dir
 

@@ -360,18 +360,25 @@ export const GeneseedContext = async (ctx) => {
         event.properties?.sessionID ?? event.payload?.sessionID ??
         event.properties?.info?.id ?? event.payload?.info?.id
       if (!sid || done.has(sid)) return
-      done.add(sid)
 
       try {
-        // Don't pollute the learn plugin's throwaway distil sessions.
-        let title = ""
+        // Don't pollute the learn plugin's throwaway distil sessions, and don't
+        // re-inject into native subagent child sessions (they inherit the parent's
+        // context). The sid is only marked done AFTER the guards pass — marking it
+        // earlier would permanently skip a session when a transient session.get
+        // failure let it through the title check.
+        let title = "", parent
         try {
           const info = await client.session.get({ path: { id: sid } })
-          title = info?.title ?? info?.data?.title ?? ""
+          const meta = info?.data ?? info
+          title = meta?.title ?? ""
+          parent = meta?.parentID ?? meta?.parentId
         } catch {}
+        if (parent) { log("skipped: child/subagent session"); return }
         if (title.startsWith("geneseed-")) { log("skipped: geneseed-* session"); return }
 
         if (await alreadyInjected(client, sid)) { log("skipped: already injected (marker present)"); return }
+        done.add(sid)
 
         const { block, src } = await resolveBlock(root)
         if (!block) { log(`no docs discovered in ${root}`); return }

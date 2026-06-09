@@ -23,6 +23,9 @@ export default async function run(rt) {
   const { agent, parallel, pipeline, phase, log, args } = rt
   const target = args?.target || "the current working-tree changes (git diff)"
   phase("Review")
+  // Stage 2 runs once per dimension — announce the Verify phase only on the first
+  // entry or the trace shows one banner per dimension.
+  let verifyAnnounced = false
 
   const results = await pipeline(
     DIMENSIONS,
@@ -35,7 +38,7 @@ export default async function run(rt) {
     ),
     // Stage 2 — verify this dimension's findings in parallel (no barrier on other dims).
     (review, d) => {
-      phase("Verify")
+      if (!verifyAnnounced) { verifyAnnounced = true; phase("Verify") }
       const findings = review?.findings || []
       if (!findings.length) { log(`${d.key}: no findings`); return [] }
       return parallel(findings.map((f) => () =>

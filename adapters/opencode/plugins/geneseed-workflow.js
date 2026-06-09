@@ -47,7 +47,9 @@ async function loadWorkflow(name) {
   const rel = path.relative(WORKFLOWS_DIR, file)
   if (rel.startsWith("..") || path.isAbsolute(rel)) throw new Error("workflow path escapes workflows dir")
   await fs.access(file)
-  const mod = await import(pathToFileURL(file).href)
+  // Cache-bust: Node's ESM cache holds the first import for the process lifetime,
+  // so an edited workflow script would otherwise run stale until OpenCode restarts.
+  const mod = await import(pathToFileURL(file).href + "?t=" + Date.now())
   const run = mod.default || mod.run
   if (typeof run !== "function") throw new Error(`workflow "${name}" has no default/run export`)
   return { meta: mod.meta || { name }, run }
@@ -137,7 +139,7 @@ export const GeneseedWorkflow = async (ctx) => {
 
     // Lazily import the runtime so a broken runtime never blocks tool registration.
     let createRuntime
-    try { ({ createRuntime } = await import(pathToFileURL(path.join(WORKFLOWS_DIR, "_runtime.js")).href)) }
+    try { ({ createRuntime } = await import(pathToFileURL(path.join(WORKFLOWS_DIR, "_runtime.js")).href + "?t=" + Date.now())) }
     catch (e) { return `Workflow runtime unavailable: ${e?.message || e}` }
 
     const rt = createRuntime({ client, directory, worktree, args: normalizeArgs(argv?.args), log: sink })

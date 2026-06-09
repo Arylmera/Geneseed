@@ -768,6 +768,10 @@ def cmd_learn(args: argparse.Namespace) -> int:
     else:
         # No memory dir found, or model said NOTHING — surface the output instead.
         sys.stdout.write(output)
+    if proc.returncode != 0 and proc.stderr:
+        # Surface the LLM's own error (auth, quota, bad model name) — a bare
+        # non-zero exit with stderr swallowed is undiagnosable.
+        sys.stderr.write(proc.stderr)
     return proc.returncode
 
 
@@ -853,7 +857,6 @@ def cmd_diff(args: argparse.Namespace) -> int:
     elif edited:
         print("\nRun with --full to see the line-level diffs.")
     return 0
-    return 0
 
 
 # ---- version + uninstall (deployed-install lifecycle) ----------------------------
@@ -922,8 +925,11 @@ def _status_data() -> dict:
     }
 
 
-_ANSI = {"red": "31", "green": "32", "yellow": "33", "blue": "34",
-         "magenta": "35", "cyan": "36", "white": "37"}
+# Terminal escape-code map ({name: "31"}) — named _ANSI_CODES, not _ANSI, so it
+# cannot be confused with build._ANSI, which maps the same names to bare ints for
+# OpenCode theme slots.
+_ANSI_CODES = {"red": "31", "green": "32", "yellow": "33", "blue": "34",
+               "magenta": "35", "cyan": "36", "white": "37"}
 
 
 def _color_enabled() -> bool:
@@ -967,7 +973,7 @@ def _status_lines(d: dict, color: bool = False) -> list[str]:
     title = f" {badge} Geneseed {emdash} status "
     width = max([len(b) for b in body] + [len(verdict), len(title) + 2])
 
-    ac = _ANSI.get(d["accent"], "36")
+    ac = _ANSI_CODES.get(d["accent"], "36")
 
     def c(s: str, code: str) -> str:
         return f"\x1b[{code}m{s}\x1b[0m" if color else s
@@ -1151,6 +1157,7 @@ def _uninstall_global(target: Path, archive_memory: bool) -> dict:
     except (json.JSONDecodeError, OSError):
         owned = []
     removed = 0
+    failed = []
     for rel in owned:
         victim = target / rel
         try:
@@ -1160,8 +1167,14 @@ def _uninstall_global(target: Path, archive_memory: bool) -> dict:
                 if victim.name == "SKILL.md" and victim.parent != target \
                         and not any(victim.parent.iterdir()):
                     victim.parent.rmdir()
-        except OSError:
-            pass
+        except OSError as e:
+            failed.append(f"{rel} ({e})")
+    if failed:
+        # A locked or permission-blocked file survives the uninstall while the
+        # manifest below is deleted — name the leftovers so the user can finish
+        # the job by hand instead of believing the dir is clean.
+        sys.stderr.write("[uninstall] WARN: could not remove "
+                         f"{len(failed)} owned file(s): {', '.join(failed)}\n")
     for d in ("agents", "skills", "plugins"):
         p = target / d
         try:

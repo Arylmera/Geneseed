@@ -88,6 +88,8 @@ to native **skills**, not slash commands (same `SKILL.md` shape as Claude Code).
 | plugin on `session.created` | **context plugin (v2)** — auto-discovers & injects the repo's `eager` docs |
 | plugin on `experimental.session.compacting` | **context plugin** — re-pushes the `eager` docs so they survive compaction |
 | plugin on `session.idle` | **learn plugin** — distils memory into `memory/` (debounced to fire once, at session end) |
+| plugin on `tool.execute.before` | **guard plugin** — blocks secret-file writes and catastrophic shell (Laws I & IV; `GENESEED_GUARD=off\|warn`) |
+| plugin registering a custom tool | **workflow plugin** — the `workflow` tool runs saved orchestration scripts from `workflows/` |
 | `context.json` / `.harness/` (manifest) | *optional* override when discovery doesn't fit |
 
 ## 6. "Why is `context.json` (or `AGENT.md`) listed twice?"

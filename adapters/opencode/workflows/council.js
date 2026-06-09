@@ -32,6 +32,12 @@ export default async function run(rt) {
 
   const wanted = Array.isArray(args?.seats) && args.seats.length ? args.seats : null
   const seats = wanted ? SEATS.filter(([role]) => wanted.includes(role)) : SEATS
+  if (!seats.length) {
+    return { error: `no seats matched ${JSON.stringify(wanted)} — valid: ${SEATS.map(([r]) => r).join(", ")}` }
+  }
+  if (wanted && seats.length < wanted.length) {
+    log(`ignored unknown seat name(s): ${wanted.filter((w) => !SEATS.some(([r]) => r === w)).join(", ")}`)
+  }
 
   phase("Positions")
   const briefs = (await parallel(seats.map(([role, charter]) => () =>
@@ -40,7 +46,7 @@ export default async function run(rt) {
       `Argue ONLY this stance: ${charter}. Give a tight, steelmanned brief — ` +
       `no hedging, no strawmen.`,
       { label: `seat:${role}`, phase: "Positions", agent: role },
-    ).then((text) => ({ role, text }))))).filter(Boolean)
+    ).then((text) => ({ role, text }))))).filter((b) => b && b.text)
 
   phase("Synthesis")
   const dossier = briefs.map((b) => `### ${b.role}\n${b.text}`).join("\n\n")
