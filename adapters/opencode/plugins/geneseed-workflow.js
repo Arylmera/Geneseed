@@ -92,6 +92,16 @@ export const GeneseedWorkflow = async (ctx) => {
   try { ({ tool: toolHelper } = await import("@opencode-ai/plugin")) }
   catch { dlog("@opencode-ai/plugin tool helper unavailable — registering a raw tool def") }
 
+  // One-line load banner (always on) so a restart visibly confirms the plugin loaded
+  // and the `workflow` tool is registered — and WARNS if this OpenCode build lacks the
+  // custom-tool helper (the silent "tool never appears" failure).
+  try {
+    const names = await listWorkflows()
+    const warn = toolHelper ? ""
+      : " — WARN: @opencode-ai/plugin 'tool' helper missing; the workflow tool may NOT register on this OpenCode version"
+    console.error(`[geneseed-workflow] loaded — tool 'workflow' registered, ${names.length} workflow(s) [${names.join(", ") || "none"}] from ${WORKFLOWS_DIR}${warn}`)
+  } catch (e) { console.error(`[geneseed-workflow] loaded but could not list workflows: ${e?.message || e}`) }
+
   const execute = async (argv) => {
     const name = (argv?.name || "").trim()
     const available = await listWorkflows()

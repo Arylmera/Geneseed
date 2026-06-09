@@ -3187,9 +3187,9 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
 _MENU_ACTIONS_RAW = [
     ("browse", "Browse", "Agents, skills and laws, with their full specs."),
     ("diff", "Review local edits", "Compare a deployed harness against source."),
-    ("setup", "Set up / re-theme", "Pick a theme and install mode, then build."),
-    ("update", "Update only", "Refresh the scripts + factory from upstream (no setup)."),
-    ("bootstrap", "Update & set up", "Pull the latest from upstream, then run the setup wizard."),
+    ("setup", "Refresh / set up (no download)", "Re-theme or change install mode and rebuild from your LOCAL source — no upstream download."),
+    ("update", "Update only (download + rebuild)", "Download the latest scripts + factory from upstream and rebuild — no setup wizard."),
+    ("bootstrap", "Update & set up (download + wizard)", "Download the latest from upstream, then run the setup wizard."),
     ("build", "Rebuild bundle", "Re-render the harness from src."),
     ("memory", "Memory", "Browse / search the memory store; delete stale facts."),
     ("status", "Status", "Theme, install mode, counts, and the memory store."),
