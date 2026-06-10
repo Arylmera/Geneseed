@@ -1,5 +1,13 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "python rituals/harness.py git-gate" }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "startup|clear",

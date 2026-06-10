@@ -29,7 +29,10 @@
   "DESC_HISTORIAN": "Reads the old grimoires — what was tried before, how it fared, and the lesson for this casting.",
   "DESC_PLAN": "Inscribe the ritual before a non-trivial working; track progress as it unfolds.",
   "DESC_MIGRATE": "Transmute to the new version without a backfire — read the tome, one rune at a time, trials green between each.",
+  "DESC_GIT_ARCHAEOLOGY": "Scry the chronicle for when the curse took hold or why a rune was set — bisect, blame, and the pickaxe, disturbing nothing.",
+  "DESC_GIT_RESCUE": "Mend a broken or tangled grimoire, or rewrite its history without a backfire — reflog and undo, every working warded by a backup.",
   "DESC_REPO_MAP": "Chart the sanctum — a single-read map of the repository, kept current.",
+  "DESC_DOCUMENT_PROJECT": "Set the project's tomes in accord with the living code — inscribe or mend the doc tree, and re-conjure a single offline HTML overview of the essential workings.",
   "DESC_COMMIT": "Gather only the reagents this working touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Scry a diff or petition — soundness first, craft after.",
   "DESC_BRAINSTORM": "Turn a raw notion into an agreed design before any rune is cut.",
@@ -82,6 +85,9 @@
   "SKILL": "Spell",
   "SKILLS": "Spells",
   "MEMORY": "Grimoire",
+  "NOTEBOOK": "Study",
+  "EPI_NOTEBOOK": "A study of your own — order it as your craft requires.",
+  "INTRO_NOTEBOOK": "This is a study that is **yours alone** — unlike the shared Sanctum around you, every leaf here is your own, to inscribe, arrange, move, and keep as your craft requires.",
   "VAULT": "Sanctum",
   "DESC_WORKFLOW": "Invoke a saved ritual that binds your familiars by inscribed rite — many sent at once, their auguries gathered and proven in one deterministic casting."
 }

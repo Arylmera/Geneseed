@@ -78,8 +78,30 @@ class BuildRoundTripTests(unittest.TestCase):
             self.assertTrue((tmp / "AGENT.md").is_file())
             self.assertTrue((tmp / "laws" / "universal.md").is_file())
             self.assertTrue((tmp / "memory" / "MEMORY.md").is_file())
+            # The agent's own freeform space ships its convention + a seeded index.
+            self.assertTrue((tmp / "notebook" / "README.md").is_file())
+            self.assertTrue((tmp / "notebook" / ".gitignore").is_file())
+            self.assertTrue((tmp / "notebook" / "NOTEBOOK.md").is_file())
             # context.json stub is created once.
             self.assertTrue((tmp / "context.json").is_file())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_notebook_is_preserved_across_rebuild(self):
+        """The notebook is the agent's own store: like memory it is NOT an owned dir,
+        so a rebuild must refresh the convention in place without wiping the index or
+        any file the agent kept there."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp)
+            # The agent writes its own index + a freeform file.
+            (tmp / "notebook" / "NOTEBOOK.md").write_text("# Notebook Index\n- kept\n",
+                                                          encoding="utf-8")
+            (tmp / "notebook" / "scratch.md").write_text("my own work", encoding="utf-8")
+            build.build("neutral", tmp)   # rebuild over the same dir
+            self.assertEqual((tmp / "notebook" / "NOTEBOOK.md").read_text(encoding="utf-8"),
+                             "# Notebook Index\n- kept\n")
+            self.assertTrue((tmp / "notebook" / "scratch.md").is_file())
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -200,7 +222,8 @@ class OpencodeExtrasTests(unittest.TestCase):
             data = _json.loads(cfg.read_text(encoding="utf-8"))
             self.assertIn("permission", data)
             self.assertEqual(data["permission"]["bash"]["rm -rf *"], "ask")
-            # Law XX backstop: every push is gated, not just force-push
+            # Law XX backstop: every commit AND push is gated, not just force-push
+            self.assertEqual(data["permission"]["bash"]["git commit*"], "ask")
             self.assertEqual(data["permission"]["bash"]["git push*"], "ask")
             # an existing policy is never overwritten
             cfg.write_text('{"permission": {"bash": "allow"}}', encoding="utf-8")

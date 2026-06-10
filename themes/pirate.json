@@ -29,7 +29,10 @@
   "DESC_HISTORIAN": "Keeps the log of old voyages — what was tried before, how it went, and the lesson for this run.",
   "DESC_PLAN": "Chart the run before a non-trivial task; mark progress as you sail.",
   "DESC_MIGRATE": "Sail to the new version without springing a leak — read the charts, one change at a time, trials green between each.",
+  "DESC_GIT_ARCHAEOLOGY": "Dive the ship's log for when she sprang a leak or why a plank was laid — bisect, blame, and the pickaxe, hands off the cargo.",
+  "DESC_GIT_RESCUE": "Right a wrecked or fouled hold, or rewrite her log without sinkin' her — reflog and undo, every move with a backup line rigged.",
   "DESC_REPO_MAP": "Chart the waters — a single-read map of the repository, kept current.",
+  "DESC_DOCUMENT_PROJECT": "Bring the ship's log and charts into line with the living code — raise or mend the doc tree, and re-draw a single offline HTML overview of what matters most.",
   "DESC_COMMIT": "Load only the cargo this run touched and seal a focused commit.",
   "DESC_CODE_REVIEW": "Inspect a diff or petition — correctness first, craft after.",
   "DESC_BRAINSTORM": "Turn a raw notion into an agreed course before any plank is cut.",
@@ -82,6 +85,9 @@
   "SKILL": "Knack",
   "SKILLS": "Knacks",
   "MEMORY": "Logbook",
+  "NOTEBOOK": "Chart Room",
+  "EPI_NOTEBOOK": "Your own table to spread the charts — lay 'em out as ye please.",
+  "INTRO_NOTEBOOK": "This be your **own** quarters — unlike the shared Hold around ye, every scrap here is yours to make, lay out, shift, and keep however ye please.",
   "VAULT": "Hold",
   "DESC_WORKFLOW": "Run a saved set o orders that drives yer crew by the chart — many sent out at once, their plunder gathered an checked in one clean voyage."
 }

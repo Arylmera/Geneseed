@@ -31,20 +31,28 @@ const SECRET_RE = [
 // .env files are often edited legitimately → WARN, don't hard-block.
 const SECRET_WARN_RE = [/(^|\/)\.env(\.[\w.-]+)?$/i]
 
-// Catastrophic, effectively irreversible shell → BLOCK.
+// Catastrophic, effectively irreversible shell → BLOCK. Both Unix and Windows shells,
+// since OpenCode runs natively on Windows and the agent may emit cmd / PowerShell.
 const SHELL_BLOCK_RE = [
   /\brm\s+-[a-z]*r[a-z]*f?[a-z]*\s+(--no-preserve-root\s+)?\/(\s|$)/, // rm -rf /
   /\brm\s+-[a-z]*r[a-z]*f?[a-z]*\s+~(\/)?(\s|$)/,                     // rm -rf ~
   /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,                         // fork bomb
   /\bmkfs\.\w+\s+\/dev\//,                                            // format a device
   /\bdd\b[^\n]*\bof=\/dev\/(sd|nvme|hd|disk)/,                        // dd over a raw disk
+  /\bformat\s+[a-z]:/i,                                              // Windows: format a drive
+  /\b(rmdir|rd)\b[^\n]*\/s\b[^\n]*\b[a-z]:[\\/]?(\s|"|$)/i,          // Windows: rd /s /q C:\
+  /\bdel\b[^\n]*\/s\b[^\n]*\b[a-z]:[\\/]?(\s|"|$)/i,                 // Windows: del /s /q C:\
+  /\bremove-item\b[^\n]*-recurse\b[^\n]*-force\b/i,                  // PowerShell rm -rf
+  /\bremove-item\b[^\n]*-force\b[^\n]*-recurse\b/i,                  // (either flag order)
 ]
 // History-rewriting / irreversible git ops → WARN.
 const SHELL_WARN_RE = [/\bgit\s+push\b[^\n]*(--force\b|-f\b)/, /\bgit\s+reset\s+--hard\b/]
 
 function pickPath(args) {
   for (const k of ["filePath", "path", "file", "target", "filename"]) {
-    if (args && typeof args[k] === "string") return args[k]
+    // Normalize Windows backslashes to `/` so the secret-path patterns (which use `/`
+    // as the segment separator) match `C:\Users\me\.ssh\id_rsa` the same as a POSIX path.
+    if (args && typeof args[k] === "string") return args[k].replace(/\\/g, "/")
   }
   return ""
 }

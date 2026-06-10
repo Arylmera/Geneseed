@@ -29,7 +29,10 @@
   "DESC_HISTORIAN": "Brings the precedent — what was tried before, how it went, and the lesson for this decision.",
   "DESC_PLAN": "Write a plan to a file before executing a non-trivial task; track progress as you go.",
   "DESC_MIGRATE": "Upgrade a dependency or API safely — read the guide, one change at a time, tests green between each.",
+  "DESC_GIT_ARCHAEOLOGY": "Investigate the history to find when a regression landed or why code exists — bisect, blame, and the pickaxe, read-only.",
+  "DESC_GIT_RESCUE": "Recover a broken or messy repo, or rewrite history safely — reflog, undo, and rebase behind a backup branch.",
   "DESC_REPO_MAP": "Create and maintain a one-read orientation map of the repository.",
+  "DESC_DOCUMENT_PROJECT": "Bring the project's own documentation into line with the current code — create or reconcile the doc tree, and regenerate a single offline HTML overview of the important parts.",
   "DESC_COMMIT": "Stage the right paths and write a focused commit.",
   "DESC_CODE_REVIEW": "Review a diff or PR for correctness first, quality second.",
   "DESC_BRAINSTORM": "Turn a raw idea into an approved design before any code is written.",
@@ -82,6 +85,9 @@
   "SKILL": "Skill",
   "SKILLS": "Skills",
   "MEMORY": "Memory",
+  "NOTEBOOK": "Notebook",
+  "EPI_NOTEBOOK": "A space of your own — arrange it however serves the work.",
+  "INTRO_NOTEBOOK": "This is a working space that is **yours alone** — unlike the shared Workspace around you, you own every file here, to create, organise, move, and keep however serves the work.",
   "VAULT": "Workspace",
   "DESC_WORKFLOW": "Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass."
 }

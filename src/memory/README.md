@@ -11,6 +11,10 @@ file**. An agent reads `MEMORY.md` (the local index it creates) at the start of 
 session and writes a new file whenever a session yields something worth keeping
 (universal {{LAW}} VI).
 
+This store is for **curated facts**, written for recall. For freeform working space
+the agent shapes for itself — plans, scratch designs, working theories, with no
+imposed format — see the {{NOTEBOOK}} (`../{{DIR_NOTEBOOK}}/`).
+
 ## File format
 
 Each memory is a Markdown file with frontmatter:

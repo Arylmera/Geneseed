@@ -39,6 +39,23 @@ CAPABILITY_LINK_RE = re.compile(r"\[([^\]]+)\]\((?:agents|skills)/[A-Za-z0-9_-]+
 
 TEXT_SUFFIXES = {".md", ".tmpl", ".json", ".txt", ".yml", ".yaml"}
 
+# Third-party skills vendored VERBATIM as multi-file folders under src/skills/<name>/
+# (not Geneseed-authored flat skills). They carry their own license and their internal
+# cross-links point at the upstream project's own files — some of which are intentionally
+# NOT vendored — so they are exempt from the hermeticity / dead-link and authoring gates
+# that govern Geneseed's own specs. They ride along in the `files` emit (rglob copies the
+# folder through) and, being nested, are invisible to the flat-skill native emit and the
+# skill counts. See THIRD-PARTY.md for provenance + license.
+VENDORED_SKILL_DIRS = ("cmux", "cmux-workspace")
+
+
+def is_vendored_path(rel) -> bool:
+    """True if a bundle-relative path lives under a vendored skill folder
+    (skills/<vendored>/…). DIR_SKILLS is always the neutral 'skills', so the second
+    segment is the skill name — match it against the vendored set."""
+    parts = Path(rel).parts
+    return len(parts) >= 2 and parts[0] == "skills" and parts[1] in VENDORED_SKILL_DIRS
+
 
 def load_theme(name: str) -> dict:
     path = THEMES / f"{name}.json"
@@ -85,6 +102,7 @@ SRC_DIR_TOKENS = {
     "agents": "DIR_AGENTS",
     "skills": "DIR_SKILLS",
     "memory": "DIR_MEMORY",
+    "notebook": "DIR_NOTEBOOK",
 }
 
 # Document STRUCTURE is theme-INDEPENDENT — the section *layout*, the harness name, the
@@ -99,6 +117,7 @@ STRUCTURE = {
     "HARNESS": "Geneseed", "CHARTER": "Charter", "CONTEXT": "Context",
     "SCRIPT": "Script", "SCRIPTS": "Scripts",
     "DIR_LAWS": "laws", "DIR_AGENTS": "agents", "DIR_SKILLS": "skills", "DIR_MEMORY": "memory",
+    "DIR_NOTEBOOK": "notebook",
 }
 
 
@@ -110,8 +129,10 @@ def effective_theme(theme_name: str) -> dict:
     return {**load_theme(theme_name), **STRUCTURE}
 
 # Dirs the build fully owns: wiped and regenerated each run so a renamed/removed
-# source file never leaves a stale copy behind. `memory` is intentionally NOT here —
-# it holds the agent's runtime MEMORY.md + fact files and is refreshed in place.
+# source file never leaves a stale copy behind. `memory` and `notebook` are
+# intentionally NOT here — they hold the agent's runtime stores (MEMORY.md + fact
+# files; the NOTEBOOK.md index + the agent's own freeform files) and are refreshed
+# in place, never wiped, so nothing the agent kept is ever destroyed by a rebuild.
 OWNED_SRC_DIRS = ("laws", "agents", "skills")
 
 # Written once into the bundle root and never overwritten — the user's per-repo
@@ -157,6 +178,7 @@ agent-overrides.json
 .geneseed-emit
 
 # memory/ keeps its own .gitignore so learned facts stay on this machine.
+# notebook/ keeps its own .gitignore so the agent's own files stay on this machine.
 """
 
 
@@ -170,6 +192,18 @@ def ensure_memory_index(mem_dir: Path) -> None:
         idx = mem_dir / "MEMORY.md"
         if not idx.exists():
             idx.write_text("# Memory Index\n", encoding="utf-8")
+
+
+def ensure_notebook_index(nb_dir: Path) -> None:
+    """Create an empty `NOTEBOOK.md` index in the notebook store if absent — and
+    NEVER overwrite one (the agent curates it). The store's README is the static
+    convention; NOTEBOOK.md is the live table of contents the agent reads and keeps
+    (AGENT.md §5). A freshly-seeded or hand-emptied store would otherwise lack it,
+    so the agent is told to read a file that does not exist."""
+    if nb_dir.is_dir():
+        idx = nb_dir / "NOTEBOOK.md"
+        if not idx.exists():
+            idx.write_text("# Notebook Index\n", encoding="utf-8")
 
 
 def ensure_bundle_gitignore(out: Path) -> None:
@@ -267,7 +301,8 @@ def build(theme_name: str, out: Path) -> None:
     agents, skills, in their themed form) are wiped, so a renamed or removed source
     file never leaves a stale copy behind. Everything else in `out` is preserved:
     the surrounding application code, the agent's runtime `memory/` (MEMORY.md +
-    fact files, refreshed in place), and `context.json` — written once, beside
+    fact files, refreshed in place) and `notebook/` (the agent's own freeform
+    space + its NOTEBOOK.md index), and `context.json` — written once, beside
     AGENT.md, and never touched again. The build therefore cleans its own footprint
     without ever destroying the user's repository or data."""
     theme, items = render_all(theme_name)
@@ -292,6 +327,7 @@ def build(theme_name: str, out: Path) -> None:
     ensure_context_stub(out)
     ensure_bundle_gitignore(out)
     ensure_memory_index(out / theme.get(SRC_DIR_TOKENS["memory"], "memory"))
+    ensure_notebook_index(out / theme.get(SRC_DIR_TOKENS["notebook"], "notebook"))
     print(f"[geneseed] built theme '{theme_name}' -> {out} ({len(items)} files)")
 
 
@@ -561,16 +597,18 @@ def _merge_opencode_json(path: Path, agent_path: str) -> None:
         instr.append(agent_path)
     config["instructions"] = instr
     # O5: a minimal, non-destructive default permission policy — ASK before the few
-    # genuinely irreversible or outward-facing bash patterns (Laws I/IV/XX). `git push*`
-    # gates EVERY push so the agent never shares code unprompted (Law XX's host-level
-    # backstop); the `--force`/`-f` entries are kept as explicit, more-specific markers.
-    # Added ONLY when the user has no `permission` key at all; never overwrites an
-    # existing policy. Unmatched commands keep OpenCode's default (allow), so normal
-    # local work (edits, builds, tests, commits on a feature branch) is unaffected.
+    # genuinely irreversible or outward-facing bash patterns (Laws I/IV/XX). `git commit*`
+    # and `git push*` gate EVERY commit and push, on any branch, so the agent never
+    # records or shares history unprompted (Law XX's host-level backstop); the
+    # `--force`/`-f` entries are kept as explicit, more-specific markers. Added ONLY
+    # when the user has no `permission` key at all; never overwrites an existing policy.
+    # Unmatched commands keep OpenCode's default (allow), so normal local work (edits,
+    # builds, tests) is unaffected.
     if "permission" not in config:
         config["permission"] = {
             "bash": {
                 "rm -rf *": "ask",
+                "git commit*": "ask",
                 "git push*": "ask",
                 "git push --force*": "ask",
                 "git push -f*": "ask",
@@ -812,6 +850,42 @@ def _global_memory(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
     return f"seeded {mem_name}/"
 
 
+def _global_notebook(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
+    """Ensure the global notebook store exists at <cfg>/notebook. If it already holds
+    files it is left alone — it carries the agent's own freeform work. Otherwise
+    migrate an existing legacy bundle's notebook into it (one-time, so a host
+    switching from a sibling Harness loses nothing), else seed from the src template.
+    The store is host state, never tracked in the owned-manifest, never deleted.
+
+    Like `memory/`, the dir name is ALWAYS the classic English `notebook/`, never
+    themed: the OpenCode config dir uses fixed directory names — the theme only
+    flavors prose, not paths."""
+    nb_name = "notebook"
+    nb_dir = cfg / nb_name
+    if nb_dir.is_dir() and any(nb_dir.iterdir()):
+        return f"kept {nb_name}/"
+    nb_dir.mkdir(parents=True, exist_ok=True)
+    if legacy:
+        src = legacy / nb_name
+        if src.is_dir() and any(src.iterdir()):
+            for f in src.rglob("*"):
+                if f.is_file():
+                    dest = nb_dir / f.relative_to(src)
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(f, dest)
+            return f"migrated {nb_name}/"
+    for _out_rel, text, src in items:
+        sp = src.relative_to(SRC).as_posix().split("/")
+        if sp[0] == nb_name and len(sp) > 1:
+            dest = nb_dir / Path(*sp[1:])
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if text is not None:
+                dest.write_text(text, encoding="utf-8")
+            else:
+                shutil.copy2(src, dest)
+    return f"seeded {nb_name}/"
+
+
 def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | None = None) -> None:
     """Render the harness straight into OpenCode's GLOBAL config dir — the
     "everything global, zero per-repo" deployment (GLOBAL-HARNESS-SPEC.md).
@@ -823,13 +897,13 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
     The target dir is shared with the user's own OpenCode config, so it is NEVER
     wiped. A `.geneseed-manifest.json` tracks exactly the files this layer owns
-    (AGENT.md, agents/, skills/, plugins/ — NOT memory); on re-emit, files we
-    previously wrote but no longer produce are removed, and the user's own
-    agents/skills/plugins (and the memory store) are left untouched.
+    (AGENT.md, agents/, skills/, plugins/ — NOT memory or notebook); on re-emit,
+    files we previously wrote but no longer produce are removed, and the user's own
+    agents/skills/plugins (and the memory + notebook stores) are left untouched.
 
     Writes: <cfg>/AGENT.md, <cfg>/agents/*.md, <cfg>/skills/<name>/SKILL.md,
-    <cfg>/plugins/*.js (single copy — kills the double-injection), the memory store,
-    and merges <cfg>/opencode.json to point `instructions` at the absolute
+    <cfg>/plugins/*.js (single copy — kills the double-injection), the memory and
+    notebook stores, and merges <cfg>/opencode.json to point `instructions` at the absolute
     <cfg>/AGENT.md. It does NOT write context.json — project docs are auto-discovered
     by the context plugin. `out`, if given, is only a migration source for an
     existing memory store (the legacy bundle location); nothing is built there.
@@ -886,6 +960,8 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
     mem_status = _global_memory(cfg, theme, items, out)
     ensure_memory_index(cfg / "memory")   # guarantee the index on every path (seed/migrate/keep)
+    nb_status = _global_notebook(cfg, theme, items, out)
+    ensure_notebook_index(cfg / "notebook")   # guarantee the index on every path (seed/migrate/keep)
 
     write_version(cfg)
     owned.append(VERSION_MARKER)
@@ -913,14 +989,14 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
     manifest_path.write_text(
         json.dumps({"_comment": "Files owned by Geneseed's --emit opencode-global. "
-                                "Do not edit; removed on re-emit. The memory store is "
-                                "NOT listed — it is never deleted.", "owned": sorted(owned)},
+                                "Do not edit; removed on re-emit. The memory and notebook "
+                                "stores are NOT listed — they are never deleted.", "owned": sorted(owned)},
                    indent=2) + "\n", encoding="utf-8")
 
     extras = (["primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
     extra = (" + " + ", ".join(extras)) if extras else ""
     print(f"[geneseed] opencode-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
-          f"{n_plugins} plugin(s), {n_workflows} workflow file(s), AGENT.md, {mem_status}, "
+          f"{n_plugins} plugin(s), {n_workflows} workflow file(s), AGENT.md, {mem_status}, {nb_status}, "
           f"opencode.json (no context.json){extra}. "
           f"The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.")
 

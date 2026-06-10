@@ -13,7 +13,7 @@ path shown in each file heading, creating subfolders as needed.
 - After writing, create an empty context.json at the repo root if absent, and list the repo's docs in it.
 - When finished, list every file you created.
 
-## Files (40 text files)
+## Files (43 text files)
 
 ### `AGENT.md`
 
@@ -78,7 +78,11 @@ No count, "nothing found", or success claim is ground truth until checked with a
 direct tool call. Before committing to any non-trivial plan, establish the actual
 state — data shape, system topology, working tree — by direct inspection, never
 by extrapolation from naming, docs, or memory. Run the verification command and
-read its output before claiming work is done.
+read its output before claiming work is done. This holds for *intent* as much as
+for state: when a request is ambiguous, or you have inferred a goal the user did
+not state outright, echo the key decision back and get explicit agreement before
+building on it — a consequential assumption is no more ground truth than an
+unchecked count. Trivial or fully-specified requests need no such check.
 
 ### Rule IV — Deletion Is Deliberate
 Every action is one of Create, Read, Update, Delete. Identify which before acting.
@@ -195,16 +199,19 @@ cruder method. Never assert that a tool or integration is absent without having 
 (Rule III).
 
 ### Rule XX — Consent Before Push
-Sharing code is consented, never unilateral. Before committing **or** pushing to a
-**shared branch** — `main`, `master`, `develop`, `development`, a `release`/`hotfix`
-branch, or any branch that is not a dedicated feature branch — first present, in order:
-(1) a plain-language summary of what changed and why, for the user to review, and
-(2) the exact commit message (subject + body) you intend to use. Then wait for the
-user's **explicit acceptance** before committing and before pushing — never push a
-shared branch on your own initiative. On a personal feature branch you may commit and
-push as part of normal flow. When unsure whether a branch is shared, treat it as
-shared. This applies Rule IV's confirm-before-outward-facing-acts to git history;
-the host may also gate `git push` at the tool boundary as a backstop.
+Recording and sharing code is consented, never unilateral. **Every** `git commit` and
+`git push` needs the user's **explicit acceptance** — on every branch, every time,
+including a personal feature branch. A one-time approval is not standing consent: ask
+again for the next commit and the next push. Before each, present, in order: (1) a
+plain-language summary of what changed and why, for the user to review, and (2) the
+exact commit message (subject + body) you intend to use; then wait for acceptance
+before committing and before pushing. Never push on your own initiative. On a **shared
+branch** — `main`, `master`, `develop`, `development`, a `release`/`hotfix` branch, or
+any branch that is not a dedicated feature branch — the same gate applies with extra
+care; when unsure whether a branch is shared, treat it as shared. This applies
+Rule IV's confirm-before-outward-facing-acts to git history; the host **also** gates
+`git commit` and `git push` at the tool boundary as a backstop, so the consent cannot
+be lost to a sticky allowlist.
 
 ---
 
@@ -252,6 +259,7 @@ A Skill is a written procedure for a recurring task. Run the matching Skill befo
 
 | Skill | Trigger |
 | --- | --- |
+| [clarify](skills/clarify.md) | the goal or scope of a task or project is unclear and needs pinning down before any design or work begins |
 | [brainstorm](skills/brainstorm.md) | a new feature or design with no plan yet |
 | [plan](skills/plan.md) | a task has more than a couple of steps |
 | [parallel-agents](skills/parallel-agents.md) | several independent subtasks and a tool that runs subagents |
@@ -264,6 +272,7 @@ A Skill is a written procedure for a recurring task. Run the matching Skill befo
 | [commit](skills/commit.md) | staging and writing a commit |
 | [code-review](skills/code-review.md) | reviewing a diff or PR |
 | [review-response](skills/review-response.md) | acting on review feedback you have received |
+| [fresh-eyes](skills/fresh-eyes.md) | a finished artifact needs an independent verdict on whether it meets the original spec, from an agent with none of the solving session's context |
 | [ship](skills/ship.md) | a verified change is ready to open as a PR or merge |
 | [release](skills/release.md) | cutting a version: bump, changelog, tag |
 | [migrate](skills/migrate.md) | upgrading a dependency, framework, or language version |
@@ -271,6 +280,7 @@ A Skill is a written procedure for a recurring task. Run the matching Skill befo
 | [handoff](skills/handoff.md) | context filling, or passing work to another agent or session |
 | [roast-me](skills/roast-me.md) | you want an artifact torn apart, brutally and actionably |
 | [council](skills/council.md) | a decision, change, or discussion needs debating from several points of view before committing |
+| [workflow](skills/workflow.md) | deterministic, code-driven orchestration of subagents (fan-out, find→verify pipeline) and the host exposes a `workflow` tool |
 
 When a task repeats and no Skill covers it, forge one: copy
 [`skills/_template.md`](skills/_template.md), keep it to one coherent
@@ -385,12 +395,6 @@ opt-in — the harness is fully functional without it.
 ## Procedure
 1. Step-by-step method this Agent follows.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- Which tier the caller should route this Agent to, and when to escalate. Read-only
-  investigation and debate seats belong on a cheap tier (universal Rule XV); reserve
-  the strongest model for genuine design/judgement work.
-
 ## Output contract
 - The exact shape of what this Agent returns to the caller (e.g. a list of
   findings with file:line, a verdict, a summary of changes made).
@@ -421,10 +425,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 1. Read the motion and the artifact so the case is concrete, not abstract (universal Rule XVII).
 2. Steelman the proposal: make its strongest case — the upside, the opportunity, the cost of *not* acting (universal Rule VIII).
 3. Name the single objection the proposal must survive, and answer it; concede only what is genuinely indefensible.
-
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal Rule XV).
 
 ## Output contract
 - A tight brief: the position in one line, the 2–4 load-bearing arguments for it, the key supporting evidence (`file:line` or facts), and the one objection it must beat. No hedging, no filler.
@@ -457,10 +457,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 3. Break the chosen approach into isolated units, each with one purpose and a
    clear interface, ordered so each step is independently verifiable.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `opus` — design and trade-off judgement is the one place the stronger model earns its cost; a caller may downgrade for a small, well-scoped design.
-
 ## Output contract
 - A plan: the approach chosen and why, the affected files, and an ordered list of
   steps — each written as `N. <file or module> — <the change> — <how to verify it>`,
@@ -492,10 +488,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
    that the code does not implement (universal Rule III).
 2. Write for the stated audience; lead with what the reader needs to do.
 3. Keep examples runnable; update any example that the change broke.
-
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — prose generation does not need the top tier.
 
 ## Output contract
 - The doc files written/updated, a one-line note of what changed and why,
@@ -530,10 +522,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 2. Mark each claim evidenced or unevidenced — and call out any asserted as fact without a source (universal Rule III).
 3. For the decisive unknowns, name the cheapest experiment, benchmark, or check that would settle them.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal Rule XV).
-
 ## Output contract
 - A claims ledger: each load-bearing claim → evidenced? → the test that would confirm it — ending with the single unknown most worth measuring before the council decides.
 ````
@@ -567,10 +555,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 2. Read only the slices that matter; follow references outward as needed.
 3. Synthesize — return findings, not raw dumps.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only fan-out; a wide search must never be routed to an expensive model (universal Rule XV).
-
 ## Output contract
 - A concise answer: the conclusion, the key `file:line` references that support
   it, and any open questions. Never the full contents of what was read.
@@ -602,10 +586,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 2. Test whether the motion addresses that need or only a symptom of it; ask what problem it would leave unsolved.
 3. If the framing is off, offer the reframed problem — the question the council should actually be debating.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal Rule XV).
-
 ## Output contract
 - The framing read: the real problem in one line, whether the motion fits it, the reframe if the framing is wrong, and the question the council should be debating instead.
 ````
@@ -635,10 +615,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 1. Read the motion, then search the codebase, changelog, and docs for prior attempts, reverts, and related decisions (universal Rule XVII).
 2. Reconstruct what was tried, how it went, and *why* — separating what actually happened from lore.
 3. Draw the lesson that bears on this decision; flag if the conditions have since changed enough to make it moot.
-
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal Rule XV).
 
 ## Output contract
 - The precedent: what was tried before, how it went and why, and the lesson for this decision — cited to `file:line` or commits where found, with a note if circumstances have changed.
@@ -670,10 +646,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 2. Pre-mortem the 3am incident: how it fails under load, whether you can see it failing (metrics, logs), and how you roll it back.
 3. Weigh the standing cost — the on-call burden, the toil, the new ways to be paged — against the benefit.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal Rule XV).
-
 ## Output contract
 - An operability read: how it fails in production, what it needs to run safely (metrics, alerts, rollback), the on-call burden it adds, and a ship / hold-for-guardrails lean with the reason.
 ````
@@ -704,10 +676,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 2. Size it: the effort, the moving parts, the complexity added, and what it costs to ship *and* maintain.
 3. Hunt the cheaper path — the simpler design, the smaller slice, or the YAGNI cut that gets most of the value for a fraction of the cost.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal Rule XV).
-
 ## Output contract
 - A feasibility read: a rough effort/complexity estimate, the cheapest viable path, what to cut, and a one-line lean — worth it / not worth it / worth it only if — with the assumption that lean rests on.
 ````
@@ -735,16 +703,11 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 - Does not edit code; it reports.
 <!-- bash: allow -->
 
-
 ## Procedure
 1. Confirm the change actually does what the task required (read the spec/issue).
 2. Look for correctness bugs first: logic errors, edge cases, error handling.
 3. Then quality: duplication, unclear naming, dead code, oversized units.
 4. Verify claims by running tests/linters rather than assuming (universal Rule III).
-
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` for the correctness + quality pass; the caller may escalate to `opus` when the change is architecturally subtle.
 
 ## Output contract
 - A list of findings, each as `file:line — problem — suggested fix`, ordered
@@ -773,16 +736,11 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 - **Read-only.** May run dependency/secret scanners. Reports; does not patch.
 <!-- bash: allow -->
 
-
 ## Procedure
 1. Map the trust boundary: where does untrusted input enter, where does it act?
 2. Check for the common classes: injection, broken auth/authz, secret exposure,
    unsafe deserialization, path traversal, vulnerable dependencies.
 3. Confirm no secret is committed (universal Rule I).
-
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` for the scan; escalate to `opus` only when a finding needs deep exploit reasoning.
 
 ## Output contract
 - Findings as `severity — location — issue — remediation`, highest severity
@@ -815,10 +773,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 2. Steelman the proposal first (universal Rule VIII), then break *that* — the failure modes, the risks, and the load-bearing assumptions no one has checked.
 3. Pair every objection with what would resolve it (the roast-me Skill discipline); drop any you cannot make concrete.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal Rule XV).
-
 ## Output contract
 - Severity-ranked objections (fatal → significant → minor), each as `claim — what's wrong — what would resolve it`, grounded in `file:line` or facts, ending with the single risk that should sink the motion if any does.
 ````
@@ -848,10 +802,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 1. Read the motion and the artifact, and the project's own conventions, so the judgement fits this system (universal Rule XVII, Rule XIII).
 2. Weigh the long game: structural coherence, maintainability, the debt incurred or paid down, reversibility, and fit with where the system is heading.
 3. Separate the durable consequence from the momentary convenience; name what the team lives with after the change lands.
-
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal Rule XV).
 
 ## Output contract
 - A long-term verdict: the structural benefits and risks, the debt this incurs or retires, how reversible it is, and a one-line keep-it-healthy recommendation with the trade-off it accepts.
@@ -885,10 +835,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 2. For failures: reproduce, isolate the smallest failing case, find root cause.
 3. Cover edge cases and error paths, not just the happy path.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — writing and running tests is mechanical enough for the cheaper tier.
-
 ## Output contract
 - The test files written/changed, the command to run them, and the actual run
   output (pass/fail counts). For diagnosis: root cause + recommended fix location.
@@ -920,10 +866,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 2. Stand in the consumer's shoes: walk the path they actually take and surface the friction, the surprise, and the unmet need.
 3. Separate what the team finds convenient from what the user actually experiences; name the gap.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal Rule XV).
-
 ## Output contract
 - The consumer's verdict: who is affected, the experience win or harm, the friction it introduces, and the one thing they would actually ask for. Grounded in the real surface, not assumed.
 ````
@@ -954,10 +896,6 @@ Suggested routing — advisory; the host's `agent-overrides.json` is the binding
 2. Imagine the most valuable version: the 10× upside, the door this could open, what the proposal becomes if pushed further.
 3. Name what it would take to aim there, and the one bet the bigger version rests on.
 
-## Model
-Suggested routing — advisory; the host's `agent-overrides.json` is the binding control.
-- `sonnet` — read-only debate seat; route the council fan-out to a cheap tier (universal Rule XV).
-
 ## Output contract
 - The bold case: the transformative upside in a line, what the motion could become if pushed, the capability it would unlock, and the single bet it depends on. No timid hedging.
 ````
@@ -984,7 +922,11 @@ No count, "nothing found", or success claim is ground truth until checked with a
 direct tool call. Before committing to any non-trivial plan, establish the actual
 state — data shape, system topology, working tree — by direct inspection, never
 by extrapolation from naming, docs, or memory. Run the verification command and
-read its output before claiming work is done.
+read its output before claiming work is done. This holds for *intent* as much as
+for state: when a request is ambiguous, or you have inferred a goal the user did
+not state outright, echo the key decision back and get explicit agreement before
+building on it — a consequential assumption is no more ground truth than an
+unchecked count. Trivial or fully-specified requests need no such check.
 
 ### Rule IV — Deletion Is Deliberate
 Every action is one of Create, Read, Update, Delete. Identify which before acting.
@@ -1101,16 +1043,19 @@ cruder method. Never assert that a tool or integration is absent without having 
 (Rule III).
 
 ### Rule XX — Consent Before Push
-Sharing code is consented, never unilateral. Before committing **or** pushing to a
-**shared branch** — `main`, `master`, `develop`, `development`, a `release`/`hotfix`
-branch, or any branch that is not a dedicated feature branch — first present, in order:
-(1) a plain-language summary of what changed and why, for the user to review, and
-(2) the exact commit message (subject + body) you intend to use. Then wait for the
-user's **explicit acceptance** before committing and before pushing — never push a
-shared branch on your own initiative. On a personal feature branch you may commit and
-push as part of normal flow. When unsure whether a branch is shared, treat it as
-shared. This applies Rule IV's confirm-before-outward-facing-acts to git history;
-the host may also gate `git push` at the tool boundary as a backstop.
+Recording and sharing code is consented, never unilateral. **Every** `git commit` and
+`git push` needs the user's **explicit acceptance** — on every branch, every time,
+including a personal feature branch. A one-time approval is not standing consent: ask
+again for the next commit and the next push. Before each, present, in order: (1) a
+plain-language summary of what changed and why, for the user to review, and (2) the
+exact commit message (subject + body) you intend to use; then wait for acceptance
+before committing and before pushing. Never push on your own initiative. On a **shared
+branch** — `main`, `master`, `develop`, `development`, a `release`/`hotfix` branch, or
+any branch that is not a dedicated feature branch — the same gate applies with extra
+care; when unsure whether a branch is shared, treat it as shared. This applies
+Rule IV's confirm-before-outward-facing-acts to git history; the host **also** gates
+`git commit` and `git push` at the tool boundary as a backstop, so the consent cannot
+be lost to a sticky allowlist.
 ````
 
 ### `memory/.gitignore` (binary — copy it from the Geneseed repo)
@@ -1206,7 +1151,7 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 
 > Turn a raw idea into an approved design before any code is written.
 
-**Trigger:** a new feature or behaviour change with no design yet, or the user says "brainstorm" / "let's design this".
+**Trigger:** a new feature or behaviour change with no design yet, or the user says "brainstorm" / "let's design this". (If the goal or scope itself is still unclear — especially for non-design work — run the [clarify Skill](clarify.md) first.)
 
 ## Procedure
 1. Read the current project state and its own docs (Rule XVII) so questions are grounded; if the request bundles several systems, decompose and take one at a time.
@@ -1217,6 +1162,26 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 
 ## Done when
 - An approved, ambiguity-free design exists and `plan` has it to sequence, with no code written beforehand.
+````
+
+### `skills/clarify.md`
+
+````
+# Skill: clarify
+
+> Interview the user to pin down the goal, scope, and success criteria of any task or project, then confirm and record the key decisions before work begins.
+
+**Trigger:** a task or whole project arrives with its goal, scope, or success criteria unstated or ambiguous — including non-design work (a refactor, migration, ops chore, investigation) — or the user says "interview me" / "what am I actually trying to do" / "clarify this first". If a concrete design problem is already identified, use the [brainstorm Skill](brainstorm.md) instead.
+
+## Procedure
+1. Read the current project state and its own docs (Rule XVII) so questions are grounded (Rule III — verify the actual state before designing the interview). If the request bundles several goals, separate them and take one at a time.
+2. If the goal, scope, and success criteria are already unambiguous, restate them in one line and skip to step 4 — no ceremony on a clear ask. Otherwise interview the user ONE question at a time (multiple-choice when you can), driving at *why* (the outcome wanted), *scope* (what is explicitly in and out), and *done* (how success is judged) — not *how* yet. Keep asking until each is unambiguous.
+3. Name every KEY DECISION the answers imply or leave open — chosen direction, trade-offs accepted, load-bearing constraints, assumptions, and non-goals. Surface each silent assumption as a decision to ratify, not a settled fact.
+4. Write the goal and the key-decision ledger to `BRIEF.md` (or `clarify/<task>.md`), then read it back to the user as a numbered list and get an EXPLICIT confirmation before acting (Rule III — confirm intent, not just state) — so nothing material is silently assumed. Scope the read-back to decisions that are consequential, irreversible, or genuinely uncertain; correct the file and re-confirm any the user changes.
+5. Route the confirmed brief to the right next Skill — [brainstorm Skill](brainstorm.md) for a design problem, [plan Skill](plan.md) for a multi-step build, [debug Skill](debug.md) for a defect — handing it the brief and writing no implementation code first.
+
+## Done when
+- A confirmed, ambiguity-free goal with an explicitly verified key-decision ledger is written to `BRIEF.md`, and the work has been handed to the appropriate downstream Skill.
 ````
 
 ### `skills/cmux.md`
@@ -1278,17 +1243,20 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 3. Confirm no secret is being committed (universal Rule I).
 4. Write a message: imperative subject ≤50 chars; a body only when the *why*
    isn't obvious from the diff. Follow the project's commit convention.
-5. **Check the branch (universal Rule XX).** On a *shared branch* — `main`,
-   `master`, `develop`/`development`, a release/hotfix branch, or any branch that is
-   **not** a dedicated feature branch — first show the user a plain-language summary of
+5. **Get explicit consent before committing (universal Rule XX).** On *every*
+   branch — feature branches included — first show the user a plain-language summary of
    the change *and* the exact commit message, then wait for explicit acceptance before
-   committing. On a personal feature branch, commit as normal flow.
-6. Push only when the user has explicitly approved it (Rule XX / Rule IV) or the
-   project's Rules call for it — never push a shared branch on your own initiative.
+   committing. A previous approval is not standing consent; ask again each commit. On a
+   *shared branch* (`main`, `master`, `develop`/`development`, a release/hotfix branch,
+   or any branch that is not a dedicated feature branch) apply the same gate with extra
+   care.
+6. Push only when the user has explicitly approved *that push* (Rule XX / Rule IV)
+   — never push on your own initiative, on any branch, and never treat one approval as
+   consent for the next.
 
 ## Done when
 - The commit contains only the intended change and the working tree is clean of it,
-  and any shared-branch commit/push went out only with the user's explicit consent.
+  and every commit and push went out only with the user's explicit, per-action consent.
 ````
 
 ### `skills/council.md`
@@ -1335,6 +1303,27 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 
 ## Done when
 - The failure is reproduced, root-caused, fixed at the cause, and the reproduction passes with no new breakage.
+````
+
+### `skills/fresh-eyes.md`
+
+````
+# Skill: fresh-eyes
+
+> Hand a context-free agent only the original task and the finished work; it derives the acceptance bar blind, then rules whether the work meets it — independent of the maker's certainty.
+
+**Trigger:** a task is claimed done and the solving session believes the artifact works — before merge or handoff, or when the user asks to "validate", "fresh eyes", "prove it meets the spec", "did this actually solve it", or "independent sign-off", and the cost of a confidently-wrong "done" is high. This re-judges the *result* from zero context — distinct from [code-review](code-review.md), which reviews a *diff* with full knowledge of the change. For an open-ended quality critique use [roast-me](roast-me.md); for a multi-stance debate over an undecided question use [council](council.md).
+
+## Procedure
+1. Capture the firewall input as TWO things and nothing else: (a) the **verbatim original task/spec** — the raw issue or request text, NOT a solver-written summary or "spec card" (a distilled card launders the solving session's framing into the rubric, the very bias this Skill exists to defeat), and (b) a pointer to the **final artifact** as it stands — file paths, built output, or the command to run it. If the raw task is too thin to yield acceptance criteria, have the **user** (never the solver) confirm a one-line acceptance bar, then proceed (Rule XVII–XVIII); if it is too fuzzy even for that, this is a judgement call — convene [council](council.md) instead.
+2. Deliberately WITHHOLD everything else and say so in the brief: the diff and changed-files list, the chat transcript, the solver's rationale and commit messages, prior test output, and every "it works because…" claim. Each is a vector for confirmation bias — they transmit the author's conviction, and a validator that inherits it cannot judge independently (Rule VIII). The validator must re-confront the artifact cold, the way an external recipient would.
+3. Dispatch ONE fresh-context validator whose context starts empty — isolation is structural, not promised — using the [reviewer Agent](../agents/reviewer.md) (read-only, runs the suite, casts a verdict; NOT the [skeptic](../agents/skeptic.md), whose charter forbids running commands and casting verdicts), via the dispatch pattern in [parallel-agents Skill](parallel-agents.md) and the read-only routing rule (Rule XV; route `sonnet`, `opus` only if the spec is subtle). Dispatch **fresh** — never resume a prior subagent session, which re-inherits its context and breaches the firewall. Where the host has no subagent capability, degrade: write the brief to a file and have the user run it in a separate fresh process; only as a last resort run the persona in-session and **stamp the verdict "SOFT ISOLATION — context bleed possible"** so the user discounts it. Never silently pretend a persona equals a fresh agent.
+4. Inside the fresh context, FIRST derive the rubric blind: from the task ALONE — before looking at the artifact — write a numbered list of observable acceptance criteria, each a yes/no test with a stated check method (a command to run, an output to see, a behaviour to exercise), tagged must-have or nice-to-have. FREEZE this list. Deriving it inside the firewall, from the task and not the solution, is what prevents criteria-fitting — the rubric cannot be bent to match what the artifact happens to do.
+5. THEN reveal the artifact and rule each criterion against it under an inverted burden of proof: actively check it — run the command, exercise the behaviour, read the named output (Rule III — verify by running, never assume) — and record `Cn: PASS | FAIL | UNVERIFIABLE — <evidence: the exact output/behaviour checked>`. Default is NOT-PASS: mark PASS only after actively confirming; a criterion that cannot be checked is UNVERIFIABLE (a finding, not a pass — name the missing evidence). Flag any **Extra** the artifact added beyond the spec, but cut gold-plating both ways — never FAIL the artifact for a requirement the task never asked for. The validator does NOT fix, refactor, or polish; it only rules.
+6. Return the independent verdict: the per-criterion table, then the overall gate — **SATISFIES** (every must-have PASS, no FAIL), **SATISFIES-WITH-GAPS** (must-haves pass, a nice-to-have fails), or **DOES-NOT-SATISFY** (any must-have FAIL or UNVERIFIABLE), listing the failing criteria with evidence. Report "could not find a fault" as not-proven-false, never as "proven correct". Surface it for the user to decide; the gate advises and applies no changes — write no code, push nothing (Rule XIV, Rule XX). On DOES-NOT-SATISFY, hand the failures to the solver (optionally via [review-response](review-response.md)) and re-run fresh-eyes after the fix rather than letting the original context relitigate the ruling.
+
+## Done when
+- A fresh context that never saw the solving session derived the acceptance criteria from the original task alone, froze them before seeing the artifact, ruled each PASS/FAIL/UNVERIFIABLE with evidence by checking the live artifact, and returned an overall gate (SATISFIES / SATISFIES-WITH-GAPS / DOES-NOT-SATISFY) for the user to weigh — or, where no true isolation was possible, the verdict is stamped soft-isolation so it is discounted.
 ````
 
 ### `skills/handoff.md`
@@ -1655,10 +1644,11 @@ request or merge the branch.
    Never ship on an unproven claim.
 2. Confirm the branch carries only this change's commits and is rebased/updated on
    the base branch; resolve any divergence before opening.
-3. Push the branch. Opening a PR or merging is **outward-facing** — get explicit
-   confirmation first unless already authorized (universal Rule IV). Pushing a
-   *shared* branch (not a feature branch) needs the Rule XX consent gate too:
-   present the change summary + commit message and wait for explicit acceptance.
+3. Push the branch only with the user's explicit, per-push acceptance — on every
+   branch, feature branches included (Rule XX); present the change summary + commit
+   message and wait, and never treat an earlier approval as consent for this push.
+   Opening a PR or merging is **outward-facing** — get explicit confirmation first too,
+   unless already authorized (universal Rule IV).
 4. Open the PR with a structured body: *what* changed and *why*, *how it was
    tested*, and any risk or follow-up. Link the issue it closes; keep the title an
    imperative one-line summary.
@@ -1690,4 +1680,33 @@ request or merge the branch.
 
 ## Done when
 - The behaviour is covered by tests written before the code, the suite is green, and each cycle was committed.
+````
+
+### `skills/workflow.md`
+
+````
+# Skill: workflow
+
+> Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass.
+
+**Trigger:** a task that benefits from *deterministic* multi-agent orchestration — fan-out across independent units, a staged find→verify pipeline, or a loop that accumulates to a target — **and** the host provides the `workflow` tool (OpenCode). When the host has no such tool, use [parallel-agents](parallel-agents.md) or [council](council.md) instead — those are *model-driven*; this Skill is *code-driven*.
+
+## What it is
+
+A `workflow` is a saved script that orchestrates subagents in **code**, not prose. The script — not the model — decides what fans out, what runs in sequence, and what verifies. The host runs it and hands you back the distilled result. Use it when the control flow should be exact and repeatable rather than re-improvised each time.
+
+Saved workflows live beside the harness (`workflows/`); you run one **by name**, you do not author one inline. To add a new workflow, copy an existing script and register it there.
+
+## Procedure
+1. Confirm the host exposes the `workflow` tool. If not, fall back to [parallel-agents](parallel-agents.md) / [council](council.md) and stop here.
+2. Pick the saved workflow that fits the shape of the work — call `workflow` with no `name`, or an unknown one, to list what is available:
+   - **review** — sweep a change across dimensions, then adversarially verify each finding before reporting (the canonical find→verify pipeline).
+   - **research-plan-implement** — three clean phases with fresh-context handoffs between them.
+   - **council** — the [council](council.md) debate as deterministic code: seat the stance Agents, gather positions in parallel, synthesise a verdict.
+3. Run it: `workflow({ name, args })`. Pass the task-specific inputs (target paths, the motion, the question) as `args` — the script reads them.
+4. Read the returned summary. The full structured result and a phase-by-phase trace are written to the run's progress file; point the user at it if they want the detail.
+5. Act on the result yourself — the workflow gathers and verifies, but committing, pushing, or merging stays with you (Rule XX).
+
+## Done when
+- The right saved workflow ran to completion, its result was read, and you have carried its conclusion forward — or, where no `workflow` tool exists, the equivalent model-driven Skill was used instead.
 ````

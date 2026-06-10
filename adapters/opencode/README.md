@@ -17,7 +17,7 @@ After implanting the harness into your repo (so `AGENT.md`, `agents/`, `skills/`
   `instructions` array into an existing `opencode.json`). It points OpenCode's
   `instructions` field at `AGENT.md` (which inlines the laws) — so every session
   starts bound by the harness. The project-context manifest `context.json` is **not**
-  listed here; the [context plugin](#doc-enforcement--the-context-plugin) loads it,
+  listed here; the [context plugin](#doc-enforcement--the-context-plugin-v2-convention-glob) loads it,
   and listing it in two configs would double-load it.
 
 That's it. OpenCode loads `AGENT.md` as a rule file on every run; the plugins handle
@@ -138,7 +138,7 @@ create it the first time.
 
 - **Global (recommended — the bundle is used everywhere):** **run this from inside
   the Geneseed folder.** It installs all four plugins — learn, the
-  [context plugin](#doc-enforcement--the-context-plugin), guard, and workflow
+  [context plugin](#doc-enforcement--the-context-plugin-v2-convention-glob), guard, and workflow
   (the `*.js` glob) — and
   points `$GENESEED_HARNESS` at the sibling bundle `upgrade.sh` builds at
   `../Harness` — so the plugins find your memory store and `context.json` with no
@@ -275,8 +275,9 @@ python build.py --emit opencode-global          # add --theme imperial if wanted
 ```
 
 It is **self-contained** — it writes only into the config dir (`$OPENCODE_CONFIG_DIR`,
-else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`) and builds **no sibling
-`Harness/` folder**:
+else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode` — on Windows that resolves
+to `C:\Users\<user>\.config\opencode`, the same homedir-relative path OpenCode itself
+uses) and builds **no sibling `Harness/` folder**:
 
 - `AGENT.md` rendered straight in;
 - `agents/`, `skills/<name>/SKILL.md`, and a single `plugins/` copy;
@@ -302,8 +303,9 @@ skills, plugins — **not** memory) and removes stale ones on re-emit, leaving y
 agents/skills/plugins and the memory store untouched.
 
 Use `$OPENCODE_CONFIG_DIR` to keep the global harness in a **git-tracked** folder.
-On upgrade: `GENESEED_EMIT=opencode-global ./upgrade.sh` (the mode is then remembered
-in `<cfg>/.geneseed-emit`, so bare `./upgrade.sh` keeps it). Full design, setup
+On upgrade: `GENESEED_EMIT=opencode-global ./upgrade.sh` — or, on Windows,
+`$env:GENESEED_EMIT="opencode-global"; .\geneseed.cmd upgrade` — (the mode is then
+remembered in `<cfg>/.geneseed-emit`, so a bare upgrade keeps it). Full design, setup
 guide, and acceptance checklist: [GLOBAL-HARNESS-SPEC.md](GLOBAL-HARNESS-SPEC.md).
 
 ## Pointing the agent at files beyond the Harness
@@ -358,12 +360,14 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   so the PROJECT CONTEXT block no longer appears in the conversation and survives
   compaction inherently. Off by default; experimental OpenCode hook — verify on your build.
 - **Default permissions.** A fresh `opencode.json` gets a minimal policy that **asks**
-  before `rm -rf *` and **every `git push`** (the host-level backstop for the
-  consent-before-push Rule — the agent never shares code unprompted; force-push is
-  also called out explicitly). Added only when you have no `permission` key — an
-  existing policy is never touched. Routine local work (edits, builds, tests, commits)
-  is unaffected; to allow frictionless feature-branch pushes, set `"git push*"` to
-  `"allow"` in your own `permission.bash` map.
+  before `rm -rf *` and **every `git commit` and `git push`** (the host-level backstop
+  for the consent-before-commit/push Rule — the agent never records or shares code
+  unprompted, on any branch; force-push is also called out explicitly). Added only when
+  you have no `permission` key — an existing policy is never touched. Routine local work
+  (edits, builds, tests) is unaffected; to allow frictionless commits/pushes, set
+  `"git commit*"` / `"git push*"` to `"allow"` in your own `permission.bash` map. (Note:
+  OpenCode lets a user pick "always allow" for the session, which makes the gate
+  session-sticky — the Claude Code adapter's PreToolUse hook re-asks every time instead.)
 - **Primary agent** (`GENESEED_PRIMARY=1`). Emits a `mode: primary` orchestrator that
   works by the Rules and delegates to the capability subagents. Off by default (it can
   change which agent is your default, so it stays opt-in).

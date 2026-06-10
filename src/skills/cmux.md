@@ -4,6 +4,8 @@
 
 **Trigger:** you are about to run several subagents (see [parallel-agents](parallel-agents.md)) and want to watch each one live in its own pane — and you are working inside a cmux session (the macOS terminal built for running AI coding agents side by side).
 
+> **Official cmux CLI skills** are vendored verbatim alongside this one for direct topology control of the terminal — [cmux/SKILL.md](cmux/SKILL.md) (windows, workspaces, panes/surfaces, focus, moves, trigger-flash) and [cmux-workspace/SKILL.md](cmux-workspace/SKILL.md) (non-disruptive automation inside the *caller's* workspace). Use them for the verified `cmux …` command surface; they are third-party (GPL-3.0-or-later © Manaflow, Inc.) — see `THIRD-PARTY.md`.
+
 ## Procedure
 1. Confirm the environment: you are inside cmux — the `CMUX_WORKSPACE_ID` env var is set (the integration self-disables without it). If not, this {{SKILL}} does not apply — fall back to plain [parallel-agents](parallel-agents.md).
 2. Pick the path that matches the work:

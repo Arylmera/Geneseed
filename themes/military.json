@@ -29,7 +29,10 @@
   "DESC_HISTORIAN": "Brings the after-action record — what was tried before, how it went, and the lesson for this call.",
   "DESC_PLAN": "Write the op order before a non-trivial task; track progress as it advances.",
   "DESC_MIGRATE": "Advance to the new version without losses — read the brief, one change at a time, tests green between each.",
+  "DESC_GIT_ARCHAEOLOGY": "Run the investigation on the record — when the regression hit or why the code's there — bisect, blame, pickaxe, no rounds fired.",
+  "DESC_GIT_RESCUE": "Recover a downed or fouled repo, or rewrite history clean — reflog, abort, rebase, every move behind a backup.",
   "DESC_REPO_MAP": "Map the terrain — a single-read recon map of the repository, kept current.",
+  "DESC_DOCUMENT_PROJECT": "Bring the project's docs into line with the current code — stand up or correct the doc tree, and regenerate a single offline HTML overview of the key positions.",
   "DESC_COMMIT": "Stage only what the mission touched and log a focused commit.",
   "DESC_CODE_REVIEW": "Inspect a diff or PR — correctness first, craft second.",
   "DESC_BRAINSTORM": "Turn a raw objective into an approved plan before any code is cut.",
@@ -82,6 +85,9 @@
   "SKILL": "Drill",
   "SKILLS": "Drills",
   "MEMORY": "Logbook",
+  "NOTEBOOK": "Ready Room",
+  "EPI_NOTEBOOK": "Your own ground to lay out the plan — arrange it to suit the mission.",
+  "INTRO_NOTEBOOK": "This is your **own** ground — unlike the shared Base around you, every file here is yours to set up, arrange, move, and hold however the mission needs.",
   "VAULT": "Base",
   "DESC_WORKFLOW": "Execute a saved op-order that commands your units by the numbers — parallel sweeps, staged phases, and confirmation, in one deterministic mission."
 }

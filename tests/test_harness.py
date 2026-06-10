@@ -282,7 +282,7 @@ class StatusDataTests(unittest.TestCase):
         d = harness._status_data()
         # counts match the rendered inventory
         self.assertEqual(d["agents"], 16)
-        self.assertEqual(d["skills"], 22)
+        self.assertEqual(d["skills"], 25)
         self.assertEqual(d["laws"], 20)
         # version fields present and well-formed
         self.assertRegex(d["source_fp"], r"^[0-9a-f]{12}$")
@@ -566,7 +566,7 @@ class TuiInventoryTests(unittest.TestCase):
     def test_counts_and_bodies(self):
         inv = harness._tui_inventory("neutral")
         self.assertEqual(len(inv["agents"]), 16)
-        self.assertEqual(len(inv["skills"]), 22)
+        self.assertEqual(len(inv["skills"]), 25)
         self.assertEqual(len(inv["laws"]), 20)
         self.assertTrue(all(e["desc"] and e["body"] for e in inv["agents"]))
         self.assertTrue(all(e["desc"] and e["body"] for e in inv["skills"]))
@@ -833,13 +833,14 @@ class McpServerListingTests(unittest.TestCase):
     """The MCP screen must show user-added servers, not only the built-in presets."""
 
     def test_known_names_unions_presets_with_config_servers(self):
-        cfg = {"mcp": {"gitlab": {"type": "local"}, "filesystem": {"type": "local"},
+        # "custom"/"sentry" are NOT presets; markitdown IS — exercise both branches.
+        cfg = {"mcp": {"custom": {"type": "local"}, "sentry": {"type": "local"},
                        "markitdown": {"type": "local"}}}
         names = harness._mcp_known_names(cfg)
-        # presets come first, then the user-added servers that aren't presets
-        self.assertEqual(names[0], "markitdown")            # the one preset
-        self.assertIn("gitlab", names)
-        self.assertIn("filesystem", names)
+        # the built-in presets come first, then the user-added servers that aren't presets
+        self.assertEqual(names[:len(harness._MCP_PRESETS)], list(harness._MCP_PRESETS))
+        self.assertIn("custom", names)
+        self.assertIn("sentry", names)
         # no duplicates even though markitdown is both a preset and in the config
         self.assertEqual(len(names), len(set(names)))
 
@@ -848,11 +849,29 @@ class McpServerListingTests(unittest.TestCase):
         self.assertEqual(harness._mcp_known_names({"mcp": {}}), list(harness._MCP_PRESETS))
 
     def test_meta_falls_back_for_unknown_server(self):
-        label, desc = harness._mcp_meta("gitlab")
-        self.assertEqual(label, "gitlab")                   # bare name, no KeyError
+        label, desc = harness._mcp_meta("custom")
+        self.assertEqual(label, "custom")                   # bare name, no KeyError
         self.assertTrue(desc)
         plabel, _ = harness._mcp_meta("markitdown")
         self.assertEqual(plabel, harness._MCP_PRESETS["markitdown"]["label"])
+
+    def test_starter_presets_present_and_well_formed(self):
+        # The four starter MCP servers Geneseed ships as presets (SETUP.md -> MCP servers).
+        for name in ("markitdown", "gitlab", "gitlab-2", "filesystem"):
+            self.assertIn(name, harness._MCP_PRESETS)
+            preset = harness._MCP_PRESETS[name]
+            self.assertTrue(preset["label"] and preset["desc"])
+            self.assertEqual(preset["block"]["type"], "local")
+            self.assertTrue(preset["block"]["command"])      # non-empty command
+        # GitLab presets share the zereight command; differ only by API URL / token.
+        for name in ("gitlab", "gitlab-2"):
+            cmd = harness._MCP_PRESETS[name]["block"]["command"]
+            self.assertEqual(cmd, ["npx", "-y", "@zereight/mcp-gitlab"])
+            env = harness._MCP_PRESETS[name]["block"]["environment"]
+            self.assertEqual(env["GITLAB_PERSONAL_ACCESS_TOKEN"], "")  # no token in source
+        self.assertEqual(
+            harness._MCP_PRESETS["filesystem"]["block"]["command"][:3],
+            ["npx", "-y", "@modelcontextprotocol/server-filesystem"])
 
 
 class SourceCompletenessGateTests(unittest.TestCase):
@@ -904,6 +923,57 @@ class SourceCompletenessGateTests(unittest.TestCase):
         # write-before-delete + the gate: the previously-good install is untouched
         self.assertTrue((cfg / "agents" / "operator.md").exists())
         self.assertTrue((cfg / "skills" / "council" / "SKILL.md").exists())
+
+
+class GitGateTests(unittest.TestCase):
+    """The PreToolUse git gate (Law XX backstop): a commit/push command — bare,
+    flagged, chained, or `-C path` — yields a `permissionDecision: "ask"`; everything
+    else (and any unreadable payload) exits 0 with no output, deferring to normal flow."""
+
+    def _run(self, payload: str):
+        import contextlib, io
+        buf = io.StringIO()
+        stdin = io.StringIO(payload)
+        with contextlib.redirect_stdout(buf):
+            old, sys.stdin = sys.stdin, stdin
+            try:
+                rc = harness.cmd_git_gate(None)
+            finally:
+                sys.stdin = old
+        return rc, buf.getvalue()
+
+    def _asks(self, command: str):
+        rc, out = self._run(json.dumps({"tool_name": "Bash",
+                                        "tool_input": {"command": command}}))
+        self.assertEqual(rc, 0)
+        self.assertTrue(out.strip(), f"expected an ask decision for: {command}")
+        dec = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(dec["hookEventName"], "PreToolUse")
+        self.assertEqual(dec["permissionDecision"], "ask")
+
+    def _defers(self, command: str):
+        rc, out = self._run(json.dumps({"tool_name": "Bash",
+                                        "tool_input": {"command": command}}))
+        self.assertEqual(rc, 0)
+        self.assertEqual(out, "", f"expected no output (defer) for: {command}")
+
+    def test_commit_and_push_forms_ask(self):
+        for cmd in ("git commit -m 'x'",
+                    "git push",
+                    "git push --force origin feature",
+                    "git add . && git commit -m x && git push",
+                    "git -C /repo push origin main"):
+            self._asks(cmd)
+
+    def test_non_git_and_readonly_git_defer(self):
+        for cmd in ("ls -la", "git status", "git add .", "echo committing"):
+            self._defers(cmd)
+
+    def test_unreadable_or_empty_payload_defers(self):
+        for payload in ("", "not json", "{}", '{"tool_input": null}'):
+            rc, out = self._run(payload)
+            self.assertEqual(rc, 0)
+            self.assertEqual(out, "")
 
 
 def setattr_many(mod, saved):

@@ -1,0 +1,7 @@
+# The notebook is the agent's own space — personal and local, NOT committed or
+# shared with the team. Keep only the convention and this ignore file; everything
+# the agent keeps here (the NOTEBOOK.md index and all its own files) stays on the
+# individual developer's machine.
+*
+!.gitignore
+!README.md

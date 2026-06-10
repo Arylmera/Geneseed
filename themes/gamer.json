@@ -29,7 +29,10 @@
   "DESC_HISTORIAN": "Reads the old runs — what was tried before, how it wiped, and the lesson for this call.",
   "DESC_PLAN": "Plot the route before a non-trivial run; track progress at each checkpoint.",
   "DESC_MIGRATE": "Patch to the new version without a wipe — read the notes, one upgrade at a time, tests green between each.",
+  "DESC_GIT_ARCHAEOLOGY": "Replay the history to find when the run broke or why the code's there — bisect, blame, pickaxe, no edits.",
+  "DESC_GIT_RESCUE": "Recover a corrupted or messy save, or rewrite history clean — reflog, undo, rebase, always backed up first.",
   "DESC_REPO_MAP": "Draw the minimap — a single-read map of the repository, kept current.",
+  "DESC_DOCUMENT_PROJECT": "Sync the wiki to the current code — build or patch the doc tree, and re-render a single offline HTML overview of the key parts.",
   "DESC_COMMIT": "Stage only what this run touched and save a focused commit.",
   "DESC_CODE_REVIEW": "Review a diff or PR — correctness first, polish second.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed build before any code drops.",
@@ -82,6 +85,9 @@
   "SKILL": "Combo",
   "SKILLS": "Combos",
   "MEMORY": "Checkpoint",
+  "NOTEBOOK": "Workshop",
+  "EPI_NOTEBOOK": "Your own sandbox — build it however you play best.",
+  "INTRO_NOTEBOOK": "This is your **own** Workshop — unlike the shared Server around you, every file here is yours to build, arrange, move, and keep however you play best.",
   "VAULT": "Server",
   "DESC_WORKFLOW": "Run a saved combo that scripts your party — fan out, chain the stages, and verify the clear, all in one deterministic rotation."
 }

@@ -9,7 +9,8 @@ between versions, and the plugins degrade quietly if one does.
 
 OpenCode does not read a single config — it **merges several**:
 
-- **Global:** `~/.config/opencode/opencode.json`
+- **Global:** `~/.config/opencode/opencode.json` (on Windows, the same homedir-relative
+  path: `C:\Users\<user>\.config\opencode\opencode.json`).
 - **Project:** `./opencode.json` or `./.opencode/opencode.json`, found by walking up
   from the current directory to the worktree root.
 - Project config **overrides** global on direct conflicts.

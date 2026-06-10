@@ -2,14 +2,19 @@ name: ci
 
 # Validate the harness on every push and PR: doctor (unresolved tokens, dead/
 # non-hermetic links, theme-key parity, author-time spec/plugin gates, rendered-
-# bundle sync) plus the stdlib unit suite. Dependency-free — no install step.
+# bundle sync) plus the stdlib unit suite and the Node test suites. Dependency-free —
+# no install step. Runs on Linux AND Windows so native-Windows support stays green.
 on:
   push:
   pull_request:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,5 +27,5 @@ jobs:
         run: python rituals/harness.py doctor --all
       - name: unit tests
         run: python -m unittest discover -s tests -p "test_*.py"
-      - name: workflow runtime tests (node)
-        run: node --test tests/workflow_runtime.test.mjs
+      - name: node test suites (workflow runtime + guard)
+        run: node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs

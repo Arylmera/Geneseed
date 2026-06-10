@@ -336,11 +336,14 @@ Skills emit as **native OpenCode skills**, not slash commands:
 `<cfg>` resolution: `$OPENCODE_CONFIG_DIR` if set (lets the harness live in a
 git-tracked folder), else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`.
 
-`upgrade.sh`: add `GENESEED_EMIT=opencode-global` to re-render globally on upgrade.
+`upgrade.sh` / `geneseed upgrade`: add `GENESEED_EMIT=opencode-global` to re-render
+globally on upgrade.
 
-> **Windows config path: TBD.** No Windows host in use currently. When one appears,
-> confirm OpenCode's actual config dir on Windows (likely `%APPDATA%\opencode` or
-> via `$OPENCODE_CONFIG_DIR`) before emitting there.
+> **Windows config path: confirmed.** Modern OpenCode uses the same homedir-relative
+> location on every OS, so `~/.config/opencode` resolves to `C:\Users\<user>\.config\opencode`
+> on Windows — exactly what `_opencode_config_dir()` (`Path.home() / ".config" / "opencode"`)
+> produces there. No `%APPDATA%` special case is needed (that was an old docs bug).
+> `$OPENCODE_CONFIG_DIR` and `$XDG_CONFIG_HOME` still override, as on Unix.
 
 ---
 
@@ -359,12 +362,25 @@ git-tracked folder), else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`
    `<cfg>/.geneseed-emit` — so every later bare `./upgrade.sh` stays global.
    (Direct equivalent: `python build.py --emit opencode-global`.)
 
+   **Windows (PowerShell)** — same flow, no bash:
+   ```powershell
+   cd C:\path\to\Geneseed
+   $env:GENESEED_EMIT = "opencode-global"
+   .\geneseed.cmd upgrade main imperial      # or: python rituals\harness.py upgrade main imperial
+   ```
+   This populates `C:\Users\<user>\.config\opencode\{AGENT.md,agents,skills,plugins,memory}`.
+
 2. **Point the learn plugin at the in-config memory store** (once):
    ```bash
    export GENESEED_HARNESS="$HOME/.config/opencode"        # so it writes <cfg>/memory
    echo "export GENESEED_HARNESS=\"$HOME/.config/opencode\"" >> ~/.zshrc
    ```
-   (Or `$OPENCODE_CONFIG_DIR` if you relocated the config dir.)
+   On **Windows (PowerShell)**:
+   ```powershell
+   setx GENESEED_HARNESS "$env:USERPROFILE\.config\opencode"   # persists for new shells
+   ```
+   (Or `$OPENCODE_CONFIG_DIR` if you relocated the config dir.) The learn plugin also
+   auto-locates the in-config store, so this is only needed to pin it explicitly.
 
 3. **Remove every per-repo copy** (the source of the double-injection):
    ```bash
@@ -409,11 +425,11 @@ convention.
   (§4) — single install is the guarantee (docs-confirmed: local plugins never dedup).
 - **Resolved:** OpenCode global `agents/` + `commands/` + `skills/` loading is
   confirmed (§1). Subdir names are plural (singular = back-compat).
-- **Windows config-dir path: TBD** — no Windows host currently (§9).
+- **Resolved:** Windows config-dir path is the same homedir-relative
+  `~/.config/opencode` (→ `C:\Users\<user>\.config\opencode`); no `%APPDATA%` case (§9).
 - **Decided:** skills emit as **native `skills/<name>/SKILL.md`** (§9.1) — model-
   invoked, progressive disclosure, same shape as Claude Code skills. Cost: no slash
   trigger, no per-skill `agent:`/`model:` pinning.
 - **Open:** whether eager auto-discovery of a repo's `AGENTS.md` should be dropped
   entirely (since `instructions` may already load it) or kept with path-dedup —
   spec currently keeps it with dedup.
-```

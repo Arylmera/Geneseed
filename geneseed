@@ -19,8 +19,8 @@
 #
 # Bare `./geneseed` opens an interactive main menu listing every action (update,
 # setup, browse, doctor, build, diff …) — just run it and pick. Thin wrapper over
-# `python3 rituals/harness.py <cmd>` (+ the scripts); no deps. On Windows, call the
-# Python CLI directly: `python rituals/harness.py <cmd>`.
+# `python3 rituals/harness.py <cmd>` (+ the scripts); no deps. On Windows, use the
+# native launchers `geneseed.cmd` / `geneseed.ps1` (same subcommands, no bash).
 #
 # `bootstrap`/`update` exec into the bootstrap script so this launcher is replaced
 # before sync-self rewrites it on disk.
@@ -51,7 +51,10 @@ fi
 if [ "$#" -eq 0 ]; then set -- menu; fi
 cmd="$1"
 case "$cmd" in
-  menu|tui|setup|build|doctor|diff|context|learn|prompt|version|status|uninstall)
+  menu|tui|setup|build|doctor|diff|context|learn|prompt|version|status|uninstall|upgrade|sync-self|link|unlink)
+    # All of these are implemented in the cross-platform Python CLI (single source of
+    # truth) — upgrade/sync-self/link/unlink were ported out of bash so they run on
+    # native Windows too (see rituals/_update.py and cmd_link/cmd_unlink in harness.py).
     exec "$PY" "$HERE/rituals/harness.py" "$@"
     ;;
   bootstrap)
@@ -59,65 +62,6 @@ case "$cmd" in
     ;;
   update)
     shift || true; exec "$HERE/bootstrap" --no-setup "$@"
-    ;;
-  upgrade)
-    shift || true; exec "$HERE/upgrade.sh" "$@"
-    ;;
-  sync-self)
-    shift || true; exec "$HERE/sync-self.sh" "$@"
-    ;;
-  link)
-    # Put `geneseed` on PATH so it runs from any directory (not just ./geneseed).
-    # Symlinks into a bin dir — default ~/.local/bin (no sudo), else /usr/local/bin.
-    shift || true
-    target_dir="${1:-}"
-    if [ -z "$target_dir" ]; then
-      if [ -d "$HOME/.local/bin" ] || mkdir -p "$HOME/.local/bin" 2>/dev/null; then
-        target_dir="$HOME/.local/bin"
-      else
-        target_dir="/usr/local/bin"
-      fi
-    fi
-    mkdir -p "$target_dir" 2>/dev/null || true
-    dest="$target_dir/geneseed"
-    if ! ln -sf "$HERE/geneseed" "$dest" 2>/dev/null; then
-      if command -v sudo >/dev/null 2>&1 && sudo ln -sf "$HERE/geneseed" "$dest"; then
-        :
-      else
-        echo "geneseed: could not write $dest — pick a writable dir, e.g.:" >&2
-        echo "  ./geneseed link \"\$HOME/.local/bin\"" >&2
-        exit 1
-      fi
-    fi
-    echo "geneseed: linked $dest -> $HERE/geneseed"
-    case ":$PATH:" in
-      *":$target_dir:"*)
-        echo "geneseed: '$target_dir' is on PATH — run 'geneseed' from anywhere." ;;
-      *)
-        echo "geneseed: NOTE '$target_dir' is not on your PATH. Add it, e.g.:"
-        echo "  echo 'export PATH=\"$target_dir:\$PATH\"' >> ~/.zshrc   # or ~/.bashrc"
-        echo "  then restart your shell." ;;
-    esac
-    ;;
-  unlink)
-    # Remove geneseed symlinks created by `link` from PATH + the common bin dirs.
-    shift || true
-    removed=0
-    seen=" "
-    for d in "$HOME/.local/bin" "/usr/local/bin" $(printf '%s' "$PATH" | tr ':' ' '); do
-      case "$seen" in *" $d "*) continue ;; esac
-      seen="$seen$d "
-      f="$d/geneseed"
-      [ -L "$f" ] || continue
-      case "$(basename "$(readlink "$f")")" in
-        geneseed) ;;
-        *) continue ;;
-      esac
-      if rm -f "$f" 2>/dev/null || { command -v sudo >/dev/null 2>&1 && sudo rm -f "$f"; }; then
-        echo "geneseed: removed $f"; removed=1
-      fi
-    done
-    [ "$removed" -eq 0 ] && echo "geneseed: no linked launcher found on PATH"
     ;;
   -h|--help|help)
     cat <<'USAGE'

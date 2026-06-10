@@ -9,6 +9,21 @@ self-discipline.
 Merge [`settings.json`](settings.json) into your repo's `.claude/settings.json`
 (or your user settings). It:
 
+- on **PreToolUse** (matcher `Bash`), runs `harness git-gate` — a tool-boundary
+  backstop for Rule XX (*consent before every commit and push*). The hook inspects the
+  command and, when it runs a `git commit` or `git push` (bare, flagged, `-C <path>`,
+  or chained like `git add . && git commit … && git push`), returns
+  `permissionDecision: "ask"` so Claude Code **prompts on every such call**. Crucially
+  this is **not** suppressible by a one-time *"Yes, and don't ask again"*: the allow
+  rule that choice writes is only consulted *after* the hook runs, so the hook re-asks
+  next time regardless. Every other Bash command (and any unreadable payload) is
+  deferred to the normal permission flow — the hook never blocks unrelated work.
+
+  **Caveat — the GitHub MCP vector.** The hook matches the `Bash` tool only. If your
+  session has the GitHub MCP server, an agent can commit/push via `push_files` /
+  `create_or_update_file` / `merge_pull_request`, which bypass Bash. To gate those too,
+  widen the matcher to `"Bash|mcp__github__.*"` — `git-gate` ignores any payload it
+  doesn't recognise as a commit/push, so over-matching the tool surface is harmless.
 - on **SessionStart** (`startup`/`clear` only — a fresh context), prints `AGENT.md`
   so the harness is in context from the first turn, then runs `harness context` to
   **inject the project context** directly into the session — so Rule XVIII is enforced
@@ -30,8 +45,7 @@ Merge [`settings.json`](settings.json) into your repo's `.claude/settings.json`
   it with `GENESEED_MEMORY=/abs/path/to/memory`.
 
 Adjust the paths if your harness bundle is not at the repository root. On Windows
-the commands are identical (`python rituals/harness.py …`); see the **Windows /
-PowerShell** section of the top-level README.
+the commands are identical (`python rituals/harness.py …`).
 
 Why inject rather than instruct? Rule XVIII tells the agent to read the project
 context at startup, but startup rituals are exactly what agents skip. The

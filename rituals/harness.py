@@ -146,8 +146,14 @@ def _check_build(theme_name: str, out: Path) -> list[str]:
     out = out.resolve()
     problems: list[str] = []
     for md in out.rglob("*.md"):
-        text = md.read_text(encoding="utf-8")
         rel = md.relative_to(out)
+        # Vendored third-party skill folders are verbatim upstream docs: their internal
+        # cross-links reference the upstream project's own (partly un-vendored) files and
+        # they carry their own license, so they are exempt from Geneseed's hermeticity /
+        # dead-link invariant. (Provenance + license: THIRD-PARTY.md.)
+        if build.is_vendored_path(rel):
+            continue
+        text = md.read_text(encoding="utf-8")
         for tok in set(TOKEN_RE.findall(text)):
             problems.append(f"[{theme_name}] unresolved token {tok} in {rel}")
         problems += [f"[{theme_name}] {p}" for p in _link_problems(md, text, out, rel)]
@@ -581,6 +587,38 @@ def cmd_context(args: argparse.Namespace) -> int:
         out.append("")
 
     sys.stdout.write("\n".join(out) + "\n")
+    return 0
+
+
+# ---- git-gate: per-action commit/push confirmation (Law XX tool-boundary backstop) -
+# A `git` verb anywhere in the command — including chained (`git add . && git commit
+# … && git push`) and `-C <path>` forms — trips the gate, so a compound one-liner can
+# never slip a commit/push past the prompt.
+GIT_GATE_RE = re.compile(r"\bgit\b[^\n]*\b(?:commit|push)\b")
+
+
+def cmd_git_gate(args: argparse.Namespace) -> int:
+    """PreToolUse hook: force the host to ASK before EVERY git commit or push, on any
+    branch — Law XX's tool-boundary backstop. Reads the Claude Code PreToolUse payload
+    from stdin ({"tool_name","tool_input":{"command":...}}); when the command runs a
+    git commit/push it prints a `permissionDecision: "ask"` so the host re-prompts on
+    every call — a decision a one-time "don't ask again" cannot suppress, since the
+    allow rule it writes is only consulted AFTER this hook runs. Every other tool call
+    (and any unreadable payload) exits 0 with no output, deferring to the normal
+    permission flow — a hook must never break a tool call (cf. cmd_context)."""
+    try:
+        payload = json.loads(sys.stdin.read() or "{}")
+        command = (payload.get("tool_input") or {}).get("command", "")
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return 0
+    if not isinstance(command, str) or not GIT_GATE_RE.search(command):
+        return 0
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "ask",
+        "permissionDecisionReason":
+            "Geneseed Law XX — every git commit/push needs explicit approval",
+    }}))
     return 0
 
 
@@ -1029,6 +1067,40 @@ _MCP_PRESETS = {
                 "[\"uvx\", \"markitdown-mcp\"]). Exposes one tool: convert_to_markdown(uri).",
         "block": {"type": "local", "command": ["markitdown-mcp"], "enabled": True},
     },
+    "gitlab": {
+        "label": "GitLab",
+        "desc": "GitLab repo / MR / issue / CI tools via @zereight/mcp-gitlab (npx, no "
+                "install). Edit GITLAB_PERSONAL_ACCESS_TOKEN (scopes: api, read_repository) "
+                "and GITLAB_API_URL before use. Add a second entry (gitlab-2) for another "
+                "instance.",
+        "block": {"type": "local",
+                  "command": ["npx", "-y", "@zereight/mcp-gitlab"],
+                  "environment": {"GITLAB_PERSONAL_ACCESS_TOKEN": "",
+                                  "GITLAB_API_URL": "https://gitlab.com/api/v4"},
+                  "enabled": True},
+    },
+    "gitlab-2": {
+        "label": "GitLab (2nd instance)",
+        "desc": "A second GitLab instance (e.g. a self-hosted server) via the same "
+                "@zereight/mcp-gitlab command. Point GITLAB_API_URL at the other instance "
+                "and give it that instance's own token.",
+        "block": {"type": "local",
+                  "command": ["npx", "-y", "@zereight/mcp-gitlab"],
+                  "environment": {"GITLAB_PERSONAL_ACCESS_TOKEN": "",
+                                  "GITLAB_API_URL": "https://gitlab.example.com/api/v4"},
+                  "enabled": True},
+    },
+    "filesystem": {
+        "label": "Filesystem",
+        "desc": "Read/write files under explicitly allowed directories via "
+                "@modelcontextprotocol/server-filesystem (npx, no install). Replace the "
+                "trailing path arg(s) with only the dir(s) the agent may touch "
+                "(least-privilege).",
+        "block": {"type": "local",
+                  "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem",
+                              "/path/to/allowed/dir"],
+                  "enabled": True},
+    },
 }
 
 
@@ -1425,7 +1497,12 @@ def _setup_summary_lines(theme, emit, out, root, ok):
     else:
         lines.append(("warn", "build failed — see the output above"))
     if emit == "opencode-global":
-        lines.append(("info", 'learn plugin: export GENESEED_HARNESS="$HOME/.config/opencode"'))
+        cfg_dir = build._opencode_config_dir()
+        if sys.platform.startswith("win"):
+            hint = f'learn plugin: $env:GENESEED_HARNESS = "{cfg_dir}"  (persist: setx GENESEED_HARNESS "{cfg_dir}")'
+        else:
+            hint = 'learn plugin: export GENESEED_HARNESS="$HOME/.config/opencode"'
+        lines.append(("info", hint))
     elif emit == "files":
         lines.append(("info", f"point your tool's instructions at {agent_md}"))
     try:
@@ -3042,8 +3119,8 @@ def _tui_loop(stdscr, inv: dict) -> None:
                 except EOFError:
                     ans = ""
                 if ans[:1] == "y":
-                    run(["bash", str(root / "sync-self.sh")])
-                    run(["bash", str(root / "upgrade.sh")])
+                    run([sys.executable, harness_py, "sync-self"])
+                    run([sys.executable, harness_py, "upgrade"])
             try:
                 input("\n[press Enter to return to the panel] ")
             except EOFError:
@@ -3203,8 +3280,9 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
     if ref is None:
         ref = _text_input(stdscr, curses, "Update from which upstream ref?", "main") or "main"
         curses.curs_set(0)
-    steps = [("Refresh orchestration scripts", ["bash", str(here / "sync-self.sh"), ref]),
-             ("Update factory & rebuild bundle", ["bash", str(here / "upgrade.sh"), ref])]
+    hp = str(here / "rituals" / "harness.py")
+    steps = [("Refresh orchestration scripts", [sys.executable, hp, "sync-self", ref]),
+             ("Update factory & rebuild bundle", [sys.executable, hp, "upgrade", ref])]
     status = _run_steps(stdscr, curses, pal, steps, heading="updating")
     failed = any(s == "failed" for s in status)
     msg = ("a step FAILED — press any key to continue to setup" if failed
@@ -3218,12 +3296,143 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
 
 
 def _bootstrap_plain(here, ref) -> None:
-    """Non-curses fallback: run the update steps with plain output (never fatal)."""
+    """Non-curses fallback: run the update steps with plain output (never fatal).
+    Cross-platform — invokes the harness's own Python `sync-self`/`upgrade` subcommands
+    (no bash), so this works identically on native Windows."""
     r = ref or "main"
+    hp = str(here / "rituals" / "harness.py")
     print("[geneseed] refreshing orchestration scripts ...")
-    run(["bash", str(here / "sync-self.sh"), r])
+    run([sys.executable, hp, "sync-self", r])
     print("[geneseed] updating factory + rebuilding ...")
-    run(["bash", str(here / "upgrade.sh"), r])
+    run([sys.executable, hp, "upgrade", r])
+
+
+def cmd_upgrade(args: argparse.Namespace) -> int:
+    """Self-upgrade from the published source, then rebuild the bundle. Cross-platform
+    (stdlib download + extract) — replaces upgrade.sh; the wrapper now delegates here."""
+    import _update
+    return _update.upgrade(args.ref, args.theme)
+
+
+def cmd_sync_self(args: argparse.Namespace) -> int:
+    """Refresh the orchestration layer (launchers + update scripts) that `upgrade` does
+    not touch. Cross-platform — replaces sync-self.sh; the wrapper now delegates here."""
+    import _update
+    return _update.sync_self(args.ref)
+
+
+# --- run-from-anywhere (link/unlink): cross-platform PATH install ------------------
+# Unix symlinks the launcher into a bin dir; Windows writes a small `geneseed.cmd` shim
+# into a dedicated dir and puts THAT on the user PATH (no admin/Dev-Mode symlink needed).
+
+def _win_bin_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home())
+    return Path(base) / "Geneseed" / "bin"
+
+
+def _win_user_path(action: str, directory: str) -> bool:
+    """Add/remove `directory` from the persistent USER Path via PowerShell (operates on
+    the user scope only, so it never truncates the system PATH). Returns success."""
+    if action == "add":
+        ps = (f"$d='{directory}';"
+              "$p=[Environment]::GetEnvironmentVariable('Path','User');"
+              "if (-not $p) {$p=''};"
+              "$parts=$p.Split(';') | Where-Object {$_ -ne ''};"
+              "if ($parts -notcontains $d) {"
+              "  $np=(@($parts)+$d) -join ';';"
+              "  [Environment]::SetEnvironmentVariable('Path',$np,'User')}")
+    else:
+        ps = (f"$d='{directory}';"
+              "$p=[Environment]::GetEnvironmentVariable('Path','User');"
+              "if ($p) {"
+              "  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');"
+              "  [Environment]::SetEnvironmentVariable('Path',$np,'User')}")
+    try:
+        return run(["powershell", "-NoProfile", "-Command", ps]).returncode == 0
+    except OSError:
+        return False
+
+
+def cmd_link(args: argparse.Namespace) -> int:
+    """Put `geneseed` on PATH so it runs from any directory."""
+    here = ROOT
+    if sys.platform.startswith("win"):
+        bindir = _win_bin_dir()
+        bindir.mkdir(parents=True, exist_ok=True)
+        shim = bindir / "geneseed.cmd"
+        shim.write_text(
+            "@echo off\r\n"
+            f'python "{here / "rituals" / "harness.py"}" %*\r\n', encoding="utf-8")
+        print(f"geneseed: wrote shim {shim}")
+        on_path = str(bindir).lower() in (os.environ.get("PATH") or "").lower()
+        if on_path or _win_user_path("add", str(bindir)):
+            print(f"geneseed: '{bindir}' is on your user PATH — open a NEW terminal, then run `geneseed`.")
+        else:
+            print(f"geneseed: add '{bindir}' to your PATH manually, then run `geneseed` from anywhere.")
+        return 0
+    # Unix: symlink the launcher into a bin dir (default ~/.local/bin, no sudo).
+    target_dir = Path(args.dir) if getattr(args, "dir", None) else None
+    if target_dir is None:
+        local = Path.home() / ".local" / "bin"
+        try:
+            local.mkdir(parents=True, exist_ok=True)
+            target_dir = local
+        except OSError:
+            target_dir = Path("/usr/local/bin")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    dest = target_dir / "geneseed"
+    try:
+        if dest.is_symlink() or dest.exists():
+            dest.unlink()
+        dest.symlink_to(here / "geneseed")
+    except OSError as e:
+        print(f"geneseed: could not write {dest} ({e}) — pick a writable dir: "
+              f"geneseed link <dir>", file=sys.stderr)
+        return 1
+    print(f"geneseed: linked {dest} -> {here / 'geneseed'}")
+    if str(target_dir) in (os.environ.get("PATH") or "").split(os.pathsep):
+        print(f"geneseed: '{target_dir}' is on PATH — run 'geneseed' from anywhere.")
+    else:
+        print(f"geneseed: NOTE '{target_dir}' is not on your PATH. Add it, e.g.:")
+        print(f"  echo 'export PATH=\"{target_dir}:$PATH\"' >> ~/.zshrc   # or ~/.bashrc")
+    return 0
+
+
+def cmd_unlink(args: argparse.Namespace) -> int:
+    """Remove the `geneseed` launcher from PATH (the symlink on Unix / shim + PATH entry
+    on Windows)."""
+    if sys.platform.startswith("win"):
+        bindir = _win_bin_dir()
+        shim = bindir / "geneseed.cmd"
+        removed = False
+        if shim.exists():
+            shim.unlink()
+            removed = True
+            print(f"geneseed: removed {shim}")
+        if _win_user_path("remove", str(bindir)):
+            print(f"geneseed: removed '{bindir}' from your user PATH (open a new terminal).")
+        if not removed:
+            print("geneseed: no linked launcher found.")
+        return 0
+    removed = False
+    candidates = [Path.home() / ".local" / "bin", Path("/usr/local/bin")]
+    candidates += [Path(d) for d in (os.environ.get("PATH") or "").split(os.pathsep) if d]
+    seen: set[Path] = set()
+    for d in candidates:
+        if d in seen:
+            continue
+        seen.add(d)
+        f = d / "geneseed"
+        if f.is_symlink() and Path(os.readlink(f)).name == "geneseed":
+            try:
+                f.unlink()
+                print(f"geneseed: removed {f}")
+                removed = True
+            except OSError:
+                pass
+    if not removed:
+        print("geneseed: no linked launcher found on PATH")
+    return 0
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> int:
@@ -3273,7 +3482,7 @@ _MENU_ACTIONS = [(k, f"{_icon(k)}  {lbl}", d) for (k, lbl, d) in _MENU_ACTIONS_R
 
 # The Settings submenu groups configuration actions reached from the main menu.
 _SETTINGS_ACTIONS_RAW = [
-    ("mcp", "MCP servers", "Wire document conversion (MarkItDown) & other MCP servers into OpenCode."),
+    ("mcp", "MCP servers", "Wire the MarkItDown, GitLab & Filesystem presets (and your own) into OpenCode."),
     ("link", "Run from anywhere", "Put `geneseed` on your PATH so it runs from any directory."),
     ("unlink", "Remove from PATH", "Remove the `geneseed` launcher symlink from your PATH."),
     ("uninstall", "Uninstall harness", "Remove a global Geneseed install (memory is kept, never deleted)."),
@@ -3293,12 +3502,12 @@ def _settings_menu(stdscr, curses, pal, here) -> None:
         if sel == "mcp":
             _mcp_view(stdscr, curses, pal)
         elif sel in ("link", "unlink", "uninstall"):
-            # Shell out to the launcher's own command: link/unlink manage the PATH
-            # symlink; uninstall removes a global install (it prompts on the restored
-            # terminal and keeps memory). The launcher lives at the repo root.
+            # Run the harness's own Python subcommand (no bash): link/unlink manage the
+            # PATH entry on every OS; uninstall removes a global install (it prompts on
+            # the restored terminal and keeps memory).
             curses.def_prog_mode()
             curses.endwin()
-            run(["bash", str(here / "geneseed"), sel])
+            run([sys.executable, str(here / "rituals" / "harness.py"), sel])
             try:
                 input("\n[press Enter to return to settings] ")
             except EOFError:
@@ -3485,6 +3694,9 @@ def main() -> int:
     c = sub.add_parser("context", help="print context.json eager entries for a SessionStart hook (Rule XVIII)")
     c.set_defaults(fn=cmd_context)
 
+    gg = sub.add_parser("git-gate", help="PreToolUse hook: force an ASK before every git commit/push (Law XX backstop)")
+    gg.set_defaults(fn=cmd_git_gate)
+
     df = sub.add_parser("diff", help="report how a deployed global harness differs from a fresh render (back-port aid)")
     df.add_argument("--target", default=None,
                     help="deployed config dir (default: $OPENCODE_CONFIG_DIR / ~/.config/opencode)")
@@ -3537,6 +3749,24 @@ def main() -> int:
     bs.add_argument("extra", nargs="*", help=argparse.SUPPRESS)  # tolerate a legacy [theme] arg
     bs.add_argument("--no-setup", action="store_true", help="update only; skip the setup wizard")
     bs.set_defaults(fn=cmd_bootstrap)
+
+    up = sub.add_parser("upgrade", help="self-upgrade from the published source, then rebuild "
+                                        "the bundle (cross-platform; replaces upgrade.sh)")
+    up.add_argument("ref", nargs="?", default=None, help="branch or tag (default: main)")
+    up.add_argument("theme", nargs="?", default=None, help="optional: force a theme (neutral|imperial|…)")
+    up.set_defaults(fn=cmd_upgrade)
+
+    ss = sub.add_parser("sync-self", help="refresh the orchestration layer — launchers + update "
+                                          "scripts (cross-platform; replaces sync-self.sh)")
+    ss.add_argument("ref", nargs="?", default=None, help="branch or tag (default: main)")
+    ss.set_defaults(fn=cmd_sync_self)
+
+    lk = sub.add_parser("link", help="put `geneseed` on PATH so it runs from any directory")
+    lk.add_argument("dir", nargs="?", default=None, help="bin dir to install into (Unix; default ~/.local/bin)")
+    lk.set_defaults(fn=cmd_link)
+
+    ul = sub.add_parser("unlink", help="remove the `geneseed` launcher from PATH")
+    ul.set_defaults(fn=cmd_unlink)
 
     args = ap.parse_args()
     return args.fn(args)

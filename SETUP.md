@@ -30,9 +30,9 @@ asks for a theme and install mode, runs the right build, and offers a health che
 It works on every OS. Prefer to do it by hand?
 Pick a path below. Already installed? Bare **`./geneseed`** opens an interactive
 **main menu** — choose *Update & set up*, *Set up / re-theme*, *Browse*, *Health
-check*, *Build*, *Diff*, or *Settings* (a submenu for MCP servers — toggle MarkItDown
-& other MCP servers into your OpenCode config — the PATH install, and uninstall) and it
-runs that flow. **`./geneseed bootstrap`** jumps
+check*, *Build*, *Diff*, or *Settings* (a submenu for MCP servers — toggle the
+MarkItDown, GitLab, and Filesystem presets into your OpenCode config — the PATH install,
+and uninstall) and it runs that flow. **`./geneseed bootstrap`** jumps
 straight to update-then-setup; **`./geneseed setup`** straight to the wizard.
 
 | Path | Use when |
@@ -52,9 +52,20 @@ Installs the whole harness into OpenCode's config dir; every repo you open inher
 ```
 # from inside the Geneseed folder
 python build.py --emit opencode-global            # add --theme imperial for the 40k voice
-export GENESEED_HARNESS="$HOME/.config/opencode"  # so the learn plugin finds the memory store
+# GENESEED_HARNESS is optional — the learn plugin auto-locates the in-config memory
+# store. Set it only to pin the location explicitly (and persist it to your rc):
+export GENESEED_HARNESS="$HOME/.config/opencode"
 echo 'export GENESEED_HARNESS="$HOME/.config/opencode"' >> ~/.zshrc
 ```
+
+**Windows (PowerShell)** — identical, no bash/WSL needed (`build.py` is pure Python):
+```powershell
+# from inside the Geneseed folder
+python build.py --emit opencode-global            # add --theme imperial for the 40k voice
+setx GENESEED_HARNESS "$env:USERPROFILE\.config\opencode"   # optional; pins the memory store
+```
+On Windows the config dir is the same homedir-relative path,
+`C:\Users\<user>\.config\opencode` — OpenCode uses `~/.config/opencode` on every OS.
 
 This writes into `$OPENCODE_CONFIG_DIR` (else `$XDG_CONFIG_HOME/opencode`, else
 `~/.config/opencode`): `AGENT.md`, `agents/`, `skills/<name>/SKILL.md`, a single
@@ -120,6 +131,9 @@ python rituals/harness.py prompt --theme neutral > install-geneseed.md
 
 That emits a self-contained prompt that recreates the entire file tree verbatim.
 Paste it into any capable agent on the target machine — no Python, no build step.
+Pre-built prompts for the two reference themes also ship in
+[`prompts/`](prompts/README.md) (`install.neutral.md`, `install.imperial.md`) — the
+other themes render the same way with the theme name substituted.
 
 ---
 
@@ -183,6 +197,30 @@ markdown. Install one converter and the skill uses it:
 
 The skill never installs a converter silently — if none is present it reports which to add.
 
+### MCP servers
+
+Beyond document conversion, Geneseed ships **four** ready-to-wire MCP servers as presets
+— **MarkItDown** (below), **GitLab** (one entry per instance), and **Filesystem**. Each
+is a *local* server the agent launches on demand: registering one only points the agent
+at a command — *you* install the tool (or let `npx`/`pipx` fetch it) and supply any
+credentials. On OpenCode they live under the `mcp` key of an `opencode.json`, each entry
+shaped:
+
+```json
+"<name>": { "type": "local", "command": ["…"], "environment": {}, "enabled": true }
+```
+
+> **Never commit a real token.** The presets and the reference
+> [`adapters/opencode/opencode.json`](adapters/opencode/opencode.json) carry **empty**
+> `GITLAB_PERSONAL_ACCESS_TOKEN` placeholders (and a sample filesystem path) — fill them
+> in your own config, never in a tracked file (universal Law I — secrets).
+
+**Don't want to hand-edit JSON?** `./geneseed` → **Settings** → **MCP servers** toggles
+any of the four presets into your project or global `opencode.json` — and enables,
+disables, or removes them — for you. The reference config ships MarkItDown enabled and
+the GitLab / Filesystem entries disabled, so a merge never activates a credential-less
+server: fill the blanks, then flip the one(s) you want on.
+
 #### MarkItDown via MCP (OpenCode)
 
 Wire Microsoft's MarkItDown in as a **local MCP server** so the agent can convert
@@ -236,11 +274,115 @@ into your project or global `opencode.json` (and enables/disables it) for you.
 The `ingest` skill auto-prefers an MCP converter when one is exposed, so a prompt like
 *"convert file:///path/to/spec.pdf to markdown"* now just works.
 
+#### GitLab (one entry per instance)
+
+Wire GitLab in via [`@zereight/mcp-gitlab`](https://github.com/zereight/gitlab-mcp) —
+repo, merge-request, issue, and CI tools over the GitLab API, run through `npx` (nothing
+installed globally; the first run fetches it). It is self-hosted ready, so the same
+command serves gitlab.com and any private instance.
+
+**1. Mint a Personal Access Token** on *each* instance — User Settings → Access Tokens,
+scopes `api` and `read_repository`. Treat it like a password.
+
+**2. Register one `mcp` entry per instance** — same command, different `GITLAB_API_URL`
+and token. Two instances (e.g. gitlab.com plus a self-hosted server) → two entries:
+
+```json
+{
+  "mcp": {
+    "gitlab": {
+      "type": "local",
+      "command": ["npx", "-y", "@zereight/mcp-gitlab"],
+      "environment": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "glpat-…",
+        "GITLAB_API_URL": "https://gitlab.com/api/v4"
+      },
+      "enabled": true
+    },
+    "gitlab-2": {
+      "type": "local",
+      "command": ["npx", "-y", "@zereight/mcp-gitlab"],
+      "environment": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "glpat-…",
+        "GITLAB_API_URL": "https://gitlab.example.com/api/v4"
+      },
+      "enabled": true
+    }
+  }
+}
+```
+
+The entry key is just a label — name them `gitlab` / `gitlab-2`, or after each instance
+(`gitlab`, `gitlab-acme`). What separates the two is the `GITLAB_API_URL` + token pair;
+keep the `/api/v4` suffix on the URL.
+
+#### Filesystem
+
+Give the agent scoped file access via
+[`@modelcontextprotocol/server-filesystem`](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem),
+also through `npx`. The **allowed directories are command-line arguments** — the server
+can touch *only* the paths you list, so grant the narrowest set that works:
+
+```json
+{
+  "mcp": {
+    "filesystem": {
+      "type": "local",
+      "command": [
+        "npx", "-y", "@modelcontextprotocol/server-filesystem",
+        "/path/to/project", "/path/to/another/allowed/dir"
+      ],
+      "enabled": true
+    }
+  }
+}
+```
+
+> **Least privilege.** Don't point it at `$HOME` or `/`. List only the dirs the task
+> needs — the server refuses any path outside them.
+
+#### Claude Code
+
+Claude Code reads the same servers from a `.mcp.json` `mcpServers` map — note the key is
+`env` (not `environment`) and the command and its args are split into `command` +
+`args`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "npx",
+      "args": ["-y", "@zereight/mcp-gitlab"],
+      "env": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "glpat-…",
+        "GITLAB_API_URL": "https://gitlab.com/api/v4"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"]
+    },
+    "markitdown": { "command": "markitdown-mcp", "args": [] }
+  }
+}
+```
+
+Register it with `claude mcp add` or by editing `.mcp.json` directly; the same
+token-safety rule applies.
+
+#### Verify
+
+Restart your agent. On OpenCode, `opencode mcp` lists each server and whether it
+connected; on Claude Code, `/mcp` shows the same. A GitLab server that won't connect is
+almost always a missing / over-scoped token or the wrong `GITLAB_API_URL` (mind the
+`/api/v4` suffix); a filesystem server that "sees nothing" usually has a wrong
+allowed-dir path.
+
 ### Environment knobs
 
 | Variable | Used by | Effect |
 | --- | --- | --- |
-| `GENESEED_HARNESS` | learn plugin | base whose `memory/` the plugin writes to (set for a global install) |
+| `GENESEED_HARNESS` | learn plugin | base whose `memory/` the plugin writes to (optional — the plugin auto-locates the in-config store; set to pin it) |
 | `GENESEED_MEMORY` | learn plugin / CLI | explicit memory dir (overrides the above) |
 | `GENESEED_CONTEXT` | context plugin / CLI | explicit `context.json` path |
 | `GENESEED_ROOT` | `harness context` | repo root to discover docs from (default: cwd) |
@@ -250,9 +392,17 @@ The `ingest` skill auto-prefers an MCP converter when one is exposed, so a promp
 | `GENESEED_OUT` / `GENESEED_ROOT` | `upgrade.sh` | bundle / project-root locations |
 | `GENESEED_DEBUG` | context plugin | `1` re-enables discovery/inject logs |
 | `GENESEED_CONTEXT_INJECT` | context plugin | `off` disables the injected block (rely on the AGENT.md law) |
-| `GENESEED_EAGER_FILE_KB` / `_TOTAL_KB` | context plugin | per-file / total eager injection budget (default 16 / 48) |
+| `GENESEED_EAGER_FILE_KB` / `GENESEED_EAGER_TOTAL_KB` | context plugin | per-file / total eager injection budget (default 16 / 48) |
 | `GENESEED_LAZY_HEADINGS` | context plugin | cap on lazy-file heading reads per session (default 64) |
+| `GENESEED_CONTEXT_TRANSFORM` | context plugin | enable invisible context injection (see the OpenCode adapter) |
 | `GENESEED_LEARN_DEBOUNCE_MS` | learn plugin | quiet period before distilling (default 60000) |
+| `GENESEED_GUARD` | guard plugin | `warn` downgrades blocks to warnings; `off` disables the safety guard |
+| `GENESEED_WORKFLOWS_DIR` | workflow plugin | override the directory the `workflow` tool reads saved scripts from |
+| `GENESEED_PRIMARY` | `build.py` | `1` also emits the primary orchestrator agent |
+| `GENESEED_COMMANDS` | `build.py` | `1` also emits the `/slash` command layer |
+| `GENESEED_TUI_ASCII` / `GENESEED_TUI_PLAIN` | TUI / harness | force pure-ASCII / drop emoji + animation in the TUI |
+| `GENESEED_NO_ANIM` | install animation | disable the themed install animation |
+| `GENESEED_LOG` | `upgrade.sh` | override the install/upgrade log path |
 | `OPENCODE_CONFIG_DIR` / `XDG_CONFIG_HOME` | global emit | where the global install is written |
 
 ---
@@ -268,7 +418,9 @@ The `ingest` skill auto-prefers an MCP converter when one is exposed, so a promp
    the learn plugin logs `wrote N memory file(s)` or a skip reason to stderr. Total
    silence means it didn't load — re-check the filename, `.js` extension, and that it
    sits in the plugins dir.
-4. **Harness health** — `python rituals/harness.py doctor` should print `ok`.
+4. **Harness health** — `python rituals/harness.py doctor` should print `ok`. To run the
+   full suite the way CI does: `python -m unittest discover -s tests -p "test_*.py"` and,
+   if Node is present, `node --test tests/workflow_runtime.test.mjs`.
 
 On a Unix terminal, `./geneseed tui` opens a two-pane, colorized panel — agents,
 skills, and laws listed on the left, the selected item's full spec on the right
@@ -305,6 +457,18 @@ instead — it does the same job:
 echo 'geneseed() { "'"$PWD"'/geneseed" "$@"; }' >> ~/.zshrc   # or ~/.bashrc
 ```
 
+**Windows** — use the native launcher `geneseed.cmd` (cmd) or `geneseed.ps1` (PowerShell),
+which route to the same Python CLI with no bash:
+
+```powershell
+.\geneseed.cmd setup            # or: .\geneseed.ps1 setup
+.\geneseed.cmd link             # writes a geneseed.cmd shim into %LOCALAPPDATA%\Geneseed\bin
+                                # and adds that dir to your user PATH (no admin / symlink needed)
+```
+
+Open a new terminal after `link`, then call `geneseed` from any directory. Remove it
+again with `.\geneseed.cmd unlink`.
+
 ## Headless / CI (OpenCode)
 
 Once the harness is installed (Path A or B), OpenCode can run **non-interactively** —
@@ -321,10 +485,11 @@ permission gates, and any per-agent overrides all take effect) and the same
 `.opencode/` agents/skills/plugins. Useful for CI checks, cron jobs, or scripting a
 capability agent. Notes:
 
-- **Permissions still gate.** The consent-before-push / `rm -rf` `ask` rules will
-  *block* in a non-interactive run (nothing to answer the prompt). For CI, set the
-  specific commands you want to `"allow"` in your own `permission.bash` map, or scope
-  the run to read-only work — don't blanket-disable the guards.
+- **Permissions still gate.** The consent-before-commit/push / `rm -rf` `ask` rules
+  will *block* in a non-interactive run (nothing to answer the prompt). Both
+  `git commit` and `git push` are gated now (Law XX, every branch), so a CI job that
+  commits must opt those commands back to `"allow"` in its own `permission.bash` map,
+  or scope the run to read-only work — don't blanket-disable the guards.
 - **`--pure`** runs OpenCode ignoring local/global config — handy to reproduce a bug
   without the harness in the way, or to confirm a behaviour is the harness's doing.
 - The **learn** plugin (`session.idle` → memory) and **context** plugin still load in

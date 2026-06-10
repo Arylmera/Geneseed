@@ -7,8 +7,9 @@
 > {{TAGLINE}}
 
 {{INTRO_DOC}} It defines the **{{LAWS}}** the agent obeys, the **{{AGENTS}}** it can
-delegate to, the **{{SKILLS}}** it can run, how it keeps **{{MEMORY}}**, and how it
-draws on the surrounding **{{VAULT}}**.
+delegate to, the **{{SKILLS}}** it can run, how it keeps **{{MEMORY}}**, the
+**{{NOTEBOOK}}** it keeps as a space of its own, and how it draws on the surrounding
+**{{VAULT}}**.
 
 It is tool-agnostic: it works with any assistant that reads a root instructions
 file. This entrypoint is named `AGENT.md`; a tool that only auto-loads `AGENTS.md`
@@ -20,7 +21,7 @@ each as a *persona* the single agent adopts for that slice of work.
 **Readiness sigil — required.** Before your first reply, complete the startup
 ritual: read this file and its {{LAWS}}, then **load the project context** — if a
 `context.json` sits beside this file, read it and load its `eager` entries now
-(§6, {{LAW}} XVIII). Only then emit your first reply, which MUST begin with the
+(§7, {{LAW}} XVIII). Only then emit your first reply, which MUST begin with the
 exact line below, before any other text. Do not paraphrase it and do not skip it —
 a first reply that omits the sigil signals the harness was not read, and emitting
 it certifies you have loaded the {{LAWS}} *and* the project context.
@@ -93,6 +94,7 @@ subset that productively clashes on a given motion.
 | [tdd]({{DIR_SKILLS}}/tdd.md) | implementing behaviour that can be pinned by a test |
 | [debug]({{DIR_SKILLS}}/debug.md) | a bug or failure to diagnose before fixing |
 | [repo-map]({{DIR_SKILLS}}/repo-map.md) | orienting to the repo, or structure changed |
+| [document-project]({{DIR_SKILLS}}/document-project.md) | the project's own docs or HTML overview are missing or have drifted from the code |
 | [ingest]({{DIR_SKILLS}}/ingest.md) | a task needs content from a PDF, Office doc, or URL |
 | [research]({{DIR_SKILLS}}/research.md) | a question needs answers gathered and verified from the open web |
 | [commit]({{DIR_SKILLS}}/commit.md) | staging and writing a commit |
@@ -102,6 +104,8 @@ subset that productively clashes on a given motion.
 | [ship]({{DIR_SKILLS}}/ship.md) | a verified change is ready to open as a PR or merge |
 | [release]({{DIR_SKILLS}}/release.md) | cutting a version: bump, changelog, tag |
 | [migrate]({{DIR_SKILLS}}/migrate.md) | upgrading a dependency, framework, or language version |
+| [git-archaeology]({{DIR_SKILLS}}/git-archaeology.md) | finding when a regression landed or why code exists — bisect, blame, pickaxe |
+| [git-rescue]({{DIR_SKILLS}}/git-rescue.md) | recovering a broken or messy repo, or safely rewriting history — reflog, undo, rebase behind a backup |
 | [refactor]({{DIR_SKILLS}}/refactor.md) | improving code structure without changing behaviour |
 | [handoff]({{DIR_SKILLS}}/handoff.md) | context filling, or passing work to another agent or session |
 | [roast-me]({{DIR_SKILLS}}/roast-me.md) | you want an artifact torn apart, brutally and actionably |
@@ -127,7 +131,28 @@ convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
 
 ---
 
-## 5. {{VAULT}} — the folder you live in
+## 5. {{NOTEBOOK}} — a space of your own
+
+*{{EPI_NOTEBOOK}}*
+
+{{INTRO_NOTEBOOK}} It lives in [`{{DIR_NOTEBOOK}}/`]({{DIR_NOTEBOOK}}/), indexed by a
+`NOTEBOOK.md` you keep yourself. This is **not** {{MEMORY}}: {{MEMORY}} (§4) is a
+curated store of durable *facts*, one per file in a fixed format, written for recall.
+The {{NOTEBOOK}} has **no imposed format** — it is freeform working space you shape
+for yourself: plans, scratch designs, a map of the code you built, a task ledger,
+working theories, anything that helps you think and work. Organise it however you
+like; **create, rename, move, and delete** your own files there at will.
+
+Read `NOTEBOOK.md` at the start of a session to recall what you keep here, and keep
+that index current as you add or move things, so the space stays referable across
+sessions. When a note here hardens into a durable fact worth recalling verbatim,
+promote it to {{MEMORY}} (§4, {{LAW}} VI). Like {{MEMORY}}, `{{DIR_NOTEBOOK}}/` is
+**personal and git-ignored** — it is yours, never committed or shared. Full
+convention: [`{{DIR_NOTEBOOK}}/README.md`]({{DIR_NOTEBOOK}}/README.md).
+
+---
+
+## 6. {{VAULT}} — the folder you live in
 
 *{{EPI_VAULT}}*
 
@@ -148,7 +173,7 @@ Because the folder is shared, two cautions hold ({{LAW}} XVI):
 
 ---
 
-## 6. {{CONTEXT}} — pointing the agent at your own docs
+## 7. {{CONTEXT}} — pointing the agent at your own docs
 
 *{{EPI_CONTEXT}}*
 
@@ -176,7 +201,7 @@ overwrites it; just fill it in.
 
 ---
 
-## 7. {{SCRIPTS}} — optional automation
+## 8. {{SCRIPTS}} — optional automation
 
 *{{EPI_SCRIPTS}}*
 
