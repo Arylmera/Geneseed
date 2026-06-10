@@ -410,3 +410,36 @@ def sync_self(ref: str | None = None) -> int:
         return 0
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Standalone CLI so the launchers can self-heal a STALE factory.
+
+    A partial update (sync-self refreshed the launchers but `upgrade` never refreshed
+    rituals/) leaves a new launcher over an old harness.py that has never heard of the
+    `upgrade` / `sync-self` subcommands — argparse there hard-fails with "invalid choice".
+    The bash / cmd / ps1 front doors probe harness.py and, on a miss, fall back to
+    `python rituals/_update.py <cmd>` here, which drives the exact code cmd_upgrade /
+    cmd_sync_self call. STABLE CONTRACT — keep `python rituals/_update.py
+    {upgrade|sync-self|update} [ref] [theme]` working so future launchers can rely on it.
+
+    Returns a process exit code (0 = ok)."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    cmd = argv[0] if argv else ""
+    rest = [a for a in argv[1:] if a not in ("-h", "--help")]
+    if cmd == "upgrade":
+        return upgrade(rest[0] if len(rest) > 0 else None,
+                       rest[1] if len(rest) > 1 else None)
+    if cmd in ("sync-self", "sync_self"):
+        return sync_self(rest[0] if rest else None)
+    if cmd == "update":  # orchestration first, THEN the factory — mirrors `geneseed update`
+        ref = rest[0] if rest else None
+        rc = sync_self(ref)
+        return rc if rc else upgrade(ref)
+    sys.stderr.write("geneseed self-heal: usage: python rituals/_update.py "
+                     "{upgrade|sync-self|update} [ref] [theme]\n")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

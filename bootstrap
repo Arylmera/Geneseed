@@ -24,4 +24,42 @@ if [ -z "$PY" ]; then
   done
   PY="${PY:-python3}"
 fi
-exec "$PY" "$HERE/rituals/harness.py" bootstrap "$@"
+# Happy path: a current harness.py owns the progress UI + setup re-exec.
+if "$PY" "$HERE/rituals/harness.py" bootstrap --help >/dev/null 2>&1; then
+  exec "$PY" "$HERE/rituals/harness.py" bootstrap "$@"
+fi
+
+# STALE factory: harness.py predates `bootstrap` (the same partial-update skew that breaks
+# upgrade/sync-self). Heal the factory directly via rituals/_update.py, then hand off to the
+# now-fresh harness for setup. Parse the ref + the --no-setup flag out of "$@" ourselves.
+echo "geneseed: installed factory predates 'bootstrap' - self-healing via rituals/_update.py ..." >&2
+no_setup=0; ref=""
+for a in "$@"; do
+  case "$a" in
+    --no-setup) no_setup=1 ;;
+    -*) ;;                                   # ignore other/unknown flags
+    *) [ -z "$ref" ] && ref="$a" ;;          # first positional is the upstream ref
+  esac
+done
+
+if "$PY" - "$HERE/rituals/_update.py" <<'PY' >/dev/null 2>&1
+import sys, importlib.util as u
+try:
+    s = u.spec_from_file_location("_u", sys.argv[1])
+    m = u.module_from_spec(s); s.loader.exec_module(m)
+    sys.exit(0 if hasattr(m, "main") else 1)
+except Exception:
+    sys.exit(1)
+PY
+then
+  "$PY" "$HERE/rituals/_update.py" update ${ref:+"$ref"} || exit $?
+else
+  echo "geneseed: rituals/_update.py is also too old to self-heal - refresh the factory by hand, then retry:" >&2
+  echo "  curl -fsSL https://github.com/Arylmera/Geneseed/archive/refs/heads/main.zip -o /tmp/gs.zip \\" >&2
+  echo "    && unzip -oq /tmp/gs.zip -d /tmp && cp -R /tmp/Geneseed-main/rituals/. \"$HERE/rituals/\" && ./geneseed bootstrap" >&2
+  exit 2
+fi
+
+# Factory is fresh now — run setup against the just-updated code unless asked to skip it.
+[ "$no_setup" = "1" ] && exit 0
+exec "$PY" "$HERE/rituals/harness.py" setup

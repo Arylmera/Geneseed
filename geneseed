@@ -51,10 +51,40 @@ fi
 if [ "$#" -eq 0 ]; then set -- menu; fi
 cmd="$1"
 case "$cmd" in
-  menu|tui|setup|build|doctor|diff|context|learn|prompt|version|status|uninstall|upgrade|sync-self|link|unlink)
-    # All of these are implemented in the cross-platform Python CLI (single source of
-    # truth) — upgrade/sync-self/link/unlink were ported out of bash so they run on
-    # native Windows too (see rituals/_update.py and cmd_link/cmd_unlink in harness.py).
+  upgrade|sync-self)
+    # Self-update commands must survive a STALE factory. A partial update (sync-self
+    # refreshed THIS launcher but `upgrade` never refreshed rituals/) leaves a new launcher
+    # over an old harness.py that has never heard of `upgrade`/`sync-self` — argparse there
+    # hard-fails with "invalid choice". Probe harness support first (a side-effect-free
+    # `--help` exits 0 iff the subcommand exists); on a miss, self-heal by driving
+    # rituals/_update.py directly (the same code cmd_upgrade/cmd_sync_self call), so the
+    # front door can always repair itself instead of dead-ending on a raw argparse error.
+    if "$PY" "$HERE/rituals/harness.py" "$cmd" --help >/dev/null 2>&1; then
+      exec "$PY" "$HERE/rituals/harness.py" "$@"
+    fi
+    echo "geneseed: installed factory predates '$cmd' - self-healing via rituals/_update.py ..." >&2
+    if "$PY" - "$HERE/rituals/_update.py" <<'PY' >/dev/null 2>&1
+import sys, importlib.util as u
+try:
+    s = u.spec_from_file_location("_u", sys.argv[1])
+    m = u.module_from_spec(s); s.loader.exec_module(m)
+    sys.exit(0 if hasattr(m, "main") else 1)
+except Exception:
+    sys.exit(1)
+PY
+    then
+      exec "$PY" "$HERE/rituals/_update.py" "$@"
+    fi
+    # Both the factory AND _update.py predate the self-heal — give the exact manual cure.
+    echo "geneseed: rituals/_update.py is also too old to self-heal - refresh the factory by hand, then retry:" >&2
+    echo "  curl -fsSL https://github.com/Arylmera/Geneseed/archive/refs/heads/main.zip -o /tmp/gs.zip \\" >&2
+    echo "    && unzip -oq /tmp/gs.zip -d /tmp && cp -R /tmp/Geneseed-main/rituals/. \"$HERE/rituals/\" && ./geneseed $cmd" >&2
+    exit 2
+    ;;
+  menu|tui|setup|build|doctor|diff|context|learn|prompt|version|status|uninstall|link|unlink)
+    # Cross-platform Python CLI (single source of truth). link/unlink also live there
+    # (cmd_link/cmd_unlink) — they need a current harness but are not self-update paths,
+    # so a stale factory there is a normal error, not a bootstrap paradox.
     exec "$PY" "$HERE/rituals/harness.py" "$@"
     ;;
   bootstrap)
