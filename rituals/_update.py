@@ -12,7 +12,9 @@ Windows, macOS, and Linux with no external tools.
 `sync-self.sh` wrappers now just delegate to `python rituals/harness.py upgrade|sync-self`,
 so this module is the single source of truth for the update logic on every platform.
 
-Stdlib only. No dependencies. Behaviour mirrors the scripts it replaces:
+Prefers the system `curl` for network I/O (its Happy-Eyeballs IPv4 fallback dodges the
+urllib stalls some networks trigger) and drops to stdlib urllib when curl is absent, so it
+still runs dependency-free. Behaviour mirrors the scripts it replaces:
   - SHA-pinned archive download (content-addressed, never a mid-publish partial) with a
     ref/tag fallback, retried with exponential backoff.
   - `doctor --all` gate on the downloaded source BEFORE anything local is touched, with
@@ -113,8 +115,8 @@ def _net_timeout() -> float:
 
 
 def _urlopen(url: str, accept: str | None = None):
-    """GET `url` with a User-Agent (GitHub rejects requests without one) and a short
-    timeout so a dead socket fails over to curl quickly."""
+    """GET `url` via stdlib urllib — the FALLBACK transport, used only when curl is absent.
+    Short timeout so even this path fails fast instead of blocking on a dead socket."""
     headers = {"User-Agent": "geneseed-upgrade"}
     if accept:
         headers["Accept"] = accept
@@ -123,10 +125,10 @@ def _urlopen(url: str, accept: str | None = None):
 
 
 def _curl_get(url: str, accept: str | None = None, dest: Path | None = None):
-    """Fallback fetch via the system `curl`, for when urllib stalls (IPv6 black-hole, or a
-    proxy urllib mishandles). Returns the response bytes (dest=None), or b"" after writing
-    to `dest`; None if curl is absent or the request failed. curl's Happy-Eyeballs gives the
-    fast IPv4 fallback an urllib-only path lacks — which is the whole reason for this hedge."""
+    """Fetch via the system `curl` — the PRIMARY transport. Its Happy-Eyeballs IPv4 fallback
+    dodges the macOS IPv6 black-hole / mishandled-proxy stalls that make Python's urllib hang
+    its full timeout. Returns the response bytes (dest=None), or b"" after writing to `dest`;
+    None if curl is absent or the request failed, in which case the caller drops to urllib."""
     exe = shutil.which("curl")
     if not exe:
         return None
@@ -152,36 +154,34 @@ def _curl_get(url: str, accept: str | None = None, dest: Path | None = None):
 def _resolve_sha(ref: str) -> str | None:
     """The 40-hex commit SHA for `ref` via the GitHub API, or None if unreachable.
     A SHA lets us pull the content-addressed archive/<sha>.zip — which only exists once
-    the commit is fully published, never a half-baked snapshot. urllib first, curl on
-    failure so a urllib stall does not strand the whole upgrade."""
+    the commit is fully published, never a half-baked snapshot. curl first (it does not
+    stall the way urllib can); urllib only if curl is absent."""
     url = f"https://api.github.com/repos/{REPO}/commits/{ref}"
     acc = "application/vnd.github.sha"
-    s: str | None = None
-    try:
-        with _urlopen(url, accept=acc) as resp:
-            s = resp.read().decode("utf-8", "replace").strip()
-    except Exception:
-        out = _curl_get(url, accept=acc)
-        if out is not None:
-            s = out.decode("utf-8", "replace").strip()
+    out = _curl_get(url, accept=acc)
+    s = out.decode("utf-8", "replace").strip() if out is not None else None
+    if not s:
+        try:
+            with _urlopen(url, accept=acc) as resp:
+                s = resp.read().decode("utf-8", "replace").strip()
+        except Exception:
+            s = None
     if s and len(s) == 40 and all(c in "0123456789abcdef" for c in s.lower()):
         return s
     return None
 
 
 def _download(url: str, dest: Path) -> bool:
-    """Stream `url` to `dest`. urllib first; if it stalls or errors, retry once with curl
-    (works where urllib hangs). True iff a non-empty file landed."""
+    """Stream `url` to `dest`. curl first (it does not hang the way urllib can); urllib only
+    if curl is absent. True iff a non-empty file landed."""
+    if _curl_get(url, dest=dest) is not None and dest.is_file() and dest.stat().st_size > 0:
+        return True
     try:
         with _urlopen(url) as resp, dest.open("wb") as fh:
             shutil.copyfileobj(resp, fh)
-        if dest.is_file() and dest.stat().st_size > 0:
-            return True
+        return dest.is_file() and dest.stat().st_size > 0
     except Exception:
-        pass
-    if _curl_get(url, dest=dest) is not None and dest.is_file() and dest.stat().st_size > 0:
-        return True
-    return False
+        return False
 
 
 def _fetch_source(ref: str, dest: Path) -> Path | None:
