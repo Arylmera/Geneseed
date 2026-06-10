@@ -101,36 +101,87 @@ DOCTOR_LEGEND = [
 ]
 
 
+def _net_timeout() -> float:
+    """urllib socket timeout (seconds). Short ON PURPOSE: a macOS IPv6 black-hole or a
+    system proxy urllib mishandles makes urlopen() block its FULL timeout in silence — the
+    classic stuck "downloading ... attempt 1/4". Failing fast lets curl take over. Override
+    with GENESEED_NET_TIMEOUT for a genuinely slow link."""
+    try:
+        return max(5.0, float(os.environ.get("GENESEED_NET_TIMEOUT", "20")))
+    except ValueError:
+        return 20.0
+
+
 def _urlopen(url: str, accept: str | None = None):
-    """GET `url` with a User-Agent (GitHub rejects requests without one)."""
+    """GET `url` with a User-Agent (GitHub rejects requests without one) and a short
+    timeout so a dead socket fails over to curl quickly."""
     headers = {"User-Agent": "geneseed-upgrade"}
     if accept:
         headers["Accept"] = accept
-    return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60)
+    return urllib.request.urlopen(urllib.request.Request(url, headers=headers),
+                                  timeout=_net_timeout())
+
+
+def _curl_get(url: str, accept: str | None = None, dest: Path | None = None):
+    """Fallback fetch via the system `curl`, for when urllib stalls (IPv6 black-hole, or a
+    proxy urllib mishandles). Returns the response bytes (dest=None), or b"" after writing
+    to `dest`; None if curl is absent or the request failed. curl's Happy-Eyeballs gives the
+    fast IPv4 fallback an urllib-only path lacks — which is the whole reason for this hedge."""
+    exe = shutil.which("curl")
+    if not exe:
+        return None
+    import subprocess
+    cmd = [exe, "-fsSL", "--connect-timeout", "10", "--max-time", "180",
+           "-A", "geneseed-upgrade"]
+    if accept:
+        cmd += ["-H", f"Accept: {accept}"]
+    if dest is not None:
+        cmd += ["-o", str(dest)]
+    cmd.append(url)
+    try:
+        proc = subprocess.run(
+            cmd, stdout=(subprocess.DEVNULL if dest is not None else subprocess.PIPE),
+            stderr=subprocess.DEVNULL, timeout=190)
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    return b"" if dest is not None else proc.stdout
 
 
 def _resolve_sha(ref: str) -> str | None:
     """The 40-hex commit SHA for `ref` via the GitHub API, or None if unreachable.
     A SHA lets us pull the content-addressed archive/<sha>.zip — which only exists once
-    the commit is fully published, never a half-baked snapshot."""
+    the commit is fully published, never a half-baked snapshot. urllib first, curl on
+    failure so a urllib stall does not strand the whole upgrade."""
+    url = f"https://api.github.com/repos/{REPO}/commits/{ref}"
+    acc = "application/vnd.github.sha"
+    s: str | None = None
     try:
-        with _urlopen(f"https://api.github.com/repos/{REPO}/commits/{ref}",
-                      accept="application/vnd.github.sha") as resp:
+        with _urlopen(url, accept=acc) as resp:
             s = resp.read().decode("utf-8", "replace").strip()
     except Exception:
-        return None
-    if len(s) == 40 and all(c in "0123456789abcdef" for c in s.lower()):
+        out = _curl_get(url, accept=acc)
+        if out is not None:
+            s = out.decode("utf-8", "replace").strip()
+    if s and len(s) == 40 and all(c in "0123456789abcdef" for c in s.lower()):
         return s
     return None
 
 
 def _download(url: str, dest: Path) -> bool:
+    """Stream `url` to `dest`. urllib first; if it stalls or errors, retry once with curl
+    (works where urllib hangs). True iff a non-empty file landed."""
     try:
         with _urlopen(url) as resp, dest.open("wb") as fh:
             shutil.copyfileobj(resp, fh)
-        return True
+        if dest.is_file() and dest.stat().st_size > 0:
+            return True
     except Exception:
-        return False
+        pass
+    if _curl_get(url, dest=dest) is not None and dest.is_file() and dest.stat().st_size > 0:
+        return True
+    return False
 
 
 def _fetch_source(ref: str, dest: Path) -> Path | None:
