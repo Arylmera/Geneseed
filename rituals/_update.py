@@ -151,58 +151,153 @@ def _curl_get(url: str, accept: str | None = None, dest: Path | None = None):
     return b"" if dest is not None else proc.stdout
 
 
-def _resolve_sha(ref: str) -> str | None:
+def _human(n: int) -> str:
+    """Bytes as a compact human string (e.g. 1.4 MB) for the live download counter."""
+    f = float(n)
+    for unit in ("B", "KB", "MB", "GB"):
+        if f < 1024 or unit == "GB":
+            return f"{int(f)} {unit}" if unit == "B" else f"{f:.1f} {unit}"
+        f /= 1024
+    return f"{f:.1f} GB"
+
+
+def _progress(log, got: int, total: int = 0, *, final: bool = False) -> None:
+    """Emit one live byte-counter line (no-op without a log). GitHub archives usually omit
+    Content-Length, so `total` is often 0 — then we just show the bytes climbing, which is
+    all the user needs to see it is alive rather than hung. ASCII only (this runs as a
+    subprocess whose stdout may not be UTF-8 on Windows)."""
+    if log is None:
+        return
+    if total > 0:
+        body = f"{_human(got)} / {_human(total)} ({min(100, int(got * 100 / total))}%)"
+    else:
+        body = _human(got)
+    log(f"[geneseed]   downloaded {body}" + (" (done)" if final else " ..."))
+
+
+def _resolve_sha(ref: str, log=None) -> str | None:
     """The 40-hex commit SHA for `ref` via the GitHub API, or None if unreachable.
     A SHA lets us pull the content-addressed archive/<sha>.zip — which only exists once
     the commit is fully published, never a half-baked snapshot. curl first (it does not
     stall the way urllib can); urllib only if curl is absent."""
+    if log is not None:
+        log(f"[geneseed] resolving latest commit of {ref} (GitHub API) ...")
     url = f"https://api.github.com/repos/{REPO}/commits/{ref}"
     acc = "application/vnd.github.sha"
+    transport = "curl"
     out = _curl_get(url, accept=acc)
     s = out.decode("utf-8", "replace").strip() if out is not None else None
     if not s:
+        transport = "urllib"
         try:
             with _urlopen(url, accept=acc) as resp:
                 s = resp.read().decode("utf-8", "replace").strip()
         except Exception:
             s = None
     if s and len(s) == 40 and all(c in "0123456789abcdef" for c in s.lower()):
+        if log is not None:
+            log(f"[geneseed]   -> {s[:12]} (via {transport})")
         return s
+    if log is not None:
+        log("[geneseed]   -> SHA unresolved; falling back to the branch archive")
     return None
 
 
-def _download(url: str, dest: Path) -> bool:
-    """Stream `url` to `dest`. curl first (it does not hang the way urllib can); urllib only
-    if curl is absent. True iff a non-empty file landed."""
-    if _curl_get(url, dest=dest) is not None and dest.is_file() and dest.stat().st_size > 0:
-        return True
+def _curl_download(url: str, dest: Path, log=None):
+    """curl -> dest with a live byte counter polled off the growing file. None if curl is
+    absent (caller drops to urllib); True/False once it has run."""
+    exe = shutil.which("curl")
+    if not exe:
+        return None
+    import subprocess
+    cmd = [exe, "-fsSL", "--connect-timeout", "10", "--max-time", "300",
+           "-A", "geneseed-upgrade", "-o", str(dest), url]
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        return None
+    last = -1
+    while proc.poll() is None:
+        try:
+            got = dest.stat().st_size
+        except OSError:
+            got = 0
+        if got - last >= 131072:                 # ~every 128 KB, so even a sub-MB file ticks
+            _progress(log, got)
+            last = got
+        time.sleep(0.2)
+    ok = proc.returncode == 0 and dest.is_file() and dest.stat().st_size > 0
+    if ok:
+        _progress(log, dest.stat().st_size, final=True)
+    return ok
+
+
+def _urllib_download(url: str, dest: Path, log=None) -> bool:
+    """urllib -> dest, chunked with a live byte counter (fallback when curl is absent)."""
     try:
         with _urlopen(url) as resp, dest.open("wb") as fh:
-            shutil.copyfileobj(resp, fh)
-        return dest.is_file() and dest.stat().st_size > 0
+            total = int(resp.headers.get("Content-Length") or 0)
+            got = last = 0
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                fh.write(chunk)
+                got += len(chunk)
+                if got - last >= 131072:          # ~every 128 KB, matches the curl path
+                    _progress(log, got, total)
+                    last = got
     except Exception:
         return False
+    ok = dest.is_file() and dest.stat().st_size > 0
+    if ok:
+        _progress(log, dest.stat().st_size, final=True)
+    return ok
 
 
-def _fetch_source(ref: str, dest: Path) -> Path | None:
+def _download(url: str, dest: Path, log=None) -> bool:
+    """Stream `url` to `dest` with a live byte counter. curl first (it does not hang the way
+    urllib can); urllib only if curl is absent or failed. True iff a non-empty file landed."""
+    if _curl_download(url, dest, log):
+        return True
+    return _urllib_download(url, dest, log)
+
+
+def _fetch_source(ref: str, dest: Path, log=None) -> Path | None:
     """Download + extract `ref` into `dest`; return the extracted `geneseed-*` dir.
-    SHA-pinned with a heads/tags fallback (mirrors fetch_source in upgrade.sh)."""
-    sha = _resolve_sha(ref)
+    SHA-pinned with a heads/tags fallback (mirrors fetch_source in upgrade.sh). Logs each
+    sub-step (resolve / source / live bytes / extract) so the progress UI is never silent."""
+    sha = _resolve_sha(ref, log)
     zip_path = dest / "src.zip"
-    urls = []
+    sources = []
     if sha:
-        urls.append(f"https://github.com/{REPO}/archive/{sha}.zip")
-    urls.append(f"https://github.com/{REPO}/archive/refs/heads/{ref}.zip")
-    urls.append(f"https://github.com/{REPO}/archive/refs/tags/{ref}.zip")
-    if not any(_download(u, zip_path) for u in urls):
+        sources.append((f"archive {sha[:12]}.zip", f"https://github.com/{REPO}/archive/{sha}.zip"))
+    sources.append((f"branch {ref}.zip", f"https://github.com/{REPO}/archive/refs/heads/{ref}.zip"))
+    sources.append((f"tag {ref}.zip", f"https://github.com/{REPO}/archive/refs/tags/{ref}.zip"))
+    landed = False
+    for name, url in sources:
+        if log is not None:
+            log(f"[geneseed] downloading {name} ...")
+        if _download(url, zip_path, log):
+            landed = True
+            break
+        if log is not None:
+            log(f"[geneseed]   {name} unavailable - trying next source ...")
+    if not landed:
         return None
+    if log is not None:
+        log("[geneseed] extracting archive ...")
     try:
         with zipfile.ZipFile(zip_path) as zf:
             zf.extractall(dest)
     except (zipfile.BadZipFile, OSError):
+        if log is not None:
+            log("[geneseed]   x extract failed (corrupt or partial zip)")
         return None
     for child in sorted(dest.iterdir()):
         if child.is_dir() and child.name.lower().startswith("geneseed-"):
+            if log is not None:
+                log(f"[geneseed]   extracted {child.name}")
             return child
     return None
 
@@ -244,12 +339,13 @@ def _resolve_emit(cfg: Path, out: Path) -> str:
     return "files"
 
 
-def _refresh_item(new_root: Path, here: Path, item: str) -> None:
+def _refresh_item(new_root: Path, here: Path, item: str) -> bool:
     """Stage one factory item with copy -> rm -> mv, shrinking the kill-vulnerable window
-    to two instant renames instead of a full-tree copy (parity with upgrade.sh)."""
+    to two instant renames instead of a full-tree copy (parity with upgrade.sh). Returns
+    True if the item was refreshed, False if upstream had nothing under that name."""
     src = new_root / item
     if not src.exists():
-        return
+        return False
     staged = here / f"{item}.geneseed-new"
     dest = here / item
     if staged.exists():
@@ -267,6 +363,7 @@ def _refresh_item(new_root: Path, here: Path, item: str) -> None:
         else:
             dest.unlink()
     os.replace(staged, dest)
+    return True
 
 
 def _migrate_stray_bundle(here: Path, out: Path, log: _Log) -> None:
@@ -331,7 +428,8 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None) -> int:
 
         log(f"[geneseed] refreshing factory files in {here} ...")
         for item in SYNC:
-            _refresh_item(new_root, here, item)
+            if _refresh_item(new_root, here, item):
+                log(f"[geneseed]   refreshed {item}")
 
         marker_theme = ""
         try:
@@ -380,7 +478,7 @@ def _fetch_and_validate(ref: str, tmp: Path, log: _Log) -> Path:
         work = tmp / f"try{i}"
         work.mkdir(parents=True, exist_ok=True)
         log(f"[geneseed] downloading {REPO}@{ref} (attempt {i}/{ATTEMPTS}) ...")
-        cand = _fetch_source(ref, work)
+        cand = _fetch_source(ref, work, log)
         if cand is None or not cand.is_dir():
             log(f"[geneseed][E-DOWNLOAD] ⚠️  download or extract failed (attempt {i}/{ATTEMPTS}) — check network.")
             if i < ATTEMPTS:
@@ -426,7 +524,7 @@ def sync_self(ref: str | None = None) -> int:
             for stale in tmp.glob("geneseed-*"):
                 shutil.rmtree(stale, ignore_errors=True)
             (tmp / "src.zip").unlink(missing_ok=True)
-            new_root = _fetch_source(ref, tmp)
+            new_root = _fetch_source(ref, tmp, log)
             if new_root is not None:
                 break
             sys.stderr.write(f"[geneseed]   download attempt {i} failed — retrying ...\n")
