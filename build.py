@@ -301,8 +301,9 @@ def build(theme_name: str, out: Path) -> None:
     agents, skills, in their themed form) are wiped, so a renamed or removed source
     file never leaves a stale copy behind. Everything else in `out` is preserved:
     the surrounding application code, the agent's runtime `memory/` (MEMORY.md +
-    fact files, refreshed in place) and `notebook/` (the agent's own freeform
-    space + its NOTEBOOK.md index), and `context.json` — written once, beside
+    fact files, refreshed in place) and `notebook/` (the agent's sovereign
+    space — seeded once, never re-emitted; only its `.gitignore` is re-asserted),
+    and `context.json` — written once, beside
     AGENT.md, and never touched again. The build therefore cleans its own footprint
     without ever destroying the user's repository or data."""
     theme, items = render_all(theme_name)
@@ -314,9 +315,19 @@ def build(theme_name: str, out: Path) -> None:
         if managed.is_dir():
             shutil.rmtree(managed)
 
+    nb_dirname = theme.get(SRC_DIR_TOKENS["notebook"], "notebook")
     for out_rel, text, src in items:
         dest = out / out_rel
         dest.parent.mkdir(parents=True, exist_ok=True)
+        # The notebook is the agent's sovereign space (spec 2026-06-11): its
+        # seeded files (charter README) are written once and never re-emitted,
+        # so the agent may rewrite its own rules. Only `.gitignore` is
+        # re-asserted every run — the one law the agent cannot lift: the space
+        # never enters the host repo.
+        rel = Path(out_rel)
+        if (rel.parts[0] == nb_dirname and rel.name != ".gitignore"
+                and dest.exists()):
+            continue
         if text is not None:
             dest.write_text(text, encoding="utf-8")
         else:

@@ -88,9 +88,8 @@ class BuildRoundTripTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_notebook_is_preserved_across_rebuild(self):
-        """The notebook is the agent's own store: like memory it is NOT an owned dir,
-        so a rebuild must refresh the convention in place without wiping the index or
-        any file the agent kept there."""
+        """The notebook is the agent's own store: NOT an owned dir, seeded once.
+        A rebuild must never wipe the index or any file the agent kept there."""
         tmp = Path(tempfile.mkdtemp())
         try:
             build.build("neutral", tmp)
@@ -102,6 +101,40 @@ class BuildRoundTripTests(unittest.TestCase):
             self.assertEqual((tmp / "notebook" / "NOTEBOOK.md").read_text(encoding="utf-8"),
                              "# Notebook Index\n- kept\n")
             self.assertTrue((tmp / "notebook" / "scratch.md").is_file())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_notebook_charter_is_agent_owned_after_seed(self):
+        """The charter README is seeded on first build and never re-emitted: an
+        agent rewrite must survive a rebuild byte-for-byte (sovereign space,
+        spec 2026-06-11)."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp)
+            charter = tmp / "notebook" / "README.md"
+            self.assertTrue(charter.is_file())   # seeded on first build
+            charter.write_text("# My rules\nmine now\n", encoding="utf-8")
+            build.build("neutral", tmp)          # rebuild over the same dir
+            self.assertEqual(charter.read_text(encoding="utf-8"),
+                             "# My rules\nmine now\n")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_notebook_gitignore_is_reasserted(self):
+        """The .gitignore is the one fixed law of the space: modified or deleted,
+        the next rebuild restores the build's version."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp)
+            gi = tmp / "notebook" / ".gitignore"
+            original = gi.read_text(encoding="utf-8")
+            gi.write_text("# lifted\n", encoding="utf-8")
+            build.build("neutral", tmp)
+            self.assertEqual(gi.read_text(encoding="utf-8"), original)
+            gi.unlink()
+            build.build("neutral", tmp)
+            self.assertTrue(gi.is_file())
+            self.assertEqual(gi.read_text(encoding="utf-8"), original)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
