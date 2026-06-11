@@ -76,7 +76,9 @@ Prefer to jump straight in? `./geneseed setup` (guided install) or `./geneseed t
 **Windows:** everything works natively (no bash, WSL, curl, or unzip) — use the
 `geneseed.cmd` / `geneseed.ps1` launchers (`.\geneseed.cmd setup`,
 `.\geneseed.cmd build`, `.\geneseed.cmd upgrade`), or call `python rituals\harness.py <cmd>`
-directly. The full-screen TUI menu is Unix-only; on Windows use the guided `setup` wizard.
+directly. The full-screen TUI runs natively too on a VT-capable console (Windows
+Terminal, or Windows 10 1809+ `conhost`) via a stdlib-only ANSI backend — still nothing
+to `pip install`; on an older console without VT it falls back to the guided `setup` wizard.
 
 ## Layout
 

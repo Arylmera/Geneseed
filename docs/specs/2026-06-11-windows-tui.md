@@ -95,11 +95,13 @@ No `get_wch`, pads, or subwindows are used.
 
 ## Component design — `rituals/_winterm.py`
 
-- **`enable_vt()`** — shared helper. `ctypes` → `kernel32.GetConsoleMode` /
-  `SetConsoleMode` with `ENABLE_VIRTUAL_TERMINAL_PROCESSING` on the stdout handle.
-  Reconfigure stdout to UTF-8. Returns success; raises/flags `Unsupported` if the
-  handle isn't a console or the mode can't be set. Used by both the shim's `wrapper`
-  **and** `theme_anim.play_line` (so the animated theme intro renders on Windows too).
+- **`enable_vt()`** — `ctypes` → `kernel32.GetConsoleMode` / `SetConsoleMode` with
+  `ENABLE_VIRTUAL_TERMINAL_PROCESSING` on the stdout handle. Reconfigure stdout to
+  UTF-8. Returns a `restore()` closure; raises `Unsupported` if the handle isn't a
+  console or the mode can't be set.
+  **Note (verified during implementation):** `theme_anim._anim_ok()` *already* enables
+  VT on Windows via the `os.system("")` trick, so the animated theme intro needs **no
+  change** — the spec's plan to route it through `enable_vt()` was unnecessary.
 - **`wrapper(fn)`** — `enable_vt()`; enter alt-screen (`\x1b[?1049h`); hide cursor;
   build the `stdscr` window; `try: fn(stdscr)` `finally:` restore (show cursor,
   `\x1b[?1049l`, restore console mode). Mirrors `curses.wrapper`'s cleanup guarantee.
@@ -155,9 +157,14 @@ get the TUI, everyone else gets today's behavior, nothing regresses.
    - coordinate → escape-sequence math (incl. clamping).
    - `getch`/`timeout`/`nodelay` state machine (timeout returns `-1`).
    - `wrapper` enable/restore ordering, including the exception path.
-2. **Drift guard:** render each screen to an in-memory buffer via real `curses` (where
-   available) and via the shim; assert the visible text/layout matches — defends the
-   project's "status/TUI never drift" property.
+2. **Integration smoke (replaces the drift guard):** during implementation the
+   "render via real curses and compare" idea proved not cleanly implementable — real
+   curses draws to the terminal, not to an inspectable string buffer, so there is no
+   apples-to-apples comparison. Instead, drive a real harness screen (`_menu`) through
+   the shim with scripted input and an in-memory stream, asserting it renders the
+   expected content and returns/cancels correctly. The shim is installed as `curses`
+   for the test, so harness' internal `import curses` resolves to it — runs on any OS
+   and exercises the seam + shim + real screen code end-to-end.
 3. **Existing suite stays green** (`python -m unittest discover -s tests`), including
    the headless `status` / line-wizard fallback tests.
 4. **Manual smoke matrix:** Windows Terminal + conhost on Win10/11 × {main menu, browse
@@ -181,11 +188,12 @@ get the TUI, everyone else gets today's behavior, nothing regresses.
 
 ## Worklog
 
-- [ ] `_winterm.py`: `enable_vt`, `_Window`, color/attr/ACS/KEY tables, `getch` state machine, `wrapper`
-- [ ] `sys.modules["curses"]` seam in `harness.py`; relax `win` platform gates
-- [ ] route `theme_anim.play_line` through `enable_vt()`
-- [ ] unit tests (`_winterm`) + drift guard
-- [ ] full unittest suite green + `--help` import check
-- [ ] manual smoke matrix (Windows Terminal + conhost)
-- [ ] update README.md / SETUP.md Windows notes
+- [x] `_winterm.py`: `enable_vt`, `_Window`, color/attr/ACS/KEY tables, `getch` state machine, `wrapper`
+- [x] `sys.modules["curses"]` seam in `harness.py`; relax `win` platform gates (5 TUI gates + cmd_tui/cmd_menu + CLI help)
+- [x] ~~route `theme_anim.play_line` through `enable_vt()`~~ — not needed; it already enables VT via `os.system("")`
+- [x] unit tests (`_winterm`, 26) + integration smoke (`_menu` via shim, 2) — replaces the drift guard
+- [x] full unittest suite green (141) + `--help` import check (seam loads shim on Windows)
+- [x] real-platform smoke: graceful fallback verified (`tui`/`menu` off a non-VT console, `enable_vt` raises `Unsupported`)
+- [ ] manual visual pass on a live Windows Terminal (interactive; outstanding — needs a human console)
+- [x] update README.md / SETUP.md Windows notes
 - [ ] commit + push

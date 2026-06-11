@@ -21,8 +21,9 @@ for OpenCode internals see [adapters/opencode/](adapters/opencode/README.md).
 ## Choose your path
 
 **Easiest:** run `./geneseed setup` (or `python rituals/harness.py setup`) for a
-guided, dependency-free wizard — a colored curses form on a Unix terminal (plain
-text prompts elsewhere). As you move through the theme picker it **previews each
+guided, dependency-free wizard — a colored full-screen form on any VT-capable terminal
+(Unix, or Windows Terminal / Windows 10 1809+ `conhost`; plain text prompts on older
+consoles or off a TTY). As you move through the theme picker it **previews each
 theme live** — its tagline, loaded-sigil, and voice — so you hear the flavour before
 you choose; once you pick, the wizard speaks in that theme's accent through confirm
 and build, and the install ends on the theme's own **banner and benediction**. It
@@ -422,10 +423,10 @@ allowed-dir path.
    full suite the way CI does: `python -m unittest discover -s tests -p "test_*.py"` and,
    if Node is present, `node --test tests/workflow_runtime.test.mjs`.
 
-On a Unix terminal, `./geneseed tui` opens a two-pane, colorized panel — agents,
-skills, and laws listed on the left, the selected item's full spec on the right
-(PgUp/PgDn to scroll it) — and runs build/doctor/diff (and `u` to update) with a
-keystroke.
+On any VT-capable terminal (Unix, or Windows Terminal / Windows 10 1809+ `conhost`),
+`./geneseed tui` opens a two-pane, colorized panel — agents, skills, and laws listed on
+the left, the selected item's full spec on the right (PgUp/PgDn to scroll it) — and runs
+build/doctor/diff (and `u` to update) with a keystroke.
 
 ## Run `geneseed` from anywhere
 

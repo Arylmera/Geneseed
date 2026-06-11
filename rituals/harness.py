@@ -24,7 +24,7 @@ Dependency-free. Subcommands:
                                    never deleted — kept in place, or --archive-memory
                                    moves it to archived-memory/; --yes to skip prompt
     harness setup                  interactive, dependency-free install wizard (all OSes)
-    harness tui                    full-screen curses control panel (Unix only)
+    harness tui                    full-screen control panel (any VT-capable console)
     harness learn [FILE]           distil notes/transcript into memory entries
                                    via a model CLI of your choice (no API key)
 
@@ -61,6 +61,19 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build.py"
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402  (path adjusted above)
+
+# curses ships in the Unix stdlib but not on Windows. When it is absent, install the
+# pure-stdlib VT shim (rituals/_winterm.py) under the `curses` name so the full-screen
+# TUI runs natively on a VT-capable Windows console; every later `import curses`
+# resolves to the shim, and its wrapper() raises Unsupported (caught by each caller)
+# when no VT console is available, so we degrade to the line wizard.
+try:
+    import curses  # noqa: F401
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import _winterm  # noqa: E402
+    sys.modules["curses"] = _winterm
+
 TOKEN_RE = re.compile(r"\{\{[A-Z_]+\}\}")
 LINK_RE = re.compile(r"\]\((?!https?://|#)([^)]+)\)")
 # A link target that leaves the bundle: POSIX-absolute, home (~), or Windows drive.
@@ -1471,7 +1484,7 @@ def _collect_setup_lines() -> "dict | None":
 def _collect_setup() -> "dict | None":
     """Gather the install selection — a colored curses form where the terminal
     supports it, else the line prompts. Returns the confirmed selection or None."""
-    if not sys.platform.startswith("win") and sys.stdin.isatty():
+    if sys.stdin.isatty():
         try:
             import curses
             import locale
@@ -1551,17 +1564,16 @@ def cmd_setup(args: argparse.Namespace) -> int:
         sys.stderr.write("[setup] needs an interactive terminal. Non-interactive? e.g.:\n"
                          "  python build.py --emit opencode-global --theme neutral\n")
         return 1
-    if not sys.platform.startswith("win"):
+    try:
+        import curses
+        import locale
         try:
-            import curses
-            import locale
-            try:
-                locale.setlocale(locale.LC_ALL, "")
-            except locale.Error:
-                pass
-            return curses.wrapper(_setup_flow)
-        except Exception as e:
-            sys.stderr.write(f"[setup] TUI unavailable ({e}); using prompts.\n")
+            locale.setlocale(locale.LC_ALL, "")
+        except locale.Error:
+            pass
+        return curses.wrapper(_setup_flow)
+    except Exception as e:
+        sys.stderr.write(f"[setup] TUI unavailable ({e}); using prompts.\n")
     return _setup_lines()
 
 
@@ -2355,7 +2367,7 @@ def _doctor_screen(stdscr) -> None:
 def _doctor_run_ui() -> int:
     """Show the health check in the curses view where supported, else run the classic
     text doctor. Used by the setup wizard's 'Run a health check now?' prompt."""
-    if (not sys.platform.startswith("win")) and sys.stdin.isatty():
+    if sys.stdin.isatty():
         try:
             import curses
             import locale
@@ -3130,16 +3142,14 @@ def _tui_loop(stdscr, inv: dict) -> None:
 
 
 def cmd_tui(args: argparse.Namespace) -> int:
-    """Full-screen curses control panel: browse agents/skills/laws and run
-    build/doctor/diff. Unix only (stdlib curses); degrades with a clear message."""
-    if sys.platform.startswith("win"):
-        print("[tui] the curses panel needs a Unix terminal. Use `harness setup` instead.")
-        return 1
+    """Full-screen control panel: browse agents/skills/laws and run build/doctor/diff.
+    Runs natively on a VT-capable console — Unix curses, or the Windows VT shim — and
+    degrades with a clear message when there is no interactive terminal / VT support."""
     if not sys.stdin.isatty():
         print("[tui] not an interactive terminal. Use `harness setup`, `doctor`, or `build`.")
         return 1
     try:
-        import curses  # noqa: F401  (availability probe)
+        import curses  # noqa: F401  (availability probe; VT shim on Windows)
     except ImportError:
         print("[tui] curses is unavailable in this Python. Use `harness setup`.")
         return 1
@@ -3150,7 +3160,11 @@ def cmd_tui(args: argparse.Namespace) -> int:
         locale.setlocale(locale.LC_ALL, "")   # enable UTF-8 box-drawing + icons
     except locale.Error:
         pass
-    curses.wrapper(_tui_loop, inv)
+    try:
+        curses.wrapper(_tui_loop, inv)
+    except Exception as e:  # e.g. the Windows shim's Unsupported when VT can't be enabled
+        print(f"[tui] full-screen panel unavailable ({e}). Use `harness setup`, `doctor`, or `build`.")
+        return 1
     return 0
 
 
@@ -3440,7 +3454,7 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     where supported, then hand off to a FRESH setup process so the wizard runs the
     just-updated code. `--no-setup` stops after the update."""
     here = Path(__file__).resolve().parent.parent
-    if (not sys.platform.startswith("win")) and sys.stdin.isatty():
+    if sys.stdin.isatty():
         try:
             import curses
             import locale
@@ -3635,12 +3649,15 @@ def _main_menu(stdscr) -> int:
 
 def cmd_menu(args: argparse.Namespace) -> int:
     """Interactive main menu — the default for a bare `./geneseed`. Falls back to a
-    one-line command list off a TTY / on Windows / if curses is unavailable."""
-    if sys.platform.startswith("win") or not sys.stdin.isatty():
+    one-line command list off a TTY / when no VT console / if curses is unavailable."""
+    def _menu_help() -> int:
         print("Geneseed — no interactive menu here. Get started with:  python harness.py setup")
         print("Other commands:  bootstrap · update · build · doctor · diff · tui")
-        print("On a Unix terminal, a bare `./geneseed` opens the interactive menu of these.")
+        print("On a VT-capable terminal, a bare `./geneseed` opens the interactive menu of these.")
         return 0
+
+    if not sys.stdin.isatty():
+        return _menu_help()
     try:
         import curses
         import locale
@@ -3651,7 +3668,7 @@ def cmd_menu(args: argparse.Namespace) -> int:
         return curses.wrapper(_main_menu)
     except Exception as e:
         sys.stderr.write(f"[menu] TUI unavailable ({e}).\n")
-        return 1
+        return _menu_help()
 
 
 def main() -> int:
