@@ -87,6 +87,48 @@ const hasAny = (name, parts) => parts.some((s) => name.includes(s))
 // context plugin: $GENESEED_WIKI -> $GENESEED_HARNESS/wiki.json -> beside the install.
 async function isFile(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
 
+// wiki.json is JSONC (the seeded stub carries a commented example): strip // and
+// /* */ comments plus trailing commas before parsing — string-aware, so quoted
+// "https://…" or "C:/…" values are untouched. Kept in sync with the context plugin's
+// copy (plugins stay self-contained, like the other shared helpers).
+function stripJsonc(text) {
+  let out = "", inStr = false, esc = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inStr) {
+      out += c
+      if (esc) esc = false
+      else if (c === "\\") esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') { inStr = true; out += c; continue }
+    if (c === "/" && text[i + 1] === "/") { while (i < text.length && text[i] !== "\n") i++; out += "\n"; continue }
+    if (c === "/" && text[i + 1] === "*") { i += 2; while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++; i++; continue }
+    out += c
+  }
+  let res = ""
+  inStr = false; esc = false
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i]
+    if (inStr) {
+      res += c
+      if (esc) esc = false
+      else if (c === "\\") esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') { inStr = true; res += c; continue }
+    if (c === ",") {
+      let j = i + 1
+      while (j < out.length && /\s/.test(out[j])) j++
+      if (out[j] === "]" || out[j] === "}") continue
+    }
+    res += c
+  }
+  return res
+}
+
 async function wikiFile() {
   const explicit = process.env.GENESEED_WIKI
   if (explicit && (await isFile(explicit))) return explicit
@@ -113,7 +155,7 @@ async function protectedPrefixes() {
   try {
     const file = await wikiFile()
     if (file) {
-      const data = JSON.parse(await fs.readFile(file, "utf8"))
+      const data = JSON.parse(stripJsonc(await fs.readFile(file, "utf8")))
       for (const w of Array.isArray(data?.wikis) ? data.wikis : []) {
         if (!w?.path || !Array.isArray(w.protected)) continue
         for (const d of w.protected) {

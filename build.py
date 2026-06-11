@@ -158,30 +158,50 @@ def ensure_context_stub(out: Path) -> None:
                         encoding="utf-8")
 
 
-WIKI_STUB = {
-    "_comment": (
-        "Declare the user's machine-wide knowledge base(s) — typically an Obsidian "
-        "vault (AGENT.md: the Wiki section). Each wiki: 'name', 'path' (absolute "
-        "root of the vault), 'description', 'entries' (notes to load: 'path' "
-        "relative to the wiki root, 'load' 'eager'/'lazy' as in context.json, "
-        "'description'), 'conventions' (note with the wiki's authoring rules — "
-        "read before the first write), 'inbox' (drop folder for notes the agent "
-        "cannot confidently file), and 'protected' (folders the agent must never "
-        "write to). An empty list disables the feature. This file is "
-        "host-specific — git-ignore it. The build creates it once, empty, and "
-        "never overwrites it."
-    ),
-    "wikis": [],
+# The wiki manifest is JSONC — its consumers (the context and guard plugins, and the
+# agent itself) strip // and /* */ comments and trailing commas before parsing, so the
+# seeded stub can carry its documentation and a copy-and-edit example inline.
+WIKI_STUB = """\
+// Geneseed wiki.json — declare your machine-wide knowledge base(s) here, typically
+// an Obsidian vault (AGENT.md: the Wiki section). Comments are allowed in this file
+// (JSONC). It is host-specific — never commit it. The build created it once, empty,
+// and will never overwrite it.
+//
+// Each wiki carries:
+//   name         a short label
+//   path         absolute root of the vault (use forward slashes, also on Windows)
+//   description  one line shown to the agent
+//   entries      notes to load: path relative to the vault root; load "eager" =
+//                read every session, "lazy" = read only when the task needs it
+//   conventions  the vault's authoring-rules note — read before the first write
+//   inbox        drop folder for notes the agent cannot confidently file
+//   protected    folders the agent must never write to (guard-enforced on OpenCode)
+//
+// Example — copy this object into the "wikis" array below and edit:
+// {
+//   "name": "Brain",
+//   "path": "C:/Users/me/Documents/Brain",
+//   "description": "my machine-wide knowledge base",
+//   "entries": [
+//     { "path": "INDEX.md", "load": "eager", "description": "always-on core" },
+//     { "path": "Maps/TOPICS.md", "load": "lazy", "description": "topic index" }
+//   ],
+//   "conventions": "STYLE.md",
+//   "inbox": "Inbox/",
+//   "protected": ["Journal/"]
+// }
+{
+  "wikis": []
 }
+"""
 
 
 def ensure_wiki_stub(out: Path) -> None:
-    """Drop an empty `wiki.json` beside AGENT.md the first time only — and NEVER
+    """Drop the JSONC `wiki.json` stub beside AGENT.md the first time only — and NEVER
     overwrite one (it holds the user's own knowledge-base declarations)."""
     dest = out / "wiki.json"
     if not dest.exists():
-        dest.write_text(json.dumps(WIKI_STUB, indent=2, ensure_ascii=False) + "\n",
-                        encoding="utf-8")
+        dest.write_text(WIKI_STUB, encoding="utf-8")
 
 
 # Bundle-level ignore so a host repo can COMMIT the rendered harness — AGENT.md, the

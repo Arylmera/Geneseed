@@ -62,6 +62,9 @@ living wiki.
 }
 ```
 
+- The file is **JSONC** (amended same day): consumers strip `//` and `/* */`
+  comments plus trailing commas — string-aware — so the seeded stub documents
+  itself and carries a commented copy-and-edit example for setup.
 - Multiple wikis allowed; an empty `wikis` list (the emitted default) means the
   feature is off.
 - `entries[].path` is relative to the wiki's `path`; `load` is `eager`/`lazy`

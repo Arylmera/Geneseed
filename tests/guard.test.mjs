@@ -15,9 +15,19 @@ import { GeneseedGuard } from "../adapters/opencode/plugins/geneseed-guard.js"
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gsguard-"))
 const vault = path.join(tmp, "Brain")
 await fs.mkdir(path.join(vault, "Codex"), { recursive: true })
-await fs.writeFile(path.join(tmp, "wiki.json"), JSON.stringify({
-  wikis: [{ name: "Brain", path: vault, protected: ["Codex/"] }],
-}))
+// Written as JSONC on purpose — the seeded stub ships commented, so the guard must
+// tolerate comments and trailing commas (and leave // inside strings alone).
+await fs.writeFile(path.join(tmp, "wiki.json"), `// machine wikis
+{
+  /* one vault */
+  "wikis": [{
+    "name": "Brain",
+    "path": ${JSON.stringify(vault)},
+    "description": "see https://example.com — not a comment",
+    "protected": ["Codex/"],
+  }],
+}
+`)
 process.env.GENESEED_WIKI = path.join(tmp, "wiki.json")
 
 after(async () => {

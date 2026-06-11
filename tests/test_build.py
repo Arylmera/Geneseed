@@ -91,13 +91,18 @@ class BuildRoundTripTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_wiki_manifest_is_preserved_across_rebuild(self):
-        """wiki.json holds the user's own knowledge-base declarations: seeded once
-        with an empty list, never overwritten (spec 2026-06-11)."""
+        """wiki.json holds the user's own knowledge-base declarations: seeded once as
+        JSONC — a commented copy-and-edit example over an empty list — and never
+        overwritten (spec 2026-06-11)."""
         tmp = Path(tempfile.mkdtemp())
         try:
             build.build("neutral", tmp)
             wiki = tmp / "wiki.json"
-            self.assertEqual(json.loads(wiki.read_text(encoding="utf-8"))["wikis"], [])
+            text = wiki.read_text(encoding="utf-8")
+            self.assertIn("// Example", text)   # the inline example ships with the stub
+            data = json.loads("\n".join(
+                l for l in text.splitlines() if not l.lstrip().startswith("//")))
+            self.assertEqual(data["wikis"], [])
             mine = '{"wikis": [{"name": "Brain", "path": "/kb"}]}\n'
             wiki.write_text(mine, encoding="utf-8")
             build.build("neutral", tmp)   # rebuild over the same dir

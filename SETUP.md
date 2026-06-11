@@ -187,8 +187,10 @@ becomes a citizen of it: entry notes load each session (eager) or on demand (laz
 and it reads *and writes* notes under your vault's own conventions (AGENT.md §7,
 the `wiki` skill). Unlike `context.json` this is **per machine, not per repo**.
 
-The build seeds an empty `wiki.json` beside `AGENT.md` (for a global install:
-`~/.config/opencode/wiki.json`) and never overwrites it. Resolution:
+The build seeds `wiki.json` beside `AGENT.md` (for a global install:
+`~/.config/opencode/wiki.json`) and never overwrites it. The file is **JSONC** —
+comments and trailing commas are fine — and the seeded stub carries this very
+example commented out, ready to copy and edit in place. Resolution:
 `$GENESEED_WIKI` → `$GENESEED_HARNESS/wiki.json` → beside the installed `AGENT.md`.
 Fill it in:
 

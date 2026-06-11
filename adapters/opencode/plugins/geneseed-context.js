@@ -91,6 +91,51 @@ async function readJson(p) {
   try { return JSON.parse(await fs.readFile(p, "utf8")) } catch { return null }
 }
 
+// Strip JSONC niceties — // and /* */ comments plus trailing commas — string-aware,
+// so a "https://…" or "C:/Users/…" inside quotes is untouched. wiki.json is seeded
+// with a commented example, so its readers must tolerate comments.
+function stripJsonc(text) {
+  let out = "", inStr = false, esc = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inStr) {
+      out += c
+      if (esc) esc = false
+      else if (c === "\\") esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') { inStr = true; out += c; continue }
+    if (c === "/" && text[i + 1] === "/") { while (i < text.length && text[i] !== "\n") i++; out += "\n"; continue }
+    if (c === "/" && text[i + 1] === "*") { i += 2; while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++; i++; continue }
+    out += c
+  }
+  let res = ""
+  inStr = false; esc = false
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i]
+    if (inStr) {
+      res += c
+      if (esc) esc = false
+      else if (c === "\\") esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') { inStr = true; res += c; continue }
+    if (c === ",") {
+      let j = i + 1
+      while (j < out.length && /\s/.test(out[j])) j++
+      if (out[j] === "]" || out[j] === "}") continue
+    }
+    res += c
+  }
+  return res
+}
+
+async function readJsonc(p) {
+  try { return JSON.parse(stripJsonc(await fs.readFile(p, "utf8"))) } catch { return null }
+}
+
 // Minimal glob -> RegExp: ** spans path separators, * does not.
 function globToRegExp(glob) {
   let re = ""
@@ -290,7 +335,7 @@ async function resolveWikiFile() {
 async function wikiSets() {
   const file = await resolveWikiFile()
   if (!file) return []
-  const data = await readJson(file)
+  const data = await readJsonc(file)   // wiki.json is JSONC: stub ships commented
   const wikis = Array.isArray(data?.wikis) ? data.wikis : []
   const out = []
   for (const w of wikis) {
