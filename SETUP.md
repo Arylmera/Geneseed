@@ -179,6 +179,21 @@ Override only when the convention doesn't fit — drop a `.harness/context.json`
 `"extend": true` layers the manifest on top of discovery. Schema:
 [GLOBAL-HARNESS-SPEC.md §3](adapters/opencode/GLOBAL-HARNESS-SPEC.md).
 
+**Delivery — hiding the block.** By default the plugin posts the context as a real
+session message on `session.created`, so the full `PROJECT CONTEXT` block is
+*visible* in the OpenCode terminal after your first prompt. Prefer it out of sight?
+Set `GENESEED_CONTEXT_TRANSFORM=1` (persist with `export` in your rc, or `setx` on
+Windows) and the plugin switches to OpenCode's `experimental.chat.messages.transform`
+hook: the context is prepended to each outgoing request instead — nothing shows in
+the conversation, and it survives compaction inherently because it is re-sent per
+request. The hook is **experimental**: on an OpenCode build that lacks it the
+transform never fires *and* the visible path is skipped too, leaving you with no
+project context at all. So verify once after enabling — run a session with
+`GENESEED_DEBUG=1` and look for `[geneseed-context] transform: injected context
+invisibly` in the logs; if it never appears, your build lacks the hook — unset the
+variable. (To drop injection entirely instead, set `GENESEED_CONTEXT_INJECT=off` and
+rely on the AGENT.md law.)
+
 ### Wiki — your own knowledge base (optional)
 
 If you keep a personal knowledge base on this machine — an Obsidian vault, or any
@@ -452,7 +467,7 @@ allowed-dir path.
 | `GENESEED_EAGER_FILE_KB` / `GENESEED_EAGER_TOTAL_KB` | context plugin | per-file / total eager injection budget (default 16 / 48) |
 | `GENESEED_LAZY_HEADINGS` | context plugin | cap on lazy-file heading reads per session (default 64) |
 | `GENESEED_WIKI_LAZY_LIMIT` | context plugin | cap on lazy notes LISTED per wiki per session (default 200; beyond it the listing truncates with a count) |
-| `GENESEED_CONTEXT_TRANSFORM` | context plugin | enable invisible context injection (see the OpenCode adapter) |
+| `GENESEED_CONTEXT_TRANSFORM` | context plugin | `1` delivers the context invisibly per request instead of a visible session message (experimental hook — verify once; see [Project context](#project-context-usually-nothing)) |
 | `GENESEED_LEARN_DEBOUNCE_MS` | learn plugin | quiet period before distilling (default 60000) |
 | `GENESEED_GUARD` | guard plugin | `warn` downgrades blocks to warnings; `off` disables the safety guard |
 | `GENESEED_WORKFLOWS_DIR` | workflow plugin | override the directory the `workflow` tool reads saved scripts from |
@@ -584,6 +599,7 @@ see what diverged from source (to back-port):
 | --- | --- |
 | No readiness sigil | Instructions not pointed at `AGENT.md` — check `opencode.json` `instructions` (or your tool's rules setting). |
 | `PROJECT CONTEXT` block appears twice | Two copies of the context plugin (global + a leftover `.opencode/plugins/`). Remove the project copy. |
+| Full `PROJECT CONTEXT` block visible in the terminal | Default delivery is a session message. Set `GENESEED_CONTEXT_TRANSFORM=1` for invisible per-request injection — then verify once with `GENESEED_DEBUG=1` (see [Project context](#project-context-usually-nothing)). |
 | Learn plugin silent / no memory written | Set `GENESEED_HARNESS` (or `GENESEED_MEMORY`); confirm the `.js` files are in the plugins dir. |
 | `could not determine a model` | Set `GENESEED_MODEL=provider/model`. |
 | PDFs / Office docs ignored | Use the `ingest` skill and install a converter (MarkItDown / Pandoc / Docling). |
