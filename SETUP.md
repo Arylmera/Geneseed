@@ -202,8 +202,8 @@ Fill it in:
     "path": "/home/me/Documents/Brain",
     "description": "my machine-wide knowledge base",
     "entries": [
-      { "path": "INDEX.md", "load": "eager", "description": "always-on core" },
-      { "path": "Maps/TOPICS.md", "load": "lazy", "description": "topic index" }
+      { "path": "ARCHITECTURE.md", "load": "eager", "description": "the root map" },
+      { "path": ".", "load": "lazy" }
     ],
     "conventions": "STYLE.md",
     "inbox": "Inbox/",
@@ -214,7 +214,13 @@ Fill it in:
 
 `path` is the vault root (absolute; on Windows use forward slashes —
 `C:/Users/me/Brain`); entry paths are relative to it, with the same `eager`/`lazy`
-semantics as `context.json`. `conventions` names the note the agent must read before
+semantics as `context.json`. An entry may name a single note **or a folder**: a
+folder applies its mode to every note beneath it (`"."` = the whole vault,
+dot-folders like `.obsidian` skipped), a file entry overrides its folder's mode
+whatever the order, and `"load": "exclude"` prunes a note or folder from the
+listing. The example above is the canonical shape — root index eager, everything
+else on demand. A big vault's lazy listing truncates at 200 lines with a visible
+count (`GENESEED_WIKI_LAZY_LIMIT` adjusts it). `conventions` names the note the agent must read before
 its first write; `inbox` is where it drops notes it cannot confidently file;
 `protected` folders are write-blocked by the guard plugin at the tool boundary
 (`GENESEED_GUARD` modes apply). Several wikis may be declared; an empty `wikis`
@@ -445,6 +451,7 @@ allowed-dir path.
 | `GENESEED_CONTEXT_INJECT` | context plugin | `off` disables the injected block (rely on the AGENT.md law) |
 | `GENESEED_EAGER_FILE_KB` / `GENESEED_EAGER_TOTAL_KB` | context plugin | per-file / total eager injection budget (default 16 / 48) |
 | `GENESEED_LAZY_HEADINGS` | context plugin | cap on lazy-file heading reads per session (default 64) |
+| `GENESEED_WIKI_LAZY_LIMIT` | context plugin | cap on lazy notes LISTED per wiki per session (default 200; beyond it the listing truncates with a count) |
 | `GENESEED_CONTEXT_TRANSFORM` | context plugin | enable invisible context injection (see the OpenCode adapter) |
 | `GENESEED_LEARN_DEBOUNCE_MS` | learn plugin | quiet period before distilling (default 60000) |
 | `GENESEED_GUARD` | guard plugin | `warn` downgrades blocks to warnings; `off` disables the safety guard |

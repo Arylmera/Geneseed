@@ -166,7 +166,7 @@ Geneseed/
 ```
 python rituals/harness.py doctor                      # every theme + parity + authoring + drift
 python -m unittest discover -s tests -p "test_*.py"   # generator + CLI unit tests (no deps)
-node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs   # plugin tests (needs Node)
+node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs tests/context_wiki.test.mjs   # Node suites
 ```
 
 `doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key

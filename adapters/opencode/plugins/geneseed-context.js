@@ -332,9 +332,39 @@ async function resolveWikiFile() {
   return null
 }
 
+// Walk a vault folder for .md notes — like the project walk, but dot-folders are
+// skipped too (.obsidian, .trash — a vault keeps its config and trash inside).
+// Shares the global MAX_DEPTH / MAX_FILES_SCANNED bounds.
+async function walkWikiDir(dir, depth, acc) {
+  if (depth > MAX_DEPTH || acc.length >= MAX_FILES_SCANNED) return
+  let entries
+  try { entries = await fs.readdir(dir, { withFileTypes: true }) } catch { return }
+  for (const e of entries) {
+    if (acc.length >= MAX_FILES_SCANNED) return
+    const full = path.join(dir, e.name)
+    if (e.isDirectory()) {
+      if (EXCLUDE_DIRS.has(e.name) || e.name.startsWith(".")) continue
+      await walkWikiDir(full, depth + 1, acc)
+    } else if (e.isFile() && e.name.toLowerCase().endsWith(".md")) {
+      acc.push(full)
+    }
+  }
+}
+
+// How many lazy notes one wiki may LIST per session — a `.` (whole-vault) folder
+// entry on a large vault would otherwise inject thousands of listing lines. Beyond
+// the cap the listing truncates with a visible count and the agent explores the
+// folders on demand instead.
+const WIKI_LAZY_LIMIT = Number(process.env.GENESEED_WIKI_LAZY_LIMIT || 200)
+
 // Parse wiki.jsonc into renderable wikis: [{ name, root, desc, conventions, inbox,
-// protected, eager:[{rel,abs,desc}], lazy:[...] }]. Entry paths resolve against the
-// wiki's own root; a missing root skips that wiki (never blocks the session).
+// protected, eager:[{rel,abs,desc}], lazy:[...], truncated }]. Entry paths resolve
+// against the wiki's own root and may name a single note OR a folder — a folder
+// applies its load mode to every note beneath it (`.` covers the whole vault).
+// Folders are processed first so a specific file entry always overrides the mode
+// its folder gave it, regardless of manifest order; within each class, later
+// entries win; `load: "exclude"` prunes. A missing root skips that wiki (never
+// blocks the session).
 async function wikiSets() {
   const file = await resolveWikiFile()
   if (!file) return []
@@ -345,19 +375,51 @@ async function wikiSets() {
     if (!w?.path) continue
     if (!(await isDir(w.path))) { log(`wiki '${w.name ?? w.path}': root not found, skipped`); continue }
     const name = w.name || path.basename(w.path)
-    const eager = [], lazy = []
-    for (const e of Array.isArray(w.entries) ? w.entries : []) {
-      if (!e?.path || e.load === "exclude") continue
-      const abs = path.isAbsolute(e.path) ? e.path : path.resolve(w.path, e.path)
-      const rec = { rel: `${name}/${e.path}`.split(path.sep).join("/"), abs, desc: e.description || "" }
-      ;(e.load === "lazy" ? lazy : eager).push(rec)
+
+    const recs = new Map()   // abs -> { rel, abs, load, desc }
+    const put = (abs, load, desc) => {
+      let rel = path.relative(w.path, abs).split(path.sep).join("/")
+      if (rel.startsWith("..")) rel = abs.split(path.sep).join("/")   // outside the root
+      const prev = recs.get(abs)
+      recs.set(abs, { rel: `${name}/${rel}`, abs, load, desc: desc || prev?.desc || "" })
     }
+
+    const resolved = []
+    for (const e of Array.isArray(w.entries) ? w.entries : []) {
+      if (!e?.path) continue
+      const abs = path.isAbsolute(e.path) ? e.path : path.resolve(w.path, e.path)
+      const load = e.load === "lazy" || e.load === "exclude" ? e.load : "eager"
+      resolved.push({ abs, load, desc: e.description || "", dir: await isDir(abs) })
+    }
+    for (const folderPhase of [true, false]) {   // folders first, then files
+      for (const e of resolved) {
+        if (e.dir !== folderPhase) continue
+        if (e.dir) {
+          const acc = []
+          await walkWikiDir(e.abs, 1, acc)
+          for (const f of acc) e.load === "exclude" ? recs.delete(f) : put(f, e.load, "")
+        } else {
+          e.load === "exclude" ? recs.delete(e.abs) : put(e.abs, e.load, e.desc)
+        }
+      }
+    }
+
     const byRel = (a, b) => a.rel.localeCompare(b.rel)
+    const eager = [], lazy = []
+    for (const r of recs.values()) (r.load === "lazy" ? lazy : eager).push(r)
+    eager.sort(byRel)
+    lazy.sort(byRel)
+    let truncated = 0
+    if (lazy.length > WIKI_LAZY_LIMIT) {
+      truncated = lazy.length - WIKI_LAZY_LIMIT
+      lazy.length = WIKI_LAZY_LIMIT
+      log(`wiki '${name}': lazy listing truncated (${truncated} beyond the ${WIKI_LAZY_LIMIT} cap)`)
+    }
     out.push({
       name, root: w.path, desc: w.description || "",
       conventions: w.conventions || "", inbox: w.inbox || "",
       protected: Array.isArray(w.protected) ? w.protected : [],
-      eager: eager.sort(byRel), lazy: lazy.sort(byRel),
+      eager, lazy, truncated,
     })
   }
   return out
@@ -429,6 +491,7 @@ async function buildBlock(sets, wikis = []) {
     if (w.protected.length) wik.push(`  protected (never write): ${w.protected.join(", ")}`)
     wik.push("")
     await renderSet(wik, { eager: w.eager, lazy: w.lazy }, state)
+    if (w.truncated) wik.push(`  [+${w.truncated} more notes in this wiki — explore its folders on demand]`, "")
   }
 
   if (!proj.length && !wik.length) return null

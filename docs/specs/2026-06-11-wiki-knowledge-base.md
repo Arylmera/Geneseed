@@ -68,6 +68,13 @@ living wiki.
   is **`wiki.jsonc`** (second same-day amendment, so the extension says what the
   content is); a `wiki.json` seeded by an earlier build is still honoured by
   every consumer, and its presence suppresses the new stub.
+- Entries may name a **folder** as well as a note (third same-day amendment): a
+  folder applies its load mode to every `.md` beneath it (`"."` = the whole
+  vault; dot-folders like `.obsidian` are skipped), a file entry overrides its
+  folder's mode regardless of manifest order, and `"load": "exclude"` prunes.
+  The canonical shape — root index eager, whole vault lazy — is the seeded
+  example. Lazy listings truncate at `GENESEED_WIKI_LAZY_LIMIT` (default 200)
+  with a visible `[+N more]` note.
 - Multiple wikis allowed; an empty `wikis` list (the emitted default) means the
   feature is off.
 - `entries[].path` is relative to the wiki's `path`; `load` is `eager`/`lazy`

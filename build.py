@@ -171,8 +171,10 @@ WIKI_STUB = """\
 //   name         a short label
 //   path         absolute root of the vault (use forward slashes, also on Windows)
 //   description  one line shown to the agent
-//   entries      notes to load: path relative to the vault root; load "eager" =
-//                read every session, "lazy" = read only when the task needs it
+//   entries      notes OR folders to load: path relative to the vault root ("." =
+//                the whole vault); load "eager" = read every session, "lazy" =
+//                read on demand; a folder applies its mode to every note beneath
+//                it, a file entry overrides its folder, "exclude" prunes
 //   conventions  the vault's authoring-rules note — read before the first write
 //   inbox        drop folder for notes the agent cannot confidently file
 //   protected    folders the agent must never write to (guard-enforced on OpenCode)
@@ -183,8 +185,8 @@ WIKI_STUB = """\
 //   "path": "C:/Users/me/Documents/Brain",
 //   "description": "my machine-wide knowledge base",
 //   "entries": [
-//     { "path": "INDEX.md", "load": "eager", "description": "always-on core" },
-//     { "path": "Maps/TOPICS.md", "load": "lazy", "description": "topic index" }
+//     { "path": "ARCHITECTURE.md", "load": "eager", "description": "the root map" },
+//     { "path": ".", "load": "lazy" }
 //   ],
 //   "conventions": "STYLE.md",
 //   "inbox": "Inbox/",

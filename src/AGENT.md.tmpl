@@ -193,7 +193,11 @@ Read `wiki.jsonc` at the start of every session, and honour each declared wiki:
 
 - **`entries`** — load each by its `load` mode, exactly as in `context.json`
   (§8): `eager` is read **now**, every session; `lazy` only when the task in
-  hand needs it. Entry paths are relative to the wiki's `path`.
+  hand needs it. Entry paths are relative to the wiki's `path` and may name a
+  single note **or a folder** — a folder applies its mode to every note beneath
+  it (`"."` covers the whole wiki), a file entry overrides its folder's mode,
+  and `"exclude"` prunes. The canonical shape: the root index `eager`, the
+  whole wiki `lazy`.
 - **`conventions`** — the wiki's own authoring rules. **Read it before your
   first write** in that wiki, and follow it over your own habits.
 - **`inbox`** — when you cannot tell where a new note belongs, drop it there
