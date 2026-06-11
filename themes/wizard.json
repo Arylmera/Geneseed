@@ -44,7 +44,6 @@
   "DESC_DEBUG": "Hunt the curse by evidence — reproduce, isolate, find its root, banish it.",
   "DESC_REFACTOR": "Reshape the working without changing its effect — one named pass, trials green throughout.",
   "DESC_PARALLEL_AGENTS": "Loose several familiars on independent tasks at once, then gather what they bring.",
-  "DESC_CMUX": "Watch your familiars live in cmux panes — one pane each, opened and closed for you.",
   "DESC_TDD": "Let the trial lead — set the failing trial first, then only the code to pass it.",
   "DESC_HANDOFF": "Pass the working — inscribe its state so a fresh mind resumes in one read.",
   "DESC_SHIP": "Send the working forth: open a PR with a clear account, or merge the branch, once proven.",

@@ -44,7 +44,6 @@
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce it, isolate it, kill the root cause, prove it fixed.",
   "DESC_REFACTOR": "Rebuild the car without changing how it drives — one named move, trials green throughout.",
   "DESC_PARALLEL_AGENTS": "Send several engineers on independent jobs at once, then bring in what they get.",
-  "DESC_CMUX": "Watch your engineers live in cmux panes — one pane each, opened and closed for you.",
   "DESC_TDD": "Let the test lead — set the failing test first, then only the code to pass it.",
   "DESC_HANDOFF": "Hand over the car — snapshot the state so a fresh driver takes the wheel in one read.",
   "DESC_SHIP": "Take the flag: open a PR with a clear write-up, or merge the branch, once it's verified.",

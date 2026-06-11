@@ -44,7 +44,6 @@
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce it, corner it, kill the root cause, and prove it dead. There is always another.",
   "DESC_REFACTOR": "Reshape the structure without changing its behaviour — one named move, trials green throughout.",
   "DESC_PARALLEL_AGENTS": "Loose several subroutines on independent tasks at once, then gather what they bring back.",
-  "DESC_CMUX": "Watch your subroutines live in cmux panes — one pane each, opened and closed for you.",
   "DESC_TDD": "Let the trials lead — write the failing test first, then only the code to pass it.",
   "DESC_HANDOFF": "Record the state of the work so a fresh mind — or a fresh despair — can take up the watch in one read.",
   "DESC_SHIP": "Send the finished work out: open a PR with a clear write-up, or merge the branch, once it's verified.",

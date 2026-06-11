@@ -44,7 +44,6 @@
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce it, isolate it, kill the root cause, prove it fixed.",
   "DESC_REFACTOR": "Rework the bit without changing the laugh — one named move, trials green throughout.",
   "DESC_PARALLEL_AGENTS": "Send several sidekicks on independent bits at once, then bring in what they get.",
-  "DESC_CMUX": "Watch your sidekicks live in cmux panes — one pane each, opened and closed for you.",
   "DESC_TDD": "Let the test lead — set the failing test first, then only the code to pass it.",
   "DESC_HANDOFF": "Pass the mic — snapshot the state so a fresh comic picks up the set in one read.",
   "DESC_SHIP": "Close the show: open a PR with a clear write-up, or merge the branch, once it's verified.",

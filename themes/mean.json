@@ -44,7 +44,6 @@
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce it, isolate it, kill the root cause, prove it dead. No guessing.",
   "DESC_REFACTOR": "Fix the structure without changing behaviour — one named move, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Put several grunts on independent jobs at once, then pull in what they bring back.",
-  "DESC_CMUX": "Watch your grunts live in cmux panes — one pane each, opened and closed for you.",
   "DESC_TDD": "Let the test lead — write the failing test first, then the minimum code to pass. No more.",
   "DESC_HANDOFF": "Snapshot the state so the next poor soul picks it up in one read, instead of guessing what you meant.",
   "DESC_SHIP": "Ship it: open a PR with a clear write-up, or merge the branch, once it's actually verified.",

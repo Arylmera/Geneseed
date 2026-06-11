@@ -44,7 +44,6 @@
   "DESC_DEBUG": "Break down the fault on tape — reproduce, isolate, root-cause, confirm the fix.",
   "DESC_REFACTOR": "Rework the formation without changing the result — one named move, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Send several players on independent plays at once, then regroup the results.",
-  "DESC_CMUX": "Watch the squad live in cmux panes — one pane per player, opened and closed for you.",
   "DESC_TDD": "Let the test lead — set the failing test first, then the minimum code to pass.",
   "DESC_HANDOFF": "Hand off cleanly — snapshot the state so a fresh player picks up in one read.",
   "DESC_SHIP": "Make the call: open a PR with a clear recap, or merge the branch, once it's verified.",

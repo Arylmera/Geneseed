@@ -44,7 +44,6 @@
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce, isolate, root-cause, confirm the kill.",
   "DESC_REFACTOR": "Restructure without changing behaviour — one named move, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Deploy independent tasks to concurrent units, then consolidate the results.",
-  "DESC_CMUX": "Run and watch your units live in cmux panes — one pane per agent, opened and closed automatically.",
   "DESC_TDD": "Let the test lead — write the failing test first, then the minimum code to pass.",
   "DESC_HANDOFF": "Hand over the watch: snapshot state so a fresh operator resumes in one read.",
   "DESC_SHIP": "Open a PR with a clear sitrep, or finish and merge the branch, once the change is verified.",

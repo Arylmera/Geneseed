@@ -44,7 +44,6 @@
   "DESC_DEBUG": "Hunt the bug by evidence — reproduce, isolate, root-cause, confirm the fix.",
   "DESC_REFACTOR": "Re-spec the build without changing behaviour — one named move, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Send the party on independent objectives at once, then regroup the loot.",
-  "DESC_CMUX": "Watch your party live in cmux panes — one pane each, opened and closed for you.",
   "DESC_TDD": "Let the test lead — write the failing test first, then the minimum code to pass.",
   "DESC_HANDOFF": "Pass the controller — snapshot the run so a fresh player picks up in one read.",
   "DESC_SHIP": "Submit the run: open a PR with clear notes, or merge the branch, once it's verified.",

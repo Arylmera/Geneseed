@@ -40,13 +40,13 @@ CAPABILITY_LINK_RE = re.compile(r"\[([^\]]+)\]\((?:agents|skills)/[A-Za-z0-9_-]+
 TEXT_SUFFIXES = {".md", ".tmpl", ".json", ".txt", ".yml", ".yaml"}
 
 # Third-party skills vendored VERBATIM as multi-file folders under src/skills/<name>/
-# (not Geneseed-authored flat skills). They carry their own license and their internal
-# cross-links point at the upstream project's own files — some of which are intentionally
-# NOT vendored — so they are exempt from the hermeticity / dead-link and authoring gates
-# that govern Geneseed's own specs. They ride along in the `files` emit (rglob copies the
-# folder through) and, being nested, are invisible to the flat-skill native emit and the
-# skill counts. See THIRD-PARTY.md for provenance + license.
-VENDORED_SKILL_DIRS = ("cmux", "cmux-workspace")
+# (not Geneseed-authored flat skills) carry their own license and internal cross-links to
+# the upstream project's own files — some intentionally NOT vendored — so they are exempt
+# from the hermeticity / dead-link and authoring gates that govern Geneseed's own specs.
+# Being nested, they ride along in the `files` emit (rglob copies the folder through) yet
+# stay invisible to the flat-skill native emit and the skill counts. None are vendored at
+# present; list a skill folder's name here to bring one in.
+VENDORED_SKILL_DIRS = ()
 
 
 def is_vendored_path(rel) -> bool:

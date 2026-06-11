@@ -44,7 +44,6 @@
   "DESC_DEBUG": "Trace the fault by evidence — reproduce, isolate, root-cause, confirm the patch.",
   "DESC_REFACTOR": "Rewire the structure without changing behaviour — one named pass, tests green throughout.",
   "DESC_PARALLEL_AGENTS": "Fork independent tasks to concurrent threads, then merge the output.",
-  "DESC_CMUX": "Watch your threads live in cmux panes — one pane each, opened and closed for you.",
   "DESC_TDD": "Let the test drive — write the failing test first, then the minimum code to pass.",
   "DESC_HANDOFF": "Pass the deck — dump the state so a fresh runner picks up in one read.",
   "DESC_SHIP": "Push it live: open a PR with a clear log, or merge the branch, once it's verified.",

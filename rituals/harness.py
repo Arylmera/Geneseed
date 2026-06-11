@@ -163,7 +163,7 @@ def _check_build(theme_name: str, out: Path) -> list[str]:
         # Vendored third-party skill folders are verbatim upstream docs: their internal
         # cross-links reference the upstream project's own (partly un-vendored) files and
         # they carry their own license, so they are exempt from Geneseed's hermeticity /
-        # dead-link invariant. (Provenance + license: THIRD-PARTY.md.)
+        # dead-link invariant. (None are vendored at present — see build.VENDORED_SKILL_DIRS.)
         if build.is_vendored_path(rel):
             continue
         text = md.read_text(encoding="utf-8")
