@@ -132,9 +132,8 @@ python rituals/harness.py prompt --theme neutral > install-geneseed.md
 
 That emits a self-contained prompt that recreates the entire file tree verbatim.
 Paste it into any capable agent on the target machine — no Python, no build step.
-Pre-built prompts for the two reference themes also ship in
-[`prompts/`](prompts/README.md) (`install.neutral.md`, `install.imperial.md`) — the
-other themes render the same way with the theme name substituted.
+Any theme works the same way — substitute its name after `--theme`. The prompt is
+always rendered fresh from `src/`, so it can never drift from the current harness.
 
 ---
 

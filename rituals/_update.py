@@ -42,7 +42,7 @@ REPO = "Arylmera/Geneseed"
 
 # Factory files upgrade refreshes from upstream. Everything else in the folder is left
 # alone — notably context.json and the bundle's memory/ (host runtime state).
-SYNC = ["build.py", "rituals", "src", "themes", "adapters", "prompts",
+SYNC = ["build.py", "rituals", "src", "themes", "adapters",
         "harness.config.json", "DESIGN.md", "README.md", "SETUP.md", "LICENSE", ".gitignore"]
 
 # Orchestration layer sync-self owns — what upgrade's SYNC deliberately skips, plus the

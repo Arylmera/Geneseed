@@ -97,7 +97,6 @@ Geneseed/
 ├── themes/               voice token maps (8: neutral, imperial, military, pirate, wizard, cyberpunk, gamer, sports)
 ├── rituals/harness.py    optional CLI: menu · setup · tui · build · doctor · diff · context · learn · prompt · status · version · bootstrap · uninstall
 ├── tests/                stdlib unit tests + a Node workflow-runtime test
-├── prompts/              self-contained, no-Python install prompts (Setup Path E)
 ├── docs/specs/           dated implementation specs — design rationale + history
 ├── adapters/             per-tool glue (opencode/, claude-code/)
 └── .github/workflows/    CI: doctor + tests
@@ -135,7 +134,6 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 - **[adapters/claude-code/](adapters/claude-code/README.md)** — the Claude Code hook adapter.
 - **[src/memory/README.md](src/memory/README.md)** — the memory convention.
 - **[src/notebook/README.md](src/notebook/README.md)** — the agent's own freeform-space convention.
-- **[prompts/README.md](prompts/README.md)** — pre-built, no-Python install prompts (Setup Path E).
 - **[docs/specs/](docs/specs/)** — dated implementation specs: the rationale and history behind each feature.
 
 ## License
