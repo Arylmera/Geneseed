@@ -13,6 +13,22 @@ builds it; it follows you into every repo.
 **New here? Jump to [Install](#install)** — or the full [Setup guide](SETUP.md) for
 every path, configuration knob, and troubleshooting. This page is the overview.
 
+## Why "Geneseed"?
+
+The name comes from Warhammer 40,000. In the lore, *gene-seed* is a Space Marine
+Chapter's genetic legacy: implanted once into an aspirant, it rebuilds them from
+within, and every successor Chapter is founded from the gene-seed of its parent.
+That is exactly this project's model. The harness began life as a personal,
+Obsidian-vault-grown agent operating system; this repo is the genetic material
+distilled out of it — implant it once into your tool, and a disciplined agent
+grows around it, carrying the same inherited rules, agents, skills, and memory
+into every repo it touches.
+
+The lineage is also why an **imperial** theme ships alongside the neutral one:
+it is the voice of the parent system the harness was extracted from. But the
+genetics are theme-independent — the name is a nod to the origin, not a
+commitment to Space Marines.
+
 ## How it works
 
 One canonical source in `src/` renders, via a tiny dependency-free generator
