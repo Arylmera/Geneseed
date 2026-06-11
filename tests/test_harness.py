@@ -980,5 +980,79 @@ def setattr_many(mod, saved):
     mod.ROOT, mod.SRC, mod.THEMES, mod.PLUGIN_SRC, mod.CONFIG, mod.WORKFLOW_SRC = saved
 
 
+class WindowsProgressUiTests(unittest.TestCase):
+    """The TUI progress runner must survive native Windows: WinSock select() cannot
+    wait on pipe fds, and the legacy console code page cannot decode the UTF-8 the
+    child processes emit. Either one used to throw out of the curses wrapper — the
+    menu then died to its plain-text fallback and the setup wizard re-prompted
+    everything as line input after a fully completed TUI pass."""
+
+    def test_pipe_select_is_skipped_on_windows(self):
+        saved = sys.platform
+        try:
+            sys.platform = "win32"
+            self.assertFalse(harness._pipe_select_ok())
+            sys.platform = "linux"
+            self.assertTrue(harness._pipe_select_ok())
+        finally:
+            sys.platform = saved
+
+    def test_run_logged_survives_utf8_glyphs_from_child(self):
+        import io as io_mod
+        import _winterm
+        win = _winterm._Window(io_mod.StringIO(), rows=24, cols=80)
+        pal = harness._tui_palette(_winterm)
+        code = ("import sys;"
+                "sys.stdout.reconfigure(encoding='utf-8');"
+                "print('upgrade \\u26a0\\ufe0f retry \\u2713 ok')")
+        log = []
+        rc = harness._run_logged(win, _winterm, pal, [("emit", None)], ["running"],
+                                 log, [sys.executable, "-c", code])
+        self.assertEqual(rc, 0)
+        self.assertTrue(any("⚠️" in ln and "✓" in ln for ln in log), log)
+
+
+class ReexecTests(unittest.TestCase):
+    """update/bootstrap hand off to a fresh harness process. On Windows os.exec*
+    does not replace the process — it kills the parent, so the launcher's cmd.exe
+    resumes and races the child for the console — the hand-off must instead run
+    the child as a subprocess and exit with its code."""
+
+    def test_windows_runs_child_subprocess_and_exits_with_its_code(self):
+        import types
+        saved_platform = sys.platform
+        real_run = harness.subprocess.run
+        calls = []
+
+        def fake_run(argv, **kwargs):
+            calls.append(list(argv))
+            return types.SimpleNamespace(returncode=7)
+
+        try:
+            sys.platform = "win32"
+            harness.subprocess.run = fake_run
+            with self.assertRaises(SystemExit) as cm:
+                harness._reexec([sys.executable, "harness.py", "menu"])
+            self.assertEqual(cm.exception.code, 7)
+            self.assertEqual(calls, [[sys.executable, "harness.py", "menu"]])
+        finally:
+            sys.platform = saved_platform
+            harness.subprocess.run = real_run
+
+    def test_unix_execs_in_place(self):
+        saved_platform = sys.platform
+        real_execv = harness.os.execv
+        calls = []
+        try:
+            sys.platform = "linux"
+            harness.os.execv = lambda exe, argv: calls.append((exe, list(argv)))
+            harness._reexec([sys.executable, "harness.py", "setup"])
+            self.assertEqual(
+                calls, [(sys.executable, [sys.executable, "harness.py", "setup"])])
+        finally:
+            sys.platform = saved_platform
+            harness.os.execv = real_execv
+
+
 if __name__ == "__main__":
     unittest.main()

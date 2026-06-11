@@ -573,6 +573,14 @@ def main(argv: list[str] | None = None) -> int:
     {upgrade|sync-self|update} [ref] [theme]` working so future launchers can rely on it.
 
     Returns a process exit code (0 = ok)."""
+    # Standalone entry — harness.py's UTF-8 reconfigure has not run, so force it here
+    # or the ✓/⚠️ progress glyphs crash print() on a legacy code page (Windows cp1252).
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except (ValueError, OSError):
+                pass
     argv = list(sys.argv[1:] if argv is None else argv)
     cmd = argv[0] if argv else ""
     rest = [a for a in argv[1:] if a not in ("-h", "--help")]

@@ -3225,11 +3225,21 @@ def _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading="updating")
     stdscr.refresh()
 
 
+def _pipe_select_ok() -> bool:
+    """Whether select() can poll the subprocess pipe. On Windows select() is WinSock-only
+    — handing it a pipe fd raises OSError — so Windows always streams plainly instead."""
+    import select
+    return hasattr(select, "select") and not sys.platform.startswith("win")
+
+
 def _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading="updating") -> int:
     """Run cmd, streaming its (sanitized) output into the progress screen's log pane."""
     try:
+        # Decode as UTF-8 regardless of the console code page: the children (harness.py,
+        # build.py) reconfigure THEIR stdout to UTF-8, and a cp1252-strict wrapper dies
+        # on the first ⚠️/✓ they emit. errors="replace" keeps a stray byte cosmetic.
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             text=True, bufsize=1)
+                             text=True, encoding="utf-8", errors="replace", bufsize=1)
     except OSError as e:
         log.append(f"[error] cannot run {cmd[0]}: {e}")
         _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
@@ -3247,7 +3257,7 @@ def _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading="updating"
         return buf
 
     fd = p.stdout.fileno() if p.stdout else None
-    if fd is not None and hasattr(select, "select"):
+    if fd is not None and _pipe_select_ok():
         # Poll the pipe with an 80 ms timeout so the screen redraws — and the spinner
         # advances — even while a step produces NO output (the silent-step freeze). Only
         # this main thread touches curses; os.read on the raw fd gives a clean EOF.
@@ -3278,6 +3288,8 @@ def _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading="updating"
                 _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
                 last = now
     _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)   # final frame
+    if p.stdout is not None:
+        p.stdout.close()
     return p.wait()
 
 
@@ -3456,6 +3468,17 @@ def cmd_unlink(args: argparse.Namespace) -> int:
     return 0
 
 
+def _reexec(argv: list) -> None:
+    """Hand off to a FRESH harness process (so just-updated code on disk runs, not the
+    stale modules this process still holds). Unix execv truly replaces the process.
+    Windows has no exec — os.execv there spawns the child and kills this parent, which
+    hands the console back to the launcher's cmd.exe mid-run and the two then fight
+    over input — so run the child as a normal subprocess and exit with its code."""
+    if sys.platform.startswith("win"):
+        raise SystemExit(subprocess.run(argv).returncode)
+    os.execv(argv[0], argv)
+
+
 def cmd_bootstrap(args: argparse.Namespace) -> int:
     """Update everything (sync scripts + upgrade), shown in a curses progress screen
     where supported, then hand off to a FRESH setup process so the wizard runs the
@@ -3478,7 +3501,7 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     if not args.no_setup:
         # Re-exec the freshly-updated harness so setup uses the new code (this running
         # process still holds the pre-update modules in memory).
-        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve()), "setup"])
+        _reexec([sys.executable, str(Path(__file__).resolve()), "setup"])
     return 0
 
 
@@ -3651,7 +3674,7 @@ def _main_menu(stdscr) -> int:
         elif sel in ("update", "bootstrap"):
             _bootstrap_progress(stdscr, here, None)
             curses.endwin()
-            os.execv(sys.executable, [sys.executable, hp, "setup" if sel == "bootstrap" else "menu"])
+            _reexec([sys.executable, hp, "setup" if sel == "bootstrap" else "menu"])
 
 
 def cmd_menu(args: argparse.Namespace) -> int:
