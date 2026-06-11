@@ -199,7 +199,10 @@ def _rendered_problems(bundle: Path) -> list[str]:
     it. Render src/ in memory and compare only the files that come FROM src/ (AGENT.md,
     the laws, agents, skills, memory/README…). Host-state files (context.json,
     MEMORY.md, the .geneseed-* markers) are created once and never rendered, so they
-    are not in the render set and are correctly ignored."""
+    are not in the render set and are correctly ignored. Notebook files (except its
+    `.gitignore`) are seed-once and agent-owned after the first build (spec
+    2026-06-11) — a difference there is the agent's own rewrite, not drift, so they
+    are compared only for existence."""
     if not bundle.is_dir():
         return []
     marker = bundle / ".geneseed-theme"
@@ -214,10 +217,14 @@ def _rendered_problems(bundle: Path) -> list[str]:
     except SystemExit:
         return [f"[rendered] cannot render theme '{theme_name}' for {bundle.name}/"]
     problems: list[str] = []
+    nb_dirname = build.STRUCTURE.get("DIR_NOTEBOOK", "notebook")
     for out_rel, text, src in items:
         dest = bundle / out_rel
+        rel = Path(out_rel)
         if not dest.exists():
             problems.append(f"[rendered] {bundle.name}/{out_rel} missing — rebuild the bundle")
+        elif rel.parts[0] == nb_dirname and rel.name != ".gitignore":
+            continue   # seed-once, agent-owned: a rewrite is not drift
         elif text is not None:
             if dest.read_text(encoding="utf-8") != text:
                 problems.append(f"[rendered] {bundle.name}/{out_rel} stale (differs from a fresh render) — rebuild")
