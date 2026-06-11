@@ -182,16 +182,17 @@ Override only when the convention doesn't fit — drop a `.harness/context.json`
 ### Wiki — your own knowledge base (optional)
 
 If you keep a personal knowledge base on this machine — an Obsidian vault, or any
-folder of interlinked markdown — declare it once in **`wiki.json`** and the agent
+folder of interlinked markdown — declare it once in **`wiki.jsonc`** and the agent
 becomes a citizen of it: entry notes load each session (eager) or on demand (lazy),
 and it reads *and writes* notes under your vault's own conventions (AGENT.md §7,
 the `wiki` skill). Unlike `context.json` this is **per machine, not per repo**.
 
-The build seeds `wiki.json` beside `AGENT.md` (for a global install:
-`~/.config/opencode/wiki.json`) and never overwrites it. The file is **JSONC** —
+The build seeds `wiki.jsonc` beside `AGENT.md` (for a global install:
+`~/.config/opencode/wiki.jsonc`) and never overwrites it. The file is **JSONC** —
 comments and trailing commas are fine — and the seeded stub carries this very
 example commented out, ready to copy and edit in place. Resolution:
-`$GENESEED_WIKI` → `$GENESEED_HARNESS/wiki.json` → beside the installed `AGENT.md`.
+`$GENESEED_WIKI` → `$GENESEED_HARNESS/wiki.jsonc` → beside the installed `AGENT.md`
+(a `wiki.json` from an earlier install is still honoured at each location).
 Fill it in:
 
 ```json
@@ -221,7 +222,7 @@ list keeps the feature off. The file may hold private paths — it is host-speci
 covered by the bundle `.gitignore`, and never committed.
 
 On tools without the plugins (plain `AGENT.md`, Claude Code), the same contract
-holds through prose: AGENT.md §7 instructs the agent to read `wiki.json` at session
+holds through prose: AGENT.md §7 instructs the agent to read `wiki.jsonc` at session
 start and honour it.
 
 ### Memory
@@ -434,7 +435,7 @@ allowed-dir path.
 | `GENESEED_HARNESS` | learn plugin | base whose `memory/` the plugin writes to (optional — the plugin auto-locates the in-config store; set to pin it) |
 | `GENESEED_MEMORY` | learn plugin / CLI | explicit memory dir (overrides the above) |
 | `GENESEED_CONTEXT` | context plugin / CLI | explicit `context.json` path |
-| `GENESEED_WIKI` | context + guard plugins | explicit `wiki.json` path (default: `$GENESEED_HARNESS/wiki.json`, else beside the installed `AGENT.md`) |
+| `GENESEED_WIKI` | context + guard plugins | explicit `wiki.jsonc` path (default: `$GENESEED_HARNESS/wiki.jsonc`, else beside the installed `AGENT.md`) |
 | `GENESEED_ROOT` | `harness context` | repo root to discover docs from (default: cwd) |
 | `GENESEED_MODEL` | learn plugin | `provider/model` fallback if the session model can't be read |
 | `GENESEED_LLM` | `harness learn` (Claude) | model CLI for distillation, e.g. `claude -p` |

@@ -85,19 +85,19 @@ class BuildRoundTripTests(unittest.TestCase):
             self.assertTrue((tmp / "notebook" / "NOTEBOOK.md").is_file())
             # context.json stub is created once.
             self.assertTrue((tmp / "context.json").is_file())
-            # wiki.json stub is created once, with an empty wikis list.
-            self.assertTrue((tmp / "wiki.json").is_file())
+            # wiki.jsonc stub is created once, with an empty wikis list.
+            self.assertTrue((tmp / "wiki.jsonc").is_file())
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_wiki_manifest_is_preserved_across_rebuild(self):
-        """wiki.json holds the user's own knowledge-base declarations: seeded once as
+        """wiki.jsonc holds the user's own knowledge-base declarations: seeded once as
         JSONC — a commented copy-and-edit example over an empty list — and never
         overwritten (spec 2026-06-11)."""
         tmp = Path(tempfile.mkdtemp())
         try:
             build.build("neutral", tmp)
-            wiki = tmp / "wiki.json"
+            wiki = tmp / "wiki.jsonc"
             text = wiki.read_text(encoding="utf-8")
             self.assertIn("// Example", text)   # the inline example ships with the stub
             data = json.loads("\n".join(
@@ -107,6 +107,20 @@ class BuildRoundTripTests(unittest.TestCase):
             wiki.write_text(mine, encoding="utf-8")
             build.build("neutral", tmp)   # rebuild over the same dir
             self.assertEqual(wiki.read_text(encoding="utf-8"), mine)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_wiki_legacy_json_suppresses_the_stub(self):
+        """A `wiki.json` seeded by an earlier build still counts as the manifest:
+        building must not drop a second `wiki.jsonc` beside it (that would fork
+        the user's declarations across two files)."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            legacy = '{"wikis": [{"name": "Old", "path": "/kb"}]}\n'
+            (tmp / "wiki.json").write_text(legacy, encoding="utf-8")
+            build.build("neutral", tmp)
+            self.assertFalse((tmp / "wiki.jsonc").exists())
+            self.assertEqual((tmp / "wiki.json").read_text(encoding="utf-8"), legacy)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

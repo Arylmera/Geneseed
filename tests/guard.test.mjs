@@ -1,7 +1,7 @@
 // Tests for the OpenCode guard plugin's cross-platform safety matching — in particular
 // that Windows-style (backslash) secret paths and Windows/PowerShell catastrophic
 // commands are caught, not just their POSIX equivalents — and for the protected-wiki
-// enforcement (AGENT.md §7) driven by a wiki.json manifest.
+// enforcement (AGENT.md §7) driven by a wiki.jsonc manifest.
 import { test, after } from "node:test"
 import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
@@ -17,7 +17,7 @@ const vault = path.join(tmp, "Brain")
 await fs.mkdir(path.join(vault, "Codex"), { recursive: true })
 // Written as JSONC on purpose — the seeded stub ships commented, so the guard must
 // tolerate comments and trailing commas (and leave // inside strings alone).
-await fs.writeFile(path.join(tmp, "wiki.json"), `// machine wikis
+await fs.writeFile(path.join(tmp, "wiki.jsonc"), `// machine wikis
 {
   /* one vault */
   "wikis": [{
@@ -28,7 +28,7 @@ await fs.writeFile(path.join(tmp, "wiki.json"), `// machine wikis
   }],
 }
 `)
-process.env.GENESEED_WIKI = path.join(tmp, "wiki.json")
+process.env.GENESEED_WIKI = path.join(tmp, "wiki.jsonc")
 
 after(async () => {
   delete process.env.GENESEED_WIKI

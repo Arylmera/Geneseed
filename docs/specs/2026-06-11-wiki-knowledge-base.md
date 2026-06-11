@@ -6,7 +6,7 @@
 **Adapter:** prose contract everywhere; plugin enforcement on OpenCode
 
 > Give the agent first-class read-write citizenship in the user's own Obsidian
-> vault(s) — declared per machine in a `wiki.json` manifest, injected per the
+> vault(s) — declared per machine in a `wiki.jsonc` manifest, injected per the
 > existing eager/lazy convention, guarded at the tool boundary.
 
 ## Problem
@@ -24,10 +24,10 @@ living wiki.
 1. **Interaction model: full read-write.** The agent may create, edit, and
    interlink notes following Obsidian conventions (wikilinks, frontmatter). The
    wiki's own rules constrain it (see `conventions`, `protected`, `inbox`).
-2. **Declaration: a manifest, not a bare env var.** `wiki.json` lives beside
+2. **Declaration: a manifest, not a bare env var.** `wiki.jsonc` lives beside
    `AGENT.md` in the install — once per machine for OpenCode-global. A bare
    path can't express entry points, conventions, inbox, or protected folders.
-   Resolution chain: `$GENESEED_WIKI` (explicit override) → `wiki.json` beside
+   Resolution chain: `$GENESEED_WIKI` (explicit override) → `wiki.jsonc` beside
    the bundle. Created empty by the build on first run, never overwritten —
    exactly like `context.json`.
 3. **Session-start loading: per-entry `eager`/`lazy`**, reusing the
@@ -43,7 +43,7 @@ living wiki.
    harness lives in), and structure names stay plain English; themes flavour
    only the voice around it.
 
-## The manifest — `wiki.json`
+## The manifest — `wiki.jsonc`
 
 ```json
 {
@@ -64,7 +64,10 @@ living wiki.
 
 - The file is **JSONC** (amended same day): consumers strip `//` and `/* */`
   comments plus trailing commas — string-aware — so the seeded stub documents
-  itself and carries a commented copy-and-edit example for setup.
+  itself and carries a commented copy-and-edit example for setup. The filename
+  is **`wiki.jsonc`** (second same-day amendment, so the extension says what the
+  content is); a `wiki.json` seeded by an earlier build is still honoured by
+  every consumer, and its presence suppresses the new stub.
 - Multiple wikis allowed; an empty `wikis` list (the emitted default) means the
   feature is off.
 - `entries[].path` is relative to the wiki's `path`; `load` is `eager`/`lazy`
@@ -83,8 +86,8 @@ living wiki.
 | `src/AGENT.md.tmpl` | new Wiki section after §6; Context and Scripts renumber |
 | `src/skills/wiki.md` | consult / capture / interlink / promote workflows + Obsidian authoring rules |
 | `themes/*.json` | new voice tokens for the section + skill (key parity enforced by doctor) |
-| `build.py` | emit empty `wiki.json` once beside `AGENT.md`, never overwrite |
-| `geneseed-context.js` | resolve `$GENESEED_WIKI` → bundle-adjacent `wiki.json`; merge entries into the injection block as a labelled `MACHINE WIKI` segment |
+| `build.py` | emit empty `wiki.jsonc` once beside `AGENT.md`, never overwrite |
+| `geneseed-context.js` | resolve `$GENESEED_WIKI` → bundle-adjacent `wiki.jsonc`; merge entries into the injection block as a labelled `MACHINE WIKI` segment |
 | `geneseed-guard.js` | block write/edit tool calls under any declared wiki's `protected` paths (`on`/`warn`/`off` modes apply) |
 | docs | README table + plugins row, SETUP.md section, OpenCode adapter README |
 | tests | emit-once/never-overwrite unit test; guard protected-path test |

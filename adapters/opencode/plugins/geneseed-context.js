@@ -20,11 +20,11 @@
 // a session. See adapters/opencode/GLOBAL-HARNESS-SPEC.md.
 //
 // MACHINE WIKI (AGENT.md §7): the same block also carries the user's own knowledge
-// base(s) — typically an Obsidian vault — declared once per machine in `wiki.json`
-// ($GENESEED_WIKI -> $GENESEED_HARNESS/wiki.json -> beside this plugin's install).
+// base(s) — typically an Obsidian vault — declared once per machine in `wiki.jsonc`
+// ($GENESEED_WIKI -> $GENESEED_HARNESS/wiki.jsonc -> beside this plugin's install).
 // Each wiki's eager entries inject in full and lazy entries list, drawing on the
 // SAME budgets as the project context; its conventions/inbox/protected metadata is
-// surfaced so the agent knows the house rules before writing. No wiki.json, or an
+// surfaced so the agent knows the house rules before writing. No wiki.jsonc, or an
 // empty `wikis` list, costs nothing.
 //
 // Quiet: by default it logs NOTHING (OpenCode shows a plugin's stderr as red text).
@@ -92,7 +92,7 @@ async function readJson(p) {
 }
 
 // Strip JSONC niceties — // and /* */ comments plus trailing commas — string-aware,
-// so a "https://…" or "C:/Users/…" inside quotes is untouched. wiki.json is seeded
+// so a "https://…" or "C:/Users/…" inside quotes is untouched. wiki.jsonc is seeded
 // with a commented example, so its readers must tolerate comments.
 function stripJsonc(text) {
   let out = "", inStr = false, esc = false
@@ -309,33 +309,36 @@ async function resolveSource(root) {
   return { mode: "discover" }
 }
 
-// ---- machine wiki (wiki.json) --------------------------------------------------
+// ---- machine wiki (wiki.jsonc) --------------------------------------------------
 // The user's own knowledge base(s) — typically an Obsidian vault — declared once per
 // machine, not per repo (AGENT.md §7). Same injection mechanics as project context,
 // different scope. Resolution (first match wins, mirroring the learn plugin):
 //   1. $GENESEED_WIKI                      explicit manifest path
-//   2. $GENESEED_HARNESS/wiki.json         pinned install dir
-//   3. <plugin dir>/../wiki.json           auto-locate: beside the installed AGENT.md
+//   2. $GENESEED_HARNESS/wiki.jsonc         pinned install dir
+//   3. <plugin dir>/../wiki.jsonc           auto-locate: beside the installed AGENT.md
 async function resolveWikiFile() {
   const explicit = process.env.GENESEED_WIKI
   if (explicit && (await isFile(explicit))) return explicit
-  const harness = process.env.GENESEED_HARNESS
-  if (harness) {
-    const p = path.join(harness, "wiki.json")
-    if (await isFile(p)) return p
+  const bases = []
+  if (process.env.GENESEED_HARNESS) bases.push(process.env.GENESEED_HARNESS)
+  bases.push(path.resolve(PLUGIN_DIR, ".."))
+  for (const base of bases) {
+    // wiki.json is the legacy name from earlier seeds — still honoured.
+    for (const name of ["wiki.jsonc", "wiki.json"]) {
+      const p = path.join(base, name)
+      if (await isFile(p)) return p
+    }
   }
-  const local = path.resolve(PLUGIN_DIR, "..", "wiki.json")
-  if (await isFile(local)) return local
   return null
 }
 
-// Parse wiki.json into renderable wikis: [{ name, root, desc, conventions, inbox,
+// Parse wiki.jsonc into renderable wikis: [{ name, root, desc, conventions, inbox,
 // protected, eager:[{rel,abs,desc}], lazy:[...] }]. Entry paths resolve against the
 // wiki's own root; a missing root skips that wiki (never blocks the session).
 async function wikiSets() {
   const file = await resolveWikiFile()
   if (!file) return []
-  const data = await readJsonc(file)   // wiki.json is JSONC: stub ships commented
+  const data = await readJsonc(file)   // wiki.jsonc is JSONC: stub ships commented
   const wikis = Array.isArray(data?.wikis) ? data.wikis : []
   const out = []
   for (const w of wikis) {

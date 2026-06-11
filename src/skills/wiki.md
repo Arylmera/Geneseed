@@ -3,12 +3,12 @@
 > {{DESC_WIKI}}
 
 **Trigger:** a task needs knowledge the user keeps in their machine-wide
-knowledge base (declared in `wiki.json`, AGENT.md §7), or the work has produced
+knowledge base (declared in `wiki.jsonc`, AGENT.md §7), or the work has produced
 a durable, cross-project fact worth writing back into it.
 
 ## Procedure
 
-**Locate.** Read `wiki.json` — beside `AGENT.md`, or at `$GENESEED_WIKI`. No
+**Locate.** Read `wiki.jsonc` — beside `AGENT.md`, or at `$GENESEED_WIKI`. No
 file, or an empty `wikis` list: stop; there is no knowledge base on this
 machine. Each declared wiki gives you its root `path`, its `entries`, a
 `conventions` note, an `inbox`, and `protected` folders.

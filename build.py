@@ -162,7 +162,7 @@ def ensure_context_stub(out: Path) -> None:
 # agent itself) strip // and /* */ comments and trailing commas before parsing, so the
 # seeded stub can carry its documentation and a copy-and-edit example inline.
 WIKI_STUB = """\
-// Geneseed wiki.json — declare your machine-wide knowledge base(s) here, typically
+// Geneseed wiki.jsonc — declare your machine-wide knowledge base(s) here, typically
 // an Obsidian vault (AGENT.md: the Wiki section). Comments are allowed in this file
 // (JSONC). It is host-specific — never commit it. The build created it once, empty,
 // and will never overwrite it.
@@ -197,10 +197,12 @@ WIKI_STUB = """\
 
 
 def ensure_wiki_stub(out: Path) -> None:
-    """Drop the JSONC `wiki.json` stub beside AGENT.md the first time only — and NEVER
-    overwrite one (it holds the user's own knowledge-base declarations)."""
-    dest = out / "wiki.json"
-    if not dest.exists():
+    """Drop the `wiki.jsonc` stub beside AGENT.md the first time only — and NEVER
+    overwrite one (it holds the user's own knowledge-base declarations). A legacy
+    `wiki.json` from an earlier seed counts as present: the consumers still honour
+    it, and seeding a second manifest beside it would fork the declarations."""
+    dest = out / "wiki.jsonc"
+    if not dest.exists() and not (out / "wiki.json").exists():
         dest.write_text(WIKI_STUB, encoding="utf-8")
 
 
@@ -217,6 +219,8 @@ BUNDLE_GITIGNORE = """\
 context.json
 
 # Knowledge-base manifest — holds private machine paths; never commit.
+# (wiki.json is the legacy name from earlier seeds.)
+wiki.jsonc
 wiki.json
 
 # Per-agent model/temperature overrides — host-specific; never commit.
@@ -964,7 +968,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
     Writes: <cfg>/AGENT.md, <cfg>/agents/*.md, <cfg>/skills/<name>/SKILL.md,
     <cfg>/plugins/*.js (single copy — kills the double-injection), the memory and
-    notebook stores, a one-time empty wiki.json (machine-level, user-owned, never
+    notebook stores, a one-time empty wiki.jsonc (machine-level, user-owned, never
     overwritten or pruned), and merges <cfg>/opencode.json to point `instructions`
     at the absolute <cfg>/AGENT.md. It does NOT write context.json — project docs
     are auto-discovered by the context plugin. `out`, if given, is only a migration source for an
@@ -1024,7 +1028,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     ensure_memory_index(cfg / "memory")   # guarantee the index on every path (seed/migrate/keep)
     nb_status = _global_notebook(cfg, theme, items, out)
     ensure_notebook_index(cfg / "notebook")   # guarantee the index on every path (seed/migrate/keep)
-    ensure_wiki_stub(cfg)   # machine-level wiki.json — seeded once, user-owned, never in the manifest
+    ensure_wiki_stub(cfg)   # machine-level wiki.jsonc — seeded once, user-owned, never in the manifest
 
     write_version(cfg)
     owned.append(VERSION_MARKER)

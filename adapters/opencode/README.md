@@ -224,7 +224,7 @@ the harness live entirely in the global config dir with zero per-repo files.
   context needs re-pushing.
 - **Machine wiki (AGENT.md §7):** the same block carries a `MACHINE WIKI` segment
   for the user's own knowledge base(s) — typically an Obsidian vault — declared in
-  `wiki.json` (`$GENESEED_WIKI` → `$GENESEED_HARNESS/wiki.json` → beside the
+  `wiki.jsonc` (`$GENESEED_WIKI` → `$GENESEED_HARNESS/wiki.jsonc` → beside the
   install). Per wiki: eager entries inject in full, lazy entries list, and the
   `conventions` / `inbox` / `protected` metadata is surfaced — on the **same**
   budgets, compaction and transform paths as the project context. Schema and
@@ -360,7 +360,7 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
 - **Runtime guard plugin** (`geneseed-guard.js`, installed with the others). Enforces
   the safety Laws at the tool boundary: **blocks** writes to private-key/credential
   files (Law I), catastrophic shell like `rm -rf /` (Law IV), and any mutation under
-  a declared wiki's `protected` folders (AGENT.md §7, from `wiki.json`); **warns** on
+  a declared wiki's `protected` folders (AGENT.md §7, from `wiki.jsonc`); **warns** on
   `.env` writes and force-push. `GENESEED_GUARD=off` disables it, `=warn` downgrades
   blocks to warnings.
 - **Invisible context injection** (`GENESEED_CONTEXT_TRANSFORM=1`). Switches the context
