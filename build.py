@@ -158,6 +158,32 @@ def ensure_context_stub(out: Path) -> None:
                         encoding="utf-8")
 
 
+WIKI_STUB = {
+    "_comment": (
+        "Declare the user's machine-wide knowledge base(s) — typically an Obsidian "
+        "vault (AGENT.md: the Wiki section). Each wiki: 'name', 'path' (absolute "
+        "root of the vault), 'description', 'entries' (notes to load: 'path' "
+        "relative to the wiki root, 'load' 'eager'/'lazy' as in context.json, "
+        "'description'), 'conventions' (note with the wiki's authoring rules — "
+        "read before the first write), 'inbox' (drop folder for notes the agent "
+        "cannot confidently file), and 'protected' (folders the agent must never "
+        "write to). An empty list disables the feature. This file is "
+        "host-specific — git-ignore it. The build creates it once, empty, and "
+        "never overwrites it."
+    ),
+    "wikis": [],
+}
+
+
+def ensure_wiki_stub(out: Path) -> None:
+    """Drop an empty `wiki.json` beside AGENT.md the first time only — and NEVER
+    overwrite one (it holds the user's own knowledge-base declarations)."""
+    dest = out / "wiki.json"
+    if not dest.exists():
+        dest.write_text(json.dumps(WIKI_STUB, indent=2, ensure_ascii=False) + "\n",
+                        encoding="utf-8")
+
+
 # Bundle-level ignore so a host repo can COMMIT the rendered harness — AGENT.md, the
 # laws, agents, and skills are content worth versioning — while keeping only the
 # host-specific / personal files out. (Note: inline `#` comments are not valid in
@@ -169,6 +195,9 @@ BUNDLE_GITIGNORE = """\
 
 # Project-context manifest — may hold private paths; never commit.
 context.json
+
+# Knowledge-base manifest — holds private machine paths; never commit.
+wiki.json
 
 # Per-agent model/temperature overrides — host-specific; never commit.
 agent-overrides.json
@@ -336,6 +365,7 @@ def build(theme_name: str, out: Path) -> None:
     (out / ".geneseed-theme").write_text(theme_name + "\n", encoding="utf-8")
     write_version(out)
     ensure_context_stub(out)
+    ensure_wiki_stub(out)
     ensure_bundle_gitignore(out)
     ensure_memory_index(out / theme.get(SRC_DIR_TOKENS["memory"], "memory"))
     ensure_notebook_index(out / theme.get(SRC_DIR_TOKENS["notebook"], "notebook"))
@@ -914,9 +944,10 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
     Writes: <cfg>/AGENT.md, <cfg>/agents/*.md, <cfg>/skills/<name>/SKILL.md,
     <cfg>/plugins/*.js (single copy — kills the double-injection), the memory and
-    notebook stores, and merges <cfg>/opencode.json to point `instructions` at the absolute
-    <cfg>/AGENT.md. It does NOT write context.json — project docs are auto-discovered
-    by the context plugin. `out`, if given, is only a migration source for an
+    notebook stores, a one-time empty wiki.json (machine-level, user-owned, never
+    overwritten or pruned), and merges <cfg>/opencode.json to point `instructions`
+    at the absolute <cfg>/AGENT.md. It does NOT write context.json — project docs
+    are auto-discovered by the context plugin. `out`, if given, is only a migration source for an
     existing memory store (the legacy bundle location); nothing is built there.
     `cfg` overrides the target dir (default: the resolved OpenCode config dir) — used
     by `harness.py diff` to render an 'expected' copy into a temp dir for comparison."""
@@ -973,6 +1004,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     ensure_memory_index(cfg / "memory")   # guarantee the index on every path (seed/migrate/keep)
     nb_status = _global_notebook(cfg, theme, items, out)
     ensure_notebook_index(cfg / "notebook")   # guarantee the index on every path (seed/migrate/keep)
+    ensure_wiki_stub(cfg)   # machine-level wiki.json — seeded once, user-owned, never in the manifest
 
     write_version(cfg)
     owned.append(VERSION_MARKER)

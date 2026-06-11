@@ -2,6 +2,7 @@
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import json
 import shutil
 import sys
 import tempfile
@@ -84,6 +85,23 @@ class BuildRoundTripTests(unittest.TestCase):
             self.assertTrue((tmp / "notebook" / "NOTEBOOK.md").is_file())
             # context.json stub is created once.
             self.assertTrue((tmp / "context.json").is_file())
+            # wiki.json stub is created once, with an empty wikis list.
+            self.assertTrue((tmp / "wiki.json").is_file())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_wiki_manifest_is_preserved_across_rebuild(self):
+        """wiki.json holds the user's own knowledge-base declarations: seeded once
+        with an empty list, never overwritten (spec 2026-06-11)."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp)
+            wiki = tmp / "wiki.json"
+            self.assertEqual(json.loads(wiki.read_text(encoding="utf-8"))["wikis"], [])
+            mine = '{"wikis": [{"name": "Brain", "path": "/kb"}]}\n'
+            wiki.write_text(mine, encoding="utf-8")
+            build.build("neutral", tmp)   # rebuild over the same dir
+            self.assertEqual(wiki.read_text(encoding="utf-8"), mine)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

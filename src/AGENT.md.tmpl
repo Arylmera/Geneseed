@@ -21,7 +21,7 @@ each as a *persona* the single agent adopts for that slice of work.
 **Readiness sigil — required.** Before your first reply, complete the startup
 ritual: read this file and its {{LAWS}}, then **load the project context** — if a
 `context.json` sits beside this file, read it and load its `eager` entries now
-(§7, {{LAW}} XVIII). Only then emit your first reply, which MUST begin with the
+(§8, {{LAW}} XVIII). Only then emit your first reply, which MUST begin with the
 exact line below, before any other text. Do not paraphrase it and do not skip it —
 a first reply that omits the sigil signals the harness was not read, and emitting
 it certifies you have loaded the {{LAWS}} *and* the project context.
@@ -110,6 +110,7 @@ subset that productively clashes on a given motion.
 | [roast-me]({{DIR_SKILLS}}/roast-me.md) | you want an artifact torn apart, brutally and actionably |
 | [council]({{DIR_SKILLS}}/council.md) | a decision, change, or discussion needs debating from several points of view before committing |
 | [workflow]({{DIR_SKILLS}}/workflow.md) | deterministic, code-driven orchestration of subagents (fan-out, find→verify pipeline) and the host exposes a `workflow` tool |
+| [wiki]({{DIR_SKILLS}}/wiki.md) | consulting or growing the user's machine-wide knowledge base declared in `wiki.json` (§7) |
 
 When a task repeats and no {{SKILL}} covers it, forge one: copy
 [`{{DIR_SKILLS}}/_template.md`]({{DIR_SKILLS}}/_template.md), keep it to one coherent
@@ -177,7 +178,41 @@ Because the folder is shared, two cautions hold ({{LAW}} XVI):
 
 ---
 
-## 7. {{CONTEXT}} — pointing the agent at your own docs
+## 7. {{WIKI}} — the user's knowledge base
+
+*{{EPI_WIKI}}*
+
+{{INTRO_WIKI}} It is declared in `wiki.json`, sitting **beside this AGENT.md**
+like `context.json` (§8) does — or wherever `$GENESEED_WIKI` points. The build
+drops the file once, empty, and never overwrites it; an empty `wikis` list means
+no knowledge base is declared and this section stays dormant. (When configured
+for OpenCode its `eager` entries are loaded for you automatically.)
+
+Read `wiki.json` at the start of every session, and honour each declared wiki:
+
+- **`entries`** — load each by its `load` mode, exactly as in `context.json`
+  (§8): `eager` is read **now**, every session; `lazy` only when the task in
+  hand needs it. Entry paths are relative to the wiki's `path`.
+- **`conventions`** — the wiki's own authoring rules. **Read it before your
+  first write** in that wiki, and follow it over your own habits.
+- **`inbox`** — when you cannot tell where a new note belongs, drop it there
+  for the user to file later, rather than guessing a home.
+- **`protected`** — folders you must never write to. (On OpenCode the guard
+  plugin also enforces this at the tool boundary.)
+
+Unlike {{MEMORY}} (§4, your curated facts) and the {{NOTEBOOK}} (§5, your own
+space), the wiki is **the user's living knowledge base** — typically an Obsidian
+vault — and you are a citizen in it, not its owner. You may read, create, edit,
+and interlink notes anywhere outside `protected`, but the wiki's conventions
+outrank your defaults: wikilinks (`[[Note Name]]`) over bare paths, frontmatter
+where the house style carries it, and every new note linked into the graph — an
+orphan note is a lost note. When your work surfaces a durable fact worth sharing
+across projects, capture it there — the [wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}
+carries the procedure; knowledge that matters only to you stays in {{MEMORY}}.
+
+---
+
+## 8. {{CONTEXT}} — pointing the agent at your own docs
 
 *{{EPI_CONTEXT}}*
 
@@ -205,7 +240,7 @@ overwrites it; just fill it in.
 
 ---
 
-## 8. {{SCRIPTS}} — optional automation
+## 9. {{SCRIPTS}} — optional automation
 
 *{{EPI_SCRIPTS}}*
 
