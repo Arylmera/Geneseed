@@ -86,7 +86,7 @@
   "MEMORY": "Logbook",
   "NOTEBOOK": "Ready Room",
   "EPI_NOTEBOOK": "Your own ground to lay out the plan — arrange it to suit the mission.",
-  "INTRO_NOTEBOOK": "This is your **own** ground — unlike the shared Base around you, every file here is yours to set up, arrange, move, and hold however the mission needs.",
+  "INTRO_NOTEBOOK": "This is your **own** ground — unlike the shared Base around you, every file here is yours to set up, arrange, move, and hold however the mission needs. You write the standing orders here and amend them as the mission evolves; tools, kit, and field data belong here as much as notes.",
   "VAULT": "Base",
   "DESC_WORKFLOW": "Execute a saved op-order that commands your units by the numbers — parallel sweeps, staged phases, and confirmation, in one deterministic mission."
 }

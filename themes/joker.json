@@ -86,7 +86,7 @@
   "MEMORY": "Joke Book",
   "NOTEBOOK": "Green Room",
   "EPI_NOTEBOOK": "Your own green room — set it up however you riff.",
-  "INTRO_NOTEBOOK": "This is your **own** Green Room — unlike the shared Club around you, every file here is yours to build, arrange, move, and keep however you riff.",
+  "INTRO_NOTEBOOK": "This is your **own** Green Room — unlike the shared Club around you, every file here is yours to build, arrange, move, and keep however you riff. You write the house rules and punch them up between sets; props, bits, and recordings belong here as much as notes.",
   "VAULT": "Club",
   "DESC_WORKFLOW": "Run a saved set that sends your sidekicks by script — many sent out at once, their findings gathered and checked in one clean show."
 }

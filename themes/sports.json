@@ -86,7 +86,7 @@
   "MEMORY": "Tape",
   "NOTEBOOK": "Clipboard",
   "EPI_NOTEBOOK": "Your own clipboard — draw it up however the game calls for.",
-  "INTRO_NOTEBOOK": "This is your **own** clipboard — unlike the shared Field around you, every sheet here is yours to draw up, arrange, move, and keep however the game calls for.",
+  "INTRO_NOTEBOOK": "This is your **own** clipboard — unlike the shared Field around you, every sheet here is yours to draw up, arrange, move, and keep however the game calls for. You draw up the rules of your own clipboard and redraw them as the season demands; plays, drills, and game film belong here as much as notes.",
   "VAULT": "Field",
   "DESC_WORKFLOW": "Run a saved set play that drives your squad on script — parallel runs, staged phases, and a verified result, all in one deterministic drive."
 }

@@ -86,7 +86,7 @@
   "MEMORY": "Memory",
   "NOTEBOOK": "Notebook",
   "EPI_NOTEBOOK": "A space of your own — arrange it however serves the work.",
-  "INTRO_NOTEBOOK": "This is a working space that is **yours alone** — unlike the shared Workspace around you, you own every file here, to create, organise, move, and keep however serves the work.",
+  "INTRO_NOTEBOOK": "This is a working space that is **yours alone** — unlike the shared Workspace around you, you own every file here, to create, organise, move, and keep however serves the work. The rules of this space are yours to write — and rewrite — as your practice evolves; code, data, and tools belong here as much as notes.",
   "VAULT": "Workspace",
   "DESC_WORKFLOW": "Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass."
 }

@@ -86,7 +86,7 @@
   "MEMORY": "Datastore",
   "NOTEBOOK": "Sandbox",
   "EPI_NOTEBOOK": "Your own partition — lay it out however runs fastest.",
-  "INTRO_NOTEBOOK": "This is your **own** partition — unlike the shared Grid around you, every file here is yours to spin up, arrange, move, and keep however runs fastest.",
+  "INTRO_NOTEBOOK": "This is your **own** partition — unlike the shared Grid around you, every file here is yours to spin up, arrange, move, and keep however runs fastest. You write the protocols here and patch them whenever something runs faster; code, datasets, and rigs belong here as much as notes.",
   "VAULT": "Grid",
   "DESC_WORKFLOW": "Jack in a saved routine that drives your daemons on rails — parallel forks, staged pipelines, and verification, all in one deterministic run."
 }
