@@ -20,21 +20,25 @@ for OpenCode internals see [adapters/opencode/](adapters/opencode/README.md).
 
 ## Choose your path
 
-**Easiest:** run `./geneseed setup` (or `python rituals/harness.py setup`) for a
-guided, dependency-free wizard — a colored full-screen form on any VT-capable terminal
-(Unix, or Windows Terminal / Windows 10 1809+ `conhost`; plain text prompts on older
-consoles or off a TTY). As you move through the theme picker it **previews each
-theme live** — its tagline, loaded-sigil, and voice — so you hear the flavour before
-you choose; once you pick, the wizard speaks in that theme's accent through confirm
-and build, and the install ends on the theme's own **banner and benediction**. It
-asks for a theme and install mode, runs the right build, and offers a health check.
-It works on every OS. Prefer to do it by hand?
-Pick a path below. Already installed? Bare **`./geneseed`** opens an interactive
-**main menu** — choose *Update & set up*, *Set up / re-theme*, *Browse*, *Health
-check*, *Build*, *Diff*, or *Settings* (a submenu for MCP servers — toggle the
-MarkItDown, GitLab, and Filesystem presets into your OpenCode config — the PATH install,
-and uninstall) and it runs that flow. **`./geneseed bootstrap`** jumps
-straight to update-then-setup; **`./geneseed setup`** straight to the wizard.
+**Easiest:** run the guided wizard — `./geneseed setup` on macOS/Linux,
+`.\geneseed.cmd setup` on Windows (or `python rituals/harness.py setup` anywhere).
+It is dependency-free: a colored full-screen form on any VT-capable terminal (Unix,
+or Windows Terminal / Windows 10 1809+ `conhost`), plain text prompts on older
+consoles or off a TTY. It asks for a theme and an install mode, runs the right
+build, and offers a health check.
+
+As you move through the theme picker the wizard **previews each theme live** — its
+tagline, loaded-sigil, and voice — so you hear the flavour before you choose; once
+you pick, it speaks in that theme's accent through confirm and build, and the
+install ends on the theme's own **banner and benediction**.
+
+**Already installed?** Bare **`./geneseed`** (Windows: `.\geneseed.cmd`) opens the
+interactive **main menu**: *Browse*, *Review local edits*, *Refresh / set up*,
+*Update only*, *Update & set up*, *Rebuild bundle*, *Memory*, *Status*, and
+*Settings* — a submenu for MCP servers (toggle the MarkItDown, GitLab, and
+Filesystem presets into your OpenCode config), the PATH install, and uninstall.
+**`./geneseed bootstrap`** jumps straight to update-then-setup; **`./geneseed setup`**
+straight to the wizard. Prefer to do it by hand? Pick a path below.
 
 | Path | Use when |
 | --- | --- |

@@ -3,13 +3,13 @@
 # launcher but needs no bash: it routes every subcommand to the cross-platform Python
 # CLI (rituals\harness.py). Usage matches geneseed.cmd / the bash launcher.
 #
-#   .\geneseed.ps1                       getting-started hint
+#   .\geneseed.ps1                       open the interactive main menu
 #   .\geneseed.ps1 setup                 guided install wizard
 #   .\geneseed.ps1 build [args]          render the bundle
 #   .\geneseed.ps1 upgrade [ref] [theme] self-upgrade from the published source
 #   .\geneseed.ps1 sync-self [ref]       refresh the launchers + update scripts
 #   .\geneseed.ps1 link | unlink         put `geneseed` on PATH / remove it
-#   .\geneseed.ps1 doctor|diff|context|learn|prompt|version|status|uninstall [args]
+#   .\geneseed.ps1 tui|doctor|diff|context|learn|prompt|version|status|uninstall [args]
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $harness = Join-Path $here 'rituals/harness.py'

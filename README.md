@@ -10,7 +10,8 @@ convention, and — on OpenCode — four **plugins** that auto-load your project
 capture durable memory, enforce the safety laws, and run saved workflows. One source
 builds it; it follows you into every repo.
 
-**New here? Start with the [Setup guide](SETUP.md).** This page is the overview.
+**New here? Jump to [Install](#install)** — or the full [Setup guide](SETUP.md) for
+every path, configuration knob, and troubleshooting. This page is the overview.
 
 ## How it works
 
@@ -44,74 +45,74 @@ your own is a copy-and-edit away.
 | **Context** | the project's own docs — auto-discovered on OpenCode, or via a `context.json` manifest |
 | **Plugins** (OpenCode) | `geneseed-context` injects project docs every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts |
 
-## Quick start (OpenCode, global)
+## Install
 
-The recommended setup — installed once into OpenCode's config dir, inherited by every
-repo, nothing committed into your projects:
+Two ways in — guided or one command. Either takes a few minutes; the only
+prerequisites are **git** and **Python 3** (the harness is stdlib-only, nothing to
+`pip install`).
 
-```
-python build.py --emit opencode-global                 # add --theme imperial if wanted
-# Optional: the learn plugin auto-locates the in-config memory store. Set this only
-# to pin it explicitly (or persist it to your shell rc):
-export GENESEED_HARNESS="$HOME/.config/opencode"
-echo 'export GENESEED_HARNESS="$HOME/.config/opencode"' >> ~/.zshrc
-```
+### The guided way — TUI wizard (macOS, Linux & Windows)
 
-Open OpenCode in any repo — the first reply opens with the readiness sigil and your
-project's docs are already in context. **Other tools (Claude Code, plain `AGENT.md`),
-per-repo installs, configuration, and troubleshooting: [SETUP.md](SETUP.md).**
+The launcher ships a dependency-free, full-screen wizard: pick a **theme** (each one
+previewed live — tagline, sigil, voice — as you move through the list), pick an
+**install mode** — *OpenCode global* (recommended; every repo inherits it), *per-repo
+`.opencode/`*, or *plain bundle* for any `AGENT.md` tool — confirm, and it builds and
+offers a health check. Bare `geneseed` opens the **main menu** instead, listing every
+action: browse, review local edits, refresh/set up, update, rebuild, memory, status,
+and Settings (MCP servers, run-from-anywhere, uninstall).
 
-## Set up via the TUI (macOS & Windows)
-
-Prefer a guided install over typing build commands? The launcher ships an interactive,
-dependency-free TUI. Bare `geneseed` opens a **main menu** of every action — browse,
-review local edits, refresh/set up, update, update & set up, rebuild, memory, status,
-and **Settings** (MCP servers, run-from-anywhere, uninstall) — and the **setup wizard**
-walks you through theme and install mode, previewing each theme's voice live before
-you commit. The only prerequisite is Python 3; the harness is stdlib-only, nothing to
-`pip install`.
-
-### macOS (and Linux)
+**macOS / Linux**
 
 ```bash
 git clone https://github.com/Arylmera/Geneseed.git
 cd Geneseed
-./geneseed                # main menu — pick "Refresh / set up"
-./geneseed setup          # …or jump straight into the wizard
+./geneseed setup          # the wizard — or bare `./geneseed` for the main menu
 ```
 
-If `python3` is missing on macOS, install it via `xcode-select --install` or Homebrew.
-In the wizard: pick a **theme** (previewed live as you move through the list), pick an
-**install mode** — *OpenCode global* (recommended; every repo inherits it), *per-repo
-`.opencode/`*, or *plain bundle* for any `AGENT.md` tool — confirm, and it builds and
-offers a health check. `./geneseed tui` opens the browse panel directly.
+If `python3` is missing on macOS, `xcode-select --install` or Homebrew provides it.
+`./geneseed tui` opens the browse panel directly.
 
-### Windows
-
-Everything runs natively — no bash, WSL, curl, or unzip:
+**Windows** — native, no bash, WSL, curl, or unzip; works from cmd or PowerShell:
 
 ```powershell
 git clone https://github.com/Arylmera/Geneseed.git
 cd Geneseed
-.\geneseed.cmd            # main menu — works from cmd or PowerShell
-.\geneseed.cmd setup      # …or jump straight into the wizard
-# PowerShell-native alternative: .\geneseed.ps1 / .\geneseed.ps1 setup
+.\geneseed.cmd setup      # the wizard — or bare .\geneseed.cmd for the main menu
+# PowerShell-native twin: .\geneseed.ps1 [setup]
 ```
 
-The launcher finds Python by itself (the `py` launcher, else `python` on PATH). The
+The launcher finds Python on its own (the `py` launcher, else `python` on PATH). The
 full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+
-`conhost` — via a stdlib-only ANSI backend; on an older console it falls back to the
-same wizard as plain text prompts. The screens are identical to macOS: theme →
-install mode → confirm → build → health check.
+`conhost` — via a stdlib-only ANSI backend; an older console degrades gracefully to
+the same wizard as plain text prompts. Screens and results are identical to macOS:
+theme → install mode → confirm → build → health check.
 
-### After the wizard
+### The direct way — one command (OpenCode, global)
 
-- **Run it from anywhere** — `./geneseed link` (symlinks into `~/.local/bin`) or
-  `.\geneseed.cmd link` (writes a shim into `%LOCALAPPDATA%\Geneseed\bin` and adds it
-  to your user PATH; open a new terminal). Then plain `geneseed` works from any directory.
-- **Verify** — `./geneseed doctor` (or `.\geneseed.cmd doctor`) should print `ok`;
-  the agent's first reply should open with the readiness sigil.
-- **Stay current** — main menu → *Update & set up*, or `./geneseed update`.
+The recommended install, done by hand — once into OpenCode's config dir, every repo
+inherits it, nothing committed into your projects:
+
+```bash
+python build.py --emit opencode-global                 # add --theme imperial if wanted
+# Optional: the learn plugin auto-locates the in-config memory store. Set this only
+# to pin it explicitly (and persist it to your shell rc):
+export GENESEED_HARNESS="$HOME/.config/opencode"
+echo 'export GENESEED_HARNESS="$HOME/.config/opencode"' >> ~/.zshrc
+```
+
+Windows is the same `python build.py` line; the optional pin is
+`setx GENESEED_HARNESS "$env:USERPROFILE\.config\opencode"`.
+
+### After installing
+
+- **Verify** — open your agent in any repo: the first reply starts with the readiness
+  sigil and your project's docs are already in context. `./geneseed doctor`
+  (`.\geneseed.cmd doctor`) should print `ok`.
+- **Run it from anywhere** — `./geneseed link` symlinks into `~/.local/bin`;
+  `.\geneseed.cmd link` writes a shim into `%LOCALAPPDATA%\Geneseed\bin` and adds it
+  to your user PATH (open a new terminal). Then plain `geneseed` works from any directory.
+- **Everything else** — other tools (Claude Code, plain `AGENT.md`), per-repo installs,
+  MCP servers, environment knobs, troubleshooting: **[SETUP.md](SETUP.md)**.
 
 ## Layout
 
@@ -134,7 +135,9 @@ Geneseed/
 │   ├── memory/           memory convention + index
 │   └── notebook/         the agent's own freeform space — convention + index
 ├── themes/               voice token maps (8: neutral, imperial, military, pirate, wizard, cyberpunk, gamer, sports)
-├── rituals/harness.py    optional CLI: menu · setup · tui · build · doctor · diff · context · learn · prompt · status · version · bootstrap · uninstall
+├── rituals/harness.py    the CLI behind the launchers: menu · setup · tui · build · doctor · diff ·
+│                         upgrade · sync-self · link/unlink · context · learn · prompt · status ·
+│                         version · bootstrap · uninstall
 ├── tests/                stdlib unit tests + a Node workflow-runtime test
 ├── docs/specs/           dated implementation specs — design rationale + history
 ├── adapters/             per-tool glue (opencode/, claude-code/)
