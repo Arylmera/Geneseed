@@ -61,18 +61,57 @@ Open OpenCode in any repo — the first reply opens with the readiness sigil and
 project's docs are already in context. **Other tools (Claude Code, plain `AGENT.md`),
 per-repo installs, configuration, and troubleshooting: [SETUP.md](SETUP.md).**
 
-Bare **`./geneseed`** opens an interactive **main menu** of every action — update,
-setup/re-theme, browse, health check, build, diff, and **Settings** (MCP servers,
-run-from-anywhere, uninstall) — so you just run it and pick.
-Prefer to jump straight in? `./geneseed setup` (guided install) or `./geneseed tui`
-(the browse panel).
+## Set up via the TUI (macOS & Windows)
 
-**Windows:** everything works natively (no bash, WSL, curl, or unzip) — use the
-`geneseed.cmd` / `geneseed.ps1` launchers (`.\geneseed.cmd setup`,
-`.\geneseed.cmd build`, `.\geneseed.cmd upgrade`), or call `python rituals\harness.py <cmd>`
-directly. The full-screen TUI runs natively too on a VT-capable console (Windows
-Terminal, or Windows 10 1809+ `conhost`) via a stdlib-only ANSI backend — still nothing
-to `pip install`; on an older console without VT it falls back to the guided `setup` wizard.
+Prefer a guided install over typing build commands? The launcher ships an interactive,
+dependency-free TUI. Bare `geneseed` opens a **main menu** of every action — browse,
+review local edits, refresh/set up, update, update & set up, rebuild, memory, status,
+and **Settings** (MCP servers, run-from-anywhere, uninstall) — and the **setup wizard**
+walks you through theme and install mode, previewing each theme's voice live before
+you commit. The only prerequisite is Python 3; the harness is stdlib-only, nothing to
+`pip install`.
+
+### macOS (and Linux)
+
+```bash
+git clone https://github.com/Arylmera/Geneseed.git
+cd Geneseed
+./geneseed                # main menu — pick "Refresh / set up"
+./geneseed setup          # …or jump straight into the wizard
+```
+
+If `python3` is missing on macOS, install it via `xcode-select --install` or Homebrew.
+In the wizard: pick a **theme** (previewed live as you move through the list), pick an
+**install mode** — *OpenCode global* (recommended; every repo inherits it), *per-repo
+`.opencode/`*, or *plain bundle* for any `AGENT.md` tool — confirm, and it builds and
+offers a health check. `./geneseed tui` opens the browse panel directly.
+
+### Windows
+
+Everything runs natively — no bash, WSL, curl, or unzip:
+
+```powershell
+git clone https://github.com/Arylmera/Geneseed.git
+cd Geneseed
+.\geneseed.cmd            # main menu — works from cmd or PowerShell
+.\geneseed.cmd setup      # …or jump straight into the wizard
+# PowerShell-native alternative: .\geneseed.ps1 / .\geneseed.ps1 setup
+```
+
+The launcher finds Python by itself (the `py` launcher, else `python` on PATH). The
+full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+
+`conhost` — via a stdlib-only ANSI backend; on an older console it falls back to the
+same wizard as plain text prompts. The screens are identical to macOS: theme →
+install mode → confirm → build → health check.
+
+### After the wizard
+
+- **Run it from anywhere** — `./geneseed link` (symlinks into `~/.local/bin`) or
+  `.\geneseed.cmd link` (writes a shim into `%LOCALAPPDATA%\Geneseed\bin` and adds it
+  to your user PATH; open a new terminal). Then plain `geneseed` works from any directory.
+- **Verify** — `./geneseed doctor` (or `.\geneseed.cmd doctor`) should print `ok`;
+  the agent's first reply should open with the readiness sigil.
+- **Stay current** — main menu → *Update & set up*, or `./geneseed update`.
 
 ## Layout
 
