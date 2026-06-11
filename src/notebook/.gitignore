@@ -1,7 +1,7 @@
 # The notebook is the agent's own space — personal and local, NOT committed or
-# shared with the team. Keep only the convention and this ignore file; everything
-# the agent keeps here (the NOTEBOOK.md index and all its own files) stays on the
-# individual developer's machine.
+# shared with the team. Everything the agent keeps here (its charter README,
+# the NOTEBOOK.md index, and all its own files) stays on the individual
+# machine. Only this ignore file is tracked; the build re-asserts it on every
+# rebuild — it is the one rule of the space the agent cannot lift.
 *
 !.gitignore
-!README.md

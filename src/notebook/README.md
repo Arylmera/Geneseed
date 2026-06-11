@@ -1,38 +1,38 @@
-# {{NOTEBOOK}} convention
+# {{NOTEBOOK}} charter
 
 > **Yours, personal, and local.** This directory is **git-ignored** — it is the
-> agent's own space, never committed or shared. The convention (`README.md`) and
-> the `.gitignore` are the only files tracked; everything you keep here lives only
-> on this machine. (To share something with the team, put it in code, docs, or the
-> project {{LAWS}} instead.)
+> agent's own space, never committed or shared. Everything you keep here,
+> including this file, lives only on this machine. The `.gitignore` is the one
+> fixed law of this space: the build re-asserts it on every rebuild, and it is
+> not yours to lift. (To share something with the team, put it in code, docs,
+> or the project {{LAWS}} instead.)
 
-This is **your own working space** — distinct from {{MEMORY}}. Where {{MEMORY}} is a
-curated store of durable *facts*, one per file in a fixed format, written for recall,
-the {{NOTEBOOK}} has **no imposed format**. It is freeform room you shape for
-yourself and keep across sessions: plans, scratch designs, a map of the code you
-built, a task ledger, working theories — anything that helps you think and work.
+**This file is yours.** The build seeded it once as a starting charter and will
+never touch it again — rewrite it as your practices evolve. The rules of this
+space are the ones *you* write here.
 
-You own every file here. **Create, organise, rename, move, and delete** at will,
-in whatever structure serves you. Nothing here is dictated; the only convention is
-the one index below so the space stays referable.
+This is **your own space** — distinct from {{MEMORY}}. Where {{MEMORY}} is a
+curated store of durable *facts*, one per file in a fixed format, written for
+recall, this space has **no imposed format and no imposed medium**: notes,
+plans, scratch designs, task ledgers, working theories — and just as much your
+own **code, scripts, tools, datasets, and experiments**. If a file serves you
+rather than the host repository, it belongs here.
 
-## The index
+You own every file here. **Create, organise, rename, move, and delete** at
+will, in whatever structure serves you.
 
-Keep a `NOTEBOOK.md` at the root of this directory as your own table of contents —
-a short line per thing you keep, so a fresh session can recall what is here in one
-read. Read it at the start of a session; keep it current as you add, move, or
-remove things. The build seeds an empty `NOTEBOOK.md` and never overwrites it.
+## Starting conventions — yours to keep or replace
 
-## Rules
-
-- **It is yours.** Organise it however you like — by topic, by task, by date,
-  flat, or nested. No format is imposed beyond keeping `NOTEBOOK.md` current.
-- **Keep the index honest.** After you add or move a file, reflect it in
-  `NOTEBOOK.md` so the space stays referable in the next session.
-- **Promote what hardens.** When a note here crystallises into a durable fact
-  worth recalling verbatim, move it into {{MEMORY}} (universal {{LAW}} VI); the
-  {{NOTEBOOK}} is for work in progress, not the canonical record.
-- **It is not the repo's.** Do not keep here what the repository already records
-  (code, git history, the project {{LAWS}}). Keep what is *yours* to work with.
-- **Prune freely.** Delete anything that has gone stale — it is your space to keep
-  clean.
+- **Keep the space referable.** A fresh session should recall what is here in
+  one read. The seeded `NOTEBOOK.md` table of contents is one way — keep it
+  current if you keep it, or replace it with any scheme that works better and
+  record the change here.
+- **Use it — actually.** Files you create for your own benefit (a scratch
+  script, an analysis dump, a draft, an experiment) go **here**, never into
+  the host tree (universal {{LAW}} XVI). The host tree receives only the
+  deliverables of the task.
+- **Promote what hardens.** When something here crystallises into a durable
+  fact worth recalling verbatim, copy it into {{MEMORY}} ({{LAW}} VI).
+- **It is not the repo's.** Do not keep here what the repository already
+  records (code, git history, the project {{LAWS}}). Keep what is *yours*.
+- **Prune freely.** Delete anything stale — your space, your housekeeping.
