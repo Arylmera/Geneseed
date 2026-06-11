@@ -235,18 +235,22 @@ swallows every error. Output mirrors `rituals/harness.py context`.
 
 - **Quiet by default:** it logs nothing (OpenCode renders a plugin's stderr as red
   text in the UI). `GENESEED_DEBUG=1` re-enables discovery/inject logs.
-- **Don't want the visible block?** The injection is a `noReply` prompt, which is
-  necessarily a message in the session — OpenCode has no plugin hook to add hidden
-  system context at session start. Set `GENESEED_CONTEXT_INJECT=off` to disable the
-  block entirely and fall back to the AGENT.md project-context Law (soft,
-  agent-discipline — no injection).
+- **Invisible by default:** the context is prepended to each outgoing request via
+  the experimental `chat.messages.transform` hook — no `PROJECT CONTEXT` block in
+  the conversation, and compaction survival is inherent (re-sent per request). On a
+  build that lacks the hook the plugin detects it (a request completes without the
+  hook firing) and falls back to the classic visible delivery, a `noReply` session
+  message. `GENESEED_CONTEXT_VISIBLE=1` forces the visible block up front; set
+  `GENESEED_CONTEXT_INJECT=off` to disable injection entirely and fall back to the
+  AGENT.md project-context Law (soft, agent-discipline — no injection).
 
 **Install:** the same step as the learn plugin — `cp …/plugins/*.js` copies all
 four plugins (context, learn, guard, workflow); `build --emit opencode` and
 `--emit opencode-global` place them for you. It uses
-`session.created`, `session.prompt` `noReply`, `session.messages`, `session.get`,
-and the experimental `session.compacting` hook — all confirmed against the current
-OpenCode docs; it degrades quietly if a field differs in your build.
+`session.created`, `session.idle` (transform-fallback detection), `session.prompt`
+`noReply`, `session.messages`, `session.get`, and the experimental
+`chat.messages.transform` and `session.compacting` hooks — all confirmed against the
+current OpenCode docs; it degrades quietly if a field differs in your build.
 
 ## Workflow tool — the `workflow` plugin
 
@@ -363,10 +367,11 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   a declared wiki's `protected` folders (AGENT.md §7, from `wiki.jsonc`); **warns** on
   `.env` writes and force-push. `GENESEED_GUARD=off` disables it, `=warn` downgrades
   blocks to warnings.
-- **Invisible context injection** (`GENESEED_CONTEXT_TRANSFORM=1`). Switches the context
-  plugin from a visible `session.created` message to `experimental.chat.messages.transform`,
-  so the PROJECT CONTEXT block no longer appears in the conversation and survives
-  compaction inherently. Off by default; experimental OpenCode hook — verify on your build.
+- **Invisible context injection** (the default). The context plugin delivers via
+  `experimental.chat.messages.transform`, so the PROJECT CONTEXT block never appears in
+  the conversation and survives compaction inherently; on a build without the hook it
+  auto-falls back to the visible `session.created` message. `GENESEED_CONTEXT_VISIBLE=1`
+  forces the visible block (legacy `GENESEED_CONTEXT_TRANSFORM=0/off` does the same).
 - **Default permissions.** A fresh `opencode.json` gets a minimal policy that **asks**
   before `rm -rf *` and **every `git commit` and `git push`** (the host-level backstop
   for the consent-before-commit/push Rule — the agent never records or shares code

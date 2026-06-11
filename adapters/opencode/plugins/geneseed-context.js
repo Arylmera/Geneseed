@@ -27,9 +27,18 @@
 // surfaced so the agent knows the house rules before writing. No wiki.jsonc, or an
 // empty `wikis` list, costs nothing.
 //
+// DELIVERY (invisible by default): the context rides into each request's message
+// array via `experimental.chat.messages.transform` — nothing shows in the
+// conversation, and it survives compaction inherently (re-sent per request). The
+// hook is experimental; on a build that lacks it the plugin notices (a request
+// completes without the hook ever firing) and FALLS BACK to the classic visible
+// delivery — a `session.created` noReply message — so no build is left without
+// context. GENESEED_CONTEXT_VISIBLE=1 forces the visible block up front (legacy
+// GENESEED_CONTEXT_TRANSFORM=0/off does the same; =1 matches the default).
+//
 // Quiet: by default it logs NOTHING (OpenCode shows a plugin's stderr as red text).
 // GENESEED_DEBUG=1 re-enables discovery/inject logs. GENESEED_CONTEXT_INJECT=off
-// disables injection entirely — no visible PROJECT CONTEXT block — leaving project
+// disables injection entirely — no PROJECT CONTEXT in any form — leaving project
 // context to the AGENT.md Law (soft, agent-discipline) instead of injection.
 //
 // Install: copy into ~/.config/opencode/plugins/ (global) — `build --emit
@@ -57,17 +66,30 @@ const HEADING_SLICE_BYTES = 4096
 // Quiet by default — OpenCode surfaces a plugin's stderr in the UI (red text). Set
 // GENESEED_DEBUG=1 to see discovery/inject logs. Set GENESEED_CONTEXT_INJECT=off to
 // disable injection entirely and lean on the AGENT.md project-context Law instead
-// (no visible PROJECT CONTEXT block; enforcement becomes soft/agent-discipline).
+// (no PROJECT CONTEXT delivered at all; enforcement becomes soft/agent-discipline).
 const DEBUG = !!process.env.GENESEED_DEBUG
 const INJECT_OFF = ["off", "0", "false", "no"].includes(
   (process.env.GENESEED_CONTEXT_INJECT || "on").toLowerCase())
-// Opt-in invisible delivery: when on, inject the context into each request's message
-// array via `experimental.chat.messages.transform` instead of a visible session.created
-// noReply message — no PROJECT CONTEXT block shows in the conversation, and it survives
-// compaction inherently (re-sent per request). Default OFF → today's behaviour is
-// unchanged. Experimental OpenCode hook; verify it on your build before relying on it.
-const TRANSFORM = ["1", "on", "true", "yes"].includes(
-  (process.env.GENESEED_CONTEXT_TRANSFORM || "").toLowerCase())
+// Delivery — INVISIBLE by default: the context is prepended to each request's message
+// array via `experimental.chat.messages.transform`, so no PROJECT CONTEXT block shows
+// in the conversation and compaction survival is inherent (re-sent per request).
+// GENESEED_CONTEXT_VISIBLE=1 forces the classic visible session.created message
+// instead; legacy GENESEED_CONTEXT_TRANSFORM=0/off is honoured the same way (=1, the
+// old opt-in, now matches the default). The transform hook is experimental — when a
+// build lacks it the event handler detects that and engages the visible fallback, so
+// no build is left without context.
+const VISIBLE =
+  ["1", "on", "true", "yes"].includes(
+    (process.env.GENESEED_CONTEXT_VISIBLE || "").toLowerCase()) ||
+  ["0", "off", "false", "no"].includes(
+    (process.env.GENESEED_CONTEXT_TRANSFORM || "").toLowerCase())
+const TRANSFORM = !VISIBLE
+// Fallback state (module-level — OpenCode keeps ONE copy of the plugin loaded):
+// `transformSeen` flips the first time the experimental hook fires; if a request
+// completes (session.idle) while it is still false, the build lacks the hook and
+// `fallbackVisible` switches delivery to the classic visible injection.
+let transformSeen = false
+let fallbackVisible = false
 function log(msg) { if (DEBUG) console.error(`[geneseed-context] ${msg}`) }
 
 // ---- convention --------------------------------------------------------------
@@ -546,57 +568,74 @@ export const GeneseedContext = async (ctx) => {
   const done = new Set()
   const root = repoRoot(ctx)
 
+  // Visible delivery — post the block as a noReply session message. Used when
+  // GENESEED_CONTEXT_VISIBLE forces it, and by the transform fallback below.
+  async function injectVisible(sid) {
+    if (!sid || done.has(sid)) return
+    try {
+      // Don't pollute the learn plugin's throwaway distil sessions, and don't
+      // re-inject into native subagent child sessions (they inherit the parent's
+      // context). The sid is only marked done AFTER the guards pass — marking it
+      // earlier would permanently skip a session when a transient session.get
+      // failure let it through the title check.
+      let title = "", parent
+      try {
+        const info = await client.session.get({ path: { id: sid } })
+        const meta = info?.data ?? info
+        title = meta?.title ?? ""
+        parent = meta?.parentID ?? meta?.parentId
+      } catch {}
+      if (parent) { log("skipped: child/subagent session"); return }
+      if (title.startsWith("geneseed-")) { log("skipped: geneseed-* session"); return }
+
+      if (await alreadyInjected(client, sid)) { log("skipped: already injected (marker present)"); return }
+      done.add(sid)
+
+      const { block, src } = await resolveBlock(root)
+      if (!block) { log(`no docs discovered in ${root}`); return }
+
+      await client.session.prompt({
+        path: { id: sid },
+        body: { noReply: true, parts: [{ type: "text", text: block.text }] },
+      })
+      const via = src.mode === "manifest" ? `manifest ${src.file}` : `auto-discovery [${root}]`
+      log(`injected: ${block.injected} eager (${block.kb} KB), ${block.lazy} lazy listed — via ${via}`)
+    } catch (err) {
+      log(`error: ${err?.message ?? err}`)
+    }
+  }
+
   return {
     event: async ({ event }) => {
-      if (!event || event.type !== "session.created") return
-      if (INJECT_OFF) return          // opt-out: rely on the AGENT.md Law, no visible block
-      if (TRANSFORM) return           // invisible delivery via messages.transform handles it
+      if (!event || INJECT_OFF) return
       const sid =
         event.properties?.sessionID ?? event.payload?.sessionID ??
         event.properties?.info?.id ?? event.payload?.info?.id
-      if (!sid || done.has(sid)) return
-
-      try {
-        // Don't pollute the learn plugin's throwaway distil sessions, and don't
-        // re-inject into native subagent child sessions (they inherit the parent's
-        // context). The sid is only marked done AFTER the guards pass — marking it
-        // earlier would permanently skip a session when a transient session.get
-        // failure let it through the title check.
-        let title = "", parent
-        try {
-          const info = await client.session.get({ path: { id: sid } })
-          const meta = info?.data ?? info
-          title = meta?.title ?? ""
-          parent = meta?.parentID ?? meta?.parentId
-        } catch {}
-        if (parent) { log("skipped: child/subagent session"); return }
-        if (title.startsWith("geneseed-")) { log("skipped: geneseed-* session"); return }
-
-        if (await alreadyInjected(client, sid)) { log("skipped: already injected (marker present)"); return }
-        done.add(sid)
-
-        const { block, src } = await resolveBlock(root)
-        if (!block) { log(`no docs discovered in ${root}`); return }
-
-        await client.session.prompt({
-          path: { id: sid },
-          body: { noReply: true, parts: [{ type: "text", text: block.text }] },
-        })
-        const via = src.mode === "manifest" ? `manifest ${src.file}` : `auto-discovery [${root}]`
-        log(`injected: ${block.injected} eager (${block.kb} KB), ${block.lazy} lazy listed — via ${via}`)
-      } catch (err) {
-        log(`error: ${err?.message ?? err}`)
+      if (event.type === "session.created") {
+        if (TRANSFORM && !fallbackVisible) return   // invisible delivery handles it
+        await injectVisible(sid)
+        return
+      }
+      // Transform fallback: the session went idle (a request completed) yet the
+      // experimental hook never fired in this process — this build lacks it. Engage
+      // the visible delivery so context still arrives, injecting into THIS session
+      // right away (one turn late) rather than waiting for the next session.
+      if (event.type === "session.idle" && TRANSFORM && !transformSeen && !fallbackVisible) {
+        fallbackVisible = true
+        log("transform hook absent on this build — falling back to visible injection")
+        await injectVisible(sid)
       }
     },
 
-    // Survive compaction. The session.created injection above is a conversation
-    // message, so OpenCode summarises it away when a long session compacts (the
-    // AGENT.md rules persist — they load via opencode.json `instructions`, not the
-    // conversation). Re-push the eager docs into the compaction context so the
-    // project context — Law XVIII — outlives the summary. Experimental OpenCode hook;
-    // if it is absent in a build this key is simply never called.
+    // Survive compaction. The visible injection above is a conversation message, so
+    // OpenCode summarises it away when a long session compacts (the AGENT.md rules
+    // persist — they load via opencode.json `instructions`, not the conversation).
+    // Re-push the eager docs into the compaction context so the project context —
+    // Law XVIII — outlives the summary. Only needed when delivery is visible
+    // (forced or fallback); the transform re-sends per request. Experimental
+    // OpenCode hook; if it is absent in a build this key is simply never called.
     "experimental.session.compacting": async (_input, output) => {
-      if (INJECT_OFF || TRANSFORM) return   // transform re-injects each request; nothing to patch
+      if (INJECT_OFF || (TRANSFORM && !fallbackVisible)) return
       try {
         const { block } = await resolveBlock(root)
         if (block && output && Array.isArray(output.context)) {
@@ -608,12 +647,14 @@ export const GeneseedContext = async (ctx) => {
       }
     },
 
-    // Invisible delivery (opt-in, GENESEED_CONTEXT_TRANSFORM=1). Prepend the context to
-    // each request's outgoing message array — no persisted/visible session message, and
-    // it survives compaction because it is re-sent every request. Experimental OpenCode
-    // hook; never called on a build that lacks it, so the default path is unaffected.
+    // Invisible delivery (the default). Prepend the context to each request's
+    // outgoing message array — no persisted/visible session message, and it survives
+    // compaction because it is re-sent every request. Experimental OpenCode hook;
+    // never called on a build that lacks it — the session.idle fallback above
+    // detects that and takes over with the visible delivery.
     "experimental.chat.messages.transform": async (_input, output) => {
-      if (INJECT_OFF || !TRANSFORM) return
+      transformSeen = true                  // the hook exists on this build
+      if (INJECT_OFF || !TRANSFORM || fallbackVisible) return
       try {
         if (!output || !Array.isArray(output.messages) || !output.messages.length) return
         const sid = output.messages[0]?.info?.sessionID

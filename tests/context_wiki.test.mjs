@@ -11,6 +11,9 @@ import * as path from "node:path"
 
 // Module-level config in the plugin — must be set BEFORE the import below.
 process.env.GENESEED_WIKI_LAZY_LIMIT = "2"
+// Pin the visible delivery: the compaction hook (our render driver) only re-pushes
+// when delivery is visible — under the invisible default it returns early.
+process.env.GENESEED_CONTEXT_VISIBLE = "1"
 
 let tmp, text
 
@@ -57,6 +60,7 @@ before(async () => {
 after(async () => {
   delete process.env.GENESEED_WIKI
   delete process.env.GENESEED_WIKI_LAZY_LIMIT
+  delete process.env.GENESEED_CONTEXT_VISIBLE
   await fs.rm(tmp, { recursive: true, force: true })
 })
 
