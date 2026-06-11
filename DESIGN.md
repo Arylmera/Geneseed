@@ -80,7 +80,7 @@ renders it as the name in parentheses.
 | Delegation | `src/agents/` | `agents/` (`legati/`) | capability specialists with output contracts |
 | Workflows | `src/skills/` | `skills/` (`rites/`) | repeatable procedures |
 | Memory | `src/memory/` | `memory/` (`anamnesis/`) | one-fact-per-file convention + index |
-| Notebook | `src/notebook/` | `notebook/` (`scriptorium/`) | the agent's own freeform space — no imposed format, refreshed in place + index |
+| Notebook | `src/notebook/` | `notebook/` (`scriptorium/`) | the agent's sovereign space — any medium, seed-once charter the agent may rewrite; only `.gitignore` re-asserted |
 | Context | `build.py` | `context.json` | empty per-repo manifest, written once and never overwritten; git-ignore it |
 | Themes | `themes/*.json` | — | token → label maps |
 | Generator | `build.py` | — | substitution + `<!-- INCLUDE: -->` inlining |

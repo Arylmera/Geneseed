@@ -40,7 +40,7 @@ your own is a copy-and-edit away.
 | **Agents** (16) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
 | **Skills** (23) | repeatable workflows: brainstorm · **clarify** · plan · tdd · debug · refactor · code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · **ingest** · **research** · handoff · roast-me · **council** · parallel-agents · **workflow** |
 | **Memory** (`memory/`) | one-fact-per-file durable knowledge, indexed by `MEMORY.md` (git-ignored, personal) |
-| **Notebook** (`notebook/`) | the agent's own freeform space — no imposed format, full create/move/delete, indexed by `NOTEBOOK.md` (git-ignored, personal) |
+| **Notebook** (`notebook/`) | the agent's sovereign space — any medium (code, tools, data, notes), self-ruled via a seed-once charter, always git-ignored; only its `.gitignore` is build-asserted |
 | **Context** | the project's own docs — auto-discovered on OpenCode, or via a `context.json` manifest |
 | **Plugins** (OpenCode) | `geneseed-context` injects project docs every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts |
 
