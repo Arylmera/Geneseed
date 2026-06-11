@@ -55,11 +55,12 @@ your own is a copy-and-edit away.
 | --- | --- |
 | **Rules** (`laws/`) | 20 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery … |
 | **Agents** (16) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
-| **Skills** (23) | repeatable workflows: brainstorm · **clarify** · plan · tdd · debug · refactor · code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · **ingest** · **research** · handoff · roast-me · **council** · parallel-agents · **workflow** |
+| **Skills** (25) | repeatable workflows: brainstorm · **clarify** · plan · tdd · debug · refactor · code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **ingest** · **research** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** |
 | **Memory** (`memory/`) | one-fact-per-file durable knowledge, indexed by `MEMORY.md` (git-ignored, personal) |
 | **Notebook** (`notebook/`) | the agent's sovereign space — any medium (code, tools, data, notes), self-ruled via a seed-once charter, always git-ignored; only its `.gitignore` is build-asserted |
+| **Wiki** (`wiki.json`) | your own machine-wide knowledge base — typically an Obsidian vault — declared once per machine: entry notes load eager/lazy, the agent reads and **writes** it under the vault's own conventions, with an inbox fallback and guard-enforced protected folders |
 | **Context** | the project's own docs — auto-discovered on OpenCode, or via a `context.json` manifest |
-| **Plugins** (OpenCode) | `geneseed-context` injects project docs every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts |
+| **Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts |
 
 ## Install
 
@@ -165,7 +166,7 @@ Geneseed/
 ```
 python rituals/harness.py doctor                      # every theme + parity + authoring + drift
 python -m unittest discover -s tests -p "test_*.py"   # generator + CLI unit tests (no deps)
-node --test tests/workflow_runtime.test.mjs           # workflow-runtime tests (needs Node)
+node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs   # plugin tests (needs Node)
 ```
 
 `doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key

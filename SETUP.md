@@ -179,6 +179,49 @@ Override only when the convention doesn't fit — drop a `.harness/context.json`
 `"extend": true` layers the manifest on top of discovery. Schema:
 [GLOBAL-HARNESS-SPEC.md §3](adapters/opencode/GLOBAL-HARNESS-SPEC.md).
 
+### Wiki — your own knowledge base (optional)
+
+If you keep a personal knowledge base on this machine — an Obsidian vault, or any
+folder of interlinked markdown — declare it once in **`wiki.json`** and the agent
+becomes a citizen of it: entry notes load each session (eager) or on demand (lazy),
+and it reads *and writes* notes under your vault's own conventions (AGENT.md §7,
+the `wiki` skill). Unlike `context.json` this is **per machine, not per repo**.
+
+The build seeds an empty `wiki.json` beside `AGENT.md` (for a global install:
+`~/.config/opencode/wiki.json`) and never overwrites it. Resolution:
+`$GENESEED_WIKI` → `$GENESEED_HARNESS/wiki.json` → beside the installed `AGENT.md`.
+Fill it in:
+
+```json
+{
+  "wikis": [{
+    "name": "Brain",
+    "path": "/home/me/Documents/Brain",
+    "description": "my machine-wide knowledge base",
+    "entries": [
+      { "path": "INDEX.md", "load": "eager", "description": "always-on core" },
+      { "path": "Maps/TOPICS.md", "load": "lazy", "description": "topic index" }
+    ],
+    "conventions": "STYLE.md",
+    "inbox": "Inbox/",
+    "protected": ["Journal/"]
+  }]
+}
+```
+
+`path` is the vault root (absolute; on Windows use forward slashes —
+`C:/Users/me/Brain`); entry paths are relative to it, with the same `eager`/`lazy`
+semantics as `context.json`. `conventions` names the note the agent must read before
+its first write; `inbox` is where it drops notes it cannot confidently file;
+`protected` folders are write-blocked by the guard plugin at the tool boundary
+(`GENESEED_GUARD` modes apply). Several wikis may be declared; an empty `wikis`
+list keeps the feature off. The file may hold private paths — it is host-specific,
+covered by the bundle `.gitignore`, and never committed.
+
+On tools without the plugins (plain `AGENT.md`, Claude Code), the same contract
+holds through prose: AGENT.md §7 instructs the agent to read `wiki.json` at session
+start and honour it.
+
 ### Memory
 
 Durable facts live as one-file-per-fact under the memory store, indexed by `MEMORY.md`
@@ -389,6 +432,7 @@ allowed-dir path.
 | `GENESEED_HARNESS` | learn plugin | base whose `memory/` the plugin writes to (optional — the plugin auto-locates the in-config store; set to pin it) |
 | `GENESEED_MEMORY` | learn plugin / CLI | explicit memory dir (overrides the above) |
 | `GENESEED_CONTEXT` | context plugin / CLI | explicit `context.json` path |
+| `GENESEED_WIKI` | context + guard plugins | explicit `wiki.json` path (default: `$GENESEED_HARNESS/wiki.json`, else beside the installed `AGENT.md`) |
 | `GENESEED_ROOT` | `harness context` | repo root to discover docs from (default: cwd) |
 | `GENESEED_MODEL` | learn plugin | `provider/model` fallback if the session model can't be read |
 | `GENESEED_LLM` | `harness learn` (Claude) | model CLI for distillation, e.g. `claude -p` |

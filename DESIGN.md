@@ -30,7 +30,7 @@ vault or a specific tool's hooks.
      a heading number. Tooling stays stable.
    - **Voice + vocabulary** (themed) — how the AI *responds* (`VOICE`), a top `BANNER`,
      and the prose words the docs use: the core nouns `LAW(S)`/`AGENT(S)`/`SKILL(S)`/
-     `MEMORY`/`VAULT`, plus `TAGLINE`, `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`, `DESC_*`,
+     `MEMORY`/`NOTEBOOK`/`VAULT`/`WIKI`, plus `TAGLINE`, `LOADED_SIGIL`, `EPI_*`, `BENEDICTION`, `DESC_*`,
      `ROAST_PERSONA`, the law titles `LEX_*`, and the section intros `INTRO_*`. Each
      theme defines its own nouns; **neutral keeps the plain words** (Rule, Agent, Skill,
      Memory, Workspace), so neutral output is unchanged.
