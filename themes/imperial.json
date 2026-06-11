@@ -88,5 +88,9 @@
   "EPI_NOTEBOOK": "A cell that is yours alone — order it as the work demands.",
   "INTRO_NOTEBOOK": "This is a sanctum that is **yours alone** — unlike the shared Demesne around you, every file here is your own, to raise, order, move, and keep as the work demands. Its laws are yours to inscribe and amend as your craft matures; engines, ledgers, and instruments belong here as much as script.",
   "VAULT": "Demesne",
+  "WIKI": "Librarium",
+  "EPI_WIKI": "The Librarium spans every world — consult it before you act, enrich it when you learn.",
+  "INTRO_WIKI": "The Emperor may keep a Librarium upon this machine — a vault of interlinked scrolls whose wisdom outlives any single crusade.",
+  "DESC_WIKI": "Consult and enrich the Emperor's Librarium — seek the governing scroll before acting, inscribe well-bound lore in return, and file each leaf where the order decrees.",
   "DESC_WORKFLOW": "Unleash a sealed battle-rite that marshals your Adepts by iron script — many loosed at once, their findings martialled and proven in one disciplined campaign."
 }

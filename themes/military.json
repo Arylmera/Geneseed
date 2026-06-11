@@ -88,5 +88,9 @@
   "EPI_NOTEBOOK": "Your own ground to lay out the plan — arrange it to suit the mission.",
   "INTRO_NOTEBOOK": "This is your **own** ground — unlike the shared Base around you, every file here is yours to set up, arrange, move, and hold however the mission needs. You write the standing orders here and amend them as the mission evolves; tools, kit, and field data belong here as much as notes.",
   "VAULT": "Base",
+  "WIKI": "Archives",
+  "EPI_WIKI": "Theater-level intel — check the archives before you move, file what you learn.",
+  "INTRO_WIKI": "Command may maintain an intel archive on this machine — a vault of cross-referenced briefs that outlasts any single operation.",
+  "DESC_WIKI": "Work the intel archives — pull the relevant brief before acting, file new intel cross-referenced, route uncertain finds through the inbox.",
   "DESC_WORKFLOW": "Execute a saved op-order that commands your units by the numbers — parallel sweeps, staged phases, and confirmation, in one deterministic mission."
 }

@@ -88,5 +88,9 @@
   "EPI_NOTEBOOK": "Your own clipboard — draw it up however the game calls for.",
   "INTRO_NOTEBOOK": "This is your **own** clipboard — unlike the shared Field around you, every sheet here is yours to draw up, arrange, move, and keep however the game calls for. You draw up the rules of your own clipboard and redraw them as the season demands; plays, drills, and game film belong here as much as notes.",
   "VAULT": "Field",
+  "WIKI": "Playbook",
+  "EPI_WIKI": "The franchise playbook — study it before the snap, draw in what you learn.",
+  "INTRO_WIKI": "The club may keep a playbook on this machine — a vault of cross-referenced plays and scouting that outlasts any single season.",
+  "DESC_WIKI": "Work the franchise playbook — study the relevant play before the snap, draw up new ones cross-referenced, and file them in the right chapter.",
   "DESC_WORKFLOW": "Run a saved set play that drives your squad on script — parallel runs, staged phases, and a verified result, all in one deterministic drive."
 }

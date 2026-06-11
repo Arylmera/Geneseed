@@ -88,5 +88,9 @@
   "EPI_NOTEBOOK": "Your own cockpit — set it up however you drive best.",
   "INTRO_NOTEBOOK": "This is your **own** Cockpit — unlike the shared Paddock around you, every file here is yours to build, arrange, move, and keep however you drive best. You write the setup sheet and revise it race by race; telemetry, tools, and test rigs belong here as much as notes.",
   "VAULT": "Paddock",
+  "WIKI": "Almanac",
+  "EPI_WIKI": "The sport's full almanac — check the history books before the call, update them after the flag.",
+  "INTRO_WIKI": "The broadcast may keep an almanac on this machine — a vault of cross-referenced records and stats that outlives any single season.",
+  "DESC_WIKI": "Work the almanac — pull the record before making the call, write new entries cross-referenced, and file them into the right season.",
   "DESC_WORKFLOW": "Run a saved race plan that drives your team by script — many sent out at once, their results gathered and checked in one clean grand prix."
 }

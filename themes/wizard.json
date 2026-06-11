@@ -88,5 +88,9 @@
   "EPI_NOTEBOOK": "A study of your own — order it as your craft requires.",
   "INTRO_NOTEBOOK": "This is a study that is **yours alone** — unlike the shared Sanctum around you, every leaf here is your own, to inscribe, arrange, move, and keep as your craft requires. Its ordinances are yours to inscribe and revise as your craft deepens; instruments, reagents, and engines belong here as much as parchment.",
   "VAULT": "Sanctum",
+  "WIKI": "Athenaeum",
+  "EPI_WIKI": "The great library of the craft — consult it before casting, add to it what you discover.",
+  "INTRO_WIKI": "The archmage may keep an athenaeum upon this machine — a vault of interlinked tomes whose knowledge outlives any single working.",
+  "DESC_WIKI": "Consult and enrich the athenaeum — find the governing tome before casting, inscribe new pages well-linked, and shelve each where the catalogue ordains.",
   "DESC_WORKFLOW": "Invoke a saved ritual that binds your familiars by inscribed rite — many sent at once, their auguries gathered and proven in one deterministic casting."
 }

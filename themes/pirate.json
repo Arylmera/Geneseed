@@ -88,5 +88,9 @@
   "EPI_NOTEBOOK": "Your own table to spread the charts — lay 'em out as ye please.",
   "INTRO_NOTEBOOK": "This be your **own** quarters — unlike the shared Hold around ye, every scrap here is yours to make, lay out, shift, and keep however ye please. Ye write the articles of this space and redraw them as ye see fit; tools, charts, and plunder belong here as much as scribbles.",
   "VAULT": "Hold",
+  "WIKI": "Map Room",
+  "EPI_WIKI": "Every chart the fleet ever drew — read 'em before ye sail, ink what ye chart.",
+  "INTRO_WIKI": "The cap'n may keep a map room aboard this machine — a vault o' linked charts an' rutters that outlives any single voyage.",
+  "DESC_WIKI": "Work the cap'n's map room — find the right chart afore ye sail, ink new ones well-linked, an' stow each where it belongs.",
   "DESC_WORKFLOW": "Run a saved set o orders that drives yer crew by the chart — many sent out at once, their plunder gathered an checked in one clean voyage."
 }

@@ -88,5 +88,9 @@
   "EPI_NOTEBOOK": "A space of your own — arrange it however serves the work.",
   "INTRO_NOTEBOOK": "This is a working space that is **yours alone** — unlike the shared Workspace around you, you own every file here, to create, organise, move, and keep however serves the work. The rules of this space are yours to write — and rewrite — as your practice evolves; code, data, and tools belong here as much as notes.",
   "VAULT": "Workspace",
+  "WIKI": "Wiki",
+  "EPI_WIKI": "The user's own knowledge base — consult it first, grow it as you learn.",
+  "INTRO_WIKI": "The user may keep a personal knowledge base on this machine — an Obsidian vault, or any folder of interlinked markdown notes — that outlives any single repository.",
+  "DESC_WIKI": "Consult and grow the user's personal knowledge base — find the governing note before acting, write well-linked notes back, file them where they belong.",
   "DESC_WORKFLOW": "Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass."
 }

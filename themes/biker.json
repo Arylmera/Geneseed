@@ -88,5 +88,9 @@
   "EPI_NOTEBOOK": "Your own garage — set it up however you wrench.",
   "INTRO_NOTEBOOK": "This is your **own** Garage — unlike the shared Clubhouse around you, every file here is yours to build, arrange, move, and keep however you wrench. You make the shop rules and re-torque them as your wrenching changes; tools, parts, and benches belong here as much as notes.",
   "VAULT": "Clubhouse",
+  "WIKI": "Road Atlas",
+  "EPI_WIKI": "Every road the club ever mapped — check the atlas before you ride, mark what you find.",
+  "INTRO_WIKI": "The club may keep a road atlas on this machine — a vault of linked maps and route notes that outlasts any single run.",
+  "DESC_WIKI": "Ride with the club's road atlas — check the map before you roll, mark new routes properly linked, and file them where the chapter keeps them.",
   "DESC_WORKFLOW": "Run a saved route that sends your riders by script — many rolled out at once, their findings gathered and checked in one clean run."
 }
