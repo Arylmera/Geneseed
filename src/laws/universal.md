@@ -105,7 +105,11 @@ treat it as first-class context, and index durable facts you find there into
 {{MEMORY}} ({{LAW}} VI). But you do not own the folder. Files you did not create
 are not harness scaffolding to move, rewrite, or delete; verify what a file is
 before touching it ({{LAW}} III) and change it only when the task calls for it
-({{LAW}} IV).
+({{LAW}} IV). What you **do** own is your {{NOTEBOOK}} (`{{DIR_NOTEBOOK}}/`):
+any file you create for your own benefit — a scratch script, an analysis dump,
+a draft, an experiment, a tool of your own — is made there, never in the shared
+{{VAULT}}. The host tree receives only the deliverables of the task; your own
+working artifacts live in the space whose rules you write (AGENT.md §5).
 
 ### {{LAW}} XVII — {{LEX_XVII}}
 Before changing a part of the system, read the project's own documentation for it.
