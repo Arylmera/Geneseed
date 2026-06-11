@@ -1674,7 +1674,8 @@ def _fit(s: str, width: int) -> str:
 _ICONS = {
     "browse":    ("📖", "▤", "#"),
     "diff":      ("🔍", "≈", "~"),
-    "setup":     ("🎨", "◈", "*"),
+    "setup":     ("🧩", "⊞", "%"),
+    "theme":     ("🎨", "◈", "*"),
     "update":    ("🔄", "↻", "@"),
     "bootstrap": ("🚀", "⇧", "^"),
     "build":     ("🔨", "⚒", "+"),
@@ -2177,6 +2178,29 @@ def _setup_tui(stdscr):
     return {"theme": theme, "emit": emit, "out": out, "root": root} if choice == "go" else None
 
 
+def _retheme_tui(stdscr):
+    """Curses re-theme form: theme → confirm. The install mode and target stay as
+    deployed — only the voice changes. Returns the selection dict, or None if
+    cancelled at either step."""
+    import curses
+    inst = _installed_defaults()
+    theme_prompt = "Choose a theme" + (f"   (installed: {inst['theme']})" if inst["theme"] else "")
+    theme = _menu(stdscr, curses, theme_prompt,
+                  [(k, k, blurb or "voice theme") for k, blurb in _theme_options()],
+                  default=inst["theme"] or _default_theme(), detail_fn=_theme_preview)
+    if theme is None:
+        return None
+    emit = inst["emit"] or "opencode-global"
+    flair = _theme_flair(theme)
+    summary = f"theme = {theme}     mode = {emit} (unchanged)"
+    prompt = flair["tagline"] or "Ready to rebuild the harness?"
+    choice = _menu(stdscr, curses, prompt,
+                   [("go", "Build now", summary),
+                    ("cancel", "Cancel", "Make no changes and exit.")],
+                   default="go", accent=flair["accent"])
+    return {"theme": theme, "emit": emit, "out": None, "root": None} if choice == "go" else None
+
+
 # Law heading in the rendered laws file, e.g. "### Rule XVIII — Load the Project Context".
 LAW_HEADING_RE = re.compile(r"^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$")
 
@@ -2487,11 +2511,25 @@ def _themed_reveal(stdscr, curses, pal, theme) -> None:
 
 def _setup_flow(stdscr) -> int:
     """One seamless curses setup: form → build → reveal → summary → health check."""
-    import curses
-    pal = _tui_palette(curses)
     sel = _setup_tui(stdscr)
     if not sel:
         return 0
+    return _grow_flow(stdscr, sel)
+
+
+def _retheme_flow(stdscr) -> int:
+    """Change theme only: the theme picker, then the same build → reveal → summary →
+    health check as setup. The install mode and target stay as deployed."""
+    sel = _retheme_tui(stdscr)
+    if not sel:
+        return 0
+    return _grow_flow(stdscr, sel)
+
+
+def _grow_flow(stdscr, sel: dict) -> int:
+    """Build → themed reveal → summary → health check for a confirmed selection —
+    the shared back half of the setup and re-theme flows."""
+    import curses
     theme, emit = sel["theme"], sel["emit"]
     out, root = sel.get("out"), sel.get("root")
     # The theme is locked in now: repaint the rest of the flow (build → summary →
@@ -3508,25 +3546,31 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
 # (key, label, description). Labels carry a leading mode-aware icon (emoji / symbol /
 # ASCII) so the menu reads at a glance; the icon never affects the returned key.
 _MENU_ACTIONS_RAW = [
+    ("bootstrap", "Install & set up", "Download the latest from upstream, then run the setup wizard."),
+    ("theme", "Change theme", "Pick a new voice theme and rebuild in place — install mode and target unchanged."),
     ("browse", "Browse", "Agents, skills and laws, with their full specs."),
-    ("diff", "Review local edits", "Compare a deployed harness against source."),
-    ("setup", "Refresh / set up (no download)", "Re-theme or change install mode and rebuild from your LOCAL source — no upstream download."),
-    ("update", "Update only (download + rebuild)", "Download the latest scripts + factory from upstream and rebuild — no setup wizard."),
-    ("bootstrap", "Update & set up (download + wizard)", "Download the latest from upstream, then run the setup wizard."),
-    ("build", "Rebuild bundle", "Re-render the harness from src."),
     ("memory", "Memory", "Browse / search the memory store; delete stale facts."),
     ("status", "Status", "Theme, install mode, counts, and the memory store."),
-    ("settings", "Settings", "Configuration: MCP servers and the PATH install (run from anywhere)."),
+    ("diff", "Review local edits", "Compare a deployed harness against source."),
+    ("settings", "Settings", "Configuration & maintenance: updates, rebuilds, MCP servers, PATH."),
     ("quit", "Quit", "Leave."),
     # 'doctor' (Health check) intentionally not listed: it runs after setup and via
     # the browse panel's `d` key. The dispatch below still handles it if re-added.
+    # The maintenance trio (update / rebuild / change install mode) lives in Settings:
+    # the menu leads with the two things a user actually comes back for — get the
+    # latest, or change the flavour — instead of four overlapping install variants.
 ]
 _MENU_ACTIONS = [(k, f"{_icon(k)}  {lbl}", d) for (k, lbl, d) in _MENU_ACTIONS_RAW]
 
 
-# The Settings submenu groups configuration actions reached from the main menu.
+# The Settings submenu groups configuration AND maintenance actions reached from the
+# main menu — deliberate, occasional flows (updates, rebuilds, mode changes) that
+# would otherwise crowd the main menu's install block.
 _SETTINGS_ACTIONS_RAW = [
     ("mcp", "MCP servers", "Wire the MarkItDown, GitLab & Filesystem presets (and your own) into OpenCode."),
+    ("update", "Update only (download + rebuild)", "Download the latest scripts + factory from upstream and rebuild — no setup wizard."),
+    ("build", "Rebuild bundle", "Re-render the harness from src."),
+    ("setup", "Change install mode", "Re-run the setup wizard from your LOCAL source — no upstream download."),
     ("link", "Run from anywhere", "Put `geneseed` on your PATH so it runs from any directory."),
     ("unlink", "Remove from PATH", "Remove the `geneseed` launcher symlink from your PATH."),
     ("uninstall", "Uninstall harness", "Remove a global Geneseed install (memory is kept, never deleted)."),
@@ -3536,15 +3580,34 @@ _SETTINGS_ACTIONS = [(k, f"{_icon(k)}  {lbl}", d) for (k, lbl, d) in _SETTINGS_A
 
 
 def _settings_menu(stdscr, curses, pal, here) -> None:
-    """Settings submenu — configuration actions (MCP servers, PATH install). The
-    in-TUI ones return here; link/unlink shell out to the launcher's own commands.
-    Returns to the main menu on Back / cancel."""
+    """Settings submenu — configuration and maintenance (MCP servers, update, rebuild,
+    install mode, PATH install). The in-TUI ones return here; link/unlink shell out to
+    the launcher's own commands; update re-execs a fresh process (it changed the code
+    on disk). Returns to the main menu on Back / cancel."""
     while True:
         sel = _menu(stdscr, curses, "Geneseed  ·  Settings", _SETTINGS_ACTIONS, default="mcp")
         if sel in (None, "back"):
             return
         if sel == "mcp":
             _mcp_view(stdscr, curses, pal)
+        elif sel == "update":
+            _bootstrap_progress(stdscr, here, None)
+            curses.endwin()
+            _reexec([sys.executable, str(here / "rituals" / "harness.py"), "menu"])
+        elif sel == "build":
+            status = _run_steps(stdscr, curses, pal,
+                                [("Build the harness", [sys.executable, str(BUILD)])],
+                                heading="building")
+            ok = bool(status) and status[0] == "done"
+            _info_screen(stdscr, curses, pal, "build",
+                         [("ok", "Build complete.")] if ok else
+                         [("fail", "Build failed — see the output above.")],
+                         "Enter: close")
+        elif sel == "setup":
+            _setup_flow(stdscr)
+            # The wizard may have re-themed the install: repaint this submenu's chrome
+            # in the new accent (the main menu refreshes itself on return).
+            pal = _tui_palette(curses, _accent_for(_installed_defaults()["theme"] or _default_theme()))
         elif sel in ("link", "unlink", "uninstall"):
             # Run the harness's own Python subcommand (no bash): link/unlink manage the
             # PATH entry on every OS; uninstall removes a global install (it prompts on
@@ -3629,7 +3692,8 @@ def _maybe_splash(stdscr, curses, pal, theme) -> None:
 
 def _main_menu(stdscr) -> int:
     """The hub for a bare `./geneseed`: pick any action. In-TUI ones return here;
-    update/bootstrap re-exec a fresh process (they change the code on disk)."""
+    bootstrap (and Settings → update) re-exec a fresh process (they change the code
+    on disk)."""
     import curses
     here = Path(__file__).resolve().parent.parent
     hp = str(Path(__file__).resolve())
@@ -3648,33 +3712,23 @@ def _main_menu(stdscr) -> int:
             _doctor_view(stdscr, curses, pal)
         elif sel == "memory":
             _memory_view(stdscr, curses, pal)
-        elif sel == "settings":
-            _settings_menu(stdscr, curses, pal, here)
-        elif sel == "status":
-            _status_view(stdscr, curses, pal)
-        elif sel == "setup":
-            _setup_flow(stdscr)
+        elif sel in ("theme", "settings"):
+            if sel == "theme":
+                _retheme_flow(stdscr)
+            else:
+                _settings_menu(stdscr, curses, pal, here)
             inst = _installed_defaults()
-            theme = inst["theme"] or theme   # reflect a re-theme
+            theme = inst["theme"] or theme   # reflect a re-theme (Settings hosts the wizard too)
             emit = inst["emit"] or emit
             pal = _tui_palette(curses, _accent_for(theme))
+        elif sel == "status":
+            _status_view(stdscr, curses, pal)
         elif sel == "diff":
             _diff_view(stdscr, curses, pal)
-        elif sel == "build":
-            # Stay inside curses with the progress UI (same path as the setup flow),
-            # instead of dropping to a bare shell and an input() pause.
-            status = _run_steps(stdscr, curses, pal,
-                                [("Build the harness", [sys.executable, str(BUILD)])],
-                                heading="building")
-            ok = bool(status) and status[0] == "done"
-            _info_screen(stdscr, curses, pal, "build",
-                         [("ok", "Build complete.")] if ok else
-                         [("fail", "Build failed — see the output above.")],
-                         "Enter: close")
-        elif sel in ("update", "bootstrap"):
+        elif sel == "bootstrap":
             _bootstrap_progress(stdscr, here, None)
             curses.endwin()
-            _reexec([sys.executable, hp, "setup" if sel == "bootstrap" else "menu"])
+            _reexec([sys.executable, hp, "setup"])
 
 
 def cmd_menu(args: argparse.Namespace) -> int:
