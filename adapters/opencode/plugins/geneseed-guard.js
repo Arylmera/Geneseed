@@ -4,6 +4,8 @@
 // "enforce by injection, don't just instruct" stance as the context plugin:
 //   - Law I  (Sealed Secrets):  block writes to private-key / credential files.
 //   - Law IV (Deletion Is Deliberate):  block catastrophic shell commands.
+//   - Wiki (AGENT.md §7):  block mutations under a declared wiki's `protected`
+//     folders — the user's knowledge base sets its own no-go zones in wiki.json.
 // High-confidence patterns only, so legitimate work is never caught. Borderline cases
 // (.env edits, force-push) are WARNED, not blocked.
 //
@@ -12,6 +14,12 @@
 //
 // Install: dropped into the plugins dir by `build --emit opencode[-global]` (the *.js
 // glob), exactly like the context and learn plugins. Errors never break a tool call.
+
+import { promises as fs } from "node:fs"
+import * as path from "node:path"
+import { fileURLToPath } from "node:url"
+
+const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 const MODE = (process.env.GENESEED_GUARD || "on").toLowerCase()
 const OFF = ["off", "0", "false", "no"].includes(MODE)
@@ -73,6 +81,59 @@ const WRITE_TOOLS = ["write", "edit", "patch", "create", "save", "insert", "repl
 const SHELL_TOOLS = ["bash", "shell", "exec", "command", "terminal", "run"]
 const hasAny = (name, parts) => parts.some((s) => name.includes(s))
 
+// ---- protected wiki folders (AGENT.md §7) --------------------------------------
+// wiki.json (the machine-level knowledge-base manifest) may list `protected` folders
+// per wiki. Mutating anything under one is denied. Same resolution chain as the
+// context plugin: $GENESEED_WIKI -> $GENESEED_HARNESS/wiki.json -> beside the install.
+async function isFile(p) { try { return (await fs.stat(p)).isFile() } catch { return false } }
+
+async function wikiFile() {
+  const explicit = process.env.GENESEED_WIKI
+  if (explicit && (await isFile(explicit))) return explicit
+  const harness = process.env.GENESEED_HARNESS
+  if (harness) {
+    const p = path.join(harness, "wiki.json")
+    if (await isFile(p)) return p
+  }
+  const local = path.resolve(PLUGIN_DIR, "..", "wiki.json")
+  if (await isFile(local)) return local
+  return null
+}
+
+// Cached absolute prefixes, refreshed on a short TTL so a wiki.json edit lands
+// without a restart. Compared slash-normalized and case-insensitive — vault paths on
+// Windows and macOS are case-insensitive in practice, and for a guard the rare
+// case-only over-match is the safe direction.
+let _prot = { at: 0, prefixes: [] }
+const PROT_TTL_MS = 30000
+async function protectedPrefixes() {
+  const now = Date.now()
+  if (now - _prot.at < PROT_TTL_MS) return _prot.prefixes
+  const prefixes = []
+  try {
+    const file = await wikiFile()
+    if (file) {
+      const data = JSON.parse(await fs.readFile(file, "utf8"))
+      for (const w of Array.isArray(data?.wikis) ? data.wikis : []) {
+        if (!w?.path || !Array.isArray(w.protected)) continue
+        for (const d of w.protected) {
+          if (typeof d !== "string" || !d) continue
+          const abs = path.resolve(w.path, d).replace(/\\/g, "/").replace(/\/+$/, "")
+          prefixes.push({ prefix: abs.toLowerCase() + "/",
+                          label: `${w.name || path.basename(w.path)}: ${d}` })
+        }
+      }
+    }
+  } catch { /* unreadable manifest = no extra protection; never break a tool call */ }
+  _prot = { at: now, prefixes }
+  return prefixes
+}
+
+// Mutation-class tools for the wiki check — wider than WRITE_TOOLS because moving,
+// renaming, or deleting a protected note is as destructive as overwriting it. Same
+// substring stance: over-matching the class is harmless (see WRITE_TOOLS note).
+const WIKI_MUTATE_TOOLS = [...WRITE_TOOLS, "delete", "remove", "rename", "move", "trash"]
+
 export const GeneseedGuard = async () => {
   return {
     "tool.execute.before": async (input, output) => {
@@ -89,6 +150,15 @@ export const GeneseedGuard = async () => {
           const p = pickPath(args)
           if (p && SECRET_RE.some((re) => re.test(p))) { deny(`write to secret/key file ${p} (Law I)`); return }
           if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Law I)`)
+        }
+        if (hasAny(tool, WIKI_MUTATE_TOOLS)) {
+          const p = pickPath(args)
+          if (p) {
+            const abs = (path.isAbsolute(p) ? p : path.resolve(p)).replace(/\\/g, "/").toLowerCase()
+            const hit = (await protectedPrefixes()).find(
+              (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))
+            if (hit) { deny(`mutation in protected wiki folder — ${hit.label} (AGENT.md §7)`); return }
+          }
         }
         // NOT else-if: a compound tool name (e.g. exec_and_save) can match both
         // classes, and the shell check must still run after the write check.

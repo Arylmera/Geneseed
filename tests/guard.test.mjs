@@ -1,9 +1,29 @@
 // Tests for the OpenCode guard plugin's cross-platform safety matching — in particular
 // that Windows-style (backslash) secret paths and Windows/PowerShell catastrophic
-// commands are caught, not just their POSIX equivalents.
-import { test } from "node:test"
+// commands are caught, not just their POSIX equivalents — and for the protected-wiki
+// enforcement (AGENT.md §7) driven by a wiki.json manifest.
+import { test, after } from "node:test"
 import assert from "node:assert/strict"
+import { promises as fs } from "node:fs"
+import os from "node:os"
+import * as path from "node:path"
 import { GeneseedGuard } from "../adapters/opencode/plugins/geneseed-guard.js"
+
+// The wiki manifest must be in place before the FIRST hook call — the guard caches
+// the protected prefixes on a TTL, so a hook call without $GENESEED_WIKI set would
+// cache an empty list for the whole run.
+const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gsguard-"))
+const vault = path.join(tmp, "Brain")
+await fs.mkdir(path.join(vault, "Codex"), { recursive: true })
+await fs.writeFile(path.join(tmp, "wiki.json"), JSON.stringify({
+  wikis: [{ name: "Brain", path: vault, protected: ["Codex/"] }],
+}))
+process.env.GENESEED_WIKI = path.join(tmp, "wiki.json")
+
+after(async () => {
+  delete process.env.GENESEED_WIKI
+  await fs.rm(tmp, { recursive: true, force: true })
+})
 
 const hook = (await GeneseedGuard())["tool.execute.before"]
 
@@ -52,4 +72,31 @@ test("blocks a Windows drive format", async () => {
 
 test("still blocks rm -rf / (no regression)", async () => {
   assert.equal(await blocked("bash", { command: "rm -rf /" }), true)
+})
+
+// ---- protected wiki folders (AGENT.md §7) --------------------------------------
+
+test("blocks a write under a protected wiki folder", async () => {
+  assert.equal(await blocked("write", { filePath: path.join(vault, "Codex", "law.md") }), true)
+})
+
+test("blocks a delete-class mutation under a protected wiki folder", async () => {
+  assert.equal(await blocked("delete_file", { path: path.join(vault, "Codex", "law.md") }), true)
+})
+
+test("protected match is slash- and case-insensitive", async () => {
+  const winStyle = path.join(vault, "Codex", "law.md").replace(/\//g, "\\").toUpperCase()
+  assert.equal(await blocked("edit", { filePath: winStyle }), true)
+})
+
+test("does NOT block a write elsewhere in the wiki", async () => {
+  assert.equal(await blocked("write", { filePath: path.join(vault, "Notes", "idea.md") }), false)
+})
+
+test("does NOT block a write outside any wiki", async () => {
+  assert.equal(await blocked("write", { filePath: path.join(tmp, "elsewhere.md") }), false)
+})
+
+test("a non-mutating tool ignores protected paths", async () => {
+  assert.equal(await blocked("read", { filePath: path.join(vault, "Codex", "law.md") }), false)
 })

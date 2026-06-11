@@ -19,6 +19,14 @@
 // mirrors `rituals/harness.py context`. Every error is swallowed — it never blocks
 // a session. See adapters/opencode/GLOBAL-HARNESS-SPEC.md.
 //
+// MACHINE WIKI (AGENT.md §7): the same block also carries the user's own knowledge
+// base(s) — typically an Obsidian vault — declared once per machine in `wiki.json`
+// ($GENESEED_WIKI -> $GENESEED_HARNESS/wiki.json -> beside this plugin's install).
+// Each wiki's eager entries inject in full and lazy entries list, drawing on the
+// SAME budgets as the project context; its conventions/inbox/protected metadata is
+// surfaced so the agent knows the house rules before writing. No wiki.json, or an
+// empty `wikis` list, costs nothing.
+//
 // Quiet: by default it logs NOTHING (OpenCode shows a plugin's stderr as red text).
 // GENESEED_DEBUG=1 re-enables discovery/inject logs. GENESEED_CONTEXT_INJECT=off
 // disables injection entirely — no visible PROJECT CONTEXT block — leaving project
@@ -30,8 +38,10 @@
 
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
+import { fileURLToPath } from "node:url"
 
 const MARKER = "<!-- geneseed-context:v2 -->"
+const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 // ---- tunable budgets (env-overridable) -------------------------------------
 const EAGER_FILE_KB = Number(process.env.GENESEED_EAGER_FILE_KB || 16)
@@ -254,14 +264,65 @@ async function resolveSource(root) {
   return { mode: "discover" }
 }
 
+// ---- machine wiki (wiki.json) --------------------------------------------------
+// The user's own knowledge base(s) — typically an Obsidian vault — declared once per
+// machine, not per repo (AGENT.md §7). Same injection mechanics as project context,
+// different scope. Resolution (first match wins, mirroring the learn plugin):
+//   1. $GENESEED_WIKI                      explicit manifest path
+//   2. $GENESEED_HARNESS/wiki.json         pinned install dir
+//   3. <plugin dir>/../wiki.json           auto-locate: beside the installed AGENT.md
+async function resolveWikiFile() {
+  const explicit = process.env.GENESEED_WIKI
+  if (explicit && (await isFile(explicit))) return explicit
+  const harness = process.env.GENESEED_HARNESS
+  if (harness) {
+    const p = path.join(harness, "wiki.json")
+    if (await isFile(p)) return p
+  }
+  const local = path.resolve(PLUGIN_DIR, "..", "wiki.json")
+  if (await isFile(local)) return local
+  return null
+}
+
+// Parse wiki.json into renderable wikis: [{ name, root, desc, conventions, inbox,
+// protected, eager:[{rel,abs,desc}], lazy:[...] }]. Entry paths resolve against the
+// wiki's own root; a missing root skips that wiki (never blocks the session).
+async function wikiSets() {
+  const file = await resolveWikiFile()
+  if (!file) return []
+  const data = await readJson(file)
+  const wikis = Array.isArray(data?.wikis) ? data.wikis : []
+  const out = []
+  for (const w of wikis) {
+    if (!w?.path) continue
+    if (!(await isDir(w.path))) { log(`wiki '${w.name ?? w.path}': root not found, skipped`); continue }
+    const name = w.name || path.basename(w.path)
+    const eager = [], lazy = []
+    for (const e of Array.isArray(w.entries) ? w.entries : []) {
+      if (!e?.path || e.load === "exclude") continue
+      const abs = path.isAbsolute(e.path) ? e.path : path.resolve(w.path, e.path)
+      const rec = { rel: `${name}/${e.path}`.split(path.sep).join("/"), abs, desc: e.description || "" }
+      ;(e.load === "lazy" ? lazy : eager).push(rec)
+    }
+    const byRel = (a, b) => a.rel.localeCompare(b.rel)
+    out.push({
+      name, root: w.path, desc: w.description || "",
+      conventions: w.conventions || "", inbox: w.inbox || "",
+      protected: Array.isArray(w.protected) ? w.protected : [],
+      eager: eager.sort(byRel), lazy: lazy.sort(byRel),
+    })
+  }
+  return out
+}
+
 // ---- injection block ---------------------------------------------------------
-async function buildBlock({ eager, lazy }) {
-  const out = [MARKER, "=== PROJECT CONTEXT — binding for this repo per Law XVIII ===", ""]
+// Render one eager+lazy set into `out`. The budget state (eager bytes, heading
+// reads) is SHARED across segments — project context and every wiki draw from the
+// same caps, so the whole block stays bounded no matter how many wikis are declared.
+async function renderSet(out, { eager, lazy }, state) {
   const perFile = EAGER_FILE_KB * 1024
   const total = EAGER_TOTAL_KB * 1024
   const demoted = []
-  let spent = 0
-  let injected = 0
 
   for (const e of eager) {
     let text
@@ -276,25 +337,24 @@ async function buildBlock({ eager, lazy }) {
       log(`demoted ${e.rel} -> lazy (${kb(size)} KB > ${EAGER_FILE_KB} KB cap)`)
       continue
     }
-    if (spent + size > total) {
+    if (state.spent + size > total) {
       demoted.push(`[demoted: ${e.rel} — eager budget (${EAGER_TOTAL_KB} KB) reached]`)
       continue
     }
     out.push(`----- ${e.rel}${e.desc ? ` — ${e.desc}` : ""} -----`)
     out.push(text.replace(/\n+$/, ""), "")
-    spent += size
-    injected++
+    state.spent += size
+    state.injected++
   }
 
   const lazyLines = []
-  let headingsRead = 0
   for (const l of lazy) {
     let head = l.desc
     // Only crack open files we have no description for, and cap how many — bounded by
     // a head-slice read so a big docs/ tree stays cheap on every session start.
-    if (!head && headingsRead < LAZY_HEADING_LIMIT) {
+    if (!head && state.headingsRead < LAZY_HEADING_LIMIT) {
       head = firstHeading(await readHeadSlice(l.abs))
-      headingsRead++
+      state.headingsRead++
     }
     lazyLines.push(`  - ${l.rel}${head ? ` — ${head}` : ""}`)
   }
@@ -304,18 +364,42 @@ async function buildBlock({ eager, lazy }) {
     if (demoted.length) out.push(...demoted.map((d) => `  ${d}`))
     out.push("")
   }
-  if (!injected && !lazyLines.length && !demoted.length) return null
-  return { text: out.join("\n"), injected, lazy: lazyLines.length, kb: kb(spent) }
+  state.lazy += lazyLines.length
 }
 
-// Resolve the eager/lazy sets (manifest or auto-discovery) and render the injection
-// block — shared by the session.created injection and the compaction hook.
+async function buildBlock(sets, wikis = []) {
+  const state = { spent: 0, injected: 0, lazy: 0, headingsRead: 0 }
+
+  const proj = []
+  await renderSet(proj, sets, state)
+
+  const wik = []
+  for (const w of wikis) {
+    wik.push(`--- wiki: ${w.name}${w.desc ? ` — ${w.desc}` : ""} (root: ${w.root}) ---`)
+    if (w.conventions) wik.push(`  conventions: ${w.conventions} (read before your first write there)`)
+    if (w.inbox) wik.push(`  inbox: ${w.inbox} (drop notes you cannot confidently file)`)
+    if (w.protected.length) wik.push(`  protected (never write): ${w.protected.join(", ")}`)
+    wik.push("")
+    await renderSet(wik, { eager: w.eager, lazy: w.lazy }, state)
+  }
+
+  if (!proj.length && !wik.length) return null
+  const out = [MARKER]
+  if (proj.length) out.push("=== PROJECT CONTEXT — binding for this repo per Law XVIII ===", "", ...proj)
+  if (wik.length) out.push("=== MACHINE WIKI — the user's knowledge base, binding per AGENT.md §7 ===", "", ...wik)
+  return { text: out.join("\n"), injected: state.injected, lazy: state.lazy, kb: kb(state.spent) }
+}
+
+// Resolve the eager/lazy sets (manifest or auto-discovery) plus the machine wikis,
+// and render the injection block — shared by the session.created injection and the
+// compaction hook (the transform path reuses it via cachedBlockText).
 async function resolveBlock(root) {
   const src = await resolveSource(root)
   const sets = src.mode === "manifest"
     ? await fromManifest(src.file, root)
     : await discover(root)
-  return { block: await buildBlock(sets), src }
+  const wikis = await wikiSets()
+  return { block: await buildBlock(sets, wikis), src }
 }
 
 // Per-process cache of the rendered block text for the transform path (root is fixed
