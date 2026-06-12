@@ -1,0 +1,25 @@
+const TOKEN = typeof window !== 'undefined' ? window.__GENESEED_TOKEN__ : ''
+
+async function get(path) {
+  const r = await fetch(path)
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText)
+  return r.json()
+}
+
+export const api = {
+  overview: () => get('/api/overview'),
+  catalog: (section) => get(`/api/catalog/${section}`),
+  item: (type, name) => get(`/api/item/${type}/${encodeURIComponent(name)}`),
+  diff: () => get('/api/diff'),
+  job: (id) => get(`/api/jobs/${id}`),
+  async action(name) {
+    const r = await fetch(`/api/actions/${name}`, {
+      method: 'POST',
+      headers: { 'X-Geneseed-Token': TOKEN || '' },
+      body: '{}',
+    })
+    if (r.status === 409) throw new Error('An action is already running.')
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText)
+    return r.json() // { job_id }
+  },
+}
