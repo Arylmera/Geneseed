@@ -26,6 +26,16 @@ export const api = {
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText)
     return r.json()
   },
+  mcp: () => get('/api/mcp'),
+  async mcpToggle(path, name, enabled) {
+    const r = await fetch('/api/mcp', {
+      method: 'POST',
+      headers: { 'X-Geneseed-Token': TOKEN || '', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, name, enabled }),
+    })
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText)
+    return r.json()
+  },
   // Synchronous restore — returns { restored, deleted, errors }, not a job.
   async restore(files) {
     const r = await fetch('/api/actions/restore', {

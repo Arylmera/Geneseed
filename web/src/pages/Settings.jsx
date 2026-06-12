@@ -10,6 +10,66 @@ function Row({ k, children }) {
   )
 }
 
+function McpServers() {
+  const [data, setData] = useState(null) // { targets, default }
+  const [err, setErr] = useState('')
+  const [note, setNote] = useState('')
+  const [busyKey, setBusyKey] = useState('')
+
+  const load = () => api.mcp().then(setData).catch((e) => setErr(e.message))
+  useEffect(() => { load() }, [])
+
+  if (err) return <p className="badge warn">{err}</p>
+  if (!data) return <p className="muted">Loading…</p>
+
+  const toggle = async (target, s) => {
+    const key = target.path + s.name
+    setBusyKey(key)
+    setNote('')
+    try {
+      await api.mcpToggle(target.path, s.name, s.state !== 'enabled')
+      await load()
+    } catch (e) { setNote(e.message) } finally { setBusyKey('') }
+  }
+
+  const verb = (s) =>
+    s.state === 'enabled' ? 'Disable' : s.state === 'disabled' ? 'Enable' : 'Add'
+
+  return (
+    <>
+      {note ? <p className="badge warn">{note}</p> : null}
+      {data.targets.map((t) => (
+        <div className="mcp-target" key={t.path}>
+          <p className="muted mcp-path">
+            {t.label} — <code>{t.path}</code>
+            {t.commented && ' (has comments — edit by hand)'}
+          </p>
+          {t.servers.map((s) => (
+            <div className="mcp-row" key={s.name}>
+              <div className="mcp-info">
+                <strong>{s.label}</strong>
+                <span className={`badge ${s.state === 'enabled' ? 'ok' : ''}`}>
+                  {s.state}
+                </span>
+                <p className="muted">{s.desc}</p>
+              </div>
+              {(s.state !== 'absent' || s.preset) && (
+                <button
+                  className="btn ghost sm"
+                  disabled={t.commented || busyKey === t.path + s.name}
+                  onClick={() => toggle(t, s)}
+                >
+                  {verb(s)}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+    </>
+  )
+}
+
 export default function Settings({ onAction }) {
   const [setup, setSetup] = useState(null)
   const [err, setErr] = useState('')
@@ -90,6 +150,15 @@ export default function Settings({ onAction }) {
           </button>
           <button className="btn" onClick={() => onAction('update')}>Update</button>
         </div>
+      </section>
+
+      <section className="panel">
+        <h3>MCP servers</h3>
+        <p className="muted">
+          Wire MCP servers into OpenCode — per project or globally. Toggles rewrite
+          only the <code>mcp</code> block, exactly like the TUI screen.
+        </p>
+        <McpServers />
       </section>
 
       <section className="panel">

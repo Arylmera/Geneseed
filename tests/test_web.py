@@ -288,6 +288,43 @@ class RestoreTests(unittest.TestCase):
             self.assertEqual(res["errors"], ["no deployed harness"])
 
 
+class McpTests(unittest.TestCase):
+    def test_api_mcp_lists_targets_and_states(self):
+        state = web.WebState(theme="neutral")
+        m = web.api_mcp(state)
+        self.assertTrue(m["targets"])
+        for t in m["targets"]:
+            self.assertIn("path", t)
+            self.assertIn("commented", t)
+            for s in t["servers"]:
+                self.assertIn(s["state"], ("enabled", "disabled", "absent"))
+                self.assertIn("label", s)
+        self.assertIsInstance(m["default"], int)
+
+    def test_api_mcp_toggle_add_then_disable(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            cfg_path = Path(t) / "opencode.json"
+            state = web.WebState(theme="neutral")
+            preset = next(iter(web.harness._MCP_PRESETS))
+            saved = web.harness._mcp_targets
+            web.harness._mcp_targets = lambda: [("test", cfg_path)]
+            try:
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": preset, "enabled": True})
+                self.assertTrue(res["ok"])
+                self.assertEqual(res["state"], "enabled")
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": preset, "enabled": False})
+                self.assertTrue(res["ok"])
+                self.assertEqual(res["state"], "disabled")
+                with self.assertRaises(web.NotFound):
+                    web.api_mcp_toggle(state, {"path": "bogus", "name": preset,
+                                               "enabled": True})
+            finally:
+                web.harness._mcp_targets = saved
+
+
 class GraphTests(unittest.TestCase):
     def test_api_graph_nodes_and_edges_resolve(self):
         state = web.WebState(theme="neutral")

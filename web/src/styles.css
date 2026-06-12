@@ -94,6 +94,17 @@ h2 { margin: 0 0 16px; font-size: 20px; }
   font-size: 13px; }
 .check-problems li { margin: 3px 0; word-break: break-word; }
 
+/* ---- MCP servers (Settings) -------------------------------------------------- */
+.mcp-target { margin-bottom: 14px; }
+.mcp-target:last-child { margin-bottom: 0; }
+.mcp-path { margin: 0 0 6px; font-size: 12px; }
+.mcp-row { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.mcp-row:last-child { border-bottom: 0; }
+.mcp-info { min-width: 0; }
+.mcp-info strong { margin-right: 8px; }
+.mcp-info p { margin: 2px 0 0; font-size: 12px; }
+
 /* ---- cross-link graph -------------------------------------------------------- */
 .graph-wrap { padding: 8px; overflow: auto; }
 .graph-wrap svg { width: 100%; height: auto; display: block; }

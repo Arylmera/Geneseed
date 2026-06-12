@@ -15,6 +15,14 @@ vi.mock('../api.js', () => ({
       emits: [{ name: 'opencode-global', desc: '' }],
       current: { theme: 'neutral', emit: 'opencode-global' },
     }),
+    mcp: () => Promise.resolve({
+      targets: [{
+        label: 'global config', path: 'C:/cfg/opencode.json', exists: true,
+        commented: false,
+        servers: [{ name: 'markitdown', label: 'MarkItDown', desc: 'docs', preset: true, state: 'enabled' }],
+      }],
+      default: 0,
+    }),
   },
 }))
 

@@ -454,6 +454,55 @@ def api_restore(state: WebState, files: list) -> dict:
     return {"restored": restored, "deleted": deleted, "errors": errors}
 
 
+def api_mcp(state: WebState) -> dict:
+    """MCP servers per config target — the web mirror of the TUI's MCP screen.
+    Presets first, then user-defined servers present in each config."""
+    targets = harness._mcp_targets()
+    out = []
+    for label, path in targets:
+        cfg = harness._mcp_load(path)
+        servers = []
+        for name in harness._mcp_known_names(cfg):
+            lbl, desc = harness._mcp_meta(name)
+            servers.append({"name": name, "label": lbl, "desc": desc,
+                            "preset": name in harness._MCP_PRESETS,
+                            "state": harness._mcp_state(cfg, name)})
+        out.append({"label": label, "path": str(path), "exists": path.is_file(),
+                    "commented": harness._mcp_commented(path),
+                    "servers": servers})
+    return {"targets": out, "default": harness._mcp_default_target(targets)}
+
+
+def api_mcp_toggle(state: WebState, body: dict) -> dict:
+    """Enable/disable — or first-add a preset — MCP server `name` in the target
+    config at `path`. Same non-destructive rewrite as the TUI (only the mcp
+    block changes); a hand-commented .jsonc is refused, never rewritten."""
+    name = str(body.get("name") or "")
+    want = bool(body.get("enabled"))
+    path_arg = str(body.get("path") or "")
+    known = {str(p): p for _label, p in harness._mcp_targets()}
+    path = known.get(path_arg)
+    if path is None or not name:
+        raise NotFound(f"mcp target {path_arg or '(none)'}")
+    if harness._mcp_commented(path):
+        return {"ok": False,
+                "error": "config holds comments — edit it by hand to keep them"}
+    cfg = harness._mcp_load(path)
+    current = harness._mcp_state(cfg, name)
+    if current == "absent":
+        preset = harness._MCP_PRESETS.get(name)
+        if preset is None:
+            return {"ok": False, "error": f"unknown server '{name}'"}
+        if not want:
+            return {"ok": False, "error": f"'{name}' is not configured"}
+        cfg = harness._mcp_apply(cfg, name, dict(preset["block"]))
+        cfg = harness._mcp_set_enabled(cfg, name, True)
+    else:
+        cfg = harness._mcp_set_enabled(cfg, name, want)
+    harness._mcp_save(path, cfg)
+    return {"ok": True, "name": name, "state": harness._mcp_state(cfg, name)}
+
+
 def api_graph(state: WebState) -> dict:
     """Cross-link graph over agents + skills: one node per item, one edge per
     resolved [[wikilink]] between two known items — hubs and orphans at a glance.
@@ -581,6 +630,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                     return self._send_json(api_doctor(state))
                 if path == "/api/graph":
                     return self._send_json(api_graph(state))
+                if path == "/api/mcp":
+                    return self._send_json(api_mcp(state))
                 if path == "/api/offline-zip":
                     data, name = offline_zip_bytes()
                     return self._send_bytes(
@@ -618,6 +669,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
             path = self.path.split("?", 1)[0]
             if self.headers.get("X-Geneseed-Token") != token:
                 return self._send_json({"error": "forbidden"}, 403)
+            if path == "/api/mcp":
+                try:
+                    res = api_mcp_toggle(state, self._read_json_body())
+                except NotFound as e:
+                    return self._send_json({"error": f"not found: {e}"}, 404)
+                return self._send_json(res, 200 if res.get("ok") else 409)
             if path.startswith("/api/jobs/") and path.endswith("/cancel"):
                 jid = path.split("/")[3]
                 if jm.cancel(jid):
