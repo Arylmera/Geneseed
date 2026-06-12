@@ -1,0 +1,46 @@
+import React from 'react'
+
+export const ICONS = {
+  dashboard: 'M3 13h7V3H3v10Zm0 8h7v-6H3v6Zm11 0h7V11h-7v10Zm0-18v6h7V3h-7Z',
+  library: 'M4 5h10v14H4zM16 7h4v12h-4M7 9h4M7 12h4',
+  graph: 'M6 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM7.5 14.5l8-8M16.7 15.2L8.8 16.6',
+  changes: 'M4 6h10M4 12h7M4 18h12M17 4l3 3-3 3M20 7h-6',
+  doctor: 'M12 3v6m0 0a4 4 0 0 1-4 4H7a3 3 0 0 0-3 3v2m8-9a4 4 0 0 0 4 4h1a3 3 0 0 1 3 3v2M12 3a1.5 1.5 0 1 0 0-.01',
+  themes: 'M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1 .8-1.5 1.7-1.5H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-3a8 8 0 0 0-.1-1.3l2-1.6-2-3.4-2.4 1a8 8 0 0 0-2.2-1.3L15 2H9l-.3 2.6a8 8 0 0 0-2.2 1.3l-2.4-1-2 3.4 2 1.6A8 8 0 0 0 4 12c0 .4 0 .9.1 1.3l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 2.2 1.3L9 22h6l.3-2.6a8 8 0 0 0 2.2-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3Z',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3',
+  chevron: 'M9 6l6 6-6 6',
+  x: 'M6 6l12 12M18 6L6 18',
+  play: 'M7 5v14l11-7L7 5Z',
+  clear: 'M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14',
+  download: 'M12 3v12m0 0l-4-4m4 4l4-4M4 19h16',
+  refresh: 'M21 12a9 9 0 1 1-3-6.7M21 4v5h-5',
+  build: 'M14 3l-1 4 4-1 3 3-4 1 1 4-3 3-1-4-4 1-3-3 4-1-1-4 3-3 5 0Z',
+  arrow: 'M5 12h14M13 6l6 6-6 6',
+  external: 'M14 5h5v5M19 5l-8 8M12 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6',
+  copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
+  spark: 'M12 3v3m0 12v3m9-9h-3M6 12H3m13.5-6.5-2 2m-7 7-2 2m11 0-2-2m-7-7-2-2',
+  layers: 'M12 3l9 5-9 5-9-5 9-5ZM3 13l9 5 9-5M3 17l9 5 9-5',
+  sun: 'M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M18.4 5.6l1.4-1.4M4.2 19.8l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
+  moon: 'M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8Z',
+}
+
+export function Icon({ name, className = 'glyph', style }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={ICONS[name] || ''} />
+    </svg>
+  )
+}
+
+export function Sprout({ className = 'sprout' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 21.5v-9" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" fill="none" />
+      <path d="M12 13c0-4.5 3.2-7.5 7.5-7.5 0 4.5-3.2 7.5-7.5 7.5z" fill="var(--accent)" />
+      <path d="M12 14.5c0-3.6-2.6-6-6-6 0 3.6 2.6 6 6 6z" fill="var(--accent)" opacity=".42" />
+      <circle cx="12" cy="12.4" r="1.1" fill="var(--bg)" />
+    </svg>
+  )
+}
