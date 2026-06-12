@@ -14,3 +14,13 @@
 
 ## Done when
 - A fresh context that never saw the solving session derived the acceptance criteria from the original task alone, froze them before seeing the artifact, ruled each PASS/FAIL/UNVERIFIABLE with evidence by checking the live artifact, and returned an overall gate (SATISFIES / SATISFIES-WITH-GAPS / DOES-NOT-SATISFY) for the user to weigh — or, where no true isolation was possible, the verdict is stamped soft-isolation so it is discounted.
+
+## Self-improvement
+
+Close each run with one beat of reflection on the {{SKILL}} itself:
+- A step misled, a needed step was missing, or the trigger fired wrongly — that
+  is a flaw in this file. Propose the exact edit (trigger, procedure, or
+  done-when) and apply it with the user's assent ({{LAW}} II).
+- The run taught something durable that is *not* a flaw in this file — record it
+  to {{MEMORY}} ({{LAW}} VI).
+- No friction, nothing learned — move on; this loop earns no ceremony.

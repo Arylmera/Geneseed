@@ -13,3 +13,13 @@
 
 ## Done when
 - A confirmed, ambiguity-free goal with an explicitly verified key-decision ledger is written to `BRIEF.md`, and the work has been handed to the appropriate downstream {{SKILL}}.
+
+## Self-improvement
+
+Close each run with one beat of reflection on the {{SKILL}} itself:
+- A step misled, a needed step was missing, or the trigger fired wrongly — that
+  is a flaw in this file. Propose the exact edit (trigger, procedure, or
+  done-when) and apply it with the user's assent ({{LAW}} II).
+- The run taught something durable that is *not* a flaw in this file — record it
+  to {{MEMORY}} ({{LAW}} VI).
+- No friction, nothing learned — move on; this loop earns no ceremony.

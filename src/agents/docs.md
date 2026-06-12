@@ -29,3 +29,11 @@
   confirmation that any code examples were run as written, and an explicit list of
   any surfaces left un-updated (so the caller can close the gap rather than assume
   none exists).
+
+## Self-improvement
+
+If this spec misled you — an input you needed but were not given, a boundary
+that proved wrong, a step you could not execute — end your report with one line:
+`spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
+friction. The caller weighs the feedback, folds a real flaw back into this file
+with the user's assent, and records durable lessons to {{MEMORY}} ({{LAW}} VI).

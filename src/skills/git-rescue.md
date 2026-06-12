@@ -45,3 +45,13 @@ finding *when/why* something changed without altering history, use git-archaeolo
 ## Done when
 - The repository is in the intended state, verified against actual git output, and the
   pre-rescue state is still recoverable from the backup branch or the reflog.
+
+## Self-improvement
+
+Close each run with one beat of reflection on the {{SKILL}} itself:
+- A step misled, a needed step was missing, or the trigger fired wrongly — that
+  is a flaw in this file. Propose the exact edit (trigger, procedure, or
+  done-when) and apply it with the user's assent ({{LAW}} II).
+- The run taught something durable that is *not* a flaw in this file — record it
+  to {{MEMORY}} ({{LAW}} VI).
+- No friction, nothing learned — move on; this loop earns no ceremony.

@@ -25,3 +25,13 @@
 ## Done when
 - The commit contains only the intended change and the working tree is clean of it,
   and every commit and push went out only with the user's explicit, per-action consent.
+
+## Self-improvement
+
+Close each run with one beat of reflection on the {{SKILL}} itself:
+- A step misled, a needed step was missing, or the trigger fired wrongly — that
+  is a flaw in this file. Propose the exact edit (trigger, procedure, or
+  done-when) and apply it with the user's assent ({{LAW}} II).
+- The run taught something durable that is *not* a flaw in this file — record it
+  to {{MEMORY}} ({{LAW}} VI).
+- No friction, nothing learned — move on; this loop earns no ceremony.

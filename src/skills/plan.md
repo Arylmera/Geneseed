@@ -30,3 +30,13 @@
 > The worklog is external memory: it lets a context-limited agent recover its
 > place after the window fills, and lets the user correct course early. Consider
 > git-ignoring `WORKLOG.md` if it should stay local to each developer.
+
+## Self-improvement
+
+Close each run with one beat of reflection on the {{SKILL}} itself:
+- A step misled, a needed step was missing, or the trigger fired wrongly — that
+  is a flaw in this file. Propose the exact edit (trigger, procedure, or
+  done-when) and apply it with the user's assent ({{LAW}} II).
+- The run taught something durable that is *not* a flaw in this file — record it
+  to {{MEMORY}} ({{LAW}} VI).
+- No friction, nothing learned — move on; this loop earns no ceremony.

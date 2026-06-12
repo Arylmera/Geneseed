@@ -68,7 +68,11 @@ never move.
 | [historian]({{DIR_AGENTS}}/historian.md) | a council debate needs precedent — what was tried before and how it went |
 
 **Rule of delegation:** read-only investigation can be dispatched freely; any
-{{AGENT}} that *writes* must return a summary of exactly what it changed.
+{{AGENT}} that *writes* must return a summary of exactly what it changed. Every
+{{AGENT}} spec ends with a **self-improvement loop**: when a report carries a
+`spec-feedback:` line, weigh it — fold a real flaw back into that {{AGENT}}'s
+file (with the user's assent) and record the durable lesson to {{MEMORY}}
+({{LAW}} VI).
 
 The last ten — `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`,
 `user-advocate`, `framer`, `empiricist`, `operator`, `historian` — are the standing
@@ -114,7 +118,9 @@ subset that productively clashes on a given motion.
 
 When a task repeats and no {{SKILL}} covers it, forge one: copy
 [`{{DIR_SKILLS}}/_template.md`]({{DIR_SKILLS}}/_template.md), keep it to one coherent
-domain ({{LAW}} V), and register it in this table.
+domain ({{LAW}} V), and register it in this table. Every {{SKILL}} ends with a
+**self-improvement loop** — honour it: fold what a run teaches back into the
+file, or into {{MEMORY}} ({{LAW}} VI).
 
 ---
 

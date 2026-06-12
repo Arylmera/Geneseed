@@ -49,3 +49,13 @@ into line with the implementation.
   the code or flagged, examples run, and the index links them all; the single-file
   `overview.html` opens offline and shows both the digest and the complex-core deep-dives;
   and any surface left undocumented is named explicitly.
+
+## Self-improvement
+
+Close each run with one beat of reflection on the {{SKILL}} itself:
+- A step misled, a needed step was missing, or the trigger fired wrongly — that
+  is a flaw in this file. Propose the exact edit (trigger, procedure, or
+  done-when) and apply it with the user's assent ({{LAW}} II).
+- The run taught something durable that is *not* a flaw in this file — record it
+  to {{MEMORY}} ({{LAW}} VI).
+- No friction, nothing learned — move on; this loop earns no ceremony.

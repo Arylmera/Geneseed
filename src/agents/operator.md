@@ -24,3 +24,11 @@
 
 ## Output contract
 - An operability read: how it fails in production, what it needs to run safely (metrics, alerts, rollback), the on-call burden it adds, and a ship / hold-for-guardrails lean with the reason.
+
+## Self-improvement
+
+If this spec misled you — an input you needed but were not given, a boundary
+that proved wrong, a step you could not execute — end your report with one line:
+`spec-feedback: <what failed — the one-line fix>`. Omit it when there is no
+friction. The caller weighs the feedback, folds a real flaw back into this file
+with the user's assent, and records durable lessons to {{MEMORY}} ({{LAW}} VI).

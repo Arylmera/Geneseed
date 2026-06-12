@@ -22,3 +22,13 @@ Saved workflows live in the host's workflows directory — on OpenCode that is `
 
 ## Done when
 - The right saved workflow ran to completion, its result was read, and you have carried its conclusion forward — or, where no `workflow` tool exists, the equivalent model-driven {{SKILL}} was used instead.
+
+## Self-improvement
+
+Close each run with one beat of reflection on the {{SKILL}} itself:
+- A step misled, a needed step was missing, or the trigger fired wrongly — that
+  is a flaw in this file. Propose the exact edit (trigger, procedure, or
+  done-when) and apply it with the user's assent ({{LAW}} II).
+- The run taught something durable that is *not* a flaw in this file — record it
+  to {{MEMORY}} ({{LAW}} VI).
+- No friction, nothing learned — move on; this loop earns no ceremony.
