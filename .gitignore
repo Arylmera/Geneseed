@@ -10,3 +10,9 @@ Harness/
 improvements/
 # Host-specific project-context manifest, if a build drops one at the repo root.
 /context.json
+
+# Brainstorming visual companion (transient)
+.superpowers/
+
+# Web UI: dev-only deps (dist/ is committed and MUST stay tracked)
+web/node_modules/
