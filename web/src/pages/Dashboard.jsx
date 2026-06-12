@@ -36,7 +36,10 @@ export default function Dashboard({ overview, onAction }) {
           <span className={`badge ${overview.doctor.ok ? 'ok' : 'warn'}`}>
             {overview.doctor.ok ? 'healthy' : `${overview.doctor.problems.length} issues`}
           </span>
-          <p className="muted">Per-check report</p>
+          <p className="muted">
+            {overview.doctor.checked_at
+              ? `Checked ${overview.doctor.checked_at}` : 'Per-check report'}
+          </p>
         </div>
         <div className="card" onClick={() => go('#/diff')}>
           <h3>📝 Local edits</h3>

@@ -29,6 +29,16 @@ class CatalogTests(unittest.TestCase):
         # The UI tints itself with the deployed theme's accent.
         self.assertIn(ov["accent"], ("red", "green", "yellow", "blue",
                                      "magenta", "cyan", "white"))
+        self.assertIn("checked_at", ov["doctor"])
+
+    def test_doctor_verdict_is_cached_until_refresh(self):
+        first = web.api_overview(self.state)["doctor"]
+        # Same object back on the next overview — no doctor re-run per request.
+        self.assertIs(self.state.doctor, self.state.doctor)
+        second = web.api_overview(self.state)["doctor"]
+        self.assertEqual(first, second)
+        self.state.refresh()
+        self.assertIsNone(self.state._doctor)
 
     def test_catalog_agents_shape(self):
         cat = web.api_catalog(self.state, "agents")

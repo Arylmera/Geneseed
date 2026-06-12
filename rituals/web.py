@@ -50,6 +50,7 @@ class WebState:
         # harness in place (e.g. opencode-global) rather than a bare source render.
         self.emit = harness._installed_defaults().get("emit") or "opencode-global"
         self._inv = None
+        self._doctor = None
 
     @property
     def inventory(self) -> dict:
@@ -57,10 +58,25 @@ class WebState:
             self._inv = harness._tui_inventory(self.theme)
         return self._inv
 
+    @property
+    def doctor(self) -> dict:
+        """Cached doctor verdict. _doctor_collect builds the theme in a sandbox
+        (seconds) — far too slow to run on every overview GET, so it runs once,
+        is stamped, and is invalidated by refresh() / repopulated by api_doctor."""
+        if self._doctor is None:
+            _themes, problems = harness._doctor_collect(theme=self.theme)
+            self.stamp_doctor(problems)
+        return self._doctor
+
+    def stamp_doctor(self, problems: list):
+        self._doctor = {"ok": not problems, "problems": problems,
+                        "checked_at": time.strftime("%Y-%m-%d %H:%M")}
+
     def refresh(self):
         """Drop caches and re-detect the deployed theme/emit — a finished Build may
         have re-themed the install, and the gallery's 'current' must follow it."""
         self._inv = None
+        self._doctor = None
         self.theme = harness._theme_of_dir(self.target) or self.theme
         self.emit = harness._installed_defaults().get("emit") or self.emit
 
@@ -307,11 +323,14 @@ def _build_override(state: WebState, body: dict) -> tuple:
 
 def api_doctor(state: WebState) -> dict:
     """Doctor checks, grouped per check, for the web Doctor page — the same engine
-    as the `doctor` command (_doctor_collect fills `groups` as it runs)."""
+    as the `doctor` command (_doctor_collect fills `groups` as it runs). A run
+    here also refreshes the overview's cached verdict."""
     groups: list[dict] = []
     themes, problems = harness._doctor_collect(theme=state.theme, groups=groups)
+    state.stamp_doctor(problems)
     return {"themes": themes, "ok": not problems,
-            "problems": problems, "groups": groups}
+            "problems": problems, "groups": groups,
+            "checked_at": state.doctor["checked_at"]}
 
 
 def api_setup(state: WebState) -> dict:
@@ -427,7 +446,6 @@ def offline_zip_bytes() -> "tuple[bytes, str]":
 
 def api_overview(state: WebState) -> dict:
     inv = state.inventory
-    themes, problems = harness._doctor_collect(theme=state.theme)
     diff = None
     if _deployed(state):
         _t, _th, files = harness._diff_collect(target=state.target, theme=state.theme)
@@ -456,7 +474,7 @@ def api_overview(state: WebState) -> dict:
             "memory": len(_memory_items(state)),
             "notebook": len(_notebook_items(state)),
         },
-        "doctor": {"ok": not problems, "problems": problems},
+        "doctor": state.doctor,
         "diff": diff,
         "build_time": build_time,
     }
