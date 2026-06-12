@@ -224,6 +224,20 @@ class RestoreTests(unittest.TestCase):
             self.assertEqual(res["errors"], ["no deployed harness"])
 
 
+class OfflineZipTests(unittest.TestCase):
+    def test_offline_zip_holds_the_source_tree(self):
+        import io
+        import zipfile
+        data, name = web.offline_zip_bytes()
+        self.assertRegex(name, r"^geneseed-offline-\d{8}\.zip$")
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            names = zf.namelist()
+        self.assertIn("geneseed-offline/build.py", names)
+        self.assertIn("geneseed-offline/rituals/web.py", names)
+        self.assertTrue(any(n.startswith("geneseed-offline/themes/") for n in names))
+        self.assertFalse(any("/.git/" in n or "node_modules" in n for n in names))
+
+
 class SetupTests(unittest.TestCase):
     def test_api_setup_reports_install_snapshot(self):
         state = web.WebState(theme="neutral")

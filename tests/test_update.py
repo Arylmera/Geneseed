@@ -152,6 +152,52 @@ class DownloadDiagnosticsTests(unittest.TestCase):
         self.assertIn("407", diag[0])
 
 
+class LocalZipTests(unittest.TestCase):
+    """The offline package path: extract a local zip instead of downloading."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _zip(self, entries: dict) -> Path:
+        import zipfile
+        zp = self.tmp / "pkg.zip"
+        with zipfile.ZipFile(zp, "w") as zf:
+            for name, body in entries.items():
+                zf.writestr(name, body)
+        return zp
+
+    def test_extracts_wrapped_source(self):
+        # GitHub archives and the web offline-zip wrap in a geneseed-* dir.
+        zp = self._zip({"geneseed-offline/build.py": "print('hi')"})
+        root = _update._extract_local_zip(zp, self.tmp / "a")
+        self.assertIsNotNone(root)
+        self.assertEqual(root.name, "geneseed-offline")
+        self.assertTrue((root / "build.py").is_file())
+
+    def test_extracts_flat_source(self):
+        zp = self._zip({"build.py": "print('hi')"})
+        root = _update._extract_local_zip(zp, self.tmp / "b")
+        self.assertIsNotNone(root)
+        self.assertTrue((root / "build.py").is_file())
+
+    def test_corrupt_zip_returns_none(self):
+        zp = self.tmp / "bad.zip"
+        zp.write_bytes(b"this is not a zip")
+        self.assertIsNone(_update._extract_local_zip(zp, self.tmp / "c"))
+
+    def test_missing_package_raises_upgrade_error(self):
+        with self.assertRaises(_update._UpgradeError) as cm:
+            _update._local_zip_source(str(self.tmp / "nope.zip"), self.tmp,
+                                      lambda _m: None)
+        self.assertEqual(cm.exception.code, "E-ZIP")
+
+    def test_main_rejects_zip_without_path(self):
+        self.assertEqual(_update.main(["upgrade", "--zip"]), 2)
+
+
 class DoctorSignatureTests(unittest.TestCase):
     def test_extracts_and_sorts_problem_bullets(self):
         out = "header\n  - zeta problem\nnoise\n- alpha problem\n  - alpha problem\n"
