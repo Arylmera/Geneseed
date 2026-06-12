@@ -49,8 +49,8 @@ h2 { margin: 0 0 16px; font-size: 20px; }
 .badge.ok { color: var(--ok); border-color: var(--ok); }
 .badge.warn { color: var(--warn); border-color: var(--warn); }
 .badge.err { color: var(--err); border-color: var(--err); }
-.btn { background: var(--accent); color: #fff; border: 0; border-radius: var(--radius-sm);
-  padding: 8px 14px; cursor: pointer; font-weight: 600; }
+.btn { background: var(--accent); color: var(--accent-contrast, #fff); border: 0;
+  border-radius: var(--radius-sm); padding: 8px 14px; cursor: pointer; font-weight: 600; }
 .btn:hover { filter: brightness(1.1); }
 .btn:disabled { opacity: .5; cursor: default; }
 .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
@@ -111,16 +111,24 @@ h2 { margin: 0 0 16px; font-size: 20px; }
 .gnode.dim { opacity: .3; }
 
 /* ---- theme gallery --------------------------------------------------------- */
+/* Each card wears its own theme's colour via --card-accent (set inline). */
 .theme-head { display: flex; align-items: center; gap: 8px; }
 .theme-head h3 { margin: 0; }
-.theme-head .swatch { width: 14px; height: 14px; }
-.theme-card { display: flex; flex-direction: column; gap: 8px; }
+.theme-card { display: flex; flex-direction: column; gap: 8px;
+  border-top: 2px solid var(--card-accent, var(--border)); }
+.card.no-hover.theme-card:hover { border-top-color: var(--card-accent, var(--border)); }
+.theme-orb { width: 14px; height: 14px; border-radius: 50%; flex: none;
+  background: var(--card-accent, var(--accent));
+  box-shadow: 0 0 8px var(--card-accent, transparent); }
 .theme-card .btn { align-self: flex-start; margin-top: auto; }
+.theme-card .btn:not(.ghost) { background: var(--card-accent, var(--accent)); }
+.theme-tagline { margin: 0; font-size: 13px; font-style: italic; }
 .theme-blurb { margin: 0; font-size: 13px; }
-.theme-sigil { margin: 0; font-size: 12px; color: var(--muted); font-style: italic;
+.theme-sigil { margin: 0; font-size: 12px; color: var(--muted);
   overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
   -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.theme-current { border-color: var(--accent); }
+.theme-current { border-color: var(--card-accent, var(--accent));
+  box-shadow: 0 0 0 1px var(--card-accent, var(--accent)) inset; }
 
 /* ---- library split view -------------------------------------------------- */
 .split { display: grid; grid-template-columns: 280px 1fr; gap: 20px; }

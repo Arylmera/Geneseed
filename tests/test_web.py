@@ -26,6 +26,9 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("ok", ov["doctor"])
         self.assertIsInstance(ov["doctor"]["problems"], list)
         self.assertIn("theme", ov)
+        # The UI tints itself with the deployed theme's accent.
+        self.assertIn(ov["accent"], ("red", "green", "yellow", "blue",
+                                     "magenta", "cyan", "white"))
 
     def test_catalog_agents_shape(self):
         cat = web.api_catalog(self.state, "agents")

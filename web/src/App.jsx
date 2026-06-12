@@ -11,6 +11,7 @@ import Graph from './pages/Graph.jsx'
 import Settings from './pages/Settings.jsx'
 import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
+import { accentHex, accentContrast } from './accents.js'
 
 // Top-level pages. `match` decides which tab lights up for the current route;
 // Library owns both the section browser and single-item views.
@@ -37,6 +38,15 @@ export default function App() {
     api.overview().then(setOverview).catch((e) => setToast({ kind: 'err', msg: e.message }))
 
   useEffect(() => { loadOverview() }, [])
+
+  // The UI wears the deployed theme's accent: overview carries the ACCENT the
+  // installed voice declares, and a re-theme build updates it live on refresh.
+  useEffect(() => {
+    if (!overview?.accent) return
+    const root = document.documentElement
+    root.style.setProperty('--accent', accentHex(overview.accent))
+    root.style.setProperty('--accent-contrast', accentContrast(overview.accent))
+  }, [overview])
 
   // Poll the running job, streaming its output into the console run, then refresh.
   useEffect(() => {

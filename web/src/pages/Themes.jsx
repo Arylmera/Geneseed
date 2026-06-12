@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import { accentHex } from '../accents.js'
 
 export default function Themes({ onAction }) {
   const [data, setData] = useState(null) // { themes, emits, current }
@@ -22,18 +23,23 @@ export default function Themes({ onAction }) {
       <p className="muted">
         Every theme ships the same harness in a different voice. Applying one
         rebuilds the deployed install ({data.current.emit}) — content and behaviour
-        stay identical.
+        stay identical, and the UI takes on its colour.
       </p>
       <div className="cards theme-cards">
         {data.themes.map((t) => {
           const current = t.name === data.current.theme
           return (
-            <div className={`card no-hover theme-card ${current ? 'theme-current' : ''}`} key={t.name}>
+            <div
+              className={`card no-hover theme-card ${current ? 'theme-current' : ''}`}
+              style={{ '--card-accent': accentHex(t.accent) }}
+              key={t.name}
+            >
               <div className="theme-head">
-                <span className="swatch" data-accent={t.accent} />
+                <span className="theme-orb" />
                 <h3>{t.name}</h3>
                 {current && <span className="badge ok">current</span>}
               </div>
+              {t.tagline && <p className="theme-tagline">“{t.tagline}”</p>}
               <p className="muted theme-blurb">{t.blurb}</p>
               {t.sigil && <p className="theme-sigil">{t.sigil}</p>}
               <button

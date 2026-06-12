@@ -445,6 +445,7 @@ def api_overview(state: WebState) -> dict:
             agent_md.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
     return {
         "theme": state.theme,
+        "accent": harness._accent_for(state.theme),
         "emit": state.emit,
         "target": str(state.target),
         "deployed": _deployed(state),
