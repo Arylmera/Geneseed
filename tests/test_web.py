@@ -162,6 +162,44 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(d["ok"], not d["problems"])
 
 
+class RestoreTests(unittest.TestCase):
+    def _deploy(self, tmp: Path) -> "web.WebState":
+        import contextlib
+        import io
+        cfg = tmp / "cfg"
+        with contextlib.redirect_stdout(io.StringIO()):
+            web.build.emit_opencode_global("neutral", out=tmp / "bundle", cfg=cfg)
+        return web.WebState(theme="neutral", target=cfg)
+
+    def test_restore_edited_deletes_added_rejects_bad_paths(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            state = self._deploy(tmp)
+            agent = state.target / "AGENT.md"
+            original = agent.read_text(encoding="utf-8")
+            agent.write_text(original + "\nLOCAL EDIT\n", encoding="utf-8")
+            extra = state.target / "zz-extra.md"
+            extra.write_text("local only\n", encoding="utf-8")
+
+            res = web.api_restore(
+                state, ["AGENT.md", "zz-extra.md", "bogus.md", "../escape.md"])
+
+            self.assertIn("AGENT.md", res["restored"])      # edited -> source wins
+            self.assertEqual(agent.read_text(encoding="utf-8"), original)
+            self.assertIn("zz-extra.md", res["deleted"])    # added -> removed
+            self.assertFalse(extra.exists())
+            self.assertEqual(len(res["errors"]), 2)         # bogus + traversal
+
+    def test_restore_without_deployed_install_is_an_error(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            state = web.WebState(theme="neutral", target=Path(t))
+            res = web.api_restore(state, ["AGENT.md"])
+            self.assertEqual(res["restored"], [])
+            self.assertEqual(res["errors"], ["no deployed harness"])
+
+
 class SetupTests(unittest.TestCase):
     def test_api_setup_reports_install_snapshot(self):
         state = web.WebState(theme="neutral")
@@ -212,6 +250,47 @@ class HandlerTests(unittest.TestCase):
             self.assertEqual(cm.exception.code, 403)
         finally:
             srv.shutdown()
+
+
+class WebAutoBuildTests(unittest.TestCase):
+    """_build_plan decides what serve() does about a missing web/dist."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        self.web_dir = self.tmp / "web"
+        self.dist = self.web_dir / "dist"
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _populate(self, *, dist=False, source=False):
+        if source:
+            self.web_dir.mkdir(parents=True, exist_ok=True)
+            (self.web_dir / "package.json").write_text("{}", encoding="utf-8")
+        if dist:
+            self.dist.mkdir(parents=True, exist_ok=True)
+            (self.dist / "index.html").write_text("<html></html>", encoding="utf-8")
+
+    def test_serve_when_dist_built(self):
+        self._populate(dist=True, source=True)
+        self.assertEqual(web._build_plan(self.dist, self.web_dir, "npm", True), "serve")
+
+    def test_no_source_without_package_json(self):
+        self.assertEqual(web._build_plan(self.dist, self.web_dir, "npm", True), "no-source")
+
+    def test_no_npm_when_npm_missing(self):
+        self._populate(source=True)
+        self.assertEqual(web._build_plan(self.dist, self.web_dir, None, True), "no-npm")
+
+    def test_no_tty_when_not_interactive(self):
+        self._populate(source=True)
+        self.assertEqual(web._build_plan(self.dist, self.web_dir, "npm", False), "no-tty")
+
+    def test_ask_when_buildable_and_interactive(self):
+        self._populate(source=True)
+        self.assertEqual(web._build_plan(self.dist, self.web_dir, "npm", True), "ask")
 
 
 if __name__ == "__main__":

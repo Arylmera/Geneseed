@@ -15,6 +15,16 @@ export const api = {
   setup: () => get('/api/setup'),
   doctor: () => get('/api/doctor'),
   job: (id) => get(`/api/jobs/${id}`),
+  // Synchronous restore — returns { restored, deleted, errors }, not a job.
+  async restore(files) {
+    const r = await fetch('/api/actions/restore', {
+      method: 'POST',
+      headers: { 'X-Geneseed-Token': TOKEN || '', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files }),
+    })
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText)
+    return r.json()
+  },
   // opts (e.g. { theme, emit } for build) ride along in the JSON body.
   async action(name, opts) {
     const r = await fetch(`/api/actions/${name}`, {

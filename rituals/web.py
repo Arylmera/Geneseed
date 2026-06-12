@@ -8,11 +8,15 @@ and build.py for every read so the web and TUI never disagree.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import re
 import secrets
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -312,6 +316,43 @@ def api_diff(state: WebState) -> dict:
     }
 
 
+def api_restore(state: WebState, files: list) -> dict:
+    """Restore selected drifted files from the source render — source wins, local
+    edits are discarded (the inverse, keeping them, is Export improvements).
+    Renders the expected copy exactly as _diff_collect does, then per rel:
+    expected file present -> overwrite/create the deployed copy; expected absent
+    but deployed present (an 'added' file) -> delete the deployed copy. Unknown
+    or out-of-tree paths land in errors and touch nothing."""
+    if not _deployed(state):
+        return {"restored": [], "deleted": [], "errors": ["no deployed harness"]}
+    restored, deleted, errors = [], [], []
+    target = state.target.resolve()
+    with tempfile.TemporaryDirectory() as tmp:
+        expected = (Path(tmp) / "expected").resolve()
+        with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's own log
+            build.emit_opencode_global(state.theme, out=Path(tmp) / "bundle",
+                                       cfg=expected)
+        for rel in files or []:
+            rel = str(rel).replace("\\", "/").strip().lstrip("/")
+            dst = (target / rel).resolve()
+            src = (expected / rel).resolve()
+            if not rel or not harness._within(dst, target) \
+                    or not harness._within(src, expected):
+                errors.append(f"{rel}: outside the deployed tree")
+                continue
+            if src.is_file():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, dst)
+                restored.append(rel)
+            elif dst.is_file():
+                dst.unlink()
+                deleted.append(rel)
+            else:
+                errors.append(f"{rel}: not in the source render nor deployed")
+    state.refresh()
+    return {"restored": restored, "deleted": deleted, "errors": errors}
+
+
 def api_overview(state: WebState) -> dict:
     inv = state.inventory
     themes, problems = harness._doctor_collect(theme=state.theme)
@@ -418,6 +459,11 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
             if path.startswith("/api/actions/"):
                 action = path.rsplit("/", 1)[1]
                 body = self._read_json_body()
+                # Restore is synchronous (one render, same cost as a diff GET)
+                # and returns a structured result instead of a job id.
+                if action == "restore":
+                    return self._send_json(
+                        api_restore(state, body.get("files") or []))
                 # Build can be re-themed/re-targeted from the UI picker; the other
                 # actions self-resolve the deployed theme downstream.
                 if action == "build":
@@ -461,12 +507,65 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
     return Handler
 
 
+def _build_plan(dist: Path, web_dir: Path, npm: str | None, interactive: bool) -> str:
+    """Pure: what serve() should do about the UI bundle. 'serve' when dist is
+    built; otherwise 'no-source' (web/ never arrived), 'no-npm', 'no-tty'
+    (cannot prompt — scripts/CI), or 'ask' (buildable and interactive)."""
+    if (dist / "index.html").is_file():
+        return "serve"
+    if not (web_dir / "package.json").is_file():
+        return "no-source"
+    if not npm:
+        return "no-npm"
+    if not interactive:
+        return "no-tty"
+    return "ask"
+
+
+def _npm_build(npm: str, web_dir: Path) -> int:
+    """Run npm install then npm run build in web/, output inherited so a slow
+    or proxied install stays visible. Returns the first non-zero exit code."""
+    for step in (("install",), ("run", "build")):
+        print(f"[web] npm {' '.join(step)} ...")
+        code = subprocess.run([npm, *step], cwd=web_dir).returncode
+        if code:
+            print(f"[web] npm {' '.join(step)} failed (exit {code}).")
+            return code
+    return 0
+
+
 def serve(theme: str | None = None, port: int = 4747, open_browser: bool = True) -> int:
     dist = ROOT / "web" / "dist"
-    if not (dist / "index.html").is_file():
-        print("[web] web/dist is missing. Build the UI first:")
-        print("        cd web && npm install && npm run build")
+    web_dir = ROOT / "web"
+    manual = "        cd web && npm install && npm run build"
+    plan = _build_plan(dist, web_dir, shutil.which("npm"), sys.stdin.isatty())
+    if plan == "no-source":
+        print(f"[web] web/ sources are missing from {ROOT}.")
+        print("      Run `geneseed upgrade` to fetch them (twice on installs whose")
+        print("      updater predates web/ in the sync list).")
         return 1
+    if plan == "no-npm":
+        print("[web] web/dist is missing and npm was not found. Install Node.js,")
+        print("      then build the UI:")
+        print(manual)
+        return 1
+    if plan == "no-tty":
+        print("[web] web/dist is missing. Build the UI first:")
+        print(manual)
+        return 1
+    if plan == "ask":
+        try:
+            answer = input("[web] UI not built — run npm install && npm run build now? [Y/n] ")
+        except (EOFError, KeyboardInterrupt):
+            answer = "n"
+        if answer.strip().lower() in ("", "y", "yes"):
+            code = _npm_build(shutil.which("npm"), web_dir)
+            if code:
+                return code
+        else:
+            print("[web] skipped. Build the UI manually:")
+            print(manual)
+            return 0
     state = WebState(theme=theme)
     if not (state.target / build.GLOBAL_MANIFEST).exists():
         print(f"[web] no deployed harness at {state.target}.")
