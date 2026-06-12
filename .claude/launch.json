@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "geneseed-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-c", "from rituals import web; web.serve(open_browser=False, port=4753)"],
+      "port": 4753
+    }
+  ]
+}
