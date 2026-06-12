@@ -193,12 +193,49 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
 class JobManager:
     """Runs one mutating action at a time in a background thread, capturing
     combined stdout/stderr. A second start() while busy returns None (the HTTP
-    layer maps that to 409). Jobs are in-memory and do not survive restart."""
+    layer maps that to 409). Finished jobs persist to `history_path` (last
+    HISTORY_MAX, output capped) so the console survives reload and restart."""
 
-    def __init__(self):
+    HISTORY_MAX = 20
+    OUTPUT_CAP = 20000  # chars of output kept per job in the history file
+
+    def __init__(self, history_path: "Path | None" = None):
         self._lock = threading.Lock()
         self._jobs: dict[str, dict] = {}
         self._busy = False
+        self._history_path = history_path
+        self._load_history()
+
+    def _load_history(self):
+        if not self._history_path or not self._history_path.is_file():
+            return
+        try:
+            jobs = json.loads(self._history_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        for j in jobs if isinstance(jobs, list) else []:
+            # A 'running' job in the file means the server died mid-run.
+            if isinstance(j, dict) and j.get("id") and j.get("status") != "running":
+                self._jobs[j["id"]] = j
+
+    def _save_history(self):
+        if not self._history_path:
+            return
+        with self._lock:
+            jobs = [dict(j) for j in self._jobs.values() if j["status"] != "running"]
+        jobs.sort(key=lambda j: j.get("started") or 0)
+        jobs = [{**j, "output": j["output"][-self.OUTPUT_CAP:]}
+                for j in jobs[-self.HISTORY_MAX:]]
+        try:
+            self._history_path.write_text(json.dumps(jobs), encoding="utf-8")
+        except OSError:
+            pass
+
+    def recent(self, n: int = HISTORY_MAX) -> list:
+        """Last `n` jobs, oldest first — the order the console appends in."""
+        with self._lock:
+            jobs = sorted(self._jobs.values(), key=lambda j: j.get("started") or 0)
+            return [dict(j) for j in jobs[-n:]]
 
     def start(self, action: str, *cmds: list, on_done=None) -> "str | None":
         with self._lock:
@@ -207,7 +244,8 @@ class JobManager:
             self._busy = True
             jid = secrets.token_hex(8)
             self._jobs[jid] = {"id": jid, "action": action, "status": "running",
-                               "output": "", "returncode": None}
+                               "output": "", "returncode": None,
+                               "started": time.time(), "duration": None}
         t = threading.Thread(target=self._run, args=(jid, cmds, on_done), daemon=True)
         t.start()
         return jid
@@ -238,9 +276,11 @@ class JobManager:
             rc = 1
         finally:
             with self._lock:
-                self._jobs[jid].update(
-                    status="done" if rc == 0 else "failed", returncode=rc)
+                j = self._jobs[jid]
+                j.update(status="done" if rc == 0 else "failed", returncode=rc,
+                         duration=round(time.time() - j["started"], 1))
                 self._busy = False
+            self._save_history()
             if on_done:
                 try:
                     on_done()
@@ -528,6 +568,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                         extra={"Content-Disposition": f'attachment; filename="{name}"'})
                 if path == "/api/diff":
                     return self._send_json(api_diff(state))
+                if path == "/api/jobs":
+                    return self._send_json({"jobs": jm.recent()})
                 if path.startswith("/api/jobs/"):
                     j = jm.get(path.rsplit("/", 1)[1])
                     return self._send_json(j) if j \
@@ -671,7 +713,9 @@ def serve(theme: str | None = None, port: int = 4747, open_browser: bool = True)
     if not (state.target / build.GLOBAL_MANIFEST).exists():
         print(f"[web] no deployed harness at {state.target}.")
         print("      Run `geneseed setup` first — serving anyway (read-only UI).")
-    jm = JobManager()
+    # Console history lives beside the deployed host state (context.json & co);
+    # writes fail silently when nothing is deployed there yet.
+    jm = JobManager(history_path=state.target / ".geneseed-web-runs.json")
     token = secrets.token_urlsafe(24)
     Handler = make_handler(state, jm, token, dist)
     try:

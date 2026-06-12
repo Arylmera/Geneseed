@@ -39,6 +39,23 @@ export default function App() {
 
   useEffect(() => { loadOverview() }, [])
 
+  // Hydrate the console from the server's run history (survives reload and
+  // restart); resume polling if a job is still running from a previous tab.
+  useEffect(() => {
+    api.jobs().then(({ jobs }) => {
+      if (!jobs.length) return
+      setRuns(jobs.map((j) => ({
+        id: j.id, action: j.action, status: j.status,
+        output: j.output || '', duration: j.duration,
+      })))
+      const running = jobs.find((j) => j.status === 'running')
+      if (running) {
+        setActiveId(running.id)
+        setConsoleOpen(true)
+      }
+    }).catch(() => {})
+  }, [])
+
   // The UI wears the deployed theme's accent: overview carries the ACCENT the
   // installed voice declares, and a re-theme build updates it live on refresh.
   useEffect(() => {
@@ -55,7 +72,9 @@ export default function App() {
       try {
         const j = await api.job(activeId)
         setRuns((rs) => rs.map((r) =>
-          r.id === activeId ? { ...r, output: j.output || '', status: j.status } : r))
+          r.id === activeId
+            ? { ...r, output: j.output || '', status: j.status, duration: j.duration }
+            : r))
         if (j.status !== 'running') {
           clearInterval(t)
           setActiveId(null)

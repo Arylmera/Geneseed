@@ -38,7 +38,8 @@ export default function Console({ runs, collapsed, onToggle, onClear }) {
               <span className="prompt">$</span>
               <span className="run-action">{r.action}</span>
               <span className={`run-status ${r.status}`}>
-                {r.status === 'running' ? '…' : r.status === 'done' ? '✓ done' : '✗ failed'}
+                {r.status === 'running' ? '…'
+                  : `${r.status === 'done' ? '✓ done' : '✗ failed'}${r.duration ? ` · ${r.duration}s` : ''}`}
               </span>
             </div>
             {r.output && <pre className="run-out">{r.output}</pre>}

@@ -16,6 +16,7 @@ export const api = {
   doctor: () => get('/api/doctor'),
   graph: () => get('/api/graph'),
   job: (id) => get(`/api/jobs/${id}`),
+  jobs: () => get('/api/jobs'),
   // Synchronous restore — returns { restored, deleted, errors }, not a job.
   async restore(files) {
     const r = await fetch('/api/actions/restore', {

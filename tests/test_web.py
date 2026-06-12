@@ -95,6 +95,37 @@ class JobManagerTests(unittest.TestCase):
         self.assertIsNone(second)  # busy
         jm.wait(jid, timeout=20)
 
+    def test_history_persists_and_reloads(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            hp = Path(t) / "runs.json"
+            jm = web.JobManager(history_path=hp)
+            jid = jm.start("noop", [sys.executable, "-c", "print('hi')"])
+            jm.wait(jid, timeout=20)
+            import time
+            for _ in range(100):                 # save runs just after status flips
+                if hp.is_file():
+                    break
+                time.sleep(0.05)
+            self.assertTrue(hp.is_file())
+            # A fresh manager (server restart) reloads the finished run.
+            jm2 = web.JobManager(history_path=hp)
+            jobs = jm2.recent()
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(jobs[0]["id"], jid)
+            self.assertEqual(jobs[0]["status"], "done")
+            self.assertIsNotNone(jobs[0]["duration"])
+            self.assertIn("hi", jobs[0]["output"])
+
+    def test_recent_is_chronological(self):
+        jm = web.JobManager()
+        a = jm.start("first", [sys.executable, "-c", "print(1)"])
+        jm.wait(a, timeout=20)
+        b = jm.start("second", [sys.executable, "-c", "print(2)"])
+        jm.wait(b, timeout=20)
+        ids = [j["id"] for j in jm.recent()]
+        self.assertEqual(ids, [a, b])
+
     def test_on_done_fires_after_completion(self):
         jm = web.JobManager()
         seen = []
