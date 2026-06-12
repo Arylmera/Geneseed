@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import { Icon } from '../components/Icon.jsx'
+
+// Map a unified-diff line to its display class. Headers (+++/---) and hunk
+// markers read as hunks; the synthetic added/missing banners read as context.
+function lineKind(ln) {
+  if (ln.startsWith('@@') || ln.startsWith('+++') || ln.startsWith('---')) return 'hunk'
+  if (ln.startsWith('+')) return 'add'
+  if (ln.startsWith('-')) return 'del'
+  return 'ctx'
+}
 
 export default function Diff() {
   const [data, setData] = useState(null)
@@ -7,10 +17,14 @@ export default function Diff() {
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
   const [sel, setSel] = useState(() => new Set())
-  const [expanded, setExpanded] = useState(() => new Set())
+  const [open, setOpen] = useState(() => new Set())
 
   const load = () =>
-    api.diff().then((d) => { setData(d); setSel(new Set()) }).catch((e) => setErr(e.message))
+    api.diff().then((d) => {
+      setData(d)
+      setSel(new Set())
+      setOpen(new Set(d.files.map((f) => f.rel)))
+    }).catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
 
   const toggle = (rel) => setSel((s) => {
@@ -50,68 +64,117 @@ export default function Diff() {
     } catch (e) { setNote(e.message) } finally { setBusy(false) }
   }
 
-  if (err) return <div className="container"><p className="badge warn">{err}</p></div>
-  if (!data) return <div className="container">Loading…</div>
+  if (err) return <p className="badge bad">{err}</p>
+  if (!data) return <div className="loading">Loading…</div>
   if (!data.deployed)
-    return <div className="container"><p>No deployed harness to diff against.</p></div>
+    return (
+      <div className="empty">
+        <div className="big">No deployed harness</div>
+        Nothing to diff against.
+      </div>
+    )
+
+  const files = data.files
+  const editedCount = files.filter((f) => f.status === 'edited').length
+  const addedCount = files.filter((f) => f.status === 'added').length
+  const missingCount = files.filter((f) => f.status === 'missing').length
+
+  const toggleOpenFile = (rel) => setOpen((s) => {
+    const n = new Set(s)
+    n.has(rel) ? n.delete(rel) : n.add(rel)
+    return n
+  })
 
   return (
-    <div className="container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0 }}>Local edits ({data.files.length})</h2>
-        <div className="row-actions" style={{ margin: 0, gap: 20 }}>
-          <button className="btn ghost" onClick={restore} disabled={busy || sel.size === 0}>
-            Restore selected from source{sel.size ? ` (${sel.size})` : ''}
+    <>
+      <div className="head-row" style={{ marginBottom: 16 }}>
+        <div>
+          <span className="eyebrow">drift from source</span>
+          <h1 className="h">Local edits</h1>
+          <p className="sub">The agent refines its own deployed files in place. Export them as improvements before any rebuild overwrites them.</p>
+        </div>
+        <div className="row" style={{ gap: 10 }}>
+          <button
+            className="btn ghost"
+            disabled={busy || sel.size === 0}
+            onClick={restore}
+          >
+            Restore{sel.size ? ` (${sel.size})` : ''}
           </button>
-          <button className="btn" onClick={exportImprovements} disabled={busy}>
-            {busy ? 'Working…' : 'Export improvements'}
+          <button className="btn" disabled={busy} onClick={exportImprovements}>
+            <Icon name="download" />Export improvements
           </button>
         </div>
       </div>
-      <p className="muted">
-        Restore discards the deployed copy and rewrites it from source — keep your
-        edits instead by exporting improvements first.
-      </p>
-      {note ? <p className="muted">{note}</p> : null}
-      {data.files.length === 0 ? <p className="muted">Deployed harness matches source.</p> : null}
-      {data.files.length > 0 && (
-        <label className="muted" style={{ display: 'block', marginBottom: 10 }}>
-          <input
-            type="checkbox"
-            checked={sel.size === data.files.length}
-            onChange={toggleAll}
-          /> Select all
-        </label>
-      )}
-      {data.files.map((f) => {
-        // Long diffs collapse to a preview so a big drift stays scannable.
-        const PREVIEW = 8
-        const long = f.diff.length > PREVIEW + 4
-        const open = !long || expanded.has(f.rel)
-        const shownDiff = open ? f.diff : f.diff.slice(0, PREVIEW)
-        return (
-          <div className="detail" key={f.rel} style={{ marginBottom: 12 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={sel.has(f.rel)} onChange={() => toggle(f.rel)} />
-              <strong>{f.rel}</strong> <span className="badge">{f.status}</span>
-              <span className="muted" style={{ fontSize: 12 }}>{f.diff.length} lines</span>
+
+      {note ? <p className="sub" style={{ marginBottom: 14 }}>{note}</p> : null}
+
+      {files.length === 0 ? (
+        <div className="empty">
+          <div className="big">In sync</div>
+          Deployed harness matches source.
+        </div>
+      ) : (
+        <>
+          <div className="row between" style={{ marginBottom: 14 }}>
+            <div className="row" style={{ gap: 10 }}>
+              <span className="badge"><span className="dot" style={{ background: 'var(--warn)' }} />{editedCount} edited</span>
+              <span className="badge"><span className="dot" style={{ background: 'var(--good)' }} />{addedCount} added</span>
+              {missingCount > 0 && (
+                <span className="badge"><span className="dot" style={{ background: 'var(--bad)' }} />{missingCount} missing</span>
+              )}
+            </div>
+            <label className="row dim" style={{ gap: 8, fontSize: 12.5, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                style={{ accentColor: 'var(--accent)' }}
+                checked={sel.size === files.length}
+                onChange={toggleAll}
+              />
+              Select all
             </label>
-            <pre className="markdown">{shownDiff.join('\n')}</pre>
-            {long && (
-              <button
-                className="btn ghost sm"
-                onClick={() => setExpanded((s) => {
-                  const n = new Set(s)
-                  n.has(f.rel) ? n.delete(f.rel) : n.add(f.rel)
-                  return n
-                })}
-              >
-                {open ? 'Collapse' : `Show all ${f.diff.length} lines`}
-              </button>
-            )}
           </div>
-        )
-      })}
-    </div>
+
+          <div className="stack" style={{ gap: 12 }}>
+            {files.map((f) => {
+              const isOpen = open.has(f.rel)
+              const statusClass = f.status === 'added' ? 'ok' : f.status === 'missing' ? 'bad' : 'warn'
+              return (
+                <div className={`card diff-file${isOpen ? ' open' : ''}`} key={f.rel}>
+                  <div className="diff-head">
+                    <input
+                      type="checkbox"
+                      className="chk"
+                      checked={sel.has(f.rel)}
+                      onChange={() => toggle(f.rel)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <span className="fname">{f.rel}</span>
+                    <span className={`badge ${statusClass}`}>
+                      <span className="dot" />{f.status}
+                    </span>
+                    <span className="dim mono" style={{ marginLeft: 'auto', fontSize: 11 }}>{f.diff.length} lines</span>
+                    <button
+                      className="iconbtn"
+                      onClick={() => toggleOpenFile(f.rel)}
+                      style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}
+                    >
+                      <Icon name="chevron" />
+                    </button>
+                  </div>
+                  {isOpen && (
+                    <div className="diff-body">
+                      {f.diff.map((ln, i) => (
+                        <div key={i} className={`diff-line ${lineKind(ln)}`}>{ln}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </>
   )
 }
