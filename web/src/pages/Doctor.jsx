@@ -1,23 +1,34 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import { Icon } from '../components/Icon.jsx'
 
 function CheckCard({ group }) {
   const clean = group.problems.length === 0
   const [open, setOpen] = useState(!clean)
   return (
-    <div className={`panel check ${clean ? '' : 'check-bad'}`}
-         onClick={() => !clean && setOpen((v) => !v)}
-         style={{ cursor: clean ? 'default' : 'pointer' }}>
-      <div className="check-head">
+    <div className={`card check ${clean ? '' : 'bad'} ${open ? 'open' : ''}`}>
+      <div
+        className="check-head"
+        onClick={() => !clean && setOpen((v) => !v)}
+        style={{ cursor: clean ? 'default' : 'pointer' }}
+      >
+        <span className={`feed-dot ${clean ? 'ok' : 'bad'}`} style={{ width: 9, height: 9 }} />
         <h3>{group.label}</h3>
-        <span className={`badge ${clean ? 'ok' : 'err'}`}>
+        <span className={`badge ${clean ? 'ok' : 'bad'}`}>
+          <span className="dot" />
           {clean ? 'clean' : `${group.problems.length} problem${group.problems.length === 1 ? '' : 's'}`}
         </span>
+        {!clean && <Icon name="chevron" className="chev glyph" />}
       </div>
       {!clean && open && (
-        <ul className="check-problems">
-          {group.problems.map((p) => <li key={p}>{p}</li>)}
-        </ul>
+        <div className="check-body">
+          {group.problems.map((p) => (
+            <div className="problem" key={p}>
+              <span className="x">✕</span>
+              <span>{p}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -34,28 +45,49 @@ export default function Doctor() {
   }
   useEffect(load, [])
 
-  if (err) return <div className="container"><p className="badge warn">{err}</p></div>
+  if (err) return <p className="badge bad">{err}</p>
 
   return (
-    <div className="container narrow">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Doctor</h2>
+    <div style={{ maxWidth: 820 }}>
+      <div className="head-row" style={{ marginBottom: 16 }}>
+        <div>
+          <span className="eyebrow">health</span>
+          <h1 className="h">Doctor</h1>
+          <p className="sub">
+            Every check builds each theme in a sandbox and validates the result — token
+            resolution, link integrity, parity, and drift.
+          </p>
+        </div>
         <button className="btn ghost" onClick={load} disabled={!data}>
+          <Icon name="refresh" />
           {data ? 'Re-run checks' : 'Running…'}
         </button>
       </div>
+
       {!data ? (
-        <p className="muted">Running every check (builds each theme in a sandbox) — this
-          takes a few seconds…</p>
+        <div className="loading">Running every check (builds each theme in a sandbox)…</div>
       ) : (
         <>
-          <p className="muted">
-            Validated theme{data.themes.length === 1 ? '' : 's'}: {data.themes.join(', ')} ·{' '}
-            {data.ok
-              ? <span className="badge ok">all checks clean</span>
-              : <span className="badge err">{data.problems.length} problem{data.problems.length === 1 ? '' : 's'}</span>}
-          </p>
-          {data.groups.map((g) => <CheckCard key={g.label} group={g} />)}
+          <div className="card pad-md" style={{ marginBottom: 16 }}>
+            <div className="row wrap between" style={{ gap: 12 }}>
+              <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+                <span className="dim mono" style={{ fontSize: 12 }}>
+                  validated {data.themes.length} themes
+                </span>
+                {data.themes.map((t) => (
+                  <span key={t} className="badge" style={{ textTransform: 'capitalize' }}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </span>
+                ))}
+              </div>
+              {data.ok
+                ? <span className="badge ok"><span className="dot" />all clean</span>
+                : <span className="badge bad"><span className="dot" />{data.problems.length} problem</span>}
+            </div>
+          </div>
+          <div className="stack" style={{ gap: 12 }}>
+            {data.groups.map((g) => <CheckCard key={g.label} group={g} />)}
+          </div>
         </>
       )}
     </div>
