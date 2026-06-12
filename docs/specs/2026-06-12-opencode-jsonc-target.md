@@ -1,7 +1,7 @@
 # `.jsonc`-aware OpenCode config writes
 
 **Date:** 2026-06-12
-**Status:** designed
+**Status:** implemented
 
 ## Problem
 
@@ -104,6 +104,9 @@ At each site, after resolving the target and reading it tolerantly:
 
 ## Verified
 
-(to fill at implementation) `doctor --all` clean; full test suite green; CLI
-round-trip with a planted commented `opencode.jsonc` (emit warns + skips; the file
-keeps its comments) and with a plain `opencode.json` (unchanged behaviour).
+`doctor --all` clean (14 themes). Full suite green — 173 tests (13 new across
+`OpencodeJsoncTests`, `McpServerTests`, `UninstallTests`). CLI round-trip:
+`--emit opencode` into a repo holding a commented `opencode.jsonc` warns with the
+exact manual entry and leaves the file **byte-for-byte unchanged** (no stray
+`opencode.json`); into a plain repo it writes `opencode.json` with `AGENT.md` +
+the default `git commit*: ask` gate as before.

@@ -1058,19 +1058,29 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def _unmerge_opencode_json(path: Path, entry: str) -> bool:
-    """Remove `entry` from opencode.json's `instructions`, leaving every other key
-    intact. Returns True if the file was changed."""
-    if not path.exists():
+    """Remove `entry` from the OpenCode config's `instructions`, leaving every other
+    key intact. Resolves a sibling `opencode.jsonc` first (the file OpenCode treats as
+    authoritative) and reads it comment-tolerantly. Returns True if the file was
+    changed. A commented `.jsonc` is NOT rewritten — that would drop the comments — so
+    the user is told to remove the entry by hand and this returns False (unchanged)."""
+    target = build._opencode_target(path)
+    if not target.exists():
         return False
     try:
-        cfg = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+        cfg, had_comments = build._read_jsonc(target.read_text(encoding="utf-8"))
+    except OSError:
+        return False
+    if not isinstance(cfg, dict):
         return False
     instr = cfg.get("instructions")
     if not isinstance(instr, list) or entry not in instr:
         return False
+    if target.suffix == ".jsonc" and had_comments:
+        print(f"[uninstall] {target.name} has comments — not rewriting it. Remove this "
+              f"from its \"instructions\" by hand: {json.dumps(entry)}")
+        return False
     cfg["instructions"] = [i for i in instr if i != entry]
-    path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    target.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
     return True
 
 
@@ -1162,14 +1172,28 @@ def _mcp_set_enabled(config: dict, name: str, enabled: bool) -> dict:
 
 
 def _mcp_load(path: Path) -> dict:
-    """Read an opencode.json into a dict; {} if missing or malformed."""
+    """Read an OpenCode config into a dict; {} if missing or malformed. Comment-tolerant
+    so a hand-maintained `opencode.jsonc` parses (its `//` and `/* */` are stripped)."""
     if not path.exists():
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data, _ = build._read_jsonc(path.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
-    except (json.JSONDecodeError, OSError):
+    except OSError:
         return {}
+
+
+def _mcp_commented(path: Path) -> bool:
+    """True when `path` is an existing `.jsonc` that carries comments — the case where
+    a non-destructive rewrite would drop the user's comments, so the MCP screen must
+    refuse to save and warn instead."""
+    if path.suffix != ".jsonc" or not path.exists():
+        return False
+    try:
+        _, had = build._read_jsonc(path.read_text(encoding="utf-8"))
+        return had
+    except OSError:
+        return False
 
 
 def _mcp_save(path: Path, config: dict) -> None:
@@ -1179,12 +1203,15 @@ def _mcp_save(path: Path, config: dict) -> None:
 
 
 def _mcp_targets() -> "list[tuple[str, Path]]":
-    """Candidate opencode.json files to manage, most-local first: the current project's,
-    then OpenCode's global config dir. Both are offered whether or not they exist yet —
-    choosing one creates it on first write."""
-    targets = [("this project", Path.cwd() / "opencode.json")]
+    """Candidate OpenCode config files to manage, most-local first: the current
+    project's, then OpenCode's global config dir. Each resolves to a present sibling
+    `opencode.jsonc` (the file OpenCode treats as authoritative) when one exists, else
+    `opencode.json`. Both targets are offered whether or not they exist yet — choosing
+    one creates the `.json` on first write."""
+    targets = [("this project", build._opencode_target(Path.cwd() / "opencode.json"))]
     try:
-        targets.append(("global config", build._opencode_config_dir() / "opencode.json"))
+        targets.append(("global config",
+                        build._opencode_target(build._opencode_config_dir() / "opencode.json")))
     except Exception:
         pass
     return targets
@@ -2948,24 +2975,33 @@ def _mcp_view(stdscr, curses, pal) -> None:
             # the whole block so it can be turned back on without re-entering the config.
             nm = names[sel]
             st = _mcp_state(config, nm)
+            new, ok = None, ""
             if st == "absent":
                 if nm in _MCP_PRESETS:
-                    config = _mcp_apply(config, nm, dict(_MCP_PRESETS[nm]["block"]))
-                    msg = f"added {nm} (enabled) → {label}"
+                    new = _mcp_apply(config, nm, dict(_MCP_PRESETS[nm]["block"]))
+                    ok = f"added {nm} (enabled) → {label}"
                 else:
                     msg = f"{nm} has no preset block to add"
             else:
-                config = _mcp_set_enabled(config, nm, st == "disabled")
-                msg = f"{nm} {'enabled' if st == 'disabled' else 'disabled'} in {label}"
-            _mcp_save(path, config)
+                new = _mcp_set_enabled(config, nm, st == "disabled")
+                ok = f"{nm} {'enabled' if st == 'disabled' else 'disabled'} in {label}"
+            if new is not None:
+                if _mcp_commented(path):
+                    msg = f"{path.name} has comments — not auto-edited; edit it by hand"
+                else:
+                    _mcp_save(path, new)
+                    config, msg = new, ok
         elif c in (ord("x"), ord("X")):
             # Explicit, destructive: delete the server's config block entirely. Use Enter
             # to merely disable; reach for this only to drop the server for good.
             nm = names[sel]
             if _mcp_state(config, nm) != "absent":
-                config = _mcp_apply(config, nm, None)
-                _mcp_save(path, config)
-                msg = f"removed {nm} from {label} (config deleted)"
+                if _mcp_commented(path):
+                    msg = f"{path.name} has comments — not auto-edited; edit it by hand"
+                else:
+                    config = _mcp_apply(config, nm, None)
+                    _mcp_save(path, config)
+                    msg = f"removed {nm} from {label} (config deleted)"
             else:
                 msg = f"{nm} is not in {label}"
 

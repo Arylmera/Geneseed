@@ -322,5 +322,102 @@ class OpencodeExtrasTests(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class OpencodeJsoncTests(unittest.TestCase):
+    """`.jsonc`-aware config writes: OpenCode reads/writes opencode.jsonc in preference
+    to opencode.json, so Geneseed operates on a present .jsonc — but never rewrites one
+    that carries comments (that would drop them)."""
+
+    def _merge(self, cfg):
+        # Run a merge while swallowing the warn output; return what was printed.
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            build._merge_opencode_json(cfg, "AGENT.md")
+        return buf.getvalue()
+
+    def test_read_jsonc_strips_comments_and_trailing_commas(self):
+        data, had = build._read_jsonc(
+            '{\n  // a line comment\n  "a": 1, /* block */\n  "b": [1, 2,],\n}')
+        self.assertEqual(data, {"a": 1, "b": [1, 2]})
+        self.assertTrue(had)
+
+    def test_read_jsonc_slashes_inside_string_are_not_comments(self):
+        # The $schema URL contains `//` — it must NOT register as a comment.
+        data, had = build._read_jsonc(
+            '{"$schema": "https://opencode.ai/config.json", "instructions": []}')
+        self.assertEqual(data["$schema"], "https://opencode.ai/config.json")
+        self.assertFalse(had)
+
+    def test_read_jsonc_malformed_returns_empty(self):
+        data, had = build._read_jsonc("{not json at all")
+        self.assertEqual(data, {})
+        self.assertFalse(had)
+
+    def test_target_prefers_existing_jsonc(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            j = d / "opencode.json"
+            jc = d / "opencode.jsonc"
+            self.assertEqual(build._opencode_target(j), j)      # neither exists -> .json
+            jc.write_text("{}", encoding="utf-8")
+            self.assertEqual(build._opencode_target(j), jc)     # .jsonc present -> .jsonc
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_merge_targets_existing_jsonc_without_comments(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            j = d / "opencode.json"
+            jc = d / "opencode.jsonc"
+            jc.write_text('{"instructions": []}', encoding="utf-8")
+            out = self._merge(j)
+            self.assertEqual(out, "")                           # no warning
+            self.assertFalse(j.exists())                        # never creates the .json
+            data = json.loads(jc.read_text(encoding="utf-8"))
+            self.assertIn("AGENT.md", data["instructions"])
+            self.assertIn("permission", data)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_merge_warns_and_skips_commented_jsonc(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            j = d / "opencode.json"
+            jc = d / "opencode.jsonc"
+            original = '// my notes\n{\n  "instructions": []\n}\n'
+            jc.write_text(original, encoding="utf-8")
+            out = self._merge(j)
+            self.assertIn("has comments", out)
+            self.assertIn("AGENT.md", out)                      # the manual entry is shown
+            self.assertEqual(jc.read_text(encoding="utf-8"), original)  # byte-for-byte unchanged
+            self.assertFalse(j.exists())                        # no stray .json written
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_merge_commented_jsonc_already_wired_is_silent_noop(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            j = d / "opencode.json"
+            jc = d / "opencode.jsonc"
+            original = ('// notes\n{\n  "instructions": ["AGENT.md"],\n'
+                        '  "permission": {"bash": "allow"}\n}\n')
+            jc.write_text(original, encoding="utf-8")
+            out = self._merge(j)
+            self.assertEqual(out, "")                           # nothing to add -> no warning
+            self.assertEqual(jc.read_text(encoding="utf-8"), original)  # untouched
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_merge_returns_resolved_target(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            j = d / "opencode.json"
+            (d / "opencode.jsonc").write_text('{"instructions": []}', encoding="utf-8")
+            self.assertEqual(build._merge_opencode_json(j, "AGENT.md").name, "opencode.jsonc")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

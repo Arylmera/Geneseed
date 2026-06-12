@@ -644,44 +644,143 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
     return n_agents, n_skills, written
 
 
-def _merge_opencode_json(path: Path, agent_path: str) -> None:
-    """Ensure `path`'s `instructions` array contains `agent_path`, preserving every
-    other key the user may have set. Never clobbers a hand-edited config — it merges
-    the one entry. A malformed existing file is replaced with a clean default."""
-    config: dict = {"$schema": "https://opencode.ai/config.json", "instructions": []}
-    if path.exists():
+_OPENCODE_SCHEMA = "https://opencode.ai/config.json"
+
+
+def _default_permission() -> dict:
+    """A fresh copy of the minimal, non-destructive default permission policy — ASK
+    before the few genuinely irreversible or outward-facing bash patterns (Laws
+    I/IV/XX). `git commit*` and `git push*` gate EVERY commit and push, on any branch,
+    so the agent never records or shares history unprompted (Law XX's host-level
+    backstop); the `--force`/`-f` entries are kept as explicit, more-specific markers.
+    Added ONLY when the user has no `permission` key at all; never overwrites an
+    existing policy. Unmatched commands keep OpenCode's default (allow), so normal
+    local work (edits, builds, tests) is unaffected."""
+    return {
+        "bash": {
+            "rm -rf *": "ask",
+            "git commit*": "ask",
+            "git push*": "ask",
+            "git push --force*": "ask",
+            "git push -f*": "ask",
+        }
+    }
+
+
+def _opencode_target(json_path: Path) -> Path:
+    """The OpenCode config file to actually operate on at this location. OpenCode loads
+    BOTH `opencode.json` and `opencode.jsonc` and merges them, with `.jsonc` winning on
+    conflict, and writes to `.jsonc` first when it exists. So a present sibling `.jsonc`
+    is the authoritative file — operate on it, not on a separate `.json` we'd be
+    splitting config across. Given a `…/opencode.json` path, return its `…/opencode.jsonc`
+    sibling when that exists, else the `.json` path (so we never create a `.jsonc`
+    ourselves)."""
+    jsonc = json_path.with_suffix(".jsonc")
+    return jsonc if jsonc.exists() else json_path
+
+
+def _read_jsonc(text: str) -> "tuple[object, bool]":
+    """Parse JSON-with-comments, returning (data, had_comments). String-aware: `//`
+    line and `/* */` block comments are stripped only OUTSIDE string literals, and
+    trailing commas are removed, before `json.loads`. A `//` inside a string — notably
+    the `$schema` value `https://opencode.ai/config.json` — is preserved and does NOT
+    set `had_comments`. Only `"` delimits strings (JSON has no single-quoted strings),
+    so an apostrophe inside a description never confuses the scan. Unparseable input
+    yields ({}, had_comments), preserving the caller's malformed-file fallback."""
+    out: "list[str]" = []
+    had_comments = False
+    i, n, in_str = 0, len(text), False
+    while i < n:
+        ch = text[i]
+        if in_str:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                in_str = False
+            i += 1
+            continue
+        if ch == '"':
+            in_str = True
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            had_comments = True
+            i += 2
+            while i < n and text[i] not in ("\n", "\r"):
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            had_comments = True
+            i += 2
+            while i + 1 < n and not (text[i] == "*" and text[i + 1] == "/"):
+                i += 1
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    stripped = re.sub(r",(\s*[}\]])", r"\1", "".join(out))
+    try:
+        return json.loads(stripped), had_comments
+    except (json.JSONDecodeError, ValueError):
+        return {}, had_comments
+
+
+def _warn_commented_jsonc(target: Path, agent_path: str, include_permission: bool,
+                          prefix: str = "geneseed") -> None:
+    """Tell the user how to wire Geneseed in by hand. Called only when `target` is a
+    `.jsonc` carrying comments and we have a real change to make — we refuse to rewrite
+    such a file (it would drop the comments), so we print the exact entry instead."""
+    print(f"[{prefix}] {target.name} has comments — not rewriting it (your edits are "
+          f"kept). Add this to its \"instructions\" array by hand:")
+    print(f"[{prefix}]     {json.dumps(agent_path)}")
+    if include_permission:
+        print(f"[{prefix}] and, for Geneseed's default ask-gates, a \"permission\" key:")
+        for line in json.dumps(_default_permission(), indent=2).splitlines():
+            print(f"[{prefix}]     {line}")
+
+
+def _merge_opencode_json(path: Path, agent_path: str) -> Path:
+    """Ensure the OpenCode config at `path`'s location has `agent_path` in its
+    `instructions` array, preserving every other key the user may have set. Resolves a
+    sibling `opencode.jsonc` first (see `_opencode_target`) and reads it comment-tolerantly.
+    Never clobbers a hand-edited config — it merges the one entry (plus a default
+    `permission` policy only when absent). An already-satisfied config is left
+    completely untouched. A commented `.jsonc` that still needs a change is NOT
+    rewritten (that would strip the comments); the user is warned with the exact entry
+    to add. A malformed `.json` is replaced with a clean default, as before. Returns the
+    resolved target path (the file we wrote, warned about, or found already wired)."""
+    target = _opencode_target(path)
+    config: dict = {"$schema": _OPENCODE_SCHEMA, "instructions": []}
+    had_comments = False
+    if target.exists():
         try:
-            loaded = json.loads(path.read_text(encoding="utf-8"))
+            loaded, had_comments = _read_jsonc(target.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
                 config = loaded
-        except (json.JSONDecodeError, OSError):
+        except OSError:
             pass
-    config.setdefault("$schema", "https://opencode.ai/config.json")
+    config.setdefault("$schema", _OPENCODE_SCHEMA)
     instr = config.get("instructions")
     if not isinstance(instr, list):
         instr = []
-    if agent_path not in instr:
+    add_instr = agent_path not in instr
+    if add_instr:
         instr.append(agent_path)
     config["instructions"] = instr
-    # O5: a minimal, non-destructive default permission policy — ASK before the few
-    # genuinely irreversible or outward-facing bash patterns (Laws I/IV/XX). `git commit*`
-    # and `git push*` gate EVERY commit and push, on any branch, so the agent never
-    # records or shares history unprompted (Law XX's host-level backstop); the
-    # `--force`/`-f` entries are kept as explicit, more-specific markers. Added ONLY
-    # when the user has no `permission` key at all; never overwrites an existing policy.
-    # Unmatched commands keep OpenCode's default (allow), so normal local work (edits,
-    # builds, tests) is unaffected.
-    if "permission" not in config:
-        config["permission"] = {
-            "bash": {
-                "rm -rf *": "ask",
-                "git commit*": "ask",
-                "git push*": "ask",
-                "git push --force*": "ask",
-                "git push -f*": "ask",
-            }
-        }
-    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    add_perm = "permission" not in config
+    if add_perm:
+        config["permission"] = _default_permission()
+    if not (add_instr or add_perm):
+        return target   # already wired — leave the file (and any comments) untouched
+    if target.suffix == ".jsonc" and had_comments:
+        _warn_commented_jsonc(target, agent_path, add_perm)
+        return target
+    target.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return target
 
 
 def _copy_plugins(dst: Path, owned: list | None = None) -> int:
@@ -852,7 +951,7 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
 
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
-    _merge_opencode_json(root / "opencode.json", agent_path)
+    cfg_name = _merge_opencode_json(root / "opencode.json", agent_path).name
 
     n_plugins = _copy_plugins(oc / "plugins")
     n_workflows = _copy_workflows(oc / "workflows")
@@ -861,7 +960,7 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     extra = (" + " + ", ".join(extras)) if extras else ""
     print(f"[geneseed] opencode layer: {n_agents} subagents, {n_skills} skills, "
           f"{n_plugins} plugin(s), {n_workflows} workflow file(s), "
-          f"opencode.json (instructions: {agent_path}){extra}")
+          f"{cfg_name} (instructions: {agent_path}){extra}")
 
 
 def _opencode_config_dir() -> Path:
@@ -1034,7 +1133,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
     write_version(cfg)
     owned.append(VERSION_MARKER)
-    _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix())
+    cfg_name = _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix()).name
 
     # Now that the whole current set is on disk, remove only what we owned before but
     # no longer produce (a removed agent/skill, a disabled primary/command). Everything
@@ -1066,7 +1165,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     extra = (" + " + ", ".join(extras)) if extras else ""
     print(f"[geneseed] opencode-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
           f"{n_plugins} plugin(s), {n_workflows} workflow file(s), AGENT.md, {mem_status}, {nb_status}, "
-          f"opencode.json (no context.json){extra}. "
+          f"{cfg_name} (no context.json){extra}. "
           f"The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.")
 
 

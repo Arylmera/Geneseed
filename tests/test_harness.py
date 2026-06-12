@@ -360,6 +360,34 @@ class UninstallTests(unittest.TestCase):
         finally:
             shutil.rmtree(cfg.parent, ignore_errors=True)
 
+    def test_unmerge_warns_and_skips_commented_jsonc(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        try:
+            jc = d / "opencode.jsonc"
+            original = '// keep my notes\n{\n  "instructions": ["AGENT.md", "other.md"]\n}\n'
+            jc.write_text(original, encoding="utf-8")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                changed = harness._unmerge_opencode_json(d / "opencode.json", "AGENT.md")
+            self.assertFalse(changed)                            # reported unchanged
+            self.assertIn("has comments", buf.getvalue())
+            self.assertEqual(jc.read_text(encoding="utf-8"), original)   # untouched
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_unmerge_edits_comment_free_jsonc(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            jc = d / "opencode.jsonc"
+            jc.write_text('{"instructions": ["AGENT.md", "other.md"]}', encoding="utf-8")
+            changed = harness._unmerge_opencode_json(d / "opencode.json", "AGENT.md")
+            self.assertTrue(changed)
+            instr = json.loads(jc.read_text(encoding="utf-8"))["instructions"]
+            self.assertEqual(instr, ["other.md"])
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
 
 class ArchiveMemoryTests(unittest.TestCase):
     def test_moves_into_timestamped_sibling(self):
@@ -488,6 +516,43 @@ class McpServerTests(unittest.TestCase):
                              ["markitdown-mcp"])
             path.write_text("{not json", encoding="utf-8")
             self.assertEqual(harness._mcp_load(path), {})            # malformed -> {}
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_load_is_comment_tolerant(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            jc = d / "opencode.jsonc"
+            jc.write_text('// hand-maintained\n{\n  "mcp": {"x": {"enabled": true}}\n}\n',
+                          encoding="utf-8")
+            self.assertEqual(harness._mcp_load(jc)["mcp"]["x"]["enabled"], True)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_targets_prefer_existing_jsonc(self):
+        d = Path(tempfile.mkdtemp())
+        orig_cwd = Path.cwd()
+        try:
+            (d / "opencode.jsonc").write_text("{}", encoding="utf-8")
+            os.chdir(d)
+            label, path = harness._mcp_targets()[0]
+            self.assertEqual(label, "this project")
+            self.assertEqual(path.name, "opencode.jsonc")
+        finally:
+            os.chdir(orig_cwd)
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_commented_detects_only_real_comments(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            plain = d / "a.jsonc"
+            plain.write_text('{"$schema": "https://opencode.ai/config.json"}',
+                             encoding="utf-8")
+            self.assertFalse(harness._mcp_commented(plain))      # // in URL is not a comment
+            noted = d / "b.jsonc"
+            noted.write_text('// note\n{}', encoding="utf-8")
+            self.assertTrue(harness._mcp_commented(noted))
+            self.assertFalse(harness._mcp_commented(d / "c.json"))  # .json is never "commented"
         finally:
             shutil.rmtree(d, ignore_errors=True)
 
