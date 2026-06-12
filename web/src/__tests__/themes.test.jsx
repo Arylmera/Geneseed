@@ -23,7 +23,7 @@ describe('Themes', () => {
     await waitFor(() => expect(screen.getByText('neutral')).toBeTruthy())
     expect(screen.getByText('imperial')).toBeTruthy()
     expect(screen.getByText('current')).toBeTruthy()   // badge on neutral
-    expect(screen.getByText('Applied')).toBeTruthy()   // disabled current button
-    expect(screen.getByText('Apply')).toBeTruthy()     // imperial is applicable
+    expect(screen.getByText('Applied')).toBeTruthy()        // disabled current button
+    expect(screen.getByText('Apply voice')).toBeTruthy()   // imperial is applicable
   })
 })
