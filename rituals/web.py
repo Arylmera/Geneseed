@@ -203,6 +203,7 @@ class JobManager:
         self._lock = threading.Lock()
         self._jobs: dict[str, dict] = {}
         self._busy = False
+        self._procs: dict[str, subprocess.Popen] = {}
         self._history_path = history_path
         self._load_history()
 
@@ -265,9 +266,13 @@ class JobManager:
                     cmd, cwd=str(ROOT), stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, text=True,
                     encoding="utf-8", errors="replace", bufsize=1)
+                with self._lock:
+                    self._procs[jid] = p   # reachable for cancel()
                 for line in p.stdout:
                     self._append(jid, line)
                 p.wait()
+                with self._lock:
+                    self._procs.pop(jid, None)
                 rc = p.returncode
                 if rc != 0:
                     break
@@ -286,6 +291,21 @@ class JobManager:
                     on_done()
                 except Exception:  # noqa: BLE001 — refresh must never kill the job thread
                     pass
+
+    def cancel(self, jid: str) -> bool:
+        """Terminate the running job's subprocess; the run thread then winds down
+        normally (stdout closes, wait() returns non-zero -> status 'failed')."""
+        with self._lock:
+            p = self._procs.get(jid)
+            j = self._jobs.get(jid)
+            if p is None or not j or j["status"] != "running":
+                return False
+        self._append(jid, "\n[web] cancelled by user.\n")
+        try:
+            p.terminate()
+        except OSError:
+            pass
+        return True
 
     def get(self, jid: str) -> "dict | None":
         with self._lock:
@@ -598,6 +618,11 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
             path = self.path.split("?", 1)[0]
             if self.headers.get("X-Geneseed-Token") != token:
                 return self._send_json({"error": "forbidden"}, 403)
+            if path.startswith("/api/jobs/") and path.endswith("/cancel"):
+                jid = path.split("/")[3]
+                if jm.cancel(jid):
+                    return self._send_json({"cancelled": jid})
+                return self._send_json({"error": "no running job by that id"}, 404)
             if path.startswith("/api/actions/"):
                 action = path.rsplit("/", 1)[1]
                 body = self._read_json_body()

@@ -126,6 +126,26 @@ class JobManagerTests(unittest.TestCase):
         ids = [j["id"] for j in jm.recent()]
         self.assertEqual(ids, [a, b])
 
+    def test_cancel_terminates_a_running_job(self):
+        jm = web.JobManager()
+        jid = jm.start("slow", [sys.executable, "-c", "import time; time.sleep(30)"])
+        import time
+        for _ in range(100):                  # wait until the proc is registered
+            if jm._procs.get(jid):
+                break
+            time.sleep(0.05)
+        self.assertTrue(jm.cancel(jid))
+        job = jm.wait(jid, timeout=20)
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("cancelled by user", job["output"])
+
+    def test_cancel_unknown_or_finished_returns_false(self):
+        jm = web.JobManager()
+        self.assertFalse(jm.cancel("nope"))
+        jid = jm.start("quick", [sys.executable, "-c", "print('x')"])
+        jm.wait(jid, timeout=20)
+        self.assertFalse(jm.cancel(jid))
+
     def test_on_done_fires_after_completion(self):
         jm = web.JobManager()
         seen = []

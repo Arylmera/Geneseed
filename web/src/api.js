@@ -17,6 +17,15 @@ export const api = {
   graph: () => get('/api/graph'),
   job: (id) => get(`/api/jobs/${id}`),
   jobs: () => get('/api/jobs'),
+  async cancelJob(id) {
+    const r = await fetch(`/api/jobs/${id}/cancel`, {
+      method: 'POST',
+      headers: { 'X-Geneseed-Token': TOKEN || '', 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText)
+    return r.json()
+  },
   // Synchronous restore — returns { restored, deleted, errors }, not a job.
   async restore(files) {
     const r = await fetch('/api/actions/restore', {

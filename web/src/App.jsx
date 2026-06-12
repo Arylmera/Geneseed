@@ -96,6 +96,9 @@ export default function App() {
     } catch (e) { setToast({ kind: 'err', msg: e.message }) }
   }
 
+  const cancelJob = (id) =>
+    api.cancelJob(id).catch((e) => setToast({ kind: 'err', msg: e.message }))
+
   return (
     <>
       <header className="header">
@@ -125,6 +128,7 @@ export default function App() {
           collapsed={!consoleOpen}
           onToggle={() => setConsoleOpen((v) => !v)}
           onClear={() => setRuns([])}
+          onCancel={cancelJob}
         />
         <main className="main">
           {route.view === 'dashboard' && <Dashboard overview={overview} onAction={runAction} />}

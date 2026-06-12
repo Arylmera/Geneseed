@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 
 // Persistent right-side terminal. Shows every action triggered from the UI as a
 // command run, streaming its output live. Not a popup — always docked.
-export default function Console({ runs, collapsed, onToggle, onClear }) {
+export default function Console({ runs, collapsed, onToggle, onClear, onCancel }) {
   const bodyRef = useRef(null)
 
   // Autoscroll to the newest output as it streams in.
@@ -41,6 +41,13 @@ export default function Console({ runs, collapsed, onToggle, onClear }) {
                 {r.status === 'running' ? '…'
                   : `${r.status === 'done' ? '✓ done' : '✗ failed'}${r.duration ? ` · ${r.duration}s` : ''}`}
               </span>
+              {r.status === 'running' && onCancel && (
+                <button
+                  className="btn ghost sm run-cancel"
+                  onClick={() => onCancel(r.id)}
+                  title="Cancel this run"
+                >✕</button>
+              )}
             </div>
             {r.output && <pre className="run-out">{r.output}</pre>}
           </div>
