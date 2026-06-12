@@ -76,13 +76,13 @@ export default function Doctor() {
                 </span>
                 {data.themes.map((t) => (
                   <span key={t} className="badge" style={{ textTransform: 'capitalize' }}>
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                    {t}
                   </span>
                 ))}
               </div>
               {data.ok
                 ? <span className="badge ok"><span className="dot" />all clean</span>
-                : <span className="badge bad"><span className="dot" />{data.problems.length} problem</span>}
+                : <span className="badge bad"><span className="dot" />{data.problems.length} problem{data.problems.length === 1 ? '' : 's'}</span>}
             </div>
           </div>
           <div className="stack" style={{ gap: 12 }}>
