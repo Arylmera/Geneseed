@@ -82,6 +82,19 @@ class JobManagerTests(unittest.TestCase):
         self.assertIsNone(second)  # busy
         jm.wait(jid, timeout=20)
 
+    def test_on_done_fires_after_completion(self):
+        jm = web.JobManager()
+        seen = []
+        jid = jm.start("noop", [sys.executable, "-c", "print('x')"],
+                       on_done=lambda: seen.append(True))
+        jm.wait(jid, timeout=20)
+        import time
+        for _ in range(100):           # on_done runs just after status flips
+            if seen:
+                break
+            time.sleep(0.05)
+        self.assertEqual(seen, [True])
+
     def test_failure_captured(self):
         jm = web.JobManager()
         jid = jm.start("boom", [sys.executable, "-c",
@@ -142,6 +155,17 @@ class ThemePickerTests(unittest.TestCase):
         theme, emit = web._build_override(self.state, {})
         self.assertEqual(theme, self.state.theme)
         self.assertEqual(emit, self.state.emit)
+
+    def test_theme_choices_carry_gallery_fields(self):
+        t = web.api_themes(self.state)
+        neutral = next(x for x in t["themes"] if x["name"] == "neutral")
+        for key in ("blurb", "accent", "tagline", "sigil"):
+            self.assertIn(key, neutral)
+        self.assertEqual(neutral["accent"], "cyan")
+        # Every theme declares an accent the swatch palette knows.
+        for x in t["themes"]:
+            self.assertIn(x["accent"], ("red", "green", "yellow", "blue",
+                                        "magenta", "cyan", "white"))
 
 
 class DoctorTests(unittest.TestCase):

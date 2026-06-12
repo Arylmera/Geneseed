@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Section from './pages/Section.jsx'
 import Diff from './pages/Diff.jsx'
 import Doctor from './pages/Doctor.jsx'
+import Themes from './pages/Themes.jsx'
 import Settings from './pages/Settings.jsx'
 import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
@@ -17,6 +18,7 @@ const NAV = [
   { hash: '#/section/agents', label: 'Library', match: (r) => r.view === 'section' || r.view === 'item' },
   { hash: '#/diff', label: 'Changes', match: (r) => r.view === 'diff' },
   { hash: '#/doctor', label: 'Doctor', match: (r) => r.view === 'doctor' },
+  { hash: '#/themes', label: 'Themes', match: (r) => r.view === 'themes' },
   { hash: '#/settings', label: 'Settings', match: (r) => r.view === 'settings' },
 ]
 
@@ -93,6 +95,7 @@ export default function App() {
             <Section section={route.type + 's'} selected={route.name} query={query} />}
           {route.view === 'diff' && <Diff />}
           {route.view === 'doctor' && <Doctor />}
+          {route.view === 'themes' && <Themes onAction={runAction} />}
           {route.view === 'settings' && <Settings onAction={runAction} />}
         </main>
       </div>
