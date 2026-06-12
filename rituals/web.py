@@ -660,6 +660,7 @@ def api_overview(state: WebState) -> dict:
             "memory": len(_memory_items(state)),
             "notebook": len(_notebook_items(state)),
             "wiki": len(_wiki_items(state)),
+            "config": len(_config_items(state)),
         },
         "doctor": state.doctor,
         "diff": diff,

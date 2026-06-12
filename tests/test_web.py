@@ -30,6 +30,8 @@ class CatalogTests(unittest.TestCase):
         self.assertIn(ov["accent"], ("red", "green", "yellow", "blue",
                                      "magenta", "cyan", "white"))
         self.assertIn("checked_at", ov["doctor"])
+        self.assertIn("config", ov["counts"])
+        self.assertIsInstance(ov["counts"]["config"], int)
 
     def test_doctor_verdict_is_cached_until_refresh(self):
         first = web.api_overview(self.state)["doctor"]
