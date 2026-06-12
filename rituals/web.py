@@ -375,6 +375,29 @@ def api_restore(state: WebState, files: list) -> dict:
     return {"restored": restored, "deleted": deleted, "errors": errors}
 
 
+def api_graph(state: WebState) -> dict:
+    """Cross-link graph over agents + skills: one node per item, one edge per
+    resolved [[wikilink]] between two known items — hubs and orphans at a glance.
+    Same resolver contract as _resolve_links (known agent/skill names only)."""
+    inv = state.inventory
+    known = {}
+    for e in inv["agents"]:
+        known[e["name"]] = "agent"
+    for e in inv["skills"]:
+        known[e["name"]] = "skill"
+    nodes = [{"id": name, "type": type_} for name, type_ in sorted(known.items())]
+    edges, seen = [], set()
+    for kind in ("agents", "skills"):
+        for e in inv[kind]:
+            src = e["name"]
+            for m in WIKILINK_RE.finditer(e["body"]):
+                dst = m.group(1).strip()
+                if dst in known and dst != src and (src, dst) not in seen:
+                    seen.add((src, dst))
+                    edges.append({"source": src, "target": dst})
+    return {"nodes": nodes, "edges": edges}
+
+
 OFFLINE_ZIP_SKIP = {".git", "node_modules", "__pycache__", ".superpowers"}
 
 
@@ -477,6 +500,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                     return self._send_json(api_setup(state))
                 if path == "/api/doctor":
                     return self._send_json(api_doctor(state))
+                if path == "/api/graph":
+                    return self._send_json(api_graph(state))
                 if path == "/api/offline-zip":
                     data, name = offline_zip_bytes()
                     return self._send_bytes(

@@ -224,6 +224,24 @@ class RestoreTests(unittest.TestCase):
             self.assertEqual(res["errors"], ["no deployed harness"])
 
 
+class GraphTests(unittest.TestCase):
+    def test_api_graph_nodes_and_edges_resolve(self):
+        state = web.WebState(theme="neutral")
+        g = web.api_graph(state)
+        self.assertTrue(g["nodes"])
+        ids = {n["id"] for n in g["nodes"]}
+        self.assertEqual(len(ids), len(g["nodes"]))          # unique nodes
+        for n in g["nodes"]:
+            self.assertIn(n["type"], ("agent", "skill"))
+        for e in g["edges"]:
+            self.assertIn(e["source"], ids)                  # edges resolve
+            self.assertIn(e["target"], ids)
+            self.assertNotEqual(e["source"], e["target"])    # no self-links
+        # No duplicate edges.
+        pairs = [(e["source"], e["target"]) for e in g["edges"]]
+        self.assertEqual(len(pairs), len(set(pairs)))
+
+
 class OfflineZipTests(unittest.TestCase):
     def test_offline_zip_holds_the_source_tree(self):
         import io

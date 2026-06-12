@@ -84,6 +84,22 @@ h2 { margin: 0 0 16px; font-size: 20px; }
   font-size: 13px; }
 .check-problems li { margin: 3px 0; word-break: break-word; }
 
+/* ---- cross-link graph -------------------------------------------------------- */
+.graph-wrap { padding: 8px; overflow: auto; }
+.graph-wrap svg { width: 100%; height: auto; display: block; }
+.graph-legend .swatch { width: 9px; height: 9px; }
+.gedge { stroke: var(--border); stroke-width: 1.2; }
+.gedge.lit { stroke: var(--accent); stroke-width: 1.8; }
+.gedge.dim { opacity: .25; }
+.gnode { cursor: pointer; }
+.gnode circle { stroke: var(--bg); stroke-width: 1.5; }
+.gnode.agent circle { fill: #5b8cff; }
+.gnode.skill circle { fill: #3fb950; }
+.gnode text { fill: var(--muted); font-size: 11px;
+  font-family: ui-sans-serif, system-ui, sans-serif; pointer-events: none; }
+.gnode:hover text { fill: var(--fg); }
+.gnode.dim { opacity: .3; }
+
 /* ---- theme gallery --------------------------------------------------------- */
 .theme-head { display: flex; align-items: center; gap: 8px; }
 .theme-head h3 { margin: 0; }

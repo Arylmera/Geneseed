@@ -14,6 +14,7 @@ export const api = {
   themes: () => get('/api/themes'),
   setup: () => get('/api/setup'),
   doctor: () => get('/api/doctor'),
+  graph: () => get('/api/graph'),
   job: (id) => get(`/api/jobs/${id}`),
   // Synchronous restore — returns { restored, deleted, errors }, not a job.
   async restore(files) {
