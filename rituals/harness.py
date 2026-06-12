@@ -14,7 +14,8 @@ Dependency-free. Subcommands:
                                    never merely requested)
     harness diff [--target DIR]    report how a DEPLOYED global harness differs from
                                    a fresh render of the source (back-port aid) —
-                                   --full for unified diffs, --theme to match voice
+                                   --full for unified diffs, --theme to match voice,
+                                   --out FILE to export a markdown improvements file
     harness version [--target DIR] show the current source fingerprint vs the
                                    deployed install's, and whether they match
     harness status                 print the install dashboard as text (theme, mode,
@@ -885,6 +886,61 @@ def _diff_collect(target=None, theme=None):
     return target, theme, files
 
 
+def _improvements_md(target, theme, files, when: str) -> str:
+    """Render the deployed-vs-source drift as a self-contained markdown report — the
+    artifact a user hands to an agent in this source repo to back-port the deployed
+    harness's self-improvements into src/. Pure (unit-tested); `when` is the caller's
+    timestamp so the render itself is reproducible."""
+    edited = [f for f in files if f["status"] == "edited"]
+    added = [f for f in files if f["status"] == "added"]
+    missing = [f for f in files if f["status"] == "missing"]
+    lines = [
+        "# Geneseed — deployed improvements to back-port",
+        "",
+        f"- captured: {when}",
+        f"- deployed: `{target}`",
+        f"- theme: {theme}",
+        f"- {len(edited)} edited · {len(added)} added in deployed · {len(missing)} missing from deployed",
+        "",
+        "The deployed harness drifted from a fresh render of `src/` — typically the",
+        "self-improvement loops editing agent/skill files in place. Hand this file to",
+        "an agent in the Geneseed source repo and ask it to fold the changes below",
+        "back into `src/`. Diffs read source -> deployed; the expected copy was",
+        "rendered in the deployed theme, so only genuine local edits appear.",
+        "",
+    ]
+    label = {"edited": "edited in deployed",
+             "added": "only in deployed — your addition",
+             "missing": "in source, not deployed"}
+    for f in files:
+        lines += [f"## `{f['rel']}`  ({label[f['status']]})", "", "```diff",
+                  *f["diff"], "```", ""]
+    return "\n".join(lines) + "\n"
+
+
+def _write_improvements(target, theme, files, out_path=None) -> Path:
+    """Write the drift report for an already-collected diff. Default destination is
+    a timestamped file under improvements/ at the source root (git-ignored)."""
+    now = datetime.datetime.now()
+    path = (Path(out_path).expanduser() if out_path else
+            ROOT / "improvements" / now.strftime("improvements-%Y%m%d-%H%M%S.md"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_improvements_md(target, theme, files,
+                                     now.strftime("%Y-%m-%d %H:%M:%S")),
+                    encoding="utf-8")
+    return path
+
+
+def export_improvements(target=None, theme=None, out_path=None):
+    """Collect the deployed-vs-source drift and, when there IS any, write it as a
+    markdown improvements file. Returns (path, files): path is None when nothing was
+    written — no deployed install (files is None) or no drift (files is [])."""
+    target, theme, files = _diff_collect(target, theme)
+    if not files:
+        return None, files
+    return _write_improvements(target, theme, files, out_path), files
+
+
 def cmd_diff(args: argparse.Namespace) -> int:
     """Report how a DEPLOYED (ported) global harness differs from a fresh render of
     the current source — so edits made in place can be reviewed and back-ported to
@@ -908,12 +964,18 @@ def cmd_diff(args: argparse.Namespace) -> int:
         print(f"  + {f['rel']}   (only in deployed — your addition)")
     for f in missing:
         print(f"  - {f['rel']}   (in source, not deployed — re-emit to add)")
+    if args.out:
+        if files:
+            path = _write_improvements(target, theme, files, args.out)
+            print(f"[diff] improvements file written: {path}")
+        else:
+            print("[diff] no differences — nothing written.")
     if args.full:
         for f in edited:
             print(f"\n--- {f['rel']} (source -> deployed) ---")
             print("\n".join(f["diff"]))
-    elif edited:
-        print("\nRun with --full to see the line-level diffs.")
+    elif edited and not args.out:
+        print("\nRun with --full to see the line-level diffs, or --out FILE to export them.")
     return 0
 
 
@@ -1570,6 +1632,16 @@ def _setup_lines() -> int:
         print("[setup] cancelled — nothing written.")
         return 0
     theme, emit, out, root = sel["theme"], sel["emit"], sel.get("out"), sel.get("root")
+    if emit == "opencode-global":
+        # The build below overwrites the deployed global harness; the self-improvement
+        # loops may have edited it in place. Preserve that drift first.
+        try:
+            ipath, _ifiles = export_improvements()
+            if ipath:
+                print(f"- local edits found in the deployed harness — saved to {ipath}")
+                print("  (hand that file to your agent to back-port them into src/)")
+        except Exception as e:
+            print(f"! could not export local edits ({e}) — continuing.")
     argv = _setup_build_args(theme, emit, out, root)
     print("Running:  python build.py " + " ".join(argv))
     rc = run([sys.executable, str(BUILD), *argv]).returncode
@@ -2563,6 +2635,25 @@ def _grow_flow(stdscr, sel: dict) -> int:
     # health check) in its accent so the chrome matches the harness being grown.
     flair = _theme_flair(theme)
     pal = _tui_palette(curses, accent=flair["accent"])
+    extra = []
+    if emit == "opencode-global":
+        # The build overwrites the deployed global harness; the self-improvement loops
+        # may have edited it in place. Preserve that drift first — one-shot "saving"
+        # frame (the export renders the whole harness to a temp dir, like the diff).
+        _clear_frame(stdscr)
+        _topbar(stdscr, pal, "setup")
+        h, w = stdscr.getmaxyx()
+        msg = f"{_spin(0)} checking the deployed harness for local edits" + ("..." if _TUI_ASCII else "…")
+        _put(stdscr, max(2, h // 2), max(2, (w - _dwidth(msg)) // 2), msg, pal["MUTED"])
+        _botbar(stdscr, pal, "")
+        stdscr.refresh()
+        try:
+            ipath, _ifiles = export_improvements()
+        except Exception:
+            ipath = None
+        if ipath:
+            extra.append(("info", f"local edits preserved -> {ipath}"))
+            extra.append(("info", "hand that file to your agent to back-port them into src"))
     argv = _setup_build_args(theme, emit, out, root)
     status = _run_steps(stdscr, curses, pal,
                         [("Build the harness", [sys.executable, str(BUILD), *argv])],
@@ -2571,7 +2662,7 @@ def _grow_flow(stdscr, sel: dict) -> int:
     if ok:
         _themed_reveal(stdscr, curses, pal, theme)   # themed install flourish before the summary
     _info_screen(stdscr, curses, pal, _setup_done_title(flair, ok),
-                 _setup_done_lines(flair, theme, emit, out, root, ok),
+                 _setup_done_lines(flair, theme, emit, out, root, ok, extra),
                  "Enter: run health check" if ok else "Enter: close")
     if not ok:
         return 1
@@ -2595,11 +2686,12 @@ def _setup_done_title(flair: dict, ok: bool) -> str:
     return "setup complete"
 
 
-def _setup_done_lines(flair: dict, theme, emit, out, root, ok) -> list:
+def _setup_done_lines(flair: dict, theme, emit, out, root, ok, extra=None) -> list:
     """Post-build rows. On success the theme's banner crowns the screen and its
     benediction closes it, with the factual install summary between — the same
-    voice/banner treatment the rendered bundle wears. On failure: just the facts."""
-    facts = _setup_summary_lines(theme, emit, out, root, ok)
+    voice/banner treatment the rendered bundle wears. On failure: just the facts.
+    `extra` rows (e.g. the preserved-local-edits pointer) join the facts."""
+    facts = _setup_summary_lines(theme, emit, out, root, ok) + list(extra or [])
     if not ok:
         return facts
     rows: list = []
@@ -2626,7 +2718,7 @@ def _diff_view(stdscr, curses, pal) -> None:
     _put(stdscr, max(2, h // 2), max(2, (w - _dwidth(msg)) // 2), msg, pal["MUTED"])
     _botbar(stdscr, pal, "")
     stdscr.refresh()
-    target, _theme, files = _diff_collect()
+    target, theme, files = _diff_collect()
     if files is None:
         _info_screen(stdscr, curses, pal, "review local edits",
                      [("warn", f"No deployed global install at {target}."),
@@ -2695,11 +2787,19 @@ def _diff_view(stdscr, curses, pal) -> None:
                 a = 0
             put(1 + i, rx, ln[:rw], a)
         _scrollbar(stdscr, pal, w - 1, 1, body_h, dtop, len(diff))
-        _botbar(stdscr, pal, "j/k file · PgUp/PgDn scroll · q close")
+        _botbar(stdscr, pal, "j/k file · PgUp/PgDn scroll · e export to file · q close")
         stdscr.refresh()
         c = stdscr.getch()
         if c in (ord("q"), 27, curses.KEY_ENTER, 10, 13):
             return
+        elif c == ord("e"):
+            try:
+                path = _write_improvements(target, theme, files)
+                rows = [("ok", f"improvements file written: {path}"),
+                        ("info", "hand it to your agent to back-port the edits into src.")]
+            except OSError as e:
+                rows = [("warn", f"could not write the file ({e})")]
+            _info_screen(stdscr, curses, pal, "export local edits", rows, "Enter: back")
         elif c in (curses.KEY_DOWN, ord("j")):
             sel = min(sel + 1, len(files) - 1)
             dtop = 0
@@ -3522,7 +3622,19 @@ def _bootstrap_plain(here, ref) -> None:
 
 def cmd_upgrade(args: argparse.Namespace) -> int:
     """Self-upgrade from the published source, then rebuild the bundle. Cross-platform
-    (stdlib download + extract) — replaces upgrade.sh; the wrapper now delegates here."""
+    (stdlib download + extract) — replaces upgrade.sh; the wrapper now delegates here.
+    Before anything is refreshed, any drift in the deployed global harness (the
+    self-improvement loops edit it in place) is exported to an improvements file —
+    the rebuild overwrites those edits, and the export must compare against the
+    PRE-refresh source the deployment was built from."""
+    try:
+        ipath, _ = export_improvements()
+        if ipath:
+            print(f"[upgrade] deployed harness carries local edits — saved to {ipath}")
+            print("[upgrade] hand that file to your agent to back-port them into src/.")
+    except Exception as e:                  # never block an upgrade on the export
+        sys.stderr.write(f"[upgrade] ⚠️  could not export local edits ({e}) — "
+                         f"run `geneseed diff --out FILE` before upgrading to keep them.\n")
     import _update
     return _update.upgrade(args.ref, args.theme)
 
@@ -3946,6 +4058,9 @@ def main() -> int:
     df.add_argument("--theme", default=None, help="theme the deployment used "
                     "(default: auto-detected from the deployed marker/sigil)")
     df.add_argument("--full", action="store_true", help="show unified diffs, not just the file-level summary")
+    df.add_argument("--out", default=None, metavar="FILE",
+                    help="also write the drift as a markdown improvements file — the "
+                         "artifact to hand to an agent to back-port edits into src/")
     df.set_defaults(fn=cmd_diff)
 
     ve = sub.add_parser("version", help="show installed vs current-source fingerprint and whether they match")

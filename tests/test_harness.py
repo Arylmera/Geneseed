@@ -1193,5 +1193,52 @@ class UpdateStepSelfHealTests(unittest.TestCase):
         self.assertEqual(cmd[2:], ["upgrade", "main"])
 
 
+class ImprovementsExportTests(unittest.TestCase):
+    """The drift report (`diff --out` / auto-export on setup & upgrade): a markdown
+    artifact carrying the deployed harness's local edits for back-porting to src/."""
+
+    FILES = [
+        {"rel": "agents/reviewer.md", "status": "edited",
+         "diff": ["--- source/agents/reviewer.md", "+++ deployed/agents/reviewer.md",
+                  "@@ -1 +1 @@", "-old line", "+new line"]},
+        {"rel": "skills/extra.md", "status": "added",
+         "diff": ["(only in deployed — your addition)", "", "+the whole body"]},
+        {"rel": "laws/gone.md", "status": "missing",
+         "diff": ["(in source, not deployed — re-emit to add)"]},
+    ]
+
+    def test_md_carries_header_counts_and_fenced_diffs(self):
+        md = harness._improvements_md(Path("/cfg"), "neutral", self.FILES,
+                                      "2026-06-12 10:00:00")
+        self.assertIn("# Geneseed — deployed improvements to back-port", md)
+        self.assertIn("- captured: 2026-06-12 10:00:00", md)
+        self.assertIn("- theme: neutral", md)
+        self.assertIn("1 edited · 1 added in deployed · 1 missing from deployed", md)
+        self.assertIn("## `agents/reviewer.md`  (edited in deployed)", md)
+        self.assertIn("## `skills/extra.md`  (only in deployed — your addition)", md)
+        self.assertIn("## `laws/gone.md`  (in source, not deployed)", md)
+        # every section is a ```diff fence and the diff bodies survive verbatim
+        self.assertEqual(md.count("```diff"), 3)
+        self.assertEqual(md.count("```"), 6)
+        self.assertIn("+new line", md)
+
+    def test_write_improvements_honours_out_path(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        out = tmp / "deep" / "report.md"      # parent does not exist yet
+        path = harness._write_improvements(Path("/cfg"), "imperial", self.FILES, out)
+        self.assertEqual(path, out)
+        text = out.read_text(encoding="utf-8")
+        self.assertIn("- theme: imperial", text)
+        self.assertIn("agents/reviewer.md", text)
+
+    def test_export_improvements_no_install_writes_nothing(self):
+        tmp = Path(tempfile.mkdtemp())        # no .geneseed-manifest.json here
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        path, files = harness.export_improvements(target=tmp)
+        self.assertIsNone(path)
+        self.assertIsNone(files)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,5 +5,8 @@ __pycache__/
 
 # Generated build output — derivable from src/ via build.py, never committed.
 Harness/
+# Exported deployed-vs-source improvements reports (geneseed diff --out / auto-export
+# on setup & upgrade) — personal back-port artifacts, never committed.
+improvements/
 # Host-specific project-context manifest, if a build drops one at the repo root.
 /context.json
