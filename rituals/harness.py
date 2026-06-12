@@ -945,6 +945,30 @@ def export_improvements(target=None, theme=None, out_path=None):
     return _write_improvements(target, theme, files, out_path), files
 
 
+_T0 = datetime.datetime.now().timestamp()    # process start — _flush_export_notes scans from here
+
+
+def _flush_export_notes() -> None:
+    """Re-print, on the RESTORED terminal, the path of any improvements file exported
+    since this process started — the in-TUI notices live on the alternate screen and
+    vanish with it (or hide below a theme banner). Called after each curses session
+    ends and before a re-exec replaces this process. Scans the global install's
+    improvements/ dir rather than tracking calls, so exports made by subprocess steps
+    (the upgrade inside bootstrap / update) are caught too."""
+    try:
+        d = build._opencode_config_dir() / "improvements"
+        fresh = sorted(p for p in d.glob("improvements-*.md")
+                       if p.stat().st_mtime >= _T0 - 1)
+    except OSError:
+        return
+    if not fresh:
+        return
+    for p in fresh:
+        print(f"[geneseed] improvements file saved: {p}")
+    print("[geneseed] the deployed harness carried local edits — hand the file to "
+          "your agent to back-port them into src/.")
+
+
 def cmd_diff(args: argparse.Namespace) -> int:
     """Report how a DEPLOYED (ported) global harness differs from a fresh render of
     the current source — so edits made in place can be reviewed and back-ported to
@@ -1681,7 +1705,9 @@ def cmd_setup(args: argparse.Namespace) -> int:
             locale.setlocale(locale.LC_ALL, "")
         except locale.Error:
             pass
-        return curses.wrapper(_setup_flow)
+        rc = curses.wrapper(_setup_flow)
+        _flush_export_notes()    # the in-TUI notice dies with the alternate screen
+        return rc
     except Exception as e:
         sys.stderr.write(f"[setup] TUI unavailable ({e}); using prompts.\n")
     return _setup_lines()
@@ -3350,6 +3376,7 @@ def cmd_tui(args: argparse.Namespace) -> int:
     except Exception as e:  # e.g. the Windows shim's Unsupported when VT can't be enabled
         print(f"[tui] full-screen panel unavailable ({e}). Use `harness setup`, `doctor`, or `build`.")
         return 1
+    _flush_export_notes()    # diff-view `e` exports / in-panel updates, re-shown post-TUI
     return 0
 
 
@@ -3794,6 +3821,9 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
             _bootstrap_plain(here, args.ref)
     else:
         _bootstrap_plain(here, args.ref)
+    # Before the re-exec replaces this process: surface any improvements file the
+    # upgrade step exported (its own notice scrolled by inside the progress screen).
+    _flush_export_notes()
     if not args.no_setup:
         # Re-exec the freshly-updated harness so setup uses the new code (this running
         # process still holds the pre-update modules in memory).
@@ -3851,6 +3881,7 @@ def _settings_menu(stdscr, curses, pal, here) -> None:
         elif sel == "update":
             _bootstrap_progress(stdscr, here, None)
             curses.endwin()
+            _flush_export_notes()    # before the re-exec replaces this process
             _reexec([sys.executable, str(here / "rituals" / "harness.py"), "menu"])
         elif sel == "build":
             status = _run_steps(stdscr, curses, pal,
@@ -3986,6 +4017,7 @@ def _main_menu(stdscr) -> int:
         elif sel == "bootstrap":
             _bootstrap_progress(stdscr, here, None)
             curses.endwin()
+            _flush_export_notes()    # before the re-exec replaces this process
             _reexec([sys.executable, hp, "setup"])
 
 
@@ -4007,7 +4039,9 @@ def cmd_menu(args: argparse.Namespace) -> int:
             locale.setlocale(locale.LC_ALL, "")
         except locale.Error:
             pass
-        return curses.wrapper(_main_menu)
+        rc = curses.wrapper(_main_menu)
+        _flush_export_notes()    # re-theme / setup / diff exports, re-shown post-TUI
+        return rc
     except Exception as e:
         sys.stderr.write(f"[menu] TUI unavailable ({e}).\n")
         return _menu_help()

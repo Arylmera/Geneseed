@@ -1247,6 +1247,34 @@ class ImprovementsExportTests(unittest.TestCase):
         self.assertIsNone(path)
         self.assertIsNone(files)
 
+    def test_flush_export_notes_prints_fresh_skips_stale(self):
+        import contextlib
+        import io
+        tmp = Path(tempfile.mkdtemp())        # stands in for the global config dir
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        d = tmp / "improvements"
+        d.mkdir()
+        fresh = d / "improvements-20991231-235959.md"
+        fresh.write_text("x", encoding="utf-8")
+        stale = d / "improvements-20200101-000000.md"
+        stale.write_text("x", encoding="utf-8")
+        os.utime(stale, (0, harness._T0 - 3600))   # written before this process
+        old = os.environ.get("OPENCODE_CONFIG_DIR")
+        os.environ["OPENCODE_CONFIG_DIR"] = str(tmp)
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                harness._flush_export_notes()
+        finally:
+            if old is None:
+                os.environ.pop("OPENCODE_CONFIG_DIR", None)
+            else:
+                os.environ["OPENCODE_CONFIG_DIR"] = old
+        out = buf.getvalue()
+        self.assertIn(fresh.name, out)
+        self.assertIn("back-port", out)
+        self.assertNotIn(stale.name, out)
+
 
 if __name__ == "__main__":
     unittest.main()

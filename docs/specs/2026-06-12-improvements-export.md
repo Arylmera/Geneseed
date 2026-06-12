@@ -64,6 +64,18 @@ offers `--out` alongside `--full`.
 Failures of the export itself never block an install or upgrade — they warn and
 continue (the upgrade warning names the manual `diff --out` escape hatch).
 
+### Post-TUI flush — the notice must outlive the alternate screen
+
+The in-TUI notices proved easy to miss in practice (the summary rows sit below
+the theme banner; in bootstrap the upgrade step's lines scroll past inside the
+progress screen). `_flush_export_notes()` re-prints, on the restored terminal,
+every improvements file written **since process start** (`_T0`): it *scans* the
+global install's `improvements/` dir by mtime instead of tracking calls, so
+exports made by subprocess steps (the upgrade inside bootstrap / update) are
+caught too. Called after each curses session ends (`cmd_setup`, `cmd_menu`,
+`cmd_tui`) and **before each `_reexec`** (bootstrap → setup, Settings → Update)
+— a re-exec replaces the process, so anything not flushed first is lost.
+
 Not hooked: Settings → *Rebuild bundle* and `geneseed build` (plain `build.py`
 defaults to `--emit files` — they never touch a deployed global install).
 
