@@ -58,7 +58,7 @@ export default function Diff() {
     <div className="container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Local edits ({data.files.length})</h2>
-        <div className="row-actions" style={{ margin: 0 }}>
+        <div className="row-actions" style={{ margin: 0, gap: 20 }}>
           <button className="btn ghost" onClick={restore} disabled={busy || sel.size === 0}>
             Restore selected from source{sel.size ? ` (${sel.size})` : ''}
           </button>
