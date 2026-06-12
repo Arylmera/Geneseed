@@ -45,10 +45,10 @@ export default function Themes({ onAction }) {
                 <span className="th-orb" />
                 <span className="th-name">{t.name}</span>
                 {isCur && (
-                  <span className="badge ok" style={{ marginLeft: 'auto' }}>current</span>
+                  <span className="badge ok" style={{ marginLeft: 'auto' }}><span className="dot" />current</span>
                 )}
               </div>
-              {t.tagline && <p className="th-tag">"{t.tagline}"</p>}
+              {t.tagline && <p className="th-tag">{'“'}{t.tagline}{'”'}</p>}
               {t.sigil && <div className="th-sigil">{t.sigil}</div>}
               <p className="muted" style={{ fontSize: 12.5 }}>{t.blurb}</p>
               <button
