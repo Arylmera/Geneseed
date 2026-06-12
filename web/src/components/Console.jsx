@@ -23,7 +23,7 @@ export default function Console({ runs, open, onToggle, onClear, onCancel, busy 
           <button className="iconbtn" title="Clear" onClick={onClear} disabled={!runs.length}>
             <Icon name="clear" />
           </button>
-          <button className="iconbtn" title={open ? 'Collapse' : 'Expand'} onClick={onToggle}>
+          <button className="iconbtn" title={open ? 'Collapse' : 'Expand'} aria-expanded={open} onClick={onToggle}>
             <Icon name="chevron" className="glyph"
               style={{ transform: open ? 'rotate(90deg)' : 'rotate(-90deg)' }} />
           </button>

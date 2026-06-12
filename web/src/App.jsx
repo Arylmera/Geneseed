@@ -40,7 +40,7 @@ const TAB_FLAG = { dashboard: 'overview', section: 'library', item: 'library',
 
 const MODE_KEY = 'geneseed-mode'
 
-function Rail({ route, overview, themes, onOpenVoice }) {
+function Rail({ route, overview, onOpenVoice }) {
   return (
     <aside className="rail">
       <div className="rail-brand" onClick={() => go('#/')} title="Dashboard">
@@ -56,7 +56,7 @@ function Rail({ route, overview, themes, onOpenVoice }) {
         return (
           <div className="rail-nav" key={n.id}>
             <a className={`rail-item ${n.match(route) ? 'active' : ''}`} href={n.hash}
-              style={{ color: undefined }}>
+              aria-current={n.match(route) ? 'page' : undefined}>
               <Icon name={n.icon} />
               <span>{n.label}</span>
               {tag ? <span className="tag" style={n.warn ? { color: 'var(--warn)' } : null}>{tag}</span> : null}
@@ -85,7 +85,7 @@ function VoicePopover({ themes, current, onPick, onClose }) {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose() }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
-  }, [])
+  }, [onClose])
   return (
     <div className="pop" ref={ref}>
       <div className="tick" style={{ padding: '4px 10px 8px' }}>Switch voice</div>
@@ -206,8 +206,8 @@ export default function App() {
 
   return (
     <div className={`app ${mode === 'light' ? 'light' : ''}`} ref={appRef}>
-      <div className="atmos" />
-      <Rail route={route} overview={overview} themes={themes}
+      <div className="atmos" aria-hidden="true" />
+      <Rail route={route} overview={overview}
         onOpenVoice={() => setVoiceOpen((v) => !v)} />
       {voiceOpen && (
         <VoicePopover themes={themes} current={overview?.theme}
