@@ -53,5 +53,16 @@ class CatalogTests(unittest.TestCase):
             web.api_item(self.state, "agent", "does-not-exist-xyz")
 
 
+class DiffTests(unittest.TestCase):
+    def test_diff_no_deployed_install(self):
+        # Point at an empty temp dir => no GLOBAL_MANIFEST => deployed False.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            state = web.WebState(theme="neutral", target=Path(tmp))
+            res = web.api_diff(state)
+            self.assertFalse(res["deployed"])
+            self.assertEqual(res["files"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

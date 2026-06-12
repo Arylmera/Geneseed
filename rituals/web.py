@@ -155,6 +155,16 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
     raise NotFound(type_)
 
 
+def api_diff(state: WebState) -> dict:
+    target, theme, files = harness._diff_collect(target=state.target, theme=state.theme)
+    return {
+        "deployed": files is not None,
+        "target": str(target),
+        "theme": theme,
+        "files": files or [],
+    }
+
+
 def api_overview(state: WebState) -> dict:
     inv = state.inventory
     themes, problems = harness._doctor_collect(theme=state.theme)
