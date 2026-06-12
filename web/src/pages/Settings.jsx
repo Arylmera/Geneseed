@@ -53,7 +53,14 @@ function McpServers() {
                     role="switch"
                     aria-checked={s.state === 'enabled'}
                     aria-disabled={isDisabled || undefined}
+                    tabIndex={isDisabled ? -1 : 0}
                     onClick={isDisabled ? undefined : () => toggle(t, s)}
+                    onKeyDown={isDisabled ? undefined : (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        if (e.key === ' ') e.preventDefault()
+                        toggle(t, s)
+                      }
+                    }}
                   />
                 ) : (s.preset ? (
                   <button

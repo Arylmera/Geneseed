@@ -15,18 +15,19 @@ vi.mock('../api.js', () => ({
       emits: [{ name: 'opencode-global', desc: '' }],
       current: { theme: 'neutral', emit: 'opencode-global' },
     }),
-    mcp: () => Promise.resolve({
+    mcp: vi.fn(() => Promise.resolve({
       targets: [{
         label: 'global config', path: 'C:/cfg/opencode.json', exists: true,
         commented: false,
         servers: [{ name: 'markitdown', label: 'MarkItDown', desc: 'docs', preset: true, state: 'enabled' }],
       }],
       default: 0,
-    }),
+    })),
   },
 }))
 
 import Settings from '../pages/Settings.jsx'
+import { api } from '../api.js'
 
 describe('Settings', () => {
   it('renders the install snapshot and the build picker', async () => {
@@ -50,7 +51,30 @@ describe('Settings', () => {
   })
 
   it('renders Add button for absent preset servers', async () => {
-    const { unmount } = render(<Settings onAction={() => {}} />)
-    unmount()
+    // Override mcp for this test: one absent preset server + one absent non-preset server
+    vi.mocked(api.mcp).mockResolvedValueOnce({
+      targets: [{
+        label: 'global config', path: 'C:/cfg/opencode.json', exists: true,
+        commented: false,
+        servers: [
+          { name: 'context7', label: 'Context7', desc: 'docs', preset: true, state: 'absent' },
+          { name: 'custom-srv', label: 'Custom', desc: 'custom', preset: false, state: 'absent' },
+        ],
+      }],
+      default: 0,
+    })
+
+    render(<Settings onAction={() => {}} />)
+
+    // Absent preset server renders an Add button
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy())
+
+    // Absent non-preset server renders no switch and no Add button (only one Add total)
+    const addButtons = screen.getAllByRole('button', { name: 'Add' })
+    expect(addButtons.length).toBe(1)
+
+    // No switch for either absent server
+    const switches = screen.queryAllByRole('switch')
+    expect(switches.length).toBe(0)
   })
 })
