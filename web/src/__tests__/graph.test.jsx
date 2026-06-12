@@ -23,6 +23,6 @@ describe('Graph', () => {
     await waitFor(() => expect(screen.getByText('scribe')).toBeTruthy())
     expect(screen.getByText('git')).toBeTruthy()
     expect(screen.getByText('loner')).toBeTruthy()
-    expect(screen.getByText(/3 nodes, 1 links/)).toBeTruthy()
+    expect(screen.getByText(/3 nodes · 1 links/)).toBeTruthy()
   })
 })

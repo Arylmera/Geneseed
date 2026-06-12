@@ -66,8 +66,8 @@ export default function Graph() {
     [data],
   )
 
-  if (err) return <div className="container"><p className="badge warn">{err}</p></div>
-  if (!data || !pos) return <div className="container">Loading…</div>
+  if (err) return <p className="badge bad">{err}</p>
+  if (!data || !pos) return <div className="loading">Loading…</div>
 
   const linked = new Set()
   data.edges.forEach((e) => { linked.add(e.source); linked.add(e.target) })
@@ -82,18 +82,21 @@ export default function Graph() {
   const dimmed = (id) => (hover ? !neighbors.has(id) : !linked.has(id))
 
   return (
-    <div className="container">
-      <h2>Cross-link graph</h2>
-      <p className="muted">
-        Every <code>[[wikilink]]</code> between agents and skills. Hover to isolate a
-        neighbourhood, click a node to open it — unlinked items are dimmed (orphans).
-      </p>
-      <p className="muted graph-legend">
-        <span className="swatch" data-accent="blue" /> agent ·{' '}
-        <span className="swatch" data-accent="green" /> skill ·{' '}
-        {data.nodes.length} nodes, {data.edges.length} links
-      </p>
-      <div className="panel graph-wrap">
+    <>
+      <div className="head-row" style={{ marginBottom: 14 }}>
+        <p className="eyebrow">cross-links</p>
+        <h1 className="h">Graph</h1>
+        <p className="sub">
+          Every <code>[[wikilink]]</code> between agents and skills. Hover to isolate a
+          neighbourhood; click a node to open it — unlinked items are dimmed (orphans).
+        </p>
+        <div className="legend">
+          <span className="swatch" style={{ background: 'var(--accent)' }} /> agent{'  '}
+          <span className="swatch" style={{ background: 'var(--good)' }} /> skill{'  '}
+          <span className="dim">{data.nodes.length} nodes · {data.edges.length} links</span>
+        </div>
+      </div>
+      <div className="card graph-wrap">
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Cross-link graph">
           {data.edges.map((e, i) => {
             const a = pos.get(e.source), b = pos.get(e.target)
@@ -111,19 +114,19 @@ export default function Graph() {
             return (
               <g
                 key={node.id}
-                className={`gnode ${node.type} ${dimmed(node.id) ? 'dim' : ''}`}
+                className={`gnode ${node.type} ${dimmed(node.id) ? 'dim' : ''} ${hover && neighbors.has(node.id) ? 'near' : ''}`}
                 transform={`translate(${p.x},${p.y})`}
                 onMouseEnter={() => setHover(node.id)}
                 onMouseLeave={() => setHover(null)}
                 onClick={() => go(`#/item/${node.type}/${encodeURIComponent(node.id)}`)}
               >
-                <circle r="7" />
-                <text dx="10" dy="4">{node.id}</text>
+                <circle r={node.type === 'agent' ? 8 : 6} />
+                <text dx="12" dy="4">{node.id}</text>
               </g>
             )
           })}
         </svg>
       </div>
-    </div>
+    </>
   )
 }
