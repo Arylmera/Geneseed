@@ -9,7 +9,11 @@ and build.py for every read so the web and TUI never disagree.
 from __future__ import annotations
 
 import re
+import secrets
+import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -153,6 +157,77 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
         return {"type": type_, "name": name, "title": name, "desc": "",
                 "body": f"```json\n{raw}\n```", "links": []}
     raise NotFound(type_)
+
+
+class JobManager:
+    """Runs one mutating action at a time in a background thread, capturing
+    combined stdout/stderr. A second start() while busy returns None (the HTTP
+    layer maps that to 409). Jobs are in-memory and do not survive restart."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._jobs: dict[str, dict] = {}
+        self._busy = False
+
+    def start(self, action: str, *cmds: list) -> "str | None":
+        with self._lock:
+            if self._busy:
+                return None
+            self._busy = True
+            jid = secrets.token_hex(8)
+            self._jobs[jid] = {"id": jid, "action": action, "status": "running",
+                               "output": "", "returncode": None}
+        t = threading.Thread(target=self._run, args=(jid, cmds), daemon=True)
+        t.start()
+        return jid
+
+    def _run(self, jid: str, cmds):
+        out, rc = [], 0
+        try:
+            for cmd in cmds:
+                p = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+                                   text=True, encoding="utf-8", errors="replace")
+                out.append(p.stdout or "")
+                out.append(p.stderr or "")
+                rc = p.returncode
+                if rc != 0:
+                    break
+        except Exception as e:  # noqa: BLE001
+            out.append(f"\n[web] job crashed: {e}")
+            rc = 1
+        finally:
+            with self._lock:
+                self._jobs[jid].update(
+                    status="done" if rc == 0 else "failed",
+                    output="".join(out), returncode=rc)
+                self._busy = False
+
+    def get(self, jid: str) -> "dict | None":
+        with self._lock:
+            j = self._jobs.get(jid)
+            return dict(j) if j else None
+
+    def wait(self, jid: str, timeout: float = 30.0) -> dict:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            j = self.get(jid)
+            if j and j["status"] != "running":
+                return j
+            time.sleep(0.05)
+        return self.get(jid)
+
+
+def action_commands(action: str) -> "list[list] | None":
+    """Action name -> list of subprocess argv (each a separate step; stop on failure)."""
+    py = sys.executable
+    h = str(ROOT / "rituals" / "harness.py")
+    b = str(ROOT / "build.py")
+    return {
+        "doctor": [[py, h, "doctor"]],
+        "build": [[py, b]],
+        "update": [[py, h, "sync-self"], [py, h, "upgrade"]],
+        "export": [[py, h, "diff", "--out"]],
+    }.get(action)
 
 
 def api_diff(state: WebState) -> dict:

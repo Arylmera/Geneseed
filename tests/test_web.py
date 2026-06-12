@@ -64,5 +64,33 @@ class DiffTests(unittest.TestCase):
             self.assertEqual(res["files"], [])
 
 
+class JobManagerTests(unittest.TestCase):
+    def test_run_and_complete(self):
+        jm = web.JobManager()
+        jid = jm.start("noop", [sys.executable, "-c", "print('hello')"])
+        self.assertIsNotNone(jid)
+        job = jm.wait(jid, timeout=20)
+        self.assertEqual(job["status"], "done")
+        self.assertIn("hello", job["output"])
+        self.assertEqual(job["returncode"], 0)
+
+    def test_busy_returns_none(self):
+        jm = web.JobManager()
+        jid = jm.start("slow", [sys.executable, "-c", "import time; time.sleep(2)"])
+        self.assertIsNotNone(jid)
+        second = jm.start("other", [sys.executable, "-c", "print('x')"])
+        self.assertIsNone(second)  # busy
+        jm.wait(jid, timeout=20)
+
+    def test_failure_captured(self):
+        jm = web.JobManager()
+        jid = jm.start("boom", [sys.executable, "-c",
+                                "import sys; sys.stderr.write('bad'); sys.exit(3)"])
+        job = jm.wait(jid, timeout=20)
+        self.assertEqual(job["status"], "failed")
+        self.assertEqual(job["returncode"], 3)
+        self.assertIn("bad", job["output"])
+
+
 if __name__ == "__main__":
     unittest.main()
