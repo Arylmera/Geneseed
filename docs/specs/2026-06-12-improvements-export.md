@@ -34,8 +34,14 @@ overwrites a deployed global harness.
   in the **deployed** theme (2026-06-07), so only genuine edits appear.
 - `_write_improvements(target, theme, files, out_path=None) -> Path` — writes
   the report for an already-collected diff. Default destination:
-  `improvements/improvements-YYYYMMDD-HHMMSS.md` under the source root
-  (git-ignored — personal artifacts, never committed).
+  `improvements/improvements-YYYYMMDD-HHMMSS.md` **inside the deployed harness
+  dir** (`target`, e.g. `~/.config/opencode`) — the report lives beside the
+  install it describes, where every consumer of that harness finds it. Safe by
+  the manifest contract: the dir is never listed as owned, so `diff` never
+  reports it as drift, re-emits never clobber it, and uninstall leaves it in
+  place (same contract as memory). *(Amended same day: the first cut wrote to
+  `improvements/` under the source root; moved into the deployment per review —
+  the artifact belongs with the harness generation location.)*
 - `export_improvements(target=None, theme=None, out_path=None) -> (path, files)`
   — collect + write **only when there is drift**. `path` is `None` when there is
   no deployed install (`files is None`) or no differences (`files == []`).

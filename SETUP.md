@@ -596,10 +596,13 @@ agent's own self-improvement loops) and you want to see what diverged from sourc
 
 The `--out` file is a self-contained back-port artifact: hand it to an agent in the
 Geneseed source repo and ask it to fold the changes into `src/`. You rarely need to
-run it by hand — **setup, re-theme, and upgrade auto-export one** (to `improvements/`
-in the source checkout, git-ignored) whenever the harness they are about to overwrite
-carries local edits, so a rebuild never silently destroys what the agent learned. The
-TUI's *Review local edits* view exports the same file with the `e` key.
+run it by hand — **setup, re-theme, and upgrade auto-export one** whenever the
+harness they are about to overwrite carries local edits, so a rebuild never silently
+destroys what the agent learned. The auto-export lands in `improvements/` **inside
+the deployed harness dir** (e.g. `~/.config/opencode/improvements/`) — beside the
+install it describes; it is not in the manifest, so re-emits never clobber it, diff
+never reports it, and uninstall leaves it in place (the same contract as memory).
+The TUI's *Review local edits* view exports the same file with the `e` key.
 
 ## Troubleshooting
 

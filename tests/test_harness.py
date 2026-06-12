@@ -1222,6 +1222,14 @@ class ImprovementsExportTests(unittest.TestCase):
         self.assertEqual(md.count("```"), 6)
         self.assertIn("+new line", md)
 
+    def test_default_destination_is_inside_the_deployed_dir(self):
+        tmp = Path(tempfile.mkdtemp())        # stands in for ~/.config/opencode
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        path = harness._write_improvements(tmp, "neutral", self.FILES)
+        self.assertEqual(path.parent, tmp / "improvements")
+        self.assertRegex(path.name, r"^improvements-\d{8}-\d{6}\.md$")
+        self.assertIn("- theme: neutral", path.read_text(encoding="utf-8"))
+
     def test_write_improvements_honours_out_path(self):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)

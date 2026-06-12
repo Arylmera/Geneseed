@@ -184,8 +184,10 @@ fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs all three on every 
 
 **Local edits survive.** The self-improvement loops let the agent refine its deployed
 agent/skill files in place. Before setup, re-theme, or upgrade overwrites them, any
-drift is auto-exported to a markdown **improvements file** (`improvements/`,
-git-ignored) — hand it to an agent in this repo to back-port the changes into `src/`.
+drift is auto-exported to a markdown **improvements file** under `improvements/`
+*inside the deployed harness dir* (e.g. `~/.config/opencode/improvements/` for the
+global install) — beside the install it describes, untouched by rebuilds and
+uninstall. Hand it to an agent in this repo to back-port the changes into `src/`.
 On demand: `./geneseed diff --out FILE`, or `e` in the TUI's *Review local edits* view.
 
 Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).

@@ -920,10 +920,14 @@ def _improvements_md(target, theme, files, when: str) -> str:
 
 def _write_improvements(target, theme, files, out_path=None) -> Path:
     """Write the drift report for an already-collected diff. Default destination is
-    a timestamped file under improvements/ at the source root (git-ignored)."""
+    a timestamped file under improvements/ INSIDE the deployed harness dir — the
+    report lives beside the install it describes (e.g. ~/.config/opencode for the
+    global emit). Never in the manifest: rebuilds compare only owned files so it is
+    not reported as drift, re-emits do not clobber it, and uninstall leaves it in
+    place (same contract as memory)."""
     now = datetime.datetime.now()
     path = (Path(out_path).expanduser() if out_path else
-            ROOT / "improvements" / now.strftime("improvements-%Y%m%d-%H%M%S.md"))
+            Path(target) / "improvements" / now.strftime("improvements-%Y%m%d-%H%M%S.md"))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_improvements_md(target, theme, files,
                                      now.strftime("%Y-%m-%d %H:%M:%S")),
