@@ -1825,6 +1825,7 @@ _ICONS = {
     "skill":     ("✨", "✦", "*"),
     "law":       ("📜", "§", "#"),
     "badge":     ("🧬", "⬡", "G"),
+    "web":       ("🌐", "◍", "W"),
 }
 
 
@@ -2856,6 +2857,7 @@ def _help_overlay(stdscr, curses, pal) -> None:
         ("info", "x                 review local edits (diff)"),
         ("info", "b                 rebuild the bundle"),
         ("info", "u                 update everything"),
+        ("info", "w                 open the local web UI"),
         ("info", "?                 this help"),
         ("info", "q                 quit the panel"),
         ("info", ""),
@@ -3282,7 +3284,7 @@ def _tui_loop(stdscr, inv: dict) -> None:
             _botbar(stdscr, pal, f"search: /{query}    Enter apply · Esc clear")
         else:
             _botbar(stdscr, pal,
-                    "j/k move · / search · ? help · d doctor · x diff · b build · u update · q quit")
+                    "j/k move · / search · ? help · d doctor · x diff · b build · u update · w web · q quit")
         stdscr.refresh()
 
         c = stdscr.getch()
@@ -3332,6 +3334,17 @@ def _tui_loop(stdscr, inv: dict) -> None:
             _doctor_view(stdscr, curses, pal)          # in-TUI health check with progress bar
         elif c == ord("x"):
             _diff_view(stdscr, curses, pal)            # in-TUI review of local edits
+        elif c == ord("w"):
+            curses.def_prog_mode()
+            curses.endwin()
+            print("[web] starting the local web UI — press Ctrl-C in this terminal to "
+                  "stop it and return to the panel.")
+            run([sys.executable, harness_py, "web"])
+            try:
+                input("\n[press Enter to return to the panel] ")
+            except EOFError:
+                pass
+            curses.reset_prog_mode()
         elif c in (ord("b"), ord("u")):
             curses.def_prog_mode()
             curses.endwin()
@@ -3852,6 +3865,7 @@ _MENU_ACTIONS_RAW = [
     ("memory", "Memory", "Browse / search the memory store; delete stale facts."),
     ("status", "Status", "Theme, install mode, counts, and the memory store."),
     ("diff", "Review local edits", "Compare a deployed harness against source."),
+    ("web", "Web UI", "Open the local browser interface over the deployed harness."),
     ("settings", "Settings", "Configuration & maintenance: updates, rebuilds, MCP servers, PATH."),
     ("quit", "Quit", "Leave."),
     # 'doctor' (Health check) intentionally not listed: it runs after setup and via
@@ -4026,6 +4040,17 @@ def _main_menu(stdscr) -> int:
             _status_view(stdscr, curses, pal)
         elif sel == "diff":
             _diff_view(stdscr, curses, pal)
+        elif sel == "web":
+            curses.def_prog_mode()
+            curses.endwin()
+            print("[web] starting the local web UI — press Ctrl-C to stop it and "
+                  "return to the menu.")
+            run([sys.executable, hp, "web"])
+            try:
+                input("\n[press Enter to return to the menu] ")
+            except EOFError:
+                pass
+            curses.reset_prog_mode()
         elif sel == "bootstrap":
             _bootstrap_progress(stdscr, here, None)
             curses.endwin()
@@ -4038,7 +4063,7 @@ def cmd_menu(args: argparse.Namespace) -> int:
     one-line command list off a TTY / when no VT console / if curses is unavailable."""
     def _menu_help() -> int:
         print("Geneseed — no interactive menu here. Get started with:  python harness.py setup")
-        print("Other commands:  bootstrap · update · build · doctor · diff · tui")
+        print("Other commands:  bootstrap · update · build · doctor · diff · tui · web")
         print("On a VT-capable terminal, a bare `./geneseed` opens the interactive menu of these.")
         return 0
 
