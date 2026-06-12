@@ -7,6 +7,7 @@ export default function Diff() {
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
   const [sel, setSel] = useState(() => new Set())
+  const [expanded, setExpanded] = useState(() => new Set())
 
   const load = () =>
     api.diff().then((d) => { setData(d); setSel(new Set()) }).catch((e) => setErr(e.message))
@@ -82,15 +83,35 @@ export default function Diff() {
           /> Select all
         </label>
       )}
-      {data.files.map((f) => (
-        <div className="detail" key={f.rel} style={{ marginBottom: 12 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input type="checkbox" checked={sel.has(f.rel)} onChange={() => toggle(f.rel)} />
-            <strong>{f.rel}</strong> <span className="badge">{f.status}</span>
-          </label>
-          <pre className="markdown">{f.diff.join('\n')}</pre>
-        </div>
-      ))}
+      {data.files.map((f) => {
+        // Long diffs collapse to a preview so a big drift stays scannable.
+        const PREVIEW = 8
+        const long = f.diff.length > PREVIEW + 4
+        const open = !long || expanded.has(f.rel)
+        const shownDiff = open ? f.diff : f.diff.slice(0, PREVIEW)
+        return (
+          <div className="detail" key={f.rel} style={{ marginBottom: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={sel.has(f.rel)} onChange={() => toggle(f.rel)} />
+              <strong>{f.rel}</strong> <span className="badge">{f.status}</span>
+              <span className="muted" style={{ fontSize: 12 }}>{f.diff.length} lines</span>
+            </label>
+            <pre className="markdown">{shownDiff.join('\n')}</pre>
+            {long && (
+              <button
+                className="btn ghost sm"
+                onClick={() => setExpanded((s) => {
+                  const n = new Set(s)
+                  n.has(f.rel) ? n.delete(f.rel) : n.add(f.rel)
+                  return n
+                })}
+              >
+                {open ? 'Collapse' : `Show all ${f.diff.length} lines`}
+              </button>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
