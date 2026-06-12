@@ -279,6 +279,15 @@ def _build_override(state: WebState, body: dict) -> tuple:
             e if e in emits else state.emit)
 
 
+def api_doctor(state: WebState) -> dict:
+    """Doctor checks, grouped per check, for the web Doctor page — the same engine
+    as the `doctor` command (_doctor_collect fills `groups` as it runs)."""
+    groups: list[dict] = []
+    themes, problems = harness._doctor_collect(theme=state.theme, groups=groups)
+    return {"themes": themes, "ok": not problems,
+            "problems": problems, "groups": groups}
+
+
 def api_setup(state: WebState) -> dict:
     """Install snapshot for the Settings page — harness._status_data() (the same
     source the `status` command and the TUI panel read, so the three never drift)
@@ -374,6 +383,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                     return self._send_json(api_themes(state))
                 if path == "/api/setup":
                     return self._send_json(api_setup(state))
+                if path == "/api/doctor":
+                    return self._send_json(api_doctor(state))
                 if path == "/api/diff":
                     return self._send_json(api_diff(state))
                 if path.startswith("/api/jobs/"):

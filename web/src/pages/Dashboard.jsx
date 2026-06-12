@@ -31,12 +31,12 @@ export default function Dashboard({ overview, onAction }) {
       </div>
 
       <div className="cards" style={{ marginBottom: 16 }}>
-        <div className="card" onClick={() => onAction('doctor')}>
+        <div className="card" onClick={() => go('#/doctor')}>
           <h3>🩺 Doctor</h3>
           <span className={`badge ${overview.doctor.ok ? 'ok' : 'warn'}`}>
             {overview.doctor.ok ? 'healthy' : `${overview.doctor.problems.length} issues`}
           </span>
-          <p className="muted">Click to re-run</p>
+          <p className="muted">Per-check report</p>
         </div>
         <div className="card" onClick={() => go('#/diff')}>
           <h3>📝 Local edits</h3>

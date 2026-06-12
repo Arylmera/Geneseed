@@ -76,6 +76,14 @@ h2 { margin: 0 0 16px; font-size: 20px; }
 .swatch[data-accent="cyan"] { background: #39c5cf; }
 .swatch[data-accent="white"] { background: #e6e8ee; }
 
+/* ---- doctor check cards --------------------------------------------------- */
+.check-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.check-head h3 { margin: 0; }
+.check.check-bad { border-color: rgba(248,81,73,.4); }
+.check-problems { margin: 10px 0 0; padding-left: 20px; color: var(--muted);
+  font-size: 13px; }
+.check-problems li { margin: 3px 0; word-break: break-word; }
+
 /* ---- library split view -------------------------------------------------- */
 .split { display: grid; grid-template-columns: 280px 1fr; gap: 20px; }
 .list { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }

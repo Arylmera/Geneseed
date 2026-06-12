@@ -13,6 +13,7 @@ export const api = {
   diff: () => get('/api/diff'),
   themes: () => get('/api/themes'),
   setup: () => get('/api/setup'),
+  doctor: () => get('/api/doctor'),
   job: (id) => get(`/api/jobs/${id}`),
   // opts (e.g. { theme, emit } for build) ride along in the JSON body.
   async action(name, opts) {

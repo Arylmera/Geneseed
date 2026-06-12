@@ -144,6 +144,24 @@ class ThemePickerTests(unittest.TestCase):
         self.assertEqual(emit, self.state.emit)
 
 
+class DoctorTests(unittest.TestCase):
+    def test_api_doctor_groups_match_flat_problems(self):
+        state = web.WebState(theme="neutral")
+        d = web.api_doctor(state)
+        self.assertIn("groups", d)
+        self.assertTrue(d["groups"])  # at least build/global/parity/authoring
+        for g in d["groups"]:
+            self.assertIn("check", g)
+            self.assertIn("label", g)
+            self.assertIsInstance(g["problems"], list)
+        checks = {g["check"] for g in d["groups"]}
+        self.assertLessEqual({"build", "global", "parity", "authoring"}, checks)
+        # The flat list is exactly the union of the groups (deduped, sorted).
+        union = sorted({p for g in d["groups"] for p in g["problems"]})
+        self.assertEqual(d["problems"], union)
+        self.assertEqual(d["ok"], not d["problems"])
+
+
 class SetupTests(unittest.TestCase):
     def test_api_setup_reports_install_snapshot(self):
         state = web.WebState(theme="neutral")

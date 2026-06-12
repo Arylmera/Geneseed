@@ -312,9 +312,13 @@ def _global_emit_problems(theme_name: str) -> list[str]:
         return _check_build(f"{theme_name} global", cfg)
 
 
-def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False, on_progress=None):
+def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
+                    on_progress=None, groups=None):
     """Run every doctor check; return (themes, sorted_unique_problems). on_progress
     (i, total, label) is called as it advances, so a caller can draw a progress bar.
+    `groups`, when a caller passes a list, is filled with one
+    {check, label, problems} dict per check run — the structured view the web
+    Doctor page renders — without changing this function's return contract.
 
     Theme scope: with no explicit `theme` and without `all_themes`, validation is
     scoped to the installed theme (detected from the deployed bundle), not the full
@@ -324,6 +328,12 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False, 
     available = [p.stem for p in build.THEMES.glob("*.json")]
     if not available:
         return [], ["[doctor] no themes found"]
+
+    def _ran(check: str, label: str, probs: list) -> list:
+        if groups is not None:
+            groups.append({"check": check, "label": label, "problems": sorted(probs)})
+        return probs
+
     # Only probe the deployed install when we actually need it (no theme / not --all).
     detected = None if (theme or all_themes) else _installed_defaults().get("theme")
     themes = _themes_to_check(theme, all_themes, detected, available)
@@ -337,17 +347,20 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False, 
             rc = run([sys.executable, str(BUILD), "--theme", theme_name, "--out", str(out)],
                      cwd=ROOT, capture_output=True, text=True).returncode
             if rc != 0:
-                problems.append(f"[{theme_name}] build failed")
+                problems += _ran("build", f"Build scan ({theme_name})",
+                                 [f"[{theme_name}] build failed"])
                 continue
-            problems += _check_build(theme_name, out)
-            problems += _global_emit_problems(theme_name)   # also validate the global install
+            problems += _ran("build", f"Build scan ({theme_name})",
+                             _check_build(theme_name, out))
+            problems += _ran("global", f"Global install ({theme_name})",
+                             _global_emit_problems(theme_name))
     if on_progress:
         on_progress(len(themes), total, "parity · authoring · bundle")
-    problems += _theme_parity_problems()
-    problems += _authoring_problems()
+    problems += _ran("parity", "Theme parity", _theme_parity_problems())
+    problems += _ran("authoring", "Authoring gates", _authoring_problems())
     if not no_bundle:
         b = Path(bundle).expanduser().resolve() if bundle else ROOT / "Harness"
-        problems += _rendered_problems(b)
+        problems += _ran("bundle", "Committed bundle drift", _rendered_problems(b))
     if on_progress:
         on_progress(total, total, "done")
     return themes, sorted(set(problems))
