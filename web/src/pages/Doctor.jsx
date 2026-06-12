@@ -72,7 +72,7 @@ export default function Doctor() {
             <div className="row wrap between" style={{ gap: 12 }}>
               <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
                 <span className="dim mono" style={{ fontSize: 12 }}>
-                  validated {data.themes.length} themes
+                  validated {data.themes.length} theme{data.themes.length === 1 ? '' : 's'}
                 </span>
                 {data.themes.map((t) => (
                   <span key={t} className="badge" style={{ textTransform: 'capitalize' }}>
