@@ -426,8 +426,51 @@ def _config_theme(here: Path) -> str:
         return ""
 
 
-def upgrade(ref: str | None = None, theme_arg: str | None = None) -> int:
-    """Port of upgrade.sh: download the published source, refresh the factory files in
+def _extract_local_zip(zip_path: Path, dest: Path, log=None) -> Path | None:
+    """Extract a local offline package (the web UI's /api/offline-zip download, a
+    `git archive` of this repo, or a GitHub source zip) into `dest`; return the
+    source root inside it — the geneseed-* wrapper dir when the zip has one, else
+    `dest` itself when build.py sits at the top level."""
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(dest)
+    except (zipfile.BadZipFile, OSError):
+        if log is not None:
+            log("[geneseed]   x extract failed (corrupt or partial zip)")
+        return None
+    for child in sorted(dest.iterdir()):
+        if child.is_dir() and child.name.lower().startswith("geneseed-"):
+            return child
+    return dest if (dest / "build.py").is_file() else None
+
+
+def _local_zip_source(zip_arg: str, tmp: Path, log: _Log) -> Path:
+    """Offline counterpart of _fetch_and_validate: extract + doctor-gate a local
+    package. Returns the validated source dir, or raises _UpgradeError."""
+    zp = Path(zip_arg).expanduser()
+    if not zp.is_file():
+        raise _UpgradeError("E-ZIP", f"offline package not found: {zp}")
+    log(f"[geneseed] using offline package {zp} ...")
+    work = tmp / "offline"
+    work.mkdir(parents=True, exist_ok=True)
+    cand = _extract_local_zip(zp, work, log)
+    if cand is None or not cand.is_dir():
+        raise _UpgradeError("E-ZIP", f"could not extract a source tree from {zp}")
+    log("[geneseed] validating offline source (doctor --all) ...")
+    passed, output = _run_doctor(cand)
+    log(output.rstrip("\n"))
+    if not passed:
+        raise _UpgradeError(
+            "E-DOCTOR",
+            "the offline package FAILS validation — it was built from a defective "
+            "source. Re-download it from a checkout whose doctor passes.")
+    return cand
+
+
+def upgrade(ref: str | None = None, theme_arg: str | None = None,
+            zip_arg: str | None = None) -> int:
+    """Port of upgrade.sh: download the published source (or, with `zip_arg`, use a
+    local offline package instead of the network), refresh the factory files in
     this folder, and re-render the bundle. Returns a process exit code (0 = ok)."""
     log = _Log()
     here = ROOT
@@ -446,7 +489,8 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None) -> int:
     tmp = Path(tempfile.mkdtemp(prefix="geneseed-"))
     try:
         try:
-            new_root = _fetch_and_validate(ref, tmp, log)
+            new_root = _local_zip_source(zip_arg, tmp, log) if zip_arg \
+                else _fetch_and_validate(ref, tmp, log)
         except _UpgradeError as e:
             for line in DOCTOR_LEGEND:
                 log(line)
@@ -615,9 +659,18 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     cmd = argv[0] if argv else ""
     rest = [a for a in argv[1:] if a not in ("-h", "--help")]
+    zip_arg = None
+    if "--zip" in rest:                     # offline package: --zip <file>
+        i = rest.index("--zip")
+        zip_arg = rest[i + 1] if i + 1 < len(rest) else None
+        rest = rest[:i] + rest[i + 2:]
+        if not zip_arg:
+            sys.stderr.write("geneseed self-heal: --zip needs a file path\n")
+            return 2
     if cmd == "upgrade":
         return upgrade(rest[0] if len(rest) > 0 else None,
-                       rest[1] if len(rest) > 1 else None)
+                       rest[1] if len(rest) > 1 else None,
+                       zip_arg=zip_arg)
     if cmd in ("sync-self", "sync_self"):
         return sync_self(rest[0] if rest else None)
     if cmd == "update":  # orchestration first, THEN the factory — mirrors `geneseed update`

@@ -3705,7 +3705,7 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
         sys.stderr.write(f"[upgrade] ⚠️  could not export local edits ({e}) — "
                          f"run `geneseed diff --out FILE` before upgrading to keep them.\n")
     import _update
-    return _update.upgrade(args.ref, args.theme)
+    return _update.upgrade(args.ref, args.theme, zip_arg=getattr(args, "zip", None))
 
 
 def cmd_sync_self(args: argparse.Namespace) -> int:
@@ -4200,6 +4200,9 @@ def main() -> int:
                                         "the bundle (cross-platform; replaces upgrade.sh)")
     up.add_argument("ref", nargs="?", default=None, help="branch or tag (default: main)")
     up.add_argument("theme", nargs="?", default=None, help="optional: force a theme (neutral|imperial|…)")
+    up.add_argument("--zip", default=None, metavar="FILE",
+                    help="offline package (zip of the source tree) to upgrade from "
+                         "instead of downloading — for machines without GitHub access")
     up.set_defaults(fn=cmd_upgrade)
 
     ss = sub.add_parser("sync-self", help="refresh the orchestration layer — launchers + update "

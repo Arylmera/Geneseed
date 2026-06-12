@@ -91,6 +91,19 @@ export default function Settings({ onAction }) {
           <button className="btn" onClick={() => onAction('update')}>Update</button>
         </div>
       </section>
+
+      <section className="panel">
+        <h3>Offline package</h3>
+        <p className="muted">
+          For machines without GitHub access (corporate proxy, air-gapped): download
+          a zip of this source tree, carry it over, then update there with{' '}
+          <code>geneseed upgrade --zip &lt;file&gt;</code> — same validation and
+          rebuild as a normal upgrade, no network needed.
+        </p>
+        <a className="btn ghost" href="/api/offline-zip" download>
+          Download offline package
+        </a>
+      </section>
     </div>
   )
 }

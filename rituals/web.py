@@ -12,6 +12,7 @@ import contextlib
 import io
 import json
 import re
+import zipfile
 import secrets
 import shutil
 import subprocess
@@ -374,6 +375,33 @@ def api_restore(state: WebState, files: list) -> dict:
     return {"restored": restored, "deleted": deleted, "errors": errors}
 
 
+OFFLINE_ZIP_SKIP = {".git", "node_modules", "__pycache__", ".superpowers"}
+
+
+def offline_zip_bytes() -> "tuple[bytes, str]":
+    """(zip bytes, download name) of the source tree — the sneakernet package a
+    proxied/offline machine consumes with `geneseed upgrade --zip <file>`.
+    `git archive` (tracked files only) when git is available; otherwise a
+    zipfile walk skipping VCS/build litter. The geneseed-offline/ prefix matches
+    what the consume side expects (a geneseed-* wrapper dir, like GitHub zips)."""
+    name = f"geneseed-offline-{time.strftime('%Y%m%d')}.zip"
+    try:
+        p = subprocess.run(
+            ["git", "archive", "--format=zip", "--prefix=geneseed-offline/", "HEAD"],
+            cwd=str(ROOT), capture_output=True, timeout=60)
+        if p.returncode == 0 and p.stdout:
+            return p.stdout, name
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(ROOT.rglob("*")):
+            rel = f.relative_to(ROOT)
+            if f.is_file() and not (set(rel.parts) & OFFLINE_ZIP_SKIP):
+                zf.write(f, f"geneseed-offline/{rel.as_posix()}")
+    return buf.getvalue(), name
+
+
 def api_overview(state: WebState) -> dict:
     inv = state.inventory
     themes, problems = harness._doctor_collect(theme=state.theme)
@@ -423,10 +451,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
             self.end_headers()
             self.wfile.write(body)
 
-        def _send_bytes(self, body: bytes, ctype: str, code=200):
+        def _send_bytes(self, body: bytes, ctype: str, code=200, extra=None):
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
+            for k, v in (extra or {}).items():
+                self.send_header(k, v)
             self.end_headers()
             self.wfile.write(body)
 
@@ -447,6 +477,11 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                     return self._send_json(api_setup(state))
                 if path == "/api/doctor":
                     return self._send_json(api_doctor(state))
+                if path == "/api/offline-zip":
+                    data, name = offline_zip_bytes()
+                    return self._send_bytes(
+                        data, "application/zip",
+                        extra={"Content-Disposition": f'attachment; filename="{name}"'})
                 if path == "/api/diff":
                     return self._send_json(api_diff(state))
                 if path.startswith("/api/jobs/"):
