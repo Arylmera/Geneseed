@@ -8,7 +8,7 @@
 
 A `workflow` is a saved script that orchestrates subagents in **code**, not prose. The script — not the model — decides what fans out, what runs in sequence, and what verifies. The host runs it and hands you back the distilled result. Use it when the control flow should be exact and repeatable rather than re-improvised each time.
 
-Saved workflows live beside the harness (`workflows/`); you run one **by name**, you do not author one inline. To add a new workflow, copy an existing script and register it there.
+Saved workflows live in the host's workflows directory — on OpenCode that is `.opencode/workflows/` in the repo, or `workflows/` under the global config (see the adapter README) — and you run one **by name**, you do not author one inline. To add a new workflow, copy an existing script and register it there.
 
 ## Procedure
 1. Confirm the host exposes the `workflow` tool. If not, fall back to [parallel-agents](parallel-agents.md) / [council](council.md) and stop here.

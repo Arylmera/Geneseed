@@ -14,7 +14,7 @@
 - The motion under debate, this seat's one-line charter, and the artifact or context to argue from.
 
 ## Allowed tools
-- **Read-only**: search and read, to ground the vision in what exists. Never edits, never runs commands, never casts the verdict.
+- **Read-only.** Search and read, to ground the vision in what exists. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
 1. Read the motion and the artifact so the ambition builds on reality, not a blank page (universal {{LAW}} XVII).

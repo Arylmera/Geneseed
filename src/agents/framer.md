@@ -14,7 +14,7 @@
 - The motion under debate, this seat's one-line charter, and the context that motivated it.
 
 ## Allowed tools
-- **Read-only**: search and read, to ground the reframe in the real need. Never edits, never runs commands, never casts the verdict.
+- **Read-only.** Search and read, to ground the reframe in the real need. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
 1. Read the motion and what prompted it, then restate the underlying need in one plain sentence (universal {{LAW}} XVII).

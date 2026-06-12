@@ -14,7 +14,7 @@
 - The motion under debate, this seat's one-line charter, and the artifact or context to assess from.
 
 ## Allowed tools
-- **Read-only**: search and read, to judge fit against the real system. Never edits, never runs commands, never casts the verdict.
+- **Read-only.** Search and read, to judge fit against the real system. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
 1. Read the motion and the artifact, and the project's own conventions, so the judgement fits this system (universal {{LAW}} XVII, {{LAW}} XIII).

@@ -1,3 +1,19 @@
+<!--
+  Authoring a new agent:
+  1. Reuse first — if an existing {{AGENT}}'s capability already covers the need,
+     extend it instead of adding a file (universal Law V applies to specialists too).
+  2. Copy this file to agents/<name>.md and fill in every section. In an installed
+     harness the purpose line is plain prose; in the Geneseed source repo it is the
+     DESC_<NAME> token with the prose defined per theme.
+  3. Register the new {{AGENT}} in the table in AGENT.md §2 (the table is
+     hand-authored; the agent files themselves auto-render).
+  Geneseed source repo only (skip in an installed harness):
+  4. Define the DESC_<NAME> token (hyphens -> underscores, uppercased) in ALL theme
+     JSONs under themes/ — the parity gate fails if any theme is missing it.
+  5. Bump the hard-coded agent counts in tests/test_harness.py, then run:
+     python rituals/harness.py doctor --all
+     and python -m unittest discover -s tests.
+-->
 # {{AGENT}}: <name>
 
 > One-line statement of this {{AGENT}}'s single purpose.
@@ -17,6 +33,8 @@
   edit, webfetch, and bash. If it must run read-only commands (tests, linters,
   scanners), add the marker `<!-- bash: allow -->` in this section to gate bash to
   "ask" instead of denying it outright.
+- Caution: the build detects the phrase "Read-only" anywhere in the file — a
+  write-capable {{AGENT}}'s spec must not contain it, or its emit is locked down.
 
 ## Procedure
 1. Step-by-step method this {{AGENT}} follows.

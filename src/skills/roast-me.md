@@ -2,7 +2,7 @@
 
 > {{DESC_ROAST_ME}}
 
-**Trigger:** the user asks to "roast", "tear apart", "find the fatal flaws", or "be brutally honest" about an artifact — code, design, plan, pitch, or writing.
+**Trigger:** the user asks to "roast", "tear apart", "find the fatal flaws", or "be brutally honest" about an artifact — code, design, plan, pitch, or writing. This is the *open-ended quality critique*: for reviewing a diff use [code-review](code-review.md); for a zero-context does-it-meet-the-spec verdict use [fresh-eyes](fresh-eyes.md).
 
 ## Procedure
 1. Identify the artifact and the critique axis that matters (correctness, architecture, viability, clarity, security…); if unclear, ask once, then proceed.

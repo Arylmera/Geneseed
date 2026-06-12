@@ -14,7 +14,7 @@
 - The motion under debate, this seat's one-line charter, and who the actual consumer is (end user, downstream dev, operator).
 
 ## Allowed tools
-- **Read-only**: search and read, to ground the consumer's view in the real interface. Never edits, never runs commands, never casts the verdict.
+- **Read-only.** Search and read, to ground the consumer's view in the real interface. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
 1. Read the motion and the surface it changes, so the view is the real user's, not a guess (universal {{LAW}} XVII).

@@ -9,12 +9,13 @@
 ## When NOT to dispatch
 - Outside a debate, for routine work — this {{AGENT}} only argues a position; it neither decides nor implements.
 - A pure design discussion with no runtime surface — drop the seat. Long-term architecture is the [steward](steward.md)'s; a-priori failure modes are the [skeptic](skeptic.md)'s.
+- The cost to *build* it is the [pragmatist](pragmatist.md)'s; the operator owns the cost to run it.
 
 ## Inputs
 - The motion under debate, this seat's one-line charter, and the artifact or context describing how it runs.
 
 ## Allowed tools
-- **Read-only**: search and read, to judge operability against the real system. Never edits, never runs commands, never casts the verdict.
+- **Read-only.** Search and read, to judge operability against the real system. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
 1. Read the motion and how it would run, so the concerns are this system's, not generic (universal {{LAW}} XVII).

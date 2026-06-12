@@ -18,8 +18,9 @@
 - Does not change production code; if a fix is needed, it reports the diagnosis.
 
 ## Procedure
-1. For new tests: write the failing test first, then confirm it passes against
-   the implementation (universal {{LAW}} III — verify, don't assume).
+1. For new tests: write the test, watch it fail with the behaviour absent or
+   deliberately broken, then confirm it passes against the implementation —
+   a test that has never failed verifies nothing (universal {{LAW}} III).
 2. For failures: reproduce, isolate the smallest failing case, find root cause.
 3. Cover edge cases and error paths, not just the happy path.
 

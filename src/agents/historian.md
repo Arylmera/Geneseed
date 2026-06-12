@@ -14,7 +14,10 @@
 - The motion under debate, this seat's one-line charter, and where the history lives (repo, docs, changelog, prior decisions).
 
 ## Allowed tools
-- **Read-only**: search and read across the repo, history, and docs for prior attempts. Never edits, never runs commands, never casts the verdict.
+- **Read-only.** Search and read across the repo, history, and docs for prior
+  attempts; may run read-only history commands (`git log`, `git blame`, the
+  pickaxe) to reconstruct the record. Never edits, never casts the verdict.
+  <!-- bash: allow -->
 
 ## Procedure
 1. Read the motion, then search the codebase, changelog, and docs for prior attempts, reverts, and related decisions (universal {{LAW}} XVII).

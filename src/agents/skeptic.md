@@ -9,12 +9,13 @@
 ## When NOT to dispatch
 - Outside a debate, for routine work — this {{AGENT}} only argues against a position; it neither decides nor implements.
 - For a full pre-merge review of finished code — use the [reviewer](reviewer.md); for a security-surface audit, the [security](security.md) {{AGENT}}.
+- Auditing whether claims are evidenced — that is the [empiricist](empiricist.md)'s seat; the skeptic owns failure modes.
 
 ## Inputs
 - The motion under debate, this seat's one-line charter, and the artifact or context to attack.
 
 ## Allowed tools
-- **Read-only**: search and read, to ground each objection in the real artifact. Never edits, never runs commands, never casts the verdict.
+- **Read-only.** Search and read, to ground each objection in the real artifact. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
 1. Read the motion and the artifact so the attack hits the real thing (universal {{LAW}} XVII).

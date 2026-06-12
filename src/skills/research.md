@@ -10,7 +10,9 @@ open web.
 1. State the question and what a complete answer must contain. Break a broad question
    into specific sub-questions.
 2. Search the web — use the host's web-search tool or a connected search provider
-   ({{LAW}} XIX). Query from several angles; one search is not research.
+   ({{LAW}} XIX). Query from several angles; one search is not research. If the host
+   exposes no web capability at all, stop and report that ({{LAW}} VII) — never
+   substitute your own knowledge for verified research.
 3. Open the most promising sources and extract only the relevant slice, not the whole
    page ({{LAW}} XV). Prefer primary and recent sources.
 4. Cross-check every material claim against at least two independent sources. Treat a

@@ -4,16 +4,19 @@
 
 ## When to dispatch
 - A feature is complete and its README / API docs / changelog must follow.
-- Existing docs have drifted from the code.
+- Existing docs have drifted from the code a change touched.
 
 ## When NOT to dispatch
 - Internal design notes that belong in a plan — use [architect](architect.md).
+- A whole-project documentation raise or the HTML overview — run the
+  document-project {{SKILL}}; this {{AGENT}} documents a specific change.
 
 ## Inputs
 - The change that shipped, the audience, and where docs live.
 
 ## Allowed tools
-- **Read + write to documentation files only.** Reads code to stay accurate.
+- **Read + write to documentation files only.** Reads code to stay accurate, and
+  may run documented examples and commands to confirm they work as written.
 
 ## Procedure
 1. Read the actual code/behaviour before describing it — never document intent

@@ -13,12 +13,15 @@
 3. Update the changelog: a dated section for the new version summarising the
    user-visible changes, grouped (added / changed / fixed), derived from the commits
    since the last tag.
-4. Commit the version bump and changelog as one focused commit (universal {{LAW}} II).
+4. Commit the version bump and changelog as one focused commit, through the
+   [commit {{SKILL}}](commit.md) — summary and exact message presented for
+   acceptance (universal {{LAW}} II, {{LAW}} XX).
 5. Tag the release (annotated, matching the version). Tagging and publishing are
-   **outward-facing** — confirm before pushing the tag or publishing unless already
-   authorized (universal {{LAW}} IV).
-6. Push the commit and the tag together; trigger or verify the publish/release
-   pipeline.
+   **outward-facing** (universal {{LAW}} IV), and the push itself needs explicit
+   per-push acceptance — a release lands on a shared branch, where {{LAW}} XX
+   applies with extra care and grants no standing consent.
+6. With that acceptance, push the commit and the tag together; trigger or verify
+   the publish/release pipeline.
 
 ## Done when
 - Version, changelog, and tag all name the same number, and the release is pushed

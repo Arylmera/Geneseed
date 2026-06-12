@@ -22,7 +22,7 @@ or rewrite, use git-rescue.md; to write a new commit, use commit.md).
    `git log -p -- <path>` to walk a file's history with diffs.
 5. Read the evidence end to end before concluding — the first matching commit is not
    always the cause. Corroborate across lenses when the answer is consequential
-   (universal {{LAW}} VIII).
+   (universal {{LAW}} III).
 6. **Reset the investigation state** when done: `git bisect reset` returns to the
    original HEAD. Confirm the working tree is back where it started (universal {{LAW}} III).
 7. Report the offending/originating commit with its evidence. Do **not** fix the bug

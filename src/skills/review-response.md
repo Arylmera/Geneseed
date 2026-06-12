@@ -13,8 +13,9 @@ are about to act on it.
    {{LAW}} VIII).
 4. Respond to each comment: the change you will make and why, or a reasoned decline
    with evidence.
-5. Apply the accepted changes — one intent per commit ({{LAW}} II) — then re-run the
-   checks ({{LAW}} III).
+5. Apply the accepted changes — one intent per commit ({{LAW}} II), each through the
+   [commit {{SKILL}}](commit.md) so {{LAW}} XX's per-commit consent holds — then
+   re-run the checks ({{LAW}} III).
 6. Surface anything the review missed that you noticed while addressing it.
 
 ## Done when

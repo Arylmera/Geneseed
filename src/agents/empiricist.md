@@ -14,7 +14,7 @@
 - The motion under debate, this seat's one-line charter, and the artifact or data to check claims against.
 
 ## Allowed tools
-- **Read-only**: search and read, to verify what is actually supported. Never edits, never runs commands, never casts the verdict.
+- **Read-only.** Search and read, to verify what is actually supported. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
 1. Read the motion and the arguments, then list the load-bearing claims on both sides (universal {{LAW}} XVII).
