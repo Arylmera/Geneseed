@@ -1100,5 +1100,33 @@ class UpdateStepDiagnosisTests(unittest.TestCase):
         self.assertTrue(any(str(logp) in ln for ln in lines))
 
 
+class UpdateStepSelfHealTests(unittest.TestCase):
+    """A stale factory must self-heal in-process: when harness.py predates `upgrade`, the
+    step routes to rituals/_update.py instead of dead-ending on argparse 'invalid choice'."""
+
+    def test_supports_real_subcommand(self):
+        hp = str(ROOT / "rituals" / "harness.py")
+        self.assertTrue(harness._harness_supports(hp, "upgrade"))
+        self.assertTrue(harness._harness_supports(hp, "sync-self"))
+        self.assertFalse(harness._harness_supports(hp, "bogus-zzz"))
+
+    def test_step_uses_harness_when_supported(self):
+        cmd = harness._update_step_cmd(ROOT, "upgrade", "main")
+        self.assertTrue(cmd[1].endswith("harness.py"))
+        self.assertEqual(cmd[2:], ["upgrade", "main"])
+
+    def test_step_falls_back_to_update_when_stale(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        rituals = tmp / "rituals"
+        rituals.mkdir()
+        # a harness.py too old to know any self-update subcommand (exit 2 like argparse)
+        (rituals / "harness.py").write_text("import sys\nsys.exit(2)\n", encoding="utf-8")
+        (rituals / "_update.py").write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+        cmd = harness._update_step_cmd(tmp, "upgrade", "main")
+        self.assertTrue(cmd[1].endswith("_update.py"))
+        self.assertEqual(cmd[2:], ["upgrade", "main"])
+
+
 if __name__ == "__main__":
     unittest.main()

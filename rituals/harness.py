@@ -3328,6 +3328,30 @@ def _diagnose_failed_step(n: int, total: int, title: str, cmd: list,
     return lines
 
 
+def _harness_supports(hp: str, sub: str) -> bool:
+    """True iff this harness.py knows subcommand `sub`. A side-effect-free `--help` exits 0
+    only when the subparser exists — argparse rejects an unknown choice with exit 2. This is
+    the same probe the launchers use to detect a stale factory."""
+    try:
+        pr = subprocess.run([sys.executable, hp, sub, "--help"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return pr.returncode == 0
+    except OSError:
+        return False
+
+
+def _update_step_cmd(here: Path, sub: str, ref: str) -> list:
+    """The command for one update step, self-healing a STALE factory. Prefer the in-tree
+    `harness.py <sub>`; but when harness.py predates it — the partial-update skew that breaks
+    step 2/2 with argparse 'invalid choice' — drop to `rituals/_update.py <sub>`, the exact
+    same code path (and the same fallback the launchers use). So an update started from a
+    stale factory now REPAIRS itself in-process instead of dead-ending."""
+    hp = str(here / "rituals" / "harness.py")
+    if _harness_supports(hp, sub):
+        return [sys.executable, hp, sub, ref]
+    return [sys.executable, str(here / "rituals" / "_update.py"), sub, ref]
+
+
 def _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading="updating") -> int:
     """Run cmd, streaming its (sanitized) output into the progress screen's log pane."""
     try:
@@ -3414,9 +3438,8 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
     if ref is None:
         ref = _text_input(stdscr, curses, "Update from which upstream ref?", "main") or "main"
         curses.curs_set(0)
-    hp = str(here / "rituals" / "harness.py")
-    steps = [("Refresh orchestration scripts", [sys.executable, hp, "sync-self", ref]),
-             ("Update factory & rebuild bundle", [sys.executable, hp, "upgrade", ref])]
+    steps = [("Refresh orchestration scripts", _update_step_cmd(here, "sync-self", ref)),
+             ("Update factory & rebuild bundle", _update_step_cmd(here, "upgrade", ref))]
     status = _run_steps(stdscr, curses, pal, steps, heading="updating")
     failed = any(s == "failed" for s in status)
     msg = ("a step FAILED — press any key to continue to setup" if failed
@@ -3436,9 +3459,8 @@ def _bootstrap_plain(here, ref) -> None:
     the exit code and (for the stale-factory skew) the exact self-heal command — the old
     code ignored the return codes, so a broken step 2/2 left no verdict at all."""
     r = ref or "main"
-    hp = str(here / "rituals" / "harness.py")
-    steps = [("Refresh orchestration scripts", [sys.executable, hp, "sync-self", r]),
-             ("Update factory & rebuild bundle", [sys.executable, hp, "upgrade", r])]
+    steps = [("Refresh orchestration scripts", _update_step_cmd(here, "sync-self", r)),
+             ("Update factory & rebuild bundle", _update_step_cmd(here, "upgrade", r))]
     failed = False
     for i, (title, cmd) in enumerate(steps):
         print(f"[geneseed] step {i + 1}/{len(steps)}: {title} ...")
@@ -3447,6 +3469,7 @@ def _bootstrap_plain(here, ref) -> None:
             failed = True
             # The live run inherited stdout, so its output was not captured. Re-probe the
             # subcommand (captured) to confirm the stale-factory signature for the diagnosis.
+            hp = str(here / "rituals" / "harness.py")
             sub = cmd[2] if len(cmd) > 2 else ""
             probe = ""
             if sub in ("upgrade", "sync-self"):
