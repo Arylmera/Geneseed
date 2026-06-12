@@ -114,6 +114,36 @@ class ActionCommandsTests(unittest.TestCase):
         self.assertIsNone(web.action_commands("bogus"))
 
 
+class ThemePickerTests(unittest.TestCase):
+    def setUp(self):
+        self.state = web.WebState(theme="neutral")
+
+    def test_api_themes_lists_themes_and_emits(self):
+        t = web.api_themes(self.state)
+        names = [x["name"] for x in t["themes"]]
+        self.assertIn("neutral", names)
+        self.assertIn("imperial", names)
+        emits = [x["name"] for x in t["emits"]]
+        self.assertIn("opencode-global", emits)
+        self.assertEqual(t["current"]["theme"], "neutral")
+
+    def test_build_override_valid_wins(self):
+        theme, emit = web._build_override(self.state, {"theme": "imperial", "emit": "files"})
+        self.assertEqual(theme, "imperial")
+        self.assertEqual(emit, "files")
+
+    def test_build_override_invalid_falls_back(self):
+        self.state.emit = "opencode-global"
+        theme, emit = web._build_override(self.state, {"theme": "bogus", "emit": "nope"})
+        self.assertEqual(theme, "neutral")          # state.theme
+        self.assertEqual(emit, "opencode-global")   # state.emit
+
+    def test_build_override_empty_body_uses_state(self):
+        theme, emit = web._build_override(self.state, {})
+        self.assertEqual(theme, self.state.theme)
+        self.assertEqual(emit, self.state.emit)
+
+
 class HandlerTests(unittest.TestCase):
     def _serve(self):
         state = web.WebState(theme="neutral")

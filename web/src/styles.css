@@ -62,3 +62,13 @@ a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: un
 .console-tab { position: fixed; left: 0; bottom: 20px; z-index: 6; cursor: pointer;
   background: var(--panel); color: var(--fg); border: 1px solid var(--border);
   border-left: 0; border-radius: 0 8px 8px 0; padding: 8px 12px; font-weight: 600; }
+/* ---- Build theme/emit picker ----------------------------------------- */
+.card.no-hover { cursor: default; }
+.card.no-hover:hover { border-color: var(--border); }
+.picker { display: flex; gap: 10px; margin: 10px 0 4px; }
+.picker label { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.picker .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); }
+.picker select { background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 6px; }
+.row-actions { display: flex; gap: 8px; margin-top: 10px; }

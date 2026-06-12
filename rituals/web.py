@@ -252,6 +252,33 @@ def action_commands(action: str, theme: str = "neutral",
     }.get(action)
 
 
+def _theme_choices() -> list[dict]:
+    """Available themes (name + short blurb) — discovered from themes/*.json."""
+    return [{"name": name, "blurb": blurb} for name, blurb in harness._theme_options()]
+
+
+def _emit_choices() -> list[dict]:
+    """Available install modes (name + description) — the setup wizard's options."""
+    return [{"name": name, "desc": desc} for name, desc in harness.EMIT_OPTIONS]
+
+
+def api_themes(state: WebState) -> dict:
+    """Theme + emit options for the web Build picker, plus the detected current pair."""
+    return {"themes": _theme_choices(), "emits": _emit_choices(),
+            "current": {"theme": state.theme, "emit": state.emit}}
+
+
+def _build_override(state: WebState, body: dict) -> tuple:
+    """Resolve (theme, emit) for a Build POST: a valid override in the request body
+    wins; anything missing or unrecognised falls back to the detected install — so a
+    bogus value can never reach the build argv."""
+    themes = {c["name"] for c in _theme_choices()}
+    emits = {c["name"] for c in _emit_choices()}
+    t, e = body.get("theme"), body.get("emit")
+    return (t if t in themes else state.theme,
+            e if e in emits else state.emit)
+
+
 def api_diff(state: WebState) -> dict:
     target, theme, files = harness._diff_collect(target=state.target, theme=state.theme)
     return {
@@ -282,6 +309,7 @@ def api_overview(state: WebState) -> dict:
             agent_md.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
     return {
         "theme": state.theme,
+        "emit": state.emit,
         "target": str(state.target),
         "deployed": _deployed(state),
         "counts": {
@@ -328,6 +356,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                 if path.startswith("/api/item/"):
                     _, _, _, type_, name = path.split("/", 4)
                     return self._send_json(api_item(state, type_, name))
+                if path == "/api/themes":
+                    return self._send_json(api_themes(state))
                 if path == "/api/diff":
                     return self._send_json(api_diff(state))
                 if path.startswith("/api/jobs/"):
@@ -340,6 +370,19 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
             except Exception as e:  # noqa: BLE001
                 return self._send_json({"error": str(e)}, 500)
 
+        def _read_json_body(self) -> dict:
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if not length:
+                return {}
+            try:
+                obj = json.loads(self.rfile.read(length) or b"{}")
+                return obj if isinstance(obj, dict) else {}
+            except Exception:  # noqa: BLE001
+                return {}
+
         # ---- POST --------------------------------------------------------
         def do_POST(self):
             path = self.path.split("?", 1)[0]
@@ -347,7 +390,14 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                 return self._send_json({"error": "forbidden"}, 403)
             if path.startswith("/api/actions/"):
                 action = path.rsplit("/", 1)[1]
-                cmds = action_commands(action, theme=state.theme, emit=state.emit)
+                body = self._read_json_body()
+                # Build can be re-themed/re-targeted from the UI picker; the other
+                # actions self-resolve the deployed theme downstream.
+                if action == "build":
+                    theme, emit = _build_override(state, body)
+                else:
+                    theme, emit = state.theme, state.emit
+                cmds = action_commands(action, theme=theme, emit=emit)
                 if not cmds:
                     return self._send_json({"error": f"unknown action {action}"}, 404)
                 jid = jm.start(action, *cmds)

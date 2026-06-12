@@ -40,10 +40,12 @@ export default function App() {
     return () => clearInterval(t)
   }, [activeId])
 
-  const runAction = async (name) => {
+  const runAction = async (name, opts) => {
     try {
-      const { job_id } = await api.action(name)
-      setRuns((rs) => [...rs, { id: job_id, action: name, status: 'running', output: '' }])
+      const { job_id } = await api.action(name, opts)
+      const label = name === 'build' && opts?.theme
+        ? `build (${opts.theme} · ${opts.emit})` : name
+      setRuns((rs) => [...rs, { id: job_id, action: label, status: 'running', output: '' }])
       setActiveId(job_id)
       setConsoleOpen(true)
     } catch (e) { setToast({ kind: 'err', msg: e.message }) }
