@@ -26,6 +26,9 @@ Dependency-free. Subcommands:
                                    moves it to archived-memory/; --yes to skip prompt
     harness setup                  interactive, dependency-free install wizard (all OSes)
     harness tui                    full-screen control panel (any VT-capable console)
+    harness web                    local web UI over the deployed harness — browse
+                                   agents/skills/laws/memory + run doctor/build/
+                                   update/diff in the browser (binds 127.0.0.1)
     harness learn [FILE]           distil notes/transcript into memory entries
                                    via a model CLI of your choice (no API key)
 

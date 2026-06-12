@@ -152,14 +152,35 @@ Geneseed/
 │   ├── memory/           memory convention + index
 │   └── notebook/         the agent's own freeform space — convention + index
 ├── themes/               voice token maps (8: neutral, imperial, military, pirate, wizard, cyberpunk, gamer, sports)
-├── rituals/harness.py    the CLI behind the launchers: menu · setup · tui · build · doctor · diff ·
-│                         upgrade · sync-self · link/unlink · context · learn · prompt · status ·
-│                         version · bootstrap · uninstall
+├── rituals/harness.py    the CLI behind the launchers: menu · setup · tui · web · build · doctor ·
+│                         diff · upgrade · sync-self · link/unlink · context · learn · prompt ·
+│                         status · version · bootstrap · uninstall
+├── rituals/web.py        local web UI server (stdlib HTTP) behind `geneseed web`
+├── web/                  Vite + React UI source; the committed web/dist/ build is what ships
 ├── tests/                stdlib unit tests + a Node workflow-runtime test
 ├── docs/specs/           dated implementation specs — design rationale + history
 ├── adapters/             per-tool glue (opencode/, claude-code/)
 └── .github/workflows/    CI: doctor + tests
 ```
+
+## Web UI
+
+`geneseed web` opens a local browser interface over the deployed harness:
+browse agents, skills, laws, memory and notebook, and run doctor, build,
+update, and diff/export — the same actions as the TUI, in a dashboard-first
+layout with rendered markdown and clickable cross-links.
+
+```
+geneseed web                 # serve on http://127.0.0.1:4747 and open the browser
+geneseed web --port 8080     # pick a port
+geneseed web --no-browser    # serve without auto-opening
+```
+
+It binds to `127.0.0.1` only and runs entirely offline — no npm needed at
+runtime; the UI build ships in `web/dist/`. Mutating actions run in the
+background and report back as toasts (fire-and-notify), guarded by a
+per-session token so other sites can't trigger them. Rebuild the UI after
+changing anything under `web/src/` with `cd web && npm install && npm run build`.
 
 ## Validate & test
 
