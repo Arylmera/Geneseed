@@ -84,15 +84,17 @@ export default function Graph() {
   return (
     <>
       <div className="head-row" style={{ marginBottom: 14 }}>
-        <p className="eyebrow">cross-links</p>
-        <h1 className="h">Graph</h1>
-        <p className="sub">
-          Every <code>[[wikilink]]</code> between agents and skills. Hover to isolate a
-          neighbourhood; click a node to open it — unlinked items are dimmed (orphans).
-        </p>
+        <div>
+          <span className="eyebrow">cross-links</span>
+          <h1 className="h">Graph</h1>
+          <p className="sub">
+            Every <code>[[wikilink]]</code> between agents and skills. Hover to isolate a
+            neighbourhood; click a node to open it — unlinked items are dimmed (orphans).
+          </p>
+        </div>
         <div className="legend">
-          <span className="swatch" style={{ background: 'var(--accent)' }} /> agent{'  '}
-          <span className="swatch" style={{ background: 'var(--good)' }} /> skill{'  '}
+          <span><span className="sw" style={{ background: 'var(--accent)' }} />agent</span>
+          <span><span className="sw" style={{ background: 'var(--good)' }} />skill</span>
           <span className="dim">{data.nodes.length} nodes · {data.edges.length} links</span>
         </div>
       </div>

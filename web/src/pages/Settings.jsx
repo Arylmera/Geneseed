@@ -96,8 +96,8 @@ export default function Settings({ onAction }) {
     }).catch(() => {})
   }, [])
 
-  if (err) return <div className="container"><p className="badge bad">{err}</p></div>
-  if (!setup) return <div className="container">Loading…</div>
+  if (err) return <p className="badge bad">{err}</p>
+  if (!setup) return <div className="loading">Loading…</div>
 
   const upToDate = (setup.version_verdict || '').includes('up to date')
 
