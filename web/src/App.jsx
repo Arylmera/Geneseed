@@ -134,7 +134,11 @@ export default function App() {
           {route.view === 'dashboard' && <Dashboard overview={overview} onAction={runAction} />}
           {route.view === 'section' && <Section section={route.section} query={query} />}
           {route.view === 'item' &&
-            <Section section={route.type + 's'} selected={route.name} query={query} />}
+            <Section
+              section={{ agent: 'agents', skill: 'skills', law: 'laws' }[route.type] || route.type}
+              selected={route.name}
+              query={query}
+            />}
           {route.view === 'diff' && <Diff />}
           {route.view === 'doctor' && <Doctor />}
           {route.view === 'themes' && <Themes onAction={runAction} />}

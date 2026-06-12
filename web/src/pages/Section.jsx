@@ -4,7 +4,7 @@ import { go } from '../router.js'
 import Markdown from '../components/Markdown.jsx'
 
 const TYPE = { agents: 'agent', skills: 'skill', laws: 'law',
-  memory: 'memory', notebook: 'notebook', config: 'config' }
+  memory: 'memory', notebook: 'notebook', wiki: 'wiki', config: 'config' }
 
 export default function Section({ section, selected, query }) {
   const [items, setItems] = useState([])

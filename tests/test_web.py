@@ -288,6 +288,52 @@ class RestoreTests(unittest.TestCase):
             self.assertEqual(res["errors"], ["no deployed harness"])
 
 
+class WikiTests(unittest.TestCase):
+    def setUp(self):
+        import json
+        import os
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        vault = self.tmp / "vault"
+        (vault / "sub").mkdir(parents=True)
+        (vault / "Hidden").mkdir()
+        (vault / "Note.md").write_text("# Note\nSee [[learn]].", encoding="utf-8")
+        (vault / "sub" / "Page.md").write_text("# Page", encoding="utf-8")
+        (vault / "Hidden" / "Secret.md").write_text("# Secret", encoding="utf-8")
+        manifest = self.tmp / "wiki.jsonc"
+        manifest.write_text(json.dumps({"wikis": [{
+            "name": "test", "path": str(vault),
+            "entries": [
+                {"path": "Note.md", "load": "eager", "description": "the note"},
+                {"path": "sub/", "load": "lazy"},
+                {"path": "Hidden/", "load": "exclude"},
+            ]}]}), encoding="utf-8")
+        os.environ["GENESEED_WIKI"] = str(manifest)
+        self.state = web.WebState(theme="neutral")
+
+    def tearDown(self):
+        import os
+        import shutil
+        os.environ.pop("GENESEED_WIKI", None)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_catalog_lists_pages_minus_excluded(self):
+        cat = web.api_catalog(self.state, "wiki")
+        names = [i["name"] for i in cat["items"]]
+        self.assertIn("test:Note.md", names)
+        self.assertIn("test:sub/Page.md", names)
+        self.assertNotIn("test:Hidden/Secret.md", names)
+
+    def test_item_reads_page_and_blocks_traversal(self):
+        item = web.api_item(self.state, "wiki", "test:Note.md")
+        self.assertIn("# Note", item["body"])
+        self.assertEqual(item["title"], "Note")
+        with self.assertRaises(web.NotFound):
+            web.api_item(self.state, "wiki", "test:../wiki.jsonc")
+        with self.assertRaises(web.NotFound):
+            web.api_item(self.state, "wiki", "nope:Note.md")
+
+
 class McpTests(unittest.TestCase):
     def test_api_mcp_lists_targets_and_states(self):
         state = web.WebState(theme="neutral")

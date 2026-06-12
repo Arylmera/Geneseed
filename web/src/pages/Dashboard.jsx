@@ -3,7 +3,8 @@ import { go } from '../router.js'
 
 const SECTIONS = [
   ['agents', 'Agents', '🤖'], ['skills', 'Skills', '🧰'], ['laws', 'Laws', '⚖️'],
-  ['memory', 'Memory', '🧠'], ['notebook', 'Notebook', '📓'], ['config', 'Config', '🛠️'],
+  ['memory', 'Memory', '🧠'], ['notebook', 'Notebook', '📓'], ['wiki', 'Wiki', '📚'],
+  ['config', 'Config', '🛠️'],
 ]
 
 export default function Dashboard({ overview, onAction }) {

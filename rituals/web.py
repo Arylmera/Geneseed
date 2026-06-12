@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build          # noqa: E402
 import harness        # noqa: E402
 
-SECTIONS = ("agents", "skills", "laws", "memory", "notebook", "config")
+SECTIONS = ("agents", "skills", "laws", "memory", "notebook", "wiki", "config")
 WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 
 
@@ -106,6 +106,79 @@ def _notebook_items(state: WebState) -> list[dict]:
             for p in sorted(d.glob("*.md"))]
 
 
+WIKI_FILE_CAP = 300  # per manifest entry — a vault folder can be huge
+
+
+def _wiki_manifest(state: WebState) -> list:
+    """The wiki manifest's `wikis` list, resolved like the context plugin does:
+    $GENESEED_WIKI first, else wiki.jsonc beside the deployed bundle."""
+    import os
+    cand = os.environ.get("GENESEED_WIKI")
+    p = Path(cand).expanduser() if cand else state.target / "wiki.jsonc"
+    if not p.is_file():
+        return []
+    cfg = harness._mcp_load(p)   # the harness's generic JSONC dict loader
+    wikis = cfg.get("wikis")
+    return wikis if isinstance(wikis, list) else []
+
+
+def _wiki_items(state: WebState) -> list[dict]:
+    """Browsable wiki pages: every .md under each manifest entry (folders walked
+    recursively, capped), minus the entries marked load=exclude. Item names are
+    '<wiki>:<relpath>' so api_item can resolve them back to the right vault."""
+    items, seen = [], set()
+    for w in _wiki_manifest(state):
+        if not isinstance(w, dict):
+            continue
+        wname = str(w.get("name") or "wiki")
+        root = Path(str(w.get("path") or "")).expanduser()
+        if not root.is_dir():
+            continue
+        entries = [e for e in (w.get("entries") or []) if isinstance(e, dict)]
+        excludes = [str(e.get("path") or "").strip("/").replace("\\", "/")
+                    for e in entries if e.get("load") == "exclude"]
+
+        def excluded(rel: str) -> bool:
+            return any(rel == x or rel.startswith(x + "/") for x in excludes if x)
+
+        for e in entries:
+            if e.get("load") == "exclude":
+                continue
+            rel = str(e.get("path") or "").strip("/").replace("\\", "/")
+            desc = str(e.get("description") or "")
+            fp = root / rel
+            if fp.is_file() and fp.suffix == ".md":
+                mds = [fp]
+            elif fp.is_dir():
+                mds = sorted(fp.rglob("*.md"))[:WIKI_FILE_CAP]
+            else:
+                continue
+            for md in mds:
+                r = md.relative_to(root).as_posix()
+                key = f"{wname}:{r}"
+                if key in seen or excluded(r):
+                    continue
+                seen.add(key)
+                items.append({"name": key, "title": md.stem,
+                              "desc": desc if len(mds) == 1 else r})
+    return items
+
+
+def api_wiki_item(state: WebState, name: str) -> dict:
+    """One wiki page by '<wiki>:<relpath>' — read from the vault, never outside it."""
+    wname, _, rel = name.partition(":")
+    rel = rel.strip("/").replace("\\", "/")
+    for w in _wiki_manifest(state):
+        if isinstance(w, dict) and str(w.get("name") or "wiki") == wname:
+            root = Path(str(w.get("path") or "")).expanduser().resolve()
+            p = (root / rel).resolve()
+            if rel and p.suffix == ".md" and harness._within(p, root) and p.is_file():
+                body = p.read_text(encoding="utf-8", errors="replace")
+                return {"type": "wiki", "name": name, "title": p.stem, "desc": "",
+                        "body": body, "links": _resolve_links(state, body)}
+    raise NotFound(name)
+
+
 def _config_items(state: WebState) -> list[dict]:
     out = []
     for fname in ("context.json", "wiki.jsonc"):
@@ -128,6 +201,8 @@ def api_catalog(state: WebState, section: str) -> dict:
         items = _memory_items(state)
     elif section == "notebook":
         items = _notebook_items(state)
+    elif section == "wiki":
+        items = _wiki_items(state)
     else:  # config
         items = _config_items(state)
     return {"section": section, "items": items}
@@ -180,6 +255,8 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
         body = p.read_text(encoding="utf-8", errors="replace")
         return {"type": type_, "name": name, "title": name, "desc": "",
                 "body": body, "links": _resolve_links(state, body)}
+    if type_ == "wiki":
+        return api_wiki_item(state, name)
     if type_ == "config":
         p = state.target / name
         if not p.is_file():
@@ -582,6 +659,7 @@ def api_overview(state: WebState) -> dict:
             "laws": len(inv["laws"]),
             "memory": len(_memory_items(state)),
             "notebook": len(_notebook_items(state)),
+            "wiki": len(_wiki_items(state)),
         },
         "doctor": state.doctor,
         "diff": diff,
