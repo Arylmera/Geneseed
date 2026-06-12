@@ -115,6 +115,43 @@ class StrayBundleTests(unittest.TestCase):
         self.assertEqual((self.out / "context.json").read_text(encoding="utf-8"), "REAL")
 
 
+class DownloadDiagnosticsTests(unittest.TestCase):
+    """Failed downloads must say WHY (one ASCII line per transport), not just
+    "unavailable - trying next source"."""
+
+    def test_curl_reason_prefers_last_stderr_line(self):
+        reason = _update._curl_failure_reason(35, b"curl: (35) schannel: next InitializeSecurityContext failed\n")
+        self.assertEqual(reason, "(35) schannel: next InitializeSecurityContext failed")
+
+    def test_curl_reason_falls_back_to_exit_code(self):
+        self.assertEqual(_update._curl_failure_reason(7, b""), "exit 7")
+
+    def test_exc_reason_is_single_line_ascii(self):
+        reason = _update._exc_reason(OSError("ligne un\nligne deux → fin"))
+        self.assertEqual(reason, "ligne un ligne deux ? fin")
+        self.assertNotIn("\n", reason)
+
+    def test_exc_reason_empty_message_uses_class_name(self):
+        self.assertEqual(_update._exc_reason(TimeoutError()), "TimeoutError")
+
+    def test_urllib_download_failure_logs_reason(self):
+        import urllib.error
+        lines = []
+        saved = _update._urlopen
+        def boom(url, accept=None):
+            raise urllib.error.HTTPError(url, 407, "Proxy Authentication Required", None, None)
+        _update._urlopen = boom
+        try:
+            ok = _update._urllib_download("https://example.invalid/x.zip",
+                                          Path(tempfile.mkdtemp()) / "x.zip", lines.append)
+        finally:
+            _update._urlopen = saved
+        self.assertFalse(ok)
+        diag = [ln for ln in lines if "x urllib:" in ln]
+        self.assertEqual(len(diag), 1)
+        self.assertIn("407", diag[0])
+
+
 class DoctorSignatureTests(unittest.TestCase):
     def test_extracts_and_sorts_problem_bullets(self):
         out = "header\n  - zeta problem\nnoise\n- alpha problem\n  - alpha problem\n"

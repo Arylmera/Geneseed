@@ -175,6 +175,25 @@ def _progress(log, got: int, total: int = 0, *, final: bool = False) -> None:
     log(f"[geneseed]   downloaded {body}" + (" (done)" if final else " ..."))
 
 
+def _curl_failure_reason(returncode: int, stderr: bytes) -> str:
+    """Why curl failed, as one ASCII line: the last non-empty stderr line (`-sS` emits
+    e.g. `curl: (35) schannel: ...`), else the bare exit code. ASCII because this can be
+    relayed by a subprocess whose stdout is not UTF-8 on Windows (same as _progress)."""
+    text = stderr.decode("utf-8", "replace") if stderr else ""
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    reason = lines[-1] if lines else f"exit {returncode}"
+    if reason.lower().startswith("curl: "):
+        reason = reason[6:]
+    return reason.encode("ascii", "replace").decode("ascii")
+
+
+def _exc_reason(exc: BaseException) -> str:
+    """A network exception as one ASCII line (e.g. `HTTP Error 407: Proxy Authentication
+    Required`), falling back to the class name when str() is empty."""
+    s = " ".join(str(exc).split()) or exc.__class__.__name__
+    return s.encode("ascii", "replace").decode("ascii")
+
+
 def _resolve_sha(ref: str, log=None) -> str | None:
     """The 40-hex commit SHA for `ref` via the GitHub API, or None if unreachable.
     A SHA lets us pull the content-addressed archive/<sha>.zip — which only exists once
@@ -210,10 +229,12 @@ def _curl_download(url: str, dest: Path, log=None):
     if not exe:
         return None
     import subprocess
-    cmd = [exe, "-fsSL", "--connect-timeout", "10", "--max-time", "300",
+    # `-sS` keeps stderr down to the one error line, so the PIPE cannot fill and
+    # deadlock the poll loop below — and gives _curl_failure_reason its message.
+    cmd = [exe, "-fsSL", "-S", "--connect-timeout", "10", "--max-time", "300",
            "-A", "geneseed-upgrade", "-o", str(dest), url]
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     except Exception:
         return None
     last = -1
@@ -226,9 +247,17 @@ def _curl_download(url: str, dest: Path, log=None):
             _progress(log, got)
             last = got
         time.sleep(0.2)
+    err = b""
+    if proc.stderr is not None:
+        try:
+            err = proc.stderr.read()
+        finally:
+            proc.stderr.close()
     ok = proc.returncode == 0 and dest.is_file() and dest.stat().st_size > 0
     if ok:
         _progress(log, dest.stat().st_size, final=True)
+    elif log is not None:
+        log(f"[geneseed]   x curl: {_curl_failure_reason(proc.returncode, err)}")
     return ok
 
 
@@ -247,7 +276,9 @@ def _urllib_download(url: str, dest: Path, log=None) -> bool:
                 if got - last >= 131072:          # ~every 128 KB, matches the curl path
                     _progress(log, got, total)
                     last = got
-    except Exception:
+    except Exception as e:
+        if log is not None:
+            log(f"[geneseed]   x urllib: {_exc_reason(e)}")
         return False
     ok = dest.is_file() and dest.stat().st_size > 0
     if ok:
