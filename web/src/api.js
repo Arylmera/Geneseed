@@ -12,6 +12,7 @@ export const api = {
   item: (type, name) => get(`/api/item/${type}/${encodeURIComponent(name)}`),
   diff: () => get('/api/diff'),
   themes: () => get('/api/themes'),
+  setup: () => get('/api/setup'),
   job: (id) => get(`/api/jobs/${id}`),
   // opts (e.g. { theme, emit } for build) ride along in the JSON body.
   async action(name, opts) {

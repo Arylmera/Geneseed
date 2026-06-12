@@ -144,6 +144,19 @@ class ThemePickerTests(unittest.TestCase):
         self.assertEqual(emit, self.state.emit)
 
 
+class SetupTests(unittest.TestCase):
+    def test_api_setup_reports_install_snapshot(self):
+        state = web.WebState(theme="neutral")
+        s = web.api_setup(state)
+        for key in ("theme", "accent", "emit", "source_fp", "installed_fp",
+                    "version_verdict", "root", "target", "deployed", "python",
+                    "memory_dir", "facts"):
+            self.assertIn(key, s)
+        self.assertTrue(s["root"])
+        self.assertRegex(s["python"], r"^\d+\.\d+")
+        self.assertIsInstance(s["deployed"], bool)
+
+
 class HandlerTests(unittest.TestCase):
     def _serve(self):
         state = web.WebState(theme="neutral")

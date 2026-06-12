@@ -279,6 +279,20 @@ def _build_override(state: WebState, body: dict) -> tuple:
             e if e in emits else state.emit)
 
 
+def api_setup(state: WebState) -> dict:
+    """Install snapshot for the Settings page — harness._status_data() (the same
+    source the `status` command and the TUI panel read, so the three never drift)
+    plus the web server's own facts."""
+    d = harness._status_data()
+    d.update({
+        "root": str(ROOT),
+        "target": str(state.target),
+        "deployed": _deployed(state),
+        "python": sys.version.split()[0],
+    })
+    return d
+
+
 def api_diff(state: WebState) -> dict:
     target, theme, files = harness._diff_collect(target=state.target, theme=state.theme)
     return {
@@ -358,6 +372,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                     return self._send_json(api_item(state, type_, name))
                 if path == "/api/themes":
                     return self._send_json(api_themes(state))
+                if path == "/api/setup":
+                    return self._send_json(api_setup(state))
                 if path == "/api/diff":
                     return self._send_json(api_diff(state))
                 if path.startswith("/api/jobs/"):

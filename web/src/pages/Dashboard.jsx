@@ -1,32 +1,35 @@
-import React, { useEffect, useState } from 'react'
-import { api } from '../api.js'
+import React from 'react'
 import { go } from '../router.js'
 
 const SECTIONS = [
-  ['agents', 'Agents'], ['skills', 'Skills'], ['laws', 'Laws'],
-  ['memory', 'Memory'], ['notebook', 'Notebook'], ['config', 'Config'],
+  ['agents', 'Agents', '🤖'], ['skills', 'Skills', '🧰'], ['laws', 'Laws', '⚖️'],
+  ['memory', 'Memory', '🧠'], ['notebook', 'Notebook', '📓'], ['config', 'Config', '🛠️'],
 ]
 
 export default function Dashboard({ overview, onAction }) {
-  const [choices, setChoices] = useState(null) // { themes:[{name,blurb}], emits:[{name,desc}], current }
-  const [theme, setTheme] = useState('')
-  const [emit, setEmit] = useState('')
-
-  useEffect(() => {
-    api.themes().then((t) => {
-      setChoices(t)
-      setTheme(t.current.theme)
-      setEmit(t.current.emit)
-    }).catch(() => {})
-  }, [])
-
   if (!overview) return <div className="container">Loading…</div>
   const d = overview.diff
   const pending = d ? d.edited + d.added + d.missing : 0
-  const stop = (e) => e.stopPropagation()
-
   return (
     <div className="container">
+      <div className="hero">
+        <div>
+          <h2 className="hero-title">
+            {overview.deployed ? 'Harness deployed' : 'No deployed harness'}
+          </h2>
+          <p className="muted hero-sub">
+            {overview.theme} voice · {overview.emit} · {overview.target}
+          </p>
+        </div>
+        <div className="hero-meta">
+          <span className={`badge ${overview.deployed ? 'ok' : 'warn'}`}>
+            {overview.deployed ? 'deployed' : 'not deployed'}
+          </span>
+          <span className="muted">Last build: {overview.build_time || 'unknown'}</span>
+          <a href="#/settings">Setup details →</a>
+        </div>
+      </div>
+
       <div className="cards" style={{ marginBottom: 16 }}>
         <div className="card" onClick={() => onAction('doctor')}>
           <h3>🩺 Doctor</h3>
@@ -40,41 +43,16 @@ export default function Dashboard({ overview, onAction }) {
           <div className="big">{overview.deployed ? pending : '—'}</div>
           <p className="muted">Review &amp; export improvements</p>
         </div>
-        <div className="card no-hover">
-          <h3>🔄 Update / Build</h3>
-          <p className="muted">Last build: {overview.build_time || 'unknown'}</p>
-          {choices && (
-            <div className="picker" onClick={stop}>
-              <label>
-                <span className="label">Theme</span>
-                <select value={theme} onChange={(e) => setTheme(e.target.value)}>
-                  {choices.themes.map((t) => (
-                    <option key={t.name} value={t.name}>{t.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span className="label">Mode</span>
-                <select value={emit} onChange={(e) => setEmit(e.target.value)}>
-                  {choices.emits.map((em) => (
-                    <option key={em.name} value={em.name}>{em.name}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-          <div className="row-actions" onClick={stop}>
-            <button className="btn ghost" onClick={() => onAction('build', { theme, emit })}>
-              Build
-            </button>
-            <button className="btn" onClick={() => onAction('update')}>Update</button>
-          </div>
+        <div className="card" onClick={() => go('#/settings')}>
+          <h3>⚙️ Setup</h3>
+          <p className="muted">Install details, build &amp; update</p>
         </div>
       </div>
+
       <div className="cards">
-        {SECTIONS.map(([key, label]) => (
+        {SECTIONS.map(([key, label, icon]) => (
           <div className="card" key={key} onClick={() => go(`#/section/${key}`)}>
-            <h3>{label}</h3>
+            <h3>{icon} {label}</h3>
             <div className="big">{overview.counts[key] ?? '—'}</div>
           </div>
         ))}

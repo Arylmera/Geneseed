@@ -5,8 +5,18 @@ import Search from './components/Search.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Section from './pages/Section.jsx'
 import Diff from './pages/Diff.jsx'
+import Settings from './pages/Settings.jsx'
 import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
+
+// Top-level pages. `match` decides which tab lights up for the current route;
+// Library owns both the section browser and single-item views.
+const NAV = [
+  { hash: '#/', label: 'Dashboard', match: (r) => r.view === 'dashboard' },
+  { hash: '#/section/agents', label: 'Library', match: (r) => r.view === 'section' || r.view === 'item' },
+  { hash: '#/diff', label: 'Changes', match: (r) => r.view === 'diff' },
+  { hash: '#/settings', label: 'Settings', match: (r) => r.view === 'settings' },
+]
 
 export default function App() {
   const route = useRoute()
@@ -57,11 +67,14 @@ export default function App() {
         <div className="brand" onClick={() => go('#/')} style={{ cursor: 'pointer' }}>
           ⚙ Genes<span className="dot">eed</span>
         </div>
+        <nav className="nav">
+          {NAV.map((n) => (
+            <a key={n.hash} href={n.hash} className={n.match(route) ? 'active' : ''}>
+              {n.label}
+            </a>
+          ))}
+        </nav>
         <Search value={query} onChange={setQuery} />
-        <button className="btn ghost" onClick={() => runAction('doctor')}>Doctor</button>
-        <button className="btn ghost" onClick={() => go('#/diff')}>Diff</button>
-        <button className="btn ghost" onClick={() => runAction('build')}>Build</button>
-        <button className="btn" onClick={() => runAction('update')}>Update</button>
       </header>
 
       <div className={`layout ${consoleOpen ? '' : 'console-collapsed'}`}>
@@ -77,6 +90,7 @@ export default function App() {
           {route.view === 'item' &&
             <Section section={route.type + 's'} selected={route.name} query={query} />}
           {route.view === 'diff' && <Diff />}
+          {route.view === 'settings' && <Settings onAction={runAction} />}
         </main>
       </div>
 
