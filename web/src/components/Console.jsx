@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 
-// Persistent left-side terminal. Shows every action triggered from the UI as a
+// Persistent right-side terminal. Shows every action triggered from the UI as a
 // command run, streaming its output live. Not a popup — always docked.
 export default function Console({ runs, collapsed, onToggle, onClear }) {
   const bodyRef = useRef(null)
@@ -26,7 +26,7 @@ export default function Console({ runs, collapsed, onToggle, onClear }) {
         <span className="console-title">Console</span>
         <span style={{ flex: 1 }} />
         <button className="btn ghost sm" onClick={onClear} disabled={!runs.length}>Clear</button>
-        <button className="btn ghost sm" onClick={onToggle} title="Hide console">⟨</button>
+        <button className="btn ghost sm" onClick={onToggle} title="Hide console">⟩</button>
       </div>
       <div className="console-body" ref={bodyRef}>
         {runs.length === 0 && (

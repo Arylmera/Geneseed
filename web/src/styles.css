@@ -127,17 +127,24 @@ h2 { margin: 0 0 16px; font-size: 20px; }
   border-radius: var(--radius-sm); max-width: 360px; }
 .toast.err { border-left-color: var(--err); } .toast.ok { border-left-color: var(--ok); }
 
-/* ---- left-docked terminal console ------------------------------------ */
+/* ---- right-docked terminal console ------------------------------------ */
 .layout { display: flex; align-items: flex-start; }
 .main { flex: 1; min-width: 0; }
-.console { flex: 0 0 380px; width: 380px; position: sticky; top: 53px;
-  height: calc(100vh - 53px); background: var(--panel); border-right: 1px solid var(--border);
+.console { flex: 0 0 380px; width: 380px; position: sticky; top: 53px; order: 2;
+  height: calc(100vh - 53px); background: var(--panel); border-left: 1px solid var(--border);
   display: flex; flex-direction: column; }
 .console-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
   border-bottom: 1px solid var(--border); }
 .console-title { font-weight: 700; font-size: 13px; }
 .console-body { flex: 1; overflow: auto; padding: 10px 12px; background: var(--panel-2);
-  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.console-body::-webkit-scrollbar { width: 8px; height: 8px; }
+.console-body::-webkit-scrollbar-track { background: transparent; }
+.console-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px;
+  border: 2px solid var(--panel-2); }
+.console-body::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.console-body::-webkit-scrollbar-corner { background: transparent; }
 .console-empty { color: var(--muted); font-style: italic; }
 .run { margin-bottom: 12px; }
 .run-head { display: flex; align-items: center; gap: 8px; }
@@ -149,9 +156,9 @@ h2 { margin: 0 0 16px; font-size: 20px; }
 .run-status.failed { color: var(--err); }
 .run-out { white-space: pre-wrap; margin: 4px 0 0; color: var(--muted);
   border-left: 2px solid var(--border); padding-left: 8px; }
-.console-tab { position: fixed; left: 0; bottom: 20px; z-index: 6; cursor: pointer;
+.console-tab { position: fixed; right: 0; bottom: 20px; z-index: 6; cursor: pointer;
   background: var(--panel); color: var(--fg); border: 1px solid var(--border);
-  border-left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 8px 12px; font-weight: 600; }
+  border-right: 0; border-radius: var(--radius-sm) 0 0 var(--radius-sm); padding: 8px 12px; font-weight: 600; }
 
 /* ---- Build theme/emit picker ----------------------------------------- */
 .picker { display: flex; gap: 10px; margin: 10px 0 4px; }
