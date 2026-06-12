@@ -3,6 +3,7 @@
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
 import json
+import os
 import re
 import shutil
 import sys
@@ -1052,6 +1053,51 @@ class ReexecTests(unittest.TestCase):
         finally:
             sys.platform = saved_platform
             harness.os.execv = real_execv
+
+
+class UpdateStepDiagnosisTests(unittest.TestCase):
+    """A failed in-process update step must leave a durable, legible trace. Field report:
+    'refresh ok, then update factory step 2/2 failed — usage harness ... invalid choice
+    upgrade'. That is the stale-factory skew; the diagnosis must name it and persist."""
+
+    def test_stale_factory_signature_yields_cure(self):
+        out = ("usage: harness [-h] {...}\n"
+               "harness: error: argument command: invalid choice: 'upgrade'")
+        hint = harness._stale_factory_hint(out, "upgrade", "main")
+        self.assertTrue(hint)
+        self.assertIn("PREDATES", hint[0])
+        self.assertTrue(any("python rituals/_update.py update main" in ln for ln in hint))
+
+    def test_unrelated_failure_gives_no_false_cure(self):
+        self.assertEqual(harness._stale_factory_hint("network unreachable", "upgrade", "main"), [])
+        self.assertEqual(harness._stale_factory_hint("", "upgrade", "main"), [])
+        # an empty subcommand must not match every line via the `sub in low` test
+        self.assertEqual(harness._stale_factory_hint("invalid choice: 'x'", "", "main"), [])
+
+    def test_failed_step_persists_to_install_log(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        logp = tmp / "install.log"
+        saved = os.environ.get("GENESEED_LOG")
+        os.environ["GENESEED_LOG"] = str(logp)
+        try:
+            cmd = [sys.executable, "harness.py", "upgrade", "main"]
+            out = "error: argument command: invalid choice: 'upgrade'"
+            lines = harness._diagnose_failed_step(
+                2, 2, "Update factory & rebuild bundle", cmd, 2, out)
+        finally:
+            if saved is None:
+                os.environ.pop("GENESEED_LOG", None)
+            else:
+                os.environ["GENESEED_LOG"] = saved
+        self.assertTrue(logp.is_file())
+        body = logp.read_text(encoding="utf-8")
+        self.assertIn("step 2/2", body)
+        self.assertIn("FAILED (exit 2)", body)
+        self.assertIn("invalid choice", body)
+        # the live lines carry the cure and a pointer to the persisted log
+        self.assertTrue(any("rituals/_update.py update main" in ln for ln in lines))
+        self.assertTrue(any(str(logp) in ln for ln in lines))
 
 
 if __name__ == "__main__":

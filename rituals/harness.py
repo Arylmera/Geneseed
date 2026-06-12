@@ -3270,6 +3270,64 @@ def _pipe_select_ok() -> bool:
     return hasattr(select, "select") and not sys.platform.startswith("win")
 
 
+def _install_logfile() -> Path | None:
+    """The persistent install log `_update.py` writes to — so a failed in-process update
+    step lands its diagnosis in the SAME file a real `upgrade` run logs to, giving the user
+    one place to read regardless of which path failed. Honours $GENESEED_LOG. None only if
+    even the fallback is unwritable."""
+    try:
+        import _update
+        return _update._logfile()
+    except Exception:
+        return Path.home() / ".geneseed-install.log"
+
+
+def _stale_factory_hint(output: str, sub: str, ref: str) -> list[str]:
+    """If `output` is argparse's 'invalid choice' reject for the self-update subcommand
+    `sub`, return the targeted cure; else []. This is the partial-update skew behind the
+    field report: step 1/2 (sync-self) refreshed the launchers + _update.py, but the factory
+    (rituals/harness.py) is still too old to know `upgrade`/`sync-self`, so step 2/2 dies in
+    argparse before `_update` is ever reached. The launchers self-heal via _update.py; this
+    points a manual run at the same cure."""
+    low = (output or "").lower()
+    if not (sub and "invalid choice" in low and sub in low):
+        return []
+    return [
+        f"[geneseed]   diagnosis: the installed rituals/harness.py PREDATES the '{sub}' subcommand.",
+        "[geneseed]   step 1/2 refreshed the launchers + _update.py, but the factory is still old —",
+        f"[geneseed]   so step 2/2 'harness.py {sub}' hit argparse 'invalid choice'. Self-heal directly:",
+        f"[geneseed]     python rituals/_update.py update {ref}",
+    ]
+
+
+def _diagnose_failed_step(n: int, total: int, title: str, cmd: list,
+                          rc: int, output: str) -> list[str]:
+    """Build — and persist to the install log — the diagnosis for a failed update step.
+    Returns the human lines to ALSO surface live (progress pane / stdout). `output` is the
+    step's captured combined output (curses path) or a captured re-probe (plain path); it is
+    scanned for the stale-factory signature. Persisting matters: the curses log pane is
+    ephemeral and the plain path's child output scrolls past, so without this the only trace
+    of WHY a step failed is gone the moment the screen tears down."""
+    sub = cmd[2] if len(cmd) > 2 else ""
+    ref = cmd[3] if len(cmd) > 3 else "main"
+    lines = [f"[geneseed] ✗ step {n}/{total} FAILED (exit {rc}): {title}"]
+    lines += _stale_factory_hint(output, sub, ref)
+    logpath = _install_logfile()
+    if logpath is not None:
+        try:
+            with logpath.open("a", encoding="utf-8") as fh:
+                fh.write(f"\n==== geneseed update: step {n}/{total} '{title}' FAILED (exit {rc}) ====\n")
+                fh.write("command: " + " ".join(str(c) for c in cmd) + "\n")
+                if output.strip():
+                    fh.write(output.rstrip("\n") + "\n")
+                for ln in lines[1:]:
+                    fh.write(ln + "\n")
+            lines.append(f"[geneseed] ── full install log: {logpath}")
+        except OSError:
+            pass
+    return lines
+
+
 def _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading="updating") -> int:
     """Run cmd, streaming its (sanitized) output into the progress screen's log pane."""
     try:
@@ -3335,11 +3393,16 @@ def _run_steps(stdscr, curses, pal, steps, heading="working") -> list:
     """Run each (title, cmd) step in the progress UI; return the per-step status list."""
     status = ["pending"] * len(steps)
     log: list[str] = []
-    for i, (_title, cmd) in enumerate(steps):
+    for i, (title, cmd) in enumerate(steps):
         status[i] = "running"
         _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
         rc = _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading)
         status[i] = "done" if rc == 0 else "failed"
+        if rc != 0:
+            # The pane scrolls and curses tears down on exit — capture WHY to the install
+            # log and surface the diagnosis (incl. the stale-factory cure) in the pane.
+            for ln in _diagnose_failed_step(i + 1, len(steps), title, cmd, rc, "\n".join(log)):
+                log.append(ln)
         _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
     return status
 
@@ -3369,13 +3432,33 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
 def _bootstrap_plain(here, ref) -> None:
     """Non-curses fallback: run the update steps with plain output (never fatal).
     Cross-platform — invokes the harness's own Python `sync-self`/`upgrade` subcommands
-    (no bash), so this works identically on native Windows."""
+    (no bash), so this works identically on native Windows. On a step failure it reports
+    the exit code and (for the stale-factory skew) the exact self-heal command — the old
+    code ignored the return codes, so a broken step 2/2 left no verdict at all."""
     r = ref or "main"
     hp = str(here / "rituals" / "harness.py")
-    print("[geneseed] refreshing orchestration scripts ...")
-    run([sys.executable, hp, "sync-self", r])
-    print("[geneseed] updating factory + rebuilding ...")
-    run([sys.executable, hp, "upgrade", r])
+    steps = [("Refresh orchestration scripts", [sys.executable, hp, "sync-self", r]),
+             ("Update factory & rebuild bundle", [sys.executable, hp, "upgrade", r])]
+    failed = False
+    for i, (title, cmd) in enumerate(steps):
+        print(f"[geneseed] step {i + 1}/{len(steps)}: {title} ...")
+        rc = run(cmd).returncode
+        if rc != 0:
+            failed = True
+            # The live run inherited stdout, so its output was not captured. Re-probe the
+            # subcommand (captured) to confirm the stale-factory signature for the diagnosis.
+            sub = cmd[2] if len(cmd) > 2 else ""
+            probe = ""
+            if sub in ("upgrade", "sync-self"):
+                pr = subprocess.run([sys.executable, hp, sub, "--help"],
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    text=True, encoding="utf-8", errors="replace")
+                if pr.returncode != 0:
+                    probe = pr.stdout or ""
+            for ln in _diagnose_failed_step(i + 1, len(steps), title, cmd, rc, probe):
+                print(ln)
+    if not failed:
+        print("[geneseed] ✓ update complete.")
 
 
 def cmd_upgrade(args: argparse.Namespace) -> int:
