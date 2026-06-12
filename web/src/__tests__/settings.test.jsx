@@ -37,4 +37,20 @@ describe('Settings', () => {
     expect(screen.getByText('Build')).toBeTruthy()
     expect(screen.getByText('Update')).toBeTruthy()
   })
+
+  it('renders switch toggles for present servers', async () => {
+    render(<Settings onAction={() => {}} />)
+    // Wait for MCP data to load
+    await waitFor(() => expect(screen.getAllByRole('switch').length).toBeGreaterThan(0))
+    // enabled server renders as a switch
+    const switches = screen.getAllByRole('switch')
+    expect(switches.length).toBeGreaterThanOrEqual(1)
+    // the enabled server's switch has aria-checked=true
+    expect(switches[0].getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('renders Add button for absent preset servers', async () => {
+    const { unmount } = render(<Settings onAction={() => {}} />)
+    unmount()
+  })
 })

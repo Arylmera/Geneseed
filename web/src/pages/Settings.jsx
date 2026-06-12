@@ -1,14 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
-
-function Row({ k, children }) {
-  return (
-    <div className="kv">
-      <span className="kv-key">{k}</span>
-      <span className="kv-val">{children}</span>
-    </div>
-  )
-}
+import { Icon } from '../components/Icon.jsx'
 
 function McpServers() {
   const [data, setData] = useState(null) // { targets, default }
@@ -19,8 +11,8 @@ function McpServers() {
   const load = () => api.mcp().then(setData).catch((e) => setErr(e.message))
   useEffect(() => { load() }, [])
 
-  if (err) return <p className="badge warn">{err}</p>
-  if (!data) return <p className="muted">Loading…</p>
+  if (err) return <p className="badge bad">{err}</p>
+  if (!data) return <p className="loading">Loading…</p>
 
   const toggle = async (target, s) => {
     const key = target.path + s.name
@@ -32,38 +24,49 @@ function McpServers() {
     } catch (e) { setNote(e.message) } finally { setBusyKey('') }
   }
 
-  const verb = (s) =>
-    s.state === 'enabled' ? 'Disable' : s.state === 'disabled' ? 'Enable' : 'Add'
-
   return (
     <>
-      {note ? <p className="badge warn">{note}</p> : null}
+      {note ? <p className="badge bad">{note}</p> : null}
       {data.targets.map((t) => (
         <div className="mcp-target" key={t.path}>
-          <p className="muted mcp-path">
+          <div className="mt-head">
             {t.label} — <code>{t.path}</code>
             {t.commented && ' (has comments — edit by hand)'}
-          </p>
-          {t.servers.map((s) => (
-            <div className="mcp-row" key={s.name}>
-              <div className="mcp-info">
-                <strong>{s.label}</strong>
-                <span className={`badge ${s.state === 'enabled' ? 'ok' : ''}`}>
-                  {s.state}
-                </span>
-                <p className="muted">{s.desc}</p>
+          </div>
+          {t.servers.map((s) => {
+            const key = t.path + s.name
+            const isDisabled = !!(t.commented || busyKey === key)
+            return (
+              <div className="mcp-row" key={s.name}>
+                <div className="mcp-info">
+                  <div className="mi-top">
+                    <strong>{s.label}</strong>
+                    <span className={`badge ${s.state === 'enabled' ? 'ok' : ''}`}>
+                      {s.state}
+                    </span>
+                  </div>
+                  <p>{s.desc}</p>
+                </div>
+                {s.state !== 'absent' ? (
+                  <div
+                    className={`sw-toggle${s.state === 'enabled' ? ' on' : ''}`}
+                    role="switch"
+                    aria-checked={s.state === 'enabled'}
+                    aria-disabled={isDisabled || undefined}
+                    onClick={isDisabled ? undefined : () => toggle(t, s)}
+                  />
+                ) : (s.preset ? (
+                  <button
+                    className="btn ghost sm"
+                    disabled={isDisabled}
+                    onClick={() => toggle(t, s)}
+                  >
+                    Add
+                  </button>
+                ) : null)}
               </div>
-              {(s.state !== 'absent' || s.preset) && (
-                <button
-                  className="btn ghost sm"
-                  disabled={t.commented || busyKey === t.path + s.name}
-                  onClick={() => toggle(t, s)}
-                >
-                  {verb(s)}
-                </button>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
       ))}
     </>
@@ -86,93 +89,125 @@ export default function Settings({ onAction }) {
     }).catch(() => {})
   }, [])
 
-  if (err) return <div className="container"><p className="badge warn">{err}</p></div>
+  if (err) return <div className="container"><p className="badge bad">{err}</p></div>
   if (!setup) return <div className="container">Loading…</div>
 
   const upToDate = (setup.version_verdict || '').includes('up to date')
+
   return (
-    <div className="container narrow">
-      <h2>Settings</h2>
+    <div style={{ maxWidth: 860 }}>
+      <div className="head-row" style={{ marginBottom: 18 }}>
+        <div>
+          <span className="eyebrow">configure</span>
+          <h1 className="h">Settings</h1>
+          <p className="sub">
+            The deployed install at a glance, plus the same actions as the TUI — build,
+            update, MCP wiring, and an offline package.
+          </p>
+        </div>
+      </div>
 
-      <section className="panel">
-        <h3>Installation</h3>
-        <Row k="Deployed">
-          <span className={`badge ${setup.deployed ? 'ok' : 'warn'}`}>
-            {setup.deployed ? 'yes' : 'no'}
-          </span>
-        </Row>
-        <Row k="Target">{setup.target}</Row>
-        <Row k="Install mode">{setup.emit}</Row>
-        <Row k="Theme">
-          <span className="swatch" data-accent={setup.accent} /> {setup.theme}
-        </Row>
-        <Row k="Version">
-          <span className={`badge ${upToDate ? 'ok' : 'warn'}`}>{setup.version_verdict}</span>
-        </Row>
-        <Row k="Installed build">{setup.installed_fp || '(none)'}</Row>
-        <Row k="Source build">{setup.source_fp}</Row>
-        <Row k="Source root">{setup.root}</Row>
-        <Row k="Memory store">
-          {setup.memory_dir || '(not found)'} · {setup.facts} fact{setup.facts === 1 ? '' : 's'}
-        </Row>
-        <Row k="Python">{setup.python}</Row>
-      </section>
+      {/* Installation card */}
+      <div className="card pad-lg" style={{ marginBottom: 16 }}>
+        <div className="card-head"><h3>Installation</h3></div>
+        {[
+          ['Deployed', (
+            <span className={`badge ${setup.deployed ? 'ok' : 'warn'}`}>
+              {setup.deployed ? 'yes' : 'no'}
+            </span>
+          )],
+          ['Target', <code>{setup.target}</code>],
+          ['Install mode', setup.emit],
+          ['Theme', <span style={{ textTransform: 'capitalize' }}>{setup.theme}</span>],
+          ['Version', (
+            <span className={`badge ${upToDate ? 'ok' : 'warn'}`}>
+              {setup.version_verdict}
+            </span>
+          )],
+          ['Installed build', <span className="mono">{setup.installed_fp || '(none)'}</span>],
+          ['Source build', <span className="mono">{setup.source_fp}</span>],
+          ['Source root', setup.root],
+          ['Memory store', (
+            <span>
+              {setup.memory_dir || '(not found)'} · {setup.facts} fact{setup.facts === 1 ? '' : 's'}
+            </span>
+          )],
+          ['Python', setup.python],
+        ].map(([k, v]) => (
+          <div className="kv" key={k}>
+            <span className="k">{k}</span>
+            <span className="v">{v}</span>
+          </div>
+        ))}
+      </div>
 
-      <section className="panel">
-        <h3>Build &amp; update</h3>
-        <p className="muted">
-          Rebuild the deployed harness in a chosen voice and install mode, or pull
-          the latest Geneseed and re-render. Either runs live in the console.
+      {/* Build & update card */}
+      <div className="card pad-lg" style={{ marginBottom: 16 }}>
+        <div className="card-head"><h3>Build &amp; update</h3></div>
+        <p className="sub" style={{ marginBottom: 16 }}>
+          Rebuild the deployed harness in a chosen voice and mode, or pull the latest
+          Geneseed and re-render. Either runs live in the terminal.
         </p>
         {choices && (
-          <div className="picker">
-            <label>
-              <span className="label">Theme</span>
-              <select value={theme} onChange={(e) => setTheme(e.target.value)}>
+          <div className="row wrap" style={{ gap: 16, alignItems: 'flex-end' }}>
+            <label className="stack" style={{ gap: 6 }}>
+              <span className="tick">Voice</span>
+              <select
+                className="sel"
+                value={theme}
+                onChange={(e) => setTheme(e.target.value)}
+              >
                 {choices.themes.map((t) => (
                   <option key={t.name} value={t.name}>{t.name}</option>
                 ))}
               </select>
             </label>
-            <label>
-              <span className="label">Mode</span>
-              <select value={emit} onChange={(e) => setEmit(e.target.value)}>
+            <label className="stack" style={{ gap: 6 }}>
+              <span className="tick">Mode</span>
+              <select
+                className="sel"
+                value={emit}
+                onChange={(e) => setEmit(e.target.value)}
+              >
                 {choices.emits.map((em) => (
                   <option key={em.name} value={em.name}>{em.name}</option>
                 ))}
               </select>
             </label>
+            <button
+              className="btn ghost"
+              onClick={() => onAction('build', { theme, emit })}
+            >
+              <Icon name="build" />Build
+            </button>
+            <button className="btn" onClick={() => onAction('update')}>
+              <Icon name="refresh" />Update
+            </button>
           </div>
         )}
-        <div className="row-actions">
-          <button className="btn ghost" onClick={() => onAction('build', { theme, emit })}>
-            Build
-          </button>
-          <button className="btn" onClick={() => onAction('update')}>Update</button>
-        </div>
-      </section>
+      </div>
 
-      <section className="panel">
-        <h3>MCP servers</h3>
-        <p className="muted">
+      {/* MCP servers card */}
+      <div className="card pad-lg" style={{ marginBottom: 16 }}>
+        <div className="card-head"><h3>MCP servers</h3></div>
+        <p className="sub" style={{ marginBottom: 16 }}>
           Wire MCP servers into OpenCode — per project or globally. Toggles rewrite
-          only the <code>mcp</code> block, exactly like the TUI screen.
+          only the <code>mcp</code> block.
         </p>
         <McpServers />
-      </section>
+      </div>
 
-      <section className="panel">
-        <h3>Offline package</h3>
-        <p className="muted">
-          For machines without GitHub access (corporate proxy, air-gapped): download
-          a zip of this source tree, carry it over, then update there with{' '}
-          <code>geneseed upgrade --zip &lt;file&gt;</code> — same validation and
-          rebuild as a normal upgrade, no network needed.
+      {/* Offline package card */}
+      <div className="card pad-lg">
+        <div className="card-head"><h3>Offline package</h3></div>
+        <p className="sub" style={{ marginBottom: 16 }}>
+          For air-gapped machines: download a zip of this source tree, carry it over,
+          then <code>geneseed upgrade --zip &lt;file&gt;</code> — same validation, no network.
         </p>
         <a className="btn ghost" href="/api/offline-zip" download>
-          Download offline package
+          <Icon name="download" />Download offline package
         </a>
-      </section>
+      </div>
     </div>
   )
 }
