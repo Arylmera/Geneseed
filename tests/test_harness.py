@@ -1276,5 +1276,37 @@ class ImprovementsExportTests(unittest.TestCase):
         self.assertNotIn(stale.name, out)
 
 
+class WebSubcommandTests(unittest.TestCase):
+    def test_cmd_web_exists_and_callable(self):
+        self.assertTrue(hasattr(harness, "cmd_web"))
+        self.assertTrue(callable(harness.cmd_web))
+
+    def test_web_subcommand_parses(self):
+        # The `web` subcommand must parse and bind fn=cmd_web with theme/port/no_browser.
+        import argparse
+        import contextlib
+        import io
+        # Re-run main()'s parser build path by parsing a known-good argv via a
+        # SystemExit-free probe: argparse exits on error, so catch it.
+        argv = ["web", "--no-browser", "--port", "4748"]
+        # harness.main() builds the parser and dispatches; we only want parsing.
+        # Patch cmd_web to a no-op capturing args, then invoke main with argv.
+        captured = {}
+        orig = harness.cmd_web
+        harness.cmd_web = lambda args: captured.update(vars(args)) or 0
+        old_argv = sys.argv
+        try:
+            sys.argv = ["harness.py", *argv]
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = harness.main()
+        finally:
+            harness.cmd_web = orig
+            sys.argv = old_argv
+        self.assertEqual(rc, 0)
+        self.assertEqual(captured.get("port"), 4748)
+        self.assertTrue(captured.get("no_browser"))
+        self.assertIsNone(captured.get("theme"))
+
+
 if __name__ == "__main__":
     unittest.main()

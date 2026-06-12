@@ -3352,6 +3352,15 @@ def _tui_loop(stdscr, inv: dict) -> None:
         # KEY_RESIZE and any other key fall through and re-render
 
 
+def cmd_web(args: argparse.Namespace) -> int:
+    """Serve the deployed harness as a local web UI (browse + actions). Thin shell
+    around rituals/web.py so the 4k-line CLI stays focused."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import web  # noqa: E402
+    return web.serve(theme=args.theme, port=args.port,
+                     open_browser=not args.no_browser)
+
+
 def cmd_tui(args: argparse.Namespace) -> int:
     """Full-screen control panel: browse agents/skills/laws and run build/doctor/diff.
     Runs natively on a VT-capable console — Unix curses, or the Windows VT shim — and
@@ -4156,6 +4165,14 @@ def main() -> int:
                                           "scripts (cross-platform; replaces sync-self.sh)")
     ss.add_argument("ref", nargs="?", default=None, help="branch or tag (default: main)")
     ss.set_defaults(fn=cmd_sync_self)
+
+    wb = sub.add_parser("web", help="serve the deployed harness as a local web UI "
+                                    "(browse agents/skills/laws/memory + run actions)")
+    wb.add_argument("--theme", default=None, help="force a theme (default: detected)")
+    wb.add_argument("--port", type=int, default=4747, help="port (default: 4747)")
+    wb.add_argument("--no-browser", action="store_true",
+                    help="don't auto-open the browser")
+    wb.set_defaults(fn=cmd_web)
 
     lk = sub.add_parser("link", help="put `geneseed` on PATH so it runs from any directory")
     lk.add_argument("dir", nargs="?", default=None, help="bin dir to install into (Unix; default ~/.local/bin)")
