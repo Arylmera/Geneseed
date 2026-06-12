@@ -92,5 +92,44 @@ class JobManagerTests(unittest.TestCase):
         self.assertIn("bad", job["output"])
 
 
+class HandlerTests(unittest.TestCase):
+    def _serve(self):
+        state = web.WebState(theme="neutral")
+        jm = web.JobManager()
+        token = "test-token"
+        Handler = web.make_handler(state, jm, token, dist=ROOT / "web" / "dist")
+        from http.server import ThreadingHTTPServer
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        import threading
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        return srv, srv.server_address[1], token
+
+    def test_overview_endpoint(self):
+        import json
+        import urllib.request
+        srv, port, _ = self._serve()
+        try:
+            with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/api/overview", timeout=20) as r:
+                data = json.loads(r.read())
+            self.assertIn("counts", data)
+        finally:
+            srv.shutdown()
+
+    def test_post_without_token_is_403(self):
+        import urllib.error
+        import urllib.request
+        srv, port, _ = self._serve()
+        try:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/actions/doctor", method="POST",
+                data=b"{}")
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(req, timeout=20)
+            self.assertEqual(cm.exception.code, 403)
+        finally:
+            srv.shutdown()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -8,12 +8,15 @@ and build.py for every read so the web and TUI never disagree.
 """
 from __future__ import annotations
 
+import json
 import re
 import secrets
 import subprocess
 import sys
 import threading
 import time
+import webbrowser
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -273,3 +276,123 @@ def api_overview(state: WebState) -> dict:
         "diff": diff,
         "build_time": build_time,
     }
+
+
+def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *a):  # silence default stderr logging
+            pass
+
+        def _send_json(self, obj, code=200):
+            body = json.dumps(obj).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_bytes(self, body: bytes, ctype: str, code=200):
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        # ---- GET ---------------------------------------------------------
+        def do_GET(self):
+            path = self.path.split("?", 1)[0]
+            try:
+                if path == "/api/overview":
+                    return self._send_json(api_overview(state))
+                if path.startswith("/api/catalog/"):
+                    return self._send_json(api_catalog(state, path.rsplit("/", 1)[1]))
+                if path.startswith("/api/item/"):
+                    _, _, _, type_, name = path.split("/", 4)
+                    return self._send_json(api_item(state, type_, name))
+                if path == "/api/diff":
+                    return self._send_json(api_diff(state))
+                if path.startswith("/api/jobs/"):
+                    j = jm.get(path.rsplit("/", 1)[1])
+                    return self._send_json(j) if j \
+                        else self._send_json({"error": "no such job"}, 404)
+                return self._serve_static(path)
+            except NotFound as e:
+                return self._send_json({"error": f"not found: {e}"}, 404)
+            except Exception as e:  # noqa: BLE001
+                return self._send_json({"error": str(e)}, 500)
+
+        # ---- POST --------------------------------------------------------
+        def do_POST(self):
+            path = self.path.split("?", 1)[0]
+            if self.headers.get("X-Geneseed-Token") != token:
+                return self._send_json({"error": "forbidden"}, 403)
+            if path.startswith("/api/actions/"):
+                action = path.rsplit("/", 1)[1]
+                cmds = action_commands(action)
+                if not cmds:
+                    return self._send_json({"error": f"unknown action {action}"}, 404)
+                jid = jm.start(action, *cmds)
+                if jid is None:
+                    return self._send_json({"error": "busy"}, 409)
+                state.refresh()
+                return self._send_json({"job_id": jid}, 202)
+            return self._send_json({"error": "not found"}, 404)
+
+        # ---- static (committed React build) ------------------------------
+        def _serve_static(self, path):
+            rel = "index.html" if path in ("/", "") else path.lstrip("/")
+            fp = (dist / rel).resolve()
+            if dist not in fp.parents and fp != (dist / "index.html").resolve():
+                # SPA fallback: unknown / out-of-tree path -> index.html
+                fp = dist / "index.html"
+            if not fp.is_file():
+                fp = dist / "index.html"
+            if not fp.is_file():
+                return self._send_json(
+                    {"error": "web/dist missing — run the UI build"}, 500)
+            data = fp.read_bytes()
+            if fp.name == "index.html":
+                inject = f'<script>window.__GENESEED_TOKEN__="{token}";</script>'
+                data = data.replace(b"</head>", inject.encode() + b"</head>", 1)
+            ctype = {
+                ".html": "text/html", ".js": "text/javascript",
+                ".css": "text/css", ".json": "application/json",
+                ".svg": "image/svg+xml", ".ico": "image/x-icon",
+                ".woff2": "font/woff2",
+            }.get(fp.suffix, "application/octet-stream")
+            return self._send_bytes(data, ctype)
+
+    return Handler
+
+
+def serve(theme: str | None = None, port: int = 4747, open_browser: bool = True) -> int:
+    dist = ROOT / "web" / "dist"
+    if not (dist / "index.html").is_file():
+        print("[web] web/dist is missing. Build the UI first:")
+        print("        cd web && npm install && npm run build")
+        return 1
+    state = WebState(theme=theme)
+    if not (state.target / build.GLOBAL_MANIFEST).exists():
+        print(f"[web] no deployed harness at {state.target}.")
+        print("      Run `geneseed setup` first — serving anyway (read-only UI).")
+    jm = JobManager()
+    token = secrets.token_urlsafe(24)
+    Handler = make_handler(state, jm, token, dist)
+    try:
+        srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except OSError:
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)  # fallback free port
+    host_port = srv.server_address[1]
+    url = f"http://127.0.0.1:{host_port}"
+    print(f"[web] Geneseed UI on {url}  (theme: {state.theme})")
+    print("[web] Ctrl-C to stop.")
+    if open_browser:
+        try:
+            webbrowser.open(url)
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[web] stopped.")
+    return 0
