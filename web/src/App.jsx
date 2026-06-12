@@ -70,8 +70,15 @@ export default function App() {
   return (
     <>
       <header className="header">
-        <div className="brand" onClick={() => go('#/')} style={{ cursor: 'pointer' }}>
-          ⚙ Genes<span className="dot">eed</span>
+        <div className="brand" onClick={() => go('#/')} title="Dashboard">
+          {/* Sprout mark — inline SVG so it renders identically on every OS
+              (the old ⚙ emoji didn't) and follows the accent color. */}
+          <svg className="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+            <path className="stem" d="M12 21.5v-8" />
+            <path className="leaf" d="M12 13.5c0-4.5 3.2-7.5 7.5-7.5 0 4.5-3.2 7.5-7.5 7.5z" />
+            <path className="leaf faded" d="M12 13.5c0-4.5-3.2-7.5-7.5-7.5 0 4.5 3.2 7.5 7.5 7.5z" />
+          </svg>
+          <span className="brand-name">Gene<span className="brand-accent">seed</span></span>
         </div>
         <nav className="nav">
           {NAV.map((n) => (

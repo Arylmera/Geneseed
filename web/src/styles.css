@@ -14,7 +14,17 @@ h2 { margin: 0 0 16px; font-size: 20px; }
 /* ---- header + top nav ------------------------------------------------- */
 .header { display: flex; align-items: center; gap: 20px; padding: 10px 20px;
   border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 5; }
-.brand { font-weight: 700; white-space: nowrap; } .brand .dot { color: var(--accent); }
+.brand { display: flex; align-items: center; gap: 8px; cursor: pointer;
+  white-space: nowrap; user-select: none; }
+.brand-mark { width: 20px; height: 20px; flex: none; }
+.brand-mark .stem { stroke: var(--accent); stroke-width: 2; stroke-linecap: round; fill: none; }
+.brand-mark .leaf { fill: var(--accent); }
+.brand-mark .leaf.faded { opacity: .45; }
+.brand-name { font-weight: 800; font-size: 15px; letter-spacing: -.02em; }
+.brand-accent { color: var(--accent); }
+.brand:hover .brand-accent { filter: brightness(1.25); }
+.brand:hover .brand-mark { transform: rotate(-6deg); }
+.brand-mark { transition: transform .2s ease; transform-origin: 50% 90%; }
 .nav { display: flex; gap: 4px; }
 .nav a { color: var(--muted); padding: 6px 12px; border-radius: var(--radius-sm);
   font-weight: 600; }
