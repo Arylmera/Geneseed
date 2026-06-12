@@ -6,46 +6,46 @@ import Dashboard from './pages/Dashboard.jsx'
 import Section from './pages/Section.jsx'
 import Diff from './pages/Diff.jsx'
 import Toast from './components/Toast.jsx'
-import LogDrawer from './components/LogDrawer.jsx'
+import Console from './components/Console.jsx'
 
 export default function App() {
   const route = useRoute()
   const [overview, setOverview] = useState(null)
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState(null)
-  const [job, setJob] = useState(null) // {id, action} being polled
+  const [runs, setRuns] = useState([]) // [{id, action, status, output}]
+  const [activeId, setActiveId] = useState(null) // job id being polled
+  const [consoleOpen, setConsoleOpen] = useState(true)
 
   const loadOverview = () =>
     api.overview().then(setOverview).catch((e) => setToast({ kind: 'err', msg: e.message }))
 
   useEffect(() => { loadOverview() }, [])
 
-  // Poll a running job to completion, then toast + refresh.
+  // Poll the running job, streaming its output into the console run, then refresh.
   useEffect(() => {
-    if (!job) return
+    if (!activeId) return
     const t = setInterval(async () => {
       try {
-        const j = await api.job(job.id)
+        const j = await api.job(activeId)
+        setRuns((rs) => rs.map((r) =>
+          r.id === activeId ? { ...r, output: j.output || '', status: j.status } : r))
         if (j.status !== 'running') {
           clearInterval(t)
-          setJob(null)
-          setToast({
-            kind: j.status === 'done' ? 'ok' : 'err',
-            msg: `${job.action}: ${j.status}`,
-            log: j.output,
-          })
+          setActiveId(null)
           loadOverview()
         }
       } catch (e) { clearInterval(t) }
-    }, 800)
+    }, 600)
     return () => clearInterval(t)
-  }, [job?.id])
+  }, [activeId])
 
   const runAction = async (name) => {
     try {
       const { job_id } = await api.action(name)
-      setToast({ kind: 'ok', msg: `${name} started…` })
-      setJob({ id: job_id, action: name })
+      setRuns((rs) => [...rs, { id: job_id, action: name, status: 'running', output: '' }])
+      setActiveId(job_id)
+      setConsoleOpen(true)
     } catch (e) { setToast({ kind: 'err', msg: e.message }) }
   }
 
@@ -62,16 +62,23 @@ export default function App() {
         <button className="btn" onClick={() => runAction('update')}>Update</button>
       </header>
 
-      {route.view === 'dashboard' && <Dashboard overview={overview} onAction={runAction} />}
-      {route.view === 'section' && <Section section={route.section} query={query} />}
-      {route.view === 'item' &&
-        <Section section={route.type + 's'} selected={route.name} query={query} />}
-      {route.view === 'diff' && <Diff />}
+      <div className={`layout ${consoleOpen ? '' : 'console-collapsed'}`}>
+        <Console
+          runs={runs}
+          collapsed={!consoleOpen}
+          onToggle={() => setConsoleOpen((v) => !v)}
+          onClear={() => setRuns([])}
+        />
+        <main className="main">
+          {route.view === 'dashboard' && <Dashboard overview={overview} onAction={runAction} />}
+          {route.view === 'section' && <Section section={route.section} query={query} />}
+          {route.view === 'item' &&
+            <Section section={route.type + 's'} selected={route.name} query={query} />}
+          {route.view === 'diff' && <Diff />}
+        </main>
+      </div>
 
-      {toast && <Toast toast={toast} onClose={() => setToast(null)}
-                       onShowLog={() => setToast({ ...toast, showDrawer: true })} />}
-      {toast?.showDrawer && <LogDrawer title={toast.msg} log={toast.log}
-                                       onClose={() => setToast({ ...toast, showDrawer: false })} />}
+      {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
     </>
   )
 }

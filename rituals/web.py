@@ -187,25 +187,34 @@ class JobManager:
         t.start()
         return jid
 
+    def _append(self, jid: str, text: str):
+        with self._lock:
+            self._jobs[jid]["output"] += text
+
     def _run(self, jid: str, cmds):
-        out, rc = [], 0
+        rc = 0
         try:
             for cmd in cmds:
-                p = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
-                                   text=True, encoding="utf-8", errors="replace")
-                out.append(p.stdout or "")
-                out.append(p.stderr or "")
+                self._append(jid, f"$ {' '.join(str(c) for c in cmd)}\n")
+                # Stream combined stdout/stderr line-by-line so the web console
+                # fills live (terminal-style) instead of dumping at the end.
+                p = subprocess.Popen(
+                    cmd, cwd=str(ROOT), stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, text=True,
+                    encoding="utf-8", errors="replace", bufsize=1)
+                for line in p.stdout:
+                    self._append(jid, line)
+                p.wait()
                 rc = p.returncode
                 if rc != 0:
                     break
         except Exception as e:  # noqa: BLE001
-            out.append(f"\n[web] job crashed: {e}")
+            self._append(jid, f"\n[web] job crashed: {e}")
             rc = 1
         finally:
             with self._lock:
                 self._jobs[jid].update(
-                    status="done" if rc == 0 else "failed",
-                    output="".join(out), returncode=rc)
+                    status="done" if rc == 0 else "failed", returncode=rc)
                 self._busy = False
 
     def get(self, jid: str) -> "dict | None":
