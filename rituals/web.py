@@ -41,6 +41,9 @@ class WebState:
     def __init__(self, theme: str | None = None, target: Path | None = None):
         self.target = Path(target) if target else build._opencode_config_dir()
         self.theme = theme or harness._theme_of_dir(self.target) or "neutral"
+        # Detect the install mode once, so the Build action rebuilds the deployed
+        # harness in place (e.g. opencode-global) rather than a bare source render.
+        self.emit = harness._installed_defaults().get("emit") or "opencode-global"
         self._inv = None
 
     @property
@@ -220,14 +223,21 @@ class JobManager:
         return self.get(jid)
 
 
-def action_commands(action: str) -> "list[list] | None":
-    """Action name -> list of subprocess argv (each a separate step; stop on failure)."""
+def action_commands(action: str, theme: str = "neutral",
+                    emit: str = "opencode-global") -> "list[list] | None":
+    """Action name -> list of subprocess argv (each a separate step; stop on failure).
+
+    `build` renders the DEPLOYED install in its detected theme + emit mode (so a
+    rebuild from an imperial opencode-global install stays imperial and lands in
+    the global config dir) — not a bare, neutral source render. `update` and
+    `export` self-resolve the deployed theme downstream, so they take no args."""
     py = sys.executable
     h = str(ROOT / "rituals" / "harness.py")
     b = str(ROOT / "build.py")
+    build_argv = harness._setup_build_args(theme, emit)
     return {
         "doctor": [[py, h, "doctor"]],
-        "build": [[py, b]],
+        "build": [[py, b, *build_argv]],
         "update": [[py, h, "sync-self"], [py, h, "upgrade"]],
         "export": [[py, h, "diff", "--out"]],
     }.get(action)
@@ -328,7 +338,7 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                 return self._send_json({"error": "forbidden"}, 403)
             if path.startswith("/api/actions/"):
                 action = path.rsplit("/", 1)[1]
-                cmds = action_commands(action)
+                cmds = action_commands(action, theme=state.theme, emit=state.emit)
                 if not cmds:
                     return self._send_json({"error": f"unknown action {action}"}, 404)
                 jid = jm.start(action, *cmds)

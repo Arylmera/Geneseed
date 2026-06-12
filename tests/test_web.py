@@ -92,6 +92,28 @@ class JobManagerTests(unittest.TestCase):
         self.assertIn("bad", job["output"])
 
 
+class ActionCommandsTests(unittest.TestCase):
+    def test_build_preserves_theme_and_emit(self):
+        # Build must render the deployed install in its theme — not a bare,
+        # neutral `build.py`. Global install => --theme <t> --emit opencode-global.
+        cmds = web.action_commands("build", theme="imperial", emit="opencode-global")
+        self.assertEqual(len(cmds), 1)
+        argv = cmds[0]
+        self.assertIn("--theme", argv)
+        self.assertIn("imperial", argv)
+        self.assertIn("--emit", argv)
+        self.assertIn("opencode-global", argv)
+
+    def test_update_runs_sync_then_upgrade(self):
+        cmds = web.action_commands("update")
+        self.assertEqual(len(cmds), 2)
+        self.assertIn("sync-self", cmds[0])
+        self.assertIn("upgrade", cmds[1])
+
+    def test_unknown_action_is_none(self):
+        self.assertIsNone(web.action_commands("bogus"))
+
+
 class HandlerTests(unittest.TestCase):
     def _serve(self):
         state = web.WebState(theme="neutral")
