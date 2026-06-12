@@ -57,7 +57,11 @@ class WebState:
         return self._inv
 
     def refresh(self):
+        """Drop caches and re-detect the deployed theme/emit — a finished Build may
+        have re-themed the install, and the gallery's 'current' must follow it."""
         self._inv = None
+        self.theme = harness._theme_of_dir(self.target) or self.theme
+        self.emit = harness._installed_defaults().get("emit") or self.emit
 
 
 def _deployed(state: WebState) -> bool:
@@ -179,7 +183,7 @@ class JobManager:
         self._jobs: dict[str, dict] = {}
         self._busy = False
 
-    def start(self, action: str, *cmds: list) -> "str | None":
+    def start(self, action: str, *cmds: list, on_done=None) -> "str | None":
         with self._lock:
             if self._busy:
                 return None
@@ -187,7 +191,7 @@ class JobManager:
             jid = secrets.token_hex(8)
             self._jobs[jid] = {"id": jid, "action": action, "status": "running",
                                "output": "", "returncode": None}
-        t = threading.Thread(target=self._run, args=(jid, cmds), daemon=True)
+        t = threading.Thread(target=self._run, args=(jid, cmds, on_done), daemon=True)
         t.start()
         return jid
 
@@ -195,7 +199,7 @@ class JobManager:
         with self._lock:
             self._jobs[jid]["output"] += text
 
-    def _run(self, jid: str, cmds):
+    def _run(self, jid: str, cmds, on_done=None):
         rc = 0
         try:
             for cmd in cmds:
@@ -220,6 +224,11 @@ class JobManager:
                 self._jobs[jid].update(
                     status="done" if rc == 0 else "failed", returncode=rc)
                 self._busy = False
+            if on_done:
+                try:
+                    on_done()
+                except Exception:  # noqa: BLE001 — refresh must never kill the job thread
+                    pass
 
     def get(self, jid: str) -> "dict | None":
         with self._lock:
@@ -257,8 +266,20 @@ def action_commands(action: str, theme: str = "neutral",
 
 
 def _theme_choices() -> list[dict]:
-    """Available themes (name + short blurb) — discovered from themes/*.json."""
-    return [{"name": name, "blurb": blurb} for name, blurb in harness._theme_options()]
+    """Available themes — name + blurb from the option list, plus the accent,
+    tagline and loaded-sigil each theme's JSON declares (for the web gallery)."""
+    out = []
+    for name, blurb in harness._theme_options():
+        try:
+            data = json.loads(
+                (build.THEMES / f"{name}.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        out.append({"name": name, "blurb": blurb,
+                    "accent": data.get("ACCENT", "cyan"),
+                    "tagline": data.get("TAGLINE", ""),
+                    "sigil": data.get("LOADED_SIGIL", "")})
+    return out
 
 
 def _emit_choices() -> list[dict]:
@@ -473,10 +494,11 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                 cmds = action_commands(action, theme=theme, emit=emit)
                 if not cmds:
                     return self._send_json({"error": f"unknown action {action}"}, 404)
-                jid = jm.start(action, *cmds)
+                # Refresh when the job FINISHES — a Build may re-theme the
+                # install, and the re-detect must read the new marker.
+                jid = jm.start(action, *cmds, on_done=state.refresh)
                 if jid is None:
                     return self._send_json({"error": "busy"}, 409)
-                state.refresh()
                 return self._send_json({"job_id": jid}, 202)
             return self._send_json({"error": "not found"}, 404)
 

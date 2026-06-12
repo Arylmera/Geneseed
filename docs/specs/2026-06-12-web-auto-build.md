@@ -62,5 +62,6 @@ untested by design.
 
 ## Docs
 
-SETUP.md web section: note that `geneseed web` offers to build the UI when
-`web/dist` is missing; the manual recipe stays as the non-interactive path.
+README → *Web UI* (SETUP.md has no web section): note that `geneseed web`
+offers to build the UI when `web/dist` is missing; the manual recipe stays as
+the non-interactive path.

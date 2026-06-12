@@ -181,6 +181,9 @@ runtime; the UI build ships in `web/dist/`. Mutating actions run in the
 background and report back as toasts (fire-and-notify), guarded by a
 per-session token so other sites can't trigger them. Rebuild the UI after
 changing anything under `web/src/` with `cd web && npm install && npm run build`.
+If `web/dist/` is missing (fresh clone, never built), `geneseed web` offers to
+run that build for you — answer `Y` and it installs, builds, and starts the
+server; in non-interactive shells it prints the manual recipe instead.
 
 ## Validate & test
 
