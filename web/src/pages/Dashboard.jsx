@@ -148,8 +148,7 @@ function ActivityFeed({ jobs }) {
 }
 
 /* ---------- Direction A · Status ---------- */
-function DirStatus({ overview, themes, setup, jobs, onAction }) {
-  const sigil = themes.find((t) => t.name === overview.theme)?.sigil || ''
+function DirStatus({ overview, sigil, setup, jobs, onAction }) {
   const headline = overview.deployed
     ? (HEADLINES[overview.theme] || 'Loaded & ready')
     : 'Not deployed'
@@ -236,6 +235,7 @@ function MiniGraph({ graph }) {
       p.set(n.id, { x: W / 2 + Math.cos(a) * rad * 1.5, y: H / 2 + Math.sin(a) * rad })
     })
     return p
+  // geometry is memoised once per graph identity on purpose — node list changes mean a new graph object
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph])
 
@@ -256,8 +256,7 @@ function MiniGraph({ graph }) {
   )
 }
 
-function DirLineage({ overview, themes, setup, jobs, graph }) {
-  const sigil = themes.find((t) => t.name === overview.theme)?.sigil || ''
+function DirLineage({ overview, sigil, setup, jobs, graph }) {
   const max = Math.max(...SECTION_ORDER.map((k) => overview.counts?.[k] ?? 0), 1)
   const verdict = setup?.version_verdict || ''
   const verdictOk = verdict.includes('up to date')
@@ -414,11 +413,14 @@ export default function Dashboard({ overview, themes, onAction }) {
   const [setup, setSetup] = useState(null)
   const [jobs, setJobs] = useState([])
   const [graph, setGraph] = useState(null)
+  const sigil = overview ? (themes.find((t) => t.name === overview.theme)?.sigil || '') : ''
 
   useEffect(() => {
-    api.setup().then(setSetup).catch(() => {})
-    api.jobs().then((r) => setJobs(r.jobs || [])).catch(() => {})
-    api.graph().then(setGraph).catch(() => {})
+    let alive = true
+    api.setup().then((v) => alive && setSetup(v)).catch(() => {})
+    api.jobs().then((r) => alive && setJobs(r.jobs || [])).catch(() => {})
+    api.graph().then((v) => alive && setGraph(v)).catch(() => {})
+    return () => { alive = false }
   }, [])
 
   if (!overview) return <div className="loading">Loading&#8230;</div>
@@ -437,8 +439,8 @@ export default function Dashboard({ overview, themes, onAction }) {
           ))}
         </div>
       </div>
-      {dir === 'status'   && <DirStatus   overview={overview} themes={themes} setup={setup} jobs={jobs} onAction={onAction} />}
-      {dir === 'lineage'  && <DirLineage  overview={overview} themes={themes} setup={setup} jobs={jobs} graph={graph} />}
+      {dir === 'status'   && <DirStatus   overview={overview} sigil={sigil} setup={setup} jobs={jobs} onAction={onAction} />}
+      {dir === 'lineage'  && <DirLineage  overview={overview} sigil={sigil} setup={setup} jobs={jobs} graph={graph} />}
       {dir === 'operator' && <DirOperator overview={overview} setup={setup} jobs={jobs} />}
     </>
   )

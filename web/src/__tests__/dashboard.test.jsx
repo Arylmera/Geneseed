@@ -32,6 +32,7 @@ describe('Dashboard', () => {
     render(<Dashboard overview={overview} themes={themes} onAction={() => {}} />)
     await waitFor(() => expect(screen.getByText('germination')).toBeTruthy())
     expect(screen.getByText('The Codex in force')).toBeTruthy()        // headline
+    expect(screen.getByText('The Codex in force.')).toBeTruthy()       // sigil (trailing period)
     expect(screen.getAllByText('16').length).toBeGreaterThan(0)        // agents KPI + genome
     expect(screen.getByText('128')).toBeTruthy()                       // wiki genome cell
     // readiness: .40 + .15 (1 problem) + .20 (fp match) + .15 (no missing) = 90%
