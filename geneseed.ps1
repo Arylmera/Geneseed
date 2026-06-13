@@ -19,7 +19,7 @@ $py = if (Get-Command py -ErrorAction SilentlyContinue) { 'py' }
       elseif (Get-Command python -ErrorAction SilentlyContinue) { 'python' }
       else { 'python3' }
 if ($args.Count -eq 0) {
-  & $py $harness menu
+  & $py $harness home
   exit $LASTEXITCODE
 }
 # Self-update commands must survive a STALE factory: if harness.py predates the subcommand

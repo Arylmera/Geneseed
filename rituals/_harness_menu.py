@@ -236,3 +236,44 @@ def cmd_menu(args: argparse.Namespace) -> int:
     except Exception as e:
         sys.stderr.write(f"[menu] TUI unavailable ({e}).\n")
         return _menu_help()
+
+
+def _web_first_ok() -> bool:
+    """Whether a bare `geneseed` should open the web UI rather than the TUI menu.
+
+    True only for an interactive terminal with a usable GUI browser, not opted
+    out, and not an SSH / headless session. Deliberately conservative: any doubt
+    (no TTY, no DISPLAY on Linux, no browser, GENESEED_NO_WEB set) falls back to
+    the menu, so a server box is never dropped into a browser launch that cannot
+    open."""
+    if os.environ.get("GENESEED_NO_WEB"):
+        return False
+    if not sys.stdin.isatty():
+        return False
+    if os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"):
+        return False
+    # On Linux a browser needs a display server; macOS/Windows always have a GUI.
+    if sys.platform.startswith("linux") and not (
+            os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return False
+    try:
+        import webbrowser
+        webbrowser.get()  # raises webbrowser.Error when nothing usable is found
+    except Exception:  # noqa: BLE001  (any failure → no web-first)
+        return False
+    return True
+
+
+def cmd_home(args: argparse.Namespace) -> int:
+    """Default entry for a bare `geneseed`: open the web console when the
+    environment can show it, else fall back to the TUI menu. The web server runs
+    as a background daemon (the shell returns immediately, the browser opens);
+    `geneseed menu` / `geneseed tui` force the terminal UI, and GENESEED_NO_WEB=1
+    disables the web-first default."""
+    if _web_first_ok():
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import web  # noqa: E402
+        print("[geneseed] opening the web console — `geneseed menu` for the terminal UI, "
+              "GENESEED_NO_WEB=1 to disable.")
+        return web.start_daemon(theme=None, port=4747, open_browser=True)
+    return cmd_menu(args)

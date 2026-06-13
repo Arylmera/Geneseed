@@ -16,7 +16,7 @@ set "HERE=%~dp0"
 rem Prefer the Windows `py` launcher, fall back to `python` on PATH.
 where py >nul 2>&1 && (set "PY=py") || (set "PY=python")
 if "%~1"=="" (
-  "%PY%" "%HERE%rituals\harness.py" menu
+  "%PY%" "%HERE%rituals\harness.py" home
   exit /b %ERRORLEVEL%
 )
 rem Self-update commands must survive a STALE factory: if harness.py predates the
