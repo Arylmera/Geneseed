@@ -85,7 +85,6 @@ export default function MiniGraph({ graph }) {
 
     const maxDeg = Math.max(1, ...degrees.values())
     return { nodes, edges, pos, degrees, maxDeg }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph])
 
   const neighbors = useMemo(() => {
@@ -168,9 +167,7 @@ export default function MiniGraph({ graph }) {
         const isOrphan = deg === 0
         const dim = neighbors && !neighbors.has(n.id)
         const fill =
-          n.type === 'agent' ? 'var(--accent)' :
-          n.type === 'law' ? 'var(--warn)' :
-          'var(--good)'
+          n.type === 'agent' ? 'var(--accent)' : n.type === 'law' ? 'var(--warn)' : 'var(--good)'
         return (
           <g
             key={n.id}

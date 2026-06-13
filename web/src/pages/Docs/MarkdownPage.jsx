@@ -78,7 +78,7 @@ const SETUP_ANCHOR_BY_EMIT = {
   'opencode-per-repo': 'path-b-opencode-per-repo',
   'claude-code': 'path-c-claude-code',
   'agent-md': 'path-d-any-agentmd-tool',
-  'bundle': 'path-d-any-agentmd-tool',
+  bundle: 'path-d-any-agentmd-tool',
 }
 
 export default function MarkdownPage({ page, overview, onAction }) {

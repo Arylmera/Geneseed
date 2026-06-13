@@ -30,12 +30,7 @@ export default function About() {
             <Icon name="github" />
             Source on GitHub
           </a>
-          <a
-            className="btn ghost"
-            href={REPO_URL + '/issues'}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a className="btn ghost" href={REPO_URL + '/issues'} target="_blank" rel="noreferrer">
             <Icon name="external" />
             Issues
           </a>

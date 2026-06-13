@@ -41,7 +41,12 @@ export default function About({ page }) {
           <Icon name="external" />
           File an issue
         </a>
-        <a className="btn ghost" href={`${page.repo}/blob/main/LICENSE`} target="_blank" rel="noreferrer">
+        <a
+          className="btn ghost"
+          href={`${page.repo}/blob/main/LICENSE`}
+          target="_blank"
+          rel="noreferrer"
+        >
           <Icon name="external" />
           License
         </a>
