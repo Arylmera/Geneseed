@@ -98,9 +98,10 @@ are never touched. Full design + checklist:
 python build.py --emit opencode --target /path/to/your-repo
 ```
 
-Writes `opencode.json` + `.opencode/{agents,skills,plugins}` into the repo. Commit
-them or not. **Bundle in a subfolder?** add `--root` so instruction paths resolve
-from the project root:
+Writes the full bundle (`AGENT.md`, `agents/`, `skills/`, `memory/`, `notebook/`)
+plus the OpenCode-native layer (`opencode.json` and `.opencode/{agents,skills,plugins,workflows}`)
+into the target dir. Commit them or not. **Want the bundle in a subfolder?** add `--root`
+so instruction paths resolve from the project root:
 
 ```
 python build.py --emit opencode --out /path/to/repo/Harness --root /path/to/repo
@@ -114,6 +115,10 @@ Merge [`adapters/claude-code/settings.json`](adapters/claude-code/settings.json)
 your repo's `.claude/settings.json` (paths assume the bundle is at the repo root).
 It wires:
 
+- **PreToolUse** (matcher `Bash`) — runs `harness git-gate`, a tool-boundary backstop
+  for Law XX. The hook inspects the command and forces an `ask` on every `git commit`
+  or `git push` (even chained or `-C`-flagged), un-suppressible by a one-time "don't
+  ask again". Every other Bash command is deferred to the normal permission flow.
 - **SessionStart** (`startup`/`clear`) — prints `AGENT.md` and injects the project
   context (`harness context`, which auto-discovers the repo's docs);
 - **SessionStart** (`resume`) — refreshes the project context only, without re-printing
@@ -154,11 +159,12 @@ always rendered fresh from `src/`, so it can never drift from the current harnes
 
 ### Theme
 
-Choose any theme in `themes/` — `neutral` (plain), `imperial` (Warhammer 40k),
-`military`, `pirate`, `wizard`, `cyberpunk`, `gamer`, or `sports` (play-by-play) —
-with `--theme NAME` (the wizard lists them for you). It is remembered in a `.geneseed-theme` marker, so later
-upgrades keep it. Adding your own is one JSON file of voice tokens; `doctor` checks
-every theme defines the same keys.
+Choose any of the 14 themes in `themes/` — `neutral` (plain), `imperial` (Warhammer 40k),
+`military`, `pirate`, `wizard`, `cyberpunk`, `gamer`, `sports` (play-by-play),
+`biker`, `commentator`, `joker`, `marvin`, `mean`, or `verstappen` — with
+`--theme NAME` (the wizard lists them all with live previews). It is remembered in a
+`.geneseed-theme` marker, so later upgrades keep it. Adding your own is one JSON file
+of voice tokens; `doctor` checks every theme defines the same keys.
 
 ### Project context (usually nothing)
 
@@ -167,8 +173,9 @@ On OpenCode the context plugin auto-discovers a repo's docs every session:
 - **Eager** (injected in full, budget-capped): root `AGENTS.md`/`AGENT.md`/`CLAUDE.md`/
   `.cursorrules`, `README.md`, `CONTRIBUTING.md`.
 - **Lazy** (listed, read on demand): `docs/`, `doc/`, `documentation/`, `architecture/`,
-  `adr/`, monorepo `packages/*/README.md`, other root `*.md`. `node_modules`, `.git`,
-  `dist`, … are never scanned.
+  `adr/`, `ADR/`, monorepo `packages/*/README.md` and `apps/*/README.md`, other root
+  `*.md`. `node_modules`, `.git`, `dist`, `build`, `vendor`, `.next`, `target`,
+  `.venv`, `__pycache__`, `.opencode`, and `.harness` are never scanned.
 
 Override only when the convention doesn't fit — drop a `.harness/context.json` (or
 `./context.json`, or point `$GENESEED_CONTEXT`):
@@ -278,8 +285,9 @@ The skill never installs a converter silently — if none is present it reports 
 
 ### MCP servers
 
-Beyond document conversion, Geneseed ships **four** ready-to-wire MCP servers as presets
-— **MarkItDown** (below), **GitLab** (one entry per instance), and **Filesystem**. Each
+Beyond document conversion, Geneseed ships ready-to-wire MCP server presets —
+**MarkItDown** (below), **GitLab** (two slots, `gitlab` and `gitlab-2`, so you can
+point at two instances), and **Filesystem** — four preset entries in total. Each
 is a *local* server the agent launches on demand: registering one only points the agent
 at a command — *you* install the tool (or let `npx`/`pipx` fetch it) and supply any
 credentials. On OpenCode they live under the `mcp` key of an `opencode.json`, each entry
@@ -295,10 +303,10 @@ shaped:
 > in your own config, never in a tracked file (universal Law I — secrets).
 
 **Don't want to hand-edit JSON?** `./geneseed` → **Settings** → **MCP servers** toggles
-any of the four presets into your project or global `opencode.json` — and enables,
-disables, or removes them — for you. The reference config ships MarkItDown enabled and
-the GitLab / Filesystem entries disabled, so a merge never activates a credential-less
-server: fill the blanks, then flip the one(s) you want on.
+any preset into your project or global `opencode.json` — and enables, disables, or
+removes them — for you. The reference config ships MarkItDown enabled and the GitLab /
+Filesystem entries disabled, so a merge never activates a credential-less server: fill
+the blanks, then flip the one(s) you want on.
 
 #### MarkItDown via MCP (OpenCode)
 
@@ -485,6 +493,8 @@ allowed-dir path.
 | `GENESEED_TUI_ASCII` / `GENESEED_TUI_PLAIN` | TUI / harness | force pure-ASCII / drop emoji + animation in the TUI |
 | `GENESEED_NO_ANIM` | install animation | disable the themed install animation |
 | `GENESEED_LOG` | `upgrade.sh` | override the install/upgrade log path |
+| `GENESEED_NET_TIMEOUT` | `upgrade` | seconds before download attempts give up (default 20, floor 5) |
+| `GENESEED_NO_WEB` | launcher / menu | `1` disables the web-first default of bare `./geneseed` — falls back to the terminal menu |
 | `OPENCODE_CONFIG_DIR` / `XDG_CONFIG_HOME` | global emit | where the global install is written |
 
 ---
