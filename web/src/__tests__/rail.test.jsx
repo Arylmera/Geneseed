@@ -28,8 +28,11 @@ describe('Rail library sub-menu', () => {
     expect(screen.queryByText('Skills')).toBeNull()
   })
 
-  it('keeps the landing collapsed — the genome grid is the expanded view there', () => {
+  it('expands the sub-menu on the landing so sections are one click away', () => {
     render(<Rail route={{ view: 'library' }} overview={overview} />)
-    expect(screen.queryByText('Skills')).toBeNull()
+    const skills = screen.getByText('Skills').closest('a')
+    expect(skills.getAttribute('href')).toBe('#/section/skills')
+    // landing has no active section, so no sub-item should be lit
+    expect(skills.className).not.toContain('active')
   })
 })

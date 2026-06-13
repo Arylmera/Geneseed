@@ -117,10 +117,13 @@ export default function Rail({ route, overview, onOpenVoice }) {
                 </span>
               ) : null}
             </a>
-            {/* Once you drill into a section (or an item), Library expands into
-                its sections as a nested sub-menu, mirroring the TUI's drill-down.
-                The landing (#/library) keeps its genome grid as the expanded view. */}
-            {n.id === 'library' && (route.view === 'section' || route.view === 'item') && (
+            {/* Library expands into its sections as a nested sub-menu as soon
+                as you're anywhere under it — landing, a section, or an item —
+                so the sections are reachable without an extra click. */}
+            {n.id === 'library' &&
+              (route.view === 'library' ||
+                route.view === 'section' ||
+                route.view === 'item') && (
               <div className="rail-sub">
                 {SECTION_ORDER.map((key) => {
                   const on = activeSection(route) === key
