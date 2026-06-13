@@ -50,6 +50,7 @@
   "DESC_RELEASE": "Cut a release — raise the version, write the roadbook entry, tag it, all three in sync.",
   "DESC_INGEST": "Bring a PDF, Office, or web document into clean markdown before reading it.",
   "DESC_RESEARCH": "Find the answer out on the open road — search wide, then prove every claim against independent sources before you trust it.",
+  "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_REVIEW_RESPONSE": "Take the notes straight — weigh each call, then act on it or push back with reasons.",
   "LEX_I": "Keep It in the Saddlebag · Sealed Secrets",
   "LEX_II": "One Move per Corner · One Intent, One Act",

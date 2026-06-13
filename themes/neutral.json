@@ -50,6 +50,7 @@
   "DESC_RELEASE": "Cut a release — bump the version, update the changelog, and tag — keeping all three in sync.",
   "DESC_INGEST": "Convert a PDF, Office, or web document into clean markdown before reading it.",
   "DESC_RESEARCH": "Answer a question from the open web — search widely, then verify each claim against independent sources before citing it.",
+  "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_REVIEW_RESPONSE": "Respond to review feedback with rigour — verify each point, then apply it or decline it with reasons.",
   "LEX_I": "Sealed Secrets",
   "LEX_II": "One Intent, One Act",

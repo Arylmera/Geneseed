@@ -50,6 +50,7 @@
   "DESC_RELEASE": "Cut a release — raise the version, write the race report, seal it with a tag, all three in sync.",
   "DESC_INGEST": "Bring a PDF, Office, or web document into clean markdown before reading it.",
   "DESC_RESEARCH": "Hunt the answer across the open circuit — search wide, then prove every claim against independent sources before you call it.",
+  "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_REVIEW_RESPONSE": "Take the scrutineer's notes straight — weigh each call, then act on it or push back with reasons.",
   "LEX_I": "Sealed Garage · Sealed Secrets",
   "LEX_II": "One Move per Corner · One Intent, One Act",

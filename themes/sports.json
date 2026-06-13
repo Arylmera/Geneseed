@@ -50,6 +50,7 @@
   "DESC_RELEASE": "Ship the release — bump the version, write the recap, tag it, all in sync.",
   "DESC_INGEST": "Bring a PDF, Office, or web document into clean markdown before reading it.",
   "DESC_RESEARCH": "Work the scouting report — search wide, then confirm every claim against independent sources before you call it.",
+  "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_REVIEW_RESPONSE": "Take the review like game tape — verify each note, then adjust or push back with reasons.",
   "LEX_I": "Guard the Signs · Sealed Secrets",
   "LEX_II": "One Play at a Time · One Intent, One Act",
