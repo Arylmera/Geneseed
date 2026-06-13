@@ -2,7 +2,7 @@ import React from 'react'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('../api.js', () => ({
+vi.mock('../api/index.js', () => ({
   api: {
     doctor: vi.fn(() => Promise.resolve({
       themes: ['neutral', 'imperial'], ok: false,
@@ -16,7 +16,7 @@ vi.mock('../api.js', () => ({
 }))
 
 import Doctor from '../pages/Doctor.jsx'
-import { api } from '../api.js'
+import { api } from '../api/index.js'
 
 describe('Doctor', () => {
   it('renders summary card with validated themes and overall badge', async () => {

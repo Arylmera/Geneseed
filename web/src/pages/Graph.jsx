@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { api } from '../api.js'
-import { go } from '../router.js'
+import { api } from '../api/index.js'
+import { go } from '../lib/router.js'
 
 // Deterministic hand-rolled force layout (no library): circle seed, then a few
 // hundred iterations of repulsion + edge springs + center pull. Small graphs

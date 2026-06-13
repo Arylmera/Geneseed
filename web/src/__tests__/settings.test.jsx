@@ -2,7 +2,7 @@ import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('../api.js', () => ({
+vi.mock('../api/index.js', () => ({
   api: {
     setup: () => Promise.resolve({
       deployed: true, target: 'C:/cfg', emit: 'opencode-global',
@@ -26,8 +26,8 @@ vi.mock('../api.js', () => ({
   },
 }))
 
-import Settings from '../pages/Settings.jsx'
-import { api } from '../api.js'
+import Settings from '../pages/Settings/index.jsx'
+import { api } from '../api/index.js'
 
 describe('Settings', () => {
   it('renders the install snapshot and the build picker', async () => {

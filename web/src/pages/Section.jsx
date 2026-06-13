@@ -1,16 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { api } from '../api.js'
-import { go } from '../router.js'
+import { api } from '../api/index.js'
+import { go } from '../lib/router.js'
+import { SECTIONS, SECTION_ORDER } from '../lib/sections.js'
 import Markdown from '../components/Markdown.jsx'
 
-const TYPE = { agents: 'agent', skills: 'skill', laws: 'law',
-  memory: 'memory', notebook: 'notebook', wiki: 'wiki', config: 'config' }
-const SEC_KEYS = ['agents', 'skills', 'laws', 'memory', 'notebook', 'wiki', 'config']
-const SEC_LABEL = { agents: 'Agents', skills: 'Skills', laws: 'Laws', memory: 'Memory',
-  notebook: 'Notebook', wiki: 'Wiki', config: 'Config' }
-
 function DocView({ section, item }) {
-  const type = TYPE[section]
+  const type = SECTIONS[section].type
   return (
     <div className="detail-doc">
       <span className="eyebrow">{type}</span>
@@ -39,7 +34,7 @@ export default function Section({ section, selected, query, counts }) {
 
   useEffect(() => {
     if (!selected) { setItem(null); return }
-    api.item(TYPE[section], selected).then(setItem).catch((e) => setErr(e.message))
+    api.item(SECTIONS[section].type, selected).then(setItem).catch((e) => setErr(e.message))
   }, [section, selected])
 
   const q = (query || '').toLowerCase()
@@ -59,10 +54,10 @@ export default function Section({ section, selected, query, counts }) {
       <div className="lib">
         <div className="card lib-list">
           <div className="lib-tabs">
-            {SEC_KEYS.map((k) => (
+            {SECTION_ORDER.map((k) => (
               <span key={k} className={`lib-tab ${section === k ? 'on' : ''}`}
                 onClick={() => go(`#/section/${k}`)}>
-                {SEC_LABEL[k]}{counts?.[k] != null
+                {SECTIONS[k].label}{counts?.[k] != null
                   ? <span style={{ opacity: .6 }}> {counts[k]}</span> : null}
               </span>
             ))}
@@ -70,7 +65,7 @@ export default function Section({ section, selected, query, counts }) {
           <div className="lib-rows">
             {shown.map((it) => (
               <div key={it.name} className={`lib-row ${selected === it.name ? 'on' : ''}`}
-                onClick={() => go(`#/item/${TYPE[section]}/${encodeURIComponent(it.name)}`)}>
+                onClick={() => go(`#/item/${SECTIONS[section].type}/${encodeURIComponent(it.name)}`)}>
                 <div className="lr-name">{it.title}</div>
                 {it.desc ? <div className="lr-desc">{it.desc}</div> : null}
               </div>

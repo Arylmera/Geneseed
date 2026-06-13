@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { api } from '../api.js'
+import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
 
 function CheckCard({ group }) {

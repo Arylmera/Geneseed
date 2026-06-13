@@ -2,7 +2,7 @@ import React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('../api.js', () => ({
+vi.mock('../api/index.js', () => ({
   api: {
     setup: () => Promise.resolve({
       installed_fp: 'a3f1c9e2', source_fp: 'a3f1c9e2',
@@ -16,7 +16,7 @@ vi.mock('../api.js', () => ({
   },
 }))
 
-import Dashboard from '../pages/Dashboard.jsx'
+import Dashboard from '../pages/Dashboard/index.jsx'
 
 const overview = {
   deployed: true, theme: 'imperial', accent: 'yellow', emit: 'opencode-global',

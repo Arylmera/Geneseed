@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { api } from '../api.js'
-import { accentHex } from '../accents.js'
+import { api } from '../api/index.js'
+import { accentHex } from '../lib/accents.js'
 
 export default function Themes({ onAction }) {
   const [data, setData] = useState(null) // { themes, emits, current }
