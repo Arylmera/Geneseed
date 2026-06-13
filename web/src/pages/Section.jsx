@@ -6,7 +6,7 @@ import { useAsync } from '../hooks/useAsync.js'
 import ErrorState from '../components/ErrorState.jsx'
 import Markdown from '../components/Markdown.jsx'
 
-function DocView({ section, item }) {
+function DocView({ section, item, onForget }) {
   const type = SECTIONS[section].type
   return (
     <div className="detail-doc">
@@ -23,6 +23,11 @@ function DocView({ section, item }) {
             {item.links.length} cross-link{item.links.length === 1 ? '' : 's'}
           </span>
         ) : null}
+        {section === 'memory' && (
+          <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={onForget}>
+            Forget this fact
+          </button>
+        )}
       </div>
       {item.desc ? <p style={{ fontSize: 15 }}>{item.desc}</p> : null}
       <Markdown body={item.body} links={item.links} />
@@ -31,13 +36,33 @@ function DocView({ section, item }) {
 }
 
 export default function Section({ section, selected, query, counts }) {
-  const { data: catalog, error: catErr } = useAsync(() => api.catalog(section), [section])
+  const {
+    data: catalog,
+    error: catErr,
+    reload: reloadCatalog,
+  } = useAsync(() => api.catalog(section), [section])
   const { data: item, error: itemErr } = useAsync(
     () => (selected ? api.item(SECTIONS[section].type, selected) : Promise.resolve(null)),
     [section, selected],
   )
   const items = catalog?.items || []
   const err = catErr || itemErr
+
+  const forget = async () => {
+    if (
+      !window.confirm(
+        `Forget the memory fact "${selected}"? It is deleted from the store and the index.`,
+      )
+    )
+      return
+    try {
+      await api.memoryDelete(selected)
+    } catch {
+      // surfaced via the next catalog load if it failed
+    }
+    go('#/section/memory') // clear the (now-gone) selection
+    reloadCatalog()
+  }
 
   const q = (query || '').toLowerCase()
   const shown = items.filter(
@@ -93,7 +118,7 @@ export default function Section({ section, selected, query, counts }) {
         <div className="card">
           <ErrorState error={err} style={{ margin: 18 }} />
           {item ? (
-            <DocView section={section} item={item} />
+            <DocView section={section} item={item} onForget={forget} />
           ) : (
             <div className="empty">
               <div className="big">Select an item</div>Pick something from the list to read it.

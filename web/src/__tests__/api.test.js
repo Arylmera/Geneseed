@@ -23,6 +23,7 @@ describe('api surface', () => {
       'graph',
       'catalog',
       'item',
+      'memoryDelete',
       'diff',
       'restore',
       'job',

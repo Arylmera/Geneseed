@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
@@ -11,11 +11,13 @@ vi.mock('../api/index.js', () => ({
           { name: 'tester', title: 'Tester', desc: 'writes tests' },
         ],
       }),
-    item: () => Promise.resolve(null),
+    item: () => Promise.resolve({ title: 'A fact', desc: '', body: 'body', links: [] }),
+    memoryDelete: vi.fn(() => Promise.resolve({ deleted: 'fact-a' })),
   },
 }))
 
 import Section from '../pages/Section.jsx'
+import { api } from '../api/index.js'
 
 describe('Section', () => {
   it('renders the tab strip with counts and the catalog items', async () => {
@@ -36,5 +38,19 @@ describe('Section', () => {
   it('prompts to pick an item when nothing is selected', async () => {
     render(<Section section="agents" counts={{}} />)
     await waitFor(() => expect(screen.getByText('Select an item')).toBeTruthy())
+  })
+
+  it('forgets a memory fact via the delete control', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<Section section="memory" selected="fact-a" counts={{}} />)
+    await waitFor(() => expect(screen.getByText('Forget this fact')).toBeTruthy())
+    fireEvent.click(screen.getByText('Forget this fact'))
+    await waitFor(() => expect(api.memoryDelete).toHaveBeenCalledWith('fact-a'))
+  })
+
+  it('shows no forget control for non-memory sections', async () => {
+    render(<Section section="agents" selected="reviewer" counts={{}} />)
+    await waitFor(() => expect(screen.getByText('A fact')).toBeTruthy())
+    expect(screen.queryByText('Forget this fact')).toBeNull()
   })
 })
