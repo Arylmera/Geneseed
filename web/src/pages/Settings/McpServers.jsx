@@ -1,20 +1,19 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { api } from '../../api/index.js'
+import { useAsync } from '../../hooks/useAsync.js'
+import Loading from '../../components/Loading.jsx'
+import ErrorState from '../../components/ErrorState.jsx'
 
 // The MCP-server wiring panel: per-target lists of servers with switches to
 // enable/disable present ones and Add buttons for absent presets. Targets whose
 // config carries comments are read-only (edited by hand).
 export default function McpServers() {
-  const [data, setData] = useState(null) // { targets, default }
-  const [err, setErr] = useState('')
+  const { data, error, reload } = useAsync(() => api.mcp(), []) // { targets, default }
   const [note, setNote] = useState('')
   const [busyKey, setBusyKey] = useState('')
 
-  const load = () => api.mcp().then(setData).catch((e) => setErr(e.message))
-  useEffect(() => { load() }, [])
-
-  if (err) return <p className="badge bad">{err}</p>
-  if (!data) return <p className="loading">Loading…</p>
+  if (error) return <ErrorState error={error} />
+  if (!data) return <Loading />
 
   const toggle = async (target, s) => {
     const key = target.path + s.name
@@ -22,7 +21,7 @@ export default function McpServers() {
     setNote('')
     try {
       await api.mcpToggle(target.path, s.name, s.state !== 'enabled')
-      await load()
+      await reload()
     } catch (e) { setNote(e.message) } finally { setBusyKey('') }
   }
 

@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../../api/index.js'
 import { Icon } from '../../components/Icon.jsx'
+import { useAsync } from '../../hooks/useAsync.js'
+import Loading from '../../components/Loading.jsx'
+import ErrorState from '../../components/ErrorState.jsx'
 import McpServers from './McpServers.jsx'
 
 // The settings page: the install snapshot, the build/update picker, the MCP
 // wiring panel (its own component), and the offline-package download.
 export default function Settings({ onAction }) {
-  const [setup, setSetup] = useState(null)
-  const [err, setErr] = useState('')
+  const { data: setup, error } = useAsync(() => api.setup(), [])
   const [choices, setChoices] = useState(null) // { themes, emits, current }
   const [theme, setTheme] = useState('')
   const [emit, setEmit] = useState('')
 
+  // Themes seed the build picker's defaults, so this load keeps its own effect.
   useEffect(() => {
-    api.setup().then(setSetup).catch((e) => setErr(e.message))
     api.themes().then((t) => {
       setChoices(t)
       setTheme(t.current.theme)
@@ -21,8 +23,8 @@ export default function Settings({ onAction }) {
     }).catch(() => {})
   }, [])
 
-  if (err) return <p className="badge bad">{err}</p>
-  if (!setup) return <div className="loading">Loading…</div>
+  if (error) return <ErrorState error={error} />
+  if (!setup) return <Loading />
 
   const upToDate = (setup.version_verdict || '').includes('up to date')
 

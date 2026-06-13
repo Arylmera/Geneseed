@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
+import { useAsync } from '../hooks/useAsync.js'
+import Loading from '../components/Loading.jsx'
+import ErrorState from '../components/ErrorState.jsx'
 
 // Map a unified-diff line to its display class. Headers (+++/---) and hunk
 // markers read as hunks; the synthetic added/missing banners read as context.
@@ -12,20 +15,19 @@ function lineKind(ln) {
 }
 
 export default function Diff() {
-  const [data, setData] = useState(null)
-  const [err, setErr] = useState('')
+  const { data, error, reload } = useAsync(() => api.diff(), [])
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
   const [sel, setSel] = useState(() => new Set())
   const [open, setOpen] = useState(() => new Set())
 
-  const load = () =>
-    api.diff().then((d) => {
-      setData(d)
-      setSel(new Set())
-      setOpen(new Set(d.files.map((f) => f.rel)))
-    }).catch((e) => setErr(e.message))
-  useEffect(() => { load() }, [])
+  // Seed the selection (none) and the expanded set (all files) whenever a fresh
+  // diff loads — including after a restore or export refetch.
+  useEffect(() => {
+    if (!data) return
+    setSel(new Set())
+    setOpen(new Set(data.files.map((f) => f.rel)))
+  }, [data])
 
   const toggle = (rel) => setSel((s) => {
     const n = new Set(s)
@@ -60,12 +62,12 @@ export default function Diff() {
       const res = await api.restore(files)
       const errs = res.errors.length ? ` · ${res.errors.length} error(s): ${res.errors.join('; ')}` : ''
       setNote(`Restored ${res.restored.length}, deleted ${res.deleted.length}${errs}`)
-      await load()
+      await reload()
     } catch (e) { setNote(e.message) } finally { setBusy(false) }
   }
 
-  if (err) return <p className="badge bad">{err}</p>
-  if (!data) return <div className="loading">Loading…</div>
+  if (error) return <ErrorState error={error} />
+  if (!data) return <Loading />
   if (!data.deployed)
     return (
       <div className="empty">

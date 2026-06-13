@@ -1,6 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
+import { useAsync } from '../hooks/useAsync.js'
+import Loading from '../components/Loading.jsx'
+import ErrorState from '../components/ErrorState.jsx'
 
 function CheckCard({ group }) {
   const clean = group.problems.length === 0
@@ -35,17 +38,12 @@ function CheckCard({ group }) {
 }
 
 export default function Doctor() {
-  const [data, setData] = useState(null)
-  const [err, setErr] = useState('')
+  const { data, error, reload, setData } = useAsync(() => api.doctor(), [])
+  // Re-running clears the result first so the button reads "Running…" and the
+  // sandbox-build loading copy shows while every theme is re-validated.
+  const rerun = () => { setData(null); reload() }
 
-  const load = () => {
-    setData(null)
-    setErr('')
-    api.doctor().then(setData).catch((e) => setErr(e.message))
-  }
-  useEffect(load, [])
-
-  if (err) return <p className="badge bad">{err}</p>
+  if (error) return <ErrorState error={error} />
 
   return (
     <div style={{ maxWidth: 820 }}>
@@ -58,14 +56,14 @@ export default function Doctor() {
             resolution, link integrity, parity, and drift.
           </p>
         </div>
-        <button className="btn ghost" onClick={load} disabled={!data}>
+        <button className="btn ghost" onClick={rerun} disabled={!data}>
           <Icon name="refresh" />
           {data ? 'Re-run checks' : 'Running…'}
         </button>
       </div>
 
       {!data ? (
-        <div className="loading">Running every check (builds each theme in a sandbox)…</div>
+        <Loading label="Running every check (builds each theme in a sandbox)…" />
       ) : (
         <>
           <div className="card pad-md" style={{ marginBottom: 16 }}>

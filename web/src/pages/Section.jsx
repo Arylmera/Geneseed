@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { SECTIONS, SECTION_ORDER } from '../lib/sections.js'
+import { useAsync } from '../hooks/useAsync.js'
+import ErrorState from '../components/ErrorState.jsx'
 import Markdown from '../components/Markdown.jsx'
 
 function DocView({ section, item }) {
@@ -23,19 +25,12 @@ function DocView({ section, item }) {
 }
 
 export default function Section({ section, selected, query, counts }) {
-  const [items, setItems] = useState([])
-  const [item, setItem] = useState(null)
-  const [err, setErr] = useState('')
-
-  useEffect(() => {
-    setErr('')
-    api.catalog(section).then((c) => setItems(c.items)).catch((e) => setErr(e.message))
-  }, [section])
-
-  useEffect(() => {
-    if (!selected) { setItem(null); return }
-    api.item(SECTIONS[section].type, selected).then(setItem).catch((e) => setErr(e.message))
-  }, [section, selected])
+  const { data: catalog, error: catErr } = useAsync(() => api.catalog(section), [section])
+  const { data: item, error: itemErr } = useAsync(
+    () => (selected ? api.item(SECTIONS[section].type, selected) : Promise.resolve(null)),
+    [section, selected])
+  const items = catalog?.items || []
+  const err = catErr || itemErr
 
   const q = (query || '').toLowerCase()
   const shown = items.filter((it) =>
@@ -75,7 +70,7 @@ export default function Section({ section, selected, query, counts }) {
           </div>
         </div>
         <div className="card">
-          {err ? <p className="badge bad" style={{ margin: 18 }}>{err}</p> : null}
+          <ErrorState error={err} style={{ margin: 18 }} />
           {item ? <DocView section={section} item={item} />
             : <div className="empty"><div className="big">Select an item</div>Pick something from the list to read it.</div>}
         </div>

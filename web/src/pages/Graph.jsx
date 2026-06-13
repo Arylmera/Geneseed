@@ -1,6 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
+import { useAsync } from '../hooks/useAsync.js'
+import Loading from '../components/Loading.jsx'
+import ErrorState from '../components/ErrorState.jsx'
 
 // Deterministic hand-rolled force layout (no library): circle seed, then a few
 // hundred iterations of repulsion + edge springs + center pull. Small graphs
@@ -53,11 +56,8 @@ function layout(nodes, edges, w, h) {
 }
 
 export default function Graph() {
-  const [data, setData] = useState(null) // { nodes, edges }
-  const [err, setErr] = useState('')
+  const { data, error } = useAsync(() => api.graph(), []) // { nodes, edges }
   const [hover, setHover] = useState(null) // node id
-
-  useEffect(() => { api.graph().then(setData).catch((e) => setErr(e.message)) }, [])
 
   const W = 980
   const H = data ? Math.max(520, data.nodes.length * 16) : 520
@@ -66,8 +66,8 @@ export default function Graph() {
     [data],
   )
 
-  if (err) return <p className="badge bad">{err}</p>
-  if (!data || !pos) return <div className="loading">Loading…</div>
+  if (error) return <ErrorState error={error} />
+  if (!data || !pos) return <Loading />
 
   const linked = new Set()
   data.edges.forEach((e) => { linked.add(e.source); linked.add(e.target) })

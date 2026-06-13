@@ -1,16 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React from 'react'
 import { api } from '../api/index.js'
 import { accentHex } from '../lib/accents.js'
+import { useAsync } from '../hooks/useAsync.js'
+import Loading from '../components/Loading.jsx'
+import ErrorState from '../components/ErrorState.jsx'
 
 export default function Themes({ onAction }) {
-  const [data, setData] = useState(null) // { themes, emits, current }
-  const [err, setErr] = useState('')
-  const ref = useRef(null)
+  const { data, error } = useAsync(() => api.themes(), []) // { themes, emits, current }
 
-  useEffect(() => { api.themes().then((d) => { ref.current = d; setData(d) }).catch((e) => setErr(e.message)) }, [])
-
-  if (err) return <p className="badge bad">{err}</p>
-  if (!data) return <div className="loading" />
+  if (error) return <ErrorState error={error} />
+  if (!data) return <Loading />
 
   const apply = (name) => {
     if (!window.confirm(
