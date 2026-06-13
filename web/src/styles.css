@@ -617,7 +617,20 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
    (a paused/offscreen iframe holds frame 0; opacity must stay visible there) */
 @keyframes rise { from { transform: translateY(9px); } to { transform: none; } }
 .rise { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
-@media (prefers-reduced-motion: reduce) { .rise { animation: none; } }
+
+/* Honour the OS "reduce motion" setting across the whole UI: near-instant
+   animations + transitions (kept non-zero so animation/transition-end events still
+   fire) and no smooth scroll. Covers the looping blink/pulse indicators, the rise
+   entrance, every hover/zoom transition, and the sprout/ring motion. State is still
+   conveyed by colour and text, never by motion alone. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* empty state */
 .empty { text-align: center; color: var(--text-3); padding: 60px 20px; }
