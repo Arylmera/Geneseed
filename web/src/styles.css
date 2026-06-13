@@ -497,17 +497,30 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 
 /* ============================ GRAPH ================================== */
 .graph-wrap { padding: 14px; overflow: hidden; }
-.graph-wrap svg { width: 100%; height: auto; display: block; }
-.gedge { stroke: var(--line-2); stroke-width: 1.2; transition: stroke .15s, opacity .15s; }
-.gedge.lit { stroke: var(--accent); stroke-width: 1.8; }
-.gedge.dim { opacity: .18; }
+.graph-wrap svg { width: 100%; height: auto; display: block; touch-action: none;
+  user-select: none; }
+.graph-toolbar { display: flex; align-items: center; gap: 10px; padding: 0 2px 10px;
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--text-2); }
+.graph-search { background: var(--surface); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 10px; font-family: var(--font-mono); font-size: 12px;
+  width: 220px; transition: border-color .15s, width .15s; }
+.graph-search:focus { border-color: var(--accent-line); outline: none; width: 260px; }
+.graph-search::placeholder { color: var(--text-3); }
+.gedge { stroke: var(--line-2); stroke-width: 1.1; transition: stroke .15s, opacity .15s,
+  stroke-width .15s; opacity: .7; }
+.gedge.lit { stroke: var(--accent); stroke-width: 1.6; opacity: .95; }
+.gedge.dim { opacity: .12; }
 .gnode { cursor: pointer; }
-.gnode circle { stroke: var(--bg); stroke-width: 2; transition: r .15s; }
-.gnode.agent circle { fill: var(--accent); }
-.gnode.skill circle { fill: var(--good); }
-.gnode text { fill: var(--text-2); font-family: var(--font-mono); font-size: 11px; pointer-events: none; }
+.gnode circle { stroke: var(--bg); stroke-width: 1.6; transition: r .15s; }
+.gnode .ghub { stroke: none; pointer-events: none; }
+.gnode.agent > circle:not(.ghub) { fill: var(--accent); }
+.gnode.skill > circle:not(.ghub) { fill: var(--good); }
+.gnode.law > circle:not(.ghub) { fill: var(--warn); }
+.gnode text { fill: var(--text-2); font-family: var(--font-mono); font-size: 11px;
+  pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px;
+  stroke-linejoin: round; }
 .gnode:hover text, .gnode.near text { fill: var(--text); }
-.gnode.dim { opacity: .26; }
+.gnode.dim { opacity: .22; }
 .legend { display: flex; gap: 18px; align-items: center; font-family: var(--font-mono);
   font-size: 11.5px; color: var(--text-2); }
 .legend .sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block;

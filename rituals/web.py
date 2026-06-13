@@ -1000,26 +1000,48 @@ def api_mcp_toggle(state: WebState, body: dict) -> dict:
     return {"ok": True, "name": name, "state": harness._mcp_state(cfg, name)}
 
 
+LAW_REF_RE = re.compile(r"\b(?:[Rr]ule|[Ll]aw)\s+([IVXLCDM]+)\b")
+
+
 def api_graph(state: WebState) -> dict:
-    """Cross-link graph over agents + skills: one node per item, one edge per
-    resolved [[wikilink]] between two known items — hubs and orphans at a glance.
-    Same resolver contract as _resolve_links (known agent/skill names only)."""
+    """Cross-link graph over agents + skills + laws: one node per item, one edge
+    per [[wikilink]] (agents/skills) or per `Rule N` / `Law N` plain-text reference
+    (any entity → laws). Laws have no wikilink target since their id is a Roman
+    numeral; the prose pattern catches both law↔law cross-references and any
+    agent/skill that names a rule by number."""
     inv = state.inventory
     known = {}
     for e in inv["agents"]:
         known[e["name"]] = "agent"
     for e in inv["skills"]:
         known[e["name"]] = "skill"
+    law_nums = set()
+    for e in inv["laws"]:
+        known[e["num"]] = "law"
+        law_nums.add(e["num"])
     nodes = [{"id": name, "type": type_} for name, type_ in sorted(known.items())]
     edges, seen = [], set()
+
+    def add_edge(src: str, dst: str) -> None:
+        if dst != src and (src, dst) not in seen:
+            seen.add((src, dst))
+            edges.append({"source": src, "target": dst})
+
     for kind in ("agents", "skills"):
         for e in inv[kind]:
             src = e["name"]
             for m in WIKILINK_RE.finditer(e["body"]):
                 dst = m.group(1).strip()
-                if dst in known and dst != src and (src, dst) not in seen:
-                    seen.add((src, dst))
-                    edges.append({"source": src, "target": dst})
+                if dst in known and known[dst] != "law":
+                    add_edge(src, dst)
+            for m in LAW_REF_RE.finditer(e["body"]):
+                if m.group(1) in law_nums:
+                    add_edge(src, m.group(1))
+    for e in inv["laws"]:
+        src = e["num"]
+        for m in LAW_REF_RE.finditer(e["body"]):
+            if m.group(1) in law_nums:
+                add_edge(src, m.group(1))
     return {"nodes": nodes, "edges": edges}
 
 

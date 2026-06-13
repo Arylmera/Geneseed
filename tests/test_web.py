@@ -381,7 +381,9 @@ class GraphTests(unittest.TestCase):
         ids = {n["id"] for n in g["nodes"]}
         self.assertEqual(len(ids), len(g["nodes"]))          # unique nodes
         for n in g["nodes"]:
-            self.assertIn(n["type"], ("agent", "skill"))
+            self.assertIn(n["type"], ("agent", "skill", "law"))
+        # Laws contribute at least the universal set; they appear as nodes.
+        self.assertTrue(any(n["type"] == "law" for n in g["nodes"]))
         for e in g["edges"]:
             self.assertIn(e["source"], ids)                  # edges resolve
             self.assertIn(e["target"], ids)

@@ -10,10 +10,10 @@
 // server uses for items and hash routes (#/item/<type>/<name>).
 export const SECTIONS = {
   agents: { label: 'Agents', type: 'agent', desc: 'capability specialists', icon: 'layers' },
-  skills: { label: 'Skills', type: 'skill', desc: 'repeatable workflows', icon: 'build' },
-  laws: { label: 'Laws', type: 'law', desc: 'governance rules', icon: 'doctor' },
+  skills: { label: 'Skills', type: 'skill', desc: 'repeatable workflows', icon: 'skill' },
+  laws: { label: 'Laws', type: 'law', desc: 'governance rules', icon: 'law' },
   memory: { label: 'Memory', type: 'memory', desc: 'durable facts', icon: 'library' },
-  notebook: { label: 'Notebook', type: 'notebook', desc: 'sovereign space', icon: 'changes' },
+  notebook: { label: 'Notebook', type: 'notebook', desc: 'sovereign space', icon: 'notebook' },
   wiki: { label: 'Wiki', type: 'wiki', desc: 'machine knowledge base', icon: 'graph' },
   config: { label: 'Config', type: 'config', desc: 'install metadata', icon: 'settings' },
 }

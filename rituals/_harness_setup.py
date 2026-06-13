@@ -83,6 +83,7 @@ THEME_BLURBS = {
 
 def _theme_options() -> list[tuple[str, str]]:
     opts = [(p.stem, THEME_BLURBS.get(p.stem, "")) for p in sorted(build.THEMES.glob("*.json"))]
+    opts.sort(key=lambda kv: (kv[0] != "neutral", kv[0]))
     return opts or [("neutral", THEME_BLURBS["neutral"])]
 
 

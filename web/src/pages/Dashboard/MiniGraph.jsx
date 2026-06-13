@@ -115,6 +115,8 @@ export default function MiniGraph({ graph }) {
   }
 
   const hoverPos = hover ? pos.get(hover) : null
+  const hoverNode = hover ? nodes.find((n) => n.id === hover) : null
+  const hoverLabel = hoverNode?.type === 'law' ? `Rule ${hover}` : hover
 
   return (
     <svg
@@ -160,11 +162,15 @@ export default function MiniGraph({ graph }) {
         const p = pos.get(n.id)
         if (!p) return null
         const deg = degrees.get(n.id) || 0
-        const base = n.type === 'agent' ? 4 : 3.2
+        const base = n.type === 'agent' ? 4 : n.type === 'law' ? 3 : 3.2
         const r = base + Math.min(3.6, deg * 0.45)
         const isHub = deg >= Math.max(3, maxDeg * 0.55)
         const isOrphan = deg === 0
         const dim = neighbors && !neighbors.has(n.id)
+        const fill =
+          n.type === 'agent' ? 'var(--accent)' :
+          n.type === 'law' ? 'var(--warn)' :
+          'var(--good)'
         return (
           <g
             key={n.id}
@@ -177,7 +183,7 @@ export default function MiniGraph({ graph }) {
               cx={p.x}
               cy={p.y}
               r={r}
-              fill={n.type === 'agent' ? 'var(--accent)' : 'var(--good)'}
+              fill={fill}
               fillOpacity={isOrphan ? 0.55 : 1}
               stroke="var(--bg)"
               strokeWidth="1.4"
@@ -195,7 +201,7 @@ export default function MiniGraph({ graph }) {
           fill="var(--text)"
           style={{ paintOrder: 'stroke', stroke: 'var(--bg)', strokeWidth: 3 }}
         >
-          {hover}
+          {hoverLabel}
         </text>
       )}
     </svg>
