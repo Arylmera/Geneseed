@@ -51,6 +51,7 @@
   "DESC_INGEST": "Load a PDF, Office, or web document into clean markdown before reading it.",
   "DESC_RESEARCH": "Look up the answer online — scout wide, then cross-check every claim against independent sources before you call it.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Take the review feedback like a coach's notes — verify each call, then apply it or push back with reasons.",
   "LEX_I": "No-Leak Run · Sealed Secrets",
   "LEX_II": "One Objective per Run · One Intent, One Act",

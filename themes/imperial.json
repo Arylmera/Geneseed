@@ -51,6 +51,7 @@
   "DESC_INGEST": "Render a foreign document — PDF, Office, or web — into clean markdown before it may be read.",
   "DESC_RESEARCH": "Seek the answer from the wider world — range across many sources, then prove each claim against independent witnesses before you trust it.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Answer the review with discipline — weigh each judgement, then heed it or refute it with cause.",
   "LEX_I": "Arcana Sigillata · Sealed Secrets",
   "LEX_II": "Unus Actus · One Intent, One Act",
