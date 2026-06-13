@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { api } from '../../api/index.js'
 import { accentHex } from '../../lib/accents.js'
 import { Icon } from '../../components/Icon.jsx'
@@ -13,18 +13,23 @@ import ErrorState from '../../components/ErrorState.jsx'
 // the run; when it finishes the overview reloads and the real dashboard appears.
 export default function Onboarding({ onAction }) {
   const { data, error } = useAsync(() => api.themes(), [])
-  const [theme, setTheme] = useState('')
-  const [emit, setEmit] = useState('')
-
-  useEffect(() => {
-    if (!data) return
-    setTheme(data.current?.theme || 'neutral')
-    const hasGlobal = data.emits?.some((e) => e.name === 'opencode-global')
-    setEmit(hasGlobal ? 'opencode-global' : data.current?.emit || data.emits?.[0]?.name || '')
-  }, [data])
+  // The selections are seeded from the loaded data and only diverge once the
+  // user picks. Deriving them (rather than seeding via an effect) means the
+  // Deploy button is enabled the instant the data renders — no flash of a
+  // disabled control, and no render-timing race.
+  const [pickedTheme, setPickedTheme] = useState('')
+  const [pickedEmit, setPickedEmit] = useState('')
 
   if (error) return <ErrorState error={error} />
   if (!data) return <Loading />
+
+  const theme = pickedTheme || data.current?.theme || 'neutral'
+  const hasGlobal = data.emits?.some((e) => e.name === 'opencode-global')
+  const emit =
+    pickedEmit ||
+    (hasGlobal ? 'opencode-global' : data.current?.emit || data.emits?.[0]?.name || '')
+  const setTheme = setPickedTheme
+  const setEmit = setPickedEmit
 
   return (
     <div className="narrow-lg">
