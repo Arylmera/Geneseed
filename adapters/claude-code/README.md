@@ -1,4 +1,6 @@
-# Claude Code adapter
+# 🪝 Claude Code adapter
+
+> [← Back to README](../../README.md) · [Setup guide](../../SETUP.md) · [OpenCode adapter](../opencode/README.md)
 
 Optional. Claude Code supports lifecycle **hooks**, so a team using it can make
 parts of the harness fire automatically instead of relying on agent

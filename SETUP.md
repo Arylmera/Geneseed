@@ -1,12 +1,21 @@
-# Geneseed — Setup Guide
+<div align="center">
 
-From bare repository to a disciplined agent in a few minutes. You pick a **theme** —
-the voice and vocabulary the harness wears — and an **install mode**; the build implants
-the gene-seed and the agent wakes speaking in that voice. Pick the path that matches your
-tool, then configure and verify. For the conceptual overview see the [README](README.md);
-for OpenCode internals see [adapters/opencode/](adapters/opencode/README.md).
+# 🧬 Geneseed — Setup Guide
 
-## Prerequisites
+**From bare repository to a disciplined agent in a few minutes.**
+
+[← Back to README](README.md) · [Design](DESIGN.md) · [OpenCode adapter](adapters/opencode/README.md) · [Claude Code adapter](adapters/claude-code/README.md)
+
+</div>
+
+---
+
+You pick a **theme** — the voice and vocabulary the harness wears — and an **install mode**;
+the build implants the gene-seed and the agent wakes speaking in that voice. Pick the path
+that matches your tool, then configure and verify. For the conceptual overview see the
+[README](README.md); for OpenCode internals see [adapters/opencode/](adapters/opencode/README.md).
+
+## 📋 Prerequisites
 
 - **Python 3** — to run `build.py` / `harness.py`. Stdlib only; nothing to `pip install`.
 - **git** — to obtain and upgrade the harness.
@@ -18,7 +27,7 @@ for OpenCode internals see [adapters/opencode/](adapters/opencode/README.md).
   or Docling — if you want the agent to read PDFs/Office files (see
   [Reading non-markdown docs](#reading-non-markdown-docs)).
 
-## Choose your path
+## 🛣️ Choose your path
 
 **Easiest:** run the guided wizard — `./geneseed setup` on macOS/Linux,
 `.\geneseed.cmd setup` on Windows (or `python rituals/harness.py setup` anywhere).
@@ -141,7 +150,7 @@ always rendered fresh from `src/`, so it can never drift from the current harnes
 
 ---
 
-## Configure
+## 🎛 Configure
 
 ### Theme
 
@@ -480,7 +489,7 @@ allowed-dir path.
 
 ---
 
-## Verify it works
+## ✅ Verify it works
 
 1. **Sigil** — the agent's first reply opens with the readiness line (the `✅`/`🧬`
    sigil for neutral/imperial). If it's missing, the instructions aren't pointed at
@@ -500,7 +509,7 @@ On any VT-capable terminal (Unix, or Windows Terminal / Windows 10 1809+ `conhos
 the left, the selected item's full spec on the right (PgUp/PgDn to scroll it) — and runs
 build/doctor/diff (and `u` to update) with a keystroke.
 
-## Run `geneseed` from anywhere
+## 🚀 Run `geneseed` from anywhere
 
 By default you invoke the launcher as `./geneseed` from inside the repo. To call it
 like any other command — plain `geneseed` from any directory — put it on your `PATH`:
@@ -542,7 +551,7 @@ which route to the same Python CLI with no bash:
 Open a new terminal after `link`, then call `geneseed` from any directory. Remove it
 again with `.\geneseed.cmd unlink`.
 
-## Headless / CI (OpenCode)
+## 🤖 Headless / CI (OpenCode)
 
 Once the harness is installed (Path A or B), OpenCode can run **non-interactively** —
 no TUI — so the harness's agents, rules, and skills apply in scripts and pipelines:
@@ -604,7 +613,7 @@ install it describes; it is not in the manifest, so re-emits never clobber it, d
 never reports it, and uninstall leaves it in place (the same contract as memory).
 The TUI's *Review local edits* view exports the same file with the `e` key.
 
-## Troubleshooting
+## 🩺 Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |

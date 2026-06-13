@@ -1,8 +1,16 @@
-# Geneseed — Design
+<div align="center">
 
-The spec behind the harness. Read this before changing structure.
+# 🧬 Geneseed — Design
 
-## Origin
+**The spec behind the harness. Read this before changing structure.**
+
+[← Back to README](README.md) · [Setup guide](SETUP.md) · [Specs archive](docs/specs/)
+
+</div>
+
+---
+
+## 🌱 Origin
 
 Geneseed is a generic port of a personal, Obsidian-vault-grown agent system. The
 source system had five layers: governance law, folder-owning delegate agents,
@@ -10,7 +18,7 @@ lifecycle-hook automation, skills, and persistent memory. Geneseed keeps the
 parts that are **runtime-agnostic** and drops the parts that assumed a specific
 vault or a specific tool's hooks.
 
-## Decisions
+## 🧠 Decisions
 
 1. **Target: generic `AGENT.md`, no hooks assumed.** The harness must work in any
    assistant that reads an instructions file at the repo root. Automation is
@@ -68,7 +76,7 @@ vault or a specific tool's hooks.
    documentation* maintained elsewhere. It also subsumes what a baked-in project
    rules file used to do: point at the project's own conventions instead.
 
-## Components
+## 🧩 Components
 
 The `Harness/` output column shows the **neutral** folder name; the imperial theme
 renders it as the name in parentheses.
@@ -87,14 +95,14 @@ renders it as the name in parentheses.
 | Automation | `rituals/harness.py` | — | optional `build` / `doctor` / `context` / `learn` / `prompt` / `diff` / `setup` / `tui` |
 | Adapters | `adapters/` | — | optional per-tool glue (hooks) |
 
-## Generator contract
+## ⚙️ Generator contract
 
 - Substitutes `{{TOKEN}}` in file *contents* only; paths are never themed.
 - Resolves `<!-- INCLUDE: relpath -->` by inlining the rendered target.
 - Unknown tokens are left visible (debugging aid); `doctor` flags them.
 - Stdlib only; no third-party dependencies, ever.
 
-## Explicitly out of scope
+## 🚫 Explicitly out of scope
 
 Graph/index generation, web-clipping pipelines, session-classification capture,
 sync-conflict cleanup, and folder-ownership delegation — all assumed a specific
