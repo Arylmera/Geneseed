@@ -141,6 +141,40 @@ export default function Settings({ onAction }) {
         <McpServers />
       </div>
 
+      {/* Maintenance card */}
+      <div className="card pad-lg mb-16">
+        <div className="card-head">
+          <h3>Maintenance</h3>
+        </div>
+        <p className="sub mb-16">
+          Put <code>geneseed</code> on your PATH so it runs from any directory, or remove a global
+          install — your memory store is always kept. Each runs live in the console.
+        </p>
+        <div className="row wrap gap-10">
+          <button className="btn ghost" onClick={() => onAction('link')}>
+            <Icon name="external" />
+            Add to PATH
+          </button>
+          <button className="btn ghost" onClick={() => onAction('unlink')}>
+            Remove from PATH
+          </button>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              if (
+                window.confirm(
+                  'Uninstall the global Geneseed harness? Your memory store is kept; everything else this install added is removed.',
+                )
+              )
+                onAction('uninstall')
+            }}
+          >
+            <Icon name="clear" />
+            Uninstall
+          </button>
+        </div>
+      </div>
+
       {/* Offline package card */}
       <div className="card pad-lg mb-16">
         <div className="card-head">

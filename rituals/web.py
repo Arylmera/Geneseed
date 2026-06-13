@@ -419,6 +419,11 @@ def action_commands(action: str, theme: str = "neutral",
         "build": [[py, b, *build_argv]],
         "update": [[py, h, "sync-self"], [py, h, "upgrade"]],
         "export": [[py, h, "diff", "--out"]],
+        # Local-machine maintenance, surfaced in the web Settings. uninstall keeps
+        # memory (never deleted) and runs non-interactively with --yes.
+        "link": [[py, h, "link"]],
+        "unlink": [[py, h, "unlink"]],
+        "uninstall": [[py, h, "uninstall", "--yes"]],
     }.get(action)
 
 
@@ -471,6 +476,25 @@ def api_doctor(state: WebState) -> dict:
     return {"themes": themes, "ok": not problems,
             "problems": problems, "groups": groups,
             "checked_at": state.doctor["checked_at"]}
+
+
+def api_memory_delete(state: WebState, name: str) -> dict:
+    """Delete one memory fact and drop its line from MEMORY.md (the index the
+    agent reads at session start). `name` is the bare slug; a path-separator or
+    the reserved index/readme names are rejected, so this can only ever remove a
+    fact file inside the resolved memory dir — never an arbitrary path."""
+    d = harness._resolve_memory_dir(None)
+    if not d or not d.is_dir():
+        raise NotFound("memory store")
+    if not name or "/" in name or "\\" in name or name in ("MEMORY", "README"):
+        raise NotFound(name)
+    p = d / f"{name}.md"
+    if not p.is_file():
+        raise NotFound(name)
+    p.unlink()
+    harness._memory_drop_index(d, name)
+    state.refresh()
+    return {"deleted": name}
 
 
 def api_setup(state: WebState) -> dict:
@@ -768,6 +792,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                 except NotFound as e:
                     return self._send_json({"error": f"not found: {e}"}, 404)
                 return self._send_json(res, 200 if res.get("ok") else 409)
+            if path == "/api/memory/delete":
+                try:
+                    return self._send_json(
+                        api_memory_delete(state, (self._read_json_body().get("name") or "")))
+                except NotFound as e:
+                    return self._send_json({"error": f"not found: {e}"}, 404)
             if path.startswith("/api/jobs/") and path.endswith("/cancel"):
                 jid = path.split("/")[3]
                 if jm.cancel(jid):
