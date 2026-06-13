@@ -15,9 +15,18 @@ const TAB_FLAG = {
   settings: 'settings',
 }
 
-// The top bar: a faux `geneseed --tab=…` prompt, the global search, and the
-// light/dark toggle.
-export default function Topbar({ route, target, query, onQuery, mode, onToggleMode }) {
+// The top bar: a faux `geneseed --tab=…` prompt, the global search, the
+// light/dark toggle, and the stop-server button (same /api/shutdown as
+// `geneseed web stop` and the Settings → Server card).
+export default function Topbar({
+  route,
+  target,
+  query,
+  onQuery,
+  mode,
+  onToggleMode,
+  onShutdown,
+}) {
   return (
     <div className="topbar">
       <div className="prompt">
@@ -35,6 +44,9 @@ export default function Topbar({ route, target, query, onQuery, mode, onToggleMo
         onClick={onToggleMode}
       >
         <Icon name={mode === 'light' ? 'moon' : 'sun'} />
+      </button>
+      <button className="iconbtn" title="Stop server" onClick={onShutdown}>
+        <Icon name="power" />
       </button>
     </div>
   )

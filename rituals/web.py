@@ -8,6 +8,7 @@ and build.py for every read so the web and TUI never disagree.
 """
 from __future__ import annotations
 
+import argparse
 import contextlib
 import io
 import json
@@ -22,6 +23,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -35,6 +37,209 @@ import harness        # noqa: E402
 
 SECTIONS = ("agents", "skills", "laws", "memory", "notebook", "wiki", "config")
 WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
+
+
+# ---- Docs registry ---------------------------------------------------------
+# The Docs menu is one rail entry on the web UI ("Learn → Docs") that surfaces
+# the on-disk documentation through a left sub-nav. Each entry below becomes
+# one page in that sub-nav. `kind` decides how the page is rendered:
+#
+#   markdown — read `source` (relative to ROOT) and render it; the file may
+#              optionally scroll to `anchor`. New markdown lands here.
+#   concept  — inline curated blurb; `body` is the markdown. Usually ends with
+#              a `link` into the existing Library route.
+#   cli      — generated CLI reference (introspects harness.build_argparser()).
+#   specs    — sorted index of every `docs/specs/*.md` file.
+#   spec     — one spec rendered (used internally when the index links through).
+#   glossary — theme-aware glossary; reads the deployed theme's JSON tokens.
+#   about    — install snapshot (version, license, repo). Generated.
+#
+# The discovery of `docs/specs/*` happens in api_docs(), so dropping a new
+# spec into the folder makes it appear without editing this list.
+DOC_GROUPS = [
+    {"id": "start", "label": "Get Started", "pages": [
+        {"id": "what", "title": "What is Geneseed?", "kind": "markdown",
+         "source": "README.md"},
+        {"id": "quickstart", "title": "Quickstart", "kind": "markdown",
+         "source": "README.md", "anchor": "install"},
+        {"id": "verify", "title": "Verify your install", "kind": "markdown",
+         "source": "README.md", "anchor": "after-installing"},
+    ]},
+    {"id": "concepts", "label": "Concepts", "pages": [
+        {"id": "model", "title": "The harness model", "kind": "concept", "body":
+         "Geneseed assembles five runtime pieces around a single `AGENT.md` "
+         "entrypoint: **Rules** (the laws the agent obeys), **Agents** "
+         "(capability specialists you delegate to), **Skills** (repeatable "
+         "workflows the agent can invoke), **Memory** (one-fact-per-file "
+         "durable knowledge), and a **Notebook** (the agent's own sovereign "
+         "space). On OpenCode, four **Plugins** bind the pieces to the host: "
+         "context injection, learn-at-session-end, the safety guard, and the "
+         "saved workflow runner. The structure is theme-independent — a "
+         "theme only changes the *voice* (banner, sigil, prose), never a "
+         "folder or a link."},
+        {"id": "rules", "title": "Rules (Laws)", "kind": "concept",
+         "link": {"hash": "#/section/laws", "label": "Browse the catalog →"},
+         "body": "20 universal laws the agent obeys — secrets handling, "
+         "scope discipline, verify-before-assert, surface-failures, context "
+         "economy, load-the-docs, tool-discovery, and more. Each law is a "
+         "short markdown file under `src/laws/` and the rendered numbered "
+         "list lives in `AGENT.md`. They bind regardless of theme: an "
+         "imperial deploy reads them as *Dictates*, a neutral deploy as "
+         "*Rules*, but the numbering and the rule itself never move."},
+        {"id": "agents", "title": "Agents", "kind": "concept",
+         "link": {"hash": "#/section/agents", "label": "Browse the catalog →"},
+         "body": "16 capability specialists — `reviewer`, `tester`, "
+         "`architect`, `docs`, `security`, `explorer`, plus a debate "
+         "**council** the [[council]] skill convenes (`advocate`, `skeptic`, "
+         "`pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, "
+         "`empiricist`, `operator`, `historian`). You delegate by capability, "
+         "not by folder: the harness picks the right specialist from the "
+         "request."},
+        {"id": "skills", "title": "Skills", "kind": "concept",
+         "link": {"hash": "#/section/skills", "label": "Browse the catalog →"},
+         "body": "25 repeatable workflows the agent can invoke by name — "
+         "[[brainstorm]], [[clarify]], [[plan]], [[tdd]], [[debug]], "
+         "[[refactor]], [[code-review]], [[fresh-eyes]], [[review-response]], "
+         "[[commit]], [[ship]], [[release]], [[migrate]], [[git-archaeology]], "
+         "[[git-rescue]], [[repo-map]], [[document-project]], [[ingest]], "
+         "[[research]], [[handoff]], [[roast-me]], [[council]], "
+         "[[parallel-agents]], [[workflow]], [[wiki]]. A skill is a markdown "
+         "playbook under `src/skills/`; the agent reads it before acting."},
+        {"id": "memory", "title": "Memory convention", "kind": "markdown",
+         "source": "src/memory/README.md"},
+        {"id": "notebook", "title": "Notebook (sovereign space)",
+         "kind": "markdown", "source": "src/notebook/README.md"},
+        {"id": "wiki", "title": "Wiki (machine knowledge base)",
+         "kind": "markdown", "source": "docs/specs/2026-06-11-wiki-knowledge-base.md"},
+        {"id": "themes", "title": "Themes (voice vs structure)",
+         "kind": "markdown", "source": "DESIGN.md", "anchor": "decisions"},
+        {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
+         "link": {"hash": "#/docs/adapters-opencode",
+                  "label": "Read the adapter spec →"},
+         "body": "OpenCode loads four plugins from the deployed bundle:\n\n"
+         "- **geneseed-context** — injects the project's docs *and* your "
+         "machine wiki at every session start (and after compaction).\n"
+         "- **geneseed-learn** — distils memory at session end (powers the "
+         "`learn` skill).\n"
+         "- **geneseed-guard** — enforces the safety Laws and protected wiki "
+         "folders at the tool boundary.\n"
+         "- **geneseed-workflow** — registers the `workflow` tool that runs "
+         "saved orchestration scripts."},
+    ]},
+    {"id": "cli", "label": "CLI Reference", "pages": [
+        {"id": "cli", "title": "Every subcommand", "kind": "cli"},
+    ]},
+    {"id": "setup", "label": "Setup paths", "pages": [
+        {"id": "setup", "title": "Install paths & configuration",
+         "kind": "markdown", "source": "SETUP.md"},
+    ]},
+    {"id": "adapters", "label": "Adapters", "pages": [
+        {"id": "adapters-opencode", "title": "OpenCode adapter",
+         "kind": "markdown", "source": "adapters/opencode/README.md"},
+        {"id": "adapters-opencode-spec", "title": "OpenCode — global harness spec",
+         "kind": "markdown", "source": "adapters/opencode/GLOBAL-HARNESS-SPEC.md"},
+        {"id": "adapters-opencode-loads", "title": "OpenCode — how it loads",
+         "kind": "markdown", "source": "adapters/opencode/HOW-OPENCODE-LOADS.md"},
+        {"id": "adapters-claude-code", "title": "Claude Code adapter",
+         "kind": "markdown", "source": "adapters/claude-code/README.md"},
+    ]},
+    {"id": "advanced", "label": "Authoring & advanced", "pages": [
+        {"id": "authoring", "title": "Editing the source", "kind": "concept",
+         "body": "Everything theme-independent lives under `src/` — laws, "
+         "agents, skills, memory and notebook conventions, and the "
+         "`AGENT.md.tmpl` entrypoint. Voice tokens live under `themes/` as one "
+         "JSON file per theme. After editing, `python build.py --emit "
+         "opencode-global` (or `geneseed update`) re-renders the deployed "
+         "bundle. The `doctor` action verifies the result: unresolved theme "
+         "tokens, dead links, hermetic escapes, theme-key parity, and that "
+         "the committed bundle matches a fresh render."},
+        {"id": "self-improve", "title": "The self-improvement loop",
+         "kind": "concept",
+         "link": {"hash": "#/diff", "label": "Open the diff page →"},
+         "body": "Local edits the agent makes to its own deployed agent/skill "
+         "files survive the next rebuild. Before `setup`, re-theme, or "
+         "`upgrade` overwrites them, any drift is auto-exported to a markdown "
+         "**improvements file** under `improvements/` inside the deployed "
+         "harness dir — untouched by rebuilds and uninstall. Hand it to an "
+         "agent in *this* repo to back-port the changes into `src/`. On "
+         "demand: `geneseed diff --out FILE`, or the **Changes** page in this "
+         "UI."},
+        {"id": "workflow", "title": "The workflow primitive", "kind": "markdown",
+         "source": "docs/specs/2026-06-09-opencode-workflow-primitive.md"},
+        {"id": "themes-author", "title": "Writing a new theme", "kind": "concept",
+         "link": {"hash": "#/themes", "label": "Open the theme gallery →"},
+         "body": "A theme is one JSON file under `themes/` declaring voice "
+         "tokens only: `BANNER`, `TAGLINE`, `LOADED_SIGIL`, `VOICE`, the core "
+         "nouns (`LAW(S)`/`AGENT(S)`/`SKILL(S)`/`MEMORY`/`NOTEBOOK`/`WIKI`), "
+         "the law titles `LEX_*`, the section intros `INTRO_*`, the epigraphs "
+         "`EPI_*`, the `BENEDICTION`, the `ROAST_PERSONA`, and `DESC_*` "
+         "blurbs. Copy `themes/neutral.json` and edit. `python build.py "
+         "--theme yours` renders it; `doctor` checks for missing tokens."},
+    ]},
+    {"id": "trouble", "label": "Troubleshooting", "pages": [
+        {"id": "trouble", "title": "Common problems & fixes",
+         "kind": "concept", "body": (
+            "### `geneseed: command not found`\n"
+            "Run `./geneseed link` (macOS/Linux) or `.\\geneseed.cmd link` "
+            "(Windows) from the cloned repo. On Windows, open a new terminal "
+            "after `link` — the PATH update only applies to fresh shells.\n\n"
+            "### The agent doesn't load my project docs\n"
+            "On OpenCode the `geneseed-context` plugin must be installed. "
+            "Re-run `geneseed setup` or `python build.py --emit opencode-"
+            "global`. Verify with `geneseed doctor`.\n\n"
+            "### `doctor` reports unresolved theme tokens\n"
+            "A theme JSON is missing a key the templates reference. Compare "
+            "with `themes/neutral.json` — every key there must exist in your "
+            "theme. Re-render: `python build.py --theme <yours>`.\n\n"
+            "### `doctor` reports drift between bundle and src\n"
+            "A committed `Harness/` snapshot fell behind. Re-render and "
+            "commit: `python build.py && git add Harness`. If the drift is "
+            "intentional local edits, use the **Changes** page to export "
+            "them as an improvements file and back-port.\n\n"
+            "### Web UI shows 'no deployed harness'\n"
+            "Run `geneseed setup` to install. The UI works read-only without "
+            "a deployment but most actions are disabled.\n\n"
+            "### Windows PATH didn't update\n"
+            "`geneseed.cmd link` writes to `%LOCALAPPDATA%\\Geneseed\\bin` "
+            "and adds it to user PATH — but only new shells see it. Close "
+            "and reopen your terminal.\n\n"
+            "### Plugin not registering on OpenCode\n"
+            "Plugins ship in `~/.config/opencode/plugin/` for the global "
+            "emit. Confirm with `ls ~/.config/opencode/plugin/` — you should "
+            "see `geneseed-*.js`. If empty, re-run the build with "
+            "`--emit opencode-global`.\n")},
+    ]},
+    {"id": "design", "label": "Design", "pages": [
+        {"id": "design", "title": "DESIGN.md — the spec", "kind": "markdown",
+         "source": "DESIGN.md"},
+    ]},
+    {"id": "glossary", "label": "Glossary", "pages": [
+        {"id": "glossary", "title": "Terms in your deployed voice",
+         "kind": "glossary"},
+    ]},
+    {"id": "about", "label": "About", "pages": [
+        {"id": "about", "title": "Version, license, links", "kind": "about"},
+    ]},
+]
+
+
+# Theme-aware glossary: each entry has the neutral term + the theme key whose
+# value is the themed word. The build read the same keys from theme JSON, so
+# this list matches whatever the templates actually substitute.
+GLOSSARY_KEYS = [
+    ("Rule (Law)", "LAW", "the governance rules the agent obeys"),
+    ("Rules (Laws)", "LAWS", "the body of governance rules"),
+    ("Agent", "AGENT", "a capability specialist"),
+    ("Agents", "AGENTS", "the roster of specialists"),
+    ("Skill", "SKILL", "a repeatable workflow"),
+    ("Skills", "SKILLS", "the catalogue of workflows"),
+    ("Memory", "MEMORY", "durable, one-fact-per-file knowledge"),
+    ("Notebook", "NOTEBOOK", "the agent's sovereign space"),
+    ("Wiki", "WIKI", "the machine-wide knowledge base"),
+    ("Tagline", "TAGLINE", "the one-line essence of the theme"),
+    ("Loaded sigil", "LOADED_SIGIL", "what the agent emits when ready"),
+    ("Benediction", "BENEDICTION", "the closing line of an install"),
+]
 
 
 class NotFound(Exception):
@@ -657,6 +862,245 @@ def offline_zip_bytes() -> "tuple[bytes, str]":
     return buf.getvalue(), name
 
 
+# ---- Docs API --------------------------------------------------------------
+
+SPEC_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(.+)\.md$")
+
+
+def _find_doc_page(page_id: str) -> "dict | None":
+    """Look up a page by id across all groups. Used by /api/docs/page/<id>."""
+    for g in DOC_GROUPS:
+        for p in g["pages"]:
+            if p["id"] == page_id:
+                return p
+    return None
+
+
+def _read_doc_source(rel: str) -> str:
+    """Read a markdown file relative to ROOT — guards against escapes the same
+    way Library does, then returns the body unmodified (frontmatter and all)."""
+    target = (ROOT / rel).resolve()
+    if not harness._within(target, ROOT) or not target.is_file():
+        raise NotFound(rel)
+    return target.read_text(encoding="utf-8", errors="replace")
+
+
+def _spec_purpose(text: str) -> str:
+    """First non-heading paragraph of a spec, used as its index blurb. We skip
+    the title, the metadata block (Date/Status lines), and any leading blank
+    lines, then return the first paragraph trimmed to one line."""
+    lines = text.splitlines()
+    paras: list[list[str]] = []
+    buf: list[str] = []
+    for ln in lines:
+        s = ln.strip()
+        if not s:
+            if buf:
+                paras.append(buf)
+                buf = []
+            continue
+        if s.startswith("#"):
+            if buf:
+                paras.append(buf)
+                buf = []
+            continue
+        if s.startswith("**Date:") or s.startswith("**Status:"):
+            continue
+        buf.append(s)
+    if buf:
+        paras.append(buf)
+    if not paras:
+        return ""
+    flat = " ".join(paras[0]).strip()
+    return (flat[:240] + "…") if len(flat) > 240 else flat
+
+
+def _specs_index() -> list[dict]:
+    """All `docs/specs/*.md`, sorted newest first, with a date and a one-line
+    purpose pulled from the body. The id is `spec:<filename>`."""
+    out = []
+    specs_dir = ROOT / "docs" / "specs"
+    if not specs_dir.is_dir():
+        return out
+    for p in sorted(specs_dir.glob("*.md")):
+        m = SPEC_DATE_RE.match(p.name)
+        date = m.group(1) if m else ""
+        try:
+            body = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        title = ""
+        for ln in body.splitlines():
+            if ln.startswith("# "):
+                title = ln[2:].strip()
+                break
+        out.append({
+            "id": f"spec:{p.name}",
+            "title": title or p.stem,
+            "date": date,
+            "filename": p.name,
+            "purpose": _spec_purpose(body),
+        })
+    out.sort(key=lambda s: s["date"], reverse=True)
+    return out
+
+
+def _cli_reference() -> dict:
+    """Walk the harness argparser into a JSON-able shape: one entry per
+    subcommand, each carrying its help text, positional args, and options.
+    The frontend renders each as a card."""
+    parser = harness.build_argparser()
+    sub_action = next((a for a in parser._actions
+                       if isinstance(a, argparse._SubParsersAction)), None)
+    if sub_action is None:
+        return {"prog": parser.prog, "commands": []}
+
+    def _arg(a) -> dict:
+        return {
+            "names": list(a.option_strings),
+            "dest": a.dest,
+            "metavar": a.metavar,
+            "help": (a.help or "") if a.help is not argparse.SUPPRESS else "",
+            "choices": list(a.choices) if a.choices else None,
+            "default": None if a.default is None else
+                       (a.default if isinstance(a.default, (str, int, float, bool)) else str(a.default)),
+            "required": bool(getattr(a, "required", False)),
+            "nargs": str(a.nargs) if a.nargs is not None else None,
+            "is_flag": not a.option_strings is None and len(a.option_strings) > 0 and a.nargs == 0,
+        }
+
+    commands = []
+    for name, sp in sub_action.choices.items():
+        positionals, options = [], []
+        for a in sp._actions:
+            if isinstance(a, argparse._HelpAction):
+                continue
+            if a.help is argparse.SUPPRESS:
+                continue
+            (positionals if not a.option_strings else options).append(_arg(a))
+        # The help text we attached via sub.add_parser(..., help=...) lives on
+        # the subparser action, not on sp itself — read it back from the parent.
+        help_text = ""
+        for action in sub_action._choices_actions:
+            if action.dest == name:
+                help_text = action.help or ""
+                break
+        commands.append({
+            "name": name,
+            "help": help_text,
+            "description": sp.description or "",
+            "positionals": positionals,
+            "options": options,
+        })
+    commands.sort(key=lambda c: c["name"])
+    return {"prog": parser.prog, "commands": commands}
+
+
+def _glossary(state: WebState) -> dict:
+    """Side-by-side neutral term vs deployed-theme term for the invented
+    vocabulary. Reads the neutral + deployed theme JSON to pull the strings the
+    build actually substitutes — so a glossary entry can never disagree with
+    what the agent prints."""
+    def _load(theme: str) -> dict:
+        try:
+            return json.loads(
+                (build.THEMES / f"{theme}.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+    neutral = _load("neutral")
+    themed = _load(state.theme) if state.theme != "neutral" else neutral
+    rows = []
+    for label, key, desc in GLOSSARY_KEYS:
+        rows.append({
+            "label": label,
+            "neutral": str(neutral.get(key, "")).strip(),
+            "themed": str(themed.get(key, "")).strip(),
+            "desc": desc,
+        })
+    return {"theme": state.theme, "rows": rows}
+
+
+def _about(state: WebState) -> dict:
+    """About-page payload: version line, deployed install summary, links."""
+    sd = harness._status_data()
+    return {
+        "version": sd.get("version") or {},
+        "theme": state.theme,
+        "emit": state.emit,
+        "deployed": _deployed(state),
+        "target": str(state.target),
+        "root": str(ROOT),
+        "python": sys.version.split()[0],
+        "repo": "https://github.com/Arylmera/Geneseed",
+        "license": "MIT",
+    }
+
+
+def api_docs(state: WebState) -> dict:
+    """Top-level menu the Docs page renders in its left sub-nav. Dated specs
+    live behind their own rail entry now (api_specs) — Docs only carries the
+    concepts, references, and the curated DESIGN.md."""
+    groups = [{"id": g["id"], "label": g["label"],
+               "pages": [{"id": p["id"], "title": p["title"], "kind": p["kind"]}
+                         for p in g["pages"]]}
+              for g in DOC_GROUPS]
+    return {"groups": groups}
+
+
+def api_specs(state: WebState) -> dict:
+    """The dated implementation specs under docs/specs/, newest first. The
+    detail view is served by api_docs_page('spec:<filename>') so the rendering
+    pipeline (wikilink resolution, markdown body) stays single-sourced."""
+    return {"specs": _specs_index()}
+
+
+def api_docs_page(state: WebState, page_id: str) -> dict:
+    """One docs page. Looks up DOC_GROUPS first; falls back to `spec:<file>`
+    for the discovered specs index entries. Every shape carries a `kind` the
+    frontend dispatches on."""
+    if page_id.startswith("spec:"):
+        fname = page_id.split(":", 1)[1]
+        if "/" in fname or "\\" in fname or not fname.endswith(".md"):
+            raise NotFound(page_id)
+        body = _read_doc_source(f"docs/specs/{fname}")
+        title = fname
+        for ln in body.splitlines():
+            if ln.startswith("# "):
+                title = ln[2:].strip()
+                break
+        return {"id": page_id, "title": title, "kind": "markdown",
+                "body": body, "source": f"docs/specs/{fname}",
+                "links": _resolve_links(state, body)}
+    page = _find_doc_page(page_id)
+    if not page:
+        raise NotFound(page_id)
+    kind = page["kind"]
+    if kind == "markdown":
+        body = _read_doc_source(page["source"])
+        return {"id": page_id, "title": page["title"], "kind": "markdown",
+                "body": body, "source": page["source"],
+                "anchor": page.get("anchor"),
+                "links": _resolve_links(state, body)}
+    if kind == "concept":
+        body = page.get("body", "")
+        return {"id": page_id, "title": page["title"], "kind": "concept",
+                "body": body, "link": page.get("link"),
+                "links": _resolve_links(state, body)}
+    if kind == "cli":
+        return {"id": page_id, "title": page["title"], "kind": "cli",
+                **_cli_reference()}
+    if kind == "specs":
+        return {"id": page_id, "title": page["title"], "kind": "specs",
+                "specs": _specs_index()}
+    if kind == "glossary":
+        return {"id": page_id, "title": page["title"], "kind": "glossary",
+                **_glossary(state)}
+    if kind == "about":
+        return {"id": page_id, "title": page["title"], "kind": "about",
+                **_about(state)}
+    raise NotFound(page_id)
+
+
 def api_overview(state: WebState) -> dict:
     inv = state.inventory
     diff = None
@@ -748,6 +1192,14 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                         extra={"Content-Disposition": f'attachment; filename="{name}"'})
                 if path == "/api/diff":
                     return self._send_json(api_diff(state))
+                if path == "/api/docs":
+                    return self._send_json(api_docs(state))
+                if path.startswith("/api/docs/page/"):
+                    pid = path[len("/api/docs/page/"):]
+                    return self._send_json(
+                        api_docs_page(state, urllib.parse.unquote(pid)))
+                if path == "/api/specs":
+                    return self._send_json(api_specs(state))
                 if path == "/api/jobs":
                     return self._send_json({"jobs": jm.recent()})
                 if path.startswith("/api/jobs/"):

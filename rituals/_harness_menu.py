@@ -15,8 +15,7 @@ from _harness_tui import _icon  # noqa: E402  (load-time use in _MENU_ACTIONS)
 _MENU_ACTIONS_RAW = [
     ("bootstrap", "Install & set up", "Download the latest from upstream, then run the setup wizard."),
     ("theme", "Change theme", "Pick a new voice theme and rebuild in place — install mode and target unchanged."),
-    ("browse", "Browse", "Agents, skills and laws, with their full specs."),
-    ("memory", "Memory", "Browse / search the memory store; delete stale facts."),
+    ("library", "Library", "Agents, skills, laws, memory, notebook, wiki, config."),
     ("status", "Status", "Theme, install mode, counts, and the memory store."),
     ("diff", "Review local edits", "Compare a deployed harness against source."),
     ("web", "Web UI", "Open the local browser interface over the deployed harness."),
@@ -29,6 +28,21 @@ _MENU_ACTIONS_RAW = [
     # latest, or change the flavour — instead of four overlapping install variants.
 ]
 _MENU_ACTIONS = [(k, f"{_icon(k)}  {lbl}", d) for (k, lbl, d) in _MENU_ACTIONS_RAW]
+
+
+# The Library submenu mirrors the web UI's section badges (agents/skills/laws +
+# memory/notebook/wiki/config) so the same vocabulary works on either surface.
+# Labels carry a live count rebuilt per open in _library_menu — that's why the
+# RAW table only lists keys + descriptions; labels are added at call time.
+_LIBRARY_SECTIONS_RAW = [
+    ("agents",   "Agents",   "agent",    "Browse the agent specs."),
+    ("skills",   "Skills",   "skill",    "Browse the skill specs."),
+    ("laws",     "Laws",     "law",      "Browse the universal laws."),
+    ("memory",   "Memory",   "memory",   "Browse / search the memory store; delete stale facts."),
+    ("notebook", "Notebook", "notebook", "Notebook entries from the deployed bundle."),
+    ("wiki",     "Wiki",     "wiki",     "Wiki pages declared in wiki.jsonc."),
+    ("config",   "Config",   "config",   "Deployed context.json and wiki.jsonc."),
+]
 
 
 # The Settings submenu groups configuration AND maintenance actions reached from the
@@ -45,6 +59,101 @@ _SETTINGS_ACTIONS_RAW = [
     ("back", "Back", "Return to the main menu."),
 ]
 _SETTINGS_ACTIONS = [(k, f"{_icon(k)}  {lbl}", d) for (k, lbl, d) in _SETTINGS_ACTIONS_RAW]
+
+
+def _library_counts(inv: dict) -> dict:
+    """Counts behind each Library entry — shown in the menu label so the user sees
+    the same numbers the web UI's badge strip shows. Reads from the rendered
+    inventory for agents/skills/laws, and from the deployed target for the rest."""
+    try:
+        target = build._opencode_config_dir()
+    except Exception:                                            # noqa: BLE001
+        target = None
+    nb = target / "notebook" if target else None
+    notebook_n = len(list(nb.glob("*.md"))) if nb and nb.is_dir() else 0
+
+    wiki_n = 0
+    wiki_path = (target / "wiki.jsonc") if target else None
+    cand = os.environ.get("GENESEED_WIKI")
+    if cand:
+        wiki_path = Path(cand).expanduser()
+    if wiki_path and wiki_path.is_file():
+        try:
+            cfg = json.loads(wiki_path.read_text(encoding="utf-8"))
+            wiki_n = len(cfg.get("wikis") or []) if isinstance(cfg, dict) else 0
+        except (OSError, json.JSONDecodeError):
+            wiki_n = 0
+
+    config_n = 0
+    if target:
+        for fname in ("context.json", "wiki.jsonc"):
+            if (target / fname).is_file():
+                config_n += 1
+
+    mdir = _resolve_memory_dir(None)
+    memory_n = len(_memory_facts(mdir)) if mdir and mdir.is_dir() else 0
+
+    return {
+        "agents":   len(inv.get("agents", [])),
+        "skills":   len(inv.get("skills", [])),
+        "laws":     len(inv.get("laws", [])),
+        "memory":   memory_n,
+        "notebook": notebook_n,
+        "wiki":     wiki_n,
+        "config":   config_n,
+    }
+
+
+def _library_actions(counts: dict) -> list[tuple[str, str, str]]:
+    """Build the Library submenu rows from current counts, plus the Back row."""
+    rows = []
+    for key, label, icon_key, desc in _LIBRARY_SECTIONS_RAW:
+        rows.append((key, f"{_icon(icon_key)}  {label} ({counts[key]})", desc))
+    rows.append(("back", f"{_icon('back')}  Back", "Return to the main menu."))
+    return rows
+
+
+def _library_placeholder(stdscr, curses, pal, kind: str, count: int) -> None:
+    """Stub view for notebook / wiki / config — these don't yet have a TUI browser;
+    show the count + where they live and point at the web UI for full content."""
+    try:
+        target = build._opencode_config_dir()
+    except Exception:                                            # noqa: BLE001
+        target = None
+    if kind == "notebook":
+        path = (target / "notebook") if target else None
+        what = f"{count} notebook entr{'y' if count == 1 else 'ies'}"
+    elif kind == "wiki":
+        cand = os.environ.get("GENESEED_WIKI")
+        path = Path(cand).expanduser() if cand else ((target / "wiki.jsonc") if target else None)
+        what = f"{count} wiki entr{'y' if count == 1 else 'ies'} in the manifest"
+    else:  # config
+        path = target
+        what = f"{count} config file(s) present"
+    lines = [("info", what),
+             ("info", f"location: {path or '(not found)'}"),
+             ("info", "Full browsing lives in the web UI — open it from the main menu.")]
+    _info_screen(stdscr, curses, pal, kind, lines, "Enter: close")
+
+
+def _library_menu(stdscr, curses, pal, theme) -> None:
+    """Library submenu — agents/skills/laws/memory/notebook/wiki/config in one
+    place, mirroring the web UI's section badges. agents/skills/laws open the
+    two-pane browser scrolled to their section; memory opens the dedicated
+    facts browser; notebook/wiki/config are info stubs until they get their
+    own TUI views."""
+    while True:
+        inv = _tui_inventory(theme)
+        actions = _library_actions(_library_counts(inv))
+        sel = _menu(stdscr, curses, "Geneseed  ·  Library", actions, default="agents")
+        if sel in (None, "back"):
+            return
+        if sel in ("agents", "skills", "laws"):
+            _tui_loop(stdscr, inv, focus={"agents": "agent", "skills": "skill", "laws": "law"}[sel])
+        elif sel == "memory":
+            _memory_view(stdscr, curses, pal)
+        else:
+            _library_placeholder(stdscr, curses, pal, sel, _library_counts(inv)[sel])
 
 
 def _settings_menu(stdscr, curses, pal, here) -> None:
@@ -175,12 +284,10 @@ def _main_menu(stdscr) -> int:
         sel = _menu(stdscr, curses, f"Geneseed  ·  {theme}  ·  {emit}", _MENU_ACTIONS, default="bootstrap")
         if sel in (None, "quit"):
             return 0
-        if sel == "browse":
-            _tui_loop(stdscr, _tui_inventory(theme))
+        if sel == "library":
+            _library_menu(stdscr, curses, pal, theme)
         elif sel == "doctor":
             _doctor_view(stdscr, curses, pal)
-        elif sel == "memory":
-            _memory_view(stdscr, curses, pal)
         elif sel in ("theme", "settings"):
             if sel == "theme":
                 _retheme_flow(stdscr)

@@ -92,16 +92,10 @@ del _m
 
 
 
-def main() -> int:
-    # Force UTF-8 I/O so injected docs / templates with unicode (sigils, em-dashes)
-    # do not crash on a legacy code page (e.g. Windows cp1252). Dependency-free.
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            try:
-                stream.reconfigure(encoding="utf-8")
-            except (ValueError, OSError):
-                pass
-
+def build_argparser() -> argparse.ArgumentParser:
+    """The harness CLI parser, extracted so web/UI layers can introspect it
+    (subcommands, flags, help text) without spawning a subprocess. main() and the
+    web docs page must read the *same* parser — that is why this lives apart."""
     ap = argparse.ArgumentParser(prog="harness", description="Geneseed harness CLI")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -228,6 +222,19 @@ def main() -> int:
     ul = sub.add_parser("unlink", help="remove the `geneseed` launcher from PATH")
     ul.set_defaults(fn=cmd_unlink)
 
+    return ap
+
+
+def main() -> int:
+    # Force UTF-8 I/O so injected docs / templates with unicode (sigils, em-dashes)
+    # do not crash on a legacy code page (e.g. Windows cp1252). Dependency-free.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except (ValueError, OSError):
+                pass
+    ap = build_argparser()
     args = ap.parse_args()
     return args.fn(args)
 

@@ -117,6 +117,10 @@ _ICONS = {
     "agent":     ("🤖", "◆", "@"),
     "skill":     ("✨", "✦", "*"),
     "law":       ("📜", "§", "#"),
+    "library":   ("📚", "❒", "L"),
+    "notebook":  ("📓", "✎", "N"),
+    "wiki":      ("📘", "▥", "W"),
+    "config":    ("🧾", "⌗", "C"),
     "badge":     ("🧬", "⬡", "G"),
     "web":       ("🌐", "◍", "W"),
 }
@@ -1434,7 +1438,7 @@ def _mcp_view(stdscr, curses, pal) -> None:
                 msg = f"{nm} is not in {label}"
 
 
-def _tui_loop(stdscr, inv: dict) -> None:
+def _tui_loop(stdscr, inv: dict, focus: str | None = None) -> None:
     import curses
     import textwrap
 
@@ -1460,7 +1464,9 @@ def _tui_loop(stdscr, inv: dict) -> None:
     all_entries = _tui_entries(inv)
     query = ""
     filtering = False
-    sel = 0
+    # focus = "agent" | "skill" | "law" lands the cursor on that section's first
+    # item — used by the Library submenu so each entry opens scrolled to its own.
+    sel = next((i for i, (k, _l, _d) in enumerate(all_entries) if k == focus), 0)
     list_top = 0
     detail_top = 0
     harness_py = str(Path(__file__).resolve())

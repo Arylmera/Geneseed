@@ -8,5 +8,6 @@ import * as diff from './diff.js'
 import * as jobs from './jobs.js'
 import * as mcp from './mcp.js'
 import * as server from './server.js'
+import * as docs from './docs.js'
 
-export const api = { ...status, ...catalog, ...diff, ...jobs, ...mcp, ...server }
+export const api = { ...status, ...catalog, ...diff, ...jobs, ...mcp, ...server, ...docs }
