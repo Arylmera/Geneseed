@@ -180,7 +180,7 @@ Geneseed/
 ```bash
 python rituals/harness.py doctor                      # every theme + parity + authoring + drift
 python -m unittest discover -s tests -p "test_*.py"   # generator + CLI unit tests (no deps)
-node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs tests/context_wiki.test.mjs   # Node suites
+node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs tests/context_wiki.test.mjs tests/context_delivery.test.mjs   # Node suites
 ```
 
 `doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs all three on every push and PR, on both Linux and Windows.
