@@ -18,7 +18,7 @@ landed in the source tree.
 > **On version numbers.** [`harness.config.json`](harness.config.json)'s `version` is a
 > human-readable label only. The canonical identity of an installed harness is the
 > **source fingerprint** stamped in `.geneseed-version` (see `geneseed version`), not the
-> string. Current label: **0.1.0**.
+> string. Current label: **1.0.0**.
 
 ## Capabilities
 

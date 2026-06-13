@@ -594,7 +594,7 @@ This is a usage note, not an emitted feature — the harness writes nothing for 
 
 ```
 ./geneseed upgrade                 # track main; keep the remembered theme + emit mode
-./geneseed upgrade v0.1.0          # pin to a tag
+./geneseed upgrade v1.0.0          # pin to a tag
 ./geneseed upgrade main imperial   # force a theme
 ```
 
