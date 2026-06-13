@@ -50,6 +50,7 @@
   "DESC_RELEASE": "Cut a release — raise the version, write the chronicle, seal it with a tag, all three in accord.",
   "DESC_INGEST": "Render a PDF, Office, or web document into clean markdown before it can be read.",
   "DESC_RESEARCH": "Seek the answer from the wider world — range across many sources, then prove each claim against independent witnesses before trusting it. Trust is a strong word.",
+  "DESC_LEARN": "Master a skill or topic, if you must — a goal-driven path, your understanding tested for the gaps you'd rather ignore, or a Feynman check it stuck.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Answer the review with rigour — weigh each point, then heed it or refute it with reasons.",
