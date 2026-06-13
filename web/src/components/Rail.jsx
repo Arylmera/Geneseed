@@ -93,6 +93,14 @@ const NAV = [
     icon: 'settings',
     match: (r) => r.view === 'settings',
   },
+  { group: 'About' },
+  {
+    hash: '#/about',
+    id: 'about',
+    label: 'About',
+    icon: 'about',
+    match: (r) => r.view === 'about',
+  },
 ]
 
 export default function Rail({ route, overview, onOpenVoice }) {

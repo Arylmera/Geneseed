@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 // Routes: #/ (dashboard), #/section/<name>, #/item/<type>/<name>, and one
 // flat view per top-level page (#/diff, #/settings, …). The docs view also
 // carries a sub-page id: #/docs (default page) or #/docs/<page-id>.
-const FLAT_VIEWS = new Set(['diff', 'settings', 'doctor', 'themes', 'graph', 'library'])
+const FLAT_VIEWS = new Set(['diff', 'settings', 'doctor', 'themes', 'graph', 'library', 'about'])
 
 export function useRoute() {
   const parse = () => {

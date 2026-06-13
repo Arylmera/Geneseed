@@ -21,6 +21,7 @@ import Graph from './pages/Graph.jsx'
 import Settings from './pages/Settings/index.jsx'
 import Docs from './pages/Docs/index.jsx'
 import Specs from './pages/Specs/index.jsx'
+import About from './pages/About.jsx'
 
 // App is a thin shell: it wires the hooks (overview, jobs, color mode) to the
 // chrome (rail, topbar, console) and dispatches the active route to a page. All
@@ -132,6 +133,7 @@ export default function App() {
             {route.view === 'specs' && (
               <Specs spec={route.spec} query={query} overview={overview} onAction={runAction} />
             )}
+            {route.view === 'about' && <About />}
           </div>
         </div>
         <Console
