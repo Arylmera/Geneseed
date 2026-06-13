@@ -82,7 +82,7 @@ THEME_BLURBS = {
 
 
 def _theme_options() -> list[tuple[str, str]]:
-    opts = [(p.stem, THEME_BLURBS.get(p.stem, "")) for p in sorted(build.THEMES.glob("*.json"))]
+    opts = [(p.stem, THEME_BLURBS.get(p.stem, "")) for p in build.theme_files()]
     opts.sort(key=lambda kv: (kv[0] != "neutral", kv[0]))
     return opts or [("neutral", THEME_BLURBS["neutral"])]
 
@@ -95,7 +95,7 @@ def _theme_from_agent(agent_md: Path) -> "str | None":
         text = agent_md.read_text(encoding="utf-8")
     except OSError:
         return None
-    for tf in sorted(build.THEMES.glob("*.json")):
+    for tf in build.theme_files():
         try:
             sig = json.loads(tf.read_text(encoding="utf-8")).get("LOADED_SIGIL", "")
         except (json.JSONDecodeError, OSError):

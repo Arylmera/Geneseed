@@ -58,7 +58,7 @@ class DestRelTests(unittest.TestCase):
 
 class RenderAllTests(unittest.TestCase):
     def test_no_unresolved_tokens_in_any_theme(self):
-        for theme in (p.stem for p in build.THEMES.glob("*.json")):
+        for theme in (p.stem for p in build.theme_files()):
             _t, items = build.render_all(theme)
             for rel, text, _src in items:
                 if text is not None:

@@ -58,7 +58,7 @@ def _theme_parity_problems() -> list[str]:
     absent from another renders as a raw {{TOKEN}} only in the files that use it, and
     only under that theme — a plain build can miss it. Compare the maps directly."""
     themes: dict[str, dict] = {}
-    for p in sorted(build.THEMES.glob("*.json")):
+    for p in build.theme_files():
         try:
             themes[p.stem] = json.loads(p.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as e:
@@ -201,7 +201,7 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
     sweep — see `_themes_to_check`. The cross-theme PARITY check below runs
     regardless of scope, so the guarantee that motivated the sweep (a voice token
     present in one theme map but missing in another) is never lost."""
-    available = [p.stem for p in build.THEMES.glob("*.json")]
+    available = [p.stem for p in build.theme_files()]
     if not available:
         return [], ["[doctor] no themes found"]
 

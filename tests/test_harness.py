@@ -585,7 +585,7 @@ class SetupFlairTests(unittest.TestCase):
     VALID_ACCENTS = {"cyan", "yellow", "red", "green", "magenta", "blue", "white"}
 
     def _themes(self):
-        return [p.stem for p in sorted(build.THEMES.glob("*.json"))]
+        return [p.stem for p in build.theme_files()]
 
     def test_every_theme_supplies_full_flair(self):
         # Parity: each theme must give the wizard a usable voice, not blanks.

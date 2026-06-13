@@ -57,10 +57,18 @@ def is_vendored_path(rel) -> bool:
     return len(parts) >= 2 and parts[0] == "skills" and parts[1] in VENDORED_SKILL_DIRS
 
 
+def theme_files() -> list[Path]:
+    """Shipped theme JSONs under themes/, excluding `_`-prefixed authoring scaffolds
+    (e.g. `_TEMPLATE.json`) — the same convention skills/_template.md uses. Every
+    theme enumeration (load, parity, doctor, setup wizard, web gallery, tests) goes
+    through here so a scaffold is never mistaken for a real theme."""
+    return sorted(p for p in THEMES.glob("*.json") if not p.name.startswith("_"))
+
+
 def load_theme(name: str) -> dict:
     path = THEMES / f"{name}.json"
     if not path.exists():
-        available = ", ".join(sorted(p.stem for p in THEMES.glob("*.json")))
+        available = ", ".join(p.stem for p in theme_files())
         sys.exit(f"[geneseed] unknown theme '{name}'. available: {available}")
     return json.loads(path.read_text(encoding="utf-8"))
 
