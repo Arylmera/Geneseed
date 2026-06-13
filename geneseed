@@ -2,7 +2,8 @@
 #
 # Geneseed — front door. One launcher for everything.
 #
-#     ./geneseed                          open the interactive main menu (pick any action)
+#     ./geneseed                          open the web console (interactive + GUI), else the TUI menu
+#     ./geneseed menu                     force the interactive TUI menu (pick any action)
 #     ./geneseed tui                      open the control panel (browse)
 #     ./geneseed web [start|stop|status]  local browser UI — foreground, or as a background daemon
 #     ./geneseed setup                    guided, dependency-free install wizard
@@ -18,8 +19,10 @@
 #     ./geneseed unlink                   remove the on-PATH launcher symlink
 #     ./geneseed help
 #
-# Bare `./geneseed` opens an interactive main menu listing every action (update,
-# setup, browse, doctor, build, diff …) — just run it and pick. Thin wrapper over
+# Bare `./geneseed` opens the local web console when the environment can show it
+# (an interactive terminal with a GUI browser), and otherwise drops to the
+# interactive TUI menu listing every action. `geneseed menu` forces the menu, and
+# GENESEED_NO_WEB=1 disables the web-first default. Thin wrapper over
 # `python3 rituals/harness.py <cmd>` (+ the scripts); no deps. On Windows, use the
 # native launchers `geneseed.cmd` / `geneseed.ps1` (same subcommands, no bash).
 #
@@ -48,8 +51,9 @@ if [ -z "$PY" ]; then
   PY="${PY:-python3}"
 fi
 
-# Bare `./geneseed` opens the interactive main menu.
-if [ "$#" -eq 0 ]; then set -- menu; fi
+# Bare `./geneseed` opens the web console when the environment can show it
+# (interactive + GUI browser), else the interactive TUI menu — see cmd_home.
+if [ "$#" -eq 0 ]; then set -- home; fi
 cmd="$1"
 case "$cmd" in
   upgrade|sync-self)
@@ -82,7 +86,7 @@ PY
     echo "    && unzip -oq /tmp/gs.zip -d /tmp && cp -R /tmp/Geneseed-main/rituals/. \"$HERE/rituals/\" && ./geneseed $cmd" >&2
     exit 2
     ;;
-  menu|tui|web|setup|build|doctor|diff|context|learn|prompt|version|status|uninstall|link|unlink)
+  home|menu|tui|web|setup|build|doctor|diff|context|learn|prompt|version|status|uninstall|link|unlink)
     # Cross-platform Python CLI (single source of truth). link/unlink also live there
     # (cmd_link/cmd_unlink) — they need a current harness but are not self-update paths,
     # so a stale factory there is a normal error, not a bootstrap paradox.
@@ -98,10 +102,12 @@ PY
     cat <<'USAGE'
 geneseed — front door for the Geneseed harness
 
-  ./geneseed                          open the interactive main menu (pick any action)
+  ./geneseed                          open the web console (interactive + GUI), else the TUI menu
+  ./geneseed menu                     force the interactive TUI menu (pick any action)
   ./geneseed tui                      open the control panel (browse)
   ./geneseed web [start|stop|status]  local browser UI — foreground, or a background daemon
   ./geneseed setup                    guided install wizard
+                                      (GENESEED_NO_WEB=1 disables the web-first default)
   ./geneseed bootstrap [ref] [theme]  update everything, then run setup
   ./geneseed update    [ref] [theme]  update everything (sync + upgrade)
   ./geneseed build|doctor|diff|context|learn|prompt [args]

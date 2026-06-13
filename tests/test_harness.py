@@ -9,13 +9,50 @@ import shutil
 import sys
 import tempfile
 import unittest
+import webbrowser
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
 import harness  # noqa: E402
+
+
+class WebFirstTests(unittest.TestCase):
+    """_web_first_ok decides whether a bare `geneseed` opens the web UI or the TUI
+    menu. It must be conservative — only an interactive, GUI-capable, non-SSH,
+    non-opted-out session returns True."""
+
+    def _call(self, *, env, isatty=True, platform="darwin", browser_ok=True):
+        err = None if browser_ok else webbrowser.Error("no browser")
+        with mock.patch.dict(os.environ, env, clear=True), \
+             mock.patch.object(sys.stdin, "isatty", return_value=isatty), \
+             mock.patch.object(sys, "platform", platform), \
+             mock.patch.object(webbrowser, "get", side_effect=err):
+            return harness._web_first_ok()
+
+    def test_happy_path_desktop(self):
+        self.assertTrue(self._call(env={}, platform="darwin"))
+
+    def test_linux_with_display(self):
+        self.assertTrue(self._call(env={"DISPLAY": ":0"}, platform="linux"))
+
+    def test_opt_out_env(self):
+        self.assertFalse(self._call(env={"GENESEED_NO_WEB": "1"}))
+
+    def test_not_a_tty(self):
+        self.assertFalse(self._call(env={}, isatty=False))
+
+    def test_ssh_session(self):
+        self.assertFalse(self._call(env={"SSH_CONNECTION": "1.2.3.4 22 5.6.7.8 22"}))
+
+    def test_linux_headless_no_display(self):
+        self.assertFalse(self._call(env={}, platform="linux"))
+
+    def test_no_usable_browser(self):
+        self.assertFalse(self._call(env={}, platform="darwin", browser_ok=False))
 
 
 class PromptParityTests(unittest.TestCase):

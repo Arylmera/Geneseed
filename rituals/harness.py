@@ -183,6 +183,10 @@ def main() -> int:
     me = sub.add_parser("menu", help="interactive main menu (the default for ./geneseed)")
     me.set_defaults(fn=cmd_menu)
 
+    hm = sub.add_parser("home", help="default entry for a bare ./geneseed: open the web UI "
+                                     "when possible (interactive + GUI browser), else the TUI menu")
+    hm.set_defaults(fn=cmd_home)
+
     bs = sub.add_parser("bootstrap", help="update everything (sync + upgrade) with a "
                                           "progress UI, then run setup")
     bs.add_argument("ref", nargs="?", default=None,
