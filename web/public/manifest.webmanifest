@@ -1,0 +1,14 @@
+{
+  "name": "Geneseed Harness Console",
+  "short_name": "Geneseed",
+  "description": "Local console for the Geneseed agent harness — browse, build, and maintain the deployed harness.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#08090B",
+  "theme_color": "#08090B",
+  "icons": [
+    { "src": "/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "maskable" }
+  ]
+}

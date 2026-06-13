@@ -1663,11 +1663,20 @@ def _tui_loop(stdscr, inv: dict) -> None:
 
 def cmd_web(args: argparse.Namespace) -> int:
     """Serve the deployed harness as a local web UI (browse + actions). Thin shell
-    around rituals/web.py so the 4k-line CLI stays focused."""
+    around rituals/web.py so the 4k-line CLI stays focused. With a start|stop|status
+    action it runs the server as a background daemon instead of blocking the terminal."""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import web  # noqa: E402
+    action = getattr(args, "action", None)
+    if action == "start":
+        return web.start_daemon(args.theme, args.port, open_browser=not args.no_browser)
+    if action == "stop":
+        return web.stop_daemon(args.theme)
+    if action == "status":
+        return web.status_daemon(args.theme)
     return web.serve(theme=args.theme, port=args.port,
-                     open_browser=not args.no_browser)
+                     open_browser=not args.no_browser,
+                     daemon=getattr(args, "daemon_internal", False))
 
 
 def cmd_tui(args: argparse.Namespace) -> int:
