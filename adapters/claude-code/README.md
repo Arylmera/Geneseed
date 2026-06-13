@@ -61,6 +61,21 @@ hooks or plugins, the AGENT.md prose still carries the rule.
 > plugin. A `context.json` still overrides, and `"extend": true` layers a manifest
 > on top of discovery.
 
+## Bundled project skill — `herdr`
+
+The repo ships a Claude Code project skill at
+[`.claude/skills/herdr/SKILL.md`](../../.claude/skills/herdr/SKILL.md). It teaches
+Claude how to drive the [herdr](https://herdr.dev) terminal multiplexer from
+inside it — split panes, spawn sibling agents, wait on output, read other panes.
+
+**Setup.** Nothing to do inside Geneseed; the skill is project-scoped and loaded
+automatically when Claude Code is launched in this repo. You only need:
+
+- the **`herdr` binary** on your `PATH` (install via [herdr.dev](https://herdr.dev)),
+- Claude Code launched **inside a herdr pane** — the skill self-gates on
+  `HERDR_ENV=1` and stays silent everywhere else, so committing it is harmless
+  for contributors who don't use herdr.
+
 ## Other tools
 
 This adapter is Claude-Code-specific. On tools without hooks, the harness still
