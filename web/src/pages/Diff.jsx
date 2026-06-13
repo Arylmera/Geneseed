@@ -89,13 +89,13 @@ export default function Diff() {
 
   return (
     <>
-      <div className="head-row" style={{ marginBottom: 16 }}>
+      <div className="head-row mb-16">
         <div>
           <span className="eyebrow">drift from source</span>
           <h1 className="h">Local edits</h1>
           <p className="sub">The agent refines its own deployed files in place. Export them as improvements before any rebuild overwrites them.</p>
         </div>
-        <div className="row" style={{ gap: 10 }}>
+        <div className="row gap-10">
           <button
             className="btn ghost"
             disabled={busy || sel.size === 0}
@@ -109,7 +109,7 @@ export default function Diff() {
         </div>
       </div>
 
-      {note ? <p className="sub" style={{ marginBottom: 14 }}>{note}</p> : null}
+      {note ? <p className="sub mb-14">{note}</p> : null}
 
       {files.length === 0 ? (
         <div className="empty">
@@ -118,8 +118,8 @@ export default function Diff() {
         </div>
       ) : (
         <>
-          <div className="row between" style={{ marginBottom: 14 }}>
-            <div className="row" style={{ gap: 10 }}>
+          <div className="row between mb-14">
+            <div className="row gap-10">
               <span className="badge"><span className="dot" style={{ background: 'var(--warn)' }} />{editedCount} edited</span>
               <span className="badge"><span className="dot" style={{ background: 'var(--good)' }} />{addedCount} added</span>
               {missingCount > 0 && (
@@ -137,7 +137,7 @@ export default function Diff() {
             </label>
           </div>
 
-          <div className="stack" style={{ gap: 12 }}>
+          <div className="stack gap-12">
             {files.map((f) => {
               const isOpen = open.has(f.rel)
               const statusClass = f.status === 'added' ? 'ok' : f.status === 'missing' ? 'bad' : 'warn'

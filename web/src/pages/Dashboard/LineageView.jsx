@@ -23,21 +23,18 @@ export default function LineageView({ overview, sigil, setup, jobs, graph }) {
 
   return (
     <>
-      <div className="grid" style={{ gridTemplateColumns: '1fr 1.1fr', alignItems: 'stretch', marginBottom: 16 }}>
+      <div className="grid split-lineage mb-16">
         <div className="card pad-lg rise" style={{ position: 'relative', overflow: 'hidden' }}>
           <span className="eyebrow">heritage</span>
           <h2 className="h" style={{ fontSize: 22, margin: '12px 0 18px' }}>Gene-seed lineage</h2>
-          <div style={{ position: 'relative', paddingLeft: 26 }}>
-            <div style={{ position: 'absolute', left: 7, top: 6, bottom: 18, width: 2,
-              background: 'linear-gradient(var(--accent), var(--line-2))' }} />
+          <div className="lineage-track">
+            <div className="spine" />
             {steps.map(([t, d, tag, on], i) => (
-              <div key={i} style={{ position: 'relative', marginBottom: i < 2 ? 22 : 0 }}>
-                <span style={{ position: 'absolute', left: -26, top: 3, width: 14, height: 14,
-                  borderRadius: '50%', background: on ? 'var(--accent)' : 'var(--surface-3)',
-                  border: '2px solid var(--bg)', boxShadow: on ? '0 0 10px var(--accent)' : 'none' }} />
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15 }}>{t}</div>
-                <div className="muted" style={{ fontSize: 13 }}>{d}</div>
-                <div className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{tag}</div>
+              <div key={i} className="lineage-step">
+                <span className={`node ${on ? 'on' : ''}`} />
+                <div className="lt">{t}</div>
+                <div className="ld">{d}</div>
+                <div className="ltag">{tag}</div>
               </div>
             ))}
           </div>
@@ -48,7 +45,7 @@ export default function LineageView({ overview, sigil, setup, jobs, graph }) {
               <span className="vr-txt">{sigil}</span>
             </div>
           )}
-          <div className="row wrap" style={{ gap: 10 }}>
+          <div className="row wrap gap-10">
             <span className={`badge ${verdictOk ? 'ok' : 'warn'}`}><span className="dot" />in sync · {verdict}</span>
             <span className="badge"><span className="dot" />{edits} local edits</span>
           </div>
@@ -63,7 +60,7 @@ export default function LineageView({ overview, sigil, setup, jobs, graph }) {
         </div>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
+      <div className="grid split-even">
         <div className="card pad-lg">
           <div className="card-head"><h3>Genome strand</h3><div className="right"><span className="tick">by volume</span></div></div>
           {SECTION_ORDER.map((k) => <StrandRow key={k} k={k} overview={overview} max={max} />)}

@@ -25,7 +25,7 @@ export default function StatusView({ overview, sigil, setup, jobs, onAction }) {
 
   return (
     <>
-      <div className="card pad-lg rise" style={{ marginBottom: 16 }}>
+      <div className="card pad-lg rise mb-16">
         <div className="hero">
           <Ring value={rv} />
           <div className="hero-facts">
@@ -46,7 +46,7 @@ export default function StatusView({ overview, sigil, setup, jobs, onAction }) {
               <span className="chip"><span className="ck">built</span><span className="cv">{overview.build_time || 'unknown'}</span></span>
               <span className="chip"><span className="ck">fp</span><span className="cv">{setup?.installed_fp || '—'}</span></span>
             </div>
-            <div className="row wrap" style={{ gap: 10 }}>
+            <div className="row wrap gap-10">
               <button className="btn" onClick={() => onAction('update')}><Icon name="refresh" />Update</button>
               <button className="btn ghost" onClick={() => onAction('build', { theme: overview.theme, emit: overview.emit })}><Icon name="build" />Rebuild</button>
               <button className="btn ghost" onClick={() => onAction('doctor')}><Icon name="doctor" />Run doctor</button>
@@ -57,7 +57,7 @@ export default function StatusView({ overview, sigil, setup, jobs, onAction }) {
 
       <KpiStrip overview={overview} />
 
-      <div className="grid" style={{ gridTemplateColumns: '1.55fr 1fr', alignItems: 'start' }}>
+      <div className="grid split-status">
         <div className="card pad-lg">
           <div className="card-head"><h3>Capability genome</h3>
             <div className="right"><span className="tick">{SECTION_ORDER.length} sections</span></div></div>

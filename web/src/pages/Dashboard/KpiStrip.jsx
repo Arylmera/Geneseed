@@ -12,7 +12,7 @@ export default function KpiStrip({ overview }) {
     { key: 'laws',   label: 'Laws',   foot: 'all enforced' },
   ]
   return (
-    <div className="grid g-4" style={{ marginBottom: 16 }}>
+    <div className="grid g-4 mb-16">
       {kpis.map((k, i) => (
         <div className="card kpi rise" key={k.key} style={{ animationDelay: `${i * 60}ms` }}>
           <div className="klabel">{k.label}</div>

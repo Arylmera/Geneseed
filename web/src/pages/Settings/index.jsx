@@ -29,8 +29,8 @@ export default function Settings({ onAction }) {
   const upToDate = (setup.version_verdict || '').includes('up to date')
 
   return (
-    <div style={{ maxWidth: 860 }}>
-      <div className="head-row" style={{ marginBottom: 18 }}>
+    <div className="narrow-lg">
+      <div className="head-row mb-18">
         <div>
           <span className="eyebrow">configure</span>
           <h1 className="h">Settings</h1>
@@ -42,7 +42,7 @@ export default function Settings({ onAction }) {
       </div>
 
       {/* Installation card */}
-      <div className="card pad-lg" style={{ marginBottom: 16 }}>
+      <div className="card pad-lg mb-16">
         <div className="card-head"><h3>Installation</h3></div>
         {[
           ['Deployed', (
@@ -76,14 +76,14 @@ export default function Settings({ onAction }) {
       </div>
 
       {/* Build & update card */}
-      <div className="card pad-lg" style={{ marginBottom: 16 }}>
+      <div className="card pad-lg mb-16">
         <div className="card-head"><h3>Build &amp; update</h3></div>
-        <p className="sub" style={{ marginBottom: 16 }}>
+        <p className="sub mb-16">
           Rebuild the deployed harness in a chosen voice and mode, or pull the latest
           Geneseed and re-render. Either runs live in the terminal.
         </p>
         {choices && (
-          <div className="row wrap" style={{ gap: 16, alignItems: 'flex-end' }}>
+          <div className="row wrap gap-16" style={{ alignItems: 'flex-end' }}>
             <label className="stack" style={{ gap: 6 }}>
               <span className="tick">Voice</span>
               <select
@@ -122,9 +122,9 @@ export default function Settings({ onAction }) {
       </div>
 
       {/* MCP servers card */}
-      <div className="card pad-lg" style={{ marginBottom: 16 }}>
+      <div className="card pad-lg mb-16">
         <div className="card-head"><h3>MCP servers</h3></div>
-        <p className="sub" style={{ marginBottom: 16 }}>
+        <p className="sub mb-16">
           Wire MCP servers into OpenCode — per project or globally. Toggles rewrite
           only the <code>mcp</code> block.
         </p>
@@ -134,7 +134,7 @@ export default function Settings({ onAction }) {
       {/* Offline package card */}
       <div className="card pad-lg">
         <div className="card-head"><h3>Offline package</h3></div>
-        <p className="sub" style={{ marginBottom: 16 }}>
+        <p className="sub mb-16">
           For air-gapped machines: download a zip of this source tree, carry it over,
           then <code>geneseed upgrade --zip &lt;file&gt;</code> — same validation, no network.
         </p>

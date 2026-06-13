@@ -46,8 +46,8 @@ export default function Doctor() {
   if (error) return <ErrorState error={error} />
 
   return (
-    <div style={{ maxWidth: 820 }}>
-      <div className="head-row" style={{ marginBottom: 16 }}>
+    <div className="narrow">
+      <div className="head-row mb-16">
         <div>
           <span className="eyebrow">health</span>
           <h1 className="h">Doctor</h1>
@@ -66,8 +66,8 @@ export default function Doctor() {
         <Loading label="Running every check (builds each theme in a sandbox)…" />
       ) : (
         <>
-          <div className="card pad-md" style={{ marginBottom: 16 }}>
-            <div className="row wrap between" style={{ gap: 12 }}>
+          <div className="card pad-md mb-16">
+            <div className="row wrap between gap-12">
               <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
                 <span className="dim mono" style={{ fontSize: 12 }}>
                   validated {data.themes.length} theme{data.themes.length === 1 ? '' : 's'}
@@ -83,7 +83,7 @@ export default function Doctor() {
                 : <span className="badge bad"><span className="dot" />{data.problems.length} problem{data.problems.length === 1 ? '' : 's'}</span>}
             </div>
           </div>
-          <div className="stack" style={{ gap: 12 }}>
+          <div className="stack gap-12">
             {data.groups.map((g) => <CheckCard key={g.label} group={g} />)}
           </div>
         </>

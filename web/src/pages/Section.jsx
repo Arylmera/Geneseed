@@ -38,7 +38,7 @@ export default function Section({ section, selected, query, counts }) {
 
   return (
     <>
-      <div className="head-row" style={{ marginBottom: 18 }}>
+      <div className="head-row mb-18">
         <div>
           <span className="eyebrow">browse</span>
           <h1 className="h">Library</h1>

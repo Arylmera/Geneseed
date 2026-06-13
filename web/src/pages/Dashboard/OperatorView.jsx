@@ -15,8 +15,8 @@ export default function OperatorView({ overview, setup, jobs }) {
 
   return (
     <>
-      <div className="card pad-md rise" style={{ marginBottom: 16 }}>
-        <div className="row wrap between" style={{ gap: 16 }}>
+      <div className="card pad-md rise mb-16">
+        <div className="row wrap between gap-16">
           <div className="row" style={{ gap: 20, flexWrap: 'wrap' }}>
             <div>
               <div className="tick">status</div>
@@ -54,7 +54,7 @@ export default function OperatorView({ overview, setup, jobs }) {
         </div>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: '1.6fr 1fr', alignItems: 'start' }}>
+      <div className="grid split-operator">
         <div className="card rise" style={{ animationDelay: '60ms' }}>
           <div className="card-head pad-lg" style={{ padding: '18px 20px 0', marginBottom: 14 }}>
             <h3>Sections</h3>
