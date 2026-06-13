@@ -99,6 +99,54 @@ class ThemeParityTests(unittest.TestCase):
         self.assertEqual(harness._theme_parity_problems(), [])
 
 
+class DoctorCatchesThemeDriftTests(unittest.TestCase):
+    """Self-tests for the parity gate: it must actually *flag* a corrupted theme, not
+    just pass on the clean shipped set. Point the theme dir at a temp copy so the real
+    themes are never touched."""
+
+    def _with_temp_themes(self, files: dict) -> list:
+        tmp = Path(tempfile.mkdtemp())
+        orig = build.THEMES
+        try:
+            for name, text in files.items():
+                (tmp / name).write_text(text, encoding="utf-8")
+            build.THEMES = tmp
+            return harness._theme_parity_problems()
+        finally:
+            build.THEMES = orig
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_missing_key_is_flagged(self):
+        good = json.loads((build.THEMES / "neutral.json").read_text(encoding="utf-8"))
+        broken = dict(good)
+        broken.pop("VOICE")
+        problems = self._with_temp_themes({
+            "neutral.json": json.dumps(good),
+            "broken.json": json.dumps(broken),
+        })
+        self.assertTrue(problems, "a theme missing a key must be flagged")
+        self.assertTrue(any("VOICE" in p and "broken" in p for p in problems), problems)
+
+    def test_malformed_json_is_flagged(self):
+        good = json.loads((build.THEMES / "neutral.json").read_text(encoding="utf-8"))
+        problems = self._with_temp_themes({
+            "neutral.json": json.dumps(good),
+            "broken.json": "{ not valid json",
+        })
+        self.assertTrue(any("unreadable" in p for p in problems), problems)
+
+    def test_underscore_scaffold_is_ignored(self):
+        """A `_`-prefixed scaffold (e.g. _TEMPLATE.json) is skipped, so an intentionally
+        partial template never trips the gate."""
+        good = json.loads((build.THEMES / "neutral.json").read_text(encoding="utf-8"))
+        problems = self._with_temp_themes({
+            "neutral.json": json.dumps(good),
+            "imperial.json": json.dumps(good),
+            "_TEMPLATE.json": json.dumps({"VOICE": "<placeholder>"}),
+        })
+        self.assertEqual(problems, [])
+
+
 class ThemeDetectionTests(unittest.TestCase):
     AVAIL = ["cyberpunk", "gamer", "imperial", "military", "neutral",
              "pirate", "sports", "wizard"]
