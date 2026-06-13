@@ -1,6 +1,15 @@
 import React from 'react'
 import { go } from '../lib/router.js'
 import { Icon, Sprout } from './Icon.jsx'
+import { SECTIONS, SECTION_ORDER, TYPE_TO_SECTION } from '../lib/sections.js'
+
+// Which section is "open" given the route — used to light up a rail sub-item.
+// Section pages carry it directly; item pages resolve it from the item's type.
+function activeSection(route) {
+  if (route.view === 'section') return route.section
+  if (route.view === 'item') return TYPE_TO_SECTION[route.type] || route.type
+  return null
+}
 
 // Left navigation rail, grouped like the design. `match` decides which item
 // lights up for the current route; `tag` surfaces a live count from the overview
@@ -15,13 +24,28 @@ const NAV = [
     match: (r) => r.view === 'dashboard',
   },
   {
-    hash: '#/section/agents',
+    hash: '#/library',
     id: 'library',
     label: 'Library',
     icon: 'library',
-    match: (r) => r.view === 'section' || r.view === 'item',
+    match: (r) => r.view === 'library' || r.view === 'section' || r.view === 'item',
   },
   { hash: '#/graph', id: 'graph', label: 'Graph', icon: 'graph', match: (r) => r.view === 'graph' },
+  { group: 'Learn' },
+  {
+    hash: '#/docs',
+    id: 'docs',
+    label: 'Docs',
+    icon: 'docs',
+    match: (r) => r.view === 'docs',
+  },
+  {
+    hash: '#/specs',
+    id: 'specs',
+    label: 'Specs',
+    icon: 'specs',
+    match: (r) => r.view === 'specs',
+  },
   { group: 'Maintain' },
   {
     hash: '#/diff',
@@ -77,12 +101,13 @@ export default function Rail({ route, overview, onOpenVoice }) {
             </div>
           )
         const tag = n.tag ? n.tag(overview) : null
+        const lit = n.match(route)
         return (
           <div className="rail-nav" key={n.id}>
             <a
-              className={`rail-item ${n.match(route) ? 'active' : ''}`}
+              className={`rail-item ${lit ? 'active' : ''}`}
               href={n.hash}
-              aria-current={n.match(route) ? 'page' : undefined}
+              aria-current={lit ? 'page' : undefined}
             >
               <Icon name={n.icon} />
               <span>{n.label}</span>
@@ -92,6 +117,28 @@ export default function Rail({ route, overview, onOpenVoice }) {
                 </span>
               ) : null}
             </a>
+            {/* Once you drill into a section (or an item), Library expands into
+                its sections as a nested sub-menu, mirroring the TUI's drill-down.
+                The landing (#/library) keeps its genome grid as the expanded view. */}
+            {n.id === 'library' && (route.view === 'section' || route.view === 'item') && (
+              <div className="rail-sub">
+                {SECTION_ORDER.map((key) => {
+                  const on = activeSection(route) === key
+                  const count = overview?.counts?.[key]
+                  return (
+                    <a
+                      key={key}
+                      className={`rail-subitem ${on ? 'active' : ''}`}
+                      href={'#/section/' + key}
+                      aria-current={on ? 'page' : undefined}
+                    >
+                      <span>{SECTIONS[key].label}</span>
+                      {count != null ? <span className="tag">{count}</span> : null}
+                    </a>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )
       })}
