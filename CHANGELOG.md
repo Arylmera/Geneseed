@@ -6,6 +6,15 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
+## [Unreleased]
+
+### Added
+- `tutor` skill — teach the user a skill or concept fast, with three modes:
+  crash course (zero to functional), error drill (Socratic practice until
+  reflex), and decode (unlock confusing material via one keystone sentence,
+  an everyday analogy, and a three-question comprehension check). Brings the
+  skill count to 28.
+
 ## [1.0.0] — 2026-06-13
 
 First stable release. The harness, its tooling, and the local web console are
@@ -16,7 +25,7 @@ suites) on Linux and Windows.
 - One neutral `src/` rendered by a stdlib-only generator (`build.py`) into 14
   themed, tool-agnostic bundles; structure stays theme-independent.
 - 20 universal laws, 16 capability agents (6 execution + a 10-seat debate council),
-  27 skills, the one-fact-per-file memory convention, and the agent's sovereign
+  28 skills, the one-fact-per-file memory convention, and the agent's sovereign
   notebook.
 
 ### Tooling

@@ -50,6 +50,7 @@
   "DESC_RELEASE": "Cut a release — bump the version, write the changelog, tag it, all three in sync. Don't skip one.",
   "DESC_INGEST": "Turn a PDF, Office, or web document into clean markdown before you read it.",
   "DESC_RESEARCH": "Find the answer in the wild — search wide, then prove every claim against independent sources before you dare cite it.",
+  "DESC_TUTOR": "Teach the user a skill or concept fast — make them functional, drill it to reflex, or decode confusing material. No hand-holding.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Take the review straight — weigh each point, then fix it or push back with reasons. Not feelings.",
