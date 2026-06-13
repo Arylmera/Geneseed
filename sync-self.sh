@@ -3,7 +3,7 @@
 # Geneseed meta-updater — thin wrapper.
 #
 #     ./sync-self.sh            # track main
-#     ./sync-self.sh v0.1.0     # pin to a tag
+#     ./sync-self.sh v1.0.0     # pin to a tag
 #
 # Refreshes the ORCHESTRATION layer that `upgrade` does not (the launchers + the update
 # scripts themselves). The logic now lives in rituals/_update.py (stdlib only — urllib +

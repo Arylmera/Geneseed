@@ -3,7 +3,7 @@
 # Geneseed self-upgrade — thin wrapper.
 #
 #     ./upgrade.sh                                  # track main, keep last theme + emit mode
-#     ./upgrade.sh v0.1.0                           # pin to a tag
+#     ./upgrade.sh v1.0.0                           # pin to a tag
 #     ./upgrade.sh main imperial                    # track main and force a theme
 #     GENESEED_EMIT=opencode ./upgrade.sh           # per-repo .opencode/ layer
 #     GENESEED_EMIT=opencode-global ./upgrade.sh main imperial   # OpenCode global config dir
