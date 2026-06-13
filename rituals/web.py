@@ -238,15 +238,6 @@ DOC_GROUPS = [
         {"id": "ingest-docs", "title": "Read PDFs / Office docs",
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "reading-non-markdown-docs", "slice": True},
-        {"id": "mcp-markitdown", "title": "MCP — MarkItDown (PDF/Office)",
-         "kind": "markdown", "source": "SETUP.md",
-         "anchor": "markitdown-via-mcp-opencode", "slice": True},
-        {"id": "mcp-gitlab", "title": "MCP — GitLab",
-         "kind": "markdown", "source": "SETUP.md",
-         "anchor": "gitlab-one-entry-per-instance", "slice": True},
-        {"id": "mcp-filesystem", "title": "MCP — Filesystem",
-         "kind": "markdown", "source": "SETUP.md",
-         "anchor": "filesystem", "slice": True},
         {"id": "run-anywhere", "title": "Run `geneseed` from anywhere",
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "run-geneseed-from-anywhere", "slice": True},
@@ -286,7 +277,67 @@ DOC_GROUPS = [
          "blurbs. Copy `themes/neutral.json` and edit. `python build.py "
          "--theme yours` renders it; `doctor` checks for missing tokens."},
     ]},
-    # ── 4. Reference ──────────────────────────────────────────────────────
+    # ── 4. MCP servers ────────────────────────────────────────────────────
+    # Wiring the four MCP presets into OpenCode / Claude Code. The overview
+    # is an inline concept; each preset and the verify step slice the
+    # canonical prose out of SETUP.md so README readers and panel readers
+    # stay single-sourced.
+    {"id": "mcp", "label": "MCP servers", "pages": [
+        {"id": "mcp-overview", "title": "MCP overview", "kind": "concept",
+         "body":
+         "Geneseed ships **four** ready-to-wire MCP servers as presets — "
+         "**MarkItDown** (PDF/Office → Markdown), **GitLab** (one entry per "
+         "instance), and **Filesystem** (scoped file access). Each is a "
+         "*local* server the agent launches on demand: registering one only "
+         "points the agent at a command — *you* install the tool (or let "
+         "`npx`/`pipx` fetch it) and supply any credentials.\n\n"
+         "### Where they live\n\n"
+         "On OpenCode they sit under the `mcp` key of an `opencode.json` "
+         "(global `~/.config/opencode/opencode.json` or per-repo), each "
+         "entry shaped:\n\n"
+         "```json\n"
+         "\"<name>\": { \"type\": \"local\", \"command\": [\"…\"], "
+         "\"environment\": {}, \"enabled\": true }\n"
+         "```\n\n"
+         "On Claude Code the same servers live in `.mcp.json` under "
+         "`mcpServers` — note the key is `env` (not `environment`) and the "
+         "command and its args are split into `command` + `args`. See "
+         "[Claude Code wiring](#/docs/mcp-claude-code).\n\n"
+         "### Toggle them without hand-editing JSON\n\n"
+         "`./geneseed` → **Settings** → **MCP servers** toggles any of the "
+         "four presets into your project or global `opencode.json` — and "
+         "enables, disables, or removes them — for you. The reference "
+         "config ships MarkItDown enabled and the GitLab / Filesystem "
+         "entries disabled, so a merge never activates a credential-less "
+         "server: fill the blanks, then flip the one(s) you want on.\n\n"
+         "> **Never commit a real token.** The presets and the reference "
+         "[`adapters/opencode/opencode.json`](#/docs/adapters-opencode) "
+         "carry **empty** `GITLAB_PERSONAL_ACCESS_TOKEN` placeholders (and "
+         "a sample filesystem path) — fill them in your own config, never "
+         "in a tracked file (universal Law I — secrets).\n\n"
+         "---\n\n"
+         "**Wire one up:** [MarkItDown](#/docs/mcp-markitdown) · "
+         "[GitLab](#/docs/mcp-gitlab) · "
+         "[Filesystem](#/docs/mcp-filesystem) · "
+         "[Claude Code](#/docs/mcp-claude-code) · "
+         "[Verify](#/docs/mcp-verify)"},
+        {"id": "mcp-markitdown", "title": "MarkItDown (PDF/Office)",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "markitdown-via-mcp-opencode", "slice": True},
+        {"id": "mcp-gitlab", "title": "GitLab",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "gitlab-one-entry-per-instance", "slice": True},
+        {"id": "mcp-filesystem", "title": "Filesystem",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "filesystem", "slice": True},
+        {"id": "mcp-claude-code", "title": "Claude Code",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "claude-code", "slice": True},
+        {"id": "mcp-verify", "title": "Verify",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "verify", "slice": True},
+    ]},
+    # ── 5. Reference ──────────────────────────────────────────────────────
     # Pure lookups — CLI, env vars, glossary, troubleshooting matrix.
     {"id": "reference", "label": "Reference", "pages": [
         {"id": "cli", "title": "CLI — every subcommand", "kind": "cli"},
@@ -335,7 +386,7 @@ DOC_GROUPS = [
             "### `could not determine a model`\n"
             "Set `GENESEED_MODEL=provider/model` in your environment.\n")},
     ]},
-    # ── 5. Deeper ─────────────────────────────────────────────────────────
+    # ── 6. Deeper ─────────────────────────────────────────────────────────
     # Design rationale, adapter internals, the workflow primitive, the
     # install snapshot. Long-form by nature — readers come here on purpose.
     {"id": "deeper", "label": "Deeper", "pages": [
