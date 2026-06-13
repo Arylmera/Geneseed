@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import re
 import zipfile
 import secrets
@@ -20,6 +21,8 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -668,7 +671,7 @@ def api_overview(state: WebState) -> dict:
     }
 
 
-def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
+def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder: "dict | None" = None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):  # silence default stderr logging
             pass
@@ -694,6 +697,9 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
         def do_GET(self):
             path = self.path.split("?", 1)[0]
             try:
+                if path == "/api/ping":
+                    # Cheap liveness probe for `web status` / the daemon launcher.
+                    return self._send_json({"ok": True, "theme": state.theme})
                 if path == "/api/overview":
                     return self._send_json(api_overview(state))
                 if path.startswith("/api/catalog/"):
@@ -748,6 +754,14 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
             path = self.path.split("?", 1)[0]
             if self.headers.get("X-Geneseed-Token") != token:
                 return self._send_json({"error": "forbidden"}, 403)
+            if path == "/api/shutdown":
+                # Graceful self-stop, used by the in-page Stop control and
+                # `geneseed web stop`. shutdown() must run off the request thread
+                # or it deadlocks against serve_forever().
+                srv = holder.get("srv") if holder else None
+                if srv is not None:
+                    threading.Thread(target=srv.shutdown, daemon=True).start()
+                return self._send_json({"stopping": True})
             if path == "/api/mcp":
                 try:
                     res = api_mcp_toggle(state, self._read_json_body())
@@ -813,6 +827,142 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
     return Handler
 
 
+# ---- daemon mode -----------------------------------------------------------
+# `geneseed web start|stop|status` runs the server detached so it never blocks
+# the terminal. State (pid/port/token/url) is written by the running server to a
+# small JSON file beside the deployed host state; control is over HTTP — `stop`
+# and the in-page Stop button both POST /api/shutdown — so we never need
+# OS-specific process-kill semantics, only a localhost request with the token.
+
+def _state_path(target: Path) -> Path:
+    return target / ".geneseed-web.json"
+
+
+def read_daemon(target: Path) -> "dict | None":
+    try:
+        return json.loads(_state_path(target).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def write_daemon(target: Path, data: dict) -> None:
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        _state_path(target).write_text(json.dumps(data), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def clear_daemon(target: Path) -> None:
+    try:
+        _state_path(target).unlink()
+    except OSError:
+        pass
+
+
+def _probe(url: str, timeout: float = 1.5) -> bool:
+    """True if a Geneseed server is answering at url (GET /api/ping)."""
+    try:
+        with urllib.request.urlopen(f"{url}/api/ping", timeout=timeout) as r:
+            return r.status == 200
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+def _post_shutdown(url: str, token: str, timeout: float = 3.0) -> bool:
+    req = urllib.request.Request(
+        f"{url}/api/shutdown", data=b"{}", method="POST",
+        headers={"X-Geneseed-Token": token, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status == 200
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+def _live_daemon(target: Path) -> "dict | None":
+    """Return the daemon state only if a server is actually answering; otherwise
+    clear a stale state file and return None."""
+    st = read_daemon(target)
+    if st and st.get("url") and _probe(st["url"]):
+        return st
+    if st:
+        clear_daemon(target)
+    return None
+
+
+def start_daemon(theme: "str | None", port: int, open_browser: bool = True) -> int:
+    """Start the server detached (singleton). If one is already running, just
+    reopen the browser. Returns 0 on success."""
+    target = WebState(theme=theme).target
+    st = _live_daemon(target)
+    if st:
+        print(f"[web] already running on {st['url']}  (pid {st.get('pid')})")
+        if open_browser:
+            with contextlib.suppress(Exception):
+                webbrowser.open(st["url"])
+        return 0
+    clear_daemon(target)
+    log = target / ".geneseed-web.log"
+    cmd = [sys.executable, str(Path(__file__).resolve().parent.parent / "rituals" / "harness.py"),
+           "web", "--daemon-internal", "--port", str(port), "--no-browser"]
+    if theme:
+        cmd += ["--theme", theme]
+    kwargs: dict = {"stdin": subprocess.DEVNULL}
+    try:
+        logf = open(log, "ab")
+        kwargs["stdout"] = logf
+        kwargs["stderr"] = subprocess.STDOUT
+    except OSError:
+        kwargs["stdout"] = subprocess.DEVNULL
+        kwargs["stderr"] = subprocess.DEVNULL
+    if os.name == "nt":
+        kwargs["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | NEW_PROCESS_GROUP
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen(cmd, **kwargs)
+    # Wait for the child to bind and write its state (pid/port/url).
+    for _ in range(60):
+        st = read_daemon(target)
+        if st and st.get("url") and _probe(st["url"], timeout=0.5):
+            print(f"[web] Geneseed UI on {st['url']}  (theme: {st.get('theme')}, pid {st.get('pid')})")
+            print("[web] running in the background — `geneseed web stop` to stop it.")
+            if open_browser:
+                with contextlib.suppress(Exception):
+                    webbrowser.open(st["url"])
+            return 0
+        time.sleep(0.2)
+    print("[web] daemon did not come up in time — check the log:")
+    print(f"      {log}")
+    return 1
+
+
+def stop_daemon(theme: "str | None" = None) -> int:
+    target = WebState(theme=theme).target
+    st = read_daemon(target)
+    if not st or not st.get("url"):
+        print("[web] no running server recorded.")
+        return 0
+    if _post_shutdown(st["url"], st.get("token", "")):
+        clear_daemon(target)
+        print(f"[web] stopped (pid {st.get('pid')}).")
+        return 0
+    # Server unreachable — the state was stale.
+    clear_daemon(target)
+    print("[web] no live server (cleared a stale record).")
+    return 0
+
+
+def status_daemon(theme: "str | None" = None) -> int:
+    target = WebState(theme=theme).target
+    st = _live_daemon(target)
+    if st:
+        print(f"[web] running on {st['url']}  (theme: {st.get('theme')}, pid {st.get('pid')})")
+        return 0
+    print("[web] not running.")
+    return 1
+
+
 def _build_plan(dist: Path, web_dir: Path, npm: str | None, interactive: bool) -> str:
     """Pure: what serve() should do about the UI bundle. 'serve' when dist is
     built; otherwise 'no-source' (web/ never arrived), 'no-npm', 'no-tty'
@@ -840,7 +990,8 @@ def _npm_build(npm: str, web_dir: Path) -> int:
     return 0
 
 
-def serve(theme: str | None = None, port: int = 4747, open_browser: bool = True) -> int:
+def serve(theme: str | None = None, port: int = 4747, open_browser: bool = True,
+          daemon: bool = False) -> int:
     dist = ROOT / "web" / "dist"
     web_dir = ROOT / "web"
     manual = "        cd web && npm install && npm run build"
@@ -880,15 +1031,24 @@ def serve(theme: str | None = None, port: int = 4747, open_browser: bool = True)
     # writes fail silently when nothing is deployed there yet.
     jm = JobManager(history_path=state.target / ".geneseed-web-runs.json")
     token = secrets.token_urlsafe(24)
-    Handler = make_handler(state, jm, token, dist)
+    holder: dict = {}
+    Handler = make_handler(state, jm, token, dist, holder)
     try:
         srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     except OSError:
         srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)  # fallback free port
+    holder["srv"] = srv
     host_port = srv.server_address[1]
     url = f"http://127.0.0.1:{host_port}"
+    # In daemon mode the running server records its own pid/port/token/url so the
+    # launcher can reopen the browser and `web stop` can reach /api/shutdown.
+    if daemon:
+        write_daemon(state.target, {
+            "pid": os.getpid(), "port": host_port, "url": url,
+            "token": token, "theme": state.theme, "started": int(time.time()),
+        })
     print(f"[web] Geneseed UI on {url}  (theme: {state.theme})")
-    print("[web] Ctrl-C to stop.")
+    print("[web] Ctrl-C to stop." if not daemon else "[web] daemon ready.")
     if open_browser:
         try:
             webbrowser.open(url)
@@ -898,4 +1058,7 @@ def serve(theme: str | None = None, port: int = 4747, open_browser: bool = True)
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\n[web] stopped.")
+    finally:
+        if daemon:
+            clear_daemon(state.target)
     return 0

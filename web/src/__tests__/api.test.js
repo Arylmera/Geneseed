@@ -31,6 +31,8 @@ describe('api surface', () => {
       'action',
       'mcp',
       'mcpToggle',
+      'ping',
+      'shutdown',
     ]
     for (const name of names) expect(typeof api[name]).toBe('function')
   })

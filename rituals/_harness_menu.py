@@ -197,9 +197,9 @@ def _main_menu(stdscr) -> int:
         elif sel == "web":
             curses.def_prog_mode()
             curses.endwin()
-            print("[web] starting the local web UI — press Ctrl-C to stop it and "
-                  "return to the menu.")
-            run([sys.executable, hp, "web"])
+            print("[web] starting the local web UI in the background — it keeps "
+                  "running after you return; `geneseed web stop` to stop it.")
+            run([sys.executable, hp, "web", "start"])
             try:
                 input("\n[press Enter to return to the menu] ")
             except EOFError:

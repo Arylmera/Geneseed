@@ -4,6 +4,7 @@
 #
 #     ./geneseed                          open the interactive main menu (pick any action)
 #     ./geneseed tui                      open the control panel (browse)
+#     ./geneseed web [start|stop|status]  local browser UI — foreground, or as a background daemon
 #     ./geneseed setup                    guided, dependency-free install wizard
 #     ./geneseed bootstrap [ref] [theme]  update everything, then run setup
 #     ./geneseed update    [ref] [theme]  update everything (sync + upgrade), no setup
@@ -81,7 +82,7 @@ PY
     echo "    && unzip -oq /tmp/gs.zip -d /tmp && cp -R /tmp/Geneseed-main/rituals/. \"$HERE/rituals/\" && ./geneseed $cmd" >&2
     exit 2
     ;;
-  menu|tui|setup|build|doctor|diff|context|learn|prompt|version|status|uninstall|link|unlink)
+  menu|tui|web|setup|build|doctor|diff|context|learn|prompt|version|status|uninstall|link|unlink)
     # Cross-platform Python CLI (single source of truth). link/unlink also live there
     # (cmd_link/cmd_unlink) — they need a current harness but are not self-update paths,
     # so a stale factory there is a normal error, not a bootstrap paradox.
@@ -99,6 +100,7 @@ geneseed — front door for the Geneseed harness
 
   ./geneseed                          open the interactive main menu (pick any action)
   ./geneseed tui                      open the control panel (browse)
+  ./geneseed web [start|stop|status]  local browser UI — foreground, or a background daemon
   ./geneseed setup                    guided install wizard
   ./geneseed bootstrap [ref] [theme]  update everything, then run setup
   ./geneseed update    [ref] [theme]  update everything (sync + upgrade)

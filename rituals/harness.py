@@ -207,10 +207,14 @@ def main() -> int:
 
     wb = sub.add_parser("web", help="serve the deployed harness as a local web UI "
                                     "(browse agents/skills/laws/memory + run actions)")
+    wb.add_argument("action", nargs="?", choices=["start", "stop", "status"], default=None,
+                    help="start|stop|status — run the UI as a background daemon so it "
+                         "doesn't block the terminal (omit to run in the foreground)")
     wb.add_argument("--theme", default=None, help="force a theme (default: detected)")
     wb.add_argument("--port", type=int, default=4747, help="port (default: 4747)")
     wb.add_argument("--no-browser", action="store_true",
                     help="don't auto-open the browser")
+    wb.add_argument("--daemon-internal", action="store_true", help=argparse.SUPPRESS)
     wb.set_defaults(fn=cmd_web)
 
     lk = sub.add_parser("link", help="put `geneseed` on PATH so it runs from any directory")

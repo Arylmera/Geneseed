@@ -5,6 +5,7 @@ import { useAsync } from '../../hooks/useAsync.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import McpServers from './McpServers.jsx'
+import ServerControl from './ServerControl.jsx'
 
 // The settings page: the install snapshot, the build/update picker, the MCP
 // wiring panel (its own component), and the offline-package download.
@@ -141,7 +142,7 @@ export default function Settings({ onAction }) {
       </div>
 
       {/* Offline package card */}
-      <div className="card pad-lg">
+      <div className="card pad-lg mb-16">
         <div className="card-head">
           <h3>Offline package</h3>
         </div>
@@ -153,6 +154,18 @@ export default function Settings({ onAction }) {
           <Icon name="download" />
           Download offline package
         </a>
+      </div>
+
+      {/* Server card */}
+      <div className="card pad-lg">
+        <div className="card-head">
+          <h3>Server</h3>
+        </div>
+        <p className="sub mb-16">
+          The console runs a small local server. Leave it running in the background and reopen any
+          time, or stop it when you are done.
+        </p>
+        <ServerControl />
       </div>
     </div>
   )
