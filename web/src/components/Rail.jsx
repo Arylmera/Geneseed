@@ -1,5 +1,7 @@
 import React from 'react'
+import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
+import { useAsync } from '../hooks/useAsync.js'
 import { Icon, Sprout } from './Icon.jsx'
 import { SECTIONS, SECTION_ORDER, TYPE_TO_SECTION } from '../lib/sections.js'
 
@@ -8,6 +10,18 @@ import { SECTIONS, SECTION_ORDER, TYPE_TO_SECTION } from '../lib/sections.js'
 function activeSection(route) {
   if (route.view === 'section') return route.section
   if (route.view === 'item') return TYPE_TO_SECTION[route.type] || route.type
+  return null
+}
+
+// Which Docs group the current page lives in. Docs pages don't carry their
+// group in the URL, so we resolve it from the server's grouping. Falls back
+// to the first group when no page id is set (the Docs landing default).
+function activeDocsGroup(route, groups) {
+  if (!groups || groups.length === 0) return null
+  if (!route.page) return groups[0].id
+  for (const g of groups) {
+    if (g.pages.some((p) => p.id === route.page)) return g.id
+  }
   return null
 }
 
@@ -82,6 +96,12 @@ const NAV = [
 ]
 
 export default function Rail({ route, overview, onOpenVoice }) {
+  // Fetch the Docs menu once so the rail can mirror Library's nested
+  // sub-menu pattern. Cheap, cached, single-sourced from the server's
+  // DOC_GROUPS so adding a group there shows up here for free.
+  const { data: docsMenu } = useAsync(() => api.docs(), [])
+  const docsGroups = docsMenu?.groups || []
+  const activeDocs = activeDocsGroup(route, docsGroups)
   return (
     <aside className="rail">
       <div className="rail-brand" onClick={() => go('#/')} title="Dashboard">
@@ -137,6 +157,30 @@ export default function Rail({ route, overview, onOpenVoice }) {
                     >
                       <span>{SECTIONS[key].label}</span>
                       {count != null ? <span className="tag">{count}</span> : null}
+                    </a>
+                  )
+                })}
+              </div>
+            )}
+            {/* Docs mirrors Library's pattern: when you're under Docs the
+                rail expands into the five intent groups (Get started / Core
+                concepts / How-to / Reference / Deeper). Each entry lands on
+                the first page of its group; the count is the page count. */}
+            {n.id === 'docs' && route.view === 'docs' && docsGroups.length > 0 && (
+              <div className="rail-sub">
+                {docsGroups.map((g) => {
+                  const on = activeDocs === g.id
+                  const first = g.pages[0]?.id
+                  if (!first) return null
+                  return (
+                    <a
+                      key={g.id}
+                      className={`rail-subitem ${on ? 'active' : ''}`}
+                      href={'#/docs/' + encodeURIComponent(first)}
+                      aria-current={on ? 'page' : undefined}
+                    >
+                      <span>{g.label}</span>
+                      <span className="tag">{g.pages.length}</span>
                     </a>
                   )
                 })}

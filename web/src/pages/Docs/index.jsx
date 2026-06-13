@@ -46,16 +46,30 @@ function PageView({ pageId, overview, onAction }) {
   }
 }
 
+// Which group contains a given page id. With the rail showing one group at a
+// time, the in-page sub-nav follows: it scopes to the active page's group.
+function groupOfPage(menu, pageId) {
+  if (!menu || !pageId) return null
+  for (const g of menu.groups) {
+    if (g.pages.some((p) => p.id === pageId)) return g
+  }
+  return null
+}
+
 export default function Docs({ page, query, overview, onAction }) {
   const { data: menu, error } = useAsync(() => api.docs(), [])
   const pageId = page || defaultPageId(menu)
+  const activeGroup = groupOfPage(menu, pageId) || menu?.groups?.[0]
+  const q = (query || '').toLowerCase().trim()
 
-  // Filter the left sub-nav by the topbar query so search is scoped to docs.
-  // A group survives if any of its pages matches; empty groups are hidden.
+  // The left column mirrors the page level: with no query, show ONLY the
+  // active group's pages — the rail's sub-nav already surfaces the other
+  // groups (same split as Library's section page). A query widens the scope
+  // back across all groups so search stays discoverable; empty groups drop
+  // out, and a group header appears so cross-group results read clearly.
   const groups = useMemo(() => {
     if (!menu) return []
-    const q = (query || '').toLowerCase().trim()
-    if (!q) return menu.groups
+    if (!q) return activeGroup ? [activeGroup] : []
     return menu.groups
       .map((g) => ({
         ...g,
@@ -67,20 +81,25 @@ export default function Docs({ page, query, overview, onAction }) {
         ),
       }))
       .filter((g) => g.pages.length > 0)
-  }, [menu, query])
+  }, [menu, q, activeGroup])
 
   if (error) return <ErrorState error={error} />
+
+  // With a query, the user is searching across all groups — keep the group
+  // headers so it's clear where each result lives. Without a query, we're
+  // focused on one group already (rail picked it), so suppress the header.
+  const showGroupHeaders = !!q
 
   return (
     <>
       <div className="head-row mb-18">
         <div>
-          <span className="eyebrow">learn</span>
-          <h1 className="h">Documentation</h1>
+          <span className="eyebrow">learn · {activeGroup?.label || 'Documentation'}</span>
+          <h1 className="h">{q ? 'Documentation' : activeGroup?.label || 'Documentation'}</h1>
           <p className="sub">
-            Everything Geneseed ships with — concepts, every CLI subcommand, every install path,
-            the design history, and a glossary in your deployed voice. Auto-discovered from the
-            repo so it stays current.
+            {q
+              ? `Searching all groups for "${q}".`
+              : 'Pick a group from the left rail to switch the focus; pages within it appear in the sub-nav.'}
           </p>
         </div>
       </div>
@@ -89,7 +108,7 @@ export default function Docs({ page, query, overview, onAction }) {
           <div className="lib-rows" style={{ maxHeight: 'calc(100vh - 220px)' }}>
             {groups.map((g) => (
               <div key={g.id} className="docs-group">
-                <div className="docs-group-head">{g.label}</div>
+                {showGroupHeaders && <div className="docs-group-head">{g.label}</div>}
                 {g.pages.map((p) => (
                   <div
                     key={p.id}
