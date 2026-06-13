@@ -1,0 +1,6 @@
+dist/
+node_modules/
+package-lock.json
+# styles.css is a hand-maintained, compactly-formatted design system; Prettier's
+# one-declaration-per-line CSS style would explode it. Keep it out of scope.
+src/styles.css

@@ -2,16 +2,17 @@ import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('../api.js', () => ({
+vi.mock('../api/index.js', () => ({
   api: {
-    graph: () => Promise.resolve({
-      nodes: [
-        { id: 'scribe', type: 'agent' },
-        { id: 'git', type: 'skill' },
-        { id: 'loner', type: 'skill' },
-      ],
-      edges: [{ source: 'scribe', target: 'git' }],
-    }),
+    graph: () =>
+      Promise.resolve({
+        nodes: [
+          { id: 'scribe', type: 'agent' },
+          { id: 'git', type: 'skill' },
+          { id: 'loner', type: 'skill' },
+        ],
+        edges: [{ source: 'scribe', target: 'git' }],
+      }),
   },
 }))
 

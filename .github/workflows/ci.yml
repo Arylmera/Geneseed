@@ -29,3 +29,28 @@ jobs:
         run: python -m unittest discover -s tests -p "test_*.py"
       - name: node test suites (workflow runtime + plugins)
         run: node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs tests/context_wiki.test.mjs
+
+  # The web UI (web/) is a Vite/React app with its own toolchain, so it gets a
+  # dedicated job: lint, format check, unit tests, and a production build. Linux
+  # only — it is platform-independent, unlike the harness CLI above.
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: lint
+        run: npm run lint
+      - name: format check
+        run: npm run format:check
+      - name: unit tests
+        run: npm test
+      - name: production build
+        run: npm run build
