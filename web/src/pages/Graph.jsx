@@ -202,8 +202,8 @@ export default function Graph() {
           <h1 className="h">Graph</h1>
           <p className="sub">
             Every <code>[[wikilink]]</code> between agents and skills, plus every{' '}
-            <code>Rule N</code> mention that lands on a real rule. Hover to isolate a
-            neighbourhood, scroll to zoom, drag the empty space to pan — orphans dim out.
+            <code>Rule N</code> mention that lands on a real rule. Hover to isolate a neighbourhood,
+            scroll to zoom, drag the empty space to pan — orphans dim out.
           </p>
         </div>
         <div className="legend">
@@ -274,9 +274,7 @@ export default function Graph() {
             if (!a || !b) return null
             const lit = hover && (e.source === hover || e.target === hover)
             const matchHit = matches && matches.has(e.source) && matches.has(e.target)
-            const dim =
-              (hover && !lit) ||
-              (!hover && matches && !matchHit)
+            const dim = (hover && !lit) || (!hover && matches && !matchHit)
             const dx = b.x - a.x
             const dy = b.y - a.y
             const len = Math.sqrt(dx * dx + dy * dy) || 1

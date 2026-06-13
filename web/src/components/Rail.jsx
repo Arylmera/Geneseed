@@ -149,27 +149,25 @@ export default function Rail({ route, overview, onOpenVoice }) {
                 as you're anywhere under it — landing, a section, or an item —
                 so the sections are reachable without an extra click. */}
             {n.id === 'library' &&
-              (route.view === 'library' ||
-                route.view === 'section' ||
-                route.view === 'item') && (
-              <div className="rail-sub">
-                {SECTION_ORDER.map((key) => {
-                  const on = activeSection(route) === key
-                  const count = overview?.counts?.[key]
-                  return (
-                    <a
-                      key={key}
-                      className={`rail-subitem ${on ? 'active' : ''}`}
-                      href={'#/section/' + key}
-                      aria-current={on ? 'page' : undefined}
-                    >
-                      <span>{SECTIONS[key].label}</span>
-                      {count != null ? <span className="tag">{count}</span> : null}
-                    </a>
-                  )
-                })}
-              </div>
-            )}
+              (route.view === 'library' || route.view === 'section' || route.view === 'item') && (
+                <div className="rail-sub">
+                  {SECTION_ORDER.map((key) => {
+                    const on = activeSection(route) === key
+                    const count = overview?.counts?.[key]
+                    return (
+                      <a
+                        key={key}
+                        className={`rail-subitem ${on ? 'active' : ''}`}
+                        href={'#/section/' + key}
+                        aria-current={on ? 'page' : undefined}
+                      >
+                        <span>{SECTIONS[key].label}</span>
+                        {count != null ? <span className="tag">{count}</span> : null}
+                      </a>
+                    )
+                  })}
+                </div>
+              )}
             {/* Docs mirrors Library's pattern: when you're under Docs the
                 rail expands into the five intent groups (Get started / Core
                 concepts / How-to / Reference / Deeper). Each entry lands on

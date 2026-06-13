@@ -58,7 +58,11 @@ function Command({ cmd, prog }) {
           <h3 style={{ margin: 0 }}>
             <code>{cmd.name}</code>
           </h3>
-          {cmd.help && <p className="sub" style={{ margin: 0 }}>{cmd.help}</p>}
+          {cmd.help && (
+            <p className="sub" style={{ margin: 0 }}>
+              {cmd.help}
+            </p>
+          )}
         </div>
         <CopyBtn text={`${prog} ${cmd.name}`} />
       </div>
@@ -91,8 +95,8 @@ export default function CliPage({ page }) {
       <span className="eyebrow">cli</span>
       <h1 style={{ marginTop: 10 }}>{page.title}</h1>
       <p className="sub" style={{ marginTop: 4 }}>
-        Every subcommand of <code>{prog}</code>. Generated from the parser at request time —
-        the same one <code>geneseed</code> actually parses, so this page cannot drift.
+        Every subcommand of <code>{prog}</code>. Generated from the parser at request time — the
+        same one <code>geneseed</code> actually parses, so this page cannot drift.
       </p>
       <div style={{ marginTop: 18 }}>
         {commands.map((c) => (
