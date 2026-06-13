@@ -132,11 +132,13 @@ export default function MarkdownPage({ page, overview, onAction }) {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [html, page.anchor])
 
-  // Setup page overlay: outline the path heading that matches the deployed
-  // emit mode, so the docs read as a status surface for free.
+  // Install-paths overlay: outline the path heading that matches the deployed
+  // emit mode, so the docs read as a status surface for free. The page is a
+  // slice of SETUP.md §"Choose your path", so the H3s ("Path A", "Path B"…)
+  // still appear inline and the highlight lands on the right one.
   useEffect(() => {
     const el = ref.current
-    if (!el || page.id !== 'setup') return
+    if (!el || page.id !== 'install-paths') return
     el.querySelectorAll('.docs-here').forEach((n) => n.classList.remove('docs-here'))
     const anchor = SETUP_ANCHOR_BY_EMIT[overview?.emit]
     if (!anchor) return
@@ -154,12 +156,13 @@ export default function MarkdownPage({ page, overview, onAction }) {
 
   // "Try this" buttons — wired only for pages where a safe action is obvious.
   const tryActions = []
-  if (page.id === 'setup') {
+  if (page.id === 'install-paths' || page.id === 'install-quick') {
     tryActions.push({ label: 'Run doctor', action: 'doctor' })
     tryActions.push({ label: 'Rebuild', action: 'build' })
   }
   if (page.id === 'verify') tryActions.push({ label: 'Run doctor', action: 'doctor' })
   if (page.id === 'self-improve') tryActions.push({ label: 'Open diff', hash: '#/diff' })
+  if (page.id === 'upgrade') tryActions.push({ label: 'Update', action: 'update' })
 
   return (
     <div className="detail-doc">

@@ -44,8 +44,12 @@ WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 # the on-disk documentation through a left sub-nav. Each entry below becomes
 # one page in that sub-nav. `kind` decides how the page is rendered:
 #
-#   markdown — read `source` (relative to ROOT) and render it; the file may
-#              optionally scroll to `anchor`. New markdown lands here.
+#   markdown — read `source` (relative to ROOT) and render it. Optional keys:
+#              `anchor` scrolls the rendered page to a heading; `slice: True`
+#              trims the body to just that anchor's section (heading line
+#              through the line before the next heading of equal-or-greater
+#              depth, code fences respected) so one source file can power
+#              many focused panel pages without duplicating prose.
 #   concept  — inline curated blurb; `body` is the markdown. Usually ends with
 #              a `link` into the existing Library route.
 #   cli      — generated CLI reference (introspects harness.build_argparser()).
@@ -54,18 +58,97 @@ WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 #   glossary — theme-aware glossary; reads the deployed theme's JSON tokens.
 #   about    — install snapshot (version, license, repo). Generated.
 #
+# The IA is organised around reader intent — Get started · Core concepts ·
+# How-to · Reference · Deeper — not around source files. README.md and
+# SETUP.md stay canonical for GitHub readers; the web panel slices them.
+#
 # The discovery of `docs/specs/*` happens in api_docs(), so dropping a new
 # spec into the folder makes it appear without editing this list.
 DOC_GROUPS = [
-    {"id": "start", "label": "Get Started", "pages": [
-        {"id": "what", "title": "What is Geneseed?", "kind": "markdown",
-         "source": "README.md"},
-        {"id": "quickstart", "title": "Quickstart", "kind": "markdown",
-         "source": "README.md", "anchor": "install"},
-        {"id": "verify", "title": "Verify your install", "kind": "markdown",
-         "source": "README.md", "anchor": "after-installing"},
+    # ── 1. Get started ────────────────────────────────────────────────────
+    # Short, action-first, hand-written. A first-time reader should be able
+    # to follow these top-to-bottom and have a working harness inside 5 min.
+    {"id": "start", "label": "Get started", "pages": [
+        {"id": "install-quick", "title": "Install in 5 minutes",
+         "kind": "concept", "body": (
+            "Three steps. The only prerequisites are **git** and "
+            "**Python 3** — the harness is stdlib-only, nothing to "
+            "`pip install`.\n\n"
+            "### 1. Clone\n\n"
+            "```\n"
+            "git clone https://github.com/Arylmera/Geneseed.git\n"
+            "cd Geneseed\n"
+            "```\n\n"
+            "### 2. Run the setup wizard\n\n"
+            "The wizard previews each theme as you move through it, picks an "
+            "install mode (OpenCode global is recommended — one install, "
+            "every repo inherits it), then builds and offers a health check.\n\n"
+            "**macOS / Linux**\n\n"
+            "```\n"
+            "./geneseed setup\n"
+            "```\n\n"
+            "**Windows** (cmd or PowerShell — no bash needed)\n\n"
+            "```\n"
+            ".\\geneseed.cmd setup\n"
+            "```\n\n"
+            "### 3. Open your agent\n\n"
+            "Open OpenCode (or Claude Code, or any `AGENT.md`-aware tool) "
+            "in any repo. The first reply opens with the readiness sigil "
+            "(`✅` neutral / `🧬` imperial / your theme's equivalent) and "
+            "your project's docs are already in context.\n\n"
+            "---\n\n"
+            "**Next:** [Verify it works](#/docs/verify) · "
+            "[What you just installed](#/docs/model) · "
+            "[Install by hand instead](#/docs/install-paths)")},
+        {"id": "verify", "title": "Verify it works",
+         "kind": "concept", "body": (
+            "Three quick checks confirm everything wired up.\n\n"
+            "### 1. The readiness sigil\n\n"
+            "Open your agent in any repo. The first reply opens with the "
+            "readiness line — `✅` for neutral, `🧬` for imperial, or your "
+            "theme's equivalent. If it's missing, the agent isn't pointed "
+            "at `AGENT.md` — re-check your tool's instructions setting.\n\n"
+            "### 2. The harness itself\n\n"
+            "```\n"
+            "./geneseed doctor       # macOS / Linux\n"
+            ".\\geneseed.cmd doctor   # Windows\n"
+            "```\n\n"
+            "Should print `ok`. Failures include unresolved theme tokens, "
+            "dead links, missing files, or a drifted bundle — each comes "
+            "with a fix hint. Press the **Run doctor** button above to run "
+            "it from here.\n\n"
+            "### 3. Context delivery (OpenCode only)\n\n"
+            "Start a session with `GENESEED_DEBUG=1` set. The context "
+            "plugin logs what it discovered and injected; you should see "
+            "the repo's `README.md` and any docs listed.\n\n"
+            "---\n\n"
+            "Trouble? See [Troubleshooting](#/docs/trouble).")},
+        {"id": "first-session", "title": "Your first session",
+         "kind": "concept", "body": (
+            "Once installed, the agent doesn't change *how* you talk to "
+            "your tool — it changes what the tool already knows when you do.\n\n"
+            "### What loaded automatically\n\n"
+            "- **`AGENT.md`** — 20 universal Rules the agent obeys.\n"
+            "- **Your repo's docs** — `README.md`, `CONTRIBUTING.md`, "
+            "anything under `docs/`, project context plugins discover.\n"
+            "- **Your machine's wiki** (if you set one up) — eager entries "
+            "and a lazy listing of the rest.\n"
+            "- **The skill and agent catalogue** — invokable by name.\n\n"
+            "### Try these prompts\n\n"
+            "- *\"Use the **clarify** skill on this feature request.\"*\n"
+            "- *\"Delegate to the **reviewer** agent on the staged diff.\"*\n"
+            "- *\"Use **brainstorm** then **plan** for how to add X.\"*\n"
+            "- *\"Use **council** to debate whether we should ship Y now.\"*\n\n"
+            "Skills are repeatable workflows; agents are capability "
+            "specialists. You invoke them by name in plain English.\n\n"
+            "---\n\n"
+            "**Catalog:** [Skills](#/section/skills) · "
+            "[Agents](#/section/agents) · [Rules](#/section/laws)")},
     ]},
-    {"id": "concepts", "label": "Concepts", "pages": [
+    # ── 2. Core concepts ──────────────────────────────────────────────────
+    # One-screen explainers. The mental model — voice vs structure, the
+    # five pieces, plugins, wiki. Each links to the live Library catalog.
+    {"id": "concepts", "label": "Core concepts", "pages": [
         {"id": "model", "title": "The harness model", "kind": "concept", "body":
          "Geneseed assembles five runtime pieces around a single `AGENT.md` "
          "entrypoint: **Rules** (the laws the agent obeys), **Agents** "
@@ -110,9 +193,11 @@ DOC_GROUPS = [
         {"id": "notebook", "title": "Notebook (sovereign space)",
          "kind": "markdown", "source": "src/notebook/README.md"},
         {"id": "wiki", "title": "Wiki (machine knowledge base)",
-         "kind": "markdown", "source": "docs/specs/2026-06-11-wiki-knowledge-base.md"},
-        {"id": "themes", "title": "Themes (voice vs structure)",
-         "kind": "markdown", "source": "DESIGN.md", "anchor": "decisions"},
+         "kind": "markdown",
+         "source": "docs/specs/2026-06-11-wiki-knowledge-base.md"},
+        {"id": "themes", "title": "Voice vs structure (themes)",
+         "kind": "markdown", "source": "DESIGN.md", "anchor": "decisions",
+         "slice": True},
         {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
          "link": {"hash": "#/docs/adapters-opencode",
                   "label": "Read the adapter spec →"},
@@ -126,33 +211,41 @@ DOC_GROUPS = [
          "- **geneseed-workflow** — registers the `workflow` tool that runs "
          "saved orchestration scripts."},
     ]},
-    {"id": "cli", "label": "CLI Reference", "pages": [
-        {"id": "cli", "title": "Every subcommand", "kind": "cli"},
-    ]},
-    {"id": "setup", "label": "Setup paths", "pages": [
-        {"id": "setup", "title": "Install paths & configuration",
-         "kind": "markdown", "source": "SETUP.md"},
-    ]},
-    {"id": "adapters", "label": "Adapters", "pages": [
-        {"id": "adapters-opencode", "title": "OpenCode adapter",
-         "kind": "markdown", "source": "adapters/opencode/README.md"},
-        {"id": "adapters-opencode-spec", "title": "OpenCode — global harness spec",
-         "kind": "markdown", "source": "adapters/opencode/GLOBAL-HARNESS-SPEC.md"},
-        {"id": "adapters-opencode-loads", "title": "OpenCode — how it loads",
-         "kind": "markdown", "source": "adapters/opencode/HOW-OPENCODE-LOADS.md"},
-        {"id": "adapters-claude-code", "title": "Claude Code adapter",
-         "kind": "markdown", "source": "adapters/claude-code/README.md"},
-    ]},
-    {"id": "advanced", "label": "Authoring & advanced", "pages": [
-        {"id": "authoring", "title": "Editing the source", "kind": "concept",
-         "body": "Everything theme-independent lives under `src/` — laws, "
-         "agents, skills, memory and notebook conventions, and the "
-         "`AGENT.md.tmpl` entrypoint. Voice tokens live under `themes/` as one "
-         "JSON file per theme. After editing, `python build.py --emit "
-         "opencode-global` (or `geneseed update`) re-renders the deployed "
-         "bundle. The `doctor` action verifies the result: unresolved theme "
-         "tokens, dead links, hermetic escapes, theme-key parity, and that "
-         "the committed bundle matches a fresh render."},
+    # ── 3. How-to ─────────────────────────────────────────────────────────
+    # One task per page — all sliced out of SETUP.md so prose isn't
+    # duplicated. The reader picks the page that matches what they need
+    # to do, not which source file it lives in.
+    {"id": "howto", "label": "How-to", "pages": [
+        {"id": "install-paths", "title": "Choose your install path",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "choose-your-path", "slice": True},
+        {"id": "configure-wiki", "title": "Configure a wiki (knowledge base)",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "wiki-your-own-knowledge-base-optional", "slice": True},
+        {"id": "project-context", "title": "Override project context",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "project-context-usually-nothing", "slice": True},
+        {"id": "ingest-docs", "title": "Read PDFs / Office docs",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "reading-non-markdown-docs", "slice": True},
+        {"id": "mcp-markitdown", "title": "MCP — MarkItDown (PDF/Office)",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "markitdown-via-mcp-opencode", "slice": True},
+        {"id": "mcp-gitlab", "title": "MCP — GitLab",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "gitlab-one-entry-per-instance", "slice": True},
+        {"id": "mcp-filesystem", "title": "MCP — Filesystem",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "filesystem", "slice": True},
+        {"id": "run-anywhere", "title": "Run `geneseed` from anywhere",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "run-geneseed-from-anywhere", "slice": True},
+        {"id": "headless", "title": "Run in CI / headless",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "headless-ci-opencode", "slice": True},
+        {"id": "upgrade", "title": "Upgrade & local edits",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "upgrade", "slice": True},
         {"id": "self-improve", "title": "The self-improvement loop",
          "kind": "concept",
          "link": {"hash": "#/diff", "label": "Open the diff page →"},
@@ -164,9 +257,16 @@ DOC_GROUPS = [
          "agent in *this* repo to back-port the changes into `src/`. On "
          "demand: `geneseed diff --out FILE`, or the **Changes** page in this "
          "UI."},
-        {"id": "workflow", "title": "The workflow primitive", "kind": "markdown",
-         "source": "docs/specs/2026-06-09-opencode-workflow-primitive.md"},
-        {"id": "themes-author", "title": "Writing a new theme", "kind": "concept",
+        {"id": "authoring", "title": "Edit the source", "kind": "concept",
+         "body": "Everything theme-independent lives under `src/` — laws, "
+         "agents, skills, memory and notebook conventions, and the "
+         "`AGENT.md.tmpl` entrypoint. Voice tokens live under `themes/` as one "
+         "JSON file per theme. After editing, `python build.py --emit "
+         "opencode-global` (or `geneseed update`) re-renders the deployed "
+         "bundle. The `doctor` action verifies the result: unresolved theme "
+         "tokens, dead links, hermetic escapes, theme-key parity, and that "
+         "the committed bundle matches a fresh render."},
+        {"id": "themes-author", "title": "Write a new theme", "kind": "concept",
          "link": {"hash": "#/themes", "label": "Open the theme gallery →"},
          "body": "A theme is one JSON file under `themes/` declaring voice "
          "tokens only: `BANNER`, `TAGLINE`, `LOADED_SIGIL`, `VOICE`, the core "
@@ -176,8 +276,16 @@ DOC_GROUPS = [
          "blurbs. Copy `themes/neutral.json` and edit. `python build.py "
          "--theme yours` renders it; `doctor` checks for missing tokens."},
     ]},
-    {"id": "trouble", "label": "Troubleshooting", "pages": [
-        {"id": "trouble", "title": "Common problems & fixes",
+    # ── 4. Reference ──────────────────────────────────────────────────────
+    # Pure lookups — CLI, env vars, glossary, troubleshooting matrix.
+    {"id": "reference", "label": "Reference", "pages": [
+        {"id": "cli", "title": "CLI — every subcommand", "kind": "cli"},
+        {"id": "env-knobs", "title": "Environment variables",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "environment-knobs", "slice": True},
+        {"id": "glossary", "title": "Glossary (in your deployed voice)",
+         "kind": "glossary"},
+        {"id": "trouble", "title": "Troubleshooting",
          "kind": "concept", "body": (
             "### `geneseed: command not found`\n"
             "Run `./geneseed link` (macOS/Linux) or `.\\geneseed.cmd link` "
@@ -207,18 +315,37 @@ DOC_GROUPS = [
             "Plugins ship in `~/.config/opencode/plugin/` for the global "
             "emit. Confirm with `ls ~/.config/opencode/plugin/` — you should "
             "see `geneseed-*.js`. If empty, re-run the build with "
-            "`--emit opencode-global`.\n")},
+            "`--emit opencode-global`.\n\n"
+            "### Full `PROJECT CONTEXT` block visible in the terminal\n"
+            "Either `GENESEED_CONTEXT_VISIBLE=1` (or legacy "
+            "`GENESEED_CONTEXT_TRANSFORM=0/off`) is set, or your OpenCode "
+            "build lacks the experimental transform hook and the plugin "
+            "fell back to visible delivery — run with `GENESEED_DEBUG=1` "
+            "to see which.\n\n"
+            "### `could not determine a model`\n"
+            "Set `GENESEED_MODEL=provider/model` in your environment.\n")},
     ]},
-    {"id": "design", "label": "Design", "pages": [
-        {"id": "design", "title": "DESIGN.md — the spec", "kind": "markdown",
-         "source": "DESIGN.md"},
-    ]},
-    {"id": "glossary", "label": "Glossary", "pages": [
-        {"id": "glossary", "title": "Terms in your deployed voice",
-         "kind": "glossary"},
-    ]},
-    {"id": "about", "label": "About", "pages": [
-        {"id": "about", "title": "Version, license, links", "kind": "about"},
+    # ── 5. Deeper ─────────────────────────────────────────────────────────
+    # Design rationale, adapter internals, the workflow primitive, the
+    # install snapshot. Long-form by nature — readers come here on purpose.
+    {"id": "deeper", "label": "Deeper", "pages": [
+        {"id": "design", "title": "DESIGN.md — the spec",
+         "kind": "markdown", "source": "DESIGN.md"},
+        {"id": "adapters-opencode", "title": "OpenCode adapter",
+         "kind": "markdown", "source": "adapters/opencode/README.md"},
+        {"id": "adapters-opencode-spec", "title": "OpenCode — global harness spec",
+         "kind": "markdown",
+         "source": "adapters/opencode/GLOBAL-HARNESS-SPEC.md"},
+        {"id": "adapters-opencode-loads", "title": "OpenCode — how it loads",
+         "kind": "markdown",
+         "source": "adapters/opencode/HOW-OPENCODE-LOADS.md"},
+        {"id": "adapters-claude-code", "title": "Claude Code adapter",
+         "kind": "markdown", "source": "adapters/claude-code/README.md"},
+        {"id": "workflow", "title": "The workflow primitive",
+         "kind": "markdown",
+         "source": "docs/specs/2026-06-09-opencode-workflow-primitive.md"},
+        {"id": "about", "title": "About — version, license, links",
+         "kind": "about"},
     ]},
 ]
 
@@ -885,6 +1012,71 @@ def _read_doc_source(rel: str) -> str:
     return target.read_text(encoding="utf-8", errors="replace")
 
 
+# Match the slug shape the frontend's `slug()` produces, so a DOC_GROUPS
+# `anchor` written against a heading matches whatever the renderer assigns.
+_SLUG_STRIP_RE = re.compile(r"[^a-z0-9\s-]")
+_SLUG_WS_RE = re.compile(r"\s+")
+_SLUG_DASH_RE = re.compile(r"-+")
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+
+
+def _slugify_heading(text: str) -> str:
+    """Same slug rules as web/src/pages/Docs/MarkdownPage.jsx → slug().
+    Keeps the server-side anchor match identical to client-side heading ids."""
+    s = _SLUG_STRIP_RE.sub("", text.lower().strip())
+    s = _SLUG_WS_RE.sub("-", s)
+    s = _SLUG_DASH_RE.sub("-", s)
+    return s.strip("-")
+
+
+def _slice_section(body: str, anchor: str) -> "tuple[str, bool]":
+    """Trim `body` to just the section whose heading slug matches `anchor` —
+    the heading line through the line before the next heading of equal or
+    lesser depth. Code fences are tracked so `#` inside ``` blocks is never
+    misread as a heading. H1 slices stop at the first H2 so they capture an
+    intro paragraph instead of the whole file.
+
+    Returns (body, ok). ok=False (and the original body) when the anchor is
+    missing, so the caller falls back to the full document."""
+    lines = body.splitlines()
+    start = -1
+    start_level = 0
+    in_fence = False
+    for i, ln in enumerate(lines):
+        if ln.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = _HEADING_RE.match(ln)
+        if not m:
+            continue
+        if _slugify_heading(m.group(2)) == anchor:
+            start = i
+            start_level = max(len(m.group(1)), 2)
+            break
+    if start < 0:
+        return body, False
+    out = [lines[start]]
+    in_fence = False
+    for j in range(start + 1, len(lines)):
+        ln = lines[j]
+        if ln.startswith("```"):
+            in_fence = not in_fence
+            out.append(ln)
+            continue
+        if in_fence:
+            out.append(ln)
+            continue
+        m = _HEADING_RE.match(ln)
+        if m and len(m.group(1)) <= start_level:
+            break
+        out.append(ln)
+    while out and out[-1].strip() == "":
+        out.pop()
+    return "\n".join(out) + "\n", True
+
+
 def _spec_purpose(text: str) -> str:
     """First non-heading paragraph of a spec, used as its index blurb. We skip
     the title, the metadata block (Date/Status lines), and any leading blank
@@ -1077,9 +1269,18 @@ def api_docs_page(state: WebState, page_id: str) -> dict:
     kind = page["kind"]
     if kind == "markdown":
         body = _read_doc_source(page["source"])
+        anchor = page.get("anchor")
+        # `slice: True` trims the body to just that section — the renderer
+        # then shows one focused page instead of dumping the whole source
+        # file. When a slice succeeds we drop the anchor so the client doesn't
+        # try to scroll to it (the heading is already at the top).
+        if anchor and page.get("slice"):
+            body, sliced = _slice_section(body, anchor)
+            if sliced:
+                anchor = None
         return {"id": page_id, "title": page["title"], "kind": "markdown",
                 "body": body, "source": page["source"],
-                "anchor": page.get("anchor"),
+                "anchor": anchor,
                 "links": _resolve_links(state, body)}
     if kind == "concept":
         body = page.get("body", "")
