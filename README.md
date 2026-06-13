@@ -9,7 +9,7 @@
 [![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![stdlib only](https://img.shields.io/badge/deps-stdlib%20only-success)](build.py)
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
-[![Skills](https://img.shields.io/badge/skills-28-blueviolet)](src/skills/)
+[![Skills](https://img.shields.io/badge/skills-30-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-16-orange)](src/agents/)
 [![Laws](https://img.shields.io/badge/laws-20-critical)](src/laws/universal.md)
 [![OpenCode · Claude Code · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20AGENT.md-1f6feb)](#install)
@@ -47,7 +47,7 @@ The harness ships as a small set of layers, mirrored one-for-one in the web cons
 | --- | --- |
 | **🛡️ Rules** (`laws/`) | 20 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery… |
 | **🤖 Agents** (16) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
-| **🛠 Skills** (28) | repeatable workflows: brainstorm · **clarify** · plan · tdd · debug · refactor · code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **ingest** · **research** · **tutor** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **herdr** |
+| **🛠 Skills** (30) | repeatable workflows: brainstorm · **clarify** · plan · tdd · debug · refactor · code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **ingest** · **research** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **herdr** |
 | **🧠 Memory** (`memory/`) | one-fact-per-file durable knowledge, indexed by `MEMORY.md` (git-ignored, personal) |
 | **📓 Notebook** (`notebook/`) | the agent's sovereign space — any medium (code, tools, data, notes), self-ruled via a seed-once charter, always git-ignored; only its `.gitignore` is build-asserted |
 | **🌐 Wiki** (`wiki.jsonc`) | your own machine-wide knowledge base — typically an Obsidian vault — declared once per machine: entry notes load eager/lazy, the agent reads and **writes** it under the vault's own conventions, with an inbox fallback and guard-enforced protected folders |

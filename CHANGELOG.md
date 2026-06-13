@@ -9,11 +9,14 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
-- `tutor` skill — teach the user a skill or concept fast, with three modes:
-  crash course (zero to functional), error drill (Socratic practice until
-  reflex), and decode (unlock confusing material via one keystone sentence,
-  an everyday analogy, and a three-question comprehension check). Brings the
-  skill count to 28.
+- Three learning skills that teach the user rather than do the work for them:
+  - `crash-course` — go from zero to functional in a skill fast: what to learn
+    first, what to ignore, and the one high-leverage exercise.
+  - `drill` — turn shaky knowledge into reflex through Socratic practice on
+    realistic mistakes, withholding the answer until the user has tried.
+  - `decode` — make confusing material click via one keystone sentence, an
+    everyday analogy, and a three-question comprehension check.
+  Brings the skill count to 30.
 
 ## [1.0.0] — 2026-06-13
 
@@ -25,7 +28,7 @@ suites) on Linux and Windows.
 - One neutral `src/` rendered by a stdlib-only generator (`build.py`) into 14
   themed, tool-agnostic bundles; structure stays theme-independent.
 - 20 universal laws, 16 capability agents (6 execution + a 10-seat debate council),
-  28 skills, the one-fact-per-file memory convention, and the agent's sovereign
+  30 skills, the one-fact-per-file memory convention, and the agent's sovereign
   notebook.
 
 ### Tooling
