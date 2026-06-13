@@ -203,6 +203,7 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 | --- | --- |
 | **[SETUP.md](SETUP.md)** | Installing — every path, configuration knob, env var, verify, troubleshooting |
 | **[DESIGN.md](DESIGN.md)** | Changing structure — the spec and the decisions behind it |
+| **[SHIPPED.md](SHIPPED.md)** | What's in the harness today — capabilities ↔ the spec behind each |
 | **[adapters/opencode/](adapters/opencode/README.md)** | Wiring OpenCode in depth — plugins, native mapping |
 | ⤷ [GLOBAL-HARNESS-SPEC.md](adapters/opencode/GLOBAL-HARNESS-SPEC.md) | The global-emit contract |
 | ⤷ [HOW-OPENCODE-LOADS.md](adapters/opencode/HOW-OPENCODE-LOADS.md) | Why a file shows up twice; plugin loading |
