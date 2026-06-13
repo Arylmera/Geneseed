@@ -1445,6 +1445,31 @@ def status_daemon(theme: "str | None" = None) -> int:
     return 1
 
 
+def restart_daemon(theme: "str | None" = None, port: int = 4747,
+                   open_browser: bool = True, only_if_running: bool = False) -> int:
+    """Stop and start the daemon so it picks up new source / static bundle.
+    Preserves the port the running daemon was bound to; with no daemon running,
+    falls back to `port`. With `only_if_running=True` returns 0 silently when
+    nothing was running — used by `geneseed upgrade` to refresh a live daemon
+    without spawning one the user didn't ask for."""
+    target = WebState(theme=theme).target
+    st = read_daemon(target)
+    live = _live_daemon(target) is not None
+    if only_if_running and not live:
+        return 0
+    use_port = (st.get("port") if st and st.get("port") else None) or port
+    if live:
+        stop_daemon(theme)
+        # Wait briefly for the OS to release the port before re-binding;
+        # otherwise start_daemon falls back to a random free port and any
+        # client (the PWA) cached on the old URL would miss the new server.
+        for _ in range(50):
+            if not _probe(f"http://127.0.0.1:{use_port}", timeout=0.2):
+                break
+            time.sleep(0.1)
+    return start_daemon(theme, use_port, open_browser=open_browser)
+
+
 def _build_plan(dist: Path, web_dir: Path, npm: str | None, interactive: bool) -> str:
     """Pure: what serve() should do about the UI bundle. 'serve' when dist is
     built; otherwise 'no-source' (web/ never arrived), 'no-npm', 'no-tty'

@@ -538,6 +538,18 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None,
                 log(f"[geneseed] ── full install log: {log.path}")
             return 1
 
+        # If a web daemon is running, bounce it so the new rituals/* source and
+        # the freshly rebuilt web/dist take effect — otherwise the open PWA keeps
+        # hitting the old code and unknown new API routes fall back to index.html
+        # (yielding the cryptic "string did not match the expected pattern" JSON
+        # parse error in the browser).
+        try:
+            sys.path.insert(0, str(here / "rituals"))
+            import web as _web  # noqa: E402
+            _web.restart_daemon(theme=theme, open_browser=False, only_if_running=True)
+        except Exception as e:  # noqa: BLE001  — never fail an upgrade on this
+            log(f"[geneseed] ⚠️  could not refresh the web daemon ({e}) — `geneseed web restart` manually if it was running.")
+
         log("[geneseed] ✓ upgrade complete." + (f" (full log: {log.path})" if log.path else ""))
         return 0
     finally:

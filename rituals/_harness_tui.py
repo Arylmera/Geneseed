@@ -1678,6 +1678,8 @@ def cmd_web(args: argparse.Namespace) -> int:
         return web.start_daemon(args.theme, args.port, open_browser=not args.no_browser)
     if action == "stop":
         return web.stop_daemon(args.theme)
+    if action == "restart":
+        return web.restart_daemon(args.theme, args.port, open_browser=not args.no_browser)
     if action == "status":
         return web.status_daemon(args.theme)
     return web.serve(theme=args.theme, port=args.port,
