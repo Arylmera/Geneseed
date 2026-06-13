@@ -4,14 +4,17 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
   api: {
-    doctor: vi.fn(() => Promise.resolve({
-      themes: ['neutral', 'imperial'], ok: false,
-      problems: ['dead link x in AGENT.md'],
-      groups: [
-        { check: 'build', label: 'Build scan (neutral)', problems: ['dead link x in AGENT.md'] },
-        { check: 'parity', label: 'Theme parity', problems: [] },
-      ],
-    })),
+    doctor: vi.fn(() =>
+      Promise.resolve({
+        themes: ['neutral', 'imperial'],
+        ok: false,
+        problems: ['dead link x in AGENT.md'],
+        groups: [
+          { check: 'build', label: 'Build scan (neutral)', problems: ['dead link x in AGENT.md'] },
+          { check: 'parity', label: 'Theme parity', problems: [] },
+        ],
+      }),
+    ),
   },
 }))
 

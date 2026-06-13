@@ -5,8 +5,14 @@ import Search from './Search.jsx'
 
 // Route view -> the --tab flag the fake prompt displays.
 const TAB_FLAG = {
-  dashboard: 'overview', section: 'library', item: 'library', diff: 'diff',
-  doctor: 'doctor', themes: 'themes', graph: 'graph', settings: 'settings',
+  dashboard: 'overview',
+  section: 'library',
+  item: 'library',
+  diff: 'diff',
+  doctor: 'doctor',
+  themes: 'themes',
+  graph: 'graph',
+  settings: 'settings',
 }
 
 // The top bar: a faux `geneseed --tab=…` prompt, the global search, and the
@@ -23,8 +29,11 @@ export default function Topbar({ route, target, query, onQuery, mode, onToggleMo
       </div>
       <div className="topbar-spacer" />
       <Search value={query} onChange={onQuery} />
-      <button className="iconbtn" title={mode === 'light' ? 'Switch to dark' : 'Switch to light'}
-        onClick={onToggleMode}>
+      <button
+        className="iconbtn"
+        title={mode === 'light' ? 'Switch to dark' : 'Switch to light'}
+        onClick={onToggleMode}
+      >
         <Icon name={mode === 'light' ? 'moon' : 'sun'} />
       </button>
     </div>

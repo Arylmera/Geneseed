@@ -32,8 +32,10 @@ export default function App() {
 
   const onError = (e) => setToast({ kind: 'err', msg: e.message })
   const { overview, themes, reload } = useOverview(onError)
-  const { runs, activeId, consoleOpen, setConsoleOpen, runAction, cancelJob, clearRuns } =
-    useJobs({ onFinish: reload, onError })
+  const { runs, activeId, consoleOpen, setConsoleOpen, runAction, cancelJob, clearRuns } = useJobs({
+    onFinish: reload,
+    onError,
+  })
 
   // The UI wears the deployed theme's accent, adjusted for light/dark mode.
   useEffect(() => {
@@ -45,25 +47,41 @@ export default function App() {
       <div className="atmos" aria-hidden="true" />
       <Rail route={route} overview={overview} onOpenVoice={() => setVoiceOpen((v) => !v)} />
       {voiceOpen && (
-        <VoicePopover themes={themes} current={overview?.theme}
+        <VoicePopover
+          themes={themes}
+          current={overview?.theme}
           onPick={(name) => {
             setVoiceOpen(false)
             runAction('build', { theme: name, emit: overview?.emit })
           }}
-          onClose={() => setVoiceOpen(false)} />
+          onClose={() => setVoiceOpen(false)}
+        />
       )}
       <div className="col">
-        <Topbar route={route} target={overview?.target} query={query} onQuery={setQuery}
-          mode={mode} onToggleMode={toggleMode} />
+        <Topbar
+          route={route}
+          target={overview?.target}
+          query={query}
+          onQuery={setQuery}
+          mode={mode}
+          onToggleMode={toggleMode}
+        />
         <div className="page">
           <div className="pad">
-            {route.view === 'dashboard' &&
-              <Dashboard overview={overview} themes={themes} onAction={runAction} />}
-            {route.view === 'section' &&
-              <Section section={route.section} query={query} counts={overview?.counts} />}
-            {route.view === 'item' &&
-              <Section section={TYPE_TO_SECTION[route.type] || route.type}
-                selected={route.name} query={query} counts={overview?.counts} />}
+            {route.view === 'dashboard' && (
+              <Dashboard overview={overview} themes={themes} onAction={runAction} />
+            )}
+            {route.view === 'section' && (
+              <Section section={route.section} query={query} counts={overview?.counts} />
+            )}
+            {route.view === 'item' && (
+              <Section
+                section={TYPE_TO_SECTION[route.type] || route.type}
+                selected={route.name}
+                query={query}
+                counts={overview?.counts}
+              />
+            )}
             {route.view === 'diff' && <Diff />}
             {route.view === 'doctor' && <Doctor />}
             {route.view === 'themes' && <Themes onAction={runAction} />}
@@ -71,9 +89,14 @@ export default function App() {
             {route.view === 'settings' && <Settings onAction={runAction} />}
           </div>
         </div>
-        <Console runs={runs} open={consoleOpen} busy={!!activeId}
-          onToggle={() => setConsoleOpen((v) => !v)} onClear={clearRuns}
-          onCancel={cancelJob} />
+        <Console
+          runs={runs}
+          open={consoleOpen}
+          busy={!!activeId}
+          onToggle={() => setConsoleOpen((v) => !v)}
+          onClear={clearRuns}
+          onCancel={cancelJob}
+        />
       </div>
       {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
     </div>

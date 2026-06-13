@@ -4,14 +4,15 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
   api: {
-    graph: () => Promise.resolve({
-      nodes: [
-        { id: 'scribe', type: 'agent' },
-        { id: 'git', type: 'skill' },
-        { id: 'loner', type: 'skill' },
-      ],
-      edges: [{ source: 'scribe', target: 'git' }],
-    }),
+    graph: () =>
+      Promise.resolve({
+        nodes: [
+          { id: 'scribe', type: 'agent' },
+          { id: 'git', type: 'skill' },
+          { id: 'loner', type: 'skill' },
+        ],
+        edges: [{ source: 'scribe', target: 'git' }],
+      }),
   },
 }))
 

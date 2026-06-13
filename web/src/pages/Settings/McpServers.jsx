@@ -22,7 +22,11 @@ export default function McpServers() {
     try {
       await api.mcpToggle(target.path, s.name, s.state !== 'enabled')
       await reload()
-    } catch (e) { setNote(e.message) } finally { setBusyKey('') }
+    } catch (e) {
+      setNote(e.message)
+    } finally {
+      setBusyKey('')
+    }
   }
 
   return (
@@ -42,9 +46,7 @@ export default function McpServers() {
                 <div className="mcp-info">
                   <div className="mi-top">
                     <strong>{s.label}</strong>
-                    <span className={`badge ${s.state === 'enabled' ? 'ok' : ''}`}>
-                      {s.state}
-                    </span>
+                    <span className={`badge ${s.state === 'enabled' ? 'ok' : ''}`}>{s.state}</span>
                   </div>
                   <p>{s.desc}</p>
                 </div>
@@ -56,14 +58,18 @@ export default function McpServers() {
                     aria-disabled={isDisabled || undefined}
                     tabIndex={isDisabled ? -1 : 0}
                     onClick={isDisabled ? undefined : () => toggle(t, s)}
-                    onKeyDown={isDisabled ? undefined : (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        if (e.key === ' ') e.preventDefault()
-                        toggle(t, s)
-                      }
-                    }}
+                    onKeyDown={
+                      isDisabled
+                        ? undefined
+                        : (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              if (e.key === ' ') e.preventDefault()
+                              toggle(t, s)
+                            }
+                          }
+                    }
                   />
-                ) : (s.preset ? (
+                ) : s.preset ? (
                   <button
                     className="btn ghost sm"
                     disabled={isDisabled}
@@ -71,7 +77,7 @@ export default function McpServers() {
                   >
                     Add
                   </button>
-                ) : null)}
+                ) : null}
               </div>
             )
           })}

@@ -21,11 +21,13 @@ export function useAsync(fn, deps = []) {
       .then((d) => setData(d))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  // deps are the caller's refetch triggers; fnRef keeps the loader fresh.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // deps are the caller's refetch triggers; fnRef keeps the loader fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
 
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => {
+    reload()
+  }, [reload])
 
   return { data, error, loading, reload, setData }
 }

@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { relTime, promptPath, readiness, maxCount, editCount } from '../lib/format.js'
 
 describe('relTime', () => {
-  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-06-13T00:00:00Z')) })
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-13T00:00:00Z'))
+  })
   afterEach(() => vi.useRealTimers())
   const now = () => Date.now() / 1000
 

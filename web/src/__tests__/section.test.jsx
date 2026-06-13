@@ -4,12 +4,13 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
   api: {
-    catalog: () => Promise.resolve({
-      items: [
-        { name: 'reviewer', title: 'Reviewer', desc: 'reviews code' },
-        { name: 'tester', title: 'Tester', desc: 'writes tests' },
-      ],
-    }),
+    catalog: () =>
+      Promise.resolve({
+        items: [
+          { name: 'reviewer', title: 'Reviewer', desc: 'reviews code' },
+          { name: 'tester', title: 'Tester', desc: 'writes tests' },
+        ],
+      }),
     item: () => Promise.resolve(null),
   },
 }))

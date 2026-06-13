@@ -9,10 +9,22 @@ export function useOverview(onError) {
   const [themes, setThemes] = useState([])
 
   const reload = () =>
-    api.overview().then(setOverview).catch((e) => onError?.(e))
+    api
+      .overview()
+      .then(setOverview)
+      .catch((e) => onError?.(e))
 
-  useEffect(() => { reload() }, [])
-  useEffect(() => { api.themes().then((t) => setThemes(t.themes)).catch(() => {}) }, [])
+  // load once on mount; reload is exposed for callers, not a dependency here
+  useEffect(() => {
+    reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
+    api
+      .themes()
+      .then((t) => setThemes(t.themes))
+      .catch(() => {})
+  }, [])
 
   return { overview, themes, reload }
 }

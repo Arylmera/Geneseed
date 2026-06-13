@@ -29,41 +29,59 @@ export default function Diff() {
     setOpen(new Set(data.files.map((f) => f.rel)))
   }, [data])
 
-  const toggle = (rel) => setSel((s) => {
-    const n = new Set(s)
-    n.has(rel) ? n.delete(rel) : n.add(rel)
-    return n
-  })
-  const toggleAll = () => setSel((s) =>
-    s.size === data.files.length ? new Set() : new Set(data.files.map((f) => f.rel)))
+  const toggle = (rel) =>
+    setSel((s) => {
+      const n = new Set(s)
+      n.has(rel) ? n.delete(rel) : n.add(rel)
+      return n
+    })
+  const toggleAll = () =>
+    setSel((s) =>
+      s.size === data.files.length ? new Set() : new Set(data.files.map((f) => f.rel)),
+    )
 
   const exportImprovements = async () => {
     setBusy(true)
     try {
       const { job_id } = await api.action('export')
       let j
-      do { await new Promise((r) => setTimeout(r, 700)); j = await api.job(job_id) }
-      while (j.status === 'running')
+      do {
+        await new Promise((r) => setTimeout(r, 700))
+        j = await api.job(job_id)
+      } while (j.status === 'running')
       setNote(j.status === 'done' ? 'Improvements file written.' : 'Export failed — see logs.')
-    } catch (e) { setNote(e.message) } finally { setBusy(false) }
+    } catch (e) {
+      setNote(e.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   const restore = async () => {
     const files = [...sel]
-    const added = files.filter((rel) =>
-      data.files.find((f) => f.rel === rel)?.status === 'added')
+    const added = files.filter((rel) => data.files.find((f) => f.rel === rel)?.status === 'added')
     const warning = added.length
       ? `Restoring will DELETE ${added.length} deployed-only file(s):\n${added.join('\n')}\n\n`
       : ''
-    if (!window.confirm(
-      `${warning}Discard local edits and restore ${files.length} file(s) from source?`)) return
+    if (
+      !window.confirm(
+        `${warning}Discard local edits and restore ${files.length} file(s) from source?`,
+      )
+    )
+      return
     setBusy(true)
     try {
       const res = await api.restore(files)
-      const errs = res.errors.length ? ` · ${res.errors.length} error(s): ${res.errors.join('; ')}` : ''
+      const errs = res.errors.length
+        ? ` · ${res.errors.length} error(s): ${res.errors.join('; ')}`
+        : ''
       setNote(`Restored ${res.restored.length}, deleted ${res.deleted.length}${errs}`)
       await reload()
-    } catch (e) { setNote(e.message) } finally { setBusy(false) }
+    } catch (e) {
+      setNote(e.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   if (error) return <ErrorState error={error} />
@@ -81,11 +99,12 @@ export default function Diff() {
   const addedCount = files.filter((f) => f.status === 'added').length
   const missingCount = files.filter((f) => f.status === 'missing').length
 
-  const toggleOpenFile = (rel) => setOpen((s) => {
-    const n = new Set(s)
-    n.has(rel) ? n.delete(rel) : n.add(rel)
-    return n
-  })
+  const toggleOpenFile = (rel) =>
+    setOpen((s) => {
+      const n = new Set(s)
+      n.has(rel) ? n.delete(rel) : n.add(rel)
+      return n
+    })
 
   return (
     <>
@@ -93,18 +112,18 @@ export default function Diff() {
         <div>
           <span className="eyebrow">drift from source</span>
           <h1 className="h">Local edits</h1>
-          <p className="sub">The agent refines its own deployed files in place. Export them as improvements before any rebuild overwrites them.</p>
+          <p className="sub">
+            The agent refines its own deployed files in place. Export them as improvements before
+            any rebuild overwrites them.
+          </p>
         </div>
         <div className="row gap-10">
-          <button
-            className="btn ghost"
-            disabled={busy || sel.size === 0}
-            onClick={restore}
-          >
+          <button className="btn ghost" disabled={busy || sel.size === 0} onClick={restore}>
             Restore{sel.size ? ` (${sel.size})` : ''}
           </button>
           <button className="btn" disabled={busy} onClick={exportImprovements}>
-            <Icon name="download" />Export improvements
+            <Icon name="download" />
+            Export improvements
           </button>
         </div>
       </div>
@@ -120,10 +139,19 @@ export default function Diff() {
         <>
           <div className="row between mb-14">
             <div className="row gap-10">
-              <span className="badge"><span className="dot" style={{ background: 'var(--warn)' }} />{editedCount} edited</span>
-              <span className="badge"><span className="dot" style={{ background: 'var(--good)' }} />{addedCount} added</span>
+              <span className="badge">
+                <span className="dot" style={{ background: 'var(--warn)' }} />
+                {editedCount} edited
+              </span>
+              <span className="badge">
+                <span className="dot" style={{ background: 'var(--good)' }} />
+                {addedCount} added
+              </span>
               {missingCount > 0 && (
-                <span className="badge"><span className="dot" style={{ background: 'var(--bad)' }} />{missingCount} missing</span>
+                <span className="badge">
+                  <span className="dot" style={{ background: 'var(--bad)' }} />
+                  {missingCount} missing
+                </span>
               )}
             </div>
             <label className="row dim" style={{ gap: 8, fontSize: 12.5, cursor: 'pointer' }}>
@@ -140,7 +168,8 @@ export default function Diff() {
           <div className="stack gap-12">
             {files.map((f) => {
               const isOpen = open.has(f.rel)
-              const statusClass = f.status === 'added' ? 'ok' : f.status === 'missing' ? 'bad' : 'warn'
+              const statusClass =
+                f.status === 'added' ? 'ok' : f.status === 'missing' ? 'bad' : 'warn'
               return (
                 <div className={`card diff-file${isOpen ? ' open' : ''}`} key={f.rel}>
                   <div className="diff-head">
@@ -153,9 +182,12 @@ export default function Diff() {
                     />
                     <span className="fname">{f.rel}</span>
                     <span className={`badge ${statusClass}`}>
-                      <span className="dot" />{f.status}
+                      <span className="dot" />
+                      {f.status}
                     </span>
-                    <span className="dim mono" style={{ marginLeft: 'auto', fontSize: 11 }}>{f.diff.length} lines</span>
+                    <span className="dim mono" style={{ marginLeft: 'auto', fontSize: 11 }}>
+                      {f.diff.length} lines
+                    </span>
                     <button
                       className="iconbtn"
                       onClick={() => toggleOpenFile(f.rel)}
@@ -167,7 +199,9 @@ export default function Diff() {
                   {isOpen && (
                     <div className="diff-body">
                       {f.diff.map((ln, i) => (
-                        <div key={i} className={`diff-line ${lineKind(ln)}`}>{ln}</div>
+                        <div key={i} className={`diff-line ${lineKind(ln)}`}>
+                          {ln}
+                        </div>
                       ))}
                     </div>
                   )}

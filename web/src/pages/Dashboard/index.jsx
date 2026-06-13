@@ -12,14 +12,25 @@ export default function Dashboard({ overview, themes, onAction }) {
   const [setup, setSetup] = useState(null)
   const [jobs, setJobs] = useState([])
   const [graph, setGraph] = useState(null)
-  const sigil = overview ? (themes.find((t) => t.name === overview.theme)?.sigil || '') : ''
+  const sigil = overview ? themes.find((t) => t.name === overview.theme)?.sigil || '' : ''
 
   useEffect(() => {
     let alive = true
-    api.setup().then((v) => alive && setSetup(v)).catch(() => {})
-    api.jobs().then((r) => alive && setJobs(r.jobs || [])).catch(() => {})
-    api.graph().then((v) => alive && setGraph(v)).catch(() => {})
-    return () => { alive = false }
+    api
+      .setup()
+      .then((v) => alive && setSetup(v))
+      .catch(() => {})
+    api
+      .jobs()
+      .then((r) => alive && setJobs(r.jobs || []))
+      .catch(() => {})
+    api
+      .graph()
+      .then((v) => alive && setGraph(v))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
   }, [])
 
   if (!overview) return <div className="loading">Loading&#8230;</div>
@@ -30,16 +41,35 @@ export default function Dashboard({ overview, themes, onAction }) {
         <div>
           <span className="eyebrow">overview</span>
           <h1 className="h">Harness console</h1>
-          <p className="sub">A live readout of the harness deployed on this machine — its voice, its capabilities, and its drift from source.</p>
+          <p className="sub">
+            A live readout of the harness deployed on this machine — its voice, its capabilities,
+            and its drift from source.
+          </p>
         </div>
         <div className="seg">
-          {[['status', 'Status'], ['lineage', 'Lineage'], ['operator', 'Operator']].map(([k, l]) => (
-            <button key={k} className={dir === k ? 'on' : ''} onClick={() => setDir(k)}>{l}</button>
+          {[
+            ['status', 'Status'],
+            ['lineage', 'Lineage'],
+            ['operator', 'Operator'],
+          ].map(([k, l]) => (
+            <button key={k} className={dir === k ? 'on' : ''} onClick={() => setDir(k)}>
+              {l}
+            </button>
           ))}
         </div>
       </div>
-      {dir === 'status'   && <StatusView   overview={overview} sigil={sigil} setup={setup} jobs={jobs} onAction={onAction} />}
-      {dir === 'lineage'  && <LineageView  overview={overview} sigil={sigil} setup={setup} jobs={jobs} graph={graph} />}
+      {dir === 'status' && (
+        <StatusView
+          overview={overview}
+          sigil={sigil}
+          setup={setup}
+          jobs={jobs}
+          onAction={onAction}
+        />
+      )}
+      {dir === 'lineage' && (
+        <LineageView overview={overview} sigil={sigil} setup={setup} jobs={jobs} graph={graph} />
+      )}
       {dir === 'operator' && <OperatorView overview={overview} setup={setup} jobs={jobs} />}
     </>
   )

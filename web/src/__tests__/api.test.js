@@ -2,15 +2,36 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { api } from '../api/index.js'
 
 const okResp = (body) => ({ ok: true, json: () => Promise.resolve(body) })
-const errResp = (status, body = {}) =>
-  ({ ok: false, status, statusText: 'ERR', json: () => Promise.resolve(body) })
+const errResp = (status, body = {}) => ({
+  ok: false,
+  status,
+  statusText: 'ERR',
+  json: () => Promise.resolve(body),
+})
 
-beforeEach(() => { vi.restoreAllMocks() })
+beforeEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('api surface', () => {
   it('exposes every endpoint the UI uses', () => {
-    const names = ['overview', 'setup', 'doctor', 'themes', 'graph', 'catalog',
-      'item', 'diff', 'restore', 'job', 'jobs', 'cancelJob', 'action', 'mcp', 'mcpToggle']
+    const names = [
+      'overview',
+      'setup',
+      'doctor',
+      'themes',
+      'graph',
+      'catalog',
+      'item',
+      'diff',
+      'restore',
+      'job',
+      'jobs',
+      'cancelJob',
+      'action',
+      'mcp',
+      'mcpToggle',
+    ]
     for (const name of names) expect(typeof api[name]).toBe('function')
   })
 })

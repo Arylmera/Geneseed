@@ -10,8 +10,12 @@ export default function Genome({ overview }) {
       {SECTION_ORDER.map((key, i) => {
         const m = SECTIONS[key]
         return (
-          <div className="card gcell rise" key={key} style={{ animationDelay: `${i * 50}ms` }}
-            onClick={() => go('#/section/' + key)}>
+          <div
+            className="card gcell rise"
+            key={key}
+            style={{ animationDelay: `${i * 50}ms` }}
+            onClick={() => go('#/section/' + key)}
+          >
             <div className="gtop">
               <span className="gname">{m.label}</span>
               <Icon name={m.icon} className="gicon" />

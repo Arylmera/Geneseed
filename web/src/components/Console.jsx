@@ -23,28 +23,43 @@ export default function Console({ runs, open, onToggle, onClear, onCancel, busy 
           <button className="iconbtn" title="Clear" onClick={onClear} disabled={!runs.length}>
             <Icon name="clear" />
           </button>
-          <button className="iconbtn" title={open ? 'Collapse' : 'Expand'} aria-expanded={open} onClick={onToggle}>
-            <Icon name="chevron" className="glyph"
-              style={{ transform: open ? 'rotate(90deg)' : 'rotate(-90deg)' }} />
+          <button
+            className="iconbtn"
+            title={open ? 'Collapse' : 'Expand'}
+            aria-expanded={open}
+            onClick={onToggle}
+          >
+            <Icon
+              name="chevron"
+              className="glyph"
+              style={{ transform: open ? 'rotate(90deg)' : 'rotate(-90deg)' }}
+            />
           </button>
         </div>
       </div>
       {open && (
         <div className="console-body" ref={bodyRef}>
-          {runs.length === 0 &&
-            <div className="console-empty">No commands run yet. Actions you trigger stream here.</div>}
+          {runs.length === 0 && (
+            <div className="console-empty">
+              No commands run yet. Actions you trigger stream here.
+            </div>
+          )}
           {runs.map((r) => (
             <div className="run" key={r.id}>
               <div className="run-head">
                 <span className="pr">$</span>
                 <span className="act">{r.action}</span>
                 <span className={`st ${r.status}`}>
-                  {r.status === 'running' ? '…running'
+                  {r.status === 'running'
+                    ? '…running'
                     : `${r.status === 'done' ? '✓ done' : '✗ failed'}${r.duration ? ` · ${r.duration}s` : ''}`}
                 </span>
                 {r.status === 'running' && onCancel && (
-                  <button className="iconbtn run-cancel" title="Cancel this run"
-                    onClick={() => onCancel(r.id)}>
+                  <button
+                    className="iconbtn run-cancel"
+                    title="Cancel this run"
+                    onClick={() => onCancel(r.id)}
+                  >
                     <Icon name="x" />
                   </button>
                 )}

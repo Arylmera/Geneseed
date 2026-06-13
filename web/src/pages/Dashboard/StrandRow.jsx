@@ -13,7 +13,9 @@ export default function StrandRow({ k, overview, max }) {
         <span className="strand-dot" />
         <span>{m.label}</span>
       </span>
-      <div className="hbar"><i style={{ width: `${(v / max) * 100}%` }} /></div>
+      <div className="hbar">
+        <i style={{ width: `${(v / max) * 100}%` }} />
+      </div>
       <span className="strand-val">{v}</span>
     </div>
   )

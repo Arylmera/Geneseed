@@ -21,7 +21,9 @@ export default function ActivityFeed({ jobs }) {
       {shown.map((j) => (
         <div className="feed-row" key={j.id}>
           <span className={`feed-dot ${kindMap[j.status] || 'ok'}`} />
-          <span className="feed-txt"><b>{j.action}</b></span>
+          <span className="feed-txt">
+            <b>{j.action}</b>
+          </span>
           <span className="feed-when">{relTime(j.started)} ago</span>
         </div>
       ))}

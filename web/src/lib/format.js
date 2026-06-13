@@ -26,17 +26,17 @@ export function promptPath(target) {
 // version in sync 20%, nothing missing on disk 15%.
 export function readiness(ov, setup) {
   if (!ov) return 0
-  const doctorScore = ov.doctor?.ok ? 0.25
-    : (ov.doctor?.problems?.length ?? 99) <= 2 ? 0.15 : 0.05
-  return (ov.deployed ? 0.40 : 0)
-    + doctorScore
-    + (setup && setup.installed_fp && setup.installed_fp === setup.source_fp ? 0.20 : 0)
-    + (ov.diff && ov.diff.missing === 0 ? 0.15 : 0)
+  const doctorScore = ov.doctor?.ok ? 0.25 : (ov.doctor?.problems?.length ?? 99) <= 2 ? 0.15 : 0.05
+  return (
+    (ov.deployed ? 0.4 : 0) +
+    doctorScore +
+    (setup && setup.installed_fp && setup.installed_fp === setup.source_fp ? 0.2 : 0) +
+    (ov.diff && ov.diff.missing === 0 ? 0.15 : 0)
+  )
 }
 
 // Largest section count (floored at 1) — the denominator for proportional bars.
-export const maxCount = (counts) =>
-  Math.max(...SECTION_ORDER.map((k) => counts?.[k] ?? 0), 1)
+export const maxCount = (counts) => Math.max(...SECTION_ORDER.map((k) => counts?.[k] ?? 0), 1)
 
 // Local edits awaiting export = edited + added files from the diff summary.
 export const editCount = (diff) => (diff?.edited ?? 0) + (diff?.added ?? 0)

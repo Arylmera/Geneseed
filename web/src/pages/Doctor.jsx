@@ -19,7 +19,9 @@ function CheckCard({ group }) {
         <h3>{group.label}</h3>
         <span className={`badge ${clean ? 'ok' : 'bad'}`}>
           <span className="dot" />
-          {clean ? 'clean' : `${group.problems.length} problem${group.problems.length === 1 ? '' : 's'}`}
+          {clean
+            ? 'clean'
+            : `${group.problems.length} problem${group.problems.length === 1 ? '' : 's'}`}
         </span>
         {!clean && <Icon name="chevron" className="chev glyph" />}
       </div>
@@ -41,7 +43,10 @@ export default function Doctor() {
   const { data, error, reload, setData } = useAsync(() => api.doctor(), [])
   // Re-running clears the result first so the button reads "Running…" and the
   // sandbox-build loading copy shows while every theme is re-validated.
-  const rerun = () => { setData(null); reload() }
+  const rerun = () => {
+    setData(null)
+    reload()
+  }
 
   if (error) return <ErrorState error={error} />
 
@@ -52,8 +57,8 @@ export default function Doctor() {
           <span className="eyebrow">health</span>
           <h1 className="h">Doctor</h1>
           <p className="sub">
-            Every check builds each theme in a sandbox and validates the result — token
-            resolution, link integrity, parity, and drift.
+            Every check builds each theme in a sandbox and validates the result — token resolution,
+            link integrity, parity, and drift.
           </p>
         </div>
         <button className="btn ghost" onClick={rerun} disabled={!data}>
@@ -78,13 +83,23 @@ export default function Doctor() {
                   </span>
                 ))}
               </div>
-              {data.ok
-                ? <span className="badge ok"><span className="dot" />all clean</span>
-                : <span className="badge bad"><span className="dot" />{data.problems.length} problem{data.problems.length === 1 ? '' : 's'}</span>}
+              {data.ok ? (
+                <span className="badge ok">
+                  <span className="dot" />
+                  all clean
+                </span>
+              ) : (
+                <span className="badge bad">
+                  <span className="dot" />
+                  {data.problems.length} problem{data.problems.length === 1 ? '' : 's'}
+                </span>
+              )}
             </div>
           </div>
           <div className="stack gap-12">
-            {data.groups.map((g) => <CheckCard key={g.label} group={g} />)}
+            {data.groups.map((g) => (
+              <CheckCard key={g.label} group={g} />
+            ))}
           </div>
         </>
       )}

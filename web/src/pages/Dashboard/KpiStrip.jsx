@@ -9,7 +9,7 @@ export default function KpiStrip({ overview }) {
   const kpis = [
     { key: 'agents', label: 'Agents', foot: 'capability roster' },
     { key: 'skills', label: 'Skills', foot: 'repeatable rites' },
-    { key: 'laws',   label: 'Laws',   foot: 'all enforced' },
+    { key: 'laws', label: 'Laws', foot: 'all enforced' },
   ]
   return (
     <div className="grid g-4 mb-16">
@@ -17,11 +17,17 @@ export default function KpiStrip({ overview }) {
         <div className="card kpi rise" key={k.key} style={{ animationDelay: `${i * 60}ms` }}>
           <div className="klabel">{k.label}</div>
           <div className="kval">{overview.counts?.[k.key] ?? '—'}</div>
-          <div className="kfoot"><span>{k.foot}</span></div>
+          <div className="kfoot">
+            <span>{k.foot}</span>
+          </div>
         </div>
       ))}
-      <div className="card kpi rise" key="edits" style={{ animationDelay: '180ms', cursor: 'pointer' }}
-        onClick={() => go('#/diff')}>
+      <div
+        className="card kpi rise"
+        key="edits"
+        style={{ animationDelay: '180ms', cursor: 'pointer' }}
+        onClick={() => go('#/diff')}
+      >
         <div className="klabel">Local edits</div>
         <div className="kval">{edits}</div>
         <div className="kfoot">

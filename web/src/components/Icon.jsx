@@ -3,11 +3,15 @@ import React from 'react'
 export const ICONS = {
   dashboard: 'M3 13h7V3H3v10Zm0 8h7v-6H3v6Zm11 0h7V11h-7v10Zm0-18v6h7V3h-7Z',
   library: 'M4 5h10v14H4zM16 7h4v12h-4M7 9h4M7 12h4',
-  graph: 'M6 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM7.5 14.5l8-8M16.7 15.2L8.8 16.6',
+  graph:
+    'M6 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM7.5 14.5l8-8M16.7 15.2L8.8 16.6',
   changes: 'M4 6h10M4 12h7M4 18h12M17 4l3 3-3 3M20 7h-6',
-  doctor: 'M12 3v6m0 0a4 4 0 0 1-4 4H7a3 3 0 0 0-3 3v2m8-9a4 4 0 0 0 4 4h1a3 3 0 0 1 3 3v2M12 3a1.5 1.5 0 1 0 0-.01',
-  themes: 'M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1 .8-1.5 1.7-1.5H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z',
-  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-3a8 8 0 0 0-.1-1.3l2-1.6-2-3.4-2.4 1a8 8 0 0 0-2.2-1.3L15 2H9l-.3 2.6a8 8 0 0 0-2.2 1.3l-2.4-1-2 3.4 2 1.6A8 8 0 0 0 4 12c0 .4 0 .9.1 1.3l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 2.2 1.3L9 22h6l.3-2.6a8 8 0 0 0 2.2-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3Z',
+  doctor:
+    'M12 3v6m0 0a4 4 0 0 1-4 4H7a3 3 0 0 0-3 3v2m8-9a4 4 0 0 0 4 4h1a3 3 0 0 1 3 3v2M12 3a1.5 1.5 0 1 0 0-.01',
+  themes:
+    'M12 3a9 9 0 1 0 0 18c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1 .8-1.5 1.7-1.5H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z',
+  settings:
+    'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-3a8 8 0 0 0-.1-1.3l2-1.6-2-3.4-2.4 1a8 8 0 0 0-2.2-1.3L15 2H9l-.3 2.6a8 8 0 0 0-2.2 1.3l-2.4-1-2 3.4 2 1.6A8 8 0 0 0 4 12c0 .4 0 .9.1 1.3l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 2.2 1.3L9 22h6l.3-2.6a8 8 0 0 0 2.2-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3Z',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3',
   chevron: 'M9 6l6 6-6 6',
   x: 'M6 6l12 12M18 6L6 18',
@@ -27,8 +31,17 @@ export const ICONS = {
 
 export function Icon({ name, className = 'glyph', style }) {
   return (
-    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      className={className}
+      style={style}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d={ICONS[name] || ''} />
     </svg>
   )
@@ -37,7 +50,13 @@ export function Icon({ name, className = 'glyph', style }) {
 export function Sprout({ className = 'sprout' }) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 21.5v-9" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" fill="none" />
+      <path
+        d="M12 21.5v-9"
+        stroke="var(--accent)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        fill="none"
+      />
       <path d="M12 13c0-4.5 3.2-7.5 7.5-7.5 0 4.5-3.2 7.5-7.5 7.5z" fill="var(--accent)" />
       <path d="M12 14.5c0-3.6-2.6-6-6-6 0 3.6 2.6 6 6 6z" fill="var(--accent)" opacity=".42" />
       <circle cx="12" cy="12.4" r="1.1" fill="var(--bg)" />

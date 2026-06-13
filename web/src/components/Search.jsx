@@ -16,8 +16,12 @@ export default function Search({ value, onChange }) {
   return (
     <div className="tb-search">
       <Icon name="search" className="mag glyph" />
-      <input ref={ref} value={value} onChange={(e) => onChange(e.target.value)}
-        placeholder="Search the harness…" />
+      <input
+        ref={ref}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search the harness…"
+      />
       <span className="kbd">/</span>
     </div>
   )
