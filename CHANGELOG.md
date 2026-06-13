@@ -16,7 +16,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
     realistic mistakes, withholding the answer until the user has tried.
   - `decode` — make confusing material click via one keystone sentence, an
     everyday analogy, and a three-question comprehension check.
-  Brings the skill count to 30.
+  These join `learning-path`, `gap-detector`, and `feynman`, bringing the
+  skill count to 33.
 
 ## [1.0.0] — 2026-06-13
 
@@ -28,7 +29,7 @@ suites) on Linux and Windows.
 - One neutral `src/` rendered by a stdlib-only generator (`build.py`) into 14
   themed, tool-agnostic bundles; structure stays theme-independent.
 - 20 universal laws, 16 capability agents (6 execution + a 10-seat debate council),
-  30 skills, the one-fact-per-file memory convention, and the agent's sovereign
+  33 skills, the one-fact-per-file memory convention, and the agent's sovereign
   notebook.
 
 ### Tooling
