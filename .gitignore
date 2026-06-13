@@ -16,3 +16,8 @@ improvements/
 
 # Web UI: dev-only deps (dist/ is committed and MUST stay tracked)
 web/node_modules/
+# Stray vite cache when a build is invoked from the repo root instead of web/
+/node_modules/
+
+# macOS Finder metadata
+.DS_Store
