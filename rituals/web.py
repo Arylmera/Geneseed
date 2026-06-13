@@ -159,7 +159,17 @@ DOC_GROUPS = [
          "context injection, learn-at-session-end, the safety guard, and the "
          "saved workflow runner. The structure is theme-independent — a "
          "theme only changes the *voice* (banner, sigil, prose), never a "
-         "folder or a link."},
+         "folder or a link.\n\n"
+         "### What this UI actually shows\n\n"
+         "The **Library** and **Graph** render the Geneseed source live — "
+         "they show the harness that *would* be deployed if you rebuilt "
+         "right now. The **Settings** panes and the **Memory** drawer read "
+         "from the deployed harness on disk (`~/.config/opencode/…` for an "
+         "OpenCode global install).\n\n"
+         "If you've built recently, the two match. If you edit a file under "
+         "`src/` and reload this panel, the Library updates immediately — "
+         "the deployed bundle does not, until the next `geneseed update` or "
+         "`build`."},
         {"id": "rules", "title": "Rules (Laws)", "kind": "concept",
          "link": {"hash": "#/section/laws", "label": "Browse the catalog →"},
          "body": "20 universal laws the agent obeys — secrets handling, "

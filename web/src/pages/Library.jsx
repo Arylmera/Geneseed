@@ -16,8 +16,10 @@ export default function Library({ overview }) {
           <span className="eyebrow">browse</span>
           <h1 className="h">Library</h1>
           <p className="sub">
-            Agents, skills, laws, memory, notebook, wiki, config — every rendered
-            piece of the deployed harness, grouped by section.
+            Agents, skills, laws, memory, notebook, wiki, config — grouped by
+            section. The catalog (agents · skills · laws) renders live from
+            <code> src/</code>; memory and config read from the deployed
+            harness on disk.
           </p>
         </div>
       </div>
