@@ -20,13 +20,15 @@ import Section from '../pages/Section.jsx'
 import { api } from '../api/index.js'
 
 describe('Section', () => {
-  it('renders the tab strip with counts and the catalog items', async () => {
+  it('labels the active section with its count and lists the catalog items', async () => {
     render(<Section section="agents" counts={{ agents: 2, skills: 5 }} />)
     await waitFor(() => expect(screen.getByText('Reviewer')).toBeTruthy())
     expect(screen.getByText('Tester')).toBeTruthy()
-    // tab strip is driven by the shared sections taxonomy
+    // the list pane heads with the active section (sibling sections now live in
+    // the rail sub-menu, not an in-page tab strip)
     expect(screen.getByText('Agents')).toBeTruthy()
-    expect(screen.getByText('Skills')).toBeTruthy()
+    expect(screen.getByText('2')).toBeTruthy()
+    expect(screen.queryByText('Skills')).toBeNull()
   })
 
   it('filters the list by the search query', async () => {

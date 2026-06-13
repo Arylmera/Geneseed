@@ -1,7 +1,7 @@
 import React from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
-import { SECTIONS, SECTION_ORDER } from '../lib/sections.js'
+import { SECTIONS } from '../lib/sections.js'
 import { useAsync } from '../hooks/useAsync.js'
 import ErrorState from '../components/ErrorState.jsx'
 import Markdown from '../components/Markdown.jsx'
@@ -83,17 +83,11 @@ export default function Section({ section, selected, query, counts }) {
       </div>
       <div className="lib">
         <div className="card lib-list">
-          <div className="lib-tabs">
-            {SECTION_ORDER.map((k) => (
-              <span
-                key={k}
-                className={`lib-tab ${section === k ? 'on' : ''}`}
-                onClick={() => go(`#/section/${k}`)}
-              >
-                {SECTIONS[k].label}
-                {counts?.[k] != null ? <span style={{ opacity: 0.6 }}> {counts[k]}</span> : null}
-              </span>
-            ))}
+          <div className="lib-head">
+            <span className="lib-head-label">{SECTIONS[section].label}</span>
+            {counts?.[section] != null ? (
+              <span className="lib-head-count">{counts[section]}</span>
+            ) : null}
           </div>
           <div className="lib-rows">
             {shown.map((it) => (

@@ -123,6 +123,27 @@ button { font-family: inherit; }
 .rail-item.active .glyph { opacity: 1; color: var(--accent); }
 .rail-item.active .tag { color: var(--accent); }
 .rail-spacer { flex: 1; }
+
+/* Library's sections rendered as a nested sub-menu beneath its rail item.
+   Indented under the parent icon, with a guide line so the nesting reads at a
+   glance; each row mirrors .rail-item's hover/active treatment one level down. */
+.rail-sub { display: flex; flex-direction: column; gap: 1px; position: relative;
+  margin: 2px 0 4px; }
+.rail-sub::before { content: ''; position: absolute; left: 25px; top: 4px; bottom: 6px;
+  width: 1px; background: var(--line-2); }
+.rail-subitem { display: flex; align-items: center; gap: 9px; position: relative;
+  padding: 7px 12px 7px 38px; border-radius: var(--r-sm); cursor: pointer;
+  color: var(--text-3); font-weight: 500; font-size: 12.5px; text-decoration: none;
+  transition: color .14s, background .14s; }
+.rail-subitem:hover { color: var(--text); background: var(--surface); }
+.rail-subitem .tag { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-3); font-variant-numeric: tabular-nums; }
+.rail-subitem.active { color: var(--text); background:
+  linear-gradient(90deg, var(--accent-soft), transparent 88%); }
+.rail-subitem.active::before { content: ''; position: absolute; left: 24px; top: 50%;
+  transform: translateY(-50%); width: 3px; height: 13px; border-radius: 3px;
+  background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+.rail-subitem.active .tag { color: var(--accent); }
 .rail-foot { border-top: 1px solid var(--line); padding: 12px 12px 2px; margin-top: 8px; }
 .rail-foot .voice { display: flex; align-items: center; gap: 9px; cursor: pointer;
   padding: 8px 10px; border-radius: var(--r-sm); }
@@ -394,11 +415,14 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 /* ============================ LIBRARY ================================= */
 .lib { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
 .lib-list { overflow: hidden; }
-.lib-tabs { display: flex; gap: 4px; padding: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
-.lib-tab { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--text-2); padding: 5px 10px; border-radius: 5px; cursor: pointer; }
-.lib-tab:hover { color: var(--text); background: var(--surface); }
-.lib-tab.on { color: var(--accent-ink); background: var(--accent); }
+/* The active section now lives in the rail sub-menu; the list pane just labels
+   which section it's showing. */
+.lib-head { display: flex; align-items: baseline; gap: 8px; padding: 13px 16px;
+  border-bottom: 1px solid var(--line); }
+.lib-head-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-2); }
+.lib-head-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+  font-variant-numeric: tabular-nums; }
 .lib-rows { max-height: calc(100vh - 280px); overflow: auto; }
 .lib-row { padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer;
   border-left: 2px solid transparent; transition: background .1s; }
@@ -679,3 +703,78 @@ a.rail-item.active { color: var(--text); }
 /* page wrappers that cap reading width (Doctor, Settings) */
 .narrow    { max-width: 820px; }
 .narrow-lg { max-width: 860px; }
+
+/* ============================== DOCS PAGE ============================ */
+/* The Docs view reuses the .lib two-pane grid. The left sub-nav is grouped:
+   each .docs-group is a section, with a small uppercase label above its rows.
+   The right pane uses .detail-doc + .markdown — the same styling the Library
+   item view uses, so the typography stays consistent. */
+.docs-group { padding: 6px 0 4px; }
+.docs-group + .docs-group { border-top: 1px solid var(--line); }
+.docs-group-head {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-3);
+  padding: 10px 16px 6px;
+}
+
+/* In-page TOC for long markdown pages. Sits as a soft chip-board above the
+   body so it scrolls away with the content, not as a sticky sidebar (the
+   right pane is already narrow). */
+.docs-toc {
+  border: 1px solid var(--line-2); background: var(--surface);
+  border-radius: 10px; padding: 12px 16px; margin: 6px 0 22px;
+}
+.docs-toc-head {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-3); margin-bottom: 6px;
+}
+.docs-toc ul { list-style: none; margin: 0; padding: 0; }
+.docs-toc li { padding: 2px 0; }
+.docs-toc li.lvl-3 { padding-left: 14px; }
+.docs-toc a {
+  color: var(--text-2); text-decoration: none; font-size: 13px;
+}
+.docs-toc a:hover { color: var(--accent); }
+
+/* "You are here" overlay on Setup. Outlines the heading that matches the
+   deployed install so the docs read as a status surface at the same time. */
+.markdown .docs-here {
+  background: var(--accent-soft); padding: 6px 10px; border-radius: 8px;
+  border-left: 3px solid var(--accent);
+}
+
+/* CLI reference cards. Synopsis is a monospace pill; each arg sits in a
+   compact row with its names, metavars, and help text. */
+.cli-card .cli-syn {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; margin: 10px 0;
+  font-family: var(--font-mono); font-size: 12.5px; white-space: pre-wrap;
+  color: var(--text);
+}
+.cli-block { margin-top: 10px; }
+.cli-block-head {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-3); margin-bottom: 6px;
+}
+.cli-arg {
+  padding: 6px 0; border-bottom: 1px dashed var(--line);
+}
+.cli-arg:last-child { border-bottom: 0; }
+.cli-arg-name { font-family: var(--font-mono); color: var(--text); font-weight: 600; }
+.cli-arg-meta { color: var(--text-3); font-size: 11.5px; }
+.cli-arg-help { color: var(--text-2); font-size: 13px; margin-top: 2px; }
+
+/* Spec index row hovers like a card. */
+.spec-row:hover { border-color: var(--accent-line); }
+
+/* Glossary side-by-side table. */
+.glossary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.glossary-table th, .glossary-table td {
+  text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.glossary-table th {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-3); font-weight: 500;
+}
+.glossary-table td.dim { color: var(--text-2); }
