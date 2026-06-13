@@ -46,7 +46,7 @@ When a step fails, errors, or returns a result you did not expect, stop and surf
 it: report the failure verbatim, state what you attempted, and wait for direction.
 Do not silently proceed past a broken step, and do not retry more than once without
 reporting what happened. A failure hidden or papered over costs more than a failure
-named. (Skill-coherence — one domain, reuse before creating — moved into {{LAW}} V.)
+named.
 
 ### {{LAW}} VIII — {{LEX_VIII}}
 Respond to what is asked — no filler, no empty preamble, no performative
