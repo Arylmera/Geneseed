@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Full-bleed background so the mask can crop to any shape; the sprout sits
+       well inside the centred 80% safe zone (102–410px). -->
+  <rect width="512" height="512" fill="#0C0E11"/>
+  <g transform="translate(136,136) scale(10)">
+    <path d="M12 21.5v-9" stroke="#3AD4C4" stroke-width="2" stroke-linecap="round" fill="none"/>
+    <path d="M12 13c0-4.5 3.2-7.5 7.5-7.5 0 4.5-3.2 7.5-7.5 7.5z" fill="#3AD4C4"/>
+    <path d="M12 14.5c0-3.6-2.6-6-6-6 0 3.6 2.6 6 6 6z" fill="#3AD4C4" opacity=".42"/>
+  </g>
+</svg>

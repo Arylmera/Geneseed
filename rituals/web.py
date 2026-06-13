@@ -805,6 +805,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path):
                 ".css": "text/css", ".json": "application/json",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon",
                 ".woff2": "font/woff2",
+                ".webmanifest": "application/manifest+json",
+                ".png": "image/png",
             }.get(fp.suffix, "application/octet-stream")
             return self._send_bytes(data, ctype)
 
