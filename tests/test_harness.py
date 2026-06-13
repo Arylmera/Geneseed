@@ -493,14 +493,18 @@ class McpServerTests(unittest.TestCase):
         d = Path(tempfile.mkdtemp())
         try:
             targets = [("this project", d / "a.json"), ("global config", d / "b.json")]
-            orig = harness._installed_defaults
+            # Patch the global in the module where _mcp_default_target actually reads
+            # it (its own __globals__), so the stub applies post-split regardless of
+            # which _harness_* file the function now lives in.
+            g = harness._mcp_default_target.__globals__
+            orig = g["_installed_defaults"]
             try:                                             # neither file exists
-                harness._installed_defaults = lambda: {"emit": "opencode-global"}
+                g["_installed_defaults"] = lambda: {"emit": "opencode-global"}
                 self.assertEqual(harness._mcp_default_target(targets), 1)   # -> global
-                harness._installed_defaults = lambda: {"emit": "files"}
+                g["_installed_defaults"] = lambda: {"emit": "files"}
                 self.assertEqual(harness._mcp_default_target(targets), 0)   # -> project
             finally:
-                harness._installed_defaults = orig
+                g["_installed_defaults"] = orig
         finally:
             shutil.rmtree(d, ignore_errors=True)
 
@@ -823,17 +827,20 @@ class TuiHelperTests(unittest.TestCase):
     def test_spin_is_static_when_motion_off(self):
         # The calm tiers (PLAIN / non-animated) must not emit a braille glyph — _spin
         # returns a tick-independent static mark so a per-keypress redraw never flickers.
-        saved = (harness._TUI_ANIM, harness._TUI_ASCII)
+        # Patch the flags in the module that _spin reads (its own __globals__) so the
+        # override applies post-split wherever the function now lives.
+        g = harness._spin.__globals__
+        saved = (g["_TUI_ANIM"], g["_TUI_ASCII"])
         try:
-            harness._TUI_ANIM, harness._TUI_ASCII = False, False
+            g["_TUI_ANIM"], g["_TUI_ASCII"] = False, False
             self.assertEqual(harness._spin(0), "·")
             self.assertEqual(harness._spin(7), "·")        # independent of the tick
-            harness._TUI_ASCII = True
+            g["_TUI_ASCII"] = True
             self.assertEqual(harness._spin(3), "-")
-            harness._TUI_ANIM, harness._TUI_ASCII = True, False
+            g["_TUI_ANIM"], g["_TUI_ASCII"] = True, False
             self.assertIn(harness._spin(0), harness._SPIN)  # animated tier whirls
         finally:
-            harness._TUI_ANIM, harness._TUI_ASCII = saved
+            g["_TUI_ANIM"], g["_TUI_ASCII"] = saved
 
     def test_new_icon_and_mark_keys_present_and_ascii_pure(self):
         self.assertIn("badge", harness._ICONS)
@@ -846,14 +853,15 @@ class TuiHelperTests(unittest.TestCase):
         # never drifts the surrounding layout — even mid-cell (eighths) fills.
         for frac in (0.0, 0.03, 0.1, 0.5, 0.99, 1.0):
             self.assertEqual(harness._dwidth(harness._progress_bar(frac, 24)), 24)
-        saved = harness._TUI_ASCII
+        g = harness._progress_bar.__globals__              # patch where the fn reads it
+        saved = g["_TUI_ASCII"]
         try:
-            harness._TUI_ASCII = True
+            g["_TUI_ASCII"] = True
             bar = harness._progress_bar(0.5, 10)
             self.assertEqual(len(bar), 10)
             self.assertTrue(set(bar) <= set("#-"))         # ASCII tier stays #/-
         finally:
-            harness._TUI_ASCII = saved
+            g["_TUI_ASCII"] = saved
 
 
 class OpencodeAgentColorAndThemeTests(unittest.TestCase):
