@@ -17,9 +17,10 @@ export default function Library({ overview }) {
           <h1 className="h">Library</h1>
           <p className="sub">
             Agents, skills, laws, memory, notebook, wiki, config — grouped by
-            section. The catalog (agents · skills · laws) renders live from
-            <code> src/</code>; memory and config read from the deployed
-            harness on disk.
+            section. The catalog (agents · skills · laws) is rebuilt live as
+            you browse, so it reflects the harness Geneseed would produce
+            right now; memory and config come from the harness already
+            installed on your machine.
           </p>
         </div>
       </div>

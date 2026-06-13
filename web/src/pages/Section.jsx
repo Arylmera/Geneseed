@@ -23,7 +23,7 @@ function DocView({ section, item, onForget }) {
             {item.links.length} cross-link{item.links.length === 1 ? '' : 's'}
           </span>
         ) : null}
-        {section === 'memory' && (
+        {section === 'memory' && item.name !== 'MEMORY' && item.name !== 'README' && (
           <button className="btn ghost sm" style={{ marginLeft: 'auto' }} onClick={onForget}>
             Forget this fact
           </button>
