@@ -15,6 +15,9 @@
 
 set -eo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Interpreter probe — kept inline (same probe as the launcher), not sourced from a
+# shared file, so this self-update wrapper carries no sibling-file dependency
+# mid-update. Intentional copy; see the launcher for the full rationale.
 PY="${PYTHON:-}"
 if [ -z "$PY" ]; then
   for c in python3 python py; do

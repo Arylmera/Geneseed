@@ -20,6 +20,8 @@ set -eo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Probe for an interpreter that actually RUNS — on Windows Git Bash, `python3` can
 # resolve to the Microsoft Store alias stub (exists, prints a hint, exits non-zero).
+# Kept inline (same probe as the launcher), not sourced from a shared file, so this
+# self-update wrapper carries no sibling-file dependency mid-update. Intentional copy.
 PY="${PYTHON:-}"
 if [ -z "$PY" ]; then
   for c in python3 python py; do

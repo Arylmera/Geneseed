@@ -17,6 +17,9 @@ set -eo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Probe for an interpreter that actually RUNS — on Windows Git Bash, `python3` can
 # resolve to the Microsoft Store alias stub (exists, prints a hint, exits non-zero).
+# Inlined on purpose (same probe as the launcher): bootstrap must find Python to reach
+# its own self-heal path below, so it can't source this from a sibling file that a
+# corrupted rituals/ might lack. The duplication is load-bearing — don't extract it.
 PY="${PYTHON:-}"
 if [ -z "$PY" ]; then
   for c in python3 python py; do
