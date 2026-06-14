@@ -7,12 +7,14 @@
      prose; in the Geneseed source repo it is the DESC_<NAME> token with the prose
      defined per theme.
   3. Add a row for it to the skills table in AGENT.md (the table is hand-authored;
-     the skill files themselves auto-render).
+     the skill files themselves auto-render). doctor fails if the table and the skill
+     files disagree, so neither can silently drift.
   Geneseed source repo only (skip in an installed harness):
   4. Define the DESC_<NAME> token (hyphens -> underscores, uppercased) in ALL theme
      JSONs under themes/ — the parity gate fails if any theme is missing it.
-  5. Bump the hard-coded skill counts in tests/test_harness.py (StatusDataTests and
-     TuiInventoryTests), then run: python rituals/harness.py doctor --all
+  5. Bump the `skills-N` count badge in README.md (doctor checks it against the real
+     file count; the test counts derive from src/ and need no edit), then run:
+     python rituals/harness.py doctor --all
      and python -m unittest discover -s tests.
 -->
 # {{SKILL}}: <name>
