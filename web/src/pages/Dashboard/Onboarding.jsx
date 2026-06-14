@@ -37,8 +37,9 @@ export default function Onboarding({ onAction }) {
         <div>
           <h1 className="h">Deploy your harness</h1>
           <p className="sub">
-            Geneseed isn&apos;t implanted on this machine yet. Pick a voice and an install mode, then
-            deploy. The graft runs in the console below, and this dashboard lights up when it lands.
+            Geneseed isn&apos;t implanted on this machine yet. Pick a voice and an install mode,
+            then deploy. The graft runs in the console below, and this dashboard lights up when it
+            lands.
           </p>
         </div>
       </div>
