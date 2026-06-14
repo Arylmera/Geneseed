@@ -54,10 +54,9 @@ export default function Doctor() {
     <div className="narrow">
       <div className="head-row mb-16">
         <div>
-          <span className="eyebrow">health</span>
           <h1 className="h">Doctor</h1>
           <p className="sub">
-            Every check builds each theme in a sandbox and validates the result — token resolution,
+            Every check builds each theme in a sandbox and validates the result: token resolution,
             link integrity, parity, and drift.
           </p>
         </div>

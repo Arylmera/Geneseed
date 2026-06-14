@@ -72,7 +72,7 @@ export default function App() {
         <div className="atmos" aria-hidden="true" />
         <div className="page" style={{ display: 'grid', placeItems: 'center' }}>
           <p className="sub" style={{ textAlign: 'center', maxWidth: 480 }}>
-            Server stopped — you can close this tab. Reopen any time with <code>geneseed web</code>.
+            Server stopped. You can close this tab and reopen any time with <code>geneseed web</code>.
           </p>
         </div>
       </div>

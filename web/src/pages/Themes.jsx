@@ -25,12 +25,11 @@ export default function Themes({ onAction }) {
     <>
       <div className="head-row">
         <div>
-          <span className="eyebrow">voice</span>
           <h1 className="h">Themes</h1>
           <p className="sub">
             Every theme ships the same harness in a different voice. Applying one rebuilds the
-            deployed install — structure and behaviour stay identical, only the words and the accent
-            change.
+            deployed install. Structure and behaviour stay identical; only the words and the accent
+            shift.
           </p>
         </div>
       </div>

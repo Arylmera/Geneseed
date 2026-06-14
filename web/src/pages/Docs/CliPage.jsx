@@ -92,11 +92,10 @@ export default function CliPage({ page }) {
   const commands = page.commands || []
   return (
     <div className="detail-doc">
-      <span className="eyebrow">cli</span>
-      <h1 style={{ marginTop: 10 }}>{page.title}</h1>
+      <h1 style={{ marginTop: 0 }}>{page.title}</h1>
       <p className="sub" style={{ marginTop: 4 }}>
-        Every subcommand of <code>{prog}</code>. Generated from the parser at request time — the
-        same one <code>geneseed</code> actually parses, so this page cannot drift.
+        Every subcommand of <code>{prog}</code>. Generated from the parser at request time (the same
+        one <code>geneseed</code> actually parses), so this page cannot drift.
       </p>
       <div style={{ marginTop: 18 }}>
         {commands.map((c) => (

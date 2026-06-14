@@ -35,11 +35,10 @@ export default function Onboarding({ onAction }) {
     <div className="narrow-lg">
       <div className="head-row mb-18">
         <div>
-          <span className="eyebrow">welcome</span>
           <h1 className="h">Deploy your harness</h1>
           <p className="sub">
-            Geneseed isn&apos;t deployed on this machine yet. Pick a voice and an install mode, then
-            deploy — it runs in the console below, and this dashboard lights up when it&apos;s done.
+            Geneseed isn&apos;t implanted on this machine yet. Pick a voice and an install mode, then
+            deploy. The graft runs in the console below, and this dashboard lights up when it lands.
           </p>
         </div>
       </div>
@@ -78,7 +77,7 @@ export default function Onboarding({ onAction }) {
         </div>
         <p className="sub mb-16">
           <code>opencode-global</code> deploys once to your global config so every repo on this
-          machine inherits the harness — recommended. Other modes render into a chosen directory.
+          machine inherits the harness (recommended). Other modes render into a chosen directory.
         </p>
         <label className="stack" style={{ gap: 6, maxWidth: 360 }}>
           <span className="tick">Mode</span>
@@ -86,7 +85,7 @@ export default function Onboarding({ onAction }) {
             {data.emits.map((em) => (
               <option key={em.name} value={em.name}>
                 {em.name}
-                {em.desc ? ` — ${em.desc}` : ''}
+                {em.desc ? ` · ${em.desc}` : ''}
               </option>
             ))}
           </select>

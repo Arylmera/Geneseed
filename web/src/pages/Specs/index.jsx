@@ -56,10 +56,9 @@ export default function Specs({ spec, query, overview }) {
     <>
       <div className="head-row mb-18">
         <div>
-          <span className="eyebrow">history</span>
           <h1 className="h">Specs</h1>
           <p className="sub">
-            Every dated implementation spec under <code>docs/specs/</code> — the rationale and
+            Every dated implementation spec under <code>docs/specs/</code>: the rationale and
             history behind each feature, newest first. Auto-discovered from the repo.
           </p>
         </div>
@@ -76,7 +75,7 @@ export default function Specs({ spec, query, overview }) {
                 <div className="lr-name">{s.title}</div>
                 <div className="lr-desc">
                   {s.date}
-                  {s.purpose ? ` — ${s.purpose}` : ''}
+                  {s.purpose ? ` · ${s.purpose}` : ''}
                 </div>
               </div>
             ))}

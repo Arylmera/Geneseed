@@ -9,7 +9,6 @@ export default function About() {
     <div className="narrow">
       <div className="head-row mb-18">
         <div>
-          <span className="eyebrow">credits</span>
           <h1 className="h">About</h1>
           <p className="sub">
             The project, where the source lives, and a word from the person who grew it.
@@ -52,8 +51,8 @@ export default function About() {
         </div>
         <p className="sub mb-16">
           Geneseed is built by <strong>Guillaume Lemer</strong>. It started as a personal,
-          Obsidian-vault-grown agent operating system and got distilled into the repo you are
-          running — implant it once, and a disciplined agent grows around the same inherited rules,
+          Obsidian-vault-grown agent operating system and was distilled into the repo you are
+          running. Implant it once, and a disciplined agent grows around the same inherited rules,
           skills, and memory in every repo it follows you into.
         </p>
         <p className="sub mb-16">

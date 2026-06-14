@@ -26,7 +26,7 @@ export default function ServerControl() {
   if (stopped) {
     return (
       <p className="sub">
-        Server stopped — you can close this tab. Reopen any time with <code>geneseed web</code>.
+        Server stopped. You can close this tab and reopen any time with <code>geneseed web</code>.
       </p>
     )
   }

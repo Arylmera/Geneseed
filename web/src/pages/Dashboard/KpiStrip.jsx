@@ -9,7 +9,7 @@ export default function KpiStrip({ overview }) {
   const kpis = [
     { key: 'agents', label: 'Agents', foot: 'capability roster' },
     { key: 'skills', label: 'Skills', foot: 'repeatable rites' },
-    { key: 'laws', label: 'Laws', foot: 'all enforced' },
+    { key: 'laws', label: 'Laws', foot: 'every one upheld' },
   ]
   return (
     <div className="grid g-4 mb-16">
@@ -32,7 +32,7 @@ export default function KpiStrip({ overview }) {
         <div className="kval">{edits}</div>
         <div className="kfoot">
           {edits > 0 && <span className="delta up">&#9650; +{edits}</span>}
-          <span>awaiting export</span>
+          <span>awaiting graft</span>
         </div>
       </div>
     </div>

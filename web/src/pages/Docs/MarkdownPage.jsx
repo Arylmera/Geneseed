@@ -166,8 +166,7 @@ export default function MarkdownPage({ page, overview, onAction }) {
 
   return (
     <div className="detail-doc">
-      <span className="eyebrow">docs</span>
-      <h1 style={{ marginTop: 10 }}>{page.title}</h1>
+      <h1 style={{ marginTop: 0 }}>{page.title}</h1>
       {page.source && (
         <div className="doc-meta">
           <span className="badge">

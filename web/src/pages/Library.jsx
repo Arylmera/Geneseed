@@ -13,13 +13,12 @@ export default function Library({ overview }) {
     <>
       <div className="head-row mb-18">
         <div>
-          <span className="eyebrow">browse</span>
           <h1 className="h">Library</h1>
           <p className="sub">
-            Agents, skills, laws, memory, notebook, wiki, config — grouped by section. The catalog
-            (agents · skills · laws) is rebuilt live as you browse, so it reflects the harness
-            Geneseed would produce right now; memory and config come from the harness already
-            installed on your machine.
+            Agents, skills, laws, memory, notebook, wiki, and config, grouped by section. The
+            catalog (agents · skills · laws) is rebuilt live as you browse, so it reflects the
+            harness Geneseed would produce right now; memory and config come from the harness
+            already installed on your machine.
           </p>
         </div>
       </div>
