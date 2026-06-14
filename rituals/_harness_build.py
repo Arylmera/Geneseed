@@ -154,6 +154,58 @@ def _authoring_problems() -> list[str]:
             if r.returncode != 0:
                 tail = (r.stderr.strip().splitlines() or ["syntax error"])[-1]
                 problems.append(f"[authoring] node --check failed for {js.name}: {tail}")
+    problems += _count_table_problems()
+    return problems
+
+
+def _src_stems(folder: str) -> set:
+    """Spec stems under src/<folder>, minus `_`-prefixed scaffolds."""
+    d = build.SRC / folder
+    return {p.stem for p in d.glob("*.md") if not p.name.startswith("_")} if d.is_dir() else set()
+
+
+def _count_table_problems() -> list[str]:
+    """Keep the hand-authored AGENT.md capability tables and the README count badges
+    honest against src/: the agent/skill tables must list EXACTLY the spec files (no
+    dead row, no orphaned spec), and each `agents`/`skills`/`laws`/`themes` badge must
+    equal the real count. This is the authoring-time guarantee that lets those tables
+    and badges stay hand-written without silently drifting from the source tree."""
+    problems: list[str] = []
+    tmpl = build.SRC / "AGENT.md.tmpl"
+    try:
+        ttext = tmpl.read_text(encoding="utf-8")
+    except OSError as e:
+        return [f"[authoring] AGENT.md.tmpl unreadable: {e}"]
+
+    # Per-row links are tokenised in the template, e.g. `[reviewer]({{DIR_AGENTS}}/reviewer.md)`.
+    linked = {"agents": set(), "skills": set()}
+    for kind, name in re.findall(r"\{\{DIR_(AGENTS|SKILLS)\}\}/([A-Za-z0-9_-]+)\.md", ttext):
+        if name != "_template":
+            linked["agents" if kind == "AGENTS" else "skills"].add(name)
+    for folder in ("agents", "skills"):
+        files = _src_stems(folder)
+        for missing in sorted(linked[folder] - files):
+            problems.append(f"[authoring] AGENT.md links {folder}/{missing}.md but no such spec exists")
+        for orphan in sorted(files - linked[folder]):
+            problems.append(f"[authoring] {folder}/{orphan}.md exists but the AGENT.md table omits it")
+
+    # README capability badges must match the real counts.
+    laws_md = build.SRC / "laws" / "universal.md"
+    counts = {
+        "agents": len(_src_stems("agents")),
+        "skills": len(_src_stems("skills")),
+        "laws": len(re.findall(r"(?m)^### \{\{LAW\}\} ", laws_md.read_text(encoding="utf-8")))
+        if laws_md.is_file() else 0,
+        "themes": len(build.theme_files()),
+    }
+    try:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    except OSError:
+        return problems
+    for key, n in counts.items():
+        m = re.search(rf"badge/{key}-(\d+)", readme)
+        if m and int(m.group(1)) != n:
+            problems.append(f"[authoring] README {key} badge says {m.group(1)} but src has {n}")
     return problems
 
 

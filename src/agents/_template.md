@@ -6,11 +6,13 @@
      harness the purpose line is plain prose; in the Geneseed source repo it is the
      DESC_<NAME> token with the prose defined per theme.
   3. Register the new {{AGENT}} in the table in AGENT.md §2 (the table is
-     hand-authored; the agent files themselves auto-render).
+     hand-authored; the agent files themselves auto-render). doctor fails if the
+     table and the agent files disagree, so neither can silently drift.
   Geneseed source repo only (skip in an installed harness):
   4. Define the DESC_<NAME> token (hyphens -> underscores, uppercased) in ALL theme
      JSONs under themes/ — the parity gate fails if any theme is missing it.
-  5. Bump the hard-coded agent counts in tests/test_harness.py, then run:
+  5. Bump the `agents-N` count badge in README.md (doctor checks it against the real
+     file count; the test counts derive from src/ and need no edit), then run:
      python rituals/harness.py doctor --all
      and python -m unittest discover -s tests.
 -->

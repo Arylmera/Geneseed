@@ -147,6 +147,36 @@ class DoctorCatchesThemeDriftTests(unittest.TestCase):
         self.assertEqual(problems, [])
 
 
+class CountTableGateTests(unittest.TestCase):
+    """The authoring gate that keeps the AGENT.md capability tables and the README
+    count badges honest against src/. Self-tested both ways: clean on the shipped
+    tree, and actually flagging a mismatch."""
+
+    def test_shipped_tables_and_badges_consistent(self):
+        self.assertEqual(harness._count_table_problems(), [])
+
+    def test_gate_flags_table_and_badge_drift(self):
+        tmp = Path(tempfile.mkdtemp())
+        orig = build.SRC
+        try:
+            for sub in ("agents", "skills", "laws"):
+                (tmp / sub).mkdir()
+            # Far fewer specs than the README badges declare, and a table (copied
+            # verbatim) that now references files which don't exist here.
+            (tmp / "agents" / "reviewer.md").write_text("> p", encoding="utf-8")
+            (tmp / "skills" / "commit.md").write_text("> p", encoding="utf-8")
+            (tmp / "laws" / "universal.md").write_text("### {{LAW}} I — x\n", encoding="utf-8")
+            shutil.copy(build.SRC / "AGENT.md.tmpl", tmp / "AGENT.md.tmpl")
+            build.SRC = tmp
+            problems = harness._count_table_problems()
+        finally:
+            build.SRC = orig
+            shutil.rmtree(tmp, ignore_errors=True)
+        self.assertTrue(problems)
+        self.assertTrue(any("badge" in p for p in problems), problems)
+        self.assertTrue(any("AGENT.md links" in p or "omits" in p for p in problems), problems)
+
+
 class ThemeDetectionTests(unittest.TestCase):
     AVAIL = ["cyberpunk", "gamer", "imperial", "military", "neutral",
              "pirate", "sports", "wizard"]
@@ -329,9 +359,9 @@ class VersionTests(unittest.TestCase):
 class StatusDataTests(unittest.TestCase):
     def test_reports_counts_version_and_keys(self):
         d = harness._status_data()
-        # counts match the rendered inventory
-        self.assertEqual(d["agents"], 16)
-        self.assertEqual(d["skills"], 33)
+        # counts match the rendered inventory (derived from src/, never hand-bumped)
+        self.assertEqual(d["agents"], len(harness._src_stems("agents")))
+        self.assertEqual(d["skills"], len(harness._src_stems("skills")))
         self.assertEqual(d["laws"], 20)
         # version fields present and well-formed
         self.assertRegex(d["source_fp"], r"^[0-9a-f]{12}$")
@@ -683,8 +713,8 @@ class SetupFlairTests(unittest.TestCase):
 class TuiInventoryTests(unittest.TestCase):
     def test_counts_and_bodies(self):
         inv = harness._tui_inventory("neutral")
-        self.assertEqual(len(inv["agents"]), 16)
-        self.assertEqual(len(inv["skills"]), 33)
+        self.assertEqual(len(inv["agents"]), len(harness._src_stems("agents")))
+        self.assertEqual(len(inv["skills"]), len(harness._src_stems("skills")))
         self.assertEqual(len(inv["laws"]), 20)
         self.assertTrue(all(e["desc"] and e["body"] for e in inv["agents"]))
         self.assertTrue(all(e["desc"] and e["body"] for e in inv["skills"]))
