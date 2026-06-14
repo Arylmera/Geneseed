@@ -38,9 +38,6 @@ export default function StatusView({ overview, sigil, setup, jobs, onAction }) {
         <div className="hero">
           <Ring value={rv} />
           <div className="hero-facts">
-            <span className="eyebrow">
-              harness · {overview.deployed ? 'deployed' : 'not deployed'}
-            </span>
             <div className="ttl">{headline}</div>
             {sigil && (
               <div className="voice-readout" key={overview.theme}>

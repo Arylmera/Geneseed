@@ -94,7 +94,6 @@ export default function Docs({ page, query, overview, onAction }) {
     <>
       <div className="head-row mb-18">
         <div>
-          <span className="eyebrow">learn · {activeGroup?.label || 'Documentation'}</span>
           <h1 className="h">{q ? 'Documentation' : activeGroup?.label || 'Documentation'}</h1>
           <p className="sub">
             {q

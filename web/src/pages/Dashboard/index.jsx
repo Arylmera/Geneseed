@@ -44,11 +44,10 @@ export default function Dashboard({ overview, themes, onAction }) {
     <>
       <div className="head-row">
         <div>
-          <span className="eyebrow">overview</span>
           <h1 className="h">Harness console</h1>
           <p className="sub">
-            A live readout of the harness deployed on this machine — its voice, its capabilities,
-            and its drift from source.
+            A live readout of the harness this machine carries. Its voice, its capabilities, its
+            drift from source.
           </p>
         </div>
         <div className="seg">

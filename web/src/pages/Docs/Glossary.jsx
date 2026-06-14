@@ -8,8 +8,7 @@ export default function Glossary({ page }) {
   const theme = page.theme || 'neutral'
   return (
     <div className="detail-doc">
-      <span className="eyebrow">glossary</span>
-      <h1 style={{ marginTop: 10 }}>{page.title}</h1>
+      <h1 style={{ marginTop: 0 }}>{page.title}</h1>
       <p className="sub" style={{ marginTop: 4 }}>
         Geneseed&apos;s invented vocabulary, decoded. Left: the neutral, plain-English term. Right:
         the word your <code style={{ textTransform: 'capitalize' }}>{theme}</code> theme actually

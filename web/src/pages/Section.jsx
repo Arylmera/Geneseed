@@ -10,8 +10,7 @@ function DocView({ section, item, onForget }) {
   const type = SECTIONS[section].type
   return (
     <div className="detail-doc">
-      <span className="eyebrow">{type}</span>
-      <h1 style={{ marginTop: 10 }}>{item.title}</h1>
+      <h1 style={{ marginTop: 0 }}>{item.title}</h1>
       <div className="doc-meta">
         <span className="badge acc">
           <span className="dot" />
@@ -73,10 +72,9 @@ export default function Section({ section, selected, query, counts }) {
     <>
       <div className="head-row mb-18">
         <div>
-          <span className="eyebrow">browse</span>
           <h1 className="h">Library</h1>
           <p className="sub">
-            Every rule, agent, skill, and note in the deployed harness — rendered markdown with
+            Every rule, agent, skill, and note in the deployed harness, rendered markdown with
             clickable cross-links.
           </p>
         </div>

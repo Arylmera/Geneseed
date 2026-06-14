@@ -19,8 +19,7 @@ export default function About({ page }) {
   ]
   return (
     <div className="detail-doc">
-      <span className="eyebrow">about</span>
-      <h1 style={{ marginTop: 10 }}>{page.title}</h1>
+      <h1 style={{ marginTop: 0 }}>{page.title}</h1>
       <p className="sub" style={{ marginTop: 4 }}>
         Live snapshot of the install behind this UI, plus where to go next.
       </p>

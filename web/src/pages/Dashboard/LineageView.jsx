@@ -16,7 +16,7 @@ export default function LineageView({ overview, sigil, setup, jobs, graph }) {
   const edits = editCount(overview.diff)
 
   const steps = [
-    ['Source', 'src/ — the canonical genetic material', setup?.source_fp || '—', true],
+    ['Source', 'src/, the canonical genetic material', setup?.source_fp || '—', true],
     ['Render', `build.py → ${overview.emit}`, overview.theme + ' voice', true],
     ['Deployed', overview.target, 'inherited by every repo', false],
   ]
@@ -25,8 +25,7 @@ export default function LineageView({ overview, sigil, setup, jobs, graph }) {
     <>
       <div className="grid split-lineage mb-16">
         <div className="card pad-lg rise" style={{ position: 'relative', overflow: 'hidden' }}>
-          <span className="eyebrow">heritage</span>
-          <h2 className="h" style={{ fontSize: 22, margin: '12px 0 18px' }}>
+          <h2 className="h" style={{ fontSize: 22, margin: '0 0 18px' }}>
             Gene-seed lineage
           </h2>
           <div className="lineage-track">

@@ -36,10 +36,9 @@ export default function Settings({ onAction }) {
     <div className="narrow-lg">
       <div className="head-row mb-18">
         <div>
-          <span className="eyebrow">configure</span>
           <h1 className="h">Settings</h1>
           <p className="sub">
-            The deployed install at a glance, plus the same actions as the TUI — build, update, MCP
+            The deployed install at a glance, plus the same actions as the TUI: build, update, MCP
             wiring, and an offline package.
           </p>
         </div>
@@ -135,7 +134,7 @@ export default function Settings({ onAction }) {
           <h3>MCP servers</h3>
         </div>
         <p className="sub mb-16">
-          Wire MCP servers into OpenCode — per project or globally. Toggles rewrite only the{' '}
+          Wire MCP servers into OpenCode, per project or globally. Toggles rewrite only the{' '}
           <code>mcp</code> block.
         </p>
         <McpServers />
@@ -148,7 +147,7 @@ export default function Settings({ onAction }) {
         </div>
         <p className="sub mb-16">
           Put <code>geneseed</code> on your PATH so it runs from any directory, or remove a global
-          install — your memory store is always kept. Each runs live in the console.
+          install. Your memory store is always kept. Each runs live in the console.
         </p>
         <div className="row wrap gap-10">
           <button className="btn ghost" onClick={() => onAction('link')}>
@@ -182,7 +181,7 @@ export default function Settings({ onAction }) {
         </div>
         <p className="sub mb-16">
           For air-gapped machines: download a zip of this source tree, carry it over, then{' '}
-          <code>geneseed upgrade --zip &lt;file&gt;</code> — same validation, no network.
+          <code>geneseed upgrade --zip &lt;file&gt;</code>. Same validation, no network.
         </p>
         <a className="btn ghost" href="/api/offline-zip" download>
           <Icon name="download" />

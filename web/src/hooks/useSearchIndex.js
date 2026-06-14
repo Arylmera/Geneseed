@@ -94,7 +94,7 @@ export function useSearchIndex() {
             kind: 'Specs',
             sortKey: 120,
             title: s.title || s.filename,
-            desc: [s.date, s.purpose].filter(Boolean).join(' — '),
+            desc: [s.date, s.purpose].filter(Boolean).join(' · '),
             hay: `${s.title || ''} ${s.filename || ''} ${s.purpose || ''}`.toLowerCase(),
             route: `#/specs/${encodeURIComponent(s.filename)}`,
           })

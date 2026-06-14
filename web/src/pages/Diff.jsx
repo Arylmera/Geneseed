@@ -49,7 +49,7 @@ export default function Diff() {
         await new Promise((r) => setTimeout(r, 700))
         j = await api.job(job_id)
       } while (j.status === 'running')
-      setNote(j.status === 'done' ? 'Improvements file written.' : 'Export failed — see logs.')
+      setNote(j.status === 'done' ? 'Improvements file written.' : 'Export failed. See logs.')
     } catch (e) {
       setNote(e.message)
     } finally {
@@ -110,7 +110,6 @@ export default function Diff() {
     <>
       <div className="head-row mb-16">
         <div>
-          <span className="eyebrow">drift from source</span>
           <h1 className="h">Local edits</h1>
           <p className="sub">
             The agent refines its own deployed files in place. Export them as improvements before

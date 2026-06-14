@@ -35,8 +35,8 @@ export default function McpServers() {
       {data.targets.map((t) => (
         <div className="mcp-target" key={t.path}>
           <div className="mt-head">
-            {t.label} — <code>{t.path}</code>
-            {t.commented && ' (has comments — edit by hand)'}
+            {t.label} · <code>{t.path}</code>
+            {t.commented && ' (has comments; edit by hand)'}
           </div>
           {t.servers.map((s) => {
             const key = t.path + s.name

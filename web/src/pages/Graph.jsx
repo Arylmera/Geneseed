@@ -198,12 +198,11 @@ export default function Graph() {
     <>
       <div className="head-row" style={{ marginBottom: 14 }}>
         <div>
-          <span className="eyebrow">cross-links</span>
           <h1 className="h">Graph</h1>
           <p className="sub">
             Every <code>[[wikilink]]</code> between agents and skills, plus every{' '}
             <code>Rule N</code> mention that lands on a real rule. Hover to isolate a neighbourhood,
-            scroll to zoom, drag the empty space to pan — orphans dim out.
+            scroll to zoom, drag the empty space to pan. Orphans dim out.
           </p>
         </div>
         <div className="legend">
