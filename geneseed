@@ -43,6 +43,11 @@ HERE="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 # Pick the first interpreter that actually RUNS — on Windows Git Bash, `python3`
 # resolves to the Microsoft Store alias stub, which exists on PATH but only prints
 # an install hint and exits non-zero. $PYTHON still overrides everything.
+# This probe is deliberately INLINED here (and copied in bootstrap/upgrade.sh/
+# sync-self.sh), not sourced from a shared file: the front door must find Python to
+# even reach the self-heal path below, so it cannot depend on a sibling file that a
+# corrupted rituals/ might be missing. The duplication is load-bearing — do not
+# "DRY" it into one sourced helper.
 PY="${PYTHON:-}"
 if [ -z "$PY" ]; then
   for c in python3 python py; do
