@@ -70,19 +70,34 @@ export default function Library({ overview, section, selected }) {
     error: catErr,
     reload: reloadCatalog,
   } = useAsync(() => api.catalog(sec), [sec])
+
+  // useAsync keeps the prior section's catalog in `data` while the new one is
+  // in flight (so the list doesn't flash empty). Guard against that staleness:
+  // only treat the loaded catalog as current when its `section` matches `sec`.
+  // Otherwise the first row below would be the *previous* section's first item
+  // (e.g. agent `advocate`, skill `brainstorm`), and the detail fetch would ask
+  // for it under the new section's type — a guaranteed NotFound flash on every
+  // tab switch.
+  const items = catalog?.section === sec ? catalog?.items || [] : []
+  // The entry whose document we display: the URL-selected item, or the first
+  // row when the section was opened without an explicit selection (e.g. after
+  // switching tabs). Auto-picking the first row keeps the highlighted row and
+  // the detail pane in sync instead of showing a generic fallback.
+  const activeName = selected || items[0]?.name || null
   const { data: item, error: itemErr } = useAsync(
-    () => (selected ? api.item(SECTIONS[sec].type, selected) : Promise.resolve(null)),
-    [sec, selected],
+    () => (activeName ? api.item(SECTIONS[sec].type, activeName) : Promise.resolve(null)),
+    [sec, activeName],
   )
 
-  const items = catalog?.items || []
   const err = catErr || itemErr
   // Prefer the catalog row; fall back to a synthetic row when the URL names
   // an item that isn't in the listing (e.g. a fresh deep-link before the
-  // catalog finishes). When nothing is selected, auto-pick the first row.
-  const fromCatalog = selected ? items.find((it) => it.name === selected) : null
-  const synthetic = selected ? { name: selected, title: item?.title || selected, desc: item?.desc || '' } : null
-  const activeItem = fromCatalog || (selected ? synthetic : items[0])
+  // catalog finishes).
+  const fromCatalog = activeName ? items.find((it) => it.name === activeName) : null
+  const synthetic = activeName
+    ? { name: activeName, title: item?.title || activeName, desc: item?.desc || '' }
+    : null
+  const activeItem = fromCatalog || synthetic
   const counts = overview?.counts || {}
 
   // Keep the active row in view inside the master scroller without using
@@ -111,14 +126,16 @@ export default function Library({ overview, section, selected }) {
   const switchSection = (k) => go(`#/section/${k}`)
 
   const onForget = async () => {
+    const name = activeItem?.name
+    if (!name) return
     if (
       !window.confirm(
-        `Forget the memory fact "${selected}"? It is deleted from the store and the index.`,
+        `Forget the memory fact "${name}"? It is deleted from the store and the index.`,
       )
     )
       return
     try {
-      await api.memoryDelete(selected)
+      await api.memoryDelete(name)
     } catch {
       // surface via reload, if any
     }
@@ -200,7 +217,7 @@ export default function Library({ overview, section, selected }) {
                 </div>
                 <div>
                   <div className="tick">source</div>
-                  <div className="lib-meta-v mono">{libSource(sec, activeItem.name)}</div>
+                  <div className="lib-meta-v mono">{item?.source || activeItem.source || libSource(sec, activeItem.name)}</div>
                 </div>
               </div>
               {sec === 'memory' &&
@@ -217,7 +234,7 @@ export default function Library({ overview, section, selected }) {
                 <div className="lib-doc">
                   <Markdown body={item.body} links={item.links || []} />
                 </div>
-              ) : item === null && selected ? (
+              ) : item === null && activeName ? (
                 <p className="sub">Loading…</p>
               ) : (
                 <EmptyDoc section={sec} source={libSource(sec, activeItem.name)} />

@@ -490,7 +490,8 @@ def _memory_items(state: WebState) -> list[dict]:
         fm, _body = harness._frontmatter(p.read_text(encoding="utf-8", errors="replace"))
         out.append({"name": p.stem,
                     "title": fm.get("name", p.stem),
-                    "desc": fm.get("description", "")})
+                    "desc": fm.get("description", ""),
+                    "source": str(p.resolve())})
     return out
 
 
@@ -652,7 +653,8 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
             raise NotFound(name)
         body = p.read_text(encoding="utf-8", errors="replace")
         return {"type": type_, "name": name, "title": name, "desc": "",
-                "body": body, "links": _resolve_links(state, body)}
+                "body": body, "links": _resolve_links(state, body),
+                "source": str(p.resolve())}
     if type_ == "wiki":
         return api_wiki_item(state, name)
     if type_ == "config":
