@@ -79,6 +79,7 @@
   "LEX_XVIII": "<themed title for Law XVIII (Load the Project Context)>",
   "LEX_XIX": "<themed title for Law XIX (Tool Discovery)>",
   "LEX_XX": "<themed title for Law XX (Consent Before Push)>",
+  "LEX_XXI": "<themed title for Law XXI (Commands Must Return)>",
   "INTRO_DOC": "<themed intro: this file is the entry point an AI agent reads in this repo>",
   "INTRO_AGENTS": "<themed intro to the Agents section — delegate focused work to a specialist>",
   "INTRO_SKILLS": "<themed intro to the Skills section — run the written procedure before improvising>",

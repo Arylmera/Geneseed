@@ -79,6 +79,7 @@
   "LEX_XVIII": "Load the Context · Load the Project Context",
   "LEX_XIX": "Know Your Tools · Tool Discovery",
   "LEX_XX": "Get the Nod Before You Push · Consent Before Push",
+  "LEX_XXI": "Don't Leave It Hanging · Commands Must Return",
   "INTRO_DOC": "This file is the first thing a coding agent reads on this repository. Read it properly.",
   "INTRO_AGENTS": "Hand focused work to the right grunt instead of doing it all yourself badly; each has one job and reports exactly what it did.",
   "INTRO_SKILLS": "A Skill is a drill written for a recurring task. Run the matching drill before you start improvising.",

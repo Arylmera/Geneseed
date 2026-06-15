@@ -9,6 +9,17 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **Law XXI — Commands Must Return**: a non-interactive-shell law forbidding
+  commands that hang on a TTY (interactive prompts, pagers, REPLs, editors,
+  unbounded processes) and directing the agent to the non-interactive form
+  (`--yes`, `--no-pager`, piped input, bounded long runs). Brings the law count
+  to 21. (Distilled from awesome-opencode's *Shell Strategy* plugin.)
+- **Context plugin — self-awareness & command discovery**: `geneseed-context`
+  now surfaces the session's live model (read from the transcript, with a
+  `GENESEED_MODEL` fallback) and the project's runnable command targets
+  (`Makefile`, `package.json` scripts, `justfile`, `Taskfile`) in the injected
+  PROJECT CONTEXT block. (Distilled from awesome-opencode's *Model Announcer* and
+  *Command Inject* plugins.)
 - Three learning skills that teach the user rather than do the work for them:
   - `crash-course` — go from zero to functional in a skill fast: what to learn
     first, what to ignore, and the one high-leverage exercise.

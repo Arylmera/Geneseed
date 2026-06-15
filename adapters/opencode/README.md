@@ -411,6 +411,72 @@ back to a CLI converter (MarkItDown / Pandoc / Docling) and never installs one
 silently. Full runbook, including the corporate-TLS (`UV_SYSTEM_CERTS`) step and the
 OCR extras: [SETUP.md → MarkItDown via MCP](../../SETUP.md#markitdown-via-mcp-opencode).
 
+## Optional add-on — git-worktree isolation (third-party, not vendored)
+
+[`opencode-worktree`](https://github.com/kdcokenny/opencode-worktree) gives the
+agent two tools — `worktree_create(branch, baseBranch?)` and
+`worktree_delete(reason)` — that create an isolated git worktree under
+`~/.local/share/opencode/worktree/<project-id>/<branch>/`, spawn a terminal with
+OpenCode already running inside it, and auto-commit + clean up on delete. It pairs
+well with the harness's parallel-agent workflows when you want *filesystem*
+isolation, not just separate sessions.
+
+It is **not vendored** and **not installed by the harness** — treat it like the
+MarkItDown MCP above: a reference pointer you opt into, not a dependency. It does
+not follow Geneseed's plugin convention (the four vendored plugins are single-file,
+zero-dependency `.js` copied by `cp …/plugins/*.js`; this one is multi-file
+TypeScript with npm deps — `jsonc-parser`, `zod` — and Bun-only APIs like
+`bun:sqlite`/`Bun.spawn`), so it can't ride the `build --emit opencode` install or
+the global-install manifest. Install it on its own track instead.
+
+It coexists cleanly with the vendored plugins — it only registers two tools and
+hooks no events they use, so nothing double-fires.
+
+### Setup (extra steps the `*.js` plugins don't need)
+
+Unlike the vendored plugins — which need nothing but the `cp` copy — this one
+requires its own package manager and a config file:
+
+1. **Install [OCX](https://github.com/kdcokenny/ocx)** (the KDCO package manager) if
+   you don't have it. The worktree plugin is distributed through OCX's registry, not
+   copied into `~/.config/opencode/plugins/` like ours.
+2. **Add the plugin:**
+   ```bash
+   ocx add kdco/worktree --from https://registry.kdco.dev
+   ```
+   OCX manages its npm dependencies and updates for you. (No separate Bun install —
+   OpenCode already runs on Bun, which is what the plugin's `bun:sqlite`/`Bun.*` calls
+   need.)
+3. **Configure sync + lifecycle hooks.** The plugin auto-creates
+   `.opencode/worktree.jsonc` on first use. Fill in what each new worktree should
+   inherit and run — e.g. for a Node repo:
+   ```jsonc
+   {
+     "sync": {
+       "copyFiles": [".env", ".env.local"],   // copied from the main worktree
+       "symlinkDirs": ["node_modules"],        // symlinked, not duplicated
+       "exclude": []
+     },
+     "hooks": {
+       "postCreate": ["pnpm install"],         // after the worktree is created
+       "preDelete": []                          // before it's removed
+     }
+   }
+   ```
+4. **(Optional) terminal multiplexer.** Terminal spawning is auto-detected across
+   macOS/Linux/Windows; it prefers `tmux` when you're already inside it and
+   [`cmux`](https://www.cmux.dev/) for agentic workflows. Neither is required —
+   it falls back to your OS default terminal.
+
+**Manual install (no OCX):** copy the plugin's `src/` into `.opencode/plugin/` and
+install `jsonc-parser` yourself — you lose OCX's dependency management and
+auto-updates, and you own the upgrade-by-re-copy. Prefer the OCX path.
+
+**Consent note.** `worktree_delete` auto-commits before removal. The harness's
+consent-before-commit Rule is enforced for *shell* `git commit` via `opencode.json`
+permissions, but this plugin commits through its own tool path — so review what it
+will commit before invoking delete, or keep the worktree and commit yourself.
+
 ## Notes
 
 - Project config beats global; `./opencode.json` or `.opencode/opencode.json`

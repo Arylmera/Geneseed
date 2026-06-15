@@ -79,6 +79,7 @@
   "LEX_XVIII": "Load the Route · Load the Project Context",
   "LEX_XIX": "Check Your Gear · Tool Discovery",
   "LEX_XX": "Crew's Nod Before You Push · Consent Before Push",
+  "LEX_XXI": "No Engine Left Idling · Commands Must Return",
   "INTRO_DOC": "This file is the route briefing a coding rider reads when it joins this repository.",
   "INTRO_AGENTS": "Send the right rider for focused work instead of riding the whole run yourself; each has one job and reports exactly what it did.",
   "INTRO_SKILLS": "A Skill is a move you've drilled for a recurring task. Run the matching move before you wing it.",

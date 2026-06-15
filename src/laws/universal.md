@@ -155,3 +155,15 @@ care; when unsure whether a branch is shared, treat it as shared. This applies
 {{LAW}} IV's confirm-before-outward-facing-acts to git history; the host **also** gates
 `git commit` and `git push` at the tool boundary as a backstop, so the consent cannot
 be lost to a sticky allowlist.
+
+### {{LAW}} XXI — {{LEX_XXI}}
+A command you run must return on its own. Never invoke something that blocks
+waiting on a terminal you cannot answer — an interactive prompt, a pager, a REPL,
+an editor, or a process that runs until killed. Reach for the non-interactive form
+first: pass `--yes`/`-y` to confirmations, `--no-pager` (or `GIT_PAGER=cat`) to git,
+avoid `-i`/interactive subcommands, pipe input rather than typing it, and add
+`--no-edit` where a tool would otherwise open `$EDITOR`. When a command must run
+long, bound it — a timeout, a non-follow flag, output redirected — so it ends and
+hands control back. A shell that never returns is a hung session: it spends the
+context window on nothing and strands the task. ({{LAW}} IV still governs *whether*
+to run a command; this governs *how*.)

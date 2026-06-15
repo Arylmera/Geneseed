@@ -19,6 +19,13 @@
 // mirrors `rituals/harness.py context`. Every error is swallowed — it never blocks
 // a session. See adapters/opencode/GLOBAL-HARNESS-SPEC.md.
 //
+// The block also carries two best-effort self-orientation lines:
+//   - COMMANDS: the repo's runnable targets (Makefile / package.json scripts /
+//     justfile / Taskfile), so the agent invokes real entry points, not guesses.
+//   - MODEL: the model the session is using (read from the transcript, else
+//     $GENESEED_MODEL), so the agent reasons within its real limits. The model line
+//     is added per request, outside the cached block; unknown -> omitted.
+//
 // MACHINE WIKI (AGENT.md §7): the same block also carries the user's own knowledge
 // base(s) — typically an Obsidian vault — declared once per machine in `wiki.jsonc`
 // ($GENESEED_WIKI -> $GENESEED_HARNESS/wiki.jsonc -> beside this plugin's install).
@@ -203,6 +210,112 @@ function kb(bytes) { return (bytes / 1024).toFixed(0) }
 
 function repoRoot(ctx) {
   return ctx?.worktree || ctx?.directory || process.cwd()
+}
+
+// ---- model self-awareness (best-effort) --------------------------------------
+// Surface the model the session is actually using so the agent reasons within its
+// real limits (awesome-opencode "Model Announcer"). Sources, first hit wins: an
+// assistant message's info.providerID/modelID in the outgoing transcript — the same
+// fields the learn plugin reads — then $GENESEED_MODEL ("provider/model"). Unknown ->
+// no line (graceful: the first turn often has no assistant message yet). It is added
+// per request, OUTSIDE the cached block, so one cache serves every model.
+function modelFromMessages(messages) {
+  if (!Array.isArray(messages)) return null
+  let found = null
+  for (const m of messages) {
+    const info = m?.info ?? {}
+    if (info.role !== "assistant") continue
+    const providerID = info.providerID ?? info.provider
+    const modelID = info.modelID ?? info.model
+    if (providerID && modelID) found = `${providerID}/${modelID}`   // last wins (latest turn)
+  }
+  return found
+}
+function envModelStr() {
+  const v = process.env.GENESEED_MODEL
+  return v && v.includes("/") ? v : null
+}
+// Insert the model line just after the MARKER (first line) of an already-rendered
+// block, leaving the model-agnostic cache untouched.
+function withModel(text, model) {
+  if (!model || !text) return text
+  const nl = text.indexOf("\n")
+  if (nl === -1) return text
+  const line = `current model: ${model} — reason within this model's real limits`
+  return `${text.slice(0, nl + 1)}${line}\n${text.slice(nl + 1)}`
+}
+
+// ---- command discovery -------------------------------------------------------
+// List the project's runnable command targets (awesome-opencode "Command Inject")
+// so the agent invokes the repo's real entry points instead of guessing — Makefile
+// targets, package.json scripts (with the right runner per lockfile), justfile
+// recipes, Taskfile tasks. Root-level only, best-effort parse, capped. Each group is
+// one rendered line: "make — build, test, lint".
+const COMMANDS_CAP = 40
+async function discoverCommands(root) {
+  const groups = []
+  const readSafe = async (p) => { try { return await fs.readFile(p, "utf8") } catch { return null } }
+
+  for (const name of ["Makefile", "makefile", "GNUmakefile"]) {
+    const text = await readSafe(path.join(root, name))
+    if (text == null) continue
+    const targets = []
+    for (const line of text.split("\n")) {
+      const m = /^([a-zA-Z0-9][\w.-]*)\s*:(?!=)/.exec(line)   // target: (not := assignment)
+      if (m && !m[1].startsWith(".") && !line.includes("%") && !targets.includes(m[1])) targets.push(m[1])
+      if (targets.length >= COMMANDS_CAP) break
+    }
+    if (targets.length) groups.push(`make — ${targets.join(", ")}`)
+    break
+  }
+
+  const pkgText = await readSafe(path.join(root, "package.json"))
+  if (pkgText) {
+    try {
+      const pkg = JSON.parse(pkgText)
+      const scripts = pkg && typeof pkg.scripts === "object" ? Object.keys(pkg.scripts) : []
+      if (scripts.length) {
+        let mgr = "npm run"
+        if (await isFile(path.join(root, "bun.lockb"))) mgr = "bun run"
+        else if (await isFile(path.join(root, "pnpm-lock.yaml"))) mgr = "pnpm"
+        else if (await isFile(path.join(root, "yarn.lock"))) mgr = "yarn"
+        groups.push(`${mgr} — ${scripts.slice(0, COMMANDS_CAP).join(", ")}`)
+      }
+    } catch {}
+  }
+
+  for (const name of ["justfile", "Justfile", ".justfile"]) {
+    const text = await readSafe(path.join(root, name))
+    if (text == null) continue
+    const recipes = []
+    for (const line of text.split("\n")) {
+      const m = /^([a-zA-Z0-9][\w-]*)(?:[ \t][^\n:]*)?:(?!=)/.exec(line)   // recipe name [args]:
+      if (m && !recipes.includes(m[1])) recipes.push(m[1])
+      if (recipes.length >= COMMANDS_CAP) break
+    }
+    if (recipes.length) groups.push(`just — ${recipes.join(", ")}`)
+    break
+  }
+
+  for (const name of ["Taskfile.yml", "Taskfile.yaml"]) {
+    const text = await readSafe(path.join(root, name))
+    if (text == null) continue
+    const tasks = []
+    let inTasks = false
+    for (const line of text.split("\n")) {
+      if (/^tasks:\s*$/.test(line)) { inTasks = true; continue }
+      if (inTasks) {
+        if (/^\S/.test(line)) break                            // dedented to a new top-level key
+        const m = /^\s{2}([a-zA-Z0-9][\w:.-]*):/.exec(line)    // two-space-indented task key
+        if (m && !tasks.includes(m[1])) tasks.push(m[1])
+      }
+      if (tasks.length >= COMMANDS_CAP) break
+    }
+    if (tasks.length) groups.push(`task — ${tasks.join(", ")}`)
+    break
+  }
+
+  return groups
 }
 
 // ---- discovery ---------------------------------------------------------------
@@ -499,11 +612,17 @@ async function renderSet(out, { eager, lazy }, state) {
   state.lazy += lazyLines.length
 }
 
-async function buildBlock(sets, wikis = []) {
+async function buildBlock(sets, wikis = [], commands = []) {
   const state = { spent: 0, injected: 0, lazy: 0, headingsRead: 0 }
 
   const proj = []
   await renderSet(proj, sets, state)
+
+  if (commands.length) {
+    proj.push("--- Project commands (runnable targets discovered in the repo root) ---")
+    for (const g of commands) proj.push(`  ${g}`)
+    proj.push("")
+  }
 
   const wik = []
   for (const w of wikis) {
@@ -532,7 +651,8 @@ async function resolveBlock(root) {
     ? await fromManifest(src.file, root)
     : await discover(root)
   const wikis = await wikiSets()
-  return { block: await buildBlock(sets, wikis), src }
+  const commands = await discoverCommands(root)
+  return { block: await buildBlock(sets, wikis, commands), src }
 }
 
 // Per-process cache of the rendered block text for the transform path (root is fixed
@@ -594,9 +714,17 @@ export const GeneseedContext = async (ctx) => {
       const { block, src } = await resolveBlock(root)
       if (!block) { log(`no docs discovered in ${root}`); return }
 
+      // Best-effort model line: read the session transcript, else $GENESEED_MODEL.
+      let model = null
+      try {
+        const msgs = await client.session.messages({ path: { id: sid } })
+        model = modelFromMessages(Array.isArray(msgs) ? msgs : (msgs?.data ?? []))
+      } catch {}
+      const text = withModel(block.text, model || envModelStr())
+
       await client.session.prompt({
         path: { id: sid },
-        body: { noReply: true, parts: [{ type: "text", text: block.text }] },
+        body: { noReply: true, parts: [{ type: "text", text }] },
       })
       const via = src.mode === "manifest" ? `manifest ${src.file}` : `auto-discovery [${root}]`
       log(`injected: ${block.injected} eager (${block.kb} KB), ${block.lazy} lazy listed — via ${via}`)
@@ -662,8 +790,11 @@ export const GeneseedContext = async (ctx) => {
         const present = output.messages.some((m) =>
           (m?.parts ?? []).some((p) => typeof p?.text === "string" && p.text.includes(MARKER)))
         if (present) return
-        const text = await cachedBlockText(root)
-        if (!text) return
+        const cached = await cachedBlockText(root)
+        if (!cached) return
+        // Model line is request-specific (kept out of the cache): prefer the live
+        // transcript on this request, fall back to $GENESEED_MODEL.
+        const text = withModel(cached, modelFromMessages(output.messages) || envModelStr())
         const stamp = Date.now()
         output.messages.unshift({
           info: { id: `geneseed-context-${stamp}`, role: "user", sessionID: sid, time: { created: stamp } },

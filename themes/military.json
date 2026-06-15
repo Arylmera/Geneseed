@@ -79,6 +79,7 @@
   "LEX_XVIII": "Load the Mission Brief · Load the Project Context",
   "LEX_XIX": "Check Your Kit · Tool Discovery",
   "LEX_XX": "Clearance Before Transmit · Consent Before Push",
+  "LEX_XXI": "No Command Left Hanging · Commands Must Return",
   "INTRO_DOC": "This file is the operating manual an AI coding agent reads on entering this repository.",
   "INTRO_AGENTS": "Task focused work to the specialist whose job it is rather than running the whole op in one context; each has one objective and reports exactly what it did.",
   "INTRO_SKILLS": "A Skill is a standard operating procedure for a recurring task. Run the matching SOP before improvising.",
