@@ -88,7 +88,8 @@ def _wiki_items(state: WebState) -> list[dict]:
                     continue
                 seen.add(key)
                 items.append({"name": key, "title": md.stem,
-                              "desc": desc if len(mds) == 1 else r})
+                              "desc": desc if len(mds) == 1 else r,
+                              "source": str(md.resolve())})
     return items
 
 
@@ -103,7 +104,8 @@ def api_wiki_item(state: WebState, name: str) -> dict:
             if rel and p.suffix == ".md" and harness._within(p, root) and p.is_file():
                 body = p.read_text(encoding="utf-8", errors="replace")
                 return {"type": "wiki", "name": name, "title": p.stem, "desc": "",
-                        "body": body, "links": _resolve_links(state, body)}
+                        "body": body, "links": _resolve_links(state, body),
+                        "source": str(p)}
     raise NotFound(name)
 
 
