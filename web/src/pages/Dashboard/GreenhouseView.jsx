@@ -64,16 +64,10 @@ function Trend({ data, height = 156, accent }) {
   const max = Math.max(...data.map((d) => d.v), 1) + 1
   const step = data.length > 1 ? w / (data.length - 1) : w
   const points = data.map((d, i) => [i * step, h - (d.v / max) * (h - 12) - 6])
-  const linePath = points
-    .map(([x, y], i) => (i === 0 ? `M${x},${y}` : `L${x},${y}`))
-    .join(' ')
+  const linePath = points.map(([x, y], i) => (i === 0 ? `M${x},${y}` : `L${x},${y}`)).join(' ')
   const areaPath = `${linePath} L${w},${h} L0,${h} Z`
   return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      preserveAspectRatio="none"
-      style={{ width: '100%', height }}
-    >
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: '100%', height }}>
       <defs>
         <linearGradient id="b-grad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor={accent} stopOpacity=".35" />
@@ -179,7 +173,9 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
         <div>
           <div className="eyebrow">your harness</div>
           <h1 className="h b-h">{headline}</h1>
-          <p className="sub">{sigil || 'A friendly read of every layer growing in your harness.'}</p>
+          <p className="sub">
+            {sigil || 'A friendly read of every layer growing in your harness.'}
+          </p>
         </div>
         <div className="row gap-8">
           <button className="btn" onClick={() => onAction('update')}>
@@ -209,7 +205,9 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
             />
           </div>
           <div className="b-hero-side">
-            <h3 className="b-hero-title">{pass} of {total} clean</h3>
+            <h3 className="b-hero-title">
+              {pass} of {total} clean
+            </h3>
             <p className="sub">
               One source, rendered into <code>{overview.target}</code> and inherited by every repo
               on this machine.
@@ -228,8 +226,20 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
           </div>
         </div>
         <div className="b-tiles">
-          <BTile label="Agents" value={c.agents ?? '—'} sub="specialists" color={B_CATS[0]} icon="layers" />
-          <BTile label="Skills" value={c.skills ?? '—'} sub="workflows" color={B_CATS[1]} icon="skill" />
+          <BTile
+            label="Agents"
+            value={c.agents ?? '—'}
+            sub="specialists"
+            color={B_CATS[0]}
+            icon="layers"
+          />
+          <BTile
+            label="Skills"
+            value={c.skills ?? '—'}
+            sub="workflows"
+            color={B_CATS[1]}
+            icon="skill"
+          />
           <BTile label="Laws" value={c.laws ?? '—'} sub="all upheld" color={B_CATS[2]} icon="law" />
           <BTile label="Edits" value={edits} sub="to graft" color={B_CATS[3]} icon="changes" />
         </div>
@@ -308,9 +318,7 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
                   <b>{j.action}</b>
                   {j.output ? ` — ${j.output.split('\n')[0].slice(0, 120)}` : ''}
                 </div>
-                <span className="b-tl-when">
-                  {j.duration ? `${j.duration}s` : j.status}
-                </span>
+                <span className="b-tl-when">{j.duration ? `${j.duration}s` : j.status}</span>
               </div>
             )
           })}

@@ -45,9 +45,9 @@ describe('Library chip-bar (replaces Section)', () => {
     await waitFor(() => expect(screen.getAllByText('Reviewer').length).toBeGreaterThan(0))
     expect(screen.getByText('Tester')).toBeTruthy()
     // the Agents chip is the on-state in the chip bar
-    const agentsChip = screen.getAllByText('Agents').find((el) =>
-      el.closest('button')?.className.includes('lib-secchip'),
-    )
+    const agentsChip = screen
+      .getAllByText('Agents')
+      .find((el) => el.closest('button')?.className.includes('lib-secchip'))
     expect(agentsChip.closest('button').className).toContain('on')
     // its count chip reads "2" — the agents value passed in via overview
     const chipBtn = agentsChip.closest('button')

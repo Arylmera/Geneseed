@@ -49,8 +49,7 @@ function LawText({ text }) {
   return (
     <>
       {parts.map((p, i) => {
-        if (p.startsWith('`') && p.endsWith('`'))
-          return <code key={i}>{p.slice(1, -1)}</code>
+        if (p.startsWith('`') && p.endsWith('`')) return <code key={i}>{p.slice(1, -1)}</code>
         if (p.startsWith('*') && p.endsWith('*') && p.length > 2)
           return <em key={i}>{p.slice(1, -1)}</em>
         return <React.Fragment key={i}>{p}</React.Fragment>
@@ -125,9 +124,7 @@ function LawRow({ law, isOpen, onToggle }) {
           ) : (
             <p className="dim">Loading…</p>
           )}
-          <div className="law-srcline">
-            $ geneseed law {law.roman} · laws/universal.md
-          </div>
+          <div className="law-srcline">$ geneseed law {law.roman} · laws/universal.md</div>
         </div>
       )}
     </>
@@ -154,7 +151,7 @@ export default function Laws({ selected }) {
     // the local LAW_META map if an older server didn't return one. The
     // principle line is always local — it's display copy, not domain data.
     const [metaCat, ess] = LAW_META[n] || ['craft', '']
-    const cat = (it.klass && LAW_CATS[it.klass] ? it.klass : metaCat)
+    const cat = it.klass && LAW_CATS[it.klass] ? it.klass : metaCat
     return { n, roman, pad, name: lawName(it.title, roman, n), cat, ess }
   })
   const counts = {}
@@ -177,10 +174,7 @@ export default function Laws({ selected }) {
       </div>
       <div className="law-toolbar">
         <div className="law-cats">
-          <button
-            className={`law-cat ${sel === 'all' ? 'on' : ''}`}
-            onClick={() => setSel('all')}
-          >
+          <button className={`law-cat ${sel === 'all' ? 'on' : ''}`} onClick={() => setSel('all')}>
             <span>All</span>
             <span className="cn">{laws.length}</span>
           </button>

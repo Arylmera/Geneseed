@@ -140,11 +140,7 @@ export default function App() {
             {route.view === 'themes' && <Themes onAction={runAction} />}
             {route.view === 'graph' && <Graph />}
             {route.view === 'settings' && (
-              <Settings
-                onAction={runAction}
-                flavour={flavour}
-                onFlavour={setFlavour}
-              />
+              <Settings onAction={runAction} flavour={flavour} onFlavour={setFlavour} />
             )}
             {route.view === 'docs' && (
               <Docs page={route.page} query={query} onAction={runAction} overview={overview} />

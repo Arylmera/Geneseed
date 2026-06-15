@@ -65,7 +65,8 @@ export default function Graph() {
   const top = 64
 
   const { groups, pos, height } = useMemo(
-    () => (data ? layout(data.nodes, cols, rowH, top) : { groups: {}, pos: new Map(), height: 240 }),
+    () =>
+      data ? layout(data.nodes, cols, rowH, top) : { groups: {}, pos: new Map(), height: 240 },
     [data, cols],
   )
 
@@ -217,7 +218,9 @@ export default function Graph() {
                     <text x={left ? -9 : 9} y="0.5" style={{ textAnchor: left ? 'end' : 'start' }}>
                       {label}
                     </text>
-                    <title>{n.type === 'law' ? `Open Rule ${n.id} in the ledger` : 'Open in Library'}</title>
+                    <title>
+                      {n.type === 'law' ? `Open Rule ${n.id} in the ledger` : 'Open in Library'}
+                    </title>
                   </g>
                 )
               }),

@@ -96,12 +96,7 @@ export default function Dashboard({ overview, themes, onAction, flavour = 'a' })
         />
       )}
       {dir === 'status' && flavour === 'c' && (
-        <OperatorHudView
-          overview={overview}
-          jobs={jobs}
-          doctor={doctor}
-          onAction={onAction}
-        />
+        <OperatorHudView overview={overview} jobs={jobs} doctor={doctor} onAction={onAction} />
       )}
       {dir === 'lineage' && (
         <LineageView overview={overview} sigil={sigil} setup={setup} jobs={jobs} graph={graph} />

@@ -116,10 +116,7 @@ export default function Library({ overview, section, selected }) {
     // Fully visible already → leave the scroll position alone.
     if (elTop >= viewTop && elBottom <= viewBottom) return
     // Otherwise (deep-link from Graph/Spotlight, or section switch) center it.
-    box.scrollTop = Math.max(
-      0,
-      elTop - box.clientHeight / 2 + el.clientHeight / 2,
-    )
+    box.scrollTop = Math.max(0, elTop - box.clientHeight / 2 + el.clientHeight / 2)
   }, [sec, selected])
 
   const openItem = (name) => go(`#/item/${SECTIONS[sec].type}/${encodeURIComponent(name)}`)
@@ -150,8 +147,8 @@ export default function Library({ overview, section, selected }) {
           <div className="eyebrow">harness content</div>
           <h1 className="h">Library</h1>
           <p className="sub">
-            Browse every layer of the deployed harness from one place. Pick a section, then read
-            an entry — the markdown comes straight from the source file.
+            Browse every layer of the deployed harness from one place. Pick a section, then read an
+            entry — the markdown comes straight from the source file.
           </p>
         </div>
       </div>
@@ -173,9 +170,7 @@ export default function Library({ overview, section, selected }) {
         })}
       </div>
 
-      {err ? (
-        <ErrorState error={err} style={{ margin: '12px 0' }} />
-      ) : null}
+      {err ? <ErrorState error={err} style={{ margin: '12px 0' }} /> : null}
 
       <div className="lib lib-2">
         <div className="card lib-main">
@@ -217,18 +212,18 @@ export default function Library({ overview, section, selected }) {
                 </div>
                 <div>
                   <div className="tick">source</div>
-                  <div className="lib-meta-v mono">{item?.source || activeItem.source || libSource(sec, activeItem.name)}</div>
+                  <div className="lib-meta-v mono">
+                    {item?.source || activeItem.source || libSource(sec, activeItem.name)}
+                  </div>
                 </div>
               </div>
-              {sec === 'memory' &&
-                activeItem.name !== 'MEMORY' &&
-                activeItem.name !== 'README' && (
-                  <div style={{ marginTop: 12 }}>
-                    <button className="btn ghost sm" onClick={onForget}>
-                      Forget this fact
-                    </button>
-                  </div>
-                )}
+              {sec === 'memory' && activeItem.name !== 'MEMORY' && activeItem.name !== 'README' && (
+                <div style={{ marginTop: 12 }}>
+                  <button className="btn ghost sm" onClick={onForget}>
+                    Forget this fact
+                  </button>
+                </div>
+              )}
               <hr className="hr" />
               {item?.body ? (
                 <div className="lib-doc">

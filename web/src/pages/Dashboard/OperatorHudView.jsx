@@ -148,9 +148,7 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
       <div className="c-titlebar">
         <div>
           <h1 className="c-h1">HARNESS // STATUS READOUT</h1>
-          <div className="c-sub">
-            {overview.target} · rendered from src/ · inherited everywhere
-          </div>
+          <div className="c-sub">{overview.target} · rendered from src/ · inherited everywhere</div>
         </div>
         <div className="row gap-8">
           <button className="btn" onClick={() => onAction('update')}>
@@ -233,7 +231,9 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
                       <span className={`c-dotmark ${ok ? 'ok' : 'bad'}`} />
                       <span className="c-check-name">{g.label}</span>
                       <span className="c-check-detail">
-                        {ok ? 'clean' : `${g.problems.length} problem${g.problems.length === 1 ? '' : 's'}`}
+                        {ok
+                          ? 'clean'
+                          : `${g.problems.length} problem${g.problems.length === 1 ? '' : 's'}`}
                       </span>
                     </div>
                   )
@@ -298,14 +298,13 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
                 return (
                   <tr key={j.id}>
                     <td style={{ width: 96 }}>
-                      <span className={`c-dotmark ${cls}`} /> <span className="c-dim">{j.action}</span>
+                      <span className={`c-dotmark ${cls}`} />{' '}
+                      <span className="c-dim">{j.action}</span>
                     </td>
                     <td className="c-name" style={{ fontWeight: 400 }}>
                       {preview}
                     </td>
-                    <td className="num c-dim">
-                      {j.duration ? `${j.duration}s` : j.status}
-                    </td>
+                    <td className="num c-dim">{j.duration ? `${j.duration}s` : j.status}</td>
                   </tr>
                 )
               })}

@@ -87,8 +87,8 @@ export default function Specs({ spec, query, overview }) {
           <h1 className="h">Specs</h1>
           <p className="sub">
             Every dated implementation spec under <code>docs/specs/</code>, newest first. Click any
-            row to expand it inline; the rationale and history of the feature lives in the
-            markdown body.
+            row to expand it inline; the rationale and history of the feature lives in the markdown
+            body.
           </p>
         </div>
       </div>
