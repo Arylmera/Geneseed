@@ -67,6 +67,14 @@ class CatalogTests(unittest.TestCase):
         with self.assertRaises(web.NotFound):
             web.api_item(self.state, "agent", "does-not-exist-xyz")
 
+    def test_agent_item_and_catalog_carry_source(self):
+        # Agents/skills now expose their src/ file too, so the UI shows the real
+        # path instead of guessing one — uniform with memory/notebook.
+        row = web.api_catalog(self.state, "agents")["items"][0]
+        self.assertTrue(Path(row["source"]).is_file())
+        item = web.api_item(self.state, "agent", row["name"])
+        self.assertEqual(item["source"], row["source"])
+
     def test_file_backed_item_carries_resolved_source_path(self):
         # The detail pane shows where a document lives on disk; the file-backed
         # item branch (shared by memory + notebook) must return the absolute,

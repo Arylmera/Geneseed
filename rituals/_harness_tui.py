@@ -706,7 +706,8 @@ def _tui_inventory(theme_name: str) -> dict:
             continue
         parts = src.relative_to(build.SRC).as_posix().split("/")
         if len(parts) == 2 and parts[1].endswith(".md") and not parts[1].startswith("_"):
-            entry = {"name": parts[1][:-3], "desc": build._first_blockquote(text), "body": text}
+            entry = {"name": parts[1][:-3], "desc": build._first_blockquote(text),
+                     "body": text, "source": str(src.resolve())}
             if parts[0] == "agents":
                 agents.append(entry)
             elif parts[0] == "skills":
