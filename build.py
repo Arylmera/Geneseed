@@ -47,8 +47,11 @@ import types as _types
 class _BuildFacade(_types.ModuleType):
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
-        if not name.startswith("_"):
-            for _sub in _SUBMODULES:
+        # Only mirror names a submodule already exports, so redirecting a real
+        # shared constant (build.SRC = tmp) reaches the code that reads it while
+        # a typo (build.ROOTS = ...) can't silently poison every submodule.
+        for _sub in _SUBMODULES:
+            if hasattr(_sub, name):
                 setattr(_sub, name, value)
 
 
@@ -105,7 +108,6 @@ def main() -> None:
             (_opencode_config_dir() / ".geneseed-theme").write_text(args.theme + "\n", encoding="utf-8")
         except OSError:
             pass
-
 
 
 if __name__ == "__main__":

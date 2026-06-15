@@ -21,11 +21,16 @@ def _memory_items(state: WebState) -> list[dict]:
     return out
 
 
+def _notebook_dir(state: WebState) -> Path:
+    return state.target / "notebook"
+
+
 def _notebook_items(state: WebState) -> list[dict]:
-    d = state.target / "notebook"
+    d = _notebook_dir(state)
     if not d.is_dir():
         return []
-    return [{"name": p.stem, "title": p.stem, "desc": ""}
+    return [{"name": p.stem, "title": p.stem, "desc": "",
+             "source": str(p.resolve())}
             for p in sorted(d.glob("*.md"))]
 
 
@@ -177,7 +182,7 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
                 "desc": "", "body": e["body"], "links": [],
                 "klass": e.get("klass", "craft")}
     if type_ in ("memory", "notebook"):
-        d = (state.target / "notebook") if type_ == "notebook" \
+        d = _notebook_dir(state) if type_ == "notebook" \
             else harness._resolve_memory_dir(None)
         p = (d / f"{name}.md") if d else None
         if not p or not p.is_file():

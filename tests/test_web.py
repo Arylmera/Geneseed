@@ -88,6 +88,10 @@ class CatalogTests(unittest.TestCase):
             state = web.WebState(theme="neutral", target=Path(tmp))
             item = web.api_item(state, "notebook", "ritual")
             self.assertEqual(Path(item["source"]), (nb / "ritual.md").resolve())
+            # The catalog row carries the same source, so the list and the
+            # detail pane agree without the UI having to guess the path.
+            row = web.api_catalog(state, "notebook")["items"][0]
+            self.assertEqual(row["source"], item["source"])
 
 
 class DiffTests(unittest.TestCase):
