@@ -6,7 +6,7 @@ so this file is only ever used through `import harness`."""
 from __future__ import annotations
 
 from _harness_core import *  # noqa: F401,F403  shared stdlib + primitives
-from _harness_tui import _icon  # noqa: E402  (load-time use in _MENU_ACTIONS)
+from _harness_tui_draw import _icon  # noqa: E402  (load-time use in _MENU_ACTIONS)
 
 
 

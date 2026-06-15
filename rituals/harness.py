@@ -64,6 +64,8 @@ import _harness_status
 import _harness_build
 import _harness_setup
 import _harness_mcp
+import _harness_tui_draw
+import _harness_tui_views
 import _harness_tui
 import _harness_lifecycle
 import _harness_menu
@@ -77,6 +79,8 @@ _SUBMODULES = (
     _harness_build,
     _harness_setup,
     _harness_mcp,
+    _harness_tui_draw,
+    _harness_tui_views,
     _harness_tui,
     _harness_lifecycle,
     _harness_menu,
