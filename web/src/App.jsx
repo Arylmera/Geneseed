@@ -4,6 +4,7 @@ import { useRoute } from './lib/router.js'
 import { applyAccent } from './lib/accents.js'
 import { TYPE_TO_SECTION } from './lib/sections.js'
 import { useColorMode } from './hooks/useColorMode.js'
+import { useFlavour } from './hooks/useFlavour.js'
 import { useOverview } from './hooks/useOverview.js'
 import { useJobs } from './hooks/useJobs.js'
 import Rail from './components/Rail.jsx'
@@ -13,7 +14,7 @@ import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
 import Dashboard from './pages/Dashboard/index.jsx'
 import Library from './pages/Library.jsx'
-import Section from './pages/Section.jsx'
+import Laws from './pages/Laws.jsx'
 import Diff from './pages/Diff.jsx'
 import Doctor from './pages/Doctor.jsx'
 import Themes from './pages/Themes.jsx'
@@ -34,6 +35,7 @@ export default function App() {
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [stopped, setStopped] = useState(false)
   const [mode, toggleMode] = useColorMode()
+  const [flavour, setFlavour] = useFlavour()
   const appRef = useRef(null)
 
   const onError = (e) => setToast({ kind: 'err', msg: e.message })
@@ -68,7 +70,7 @@ export default function App() {
 
   if (stopped) {
     return (
-      <div className={`app ${mode === 'light' ? 'light' : ''}`} ref={appRef}>
+      <div className={`app fl-${flavour} ${mode === 'light' ? 'light' : ''}`} ref={appRef}>
         <div className="atmos" aria-hidden="true" />
         <div className="page" style={{ display: 'grid', placeItems: 'center' }}>
           <p className="sub" style={{ textAlign: 'center', maxWidth: 480 }}>
@@ -81,7 +83,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app ${mode === 'light' ? 'light' : ''}`} ref={appRef}>
+    <div className={`app fl-${flavour} ${mode === 'light' ? 'light' : ''}`} ref={appRef}>
       <div className="atmos" aria-hidden="true" />
       <Rail route={route} overview={overview} onOpenVoice={() => setVoiceOpen((v) => !v)} />
       {voiceOpen && (
@@ -108,25 +110,36 @@ export default function App() {
         <div className="page">
           <div className="pad">
             {route.view === 'dashboard' && (
-              <Dashboard overview={overview} themes={themes} onAction={runAction} />
+              <Dashboard
+                overview={overview}
+                themes={themes}
+                onAction={runAction}
+                flavour={flavour}
+              />
             )}
             {route.view === 'library' && <Library overview={overview} />}
+            {route.view === 'laws' && <Laws />}
             {route.view === 'section' && (
-              <Section section={route.section} query={query} counts={overview?.counts} />
+              <Library overview={overview} section={route.section} />
             )}
             {route.view === 'item' && (
-              <Section
+              <Library
+                overview={overview}
                 section={TYPE_TO_SECTION[route.type] || route.type}
                 selected={route.name}
-                query={query}
-                counts={overview?.counts}
               />
             )}
             {route.view === 'diff' && <Diff />}
             {route.view === 'doctor' && <Doctor />}
             {route.view === 'themes' && <Themes onAction={runAction} />}
             {route.view === 'graph' && <Graph />}
-            {route.view === 'settings' && <Settings onAction={runAction} />}
+            {route.view === 'settings' && (
+              <Settings
+                onAction={runAction}
+                flavour={flavour}
+                onFlavour={setFlavour}
+              />
+            )}
             {route.view === 'docs' && (
               <Docs page={route.page} query={query} onAction={runAction} overview={overview} />
             )}

@@ -442,8 +442,13 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .lib-head-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
   font-variant-numeric: tabular-nums; }
 .lib-rows { max-height: calc(100vh - 280px); overflow: auto; }
-.lib-row { padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer;
-  border-left: 2px solid transparent; transition: background .1s; }
+.lib-row {
+  display: block; width: 100%; text-align: left;
+  padding: 12px 16px; border: 0; border-bottom: 1px solid var(--line);
+  border-left: 2px solid transparent;
+  background: transparent; cursor: pointer; font: inherit; color: var(--text);
+  transition: background .1s;
+}
 .lib-row:hover { background: var(--surface-2); }
 .lib-row.on { background: var(--accent-soft); border-left-color: var(--accent); }
 .lib-row .lr-name { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
@@ -601,10 +606,17 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .iconbtn:hover { background: var(--surface-3); color: var(--text); }
 .iconbtn .glyph { width: 16px; height: 16px; }
 
-/* theme popover */
-.pop { position: absolute; bottom: 64px; left: 14px; width: 204px; z-index: 30;
+/* theme popover — fixed to the viewport so it always anchors just above the
+   rail-foot's voice control, regardless of how tall the page content gets.
+   (Previously `position: absolute` against `.app` whose min-height grows with
+   the page; on long views like Library or Graph that pushed the popover well
+   below the viewport.) max-height: 60vh keeps it inside the screen even with
+   all 14 voices loaded. */
+.pop {
+  position: fixed; bottom: 72px; left: 14px; width: 204px; z-index: 30;
   background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-md);
-  box-shadow: var(--shadow-pop); padding: 8px; max-height: 60vh; overflow: auto; }
+  box-shadow: var(--shadow-pop); padding: 8px; max-height: 60vh; overflow: auto;
+}
 .pop-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-sm);
   cursor: pointer; font-size: 13px; }
 .pop-item:hover { background: var(--surface-3); }
@@ -822,3 +834,1000 @@ a.rail-item.active { color: var(--text); }
   text-transform: uppercase; color: var(--text-3); font-weight: 500;
 }
 .glossary-table td.dim { color: var(--text-2); }
+
+/* ============================================================================
+   LAWS — terminal spec-sheet (Ledger) for the governance rules
+   Class-coloured chip filter, № · Rule · Principle · Class table, row-expand
+   for canonical text. Adapted from the Console redesign's Direction C.
+   ============================================================================ */
+.law-toolbar {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin: 18px 0 14px;
+}
+.law-cats { display: flex; flex-wrap: wrap; gap: 8px; }
+.law-cat {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 13px; border: 1px solid var(--line);
+  background: var(--surface); border-radius: 999px; cursor: pointer;
+  color: var(--text-2); font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .04em; text-transform: uppercase;
+  transition: border-color .14s, color .14s, background .14s;
+}
+.law-cat:hover { color: var(--text); border-color: var(--line-2); }
+.law-cat .cdot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--cc, var(--text-3));
+}
+.law-cat .cn { color: var(--text-3); }
+.law-cat.on {
+  color: var(--text); border-color: var(--accent-line); background: var(--accent-soft);
+}
+.law-readout {
+  margin-left: auto; font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-3); letter-spacing: .04em;
+}
+.law-readout b { color: var(--text); font-weight: 500; }
+
+.law-wrap { overflow: hidden; padding: 0; }
+.law-rowhead {
+  display: grid; grid-template-columns: 64px 1fr 1.25fr 138px; gap: 16px;
+  padding: 11px 18px; border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+.law-rowhead span {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.law-row {
+  display: grid; grid-template-columns: 64px 1fr 1.25fr 138px; gap: 16px;
+  align-items: center; width: 100%; text-align: left;
+  padding: 13px 18px; border: 0; border-bottom: 1px solid var(--line);
+  background: transparent; cursor: pointer; font: inherit;
+  color: var(--text); transition: background .1s;
+}
+.law-row:last-of-type { border-bottom: 0; }
+.law-row:hover { background: var(--surface-2); }
+.law-row.on { background: var(--accent-soft); border-bottom-color: transparent; }
+.law-no {
+  font-family: var(--font-mono); font-size: 13px;
+  color: var(--cc, var(--accent)); font-variant-numeric: tabular-nums;
+  display: flex; align-items: center; gap: 8px;
+}
+.law-no .x { color: var(--text-3); transition: transform .14s; font-size: 11px; }
+.law-row.on .law-no .x { transform: rotate(90deg); color: var(--accent); }
+.law-name {
+  font-family: var(--font-display); font-weight: 600; font-size: 15px;
+  color: var(--text); letter-spacing: -.01em;
+}
+.law-princ {
+  font-family: var(--font-mono); font-size: 12.5px;
+  color: var(--text-2); line-height: 1.45;
+}
+.law-class {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-3);
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.law-class .cdot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--cc, var(--text-3));
+}
+.law-expand {
+  padding: 2px 18px 20px 82px; border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.law-expand p {
+  color: var(--text-2); font-size: 13.5px; line-height: 1.66;
+  margin: 6px 0 0; max-width: 88ch;
+}
+.law-expand p code {
+  font-family: var(--font-mono); font-size: 12.5px;
+  background: var(--surface-2); padding: 1px 5px; border-radius: 4px;
+  border: 1px solid var(--line);
+}
+.law-expand em { font-style: italic; color: var(--text); }
+.law-srcline {
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-3); letter-spacing: .04em; margin-top: 13px;
+}
+
+@media (max-width: 1100px) {
+  .law-row, .law-rowhead { grid-template-columns: 52px 1fr 116px; }
+  .law-princ { display: none; }
+  .law-expand { padding-left: 18px; }
+}
+
+/* ============================================================================
+   FLAVOURS — three console directions: Cultivar (a), Greenhouse (b),
+   Operator HUD (c). The default tokens at :root are Cultivar — fl-a stays a
+   no-op so it loads with no class flicker on first paint. fl-b and fl-c
+   override the palette, radius, and where it matters the display font.
+   The component layouts stay the same across flavours; only the visual
+   personality swaps.
+   ============================================================================ */
+
+/* ---- Flavour A · Cultivar Evolved (default) ---- */
+/* Tokens already declared at :root — kept as a placeholder hook so future
+   per-flavour tweaks can attach here without restructuring. */
+
+/* ---- Flavour B · Greenhouse ---- */
+/* Warm, organic, generous radius, soft cards. Same accent system, different
+   ink. Dark by default; light mode is cream paper. */
+.fl-b {
+  --bg:        #11160F;
+  --bg-2:      #0D120C;
+  --surface:   #171E14;
+  --surface-2: #1C2419;
+  --surface-3: #232C1F;
+  --line:      #2C3826;
+  --line-2:    #3A4A31;
+  --line-3:    #52684A;
+  --text:      #EEF1E6;
+  --text-2:    #AEB8A2;
+  --text-3:    #79856E;
+  --good:      #5BD08A;
+  --warn:      #E8B53D;
+  --bad:       #FF6B66;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --shadow-card: 0 1px 0 rgba(255,255,255,.03) inset, 0 22px 50px -30px rgba(0,0,0,.85);
+}
+.fl-b.light {
+  --bg:        #F4F1E8;
+  --bg-2:      #EDE9DC;
+  --surface:   #FFFFFF;
+  --surface-2: #FBF8F0;
+  --surface-3: #F1ECDF;
+  --line:      #E4DDCC;
+  --line-2:    #D4CAB3;
+  --line-3:    #A99E84;
+  --text:      #26241C;
+  --text-2:    #5E5A4C;
+  --text-3:    #8A8472;
+  --good:      #2C9A5E;
+  --warn:      #B07914;
+  --bad:       #D2504B;
+  --shadow-card: 0 1px 2px rgba(60,50,30,.05), 0 18px 44px -28px rgba(60,50,30,.45);
+}
+.fl-b h1.h { font-size: 31px; letter-spacing: -.025em; }
+
+/* ---- Flavour C · Operator HUD ---- */
+/* Dense terminal readout: near-black, sharp panels, all-mono. Radius tokens
+   collapse to 0 so the cards read as flat instrument panels. */
+.fl-c {
+  --bg:        #06080B;
+  --bg-2:      #080A0E;
+  --surface:   #0E1217;
+  --surface-2: #11161C;
+  --surface-3: #161C24;
+  --line:      #1B222B;
+  --line-2:    #26303B;
+  --line-3:    #36424F;
+  --text:      #E6EDF3;
+  --text-2:    #8B98A6;
+  --text-3:    #5A6573;
+  --good:      #3FB68B;
+  --warn:      #E8A23B;
+  --bad:       #E5484D;
+  --r-sm: 0px;
+  --r-md: 0px;
+  --r-lg: 0px;
+  --r-xl: 0px;
+  --font-display: 'JetBrains Mono', ui-monospace, monospace;
+  --font-ui: 'JetBrains Mono', ui-monospace, monospace;
+  --shadow-card: none;
+}
+.fl-c.light {
+  --bg:        #E9ECEF;
+  --bg-2:      #E1E5E9;
+  --surface:   #FFFFFF;
+  --surface-2: #F6F8FA;
+  --surface-3: #EEF1F4;
+  --line:      #D4DAE0;
+  --line-2:    #BFC7CF;
+  --line-3:    #9AA4AE;
+  --text:      #0E1217;
+  --text-2:    #46525E;
+  --text-3:    #6A7682;
+  --good:      #1F8A5B;
+  --warn:      #B07914;
+  --bad:       #D23A37;
+}
+/* In Operator HUD, headings and buttons read tighter and all-mono. */
+.fl-c h1.h, .fl-c h2, .fl-c h3 { letter-spacing: .02em; }
+.fl-c .btn { border-radius: 0; font-family: var(--font-mono); letter-spacing: .04em; }
+.fl-c .badge { border-radius: 2px; }
+
+/* ============================================================================
+   SETTINGS — Console direction picker tiles (one per flavour).
+   Mini schematic + name + tagline; the active tile gets an accent ring.
+   ============================================================================ */
+.dir-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  margin-top: 4px;
+}
+.dir-tile {
+  text-align: left; border: 1px solid var(--line);
+  background: var(--surface); border-radius: var(--r-md);
+  padding: 12px; cursor: pointer; font: inherit; color: var(--text);
+  display: flex; flex-direction: column; gap: 11px;
+  transition: border-color .14s, transform .1s, box-shadow .14s;
+}
+.dir-tile:hover { border-color: var(--accent-line); transform: translateY(-2px); }
+.dir-tile.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset, 0 12px 28px -22px var(--accent);
+}
+.dir-thumb {
+  position: relative; height: 78px;
+  border-radius: 8px; overflow: hidden;
+  padding: 10px 10px 10px 34px;
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.dir-thumb-rail {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 24px; opacity: .9;
+}
+.dir-thumb-bar { height: 6px; border-radius: 3px; opacity: .92; }
+.dir-thumb-dot {
+  position: absolute; right: 10px; top: 10px;
+  width: 9px; height: 9px; border-radius: 50%;
+}
+/* Per-direction thumbnail palettes — distilled from each flavour's dark mode.
+   Always painted in the direction's own colours, not the active flavour's,
+   so the picker reads the same regardless of what's currently selected. */
+.dir-a .dir-thumb { background: linear-gradient(160deg, #101317, #14181D); }
+.dir-a .dir-thumb-rail { background: #14181D; border-right: 1px solid #2C333B; }
+.dir-a .dir-thumb-bar { background: #3AD4C4; }
+.dir-a .dir-thumb-bar:nth-child(2) { background: #2C333B; }
+.dir-a .dir-thumb-bar:nth-child(3) { background: #2C333B; }
+.dir-a .dir-thumb-dot { background: #3AD4C4; box-shadow: 0 0 8px #3AD4C4; }
+
+.dir-b .dir-thumb { background: linear-gradient(160deg, #171E14, #1C2419); border-radius: 14px; }
+.dir-b .dir-thumb-rail { background: #1C2419; border-right: 1px solid #2C3826; }
+.dir-b .dir-thumb-bar { background: #5BD08A; }
+.dir-b .dir-thumb-bar:nth-child(2) { background: #2C3826; }
+.dir-b .dir-thumb-bar:nth-child(3) { background: #2C3826; }
+.dir-b .dir-thumb-dot { background: #5BD08A; box-shadow: 0 0 10px #5BD08A; }
+
+.dir-c .dir-thumb { background: #0E1217; border-radius: 0; }
+.dir-c .dir-thumb-rail { background: #11161C; border-right: 1px solid #1B222B; }
+.dir-c .dir-thumb-bar { background: #3FB68B; border-radius: 0; }
+.dir-c .dir-thumb-bar:nth-child(2) { background: #26303B; }
+.dir-c .dir-thumb-bar:nth-child(3) { background: #26303B; }
+.dir-c .dir-thumb-dot { background: #E8A23B; box-shadow: none; border-radius: 0; }
+
+.dir-meta { display: flex; flex-direction: column; gap: 4px; }
+.dir-name {
+  font-family: var(--font-display); font-weight: 600; font-size: 14.5px;
+  display: flex; align-items: center; gap: 8px;
+}
+.dir-check {
+  font-family: var(--font-mono); font-size: 10px; color: var(--accent);
+  margin-left: auto;
+}
+.dir-tag { font-size: 12px; color: var(--text-2); line-height: 1.45; }
+
+@media (max-width: 900px) {
+  .dir-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================================
+   PER-FLAVOUR LAYOUT TWEAKS — beyond palette/radius, each direction reshapes
+   shared dashboard primitives so the three feel distinctly different even on
+   the same markup. Greenhouse adds breathing room and pill chips; Operator HUD
+   collapses cards into flat instrument panels with mono titles and table-like
+   rows. Cultivar is the baseline (no overrides needed).
+   ============================================================================ */
+
+/* ---- Greenhouse · b ---- */
+.fl-b .hero { padding: 4px 0; gap: 32px; }
+.fl-b .hero-facts .ttl { font-size: 30px; letter-spacing: -.018em; }
+.fl-b .chip {
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+}
+.fl-b .chip .ck { color: var(--text-3); }
+.fl-b .chip .cv { color: var(--text); font-weight: 500; }
+.fl-b .kpi {
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.fl-b .kpi .kval { font-size: 42px; letter-spacing: -.02em; }
+.fl-b .gcell { border-radius: var(--r-md); }
+.fl-b .gcell:hover { transform: translateY(-3px); }
+.fl-b .feed-row { padding: 13px 0; }
+.fl-b .card-head h3 {
+  font-family: var(--font-display);
+  letter-spacing: -.01em;
+}
+
+/* ---- Operator HUD · c ---- */
+/* Cards flatten into instrument-panel modules. Cultivar's card chrome
+   (rounded corners, shadow, gradient) is stripped; in its place a hard
+   1px outline + mono uppercase head, all stacked tight. */
+.fl-c .card {
+  background: var(--surface);
+  border-radius: 0;
+  box-shadow: none;
+}
+.fl-c .card-head {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 11px;
+  margin-bottom: 14px;
+}
+.fl-c .card-head h3 {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  position: relative;
+  padding-left: 22px;
+}
+.fl-c .card-head h3::before {
+  content: '';
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 2px; background: var(--accent);
+}
+.fl-c .hero-facts .ttl {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.fl-c .voice-readout .vr-txt {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-3);
+  letter-spacing: .02em;
+}
+.fl-c .chip {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 5px 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.fl-c .chip .ck { color: var(--text-3); }
+.fl-c .chip .cv { color: var(--text); }
+.fl-c .kpi {
+  border-radius: 0;
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+}
+.fl-c .kpi .klabel {
+  font-size: 9px;
+  letter-spacing: .14em;
+}
+.fl-c .kpi .klabel::before { display: none; }
+.fl-c .kpi .kval {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -.01em;
+  margin-top: 6px;
+}
+.fl-c .kpi .kfoot {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .04em;
+}
+.fl-c .gcell {
+  border-radius: 0;
+  border: 1px solid var(--line);
+  padding: 14px 16px;
+}
+.fl-c .gcell .gname {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.fl-c .gcell .gcount {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  letter-spacing: -.01em;
+}
+.fl-c .gcell .gdesc {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .04em;
+  color: var(--text-3);
+}
+.fl-c .feed-row {
+  border-bottom: 1px solid var(--line);
+  padding: 9px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.fl-c .seg {
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.fl-c .seg button {
+  border-radius: 0;
+  font-family: var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-size: 10.5px;
+}
+/* Operator's atmos overlay is a faint dot grid instead of the radial glow,
+   matching the design's "instrument panel" feel. The original .atmos
+   keeps its accent-tint gradients; we layer a subtle dot field on top. */
+.fl-c .atmos::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.fl-c.light .atmos::after {
+  background-image: radial-gradient(rgba(20,28,38,.04) 1px, transparent 1px);
+}
+
+/* ============================================================================
+   GREENHOUSE · b-* — warm, friendly dashboard with hero ring, four KPI tiles,
+   capability donut, and timeline activity. Used only when fl-b is active so
+   classes don't need a flavour prefix; the scoping is positional.
+   ============================================================================ */
+.b-greet {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap; margin-bottom: 18px;
+}
+.b-greet h1.b-h { font-size: 31px; letter-spacing: -.025em; margin: 4px 0 0; }
+.b-hero-grid { grid-template-columns: 1.25fr 1fr; align-items: stretch; }
+.b-hero {
+  display: flex; gap: 24px; align-items: center;
+  padding: 24px; min-height: 220px;
+}
+.b-hero-ring { flex: none; }
+.b-hero-side { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.b-hero-title {
+  font-family: var(--font-display);
+  font-size: 21px; font-weight: 600; margin: 0;
+  letter-spacing: -.01em;
+}
+.b-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.b-chip {
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 12.5px; color: var(--text-2); white-space: nowrap;
+}
+.b-chip b { color: var(--text); font-weight: 500; }
+.b-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.b-tile {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 10px;
+  position: relative;
+}
+.b-tile-ic {
+  width: 38px; height: 38px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.b-tile-ic .glyph { width: 19px; height: 19px; }
+.b-tile-body { display: flex; flex-direction: column; gap: 2px; }
+.b-tile-val {
+  font-family: var(--font-display);
+  font-size: 32px; font-weight: 600; letter-spacing: -.02em; line-height: 1;
+}
+.b-tile-label { font-size: 13px; color: var(--text-2); }
+.b-tile-sub {
+  position: absolute; top: 18px; right: 18px;
+  font-family: var(--font-mono); font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: .1em; color: var(--text-3);
+}
+.b-mix-card { display: flex; flex-direction: column; }
+.b-mix {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: 26px; align-items: center; flex: 1;
+}
+.b-legend { display: flex; flex-direction: column; gap: 11px; }
+.b-leg-row {
+  display: grid; grid-template-columns: 12px 90px 1fr 32px;
+  gap: 10px; align-items: center;
+}
+.b-leg-dot { width: 11px; height: 11px; border-radius: 4px; }
+.b-leg-name { font-size: 13px; }
+.b-leg-bar {
+  height: 8px; background: var(--surface-3);
+  border-radius: 999px; overflow: hidden;
+}
+.b-leg-bar i { display: block; height: 100%; border-radius: 999px; }
+.b-leg-val {
+  font-family: var(--font-mono); font-size: 13px;
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+.b-stat-lead {
+  display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px;
+}
+.b-stat-big {
+  font-family: var(--font-display);
+  font-size: 34px; font-weight: 600; letter-spacing: -.02em;
+}
+.b-stat-cap { font-size: 12.5px; color: var(--text-2); }
+.b-checks {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px;
+}
+.b-check {
+  font-size: 12px; padding: 4px 11px;
+  border-radius: 999px; border: 1px solid var(--line-2);
+  color: var(--text-2);
+}
+.b-check.ok {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 30%, transparent);
+  background: color-mix(in srgb, var(--good) 9%, transparent);
+}
+.b-check.bad {
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
+  background: color-mix(in srgb, var(--bad) 9%, transparent);
+}
+.b-timeline { display: flex; flex-direction: column; }
+.b-tl-row {
+  display: grid; grid-template-columns: 16px 1fr auto;
+  gap: 14px; align-items: center;
+  padding: 12px 0; border-bottom: 1px solid var(--line);
+}
+.b-tl-row:last-child { border-bottom: 0; }
+.b-tl-node {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--text-3); box-shadow: 0 0 0 4px var(--surface);
+}
+.b-tl-node.ok { background: var(--good); }
+.b-tl-node.acc { background: var(--accent); }
+.b-tl-node.warn { background: var(--warn); }
+.b-tl-body { font-size: 13.5px; min-width: 0; word-break: break-word; }
+.b-tl-body b { text-transform: capitalize; }
+.b-tl-when {
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+  white-space: nowrap;
+}
+.donut-c-num {
+  font-family: var(--font-display); font-weight: 600; font-size: 28px;
+  fill: var(--text);
+}
+.donut-c-cap {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: .14em; text-transform: uppercase; fill: var(--text-3);
+}
+
+@media (max-width: 1100px) {
+  .b-hero-grid { grid-template-columns: 1fr; }
+  .b-tiles { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 720px) {
+  .b-tiles { grid-template-columns: 1fr 1fr; }
+  .b-hero { flex-direction: column; align-items: flex-start; }
+  .b-mix { grid-template-columns: 1fr; }
+}
+
+/* ============================================================================
+   OPERATOR HUD · c-* — flat instrument panels, mono everywhere, dense tables.
+   Used only when fl-c is active so classes need no flavour prefix; the
+   markup is positional.
+   ============================================================================ */
+.c-root { font-family: var(--font-mono); }
+.c-titlebar {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.c-h1 {
+  font-family: var(--font-mono);
+  font-size: 17px; font-weight: 600; letter-spacing: .02em;
+  margin: 0; color: var(--text);
+}
+.c-sub {
+  font-family: var(--font-mono);
+  font-size: 11.5px; color: var(--text-3); margin-top: 5px;
+}
+.c-root .btn {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .05em; border-radius: 0;
+}
+
+.c-strip {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  border: 1px solid var(--line); background: var(--surface);
+  margin-bottom: 14px;
+}
+.c-strip-cell {
+  padding: 11px 14px; border-right: 1px solid var(--line);
+  min-width: 0;
+}
+.c-strip-cell:last-child { border-right: 0; }
+.c-strip-k {
+  font-size: 9px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.c-strip-v {
+  font-size: 13.5px; color: var(--text); margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.c-pill {
+  display: inline-block;
+  font-size: 9.5px; letter-spacing: .08em;
+  padding: 2px 7px; border: 1px solid currentColor;
+  text-transform: uppercase;
+}
+.c-pill.ok { color: var(--good); }
+.c-pill.warn { color: var(--warn); }
+.c-pill.bad { color: var(--bad); }
+
+.c-kpi-row {
+  display: grid; grid-template-columns: repeat(6, 1fr);
+  border: 1px solid var(--line); background: var(--surface);
+  margin-bottom: 14px;
+}
+.c-kpi {
+  padding: 14px 16px; border-right: 1px solid var(--line);
+  position: relative;
+}
+.c-kpi:last-child { border-right: 0; }
+.c-kpi-label {
+  font-size: 9px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.c-kpi-val {
+  font-size: 29px; font-weight: 500; letter-spacing: -.02em;
+  margin-top: 6px; font-variant-numeric: tabular-nums; color: var(--text);
+}
+
+.c-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+}
+.c-mod {
+  border: 1px solid var(--line); background: var(--surface);
+  display: flex; flex-direction: column; min-width: 0;
+}
+.c-mod-head {
+  display: flex; align-items: center; gap: 9px;
+  padding: 11px 14px; border-bottom: 1px solid var(--line);
+}
+.c-tab {
+  width: 16px; height: 2px; background: var(--accent); flex: none;
+}
+.c-mod-head h3 {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-2); font-weight: 500;
+}
+.c-mod-right {
+  margin-left: auto; font-size: 10.5px;
+  letter-spacing: .1em; color: var(--text-3);
+}
+.c-mod-body { padding: 14px; flex: 1; }
+.c-tbl {
+  width: 100%; border-collapse: collapse; font-family: var(--font-mono);
+}
+.c-tbl th {
+  text-align: left; font-size: 9px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-3);
+  padding: 0 10px 9px; border-bottom: 1px solid var(--line);
+  font-weight: 500;
+}
+.c-tbl td {
+  padding: 8px 10px; border-bottom: 1px solid var(--line);
+  font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.c-tbl tr:last-child td { border-bottom: 0; }
+.c-tbl .num { text-align: right; }
+.c-name { color: var(--text); font-weight: 500; }
+.c-dim { color: var(--text-3); }
+.c-bar {
+  height: 7px; background: var(--surface-3); overflow: hidden;
+  border-radius: 0;
+}
+.c-bar i { display: block; height: 100%; }
+.c-check-list { display: flex; flex-direction: column; margin-top: 12px; }
+.c-check-row {
+  display: grid; grid-template-columns: 12px 1fr auto;
+  gap: 10px; align-items: center;
+  padding: 7px 0; border-top: 1px solid var(--line); font-size: 12px;
+}
+.c-check-row:first-child { border-top: 0; }
+.c-dotmark {
+  width: 8px; height: 8px; border-radius: 2px; background: var(--text-3);
+}
+.c-dotmark.ok { background: var(--good); }
+.c-dotmark.bad { background: var(--bad); }
+.c-dotmark.acc { background: var(--accent); }
+.c-dotmark.warn { background: var(--warn); }
+.c-check-name { color: var(--text); }
+.c-check-detail { color: var(--text-3); font-size: 11px; text-align: right; }
+.c-axis {
+  display: flex; justify-content: space-between; margin-top: 6px;
+  font-size: 9px; color: var(--text-3); font-family: var(--font-mono);
+}
+.c-axis span { flex: 1; text-align: center; }
+
+/* Micro-column chart for RUN RATE // 10D */
+.c-cols {
+  display: flex; align-items: flex-end; gap: 4px;
+  width: 100%;
+}
+.c-col {
+  flex: 1; background: var(--surface-3); transition: background .12s;
+  min-width: 4px;
+}
+.c-col.hi { background: var(--accent); }
+
+/* Tally band for DOCTOR // CHECKS */
+.c-band {
+  display: flex; gap: 3px; margin-bottom: 12px;
+}
+.c-band-cell {
+  flex: 1; height: 14px; background: var(--surface-3);
+}
+.c-band-cell.ok { background: var(--good); }
+.c-band-cell.bad { background: var(--bad); }
+
+@media (max-width: 1180px) {
+  .c-strip { grid-template-columns: repeat(4, 1fr); }
+  .c-kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .c-grid { grid-template-columns: repeat(2, 1fr); }
+  .c-grid .c-mod[style*="span 3"],
+  .c-grid .c-mod[style*="span 2"] { grid-column: span 2 !important; }
+}
+@media (max-width: 720px) {
+  .c-strip { grid-template-columns: repeat(2, 1fr); }
+  .c-kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .c-grid { grid-template-columns: 1fr; }
+  .c-grid .c-mod[style*="span"] { grid-column: span 1 !important; }
+}
+
+/* ============================================================================
+   LIBRARY chip-bar layout — horizontal section chips above a master/detail
+   grid. Selecting a chip pushes #/section/<key>; selecting a row pushes
+   #/item/<type>/<name>. The new layout merges what used to be Library +
+   Section into one page.
+   ============================================================================ */
+.lib-secbar {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin: 6px 0 16px;
+}
+.lib-secchip {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  cursor: pointer; font: inherit;
+  color: var(--text-2);
+  font-size: 13px;
+  transition: border-color .14s, color .14s, background .14s;
+}
+.lib-secchip .glyph { width: 16px; height: 16px; opacity: .85; }
+.lib-secchip:hover { color: var(--text); border-color: var(--line-2); }
+.lib-secchip.on {
+  color: var(--text);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.lib-secchip.on .glyph { color: var(--accent); opacity: 1; }
+.lib-secchip-n {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-3); font-variant-numeric: tabular-nums;
+}
+.lib-secchip.on .lib-secchip-n { color: var(--accent); }
+
+/* Two-column master/detail grid. Override the existing `.lib` 2-column grid
+   with a slightly different proportion now that the chip bar sits above. */
+.lib.lib-2 {
+  grid-template-columns: 320px 1fr;
+}
+.lib-main { overflow: hidden; }
+.lib-detail { padding: 22px 24px; min-height: 320px; }
+.lib-detail .eyebrow { margin-bottom: 4px; }
+.lib-meta-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.lib-meta-v {
+  font-size: 13px; color: var(--text); margin-top: 4px;
+  word-break: break-word;
+}
+.lib-meta-v.mono {
+  font-family: var(--font-mono); font-size: 12px; color: var(--text-2);
+}
+.lib-doc { font-size: 14px; }
+.lib-doc-empty {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 16px;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-sm);
+  color: var(--text-2); font-size: 13px;
+}
+.lib-doc-empty .glyph {
+  width: 20px; height: 20px; color: var(--text-3); flex: none;
+}
+
+@media (max-width: 900px) {
+  .lib.lib-2 { grid-template-columns: 1fr; }
+  .lib-secbar { gap: 6px; }
+  .lib-secchip { padding: 6px 11px; font-size: 12.5px; }
+}
+
+/* ============================================================================
+   GRAPH — layered column layout. Three vertical columns (Laws · Agents ·
+   Skills); edges are bezier curves crossing the column gutters. Replaces the
+   prior force-directed canvas; the data shape is the same.
+   ============================================================================ */
+.graph-scroll {
+  overflow: auto;
+  max-height: calc(100vh - 240px);
+  scrollbar-width: thin;
+}
+/* Width-fill + auto-height so the canvas extends downward with the data
+   instead of being letterboxed when the container is wider than viewBox. */
+.graph-svg { display: block; height: auto; max-width: 100%; }
+
+.gcol-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .14em;
+}
+
+/* Edges are the whole point of the constellation, so the idle stroke needs
+   to read at a glance — not the near-invisible 1px line-2 of the old graph.
+   text-2 at full opacity gives a solid medium-grey line that pops on dark
+   ink without overwhelming the nodes. Lit/dim states still take over on
+   hover trace. */
+.gedge2 {
+  fill: none;
+  stroke: var(--text-2);
+  stroke-width: 1.3;
+  opacity: .55;
+  transition: stroke .12s, opacity .12s, stroke-width .12s;
+}
+.gedge2.lit { stroke: var(--accent); stroke-width: 2; opacity: 1; }
+.gedge2.dim { opacity: .07; }
+
+.gnode2 { cursor: pointer; }
+/* Invisible hit rect spans the full row so hover lands easily — the 3.4px
+   coloured circle alone is too small a target. The rect catches the pointer
+   first; the visible circle and text sit on top of it. */
+.gnode2 .ghit { fill: transparent; }
+.gnode2 circle:not(.ghit) {
+  stroke: var(--bg);
+  stroke-width: 1.4;
+  transition: r .12s;
+  pointer-events: none;
+}
+.gnode2.agent > circle:not(.ghit) { fill: var(--accent); }
+.gnode2.skill > circle:not(.ghit) { fill: var(--good); }
+.gnode2.law > circle:not(.ghit) { fill: var(--warn); }
+.gnode2 text {
+  fill: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  pointer-events: none;
+  dominant-baseline: middle;
+}
+.gnode2:hover text,
+.gnode2.near text { fill: var(--text); }
+.gnode2:hover circle:not(.ghit),
+.gnode2.near circle:not(.ghit) { r: 4.2; }
+.gnode2.dim { opacity: .22; }
+
+/* ============================================================================
+   SPECS — collapsible single-column list. Each row is a card; clicking the
+   header expands inline to render the full markdown body.
+   ============================================================================ */
+.spec-list { display: flex; flex-direction: column; gap: 14px; }
+.spec-item { padding: 0; overflow: hidden; }
+.spec-row {
+  display: grid;
+  grid-template-columns: 110px 1fr auto auto 22px;
+  gap: 18px;
+  align-items: center;
+  width: 100%;
+  padding: 18px 20px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .12s;
+}
+.spec-row:hover { background: var(--surface-2); }
+.spec-item.open .spec-row { background: var(--surface-2); }
+.spec-date {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+}
+.spec-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.spec-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -.01em;
+  color: var(--text);
+}
+.spec-purpose {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+/* Status badge — three buckets mapped from each spec's `**Status:** …`
+   line: planned (cool grey/blue), ongoing (warm amber), completed (good
+   green). Same dot+label shape as the system .badge so it reads as one of
+   our chips. */
+.spec-status {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 11px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.spec-status .dot {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+}
+.spec-status-planned {
+  color: var(--text-3);
+  background: var(--surface-2);
+}
+.spec-status-ongoing {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 36%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+.spec-status-completed {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 36%, transparent);
+  background: color-mix(in srgb, var(--good) 10%, transparent);
+}
+
+.spec-chev {
+  font-size: 22px;
+  color: var(--text-3);
+  transition: transform .14s, color .14s;
+  display: inline-block;
+  text-align: center;
+}
+.spec-item.open .spec-chev { color: var(--accent); }
+.spec-body {
+  border-top: 1px solid var(--line);
+  padding: 18px 22px 22px;
+  max-height: 640px;
+  overflow: auto;
+  scrollbar-width: thin;
+  background: color-mix(in srgb, var(--accent) 3%, transparent);
+}
+
+@media (max-width: 720px) {
+  .spec-row {
+    grid-template-columns: 1fr auto 22px;
+    gap: 14px;
+  }
+  .spec-date { grid-column: 1 / -1; margin-bottom: 4px; }
+  .spec-status { grid-column: 1 / -1; justify-self: start; margin-top: 4px; }
+}

@@ -592,7 +592,8 @@ def api_catalog(state: WebState, section: str) -> dict:
                  for e in inv[section]]
     elif section == "laws":
         items = [{"name": e["num"], "title": f"Rule {e['num']} — {e['title']}",
-                  "desc": ""} for e in inv["laws"]]
+                  "desc": "", "klass": e.get("klass", "craft")}
+                 for e in inv["laws"]]
     elif section == "memory":
         items = _memory_items(state)
     elif section == "notebook":
@@ -641,7 +642,8 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
         if not e:
             raise NotFound(name)
         return {"type": type_, "name": name, "title": f"Rule {e['num']} — {e['title']}",
-                "desc": "", "body": e["body"], "links": []}
+                "desc": "", "body": e["body"], "links": [],
+                "klass": e.get("klass", "craft")}
     if type_ in ("memory", "notebook"):
         d = (state.target / "notebook") if type_ == "notebook" \
             else harness._resolve_memory_dir(None)
@@ -1190,6 +1192,34 @@ def _spec_purpose(text: str) -> str:
     return (flat[:240] + "…") if len(flat) > 240 else flat
 
 
+_SPEC_STATUS_RE = re.compile(r"\*\*Status:\*\*\s*(.+?)\s*$", re.MULTILINE)
+
+
+def _spec_status(body: str) -> str:
+    """Normalise a spec's `**Status:** …` line into one of three buckets the
+    web Specs list uses for its badge: planned (default), ongoing, completed.
+
+    Recognised phrasings (case-insensitive):
+      - completed  ← "implemented", "completed", "done", "shipped", "merged"
+      - ongoing    ← "implementing", "in progress", "wip", "ongoing", any
+                     arrow chain whose right side names ongoing work
+      - planned    ← "draft", "proposed", "approved", "planned", or unknown
+    """
+    m = _SPEC_STATUS_RE.search(body)
+    if not m:
+        return "planned"
+    raw = m.group(1).lower()
+    # Arrow-chained statuses ("approved → implementing") take the rightmost
+    # token: that's the current state, not the prior one.
+    if "→" in raw or "->" in raw:
+        raw = re.split(r"[→]|->", raw)[-1].strip()
+    if any(k in raw for k in ("implemented", "completed", "done", "shipped", "merged")):
+        return "completed"
+    if any(k in raw for k in ("implementing", "in progress", "wip", "ongoing")):
+        return "ongoing"
+    return "planned"
+
+
 def _specs_index() -> list[dict]:
     """All `docs/specs/*.md`, sorted newest first, with a date and a one-line
     purpose pulled from the body. The id is `spec:<filename>`."""
@@ -1215,6 +1245,7 @@ def _specs_index() -> list[dict]:
             "date": date,
             "filename": p.name,
             "purpose": _spec_purpose(body),
+            "status": _spec_status(body),
         })
     out.sort(key=lambda s: s["date"], reverse=True)
     return out

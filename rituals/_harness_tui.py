@@ -634,9 +634,42 @@ def _retheme_tui(stdscr):
 # Law heading in the rendered laws file, e.g. "### Rule XVIII — Load the Project Context".
 LAW_HEADING_RE = re.compile(r"^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$")
 
+# Each rule's governance class. Six classes distilled from src/laws/universal.md
+# so the web Laws view can filter by intent (security, verification, process,
+# craft, context, communication). Keyed by Roman numeral, matching the heading
+# numbering — same source of truth across TUI and web. Update when a new rule
+# lands in universal.md.
+LAW_CLASS: dict[str, str] = {
+    "I": "security",
+    "II": "process",
+    "III": "verify",
+    "IV": "security",
+    "V": "craft",
+    "VI": "context",
+    "VII": "verify",
+    "VIII": "comms",
+    "IX": "comms",
+    "X": "comms",
+    "XI": "craft",
+    "XII": "craft",
+    "XIII": "craft",
+    "XIV": "process",
+    "XV": "process",
+    "XVI": "context",
+    "XVII": "context",
+    "XVIII": "context",
+    "XIX": "context",
+    "XX": "security",
+}
+
 
 def _parse_laws(text: str) -> list[dict]:
-    """Split the rendered laws file into {num, title, body} entries."""
+    """Split the rendered laws file into {num, title, klass, body} entries.
+
+    `klass` is the rule's governance class (security, verify, process, craft,
+    context, comms) — see LAW_CLASS above — surfaced so the web Laws ledger
+    can filter by intent without duplicating the taxonomy client-side.
+    """
     laws: list[dict] = []
     cur: dict | None = None
     for line in text.splitlines():
@@ -644,7 +677,13 @@ def _parse_laws(text: str) -> list[dict]:
         if m:
             if cur:
                 laws.append(cur)
-            cur = {"num": m.group(1), "title": m.group(2), "body": ""}
+            num = m.group(1)
+            cur = {
+                "num": num,
+                "title": m.group(2),
+                "klass": LAW_CLASS.get(num, "craft"),
+                "body": "",
+            }
         elif cur is not None:
             cur["body"] += line + "\n"
     if cur:

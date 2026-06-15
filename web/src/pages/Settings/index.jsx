@@ -2,14 +2,16 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../../api/index.js'
 import { Icon } from '../../components/Icon.jsx'
 import { useAsync } from '../../hooks/useAsync.js'
+import { FLAVOURS } from '../../hooks/useFlavour.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import McpServers from './McpServers.jsx'
 import ServerControl from './ServerControl.jsx'
 
-// The settings page: the install snapshot, the build/update picker, the MCP
-// wiring panel (its own component), and the offline-package download.
-export default function Settings({ onAction }) {
+// The settings page: the console direction picker, the install snapshot, the
+// build/update picker, the MCP wiring panel (its own component), and the
+// offline-package download.
+export default function Settings({ onAction, flavour, onFlavour }) {
   const { data: setup, error } = useAsync(() => api.setup(), [])
   const [choices, setChoices] = useState(null) // { themes, emits, current }
   const [theme, setTheme] = useState('')
@@ -43,6 +45,45 @@ export default function Settings({ onAction }) {
           </p>
         </div>
       </div>
+
+      {/* Console direction card — picks the visual flavour of the console.
+          Persisted to localStorage; the change is live (no rebuild needed). */}
+      {flavour && onFlavour && (
+        <div className="card pad-lg mb-16">
+          <div className="card-head">
+            <h3>Console direction</h3>
+          </div>
+          <p className="sub mb-16">
+            Three takes on the same data. Pick a direction — it applies instantly and persists
+            across reloads.
+          </p>
+          <div className="dir-grid">
+            {FLAVOURS.map((f) => (
+              <button
+                key={f.id}
+                className={`dir-tile dir-${f.id} ${flavour === f.id ? 'on' : ''}`}
+                onClick={() => onFlavour(f.id)}
+                aria-pressed={flavour === f.id}
+              >
+                <span className="dir-thumb" aria-hidden="true">
+                  <span className="dir-thumb-rail" />
+                  <span className="dir-thumb-bar" />
+                  <span className="dir-thumb-bar" style={{ width: '70%' }} />
+                  <span className="dir-thumb-bar" style={{ width: '52%' }} />
+                  <span className="dir-thumb-dot" />
+                </span>
+                <span className="dir-meta">
+                  <span className="dir-name">
+                    {f.short}
+                    {flavour === f.id && <span className="dir-check">● active</span>}
+                  </span>
+                  <span className="dir-tag">{f.tagline}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Installation card */}
       <div className="card pad-lg mb-16">
