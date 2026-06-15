@@ -119,16 +119,22 @@ export default function App() {
             )}
             {route.view === 'library' && <Library overview={overview} />}
             {route.view === 'laws' && <Laws />}
-            {route.view === 'section' && (
-              <Library overview={overview} section={route.section} />
-            )}
-            {route.view === 'item' && (
-              <Library
-                overview={overview}
-                section={TYPE_TO_SECTION[route.type] || route.type}
-                selected={route.name}
-              />
-            )}
+            {route.view === 'section' &&
+              (route.section === 'laws' ? (
+                <Laws />
+              ) : (
+                <Library overview={overview} section={route.section} />
+              ))}
+            {route.view === 'item' &&
+              (route.type === 'law' ? (
+                <Laws selected={route.name} />
+              ) : (
+                <Library
+                  overview={overview}
+                  section={TYPE_TO_SECTION[route.type] || route.type}
+                  selected={route.name}
+                />
+              ))}
             {route.view === 'diff' && <Diff />}
             {route.view === 'doctor' && <Doctor />}
             {route.view === 'themes' && <Themes onAction={runAction} />}

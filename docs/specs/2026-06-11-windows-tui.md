@@ -8,7 +8,7 @@
 > path stay untouched.
 
 **Date:** 2026-06-11
-**Status:** spec
+**Status:** implemented (verified 2026-06-15)
 **Scope:** Additive — a new stdlib-only backend module plus relaxed platform gates.
 No new screens, no keybinding changes, no screen-geometry changes. Pure-stdlib only
 (Decision: "no third-party dependencies, ever" — so **no** `windows-curses`,

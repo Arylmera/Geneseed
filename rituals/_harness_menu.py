@@ -30,10 +30,13 @@ _MENU_ACTIONS_RAW = [
 _MENU_ACTIONS = [(k, f"{_icon(k)}  {lbl}", d) for (k, lbl, d) in _MENU_ACTIONS_RAW]
 
 
-# The Library submenu mirrors the web UI's section badges (agents/skills/laws +
-# memory/notebook/wiki/config) so the same vocabulary works on either surface.
-# Labels carry a live count rebuilt per open in _library_menu — that's why the
-# RAW table only lists keys + descriptions; labels are added at call time.
+# The Library submenu is the terminal's one browse surface for all seven
+# sections (agents/skills/laws/memory/notebook/wiki/config). The web UI promoted
+# Laws to a dedicated #/laws ledger and dropped it from the Library chip-bar, but
+# the TUI has no separate Laws screen, so laws stay here — their only terminal
+# entry point. Labels carry a live count rebuilt per open in _library_menu —
+# that's why the RAW table only lists keys + descriptions; labels are added at
+# call time.
 _LIBRARY_SECTIONS_RAW = [
     ("agents",   "Agents",   "agent",    "Browse the agent specs."),
     ("skills",   "Skills",   "skill",    "Browse the skill specs."),

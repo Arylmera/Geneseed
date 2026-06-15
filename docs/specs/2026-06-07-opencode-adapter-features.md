@@ -6,7 +6,7 @@
 > nothing changes the machine's current agent/model behaviour unless explicitly enabled.
 
 **Date:** 2026-06-07
-**Status:** approved → implementing
+**Status:** implemented (verified 2026-06-15)
 **Batch:** O1, O2, O3, O5, O6 (core) + O4 (primary, opt-in) + O7 (commands, opt-in).
 O8/O9 deferred.
 

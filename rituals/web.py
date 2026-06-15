@@ -143,7 +143,7 @@ DOC_GROUPS = [
             "specialists. You invoke them by name in plain English.\n\n"
             "---\n\n"
             "**Catalog:** [Skills](#/section/skills) · "
-            "[Agents](#/section/agents) · [Rules](#/section/laws)")},
+            "[Agents](#/section/agents) · [Rules](#/laws)")},
     ]},
     # ── 2. Core concepts ──────────────────────────────────────────────────
     # One-screen explainers. The mental model — voice vs structure, the
@@ -171,7 +171,7 @@ DOC_GROUPS = [
          "the deployed bundle does not, until the next `geneseed update` or "
          "`build`."},
         {"id": "rules", "title": "Rules (Laws)", "kind": "concept",
-         "link": {"hash": "#/section/laws", "label": "Browse the catalog →"},
+         "link": {"hash": "#/laws", "label": "Browse the ledger →"},
          "body": "20 universal laws the agent obeys — secrets handling, "
          "scope discipline, verify-before-assert, surface-failures, context "
          "economy, load-the-docs, tool-discovery, and more. Each law is a "
@@ -285,9 +285,9 @@ DOC_GROUPS = [
     {"id": "mcp", "label": "MCP servers", "pages": [
         {"id": "mcp-overview", "title": "MCP overview", "kind": "concept",
          "body":
-         "Geneseed ships **four** ready-to-wire MCP servers as presets — "
-         "**MarkItDown** (PDF/Office → Markdown), **GitLab** (one entry per "
-         "instance), and **Filesystem** (scoped file access). Each is a "
+         "The Harness ships **four** ready-to-wire MCP servers as presets — "
+         "**MarkItDown** (PDF/Office → Markdown), **GitLab** (two entries, "
+         "one per instance), and **Filesystem** (scoped file access). Each is a "
          "*local* server the agent launches on demand: registering one only "
          "points the agent at a command — *you* install the tool (or let "
          "`npx`/`pipx` fetch it) and supply any credentials.\n\n"
@@ -1002,7 +1002,18 @@ def api_mcp_toggle(state: WebState, body: dict) -> dict:
     return {"ok": True, "name": name, "state": harness._mcp_state(cfg, name)}
 
 
-LAW_REF_RE = re.compile(r"\b(?:[Rr]ule|[Ll]aw)\s+([IVXLCDM]+)\b")
+def _law_ref_re(theme: dict) -> "re.Pattern[str]":
+    """Regex matching a plain-text law reference like "Rule III" / "Dictate III".
+
+    The law-noun is themed: the source files write `{{LAW}} N`, so the rendered
+    body uses whatever the active theme calls a law ("Rule", "Dictate", "Code",
+    "Directive", …). A hardcoded `Rule|Law` only matched the neutral theme and
+    silently dropped every law edge under any other theme — which is why the
+    graph showed no links. Build the alternation from the theme's LAW/LAWS
+    tokens (plus the canonical Rule/Law as a fallback for un-themed prose)."""
+    words = {"Rule", "Law", str(theme.get("LAW", "")), str(theme.get("LAWS", ""))}
+    alt = "|".join(re.escape(w) for w in sorted(words, key=len, reverse=True) if w)
+    return re.compile(rf"\b(?:{alt})\s+([IVXLCDM]+)\b", re.IGNORECASE)
 
 
 def api_graph(state: WebState) -> dict:
@@ -1012,6 +1023,7 @@ def api_graph(state: WebState) -> dict:
     numeral; the prose pattern catches both law↔law cross-references and any
     agent/skill that names a rule by number."""
     inv = state.inventory
+    law_ref_re = _law_ref_re(build.load_theme(state.theme))
     known = {}
     for e in inv["agents"]:
         known[e["name"]] = "agent"
@@ -1036,12 +1048,12 @@ def api_graph(state: WebState) -> dict:
                 dst = m.group(1).strip()
                 if dst in known and known[dst] != "law":
                     add_edge(src, dst)
-            for m in LAW_REF_RE.finditer(e["body"]):
+            for m in law_ref_re.finditer(e["body"]):
                 if m.group(1) in law_nums:
                     add_edge(src, m.group(1))
     for e in inv["laws"]:
         src = e["num"]
-        for m in LAW_REF_RE.finditer(e["body"]):
+        for m in law_ref_re.finditer(e["body"]):
             if m.group(1) in law_nums:
                 add_edge(src, m.group(1))
     return {"nodes": nodes, "edges": edges}

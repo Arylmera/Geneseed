@@ -1,7 +1,7 @@
 # Spec — Wiki: a machine-wide Obsidian knowledge base
 
 **Date:** 2026-06-11
-**Status:** Accepted
+**Status:** implemented (verified 2026-06-15)
 **Scope:** `src/` (AGENT.md template, skills, themes) + `adapters/opencode/plugins/` + `build.py` + tests
 **Adapter:** prose contract everywhere; plugin enforcement on OpenCode
 

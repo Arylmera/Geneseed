@@ -197,11 +197,11 @@ def _mcp_known_names(config: dict) -> list:
 def _mcp_meta(name: str) -> "tuple[str, str]":
     """(label, description) for a server row: the preset's metadata when known, else the
     bare server name and a generic note (a server discovered in the config, not a
-    Geneseed preset — still toggleable/removable). Pure."""
+    Harness preset — still toggleable/removable). Pure."""
     p = _MCP_PRESETS.get(name)
     if p:
         return p["label"], p["desc"]
-    return name, ("User-defined MCP server (not a Geneseed preset). It lives in this "
+    return name, ("User-defined MCP server (not a Harness preset). It lives in this "
                   "config already — 'e' enables/disables it, Enter removes it.")
 
 

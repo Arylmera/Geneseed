@@ -1,7 +1,7 @@
 # Spec — Notebook: the agent's own freeform space
 
 **Date:** 2026-06-10
-**Status:** Accepted
+**Status:** implemented (verified 2026-06-15)
 **Scope:** `src/notebook/` (new) + `src/AGENT.md.tmpl` + `build.py` + all 8 themes + `README.md` + `DESIGN.md` + tests
 **Adapter:** runtime-agnostic; loads on any tool, primary target OpenCode
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { api } from '../api/index.js'
+import { go } from '../lib/router.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
@@ -133,10 +134,14 @@ function LawRow({ law, isOpen, onToggle }) {
   )
 }
 
-export default function Laws() {
+// `selected` is the Roman numeral from a #/item/law/<roman> deep-link (Spotlight,
+// the old Library route). The open row is driven straight off the URL so those
+// links pre-open the rule and any opened rule is itself shareable.
+export default function Laws({ selected }) {
   const { data, error } = useAsync(() => api.catalog('laws'), [])
   const [sel, setSel] = useState('all')
-  const [open, setOpen] = useState(null)
+  const open = selected || null
+  const toggle = (roman) => go(open === roman ? '#/laws' : `#/item/law/${roman}`)
 
   if (error) return <ErrorState error={error} />
   if (!data) return <Loading />
@@ -208,7 +213,7 @@ export default function Laws() {
             key={l.roman}
             law={l}
             isOpen={open === l.roman}
-            onToggle={() => setOpen(open === l.roman ? null : l.roman)}
+            onToggle={() => toggle(l.roman)}
           />
         ))}
         {shown.length === 0 && (

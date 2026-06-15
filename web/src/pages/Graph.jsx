@@ -51,9 +51,13 @@ export default function Graph() {
   const W = 1200
   const cols = useMemo(
     () => [
-      { key: 'laws', title: 'Laws', x: 60, accent: 'var(--warn)' },
-      { key: 'agents', title: 'Agents', x: 360, accent: 'var(--accent)' },
-      { key: 'skills', title: 'Skills', x: 760, accent: 'var(--good)' },
+      // Agents sit leftmost and render their labels to the LEFT of the dot
+      // (side: 'left') so edges leave from clean space instead of crossing the
+      // long agent names. That needs ~100px of gutter, hence x: 200. Laws (the
+      // hub) stay centred; skills stay right with labels flowing rightward.
+      { key: 'agents', title: 'Agents', x: 200, accent: 'var(--accent)', side: 'left' },
+      { key: 'laws', title: 'Laws', x: 500, accent: 'var(--warn)', side: 'right' },
+      { key: 'skills', title: 'Skills', x: 840, accent: 'var(--good)', side: 'right' },
     ],
     [],
   )
@@ -83,11 +87,11 @@ export default function Graph() {
   const nodeCount = data.nodes.length
   const edgeCount = data.edges.length
 
-  // Click handler: law nodes go to the Ledger; agents/skills open in the
-  // Library section/item view.
+  // Click handler: every node deep-links to its own item view. Laws resolve to
+  // #/item/law/<roman>, which opens the Laws ledger with that exact rule
+  // pre-expanded (not the bare ledger); agents/skills open in the Library.
   const openNode = (n) => {
-    if (n.type === 'law') go('#/laws')
-    else go(`#/item/${n.type}/${encodeURIComponent(n.id)}`)
+    go(`#/item/${n.type}/${encodeURIComponent(n.id)}`)
   }
 
   // Law labels stay short ("Rule III") so they don't overflow the column
@@ -152,10 +156,10 @@ export default function Graph() {
             {cols.map((c) => (
               <text
                 key={c.key}
-                x={c.x - 5}
+                x={c.side === 'left' ? c.x + 5 : c.x - 5}
                 y={34}
                 className="gcol-title"
-                style={{ fill: c.accent }}
+                style={{ fill: c.accent, textAnchor: c.side === 'left' ? 'end' : 'start' }}
               >
                 {c.title.toUpperCase()} · {(groups[c.key] || []).length}
               </text>
@@ -188,7 +192,9 @@ export default function Graph() {
                 // Approximate label width so the invisible hit rect spans
                 // the whole row — 6.5px per character at 11.5px mono is a
                 // safe overestimate for hover. The visible circle + text
-                // ride on top via pointer-events:none in CSS.
+                // ride on top via pointer-events:none in CSS. Left-side
+                // columns mirror the text + hit rect to the dot's left.
+                const left = c.side === 'left'
                 const hitW = 18 + label.length * 6.5
                 return (
                   <g
@@ -201,17 +207,17 @@ export default function Graph() {
                   >
                     <rect
                       className="ghit"
-                      x={-8}
+                      x={left ? 8 - hitW : -8}
                       y={-10}
                       width={hitW}
                       height={20}
                       rx={3}
                     />
                     <circle r="3.4" />
-                    <text x="9" y="0.5">
+                    <text x={left ? -9 : 9} y="0.5" style={{ textAnchor: left ? 'end' : 'start' }}>
                       {label}
                     </text>
-                    <title>{n.type === 'law' ? 'Open Laws ledger' : 'Open in Library'}</title>
+                    <title>{n.type === 'law' ? `Open Rule ${n.id} in the ledger` : 'Open in Library'}</title>
                   </g>
                 )
               }),

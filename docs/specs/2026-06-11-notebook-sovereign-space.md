@@ -1,7 +1,7 @@
 # Spec — Notebook: from scratch-pad to sovereign space
 
 **Date:** 2026-06-11
-**Status:** Accepted
+**Status:** implemented (verified 2026-06-15)
 **Scope:** `src/notebook/README.md` + `src/AGENT.md.tmpl` (§5) + `src/laws/universal.md` ({{LAW}} XVI) + `build.py` + all 14 themes + `README.md` + `DESIGN.md` + tests
 **Adapter:** runtime-agnostic; loads on any tool, primary target OpenCode
 **Builds on:** [2026-06-10-notebook-agent-own-space.md](2026-06-10-notebook-agent-own-space.md)

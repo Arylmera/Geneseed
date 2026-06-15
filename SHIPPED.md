@@ -20,6 +20,12 @@ landed in the source tree.
 > **source fingerprint** stamped in `.geneseed-version` (see `geneseed version`), not the
 > string. Current label: **1.0.0**.
 
+> **Spec status audit (2026-06-15).** Every dated spec authored before today was
+> verified against the source tree and confirmed implemented (code + tests + docs);
+> their `**Status:**` headers were flipped from `approved`/`implementing`/`Accepted`/`spec`
+> to `implemented`. The only open spec is the same-day
+> [shell-completion](docs/specs/2026-06-15-shell-completion.md) draft.
+
 ## Capabilities
 
 Every row below is present in the tree today; "Spec" links the design record.
@@ -27,11 +33,11 @@ Every row below is present in the tree today; "Spec" links the design record.
 | Capability | What it is | Spec |
 | --- | --- | --- |
 | **Themed generator** | One neutral `src/` → 14 themed bundles via `build.py` (stdlib only); structure stays theme-independent | [DESIGN.md](DESIGN.md) |
-| **Laws / Agents / Skills / Memory / Notebook** | 20 laws, 16 agents, 33 skills, the memory convention, and the agent's sovereign notebook | [notebook](docs/specs/2026-06-11-notebook-sovereign-space.md) |
+| **Laws / Agents / Skills / Memory / Notebook** | 20 laws, 16 agents, 33 skills, the memory convention, and the agent's sovereign notebook | [notebook](docs/specs/2026-06-11-notebook-sovereign-space.md) · [agent-own-space](docs/specs/2026-06-10-notebook-agent-own-space.md) |
 | **`doctor`** | One check: unresolved tokens, dead/non-hermetic links, theme-key parity, authoring gates, rendered-bundle drift | [theme-aware doctor/diff](docs/specs/2026-06-07-theme-aware-doctor-diff.md) |
 | **`diff` + improvements export** | Deployed-vs-source drift report; export an `improvements.md` back-port | [improvements-export](docs/specs/2026-06-12-improvements-export.md) |
 | **`status` / `version`** | Headless dashboard + fingerprint verdict (no TUI needed) | [status-command](docs/specs/2026-06-07-status-command.md) · [version-and-uninstall](docs/specs/2026-06-07-version-and-uninstall.md) |
-| **TUI** | Full-screen curses control panel, modern refresh, native-Windows VT backend | [modern-refresh](docs/specs/2026-06-08-tui-modern-refresh.md) · [windows-tui](docs/specs/2026-06-11-windows-tui.md) |
+| **TUI** | Full-screen curses control panel, modern refresh, native-Windows VT backend | [refactor-polish](docs/specs/2026-06-07-tui-refactor-polish.md) · [modern-refresh](docs/specs/2026-06-08-tui-modern-refresh.md) · [windows-tui](docs/specs/2026-06-11-windows-tui.md) |
 | **Web console** | Local browser UI (Dashboard, Library, Graph, Docs, Specs, Changes, Doctor, Themes, Settings), auto-build, in-app docs menu | [web-ui-v2](docs/specs/2026-06-12-web-ui-v2.md) · [web-auto-build](docs/specs/2026-06-12-web-auto-build.md) · [docs-menu](docs/specs/2026-06-13-docs-menu.md) |
 | **OpenCode adapter** | Native agents/skills mapping + four plugins (context, learn, guard, workflow); global-emit link integrity; JSONC config target | [adapter-features](docs/specs/2026-06-07-opencode-adapter-features.md) · [global-emit](docs/specs/2026-06-07-global-emit-link-integrity.md) · [jsonc-target](docs/specs/2026-06-12-opencode-jsonc-target.md) |
 | **Workflow primitive** | Saved, code-driven subagent orchestration (`workflow` tool + runtime) | [workflow-primitive](docs/specs/2026-06-09-opencode-workflow-primitive.md) |

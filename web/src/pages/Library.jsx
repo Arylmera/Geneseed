@@ -12,7 +12,6 @@ import ErrorState from '../components/ErrorState.jsx'
 // any fetching.
 function libSource(sec, name) {
   if (sec === 'agents' || sec === 'skills') return `${sec}/${name}.md`
-  if (sec === 'laws') return 'laws/universal.md'
   if (sec === 'memory') return `memory/${name}`
   if (sec === 'notebook') return `notebook/${name}`
   if (sec === 'wiki') return `wiki.jsonc`

@@ -5,7 +5,7 @@
 > No new screens, no keybinding or feature changes, no screen-geometry changes.
 
 **Date:** 2026-06-07
-**Status:** approved → implementing
+**Status:** implemented (verified 2026-06-15)
 **Scope:** Refactor + conservative polish (user-selected). Park G5 (worktrees) and the
 Windows-TUI gap.
 

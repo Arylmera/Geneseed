@@ -1,7 +1,7 @@
 # Geneseed Web UI — Design Spec
 
 **Date:** 2026-06-12
-**Status:** Approved (brainstorm with Guillaume)
+**Status:** implemented (verified 2026-06-15)
 **Scope:** v1 — local web interface to navigate the deployed Harness with TUI action parity plus richer reading. No editing.
 
 ## Goal

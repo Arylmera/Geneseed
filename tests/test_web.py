@@ -392,6 +392,20 @@ class GraphTests(unittest.TestCase):
         pairs = [(e["source"], e["target"]) for e in g["edges"]]
         self.assertEqual(len(pairs), len(set(pairs)))
 
+    def test_api_graph_edges_survive_themed_law_noun(self):
+        # The law-noun is themed ({{LAW}} → "Dictate", "Code", "Directive", …),
+        # so a hardcoded "Rule|Law" reference regex found zero law edges under
+        # any non-neutral theme and the graph rendered with no links. Every
+        # theme should yield the same (non-empty) edge set.
+        baseline = len(web.api_graph(web.WebState(theme="neutral"))["edges"])
+        self.assertGreater(baseline, 0)
+        for theme in ("imperial", "biker", "military"):
+            g = web.api_graph(web.WebState(theme=theme))
+            self.assertEqual(len(g["edges"]), baseline, f"theme {theme} dropped edges")
+            self.assertTrue(any(e["target"] in {n["id"] for n in g["nodes"]
+                                                if n["type"] == "law"} for e in g["edges"]),
+                            f"theme {theme} found no law edges")
+
 
 class OfflineZipTests(unittest.TestCase):
     def test_offline_zip_holds_the_source_tree(self):

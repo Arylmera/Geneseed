@@ -1,7 +1,7 @@
 # Theme-aware doctor & diff
 
 **Date:** 2026-06-07
-**Status:** approved
+**Status:** implemented (verified 2026-06-15)
 
 ## Problem
 
