@@ -67,6 +67,20 @@ class CatalogTests(unittest.TestCase):
         with self.assertRaises(web.NotFound):
             web.api_item(self.state, "agent", "does-not-exist-xyz")
 
+    def test_file_backed_item_carries_resolved_source_path(self):
+        # The detail pane shows where a document lives on disk; the file-backed
+        # item branch (shared by memory + notebook) must return the absolute,
+        # resolved path to the file it read. Driven through notebook because its
+        # directory hangs off state.target and so is hermetic to control.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            nb = Path(tmp) / "notebook"
+            nb.mkdir()
+            (nb / "ritual.md").write_text("# Ritual\n", encoding="utf-8")
+            state = web.WebState(theme="neutral", target=Path(tmp))
+            item = web.api_item(state, "notebook", "ritual")
+            self.assertEqual(Path(item["source"]), (nb / "ritual.md").resolve())
+
 
 class DiffTests(unittest.TestCase):
     def test_diff_no_deployed_install(self):
