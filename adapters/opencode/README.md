@@ -139,8 +139,8 @@ both `.js` and `.ts` are accepted. The directory does **not** exist by default, 
 create it the first time.
 
 - **Global (recommended — the bundle is used everywhere):** **run this from inside
-  the Geneseed folder.** It installs all four plugins — learn, the
-  [context plugin](#doc-enforcement--the-context-plugin-v2-convention-glob), guard, and workflow
+  the Geneseed folder.** It installs all five plugins — learn, the
+  [context plugin](#doc-enforcement--the-context-plugin-v2-convention-glob), guard, workflow, and notify
   (the `*.js` glob) — and
   points `$GENESEED_HARNESS` at the sibling bundle `upgrade.sh` builds at
   `../Harness` — so the plugins find your memory store and `context.json` with no
@@ -247,7 +247,7 @@ swallows every error. Output mirrors `rituals/harness.py context`.
   AGENT.md project-context Law (soft, agent-discipline — no injection).
 
 **Install:** the same step as the learn plugin — `cp …/plugins/*.js` copies all
-four plugins (context, learn, guard, workflow); `build --emit opencode` and
+five plugins (context, learn, guard, workflow, notify); `build --emit opencode` and
 `--emit opencode-global` place them for you. It uses
 `session.created`, `session.idle` (transform-fallback detection), `session.prompt`
 `noReply`, `session.messages`, `session.get`, and the experimental
@@ -277,6 +277,31 @@ the script, not the model, drives the control flow.
 
 The matching `workflow` **skill** (in the rendered bundle) teaches the agent when
 to reach for the tool; the plugin is what actually executes the scripts.
+
+## Desktop notifications — the `notify` plugin
+
+[`plugins/geneseed-notify.js`](plugins/geneseed-notify.js) pings the OS when the
+agent finishes a turn, so you can start a long run, walk away, and be called back
+when it's your move again. It hooks `session.idle` like the learn plugin.
+
+- **Anti-spam by design:** it only fires when the turn actually took a while — the
+  gap between the session's last user prompt and now must exceed
+  `GENESEED_NOTIFY_MIN_SECONDS` (default **30**; set `0` to notify on every turn). A
+  quick back-and-forth never notifies; a multi-minute build/test run does.
+- **Stays out of the way:** native subagent child sessions and the learn plugin's
+  throwaway `geneseed-*` distil sessions are skipped, so background machinery is
+  silent.
+- **Native, dependency-free delivery:** macOS `osascript`, Linux `notify-send`
+  (from libnotify — if it isn't installed the call is swallowed, no error), Windows
+  a PowerShell balloon tip. The notifier is spawned detached; any failure is
+  swallowed, so it never blocks, delays, or breaks a session.
+- **Config:** `GENESEED_NOTIFY=off` disables it; `GENESEED_NOTIFY_MIN_SECONDS=N`
+  tunes the threshold; `GENESEED_NOTIFY_TITLE="…"` overrides the title (default
+  `Geneseed`); `GENESEED_DEBUG=1` logs each decision/delivery to stderr.
+
+**Verify it loaded:** with `GENESEED_DEBUG=1`, end a session that ran longer than the
+threshold — you'll see `[geneseed-notify] notified for …` and a desktop notification.
+On Linux, install `libnotify` (`notify-send`) if nothing appears.
 
 ## Global install — everything in the config dir
 
@@ -422,7 +447,7 @@ well with the harness's parallel-agent workflows when you want *filesystem*
 isolation, not just separate sessions.
 
 It is **not vendored** and **not installed by the harness** — treat it like the
-MarkItDown MCP above: a reference pointer you opt into, not a dependency. It does
+MarkItDown MCP server: a reference pointer you opt into, not a dependency. It does
 not follow Geneseed's plugin convention (the four vendored plugins are single-file,
 zero-dependency `.js` copied by `cp …/plugins/*.js`; this one is multi-file
 TypeScript with npm deps — `jsonc-parser`, `zod` — and Bun-only APIs like

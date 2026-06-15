@@ -153,9 +153,10 @@ DOC_GROUPS = [
          "(capability specialists you delegate to), **Skills** (repeatable "
          "workflows the agent can invoke), **Memory** (one-fact-per-file "
          "durable knowledge), and a **Notebook** (the agent's own sovereign "
-         "space). On OpenCode, four **Plugins** bind the pieces to the host: "
-         "context injection, learn-at-session-end, the safety guard, and the "
-         "saved workflow runner. The structure is theme-independent — a "
+         "space). On OpenCode, five **Plugins** bind the pieces to the host: "
+         "context injection, learn-at-session-end, the safety guard, the "
+         "saved workflow runner, and end-of-run notifications. The structure "
+         "is theme-independent — a "
          "theme only changes the *voice* (banner, sigil, prose), never a "
          "folder or a link.\n\n"
          "### What this UI actually shows\n\n"
@@ -210,7 +211,7 @@ DOC_GROUPS = [
         {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
          "link": {"hash": "#/docs/adapters-opencode",
                   "label": "Read the adapter spec →"},
-         "body": "OpenCode loads four plugins from the deployed bundle:\n\n"
+         "body": "OpenCode loads five plugins from the deployed bundle:\n\n"
          "- **geneseed-context** — injects the project's docs *and* your "
          "machine wiki at every session start (and after compaction).\n"
          "- **geneseed-learn** — distils memory at session end (powers the "
@@ -218,12 +219,15 @@ DOC_GROUPS = [
          "- **geneseed-guard** — enforces the safety Laws and protected wiki "
          "folders at the tool boundary.\n"
          "- **geneseed-workflow** — registers the `workflow` tool that runs "
-         "saved orchestration scripts."},
+         "saved orchestration scripts.\n"
+         "- **geneseed-notify** — sends a native OS notification when a long "
+         "run finishes, so you can step away and be called back."},
     ]},
     # ── 3. How-to ─────────────────────────────────────────────────────────
-    # One task per page — all sliced out of SETUP.md so prose isn't
-    # duplicated. The reader picks the page that matches what they need
-    # to do, not which source file it lives in.
+    # One task per page — most sliced out of SETUP.md (the git-worktree
+    # add-on slices the OpenCode adapter README) so prose isn't duplicated.
+    # The reader picks the page that matches what they need to do, not
+    # which source file it lives in.
     {"id": "howto", "label": "How-to", "pages": [
         {"id": "install-paths", "title": "Choose your install path",
          "kind": "markdown", "source": "SETUP.md",
@@ -237,6 +241,10 @@ DOC_GROUPS = [
         {"id": "ingest-docs", "title": "Read PDFs / Office docs",
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "reading-non-markdown-docs", "slice": True},
+        {"id": "worktree", "title": "Add git-worktree isolation (OpenCode)",
+         "kind": "markdown", "source": "adapters/opencode/README.md",
+         "anchor": "optional-add-on-git-worktree-isolation-third-party-not-vendored",
+         "slice": True},
         {"id": "run-anywhere", "title": "Run `geneseed` from anywhere",
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "run-geneseed-from-anywhere", "slice": True},
