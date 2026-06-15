@@ -421,12 +421,24 @@ class GraphTests(unittest.TestCase):
     def test_api_graph_edges_survive_themed_law_noun(self):
         # The law-noun is themed ({{LAW}} → "Dictate", "Code", "Directive", …),
         # so a hardcoded "Rule|Law" reference regex found zero law edges under
-        # any non-neutral theme and the graph rendered with no links. Every
-        # theme should yield the same (non-empty) edge set.
-        baseline = len(web.api_graph(web.WebState(theme="neutral"))["edges"])
+        # any non-neutral theme and the graph rendered with no links. The web
+        # reads the DEPLOYED harness, so emit each theme to its own target and
+        # graph that — every theme should yield the same (non-empty) edge set.
+        import contextlib
+        import io
+        import tempfile
+
+        def graph_for(theme):
+            tmp = Path(tempfile.mkdtemp())
+            cfg = tmp / "cfg"
+            with contextlib.redirect_stdout(io.StringIO()):  # swallow emit log
+                web.build.emit_opencode_global(theme, out=tmp / "bundle", cfg=cfg)
+            return web.api_graph(web.WebState(target=cfg))  # theme auto-detected
+
+        baseline = len(graph_for("neutral")["edges"])
         self.assertGreater(baseline, 0)
         for theme in ("imperial", "biker", "military"):
-            g = web.api_graph(web.WebState(theme=theme))
+            g = graph_for(theme)
             self.assertEqual(len(g["edges"]), baseline, f"theme {theme} dropped edges")
             self.assertTrue(any(e["target"] in {n["id"] for n in g["nodes"]
                                                 if n["type"] == "law"} for e in g["edges"]),

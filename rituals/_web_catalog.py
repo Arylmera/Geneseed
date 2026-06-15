@@ -7,9 +7,17 @@ from __future__ import annotations
 from _web_core import *  # noqa: F401,F403  shared stdlib + primitives
 
 
+def _memory_dir(state: WebState) -> Path:
+    """The memory store of the deployed harness: always <target>/memory. Anchored
+    to state.target (not the CWD-scanning harness._resolve_memory_dir) so the web
+    only ever shows THIS harness's facts — never an unrelated `memory/` or themed
+    `anamnesis/` that happens to sit beside wherever the daemon was launched."""
+    return state.target / "memory"
+
+
 def _memory_items(state: WebState) -> list[dict]:
-    d = harness._resolve_memory_dir(None)
-    if not d or not d.is_dir():
+    d = _memory_dir(state)
+    if not d.is_dir():
         return []
     out = []
     for p in sorted(d.glob("*.md")):
@@ -185,7 +193,7 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
                 "klass": e.get("klass", "craft")}
     if type_ in ("memory", "notebook"):
         d = _notebook_dir(state) if type_ == "notebook" \
-            else harness._resolve_memory_dir(None)
+            else _memory_dir(state)
         p = (d / f"{name}.md") if d else None
         if not p or not p.is_file():
             raise NotFound(name)

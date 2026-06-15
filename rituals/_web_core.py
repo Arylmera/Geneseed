@@ -449,7 +449,8 @@ class WebState:
     @property
     def inventory(self) -> dict:
         if self._inv is None:
-            self._inv = harness._tui_inventory(self.theme)
+            self._inv = (_deployed_inventory(self) if _deployed(self)
+                         else harness._tui_inventory(self.theme))
         return self._inv
 
     @property
@@ -477,3 +478,39 @@ class WebState:
 
 def _deployed(state: WebState) -> bool:
     return (state.target / build.GLOBAL_MANIFEST).exists()
+
+
+def _spec_entries(root: Path, nested: bool) -> list[dict]:
+    """Agent/skill specs read straight from a deployed harness dir. Agents are flat
+    `<root>/<name>.md` (skipping `_*` templates); skills use OpenCode's folder layout
+    `<root>/<name>/SKILL.md`. Each entry mirrors the source-render shape
+    (name/desc/body/source) so every inventory consumer is indifferent to the origin."""
+    out: list[dict] = []
+    if not root.is_dir():
+        return out
+    if nested:
+        files = [d / "SKILL.md" for d in sorted(root.iterdir()) if d.is_dir()]
+    else:
+        files = sorted(p for p in root.glob("*.md") if not p.name.startswith("_"))
+    for p in files:
+        if not p.is_file():
+            continue
+        text = p.read_text(encoding="utf-8", errors="replace")
+        name = p.parent.name if nested else p.stem
+        out.append({"name": name, "desc": build._first_blockquote(text),
+                    "body": text, "source": str(p.resolve())})
+    out.sort(key=lambda e: e["name"])
+    return out
+
+
+def _deployed_inventory(state: WebState) -> dict:
+    """Inventory read from the DEPLOYED harness at state.target — the agents and
+    skills actually installed there, not a fresh render of Geneseed's src/. Laws are
+    still taken from the render: once deployed they live inside AGENT.md, not as
+    separate files. Used whenever the target is a real install; the inventory
+    property falls back to the source render otherwise, so a non-deployed dev host
+    still shows a gallery."""
+    render = harness._tui_inventory(state.theme)
+    return {"agents": _spec_entries(state.target / "agents", nested=False),
+            "skills": _spec_entries(state.target / "skills", nested=True),
+            "laws": render["laws"], "theme": state.theme}

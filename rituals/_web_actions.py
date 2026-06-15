@@ -63,8 +63,8 @@ def api_memory_delete(state: WebState, name: str) -> dict:
     agent reads at session start). `name` is the bare slug; a path-separator or
     the reserved index/readme names are rejected, so this can only ever remove a
     fact file inside the resolved memory dir — never an arbitrary path."""
-    d = harness._resolve_memory_dir(None)
-    if not d or not d.is_dir():
+    d = _memory_dir(state)
+    if not d.is_dir():
         raise NotFound("memory store")
     if not name or "/" in name or "\\" in name or name in ("MEMORY", "README"):
         raise NotFound(name)
