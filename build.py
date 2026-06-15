@@ -21,6 +21,11 @@ from __future__ import annotations
 # _build_core.py. After importing the submodules we link them into ONE shared
 # namespace so cross-module calls resolve as in the original flat file, and the
 # `import build` surface (harness, web, tests) stays byte-for-byte unchanged.
+#
+# Constraint for maintainers: the _build_* submodules must import ONLY stdlib and
+# _build_core — never harness or web. harness.py imports build, so a back-import
+# here would be circular; that is also why this merge exists instead of build
+# simply reusing a shared facade helper from the harness tree.
 import _build_core
 import _build_render
 import _build_emit
