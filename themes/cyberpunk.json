@@ -100,5 +100,8 @@
   "EPI_WIKI": "The operator's own net — query it before you run, push what you learn back upstream.",
   "INTRO_WIKI": "The operator may run a private datanet on this node — a vault of hyperlinked records that persists across every gig.",
   "DESC_WIKI": "Work the operator's datanet — query the governing record before you run, commit new entries hard-linked, drop uncertain data in the buffer.",
+  "DESC_MCP": "Build or harden an MCP server — jack into the spec, forge task-shaped tools, test on the Inspector, and prove it with evals.",
+  "DESC_PROSE": "Write prose with a human pulse, not synthetic filler — strip the boilerplate, stay active, vary the cadence, trust the reader.",
+  "DESC_FRONTEND_DESIGN": "Design a UI with edge — palette, type, and layout forged for this brief, not the stock defaults; plan, critique, and keep one bold move.",
   "DESC_WORKFLOW": "Jack in a saved routine that drives your daemons on rails — parallel forks, staged pipelines, and verification, all in one deterministic run."
 }

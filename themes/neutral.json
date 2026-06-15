@@ -100,5 +100,8 @@
   "EPI_WIKI": "The user's own knowledge base — consult it first, grow it as you learn.",
   "INTRO_WIKI": "The user may keep a personal knowledge base on this machine — an Obsidian vault, or any folder of interlinked markdown notes — that outlives any single repository.",
   "DESC_WIKI": "Consult and grow the user's personal knowledge base — find the governing note before acting, write well-linked notes back, file them where they belong.",
+  "DESC_MCP": "Build or harden a Model Context Protocol server — research the spec, design task-shaped tools, test with the Inspector, and prove it with evaluations.",
+  "DESC_PROSE": "Write prose for a human that doesn't read like a model — cut filler, use active voice, vary rhythm, and trust the reader.",
+  "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — choose palette, type, and layout for this brief, not the templated defaults, then critique and cut to one bold move.",
   "DESC_WORKFLOW": "Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass."
 }

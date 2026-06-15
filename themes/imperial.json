@@ -100,5 +100,8 @@
   "EPI_WIKI": "The Librarium spans every world — consult it before you act, enrich it when you learn.",
   "INTRO_WIKI": "The Emperor may keep a Librarium upon this machine — a vault of interlinked scrolls whose wisdom outlives any single crusade.",
   "DESC_WIKI": "Consult and enrich the Emperor's Librarium — seek the governing scroll before acting, inscribe well-bound lore in return, and file each leaf where the order decrees.",
+  "DESC_MCP": "Forge or fortify an MCP server — study the rite, shape tools to real tasks, test with the Inspector, and prove it with trials.",
+  "DESC_PROSE": "Inscribe prose fit for human eyes, not machine-cant — strike the filler, speak plainly, vary the cadence, and trust the reader.",
+  "DESC_FRONTEND_DESIGN": "Design an interface with intent — palette, type, and layout forged for this brief, not the common defaults; plan, scrutinise, and keep one bold stroke.",
   "DESC_WORKFLOW": "Unleash a sealed battle-rite that marshals your Adepts by iron script — many loosed at once, their findings martialled and proven in one disciplined campaign."
 }

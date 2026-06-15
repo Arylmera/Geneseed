@@ -100,5 +100,8 @@
   "EPI_WIKI": "Every chart the fleet ever drew — read 'em before ye sail, ink what ye chart.",
   "INTRO_WIKI": "The cap'n may keep a map room aboard this machine — a vault o' linked charts an' rutters that outlives any single voyage.",
   "DESC_WIKI": "Work the cap'n's map room — find the right chart afore ye sail, ink new ones well-linked, an' stow each where it belongs.",
+  "DESC_MCP": "Build or batten down an MCP server — study the charter, shape tools for real work, test with the Inspector, and prove it with trials.",
+  "DESC_PROSE": "Write like a soul, not a machine — heave the filler overboard, keep it active, vary the swell, and trust yer reader.",
+  "DESC_FRONTEND_DESIGN": "Design a UI with real character — palette, type, and layout cut for this brief, not the common defaults, then trim her down to one bold move.",
   "DESC_WORKFLOW": "Run a saved set o orders that drives yer crew by the chart — many sent out at once, their plunder gathered an checked in one clean voyage."
 }

@@ -100,5 +100,8 @@
   "EPI_WIKI": "The sport's full almanac — check the history books before the call, update them after the flag.",
   "INTRO_WIKI": "The broadcast may keep an almanac on this machine — a vault of cross-referenced records and stats that outlives any single season.",
   "DESC_WIKI": "Work the almanac — pull the record before making the call, write new entries cross-referenced, and file them into the right season.",
+  "DESC_MCP": "Build or harden an MCP server — study the spec, shape task-ready tools, test with the Inspector, and prove it on the evals.",
+  "DESC_PROSE": "Write copy that sounds human, not machine-read — cut the filler, keep it active, vary the pace, trust the audience.",
+  "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — palette, type, and layout built for this brief, not the templated defaults, then critique and cut to one bold move.",
   "DESC_WORKFLOW": "Run a saved race plan that drives your team by script — many sent out at once, their results gathered and checked in one clean grand prix."
 }

@@ -100,5 +100,8 @@
   "EPI_WIKI": "The great library of the craft — consult it before casting, add to it what you discover.",
   "INTRO_WIKI": "The archmage may keep an athenaeum upon this machine — a vault of interlinked tomes whose knowledge outlives any single working.",
   "DESC_WIKI": "Consult and enrich the athenaeum — find the governing tome before casting, inscribe new pages well-linked, and shelve each where the catalogue ordains.",
+  "DESC_MCP": "Conjure or fortify an MCP server — study the grimoire, shape tools to real workings, test with the Inspector, and prove it with trials.",
+  "DESC_PROSE": "Pen prose for mortal eyes, not machine-cant — banish the filler, speak plainly, vary the cadence, and trust the reader.",
+  "DESC_FRONTEND_DESIGN": "Design a UI with intent — palette, type, and layout woven for this brief, not the common defaults; plan, scrutinise, and keep one bold flourish.",
   "DESC_WORKFLOW": "Invoke a saved ritual that binds your familiars by inscribed rite — many sent at once, their auguries gathered and proven in one deterministic casting."
 }

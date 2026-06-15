@@ -100,5 +100,8 @@
   "EPI_WIKI": "Every bit that ever worked — check the library before you go up, write down what kills.",
   "INTRO_WIKI": "The club may keep a bit library on this machine — a vault of cross-referenced material that outlives any single show.",
   "DESC_WIKI": "Work the bit library — find the bit before you riff, write new material well-linked, and file it where the archive keeps it.",
+  "DESC_MCP": "Build or harden an MCP server — read the spec, shape real tools, test with the Inspector, and prove it actually works.",
+  "DESC_PROSE": "Write like a human, not a model — ditch the filler, keep it active, vary the rhythm, and don't over-explain the joke.",
+  "DESC_FRONTEND_DESIGN": "Design a UI with actual personality — palette, type, and layout for this brief, not the stock defaults, then trim to one bold move.",
   "DESC_WORKFLOW": "Run a saved set that sends your sidekicks by script — many sent out at once, their findings gathered and checked in one clean show."
 }

@@ -100,5 +100,8 @@
   "EPI_WIKI": "The community wiki — check it before the pull, edit it when you learn the mechanic.",
   "INTRO_WIKI": "The player may keep a wiki on this machine — a vault of interlinked guides that carries over between every save.",
   "DESC_WIKI": "Use and update the player's wiki — look up the guide before the attempt, write well-linked pages for what you unlock, and file them on the right branch.",
+  "DESC_MCP": "Build or harden an MCP server — read the spec, design task-shaped tools, test with the Inspector, and prove it with evals.",
+  "DESC_PROSE": "Write like a player, not a bot — cut the filler, keep it active, mix up the rhythm, and trust the reader.",
+  "DESC_FRONTEND_DESIGN": "Design a UI with a real identity — palette, type, and layout picked for this brief, not the default skin, then cut it down to one bold move.",
   "DESC_WORKFLOW": "Run a saved combo that scripts your party — fan out, chain the stages, and verify the clear, all in one deterministic rotation."
 }

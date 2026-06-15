@@ -100,5 +100,8 @@
   "EPI_WIKI": "The franchise playbook — study it before the snap, draw in what you learn.",
   "INTRO_WIKI": "The club may keep a playbook on this machine — a vault of cross-referenced plays and scouting that outlasts any single season.",
   "DESC_WIKI": "Work the franchise playbook — study the relevant play before the snap, draw up new ones cross-referenced, and file them in the right chapter.",
+  "DESC_MCP": "Build or harden an MCP server — study the spec, design task-ready tools, test with the Inspector, and prove it on the evals.",
+  "DESC_PROSE": "Write like a human, not a machine — cut the filler, keep it active, vary the tempo, trust the reader.",
+  "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — palette, type, and layout built for this brief, not the stock defaults, then cut to one bold move.",
   "DESC_WORKFLOW": "Run a saved set play that drives your squad on script — parallel runs, staged phases, and a verified result, all in one deterministic drive."
 }

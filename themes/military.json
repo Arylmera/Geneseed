@@ -100,5 +100,8 @@
   "EPI_WIKI": "Theater-level intel — check the archives before you move, file what you learn.",
   "INTRO_WIKI": "Command may maintain an intel archive on this machine — a vault of cross-referenced briefs that outlasts any single operation.",
   "DESC_WIKI": "Work the intel archives — pull the relevant brief before acting, file new intel cross-referenced, route uncertain finds through the inbox.",
+  "DESC_MCP": "Build or harden an MCP server — recon the spec, design task-shaped tools, test with the Inspector, and prove it with evals.",
+  "DESC_PROSE": "Write prose for a human, not a machine — cut the filler, active voice, vary cadence, trust the reader.",
+  "DESC_FRONTEND_DESIGN": "Design a UI with intent — palette, type, and layout chosen for this brief, not the standard-issue defaults; plan, critique, and keep one bold move.",
   "DESC_WORKFLOW": "Execute a saved op-order that commands your units by the numbers — parallel sweeps, staged phases, and confirmation, in one deterministic mission."
 }

@@ -100,5 +100,8 @@
   "EPI_WIKI": "All the data from every weekend — check it before you push, log what the car tells you.",
   "INTRO_WIKI": "The team may keep a data room on this machine — a vault of linked engineering notes that carries over every race weekend.",
   "DESC_WIKI": "Use the team's data room — check the data before you push, log new findings properly linked, and file them with the right weekend.",
+  "DESC_MCP": "Build or harden an MCP server — study the spec, design task-shaped tools, test with the Inspector, and prove it with evals.",
+  "DESC_PROSE": "Write like a human, not a bot — bin the filler, keep it active, vary the rhythm, and trust the reader.",
+  "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — palette, type, and layout dialled in for this brief, not the default setup, then trim to one bold move.",
   "DESC_WORKFLOW": "Run a saved race plan that drives your engineers by script — many sent out at once, their results gathered and checked in one clean grand prix."
 }
