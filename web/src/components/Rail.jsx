@@ -1,33 +1,12 @@
 import React from 'react'
-import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
-import { useAsync } from '../hooks/useAsync.js'
 import { Icon, Sprout } from './Icon.jsx'
-import { SECTIONS, SECTION_ORDER, TYPE_TO_SECTION } from '../lib/sections.js'
-
-// Which section is "open" given the route — used to light up a rail sub-item.
-// Section pages carry it directly; item pages resolve it from the item's type.
-function activeSection(route) {
-  if (route.view === 'section') return route.section
-  if (route.view === 'item') return TYPE_TO_SECTION[route.type] || route.type
-  return null
-}
-
-// Which Docs group the current page lives in. Docs pages don't carry their
-// group in the URL, so we resolve it from the server's grouping. Falls back
-// to the first group when no page id is set (the Docs landing default).
-function activeDocsGroup(route, groups) {
-  if (!groups || groups.length === 0) return null
-  if (!route.page) return groups[0].id
-  for (const g of groups) {
-    if (g.pages.some((p) => p.id === route.page)) return g.id
-  }
-  return null
-}
 
 // Left navigation rail, grouped like the design. `match` decides which item
 // lights up for the current route; `tag` surfaces a live count from the overview
-// (e.g. pending edits, doctor problems).
+// (e.g. pending edits, doctor problems). Library and Docs no longer expand
+// into nested sub-menus here — both pages own their own horizontal chip-bar
+// for in-page sub-navigation now.
 const NAV = [
   { group: 'Harness' },
   {
@@ -36,6 +15,14 @@ const NAV = [
     label: 'Dashboard',
     icon: 'dashboard',
     match: (r) => r.view === 'dashboard',
+  },
+  {
+    hash: '#/laws',
+    id: 'laws',
+    label: 'Laws',
+    icon: 'law',
+    match: (r) => r.view === 'laws',
+    tag: (o) => o?.counts?.laws ?? null,
   },
   {
     hash: '#/library',
@@ -104,12 +91,6 @@ const NAV = [
 ]
 
 export default function Rail({ route, overview, onOpenVoice }) {
-  // Fetch the Docs menu once so the rail can mirror Library's nested
-  // sub-menu pattern. Cheap, cached, single-sourced from the server's
-  // DOC_GROUPS so adding a group there shows up here for free.
-  const { data: docsMenu } = useAsync(() => api.docs(), [])
-  const docsGroups = docsMenu?.groups || []
-  const activeDocs = activeDocsGroup(route, docsGroups)
   return (
     <aside className="rail">
       <div className="rail-brand" onClick={() => go('#/')} title="Dashboard">
@@ -145,53 +126,6 @@ export default function Rail({ route, overview, onOpenVoice }) {
                 </span>
               ) : null}
             </a>
-            {/* Library expands into its sections as a nested sub-menu as soon
-                as you're anywhere under it — landing, a section, or an item —
-                so the sections are reachable without an extra click. */}
-            {n.id === 'library' &&
-              (route.view === 'library' || route.view === 'section' || route.view === 'item') && (
-                <div className="rail-sub">
-                  {SECTION_ORDER.map((key) => {
-                    const on = activeSection(route) === key
-                    const count = overview?.counts?.[key]
-                    return (
-                      <a
-                        key={key}
-                        className={`rail-subitem ${on ? 'active' : ''}`}
-                        href={'#/section/' + key}
-                        aria-current={on ? 'page' : undefined}
-                      >
-                        <span>{SECTIONS[key].label}</span>
-                        {count != null ? <span className="tag">{count}</span> : null}
-                      </a>
-                    )
-                  })}
-                </div>
-              )}
-            {/* Docs mirrors Library's pattern: when you're under Docs the
-                rail expands into the five intent groups (Get started / Core
-                concepts / How-to / Reference / Deeper). Each entry lands on
-                the first page of its group; the count is the page count. */}
-            {n.id === 'docs' && route.view === 'docs' && docsGroups.length > 0 && (
-              <div className="rail-sub">
-                {docsGroups.map((g) => {
-                  const on = activeDocs === g.id
-                  const first = g.pages[0]?.id
-                  if (!first) return null
-                  return (
-                    <a
-                      key={g.id}
-                      className={`rail-subitem ${on ? 'active' : ''}`}
-                      href={'#/docs/' + encodeURIComponent(first)}
-                      aria-current={on ? 'page' : undefined}
-                    >
-                      <span>{g.label}</span>
-                      <span className="tag">{g.pages.length}</span>
-                    </a>
-                  )
-                })}
-              </div>
-            )}
           </div>
         )
       })}

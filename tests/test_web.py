@@ -67,6 +67,32 @@ class CatalogTests(unittest.TestCase):
         with self.assertRaises(web.NotFound):
             web.api_item(self.state, "agent", "does-not-exist-xyz")
 
+    def test_agent_item_and_catalog_carry_source(self):
+        # Agents/skills now expose their src/ file too, so the UI shows the real
+        # path instead of guessing one — uniform with memory/notebook.
+        row = web.api_catalog(self.state, "agents")["items"][0]
+        self.assertTrue(Path(row["source"]).is_file())
+        item = web.api_item(self.state, "agent", row["name"])
+        self.assertEqual(item["source"], row["source"])
+
+    def test_file_backed_item_carries_resolved_source_path(self):
+        # The detail pane shows where a document lives on disk; the file-backed
+        # item branch (shared by memory + notebook) must return the absolute,
+        # resolved path to the file it read. Driven through notebook because its
+        # directory hangs off state.target and so is hermetic to control.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            nb = Path(tmp) / "notebook"
+            nb.mkdir()
+            (nb / "ritual.md").write_text("# Ritual\n", encoding="utf-8")
+            state = web.WebState(theme="neutral", target=Path(tmp))
+            item = web.api_item(state, "notebook", "ritual")
+            self.assertEqual(Path(item["source"]), (nb / "ritual.md").resolve())
+            # The catalog row carries the same source, so the list and the
+            # detail pane agree without the UI having to guess the path.
+            row = web.api_catalog(state, "notebook")["items"][0]
+            self.assertEqual(row["source"], item["source"])
+
 
 class DiffTests(unittest.TestCase):
     def test_diff_no_deployed_install(self):
@@ -391,6 +417,32 @@ class GraphTests(unittest.TestCase):
         # No duplicate edges.
         pairs = [(e["source"], e["target"]) for e in g["edges"]]
         self.assertEqual(len(pairs), len(set(pairs)))
+
+    def test_api_graph_edges_survive_themed_law_noun(self):
+        # The law-noun is themed ({{LAW}} → "Dictate", "Code", "Directive", …),
+        # so a hardcoded "Rule|Law" reference regex found zero law edges under
+        # any non-neutral theme and the graph rendered with no links. The web
+        # reads the DEPLOYED harness, so emit each theme to its own target and
+        # graph that — every theme should yield the same (non-empty) edge set.
+        import contextlib
+        import io
+        import tempfile
+
+        def graph_for(theme):
+            tmp = Path(tempfile.mkdtemp())
+            cfg = tmp / "cfg"
+            with contextlib.redirect_stdout(io.StringIO()):  # swallow emit log
+                web.build.emit_opencode_global(theme, out=tmp / "bundle", cfg=cfg)
+            return web.api_graph(web.WebState(target=cfg))  # theme auto-detected
+
+        baseline = len(graph_for("neutral")["edges"])
+        self.assertGreater(baseline, 0)
+        for theme in ("imperial", "biker", "military"):
+            g = graph_for(theme)
+            self.assertEqual(len(g["edges"]), baseline, f"theme {theme} dropped edges")
+            self.assertTrue(any(e["target"] in {n["id"] for n in g["nodes"]
+                                                if n["type"] == "law"} for e in g["edges"]),
+                            f"theme {theme} found no law edges")
 
 
 class OfflineZipTests(unittest.TestCase):

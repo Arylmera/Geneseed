@@ -13,6 +13,10 @@ vi.mock('../api/index.js', () => ({
         ],
         edges: [{ source: 'scribe', target: 'git' }],
       }),
+    // Graph now reads law titles from the laws catalog so it can label nodes
+    // as "Rule III — Verify…" rather than the bare Roman numeral. Returns
+    // empty here since this fixture has no law nodes.
+    catalog: () => Promise.resolve({ items: [] }),
   },
 }))
 

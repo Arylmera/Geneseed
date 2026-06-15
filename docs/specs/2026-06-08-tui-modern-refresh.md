@@ -5,7 +5,7 @@
 > with a calm opt-out and the existing ASCII fallback intact.
 
 **Date:** 2026-06-08
-**Status:** implementing
+**Status:** implemented (verified 2026-06-15)
 **Scope:** Additive polish on top of the 2026-06-07 refactor. No new screens, no
 keybinding changes, no screen-geometry changes. Pure-stdlib `curses` only (Decision:
 "no third-party dependencies, ever" — so no `rich`/`textual`).

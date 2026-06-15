@@ -1,7 +1,7 @@
 # Web auto-build — offer npm install + build when web/dist is missing
 
 **Date:** 2026-06-12
-**Status:** approved
+**Status:** implemented (verified 2026-06-15)
 
 ## Problem
 

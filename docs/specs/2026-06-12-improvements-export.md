@@ -1,7 +1,7 @@
 # Improvements export — preserve deployed self-improvements as a back-port file
 
 **Date:** 2026-06-12
-**Status:** approved
+**Status:** implemented (verified 2026-06-15)
 
 ## Problem
 

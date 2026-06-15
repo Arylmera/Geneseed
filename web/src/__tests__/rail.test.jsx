@@ -6,33 +6,41 @@ import Rail from '../components/Rail.jsx'
 
 const overview = { counts: { agents: 16, skills: 25, laws: 20 }, theme: 'ember' }
 
-describe('Rail library sub-menu', () => {
-  it('expands Library into its sections while browsing the library', () => {
-    render(<Rail route={{ view: 'section', section: 'skills' }} overview={overview} />)
-    // sections render as nested sub-items with their live counts
-    const skills = screen.getByText('Skills').closest('a')
-    expect(skills.getAttribute('href')).toBe('#/section/skills')
-    expect(skills.className).toContain('active')
-    expect(screen.getByText('16')).toBeTruthy() // agents count
-    // a non-active section is present but not lit
-    expect(screen.getByText('Laws').closest('a').className).not.toContain('active')
-  })
-
-  it('keeps the owning section lit on an item-detail route', () => {
-    render(<Rail route={{ view: 'item', type: 'agent', name: 'advocate' }} overview={overview} />)
-    expect(screen.getByText('Agents').closest('a').className).toContain('active')
-  })
-
-  it('hides the sub-menu outside the library', () => {
-    render(<Rail route={{ view: 'dashboard' }} overview={overview} />)
-    expect(screen.queryByText('Skills')).toBeNull()
-  })
-
-  it('expands the sub-menu on the landing so sections are one click away', () => {
+// The rail no longer expands sub-menus for Library or Docs — both pages own
+// their own horizontal chip-bar now. These tests cover what the rail still
+// owns: lighting up the right top-level item for each route and showing the
+// new Laws tab between Dashboard and Library.
+describe('Rail navigation', () => {
+  it('lights up Library on the landing route', () => {
     render(<Rail route={{ view: 'library' }} overview={overview} />)
-    const skills = screen.getByText('Skills').closest('a')
-    expect(skills.getAttribute('href')).toBe('#/section/skills')
-    // landing has no active section, so no sub-item should be lit
-    expect(skills.className).not.toContain('active')
+    const libraryLink = screen.getByText('Library').closest('a')
+    expect(libraryLink.getAttribute('href')).toBe('#/library')
+    expect(libraryLink.className).toContain('active')
+  })
+
+  it('keeps Library lit on section + item routes', () => {
+    render(<Rail route={{ view: 'section', section: 'skills' }} overview={overview} />)
+    expect(screen.getByText('Library').closest('a').className).toContain('active')
+  })
+
+  it('keeps Library lit on an item-detail route', () => {
+    render(<Rail route={{ view: 'item', type: 'agent', name: 'advocate' }} overview={overview} />)
+    expect(screen.getByText('Library').closest('a').className).toContain('active')
+  })
+
+  it('exposes Laws as its own rail entry between Dashboard and Library', () => {
+    render(<Rail route={{ view: 'laws' }} overview={overview} />)
+    const lawsLink = screen.getByText('Laws').closest('a')
+    expect(lawsLink.getAttribute('href')).toBe('#/laws')
+    expect(lawsLink.className).toContain('active')
+    // count badge sourced from overview.counts.laws
+    expect(lawsLink.textContent).toContain('20')
+  })
+
+  it('does not render section sub-items in the rail', () => {
+    render(<Rail route={{ view: 'library' }} overview={overview} />)
+    // "Skills" used to appear as a sub-menu entry; now it lives in the
+    // Library chip-bar (rendered by the Library page, not the rail).
+    expect(screen.queryByText('Skills')).toBeNull()
   })
 })

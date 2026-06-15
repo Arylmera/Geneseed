@@ -18,8 +18,12 @@ export const SECTIONS = {
   config: { label: 'Config', type: 'config', desc: 'install metadata', icon: 'settings' },
 }
 
-// Canonical display order for grids, tables, and tab strips.
-export const SECTION_ORDER = ['agents', 'skills', 'laws', 'memory', 'notebook', 'wiki', 'config']
+// Canonical display order for the Library's section chip-bar. Laws are
+// deliberately absent: they have their own top-level tab (#/laws) with a
+// purpose-built ledger view, so the generic Library listing would only be a
+// worse second door to the same content. `SECTIONS.laws` is kept so the `law`
+// item type still resolves (TYPE_TO_SECTION, deep-link redirects).
+export const SECTION_ORDER = ['agents', 'skills', 'memory', 'notebook', 'wiki', 'config']
 
 // Singular item type -> plural section key, for resolving #/item/<type>/<name>
 // routes back to the section that owns them.

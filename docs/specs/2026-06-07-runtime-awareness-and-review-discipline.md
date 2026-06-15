@@ -5,7 +5,7 @@
 > script, adapter, or CLI surface. Pure `src/` authoring + theme tokens + doc sync.
 
 **Date:** 2026-06-07
-**Status:** approved → implementing
+**Status:** implemented (verified 2026-06-15)
 **Approach:** C (Balanced) — +1 Rule, +2 skills, 2 extensions.
 
 ## Background

@@ -6,38 +6,59 @@ import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import MarkdownPage from '../Docs/MarkdownPage.jsx'
 
-// Build the docs-page id the backend recognises for one spec ("spec:<file>").
-// The router carries the bare filename, the API expects the prefix.
+// docsPage id for a given spec filename — the server prefixes specs with
+// "spec:" so they share the docs renderer.
 const pageIdFor = (filename) => `spec:${filename}`
 
-// One spec rendered in the right pane — defers to MarkdownPage so the TOC,
-// anchor handling, and wikilink resolution are identical to a Docs markdown
-// page (DRY: one renderer, two surfaces).
-function SpecDetail({ filename, overview }) {
-  const { data, error, loading } = useAsync(
-    () => (filename ? api.docsPage(pageIdFor(filename)) : Promise.resolve(null)),
-    [filename],
+// One row of the collapsible list. Lazy-loads its full markdown body the
+// first time the user opens it via api.docsPage; subsequent toggles reuse
+// the cached page. Renders through MarkdownPage so wikilink resolution and
+// anchor handling match the Docs surface (DRY: one renderer, two places).
+function SpecRow({ spec, isOpen, onToggle, overview }) {
+  const { data, error } = useAsync(
+    () => (isOpen ? api.docsPage(pageIdFor(spec.filename)) : Promise.resolve(null)),
+    [isOpen, spec.filename],
   )
-  if (error) return <ErrorState error={error} style={{ margin: 18 }} />
-  if (!filename) {
-    return (
-      <div className="empty">
-        <div className="big">Pick a spec</div>
-        Choose one from the list to read it.
-      </div>
-    )
-  }
-  if (loading || !data) return <Loading label="Loading spec…" />
-  return <MarkdownPage page={data} overview={overview} />
+  return (
+    <div className={`card spec-item ${isOpen ? 'open' : ''}`}>
+      <button
+        className="spec-row"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={`spec-body-${spec.filename}`}
+      >
+        <div className="spec-date mono">{spec.date || '—'}</div>
+        <div className="spec-main">
+          <div className="spec-name">{spec.title}</div>
+          {spec.purpose && <div className="spec-purpose">{spec.purpose}</div>}
+        </div>
+        <span className={`spec-status spec-status-${spec.status || 'planned'}`}>
+          <span className="dot" />
+          {spec.status || 'planned'}
+        </span>
+        <span className="spec-chev" style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}>
+          ›
+        </span>
+      </button>
+      {isOpen && (
+        <div className="spec-body" id={`spec-body-${spec.filename}`}>
+          {error ? (
+            <ErrorState error={error} style={{ margin: 18 }} />
+          ) : data ? (
+            <MarkdownPage page={data} overview={overview} />
+          ) : (
+            <Loading label="Loading spec…" />
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function Specs({ spec, query, overview }) {
   const { data, error } = useAsync(() => api.specs(), [])
-  const filename = spec || ''
 
-  // Topbar search scopes to the visible spec list — title, date, or the
-  // first-paragraph purpose all hit. Matches the Docs page filter behaviour
-  // so the same query feels consistent across Learn.
+  // Topbar search scopes the list — title, date, or purpose all hit.
   const shown = useMemo(() => {
     const all = data?.specs || []
     const q = (query || '').toLowerCase().trim()
@@ -52,44 +73,41 @@ export default function Specs({ spec, query, overview }) {
 
   if (error) return <ErrorState error={error} />
 
+  // The URL drives which spec is open. Toggling pushes a new hash so opening
+  // a spec is bookmarkable and reflected in the back button.
+  const openFilename = spec || ''
+  const toggle = (filename) =>
+    go(openFilename === filename ? '#/specs' : `#/specs/${encodeURIComponent(filename)}`)
+
   return (
     <>
       <div className="head-row mb-18">
         <div>
+          <div className="eyebrow">implementation specs</div>
           <h1 className="h">Specs</h1>
           <p className="sub">
-            Every dated implementation spec under <code>docs/specs/</code>: the rationale and
-            history behind each feature, newest first. Auto-discovered from the repo.
+            Every dated implementation spec under <code>docs/specs/</code>, newest first. Click any
+            row to expand it inline; the rationale and history of the feature lives in the markdown
+            body.
           </p>
         </div>
       </div>
-      <div className="lib">
-        <div className="card lib-list">
-          <div className="lib-rows" style={{ maxHeight: 'calc(100vh - 220px)' }}>
-            {shown.map((s) => (
-              <div
-                key={s.id}
-                className={`lib-row ${filename === s.filename ? 'on' : ''}`}
-                onClick={() => go(`#/specs/${encodeURIComponent(s.filename)}`)}
-              >
-                <div className="lr-name">{s.title}</div>
-                <div className="lr-desc">
-                  {s.date}
-                  {s.purpose ? ` · ${s.purpose}` : ''}
-                </div>
-              </div>
-            ))}
-            {shown.length === 0 && (
-              <div className="empty">
-                <div className="big">No specs</div>
-                {data ? 'No matches for your search.' : 'docs/specs/ is empty.'}
-              </div>
-            )}
+      <div className="spec-list">
+        {shown.map((s) => (
+          <SpecRow
+            key={s.id}
+            spec={s}
+            isOpen={openFilename === s.filename}
+            onToggle={() => toggle(s.filename)}
+            overview={overview}
+          />
+        ))}
+        {shown.length === 0 && (
+          <div className="empty" style={{ padding: 32 }}>
+            <div className="big">No specs</div>
+            {data ? 'No matches for your search.' : 'docs/specs/ is empty.'}
           </div>
-        </div>
-        <div className="card">
-          <SpecDetail filename={filename} overview={overview} />
-        </div>
+        )}
       </div>
     </>
   )

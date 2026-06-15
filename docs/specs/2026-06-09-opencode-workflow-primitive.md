@@ -1,7 +1,7 @@
 # Spec — OpenCode Workflow Primitive
 
 **Date:** 2026-06-09
-**Status:** Accepted
+**Status:** implemented (verified 2026-06-15)
 **Scope:** `adapters/opencode/` + `src/skills/` + theme tokens + tests
 **Adapter:** OpenCode only (v1)
 

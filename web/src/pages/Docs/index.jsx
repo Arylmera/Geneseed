@@ -46,8 +46,8 @@ function PageView({ pageId, overview, onAction }) {
   }
 }
 
-// Which group contains a given page id. With the rail showing one group at a
-// time, the in-page sub-nav follows: it scopes to the active page's group.
+// Which group contains a given page id. With the chip-bar showing all groups
+// at once, the active chip is the one whose pages contain the current page.
 function groupOfPage(menu, pageId) {
   if (!menu || !pageId) return null
   for (const g of menu.groups) {
@@ -62,11 +62,10 @@ export default function Docs({ page, query, overview, onAction }) {
   const activeGroup = groupOfPage(menu, pageId) || menu?.groups?.[0]
   const q = (query || '').toLowerCase().trim()
 
-  // The left column mirrors the page level: with no query, show ONLY the
-  // active group's pages — the rail's sub-nav already surfaces the other
-  // groups (same split as Library's section page). A query widens the scope
-  // back across all groups so search stays discoverable; empty groups drop
-  // out, and a group header appears so cross-group results read clearly.
+  // With a query, the master list scopes across every group so search stays
+  // discoverable (group headers appear so it's clear where each result
+  // lives). Without a query, scope to just the active group's pages — the
+  // chip-bar already surfaces the other groups one click away.
   const groups = useMemo(() => {
     if (!menu) return []
     if (!q) return activeGroup ? [activeGroup] : []
@@ -85,49 +84,74 @@ export default function Docs({ page, query, overview, onAction }) {
 
   if (error) return <ErrorState error={error} />
 
-  // With a query, the user is searching across all groups — keep the group
-  // headers so it's clear where each result lives. Without a query, we're
-  // focused on one group already (rail picked it), so suppress the header.
+  const allGroups = menu?.groups || []
   const showGroupHeaders = !!q
+  const switchGroup = (g) => {
+    const first = g.pages[0]?.id
+    if (first) go(`#/docs/${encodeURIComponent(first)}`)
+  }
 
   return (
     <>
-      <div className="head-row mb-18">
+      <div className="head-row mb-16">
         <div>
-          <h1 className="h">{q ? 'Documentation' : activeGroup?.label || 'Documentation'}</h1>
+          <div className="eyebrow">documentation</div>
+          <h1 className="h">Docs</h1>
           <p className="sub">
-            {q
-              ? `Searching all groups for "${q}".`
-              : 'Pick a group from the left rail to switch the focus; pages within it appear in the sub-nav.'}
+            Concept pages, a generated CLI reference, and a glossary. Pick a group, then read a
+            page; the markdown renders inline with wikilink resolution.
           </p>
         </div>
       </div>
-      <div className="lib">
-        <div className="card lib-list">
-          <div className="lib-rows" style={{ maxHeight: 'calc(100vh - 220px)' }}>
+      {/* Horizontal group chip-bar — same pattern as Library's section bar so
+          the two surfaces feel coherent. Active chip = group of the current
+          page; each chip carries its page count. */}
+      <div className="lib-secbar">
+        {allGroups.map((g) => (
+          <button
+            key={g.id}
+            className={`lib-secchip ${activeGroup?.id === g.id ? 'on' : ''}`}
+            onClick={() => switchGroup(g)}
+          >
+            <span>{g.label}</span>
+            <span className="lib-secchip-n">{g.pages.length}</span>
+          </button>
+        ))}
+      </div>
+      <div className="lib lib-2">
+        <div className="card lib-main">
+          <div className="lib-head">
+            <span className="lib-head-label">{q ? 'all groups' : activeGroup?.label || ''}</span>
+            <span className="lib-head-count">
+              {groups.reduce((s, g) => s + g.pages.length, 0)} pages
+            </span>
+          </div>
+          <div className="lib-rows">
             {groups.map((g) => (
               <div key={g.id} className="docs-group">
                 {showGroupHeaders && <div className="docs-group-head">{g.label}</div>}
                 {g.pages.map((p) => (
-                  <div
+                  <button
                     key={p.id}
                     className={`lib-row ${pageId === p.id ? 'on' : ''}`}
                     onClick={() => go(`#/docs/${encodeURIComponent(p.id)}`)}
                   >
                     <div className="lr-name">{p.title}</div>
                     {p.date ? <div className="lr-desc">{p.date}</div> : null}
-                  </div>
+                  </button>
                 ))}
               </div>
             ))}
-            {groups.length === 0 && (
-              <div className="empty">
-                <div className="big">No matches</div>Try another search.
+            {groups.length === 0 && menu && (
+              <div className="empty" style={{ padding: 32 }}>
+                <div className="big">No matches</div>
+                Try another search.
               </div>
             )}
+            {!menu && <Loading label="Loading docs…" />}
           </div>
         </div>
-        <div className="card">
+        <div className="card lib-detail">
           <PageView pageId={pageId} overview={overview} onAction={onAction} />
         </div>
       </div>
