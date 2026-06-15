@@ -8,8 +8,9 @@ import { describe, it, expect, vi } from 'vitest'
 // item via the URL, forget a memory fact.
 vi.mock('../api/index.js', () => ({
   api: {
-    catalog: () =>
+    catalog: (section) =>
       Promise.resolve({
+        section,
         items: [
           { name: 'reviewer', title: 'Reviewer', desc: 'reviews code' },
           { name: 'tester', title: 'Tester', desc: 'writes tests' },
