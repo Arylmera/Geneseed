@@ -8,9 +8,11 @@ import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
 // so a colour assigned to "agents" stays the same regardless of theme voice.
 const B_CATS = ['#2BB673', '#16A6A6', '#E8A23B', '#E07A5F', '#8E7DBE', '#5BD08A', '#79856E']
 
-// Donut chart of capability mix. Plain SVG arcs — no chart library. Centre
-// shows the running total; legend reads alongside the chart.
-function Donut({ segments, size = 186, stroke = 26 }) {
+// Donut chart. Plain SVG arcs — no chart library. Centre shows the running
+// total under a caption; legend reads alongside the chart. The caption is a
+// prop so the same donut serves both the capability mix and the doctor-checks
+// readiness ring without mislabelling one as the other.
+function Donut({ segments, size = 186, stroke = 26, caption = 'capabilities' }) {
   const total = segments.reduce((s, x) => s + x.value, 0) || 1
   const r = size / 2 - stroke / 2
   const cx = size / 2
@@ -49,36 +51,78 @@ function Donut({ segments, size = 186, stroke = 26 }) {
         {total}
       </text>
       <text x={cx} y={cy + 16} textAnchor="middle" className="donut-c-cap">
-        capabilities
+        {caption}
       </text>
     </svg>
   )
 }
 
-// Tiny area trend — buckets the values into an SVG path with a fill underneath
-// and dots on each point. Used for the Recent runs sub-chart.
+// Smooth a list of [x,y] points into an SVG path using Catmull-Rom → cubic
+// bezier. Returns the `d` string starting with a move-to. The fill baseline is
+// closed by the caller.
+function smoothPath(points) {
+  if (points.length < 2) return points.length ? `M${points[0][0]},${points[0][1]}` : ''
+  let d = `M${points[0][0]},${points[0][1]}`
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] || points[i]
+    const p1 = points[i]
+    const p2 = points[i + 1]
+    const p3 = points[i + 2] || p2
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6
+    d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`
+  }
+  return d
+}
+
+// Tiny area trend — buckets the values into a smooth SVG path with a fill
+// underneath. Used for the Recent runs sub-chart. We render in a real wide
+// coordinate space (not a stretched 100-wide box) so the stroke keeps an even
+// weight and the curve reads cleanly.
 function Trend({ data, height = 156, accent }) {
   if (!data.length) return null
-  const w = 100
+  const w = 600
   const h = height
+  const padX = 6
+  const padTop = 14
+  const padBottom = 6
   const max = Math.max(...data.map((d) => d.v), 1) + 1
-  const step = data.length > 1 ? w / (data.length - 1) : w
-  const points = data.map((d, i) => [i * step, h - (d.v / max) * (h - 12) - 6])
-  const linePath = points.map(([x, y], i) => (i === 0 ? `M${x},${y}` : `L${x},${y}`)).join(' ')
-  const areaPath = `${linePath} L${w},${h} L0,${h} Z`
+  const innerW = w - padX * 2
+  const step = data.length > 1 ? innerW / (data.length - 1) : innerW
+  const points = data.map((d, i) => {
+    const x = padX + i * step
+    const y = h - padBottom - (d.v / max) * (h - padTop - padBottom)
+    return [x, y]
+  })
+  const linePath = smoothPath(points)
+  const last = points[points.length - 1]
+  const first = points[0]
+  const areaPath = `${linePath} L${last[0]},${h} L${first[0]},${h} Z`
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: '100%', height }}>
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      style={{ width: '100%', height, display: 'block', overflow: 'visible' }}
+    >
       <defs>
         <linearGradient id="b-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={accent} stopOpacity=".35" />
+          <stop offset="0" stopColor={accent} stopOpacity=".28" />
           <stop offset="1" stopColor={accent} stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={areaPath} fill="url(#b-grad)" />
-      <path d={linePath} fill="none" stroke={accent} strokeWidth="1.4" />
-      {points.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r="1.6" fill={accent} />
-      ))}
+      <path
+        d={linePath}
+        fill="none"
+        stroke={accent}
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle cx={last[0]} cy={last[1]} r="3.5" fill={accent} vectorEffect="non-scaling-stroke" />
     </svg>
   )
 }
@@ -151,6 +195,7 @@ const HEADLINES = {
 export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction }) {
   const c = overview.counts || {}
   const checks = doctor?.groups || []
+  const loaded = checks.length > 0
   const pass = checks.filter((g) => g.problems.length === 0).length
   const total = checks.length || 1
   const headline = overview.deployed
@@ -202,16 +247,34 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
               ]}
               size={168}
               stroke={20}
+              caption="checks"
             />
           </div>
           <div className="b-hero-side">
             <h3 className="b-hero-title">
-              {pass} of {total} clean
+              {loaded ? `${pass} of ${total} checks pass` : 'Running checks…'}
             </h3>
             <p className="sub">
               One source, rendered into <code>{overview.target}</code> and inherited by every repo
               on this machine.
             </p>
+            {loaded && (
+              <ul className="b-hero-checks">
+                {checks.map((ch) => {
+                  const ok = ch.problems.length === 0
+                  return (
+                    <li
+                      key={ch.label}
+                      className={`b-hcheck ${ok ? 'ok' : 'bad'}`}
+                      title={ok ? 'clean' : ch.problems.join('; ')}
+                    >
+                      <span className="b-hcheck-mark">{ok ? '✓' : '!'}</span>
+                      <span className="b-hcheck-label">{ch.label}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
             <div className="b-chips">
               <span className="b-chip">
                 <b style={{ textTransform: 'capitalize' }}>{overview.theme}</b> voice
@@ -286,16 +349,6 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
             </span>
           </div>
           <Trend data={series} accent={B_CATS[0]} height={156} />
-          <div className="b-checks">
-            {checks.slice(0, 6).map((ch) => {
-              const ok = ch.problems.length === 0
-              return (
-                <span key={ch.label} className={`b-check ${ok ? 'ok' : 'bad'}`}>
-                  {ok ? '✓' : '!'} {ch.label}
-                </span>
-              )
-            })}
-          </div>
         </div>
       </div>
 

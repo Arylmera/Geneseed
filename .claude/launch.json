@@ -4,7 +4,7 @@
     {
       "name": "geneseed-web",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-c", "from rituals import web; web.serve(open_browser=False, port=4753)"],
+      "runtimeArgs": ["-c", "import sys; sys.path.insert(0, 'rituals'); import web; web.serve(open_browser=False, port=4753)"],
       "port": 4753
     }
   ]
