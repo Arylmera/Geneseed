@@ -235,9 +235,14 @@ def _uninstall_global(target: Path, archive_memory: bool) -> dict:
             if victim.is_file():
                 victim.unlink()
                 removed += 1
-                if victim.name == "SKILL.md" and victim.parent != target \
-                        and not any(victim.parent.iterdir()):
-                    victim.parent.rmdir()
+                # Prune now-empty ancestor dirs up to (not including) target. Walking
+                # up — not just the immediate parent — clears the nested layout of a
+                # vendored skill folder (skills/<name>/references/…, …/.claude-plugin/…)
+                # as well as a flat native skill (skills/<name>/SKILL.md).
+                d = victim.parent
+                while d != target and d.is_dir() and not any(d.iterdir()):
+                    d.rmdir()
+                    d = d.parent
         except OSError as e:
             failed.append(f"{rel} ({e})")
     if failed:

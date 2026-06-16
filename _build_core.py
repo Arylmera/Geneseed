@@ -35,8 +35,10 @@ TEXT_SUFFIXES = {".md", ".tmpl", ".json", ".txt", ".yml", ".yaml"}
 # (not Geneseed-authored flat skills) carry their own license and internal cross-links to
 # the upstream project's own files — some intentionally NOT vendored — so they are exempt
 # from the hermeticity / dead-link and authoring gates that govern Geneseed's own specs.
-# Being nested, they ride along in the `files` emit (rglob copies the folder through) yet
-# stay invisible to the flat-skill native emit and the skill counts. None are vendored at
-# present; list a skill folder's name here to bring one in.
-VENDORED_SKILL_DIRS = ()
+# Being nested, they ride along verbatim in every emit — the `files` build (rglob copies
+# the folder through) and the OpenCode native/global skills dir (copied whole, not wrapped
+# as a flat SKILL.md) — so AGENT.md's vendored-skill pointer resolves everywhere, yet they
+# stay out of the skill COUNTS and tables. List a skill folder's name here to bring one in;
+# each carries a VENDOR.md recording its upstream source, commit, and license.
+VENDORED_SKILL_DIRS = ("react-view-transitions", "daydream")
 

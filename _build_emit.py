@@ -108,9 +108,23 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
     n_agents = n_skills = 0
     written: list[Path] = []
     for _out_rel, text, src in items:
+        sparts = src.relative_to(SRC).as_posix().split("/")
+        # Vendored third-party skill folders (skills/<name>/…) ride along verbatim into
+        # the native skills dir, preserving their own multi-file layout and upstream
+        # format, so AGENT.md's vendored-skill pointer resolves in this emit too (the
+        # global install builds no sibling bundle). They are copied through — NOT wrapped
+        # as a native SKILL.md — and never counted as harness skills.
+        if len(sparts) >= 2 and sparts[0] == "skills" and sparts[1] in VENDORED_SKILL_DIRS:
+            dest = skills_dir.joinpath(*sparts[1:])
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if text is not None:
+                dest.write_text(text, encoding="utf-8")
+            else:
+                shutil.copy2(src, dest)
+            written.append(dest)
+            continue
         if text is None:
             continue
-        sparts = src.relative_to(SRC).as_posix().split("/")
         if len(sparts) != 2 or not sparts[1].endswith(".md"):
             continue
         folder, fname = sparts[0], sparts[1]
@@ -317,7 +331,7 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
 
 
 def _copy_plugins(dst: Path, owned: list | None = None) -> int:
-    """Copy the static OpenCode plugins (context, learn, guard, workflow) into `dst`.
+    """Copy the static OpenCode plugins (context, learn, guard, workflow, notify) into `dst`.
     They are maintained files, not rendered from src, so copy them verbatim. When the
     caller tracks an ownership manifest (the global emit), pass `owned` and each copy
     is appended to it as `plugins/<name>`."""
