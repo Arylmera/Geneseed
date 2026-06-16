@@ -114,7 +114,7 @@ If you'd rather not run the generator, create each file by hand:
 `.opencode/agents/<name>.md` with frontmatter `description`, `mode: subagent`, and
 (for read-only agents) a `permission:` block (`edit: deny`, `webfetch: deny`, and
 `bash: deny` — or `bash: ask` if it runs read-only commands), body = the agent spec. Skills become native skills at `.opencode/skills/<name>/SKILL.md` with
-frontmatter `name` + `description` (+ optional `compatibility: opencode`), body =
+frontmatter `name` + `description`, body =
 the skill spec. (Plural dir names are canonical; singular `agent/`/`command/` are
 back-compat aliases.)
 

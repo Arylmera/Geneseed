@@ -316,7 +316,7 @@ Skills emit as **native OpenCode skills**, not slash commands:
 - **Shape:** one directory per skill, `skills/<name>/SKILL.md` (not a flat
   `commands/<name>.md`).
 - **Frontmatter:** skill schema — `name`, `description` (+ optional `license`,
-  `compatibility: opencode`, `metadata`). Drop the command-only `agent:` / `model:`
+  `metadata`). Drop the command-only `agent:` / `model:`
   keys. Geneseed's `src/skills/*.md` frontmatter is transformed on emit.
 - **Invocation:** model-invoked via the native `skill` tool with progressive
   disclosure (the agent sees `description`s, loads the body on demand) — **not** a

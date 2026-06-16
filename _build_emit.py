@@ -97,7 +97,7 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
       and read-only tool gating).
     - Skills -> `<skills_dir>/<name>/SKILL.md`  (native skills: model-invoked via the
       `skill` tool with progressive disclosure — NOT slash commands. Frontmatter is
-      the skill schema: name + description + compatibility. The command-only
+      the skill schema: name + description. The command-only
       `agent:` / `model:` keys are intentionally dropped; a skill runs in the current
       agent context. See adapters/opencode/GLOBAL-HARNESS-SPEC.md §9.1.)
 
@@ -165,7 +165,7 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
             dest = agents_dir / f"{stem}.md"
             n_agents += 1
         elif folder == "skills":
-            fm = [f"name: {stem}", f"description: {json.dumps(desc)}", "compatibility: opencode"]
+            fm = [f"name: {stem}", f"description: {json.dumps(desc)}"]
             body = _strip_skill_body_links(body)   # OpenCode never follows these — plain text
             dest = skills_dir / stem / "SKILL.md"
             n_skills += 1
