@@ -20,6 +20,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   (`Makefile`, `package.json` scripts, `justfile`, `Taskfile`) in the injected
   PROJECT CONTEXT block. (Distilled from awesome-opencode's *Model Announcer* and
   *Command Inject* plugins.)
+- **`geneseed-notify` plugin** (OpenCode): a fifth plugin that sends a native,
+  dependency-free OS notification (macOS `osascript`, Linux `notify-send`, Windows
+  PowerShell) when the agent finishes a turn — gated by `GENESEED_NOTIFY_MIN_SECONDS`
+  (default 30) so only genuinely long runs ping, and skipping subagent/throwaway
+  sessions. Toggle with `GENESEED_NOTIFY=off`. (Distilled from awesome-opencode's
+  *Opencode Notify*.)
 - Three learning skills that teach the user rather than do the work for them:
   - `crash-course` — go from zero to functional in a skill fast: what to learn
     first, what to ignore, and the one high-leverage exercise.

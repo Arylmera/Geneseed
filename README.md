@@ -20,7 +20,7 @@
 
 ---
 
-Geneseed distils an agent operating system into a generic harness built around a single `AGENT.md`. Point your tool at it and the agent inherits a set of operating **rules**, a roster of capability **agents**, native **skills**, a **memory** convention, and — on OpenCode — four **plugins** that auto-load your project's docs, capture durable memory, enforce the safety laws, and run saved workflows. One source builds it; it follows you into every repo.
+Geneseed distils an agent operating system into a generic harness built around a single `AGENT.md`. Point your tool at it and the agent inherits a set of operating **rules**, a roster of capability **agents**, native **skills**, a **memory** convention, and — on OpenCode — five **plugins** that auto-load your project's docs, capture durable memory, enforce the safety laws, run saved workflows, and ping you when a long run finishes. One source builds it; it follows you into every repo.
 
 > **New here? Jump to [Install](#-install)** — or read the full [Setup guide](SETUP.md) for every path, configuration knob, and troubleshooting. This page is the overview.
 
@@ -52,7 +52,7 @@ The harness ships as a small set of layers, mirrored one-for-one in the web cons
 | **📓 Notebook** (`notebook/`) | the agent's sovereign space — any medium (code, tools, data, notes), self-ruled via a seed-once charter, always git-ignored; only its `.gitignore` is build-asserted |
 | **🌐 Wiki** (`wiki.jsonc`) | your own machine-wide knowledge base — typically an Obsidian vault — declared once per machine: entry notes load eager/lazy, the agent reads and **writes** it under the vault's own conventions, with an inbox fallback and guard-enforced protected folders |
 | **🧭 Context** | the project's own docs — auto-discovered on OpenCode, or via a `context.json` manifest |
-| **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts |
+| **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes |
 
 ## 🚀 Install
 

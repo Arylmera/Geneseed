@@ -505,9 +505,14 @@ def _spec_entries(root: Path, nested: bool) -> list[dict]:
         if not p.is_file():
             continue
         text = p.read_text(encoding="utf-8", errors="replace")
+        # Deployed agent/skill files carry OpenCode frontmatter (name, description,
+        # mode, …). That's host plumbing, not prose — strip it so the web
+        # detail pane shows just the spec, matching the frontmatter-free source render
+        # path. The title/desc are surfaced separately from the catalog entry.
+        _fm, body = harness._frontmatter(text)
         name = p.parent.name if nested else p.stem
-        out.append({"name": name, "desc": build._first_blockquote(text),
-                    "body": text, "source": str(p.resolve())})
+        out.append({"name": name, "desc": build._first_blockquote(body),
+                    "body": body, "source": str(p.resolve())})
     out.sort(key=lambda e: e["name"])
     return out
 

@@ -195,6 +195,13 @@ Override only when the convention doesn't fit — drop a `.harness/context.json`
 `"extend": true` layers the manifest on top of discovery. Schema:
 [GLOBAL-HARNESS-SPEC.md §3](adapters/opencode/GLOBAL-HARNESS-SPEC.md).
 
+**Self-orientation extras.** The same injected block also carries two best-effort
+lines so the agent starts oriented: the repo's **runnable commands** (targets from
+`Makefile`, `package.json` scripts — with the right runner per lockfile — `justfile`,
+and `Taskfile`), and the session's **current model** (read from the transcript, or
+`GENESEED_MODEL=provider/model` as a fallback). Both degrade silently when absent —
+no commands file, no known model → the line is simply omitted.
+
 **Delivery — invisible by default.** The plugin delivers the context by prepending
 it to each outgoing request via OpenCode's `experimental.chat.messages.transform`
 hook: nothing shows in the conversation, and the context survives compaction
@@ -474,11 +481,11 @@ allowed-dir path.
 | `GENESEED_CONTEXT` | context plugin / CLI | explicit `context.json` path |
 | `GENESEED_WIKI` | context + guard plugins | explicit `wiki.jsonc` path (default: `$GENESEED_HARNESS/wiki.jsonc`, else beside the installed `AGENT.md`) |
 | `GENESEED_ROOT` | `harness context` | repo root to discover docs from (default: cwd) |
-| `GENESEED_MODEL` | learn plugin | `provider/model` fallback if the session model can't be read |
+| `GENESEED_MODEL` | learn + context plugins | `provider/model` fallback if the session model can't be read (learn distils with it; context shows it in the self-awareness line) |
 | `GENESEED_LLM` | `harness learn` (Claude) | model CLI for distillation, e.g. `claude -p` |
 | `GENESEED_EMIT` | `upgrade.sh` | `opencode-global` \| `opencode` \| unset (plain bundle) |
 | `GENESEED_OUT` / `GENESEED_ROOT` | `upgrade.sh` | bundle / project-root locations |
-| `GENESEED_DEBUG` | context plugin | `1` re-enables discovery/inject logs |
+| `GENESEED_DEBUG` | context + notify plugins | `1` re-enables discovery/inject logs (context) and decision/delivery logs (notify) |
 | `GENESEED_CONTEXT_INJECT` | context plugin | `off` disables the injected block (rely on the AGENT.md law) |
 | `GENESEED_EAGER_FILE_KB` / `GENESEED_EAGER_TOTAL_KB` | context plugin | per-file / total eager injection budget (default 16 / 48) |
 | `GENESEED_LAZY_HEADINGS` | context plugin | cap on lazy-file heading reads per session (default 64) |
@@ -488,6 +495,9 @@ allowed-dir path.
 | `GENESEED_LEARN_DEBOUNCE_MS` | learn plugin | quiet period before distilling (default 60000) |
 | `GENESEED_GUARD` | guard plugin | `warn` downgrades blocks to warnings; `off` disables the safety guard |
 | `GENESEED_WORKFLOWS_DIR` | workflow plugin | override the directory the `workflow` tool reads saved scripts from |
+| `GENESEED_NOTIFY` | notify plugin | `off` disables end-of-run desktop notifications |
+| `GENESEED_NOTIFY_MIN_SECONDS` | notify plugin | minimum turn length, in seconds, before notifying (default 30; `0` = every turn) |
+| `GENESEED_NOTIFY_TITLE` | notify plugin | override the notification title (default `Geneseed`) |
 | `GENESEED_PRIMARY` | `build.py` | `1` also emits the primary orchestrator agent |
 | `GENESEED_COMMANDS` | `build.py` | `1` also emits the `/slash` command layer |
 | `GENESEED_TUI_ASCII` / `GENESEED_TUI_PLAIN` | TUI / harness | force pure-ASCII / drop emoji + animation in the TUI |
