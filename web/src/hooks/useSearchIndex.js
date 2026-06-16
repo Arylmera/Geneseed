@@ -86,23 +86,6 @@ export function useSearchIndex() {
         // optional
       }
 
-      // Specs — newest first; route uses filename like the Specs page does.
-      try {
-        const specs = await api.specs()
-        for (const s of specs?.specs || []) {
-          entries.push({
-            kind: 'Specs',
-            sortKey: 120,
-            title: s.title || s.filename,
-            desc: [s.date, s.purpose].filter(Boolean).join(' · '),
-            hay: `${s.title || ''} ${s.filename || ''} ${s.purpose || ''}`.toLowerCase(),
-            route: `#/specs/${encodeURIComponent(s.filename)}`,
-          })
-        }
-      } catch {
-        // optional
-      }
-
       setIndex(entries)
       inflight.current = null
       return entries

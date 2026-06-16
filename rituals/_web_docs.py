@@ -9,8 +9,6 @@ from _web_core import *  # noqa: F401,F403  shared stdlib + primitives
 
 # ---- Docs API --------------------------------------------------------------
 
-SPEC_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(.+)\.md$")
-
 
 def _find_doc_page(page_id: str) -> "dict | None":
     """Look up a page by id across all groups. Used by /api/docs/page/<id>."""
@@ -93,95 +91,6 @@ def _slice_section(body: str, anchor: str) -> "tuple[str, bool]":
     while out and out[-1].strip() == "":
         out.pop()
     return "\n".join(out) + "\n", True
-
-
-def _spec_purpose(text: str) -> str:
-    """First non-heading paragraph of a spec, used as its index blurb. We skip
-    the title, the metadata block (Date/Status lines), and any leading blank
-    lines, then return the first paragraph trimmed to one line."""
-    lines = text.splitlines()
-    paras: list[list[str]] = []
-    buf: list[str] = []
-    for ln in lines:
-        s = ln.strip()
-        if not s:
-            if buf:
-                paras.append(buf)
-                buf = []
-            continue
-        if s.startswith("#"):
-            if buf:
-                paras.append(buf)
-                buf = []
-            continue
-        if s.startswith("**Date:") or s.startswith("**Status:"):
-            continue
-        buf.append(s)
-    if buf:
-        paras.append(buf)
-    if not paras:
-        return ""
-    flat = " ".join(paras[0]).strip()
-    return (flat[:240] + "…") if len(flat) > 240 else flat
-
-
-_SPEC_STATUS_RE = re.compile(r"\*\*Status:\*\*\s*(.+?)\s*$", re.MULTILINE)
-
-
-def _spec_status(body: str) -> str:
-    """Normalise a spec's `**Status:** …` line into one of three buckets the
-    web Specs list uses for its badge: planned (default), ongoing, completed.
-
-    Recognised phrasings (case-insensitive):
-      - completed  ← "implemented", "completed", "done", "shipped", "merged"
-      - ongoing    ← "implementing", "in progress", "wip", "ongoing", any
-                     arrow chain whose right side names ongoing work
-      - planned    ← "draft", "proposed", "approved", "planned", or unknown
-    """
-    m = _SPEC_STATUS_RE.search(body)
-    if not m:
-        return "planned"
-    raw = m.group(1).lower()
-    # Arrow-chained statuses ("approved → implementing") take the rightmost
-    # token: that's the current state, not the prior one.
-    if "→" in raw or "->" in raw:
-        raw = re.split(r"[→]|->", raw)[-1].strip()
-    if any(k in raw for k in ("implemented", "completed", "done", "shipped", "merged")):
-        return "completed"
-    if any(k in raw for k in ("implementing", "in progress", "wip", "ongoing")):
-        return "ongoing"
-    return "planned"
-
-
-def _specs_index() -> list[dict]:
-    """All `docs/specs/*.md`, sorted newest first, with a date and a one-line
-    purpose pulled from the body. The id is `spec:<filename>`."""
-    out = []
-    specs_dir = ROOT / "docs" / "specs"
-    if not specs_dir.is_dir():
-        return out
-    for p in sorted(specs_dir.glob("*.md")):
-        m = SPEC_DATE_RE.match(p.name)
-        date = m.group(1) if m else ""
-        try:
-            body = p.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        title = ""
-        for ln in body.splitlines():
-            if ln.startswith("# "):
-                title = ln[2:].strip()
-                break
-        out.append({
-            "id": f"spec:{p.name}",
-            "title": title or p.stem,
-            "date": date,
-            "filename": p.name,
-            "purpose": _spec_purpose(body),
-            "status": _spec_status(body),
-        })
-    out.sort(key=lambda s: s["date"], reverse=True)
-    return out
 
 
 def _cli_reference() -> dict:
@@ -276,9 +185,8 @@ def _about(state: WebState) -> dict:
 
 
 def api_docs(state: WebState) -> dict:
-    """Top-level menu the Docs page renders in its left sub-nav. Dated specs
-    live behind their own rail entry now (api_specs) — Docs only carries the
-    concepts, references, and the curated DESIGN.md."""
+    """Top-level menu the Docs page renders in its left sub-nav: the concepts,
+    references, and the curated DESIGN.md."""
     groups = [{"id": g["id"], "label": g["label"],
                "pages": [{"id": p["id"], "title": p["title"], "kind": p["kind"]}
                          for p in g["pages"]]}
@@ -286,30 +194,9 @@ def api_docs(state: WebState) -> dict:
     return {"groups": groups}
 
 
-def api_specs(state: WebState) -> dict:
-    """The dated implementation specs under docs/specs/, newest first. The
-    detail view is served by api_docs_page('spec:<filename>') so the rendering
-    pipeline (wikilink resolution, markdown body) stays single-sourced."""
-    return {"specs": _specs_index()}
-
-
 def api_docs_page(state: WebState, page_id: str) -> dict:
-    """One docs page. Looks up DOC_GROUPS first; falls back to `spec:<file>`
-    for the discovered specs index entries. Every shape carries a `kind` the
-    frontend dispatches on."""
-    if page_id.startswith("spec:"):
-        fname = page_id.split(":", 1)[1]
-        if "/" in fname or "\\" in fname or not fname.endswith(".md"):
-            raise NotFound(page_id)
-        body = _read_doc_source(f"docs/specs/{fname}")
-        title = fname
-        for ln in body.splitlines():
-            if ln.startswith("# "):
-                title = ln[2:].strip()
-                break
-        return {"id": page_id, "title": title, "kind": "markdown",
-                "body": body, "source": f"docs/specs/{fname}",
-                "links": _resolve_links(state, body)}
+    """One docs page, looked up in DOC_GROUPS. Every shape carries a `kind`
+    the frontend dispatches on."""
     page = _find_doc_page(page_id)
     if not page:
         raise NotFound(page_id)
@@ -337,9 +224,6 @@ def api_docs_page(state: WebState, page_id: str) -> dict:
     if kind == "cli":
         return {"id": page_id, "title": page["title"], "kind": "cli",
                 **_cli_reference()}
-    if kind == "specs":
-        return {"id": page_id, "title": page["title"], "kind": "specs",
-                "specs": _specs_index()}
     if kind == "glossary":
         return {"id": page_id, "title": page["title"], "kind": "glossary",
                 **_glossary(state)}

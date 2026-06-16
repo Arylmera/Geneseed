@@ -31,8 +31,6 @@ const NAV = [
     icon: 'library',
     match: (r) => r.view === 'library' || r.view === 'section' || r.view === 'item',
   },
-  { hash: '#/graph', id: 'graph', label: 'Graph', icon: 'graph', match: (r) => r.view === 'graph' },
-  { group: 'Learn' },
   {
     hash: '#/docs',
     id: 'docs',
@@ -40,13 +38,7 @@ const NAV = [
     icon: 'docs',
     match: (r) => r.view === 'docs',
   },
-  {
-    hash: '#/specs',
-    id: 'specs',
-    label: 'Specs',
-    icon: 'specs',
-    match: (r) => r.view === 'specs',
-  },
+  { hash: '#/graph', id: 'graph', label: 'Graph', icon: 'graph', match: (r) => r.view === 'graph' },
   { group: 'Maintain' },
   {
     hash: '#/diff',

@@ -65,8 +65,6 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     pid = path[len("/api/docs/page/"):]
                     return self._send_json(
                         api_docs_page(state, urllib.parse.unquote(pid)))
-                if path == "/api/specs":
-                    return self._send_json(api_specs(state))
                 if path == "/api/jobs":
                     return self._send_json({"jobs": jm.recent()})
                 if path.startswith("/api/jobs/"):
