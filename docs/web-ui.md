@@ -82,7 +82,7 @@ streams the output of background jobs and keeps their history across reloads.
 
 - **Docs** (`#/docs`) — rendered documentation: markdown pages, concept pages, a CLI
   reference (generated from the harness argument parser), and a glossary, grouped into
-  Get started / Core concepts / How-to / Reference / Deeper.
+  Get started / Core concepts / How-to / MCP servers / Plugins / Reference / Deeper.
 - **Specs** (`#/specs`) — the dated implementation specs from `docs/specs/`, each with its
   purpose line, rendered with the same engine as Docs.
 

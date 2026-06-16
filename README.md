@@ -118,7 +118,7 @@ The left rail mirrors the harness's own shape:
 | Group | What's there |
 | --- | --- |
 | **🧬 Harness** | **Dashboard** — live readout of what's deployed (voice, capabilities, drift, recent jobs) · **Library** — browse Laws, Agents, Skills, Memory, Notebook · **Graph** — cross-link constellation across the whole harness |
-| **📚 Learn** | **Docs** — rendered markdown + concept pages + CLI reference + glossary, grouped into Get started / Core concepts / How-to / Reference / Deeper · **Specs** — dated implementation specs with design rationale |
+| **📚 Learn** | **Docs** — rendered markdown + concept pages + CLI reference + glossary, grouped into Get started / Core concepts / How-to / MCP servers / Plugins / Reference / Deeper · **Specs** — dated implementation specs with design rationale |
 | **🔧 Maintain** | **Changes** — diff between the deployed harness and the source, export an `improvements.md` back-port · **Doctor** — health check across themes, links, parity, and authoring gates |
 | **🎨 Configure** | **Themes** — preview and switch the deployed voice live · **Settings** — MCP servers, server controls |
 | **ℹ️ About** | project + creator credits, source link |

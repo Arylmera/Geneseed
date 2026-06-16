@@ -209,8 +209,8 @@ DOC_GROUPS = [
          "kind": "markdown", "source": "DESIGN.md", "anchor": "decisions",
          "slice": True},
         {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
-         "link": {"hash": "#/docs/adapters-opencode",
-                  "label": "Read the adapter spec →"},
+         "link": {"hash": "#/docs/plugin-context",
+                  "label": "One page per plugin →"},
          "body": "OpenCode loads five plugins from the deployed bundle:\n\n"
          "- **geneseed-context** — injects the project's docs *and* your "
          "machine wiki at every session start (and after compaction).\n"
@@ -344,7 +344,163 @@ DOC_GROUPS = [
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "verify", "slice": True},
     ]},
-    # ── 5. Reference ──────────────────────────────────────────────────────
+    # ── 5. Plugins ────────────────────────────────────────────────────────
+    # The shared install lives once in "Plugin setup" (the first page, sliced
+    # from docs/opencode-plugin-setup.md); each plugin page then covers only its
+    # own configuration and verify steps and points back to that setup page.
+    {"id": "plugins", "label": "Plugins", "pages": [
+        {"id": "plugin-setup", "title": "Plugin setup", "kind": "markdown",
+         "source": "docs/opencode-plugin-setup.md"},
+        {"id": "plugin-context", "title": "geneseed-context", "kind": "concept",
+         "body":
+         "Enforces **Law XVIII** (*Load the Project Context*) by injection, "
+         "not instruction: on `session.created` it auto-discovers the repo's "
+         "docs by convention and injects the `eager` ones before your first "
+         "turn, so the harness needs **zero per-repo files**.\n\n"
+         "- **Eager** (injected in full, budget-capped): root `AGENTS.md` / "
+         "`AGENT.md` / `CLAUDE.md` / `.cursorrules`, `README.md`, "
+         "`CONTRIBUTING.md`.\n"
+         "- **Lazy** (path + first heading, read on demand): `docs/`, `doc/`, "
+         "`architecture/`, `adr/`, monorepo `packages/*/README.md`, other root "
+         "`*.md`. `node_modules`, `.git`, `dist`, `build` are never scanned.\n"
+         "- It re-pushes eager docs on `session.compacting` so context "
+         "survives a summarised long session, and carries your machine wiki "
+         "(`wiki.jsonc`) on the same budgets.\n\n"
+         "### Install\n\n"
+         "Installs with the other plugins in one step — see "
+         "[Plugin setup](#/docs/plugin-setup).\n\n"
+         "### Configure\n\n"
+         "- `GENESEED_CONTEXT` — path to an explicit `context.json` manifest "
+         "(or drop `.harness/context.json` in the repo) to take control: same "
+         "schema, plus glob `path`s, `load: exclude`, and `\"extend\": true` "
+         "to layer on top of discovery.\n"
+         "- `GENESEED_EAGER_FILE_KB` (default 16) / `GENESEED_EAGER_TOTAL_KB` "
+         "(default 48) — budget caps; an oversized eager file is demoted to a "
+         "lazy listing, never silently truncated.\n"
+         "- `GENESEED_CONTEXT_VISIBLE=1` — force the visible `PROJECT CONTEXT` "
+         "block instead of the invisible per-request transform.\n"
+         "- `GENESEED_CONTEXT_INJECT=off` — disable injection entirely (falls "
+         "back to the soft AGENT.md Law).\n\n"
+         "### Verify\n\n"
+         "Start a session with `GENESEED_DEBUG=1` set — the plugin logs what "
+         "it discovered and injected to stderr. Silence means it didn't load: "
+         "re-check the filename and that the path is exactly the plugins dir "
+         "above."},
+        {"id": "plugin-learn", "title": "geneseed-learn", "kind": "concept",
+         "body":
+         "The runtime-agnostic counterpart of the Claude Code `Stop` hook: on "
+         "`session.idle` it distils durable memories from the conversation "
+         "into the bundle's `memory/` dir and maintains `MEMORY.md`, deduping "
+         "against what's already stored — exactly what `geneseed learn` does, "
+         "but self-contained in JS, so no Python and no model CLI are "
+         "required.\n\n"
+         "It distils with the **same model the session already used** (read "
+         "from the transcript), inheriting your OpenCode provider config — no "
+         "API key, nothing to set. Trivial sessions are skipped and any error "
+         "is swallowed, so it never blocks a session.\n\n"
+         "### Install\n\n"
+         "Installs with the other plugins in one step — see "
+         "[Plugin setup](#/docs/plugin-setup).\n\n"
+         "### Configure — where it writes\n\n"
+         "Memories land in the first location that resolves:\n\n"
+         "1. `GENESEED_MEMORY` — an explicit memory dir;\n"
+         "2. `$GENESEED_HARNESS/memory` (or `/anamnesis` for the imperial "
+         "theme);\n"
+         "3. `./memory` or `./Harness/memory` when the bundle lives in the "
+         "project.\n\n"
+         "Because the bundle is global, set `GENESEED_HARNESS` once to its "
+         "absolute path so the plugin always writes to the same store no "
+         "matter where you launch OpenCode. If it can't read the session's "
+         "model from the transcript, set a fallback `GENESEED_MODEL="
+         "provider/model`.\n\n"
+         "### Verify\n\n"
+         "Start a session, do a little work, end it. On `session.idle` the "
+         "plugin logs `[geneseed-learn] wrote N memory file(s): …` or a skip "
+         "reason to stderr. Total silence means it didn't load."},
+        {"id": "plugin-guard", "title": "geneseed-guard", "kind": "concept",
+         "body":
+         "Enforces the safety Laws at the tool boundary "
+         "(`tool.execute.before`) — the same *enforce by injection, don't just "
+         "instruct* stance as the context plugin. High-confidence patterns "
+         "only, so legitimate work is never caught:\n\n"
+         "- **Blocks** — writes to private-key / credential files (**Law I**), "
+         "catastrophic shell like `rm -rf /` (**Law IV**), and any mutation "
+         "under a declared wiki's `protected` folders (AGENT.md §7, from "
+         "`wiki.jsonc`).\n"
+         "- **Warns** (logged, allowed) — `.env` writes and force-push.\n\n"
+         "### Install\n\n"
+         "Installs with the other plugins in one step — see "
+         "[Plugin setup](#/docs/plugin-setup). The `protected` wiki folders are "
+         "read from `wiki.jsonc` (`GENESEED_WIKI` → `$GENESEED_HARNESS/"
+         "wiki.jsonc` → beside the install).\n\n"
+         "### Configure\n\n"
+         "- `GENESEED_GUARD=off` — disable the guard entirely.\n"
+         "- `GENESEED_GUARD=warn` — downgrade every block to a warning (log, "
+         "but allow).\n\n"
+         "### Verify\n\n"
+         "Ask the agent to do something the guard blocks (e.g. write to a "
+         "`.pem` file) — it should be refused with a "
+         "`[geneseed-guard] blocked: …` message naming the Law."},
+        {"id": "plugin-workflow", "title": "geneseed-workflow", "kind": "concept",
+         "body":
+         "Registers one custom tool, `workflow`, that runs saved, code-driven "
+         "orchestration scripts — the deterministic counterpart to the "
+         "model-driven [[council]] / [[parallel-agents]] skills: the script, "
+         "not the model, drives the control flow.\n\n"
+         "- **Saved scripts only (v1):** the tool loads `<name>.js` from the "
+         "sibling `workflows/` dir. No model-authored scripts are eval'd.\n"
+         "- **Call shape:** `workflow({ name, args })` — call with no name to "
+         "list what's available. Shipped: `council`, `review`, "
+         "`research-plan-implement`.\n"
+         "- **Runtime API:** scripts get `agent()`, `parallel()`, "
+         "`pipeline()`, `phase()`, `log()`, `budget`, `args`. Child work runs "
+         "as real OpenCode sessions; concurrency is capped at "
+         "`min(16, cores − 2)`.\n\n"
+         "### Install\n\n"
+         "Installs with the other plugins in one step — see "
+         "[Plugin setup](#/docs/plugin-setup). The build copies the plugin "
+         "**and** the sibling `workflows/` dir, so the saved scripts resolve "
+         "out of the box; a manual `cp` only moves the `*.js`, so copy "
+         "`adapters/opencode/workflows/` alongside it too.\n\n"
+         "### Configure\n\n"
+         "- `GENESEED_WORKFLOWS_DIR` — override the scripts dir (defaults to "
+         "`.opencode/workflows/` per-repo, `<config>/workflows/` global).\n"
+         "- A phase-by-phase trace plus the full result land in "
+         "`.geneseed/workflow-runs/<runId>.log`; `GENESEED_DEBUG=1` adds "
+         "stderr logging.\n\n"
+         "### Verify\n\n"
+         "Ask the agent to *\"list available workflows\"* — it should call "
+         "`workflow` with no name and return `council`, `review`, "
+         "`research-plan-implement`."},
+        {"id": "plugin-notify", "title": "geneseed-notify", "kind": "concept",
+         "body":
+         "Pings the OS when the agent finishes a turn, so you can start a long "
+         "run, walk away, and be called back when it's your move again. It "
+         "hooks `session.idle` like the learn plugin.\n\n"
+         "- **Anti-spam:** only fires when the turn actually took a while — the "
+         "gap between the session's last user prompt and now must exceed "
+         "`GENESEED_NOTIFY_MIN_SECONDS` (default 30). Native subagent child "
+         "sessions and the learn plugin's throwaway distil sessions are "
+         "skipped.\n"
+         "- **Native, dependency-free:** macOS `osascript`, Linux "
+         "`notify-send` (libnotify), Windows a PowerShell balloon. Spawned "
+         "detached; any failure is swallowed, so it never blocks a session.\n\n"
+         "### Install\n\n"
+         "Installs with the other plugins in one step — see "
+         "[Plugin setup](#/docs/plugin-setup). On Linux, install `libnotify` "
+         "(for `notify-send`) if nothing appears.\n\n"
+         "### Configure\n\n"
+         "- `GENESEED_NOTIFY=off` — disable it.\n"
+         "- `GENESEED_NOTIFY_MIN_SECONDS=N` — tune the threshold (`0` notifies "
+         "on every turn).\n"
+         "- `GENESEED_NOTIFY_TITLE=\"…\"` — override the title (default "
+         "`Geneseed`).\n\n"
+         "### Verify\n\n"
+         "With `GENESEED_DEBUG=1`, end a session that ran longer than the "
+         "threshold — you'll see `[geneseed-notify] notified for …` and a "
+         "desktop notification."},
+    ]},
+    # ── 6. Reference ──────────────────────────────────────────────────────
     # Pure lookups — CLI, env vars, glossary, troubleshooting matrix.
     {"id": "reference", "label": "Reference", "pages": [
         {"id": "cli", "title": "CLI — every subcommand", "kind": "cli"},
@@ -393,9 +549,9 @@ DOC_GROUPS = [
             "### `could not determine a model`\n"
             "Set `GENESEED_MODEL=provider/model` in your environment.\n")},
     ]},
-    # ── 6. Deeper ─────────────────────────────────────────────────────────
-    # Design rationale, adapter internals, the workflow primitive, the
-    # install snapshot. Long-form by nature — readers come here on purpose.
+    # ── 7. Deeper ─────────────────────────────────────────────────────────
+    # Design rationale, adapter internals, the install snapshot. Long-form by
+    # nature — readers come here on purpose.
     {"id": "deeper", "label": "Deeper", "pages": [
         {"id": "design", "title": "DESIGN.md — the spec",
          "kind": "markdown", "source": "DESIGN.md"},
@@ -409,9 +565,6 @@ DOC_GROUPS = [
          "source": "adapters/opencode/HOW-OPENCODE-LOADS.md"},
         {"id": "adapters-claude-code", "title": "Claude Code adapter",
          "kind": "markdown", "source": "adapters/claude-code/README.md"},
-        {"id": "workflow", "title": "The workflow primitive",
-         "kind": "markdown",
-         "source": "docs/specs/2026-06-09-opencode-workflow-primitive.md"},
         {"id": "about", "title": "About — version, license, links",
          "kind": "about"},
     ]},

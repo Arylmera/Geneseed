@@ -132,38 +132,15 @@ are skipped and any error is swallowed, so it never blocks or disturbs a session
 
 ### Install
 
-OpenCode auto-loads any plugin file from its plugins directory at startup — the
-folder is **`plugins`** (plural), files are loaded automatically with **no entry
-in `opencode.json`** (that `"plugin"` array is only for npm-package plugins), and
-both `.js` and `.ts` are accepted. The directory does **not** exist by default, so
-create it the first time.
-
-- **Global (recommended — the bundle is used everywhere):** **run this from inside
-  the Geneseed folder.** It installs all five plugins — learn, the
-  [context plugin](#doc-enforcement--the-context-plugin-v2-convention-glob), guard, workflow, and notify
-  (the `*.js` glob) — and
-  points `$GENESEED_HARNESS` at the sibling bundle `upgrade.sh` builds at
-  `../Harness` — so the plugins find your memory store and `context.json` with no
-  hand-typed path:
-
-  ```
-  mkdir -p ~/.config/opencode/plugins
-  cp adapters/opencode/plugins/*.js ~/.config/opencode/plugins/
-  export GENESEED_HARNESS="$(dirname "$PWD")/Harness"                  # this shell
-  echo "export GENESEED_HARNESS=\"$GENESEED_HARNESS\"" >> ~/.zshrc     # persist (run once)
-  ```
-
-  Using a non-default bundle location (`GENESEED_OUT`)? Set `GENESEED_HARNESS` to
-  that path instead of `../Harness`.
-
-- **Per-project:** `build.py --emit opencode` (and `GENESEED_EMIT=opencode
-  ./upgrade.sh`) creates `.opencode/plugins/` in the repo and drops it in for you.
+All five plugins (learn, context, guard, workflow, notify) install together in
+one step — the shared recipe lives in
+**[Plugin setup](../../docs/opencode-plugin-setup.md)** (global `cp …/plugins/*.js`
++ `GENESEED_HARNESS`, or `build.py --emit opencode` / `opencode-global`).
 
 **Verify it loaded:** start a session, do a little work, end it. On `session.idle`
-the plugin logs to stderr — either `[geneseed-learn] wrote N memory file(s): …` or
-a `[geneseed-learn] …` skip reason. Total silence means it did not load: re-check
-the filename, the `.js` extension, and that the path is exactly the plugins dir
-above.
+the learn plugin logs to stderr — either `[geneseed-learn] wrote N memory file(s): …`
+or a `[geneseed-learn] …` skip reason. Total silence means it did not load: re-check
+the filename, the `.js` extension, and that the path is exactly the plugins dir.
 
 ### Point it at the memory dir
 
@@ -246,9 +223,8 @@ swallows every error. Output mirrors `rituals/harness.py context`.
   `GENESEED_CONTEXT_INJECT=off` to disable injection entirely and fall back to the
   AGENT.md project-context Law (soft, agent-discipline — no injection).
 
-**Install:** the same step as the learn plugin — `cp …/plugins/*.js` copies all
-five plugins (context, learn, guard, workflow, notify); `build --emit opencode` and
-`--emit opencode-global` place them for you. It uses
+**Install:** installs with the others in one step — see
+[Plugin setup](../../docs/opencode-plugin-setup.md). It uses
 `session.created`, `session.idle` (transform-fallback detection), `session.prompt`
 `noReply`, `session.messages`, `session.get`, and the experimental
 `chat.messages.transform` and `session.compacting` hooks — all confirmed against the
