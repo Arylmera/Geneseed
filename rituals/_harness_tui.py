@@ -242,6 +242,7 @@ LAW_CLASS: dict[str, str] = {
     "XVIII": "context",
     "XIX": "context",
     "XX": "security",
+    "XXI": "process",
 }
 
 
