@@ -502,6 +502,53 @@ consent-before-commit Rule is enforced for *shell* `git commit` via `opencode.js
 permissions, but this plugin commits through its own tool path — so review what it
 will commit before invoking delete, or keep the worktree and commit yourself.
 
+## Optional add-on — interactive TUI canvases (third-party, not vendored)
+
+[`@mailshieldai/opencode-canvas`](https://github.com/mailshieldai/opencode-canvas)
+(MIT) lets the agent spawn rich, interactive terminal UIs in a tmux split — a
+calendar/date picker, a document editor, a flight-search panel — and read the user's
+selection back. It registers four tools (`canvas_spawn`, `canvas_update`,
+`canvas_selection`, `canvas_close`) that talk to the TUI over a Unix socket. Reach for
+it when a choice is genuinely easier *picked* than typed.
+
+Like the worktree add-on, it is **not vendored** and **not installed by the harness**,
+and does not follow Geneseed's plugin convention (the four vendored plugins are
+single-file, zero-dependency `.js` copied by `cp …/plugins/*.js`): it ships as a
+multi-file TypeScript npm package that runs on **Bun** and needs **tmux**, so it can't
+ride the `build --emit opencode` install or the global-install manifest. Install it on
+its own track.
+
+### Setup
+
+1. **Prerequisites.** Ensure `bun` and `tmux` are on `PATH` — OpenCode already runs on
+   Bun; the canvases render inside a tmux split, so you must be in (or able to start) a
+   tmux session.
+2. **Register the plugin and grant its tools** in your `opencode.jsonc` (project
+   `./opencode.json[c]` or the global config dir). OpenCode resolves the npm package by
+   name — no manual `bun add`:
+   ```jsonc
+   {
+     // ... your existing Geneseed config (instructions, the four geneseed plugins) ...
+     "plugin": ["@mailshieldai/opencode-canvas"],
+     "permission": {
+       "canvas_spawn": "allow",
+       "canvas_update": "allow",
+       "canvas_selection": "allow",
+       "canvas_close": "allow"
+     }
+   }
+   ```
+   `plugin` and `permission` **merge** with Geneseed's — list the canvas plugin
+   alongside (don't replace) anything the harness already put there. Check the
+   upstream README for the current package name and any version pin.
+3. **Verify.** Start OpenCode inside tmux and confirm the `canvas_*` tools appear in the
+   tool list; a first `canvas_spawn` should open a pane.
+
+It coexists with the vendored plugins (it only adds the four `canvas_*` tools and a
+socket; it hooks none of the events `context`/`learn`/`guard`/`workflow` use, so
+nothing double-fires). It is host-specific and adds runtime dependencies, so adopt it
+deliberately, not by default.
+
 ## Notes
 
 - Project config beats global; `./opencode.json` or `.opencode/opencode.json`

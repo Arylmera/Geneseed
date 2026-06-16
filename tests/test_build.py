@@ -61,7 +61,10 @@ class RenderAllTests(unittest.TestCase):
         for theme in (p.stem for p in build.theme_files()):
             _t, items = build.render_all(theme)
             for rel, text, _src in items:
-                if text is not None:
+                # Vendored third-party skill folders are exempt (same as doctor's
+                # _check_build): they are copied verbatim and legitimately contain `{{`
+                # — e.g. JSX `style={{ ... }}` — which is not a Geneseed token.
+                if text is not None and not build.is_vendored_path(rel):
                     self.assertNotIn("{{", text, f"unresolved token in {rel} ({theme})")
 
     def test_include_directive_is_inlined(self):

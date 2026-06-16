@@ -39,6 +39,7 @@ const LAW_META = {
   18: ['context', 'Load context.json at session start, and act on it.'],
   19: ['context', "Discover the host's real tools before deciding one is missing."],
   20: ['security', 'Every commit and push needs explicit, repeated consent.'],
+  21: ['process', 'Run commands that return on their own — never block on a prompt or pager.'],
 }
 
 // Tiny inline formatter: render `code` spans and *emphasis* in plain rule text.
