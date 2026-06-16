@@ -19,7 +19,7 @@
 
 ## Procedure
 1. Read the motion and how it would run, so the concerns are this system's, not generic (universal {{LAW}} XVII).
-2. Pre-mortem the 3am incident: how it fails under load, whether you can see it failing (metrics, logs), and how you roll it back.
+2. Pre-mortem the 3am incident: how it fails under load, whether you can see it failing (metrics, logs), and how you roll it back. Treat a production deploy with no tested rollback or fix-forward path and no retained previous artifact as not ready to ship — there must be a way back before there is a way out.
 3. Weigh the standing cost — the on-call burden, the toil, the new ways to be paged — against the benefit.
 
 ## Output contract

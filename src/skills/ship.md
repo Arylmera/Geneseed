@@ -23,6 +23,11 @@ request or merge the branch.
    imperative one-line summary.
 5. If the project merges locally instead, merge into the base branch only after
    review/approval, then delete the merged branch.
+   If shipping triggers a production deploy, confirm a tested rollback or
+   fix-forward path and a retained previous artifact *before* deploying — there must
+   be a way back (universal {{LAW}} IV); dispatch the
+   [operator {{AGENT}}](../{{DIR_AGENTS}}/operator.md) when the runtime surface is
+   non-trivial.
 6. Make sure documentation shipped with the code (universal {{LAW}} XI) — a change
    that alters behaviour without its docs is incomplete, not ready to ship.
 

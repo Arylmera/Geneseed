@@ -8,9 +8,17 @@
 1. Review the working tree; identify the paths that belong to *this* change only.
 2. Stage exactly those paths — never `git add -A` blindly (universal {{LAW}} II:
    one intent, one act). Leave unrelated dirty files out.
-3. Confirm no secret is being committed (universal {{LAW}} I).
+3. Confirm no secret is being committed (universal {{LAW}} I), and no leftover
+   debug scaffolding rides along — `console.log`, `debugger`, `print`,
+   commented-out code, or hardcoded test values left over from diagnosis
+   ({{LAW}} XXIV).
 4. Write a message: imperative subject ≤50 chars; a body only when the *why*
-   isn't obvious from the diff. Follow the project's commit convention.
+   isn't obvious from the diff. **Match the repository's existing commit convention**
+   (universal {{LAW}} XIII) — detect it from commit tooling (`commitlint`,
+   `semantic-release`, `release-please`, husky hooks) and recent `git log`. When the
+   repo has no discernible convention, default to **Conventional Commits**:
+   `type(scope): subject` (`feat`, `fix`, `docs`, `refactor`, `test`, `chore`…),
+   with a `!` before the colon or a `BREAKING CHANGE:` footer for a breaking change.
 5. **Get explicit consent before committing (universal {{LAW}} XX).** On *every*
    branch — feature branches included — first show the user a plain-language summary of
    the change *and* the exact commit message, then wait for explicit acceptance before

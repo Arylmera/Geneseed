@@ -8,6 +8,8 @@
 1. Decide the version from the changes since the last tag, following the project's
    scheme (semver: breaking → major, feature → minor, fix → patch). Verify the
    current version and the last tag rather than guessing (universal {{LAW}} III).
+   **Never ship a breaking change under a non-major bump** — honest versions are a
+   promise to downstream consumers, and a quiet break is a broken one.
 2. Update the version wherever it is declared (manifest, package metadata, a VERSION
    constant) — find *every* occurrence so they cannot drift (universal {{LAW}} XII).
 3. Update the changelog: a dated section for the new version summarising the

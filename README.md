@@ -9,9 +9,9 @@
 [![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![stdlib only](https://img.shields.io/badge/deps-stdlib%20only-success)](build.py)
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
-[![Skills](https://img.shields.io/badge/skills-36-blueviolet)](src/skills/)
+[![Skills](https://img.shields.io/badge/skills-37-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-16-orange)](src/agents/)
-[![Laws](https://img.shields.io/badge/laws-21-critical)](src/laws/universal.md)
+[![Laws](https://img.shields.io/badge/laws-31-critical)](src/laws/universal.md)
 [![OpenCode · Claude Code · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20AGENT.md-1f6feb)](#install)
 
 [**Install**](#-install) · [**Web UI**](#-web-ui) · [**What you get**](#-what-you-get) · [**Themes**](#-themes) · [**Docs**](#-documentation)
@@ -20,7 +20,7 @@
 
 ---
 
-Geneseed distils an agent operating system into a generic harness built around a single `AGENT.md`. Point your tool at it and the agent inherits a set of operating **rules**, a roster of capability **agents**, native **skills**, a **memory** convention, and — on OpenCode — five **plugins** that auto-load your project's docs, capture durable memory, enforce the safety laws, run saved workflows, and ping you when a long run finishes. One source builds it; it follows you into every repo.
+Geneseed distils an agent operating system into a generic harness built around a single `AGENT.md`. Point your tool at it and the agent inherits a set of operating **rules**, a roster of capability **agents**, native **skills**, a **memory** convention, and — on OpenCode — six **plugins** that auto-load your project's docs, capture durable memory, enforce the safety laws, run saved workflows, ping you when a long run finishes, and hold a minimal-code mode when you ask for one. One source builds it; it follows you into every repo.
 
 > **New here? Jump to [Install](#-install)** — or read the full [Setup guide](SETUP.md) for every path, configuration knob, and troubleshooting. This page is the overview.
 
@@ -45,14 +45,14 @@ The harness ships as a small set of layers, mirrored one-for-one in the web cons
 
 | Layer | What it is |
 | --- | --- |
-| **🛡️ Rules** (`laws/`) | 21 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery, non-interactive-shell… |
+| **🛡️ Rules** (`laws/`) | 31 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery, non-interactive-shell, untrusted-content, least-privilege, root-cause, idempotency, calibrated-honesty… |
 | **🤖 Agents** (16) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
-| **🛠 Skills** (36) | repeatable workflows: brainstorm · **clarify** · plan · tdd · debug · refactor · **mcp** · code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **learning-path** · **gap-detector** · **feynman** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **herdr** |
+| **🛠 Skills** (37) | repeatable workflows: brainstorm · **clarify** · plan · tdd · debug · refactor · **ponytail** · **mcp** · code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **learning-path** · **gap-detector** · **feynman** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **herdr** |
 | **🧠 Memory** (`memory/`) | one-fact-per-file durable knowledge, indexed by `MEMORY.md` (git-ignored, personal) |
 | **📓 Notebook** (`notebook/`) | the agent's sovereign space — any medium (code, tools, data, notes), self-ruled via a seed-once charter, always git-ignored; only its `.gitignore` is build-asserted |
 | **🌐 Wiki** (`wiki.jsonc`) | your own machine-wide knowledge base — typically an Obsidian vault — declared once per machine: entry notes load eager/lazy, the agent reads and **writes** it under the vault's own conventions, with an inbox fallback and guard-enforced protected folders |
 | **🧭 Context** | the project's own docs — auto-discovered on OpenCode, or via a `context.json` manifest |
-| **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes |
+| **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes; `geneseed-ponytail` holds a minimal-code mode (`/ponytail lite\|full\|ultra\|off`), opt-in, injecting the laziest-that-works ruleset every turn so it doesn't drift |
 
 ## 🚀 Install
 
@@ -180,7 +180,7 @@ Geneseed/
 ```bash
 python rituals/harness.py doctor                      # every theme + parity + authoring + drift
 python -m unittest discover -s tests -p "test_*.py"   # generator + CLI unit tests (no deps)
-node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs tests/context_wiki.test.mjs tests/context_delivery.test.mjs   # Node suites
+node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs tests/context_wiki.test.mjs tests/context_delivery.test.mjs tests/notify.test.mjs tests/ponytail.test.mjs   # Node suites
 ```
 
 `doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs all three on every push and PR, on both Linux and Windows.

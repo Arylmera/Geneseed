@@ -5,9 +5,9 @@
 > wiring they all share. Canonical long-form lives in the
 > [OpenCode adapter README](../adapters/opencode/README.md).
 
-The five plugins — `geneseed-context`, `geneseed-learn`, `geneseed-guard`,
-`geneseed-workflow`, `geneseed-notify` — ship in **one folder and install
-together**. OpenCode auto-loads every file in its plugins dir at startup (both
+The six plugins — `geneseed-context`, `geneseed-learn`, `geneseed-guard`,
+`geneseed-workflow`, `geneseed-notify`, `geneseed-ponytail` — ship in **one
+folder and install together**. OpenCode auto-loads every file in its plugins dir at startup (both
 `.js` and `.ts`), so there is **no `opencode.json` entry** to add (the
 `"plugin"` array is only for npm-package plugins). The directory does not exist
 by default — create it the first time.
@@ -16,7 +16,7 @@ by default — create it the first time.
 
 The bundle is used from every repo, so install once into OpenCode's global
 config dir. **Run this from inside the Geneseed folder** — the `*.js` glob
-copies all five plugins, and `GENESEED_HARNESS` is pointed at the sibling
+copies all six plugins, and `GENESEED_HARNESS` is pointed at the sibling
 bundle `upgrade.sh` builds at `../Harness`:
 
 ```
@@ -49,7 +49,7 @@ To scope the plugins to a single repo instead of globally:
 python build.py --emit opencode --target /path/to/your-repo
 ```
 
-This creates `.opencode/plugins/` in the repo and drops the five `*.js` files
+This creates `.opencode/plugins/` in the repo and drops the six `*.js` files
 (plus `.opencode/workflows/`) in for you.
 
 ## Verify they loaded

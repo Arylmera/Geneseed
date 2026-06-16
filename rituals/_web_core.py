@@ -153,9 +153,10 @@ DOC_GROUPS = [
          "(capability specialists you delegate to), **Skills** (repeatable "
          "workflows the agent can invoke), **Memory** (one-fact-per-file "
          "durable knowledge), and a **Notebook** (the agent's own sovereign "
-         "space). On OpenCode, five **Plugins** bind the pieces to the host: "
+         "space). On OpenCode, six **Plugins** bind the pieces to the host: "
          "context injection, learn-at-session-end, the safety guard, the "
-         "saved workflow runner, and end-of-run notifications. The structure "
+         "saved workflow runner, end-of-run notifications, and an opt-in "
+         "minimal-code mode. The structure "
          "is theme-independent — a "
          "theme only changes the *voice* (banner, sigil, prose), never a "
          "folder or a link.\n\n"
@@ -211,7 +212,7 @@ DOC_GROUPS = [
         {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
          "link": {"hash": "#/docs/plugin-context",
                   "label": "One page per plugin →"},
-         "body": "OpenCode loads five plugins from the deployed bundle:\n\n"
+         "body": "OpenCode loads six plugins from the deployed bundle:\n\n"
          "- **geneseed-context** — injects the project's docs *and* your "
          "machine wiki at every session start (and after compaction).\n"
          "- **geneseed-learn** — distils memory at session end (powers the "
@@ -221,7 +222,10 @@ DOC_GROUPS = [
          "- **geneseed-workflow** — registers the `workflow` tool that runs "
          "saved orchestration scripts.\n"
          "- **geneseed-notify** — sends a native OS notification when a long "
-         "run finishes, so you can step away and be called back."},
+         "run finishes, so you can step away and be called back.\n"
+         "- **geneseed-ponytail** — holds an opt-in minimal-code mode "
+         "(`/ponytail lite|full|ultra|off`), injecting the laziest-that-works "
+         "ruleset every turn so it doesn't drift."},
     ]},
     # ── 3. How-to ─────────────────────────────────────────────────────────
     # One task per page — most sliced out of SETUP.md (the git-worktree
@@ -499,6 +503,32 @@ DOC_GROUPS = [
          "With `GENESEED_DEBUG=1`, end a session that ran longer than the "
          "threshold — you'll see `[geneseed-notify] notified for …` and a "
          "desktop notification."},
+        {"id": "plugin-ponytail", "title": "geneseed-ponytail", "kind": "concept",
+         "body":
+         "The sustained counterpart to the `ponytail` skill: once you opt in, "
+         "it appends the laziest-that-works ruleset to the system prompt **every "
+         "turn**, so the agent doesn't drift back to over-building mid-session, "
+         "and it persists the level across turns.\n\n"
+         "- **Opt-in:** the mode starts at `off` and injects nothing until you "
+         "switch it on. Geneseed treats ponytail as a skill, not an always-on "
+         "Law.\n"
+         "- **Toggle:** `/ponytail lite|full|ultra|off` (a bare `/ponytail` "
+         "means `full`). The level is written to `.geneseed-ponytail` beside "
+         "OpenCode's config and applies from the next turn.\n"
+         "- **Hooks:** `experimental.chat.system.transform` appends the "
+         "ruleset; `command.execute.before` records the switch. Every failure "
+         "is swallowed; on a build without the system-transform hook it simply "
+         "never injects (the skill still covers the invokable path).\n\n"
+         "### Install\n\n"
+         "Installs with the other plugins in one step — see "
+         "[Plugin setup](#/docs/plugin-setup).\n\n"
+         "### Configure\n\n"
+         "- `GENESEED_PONYTAIL=lite|full|ultra` — make a level the default for "
+         "new installs (default `off`, i.e. dormant until asked).\n\n"
+         "### Verify\n\n"
+         "With `GENESEED_DEBUG=1`, run `/ponytail full` — you'll see "
+         "`[geneseed-ponytail] ponytail full`, and the next turn's replies "
+         "favour the minimal solution."},
     ]},
     # ── 6. Reference ──────────────────────────────────────────────────────
     # Pure lookups — CLI, env vars, glossary, troubleshooting matrix.

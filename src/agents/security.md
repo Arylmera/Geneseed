@@ -21,7 +21,14 @@
 1. Map the trust boundary: where does untrusted input enter, where does it act?
 2. Check for the common classes: injection, broken auth/authz, secret exposure,
    unsafe deserialization, path traversal, vulnerable dependencies.
-3. Confirm no secret is committed (universal {{LAW}} I).
+3. Validate untrusted input at the boundary — type, length, format, range, by
+   allowlist — and confirm it never reaches `eval`, a shell string, or an
+   unparameterised query; require context-aware output encoding wherever data
+   crosses into a new interpreter (HTML, JS, URL, SQL, shell).
+4. Check the posture: features default to their most locked-down working state and
+   fail closed (deny) on error, and dependencies come from vetted sources, pinned to
+   an exact version in a committed lockfile.
+5. Confirm no secret is committed (universal {{LAW}} I).
 
 ## Output contract
 - Findings as `severity — location — issue — remediation`, highest severity
