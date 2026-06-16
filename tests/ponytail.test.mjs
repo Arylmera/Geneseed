@@ -6,8 +6,8 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { normalizeMode, defaultMode, ponytailInstructions }
-  from "../adapters/opencode/plugins/geneseed-ponytail.js"
+import GeneseedPonytail from "../adapters/opencode/plugins/geneseed-ponytail.js"
+const { normalizeMode, defaultMode, ponytailInstructions } = GeneseedPonytail
 
 test("normalizeMode: known levels pass through, case/space-insensitive", () => {
   assert.equal(normalizeMode("lite"), "lite")

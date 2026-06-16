@@ -38,7 +38,7 @@ function log(msg) { if (DEBUG) console.error(`[geneseed-notify] ${msg}`) }
 // The timestamp (ms) of the latest user prompt in a transcript — our proxy for "when
 // this turn started", so we can measure how long the agent worked. Tolerant of the
 // few shapes `info.time` takes across SDK versions. Exported for tests.
-export function lastUserMs(messages) {
+function lastUserMs(messages) {
   if (!Array.isArray(messages)) return null
   let t = null
   for (const m of messages) {
@@ -55,7 +55,7 @@ export function lastUserMs(messages) {
 //   - a `geneseed-*` session is the learn plugin's throwaway distil → no.
 //   - unknown turn length → yes (don't suppress an opt-in ping over a missing field).
 //   - otherwise: only if the turn ran at least `minMs`.
-export function shouldNotify({ now, lastUserMs, parentID, title, minMs }) {
+function shouldNotify({ now, lastUserMs, parentID, title, minMs }) {
   if (parentID) return false
   if (typeof title === "string" && title.startsWith("geneseed-")) return false
   if (lastUserMs == null) return true
@@ -130,5 +130,10 @@ export const GeneseedNotify = async ({ client }) => {
     },
   }
 }
+
+// ponytail: OpenCode treats every export as a plugin and rejects non-functions; a
+// bare helper export crashes startup or logs "not a function". Hang the test helpers
+// off the factory instead — reachable via `import`, invisible to the loader.
+Object.assign(GeneseedNotify, { lastUserMs, shouldNotify })
 
 export default GeneseedNotify

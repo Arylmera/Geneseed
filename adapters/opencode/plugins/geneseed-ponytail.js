@@ -37,7 +37,7 @@ function log(msg) { if (DEBUG) console.error(`[geneseed-ponytail] ${msg}`) }
 
 // Normalise a raw mode string to a known level, or null if unrecognised. Tolerant of
 // surrounding whitespace and case; "normal"/"stop"/"none" are spelled as `off`.
-export function normalizeMode(raw) {
+function normalizeMode(raw) {
   const s = String(raw ?? "").trim().toLowerCase()
   if (!s) return null
   if (s === "normal" || s === "stop" || s === "none" || s === "disable") return "off"
@@ -46,13 +46,13 @@ export function normalizeMode(raw) {
 
 // The default level when no switch has been made yet — $GENESEED_PONYTAIL, else `off`.
 // Opt-in: Geneseed keeps ponytail dormant until the user asks for it.
-export function defaultMode() {
+function defaultMode() {
   return normalizeMode(process.env.GENESEED_PONYTAIL) || "off"
 }
 
 // The compact ruleset appended to the system prompt for a non-off level. Kept lean on
 // purpose — it rides every turn, so ponytail eats its own dog food. null when off.
-export function ponytailInstructions(mode) {
+function ponytailInstructions(mode) {
   if (mode === "off" || !MODES.has(mode)) return null
   const ladder =
     "Before writing code, climb the ladder and stop at the first rung that holds: " +
@@ -132,5 +132,11 @@ export const GeneseedPonytail = async () => ({
     }
   },
 })
+
+// ponytail: OpenCode treats every export in a plugin file as a plugin and rejects
+// any that isn't a function — a bare helper export crashes startup ("null is not an
+// object") or logs "not a function". Hang the test helpers off the factory instead;
+// they ride along for `import`, invisible to the loader. Upgrade path: none needed.
+Object.assign(GeneseedPonytail, { normalizeMode, defaultMode, ponytailInstructions })
 
 export default GeneseedPonytail

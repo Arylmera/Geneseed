@@ -6,7 +6,8 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { shouldNotify, lastUserMs } from "../adapters/opencode/plugins/geneseed-notify.js"
+import GeneseedNotify from "../adapters/opencode/plugins/geneseed-notify.js"
+const { shouldNotify, lastUserMs } = GeneseedNotify
 
 const MIN = 30_000
 
