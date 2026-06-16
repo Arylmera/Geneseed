@@ -76,6 +76,18 @@ vault or a specific tool's hooks.
    documentation* maintained elsewhere. It also subsumes what a baked-in project
    rules file used to do: point at the project's own conventions instead.
 
+7. **Lean governance — every line must change behaviour.** The Laws, agent specs,
+   and skills are the product, and a bloated instruction surface is ignored at
+   runtime, not obeyed: an over-long rule set dilutes the rules that matter. So the
+   bar for a new Law is high — it must be universal (it binds *every* task, in
+   *every* repository), agent-behavioural (something the model does, not infra it
+   cannot instantiate), and not already covered. A principle that is app-code craft,
+   host-specific infrastructure, or single-domain belongs in an agent, a skill, or
+   `context.json`, not in the universal Laws; a rule that overlaps an existing Law is
+   folded in as a clause, not minted as a new number. This is the authoring-time
+   counterpart to Law XV's runtime context economy: keep the instruction surface
+   high-signal and pruned so it stays read and heeded.
+
 ## 🧩 Components
 
 The `Harness/` output column shows the **neutral** folder name; the imperial theme

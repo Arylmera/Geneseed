@@ -20,6 +20,12 @@ onto a new API.
    each through the [commit {{SKILL}}](commit.md) (universal {{LAW}} XX), so each
    diff is reviewable in isolation.
 
+**Schema migrations stay backward-compatible.** For a database or stored-format
+change, move in expand → backfill → contract phases so every migration is
+compatible with the currently running code, and never bundle a destructive schema
+change into the same deploy as the code that depends on it (universal {{LAW}} II,
+{{LAW}} IV) — the old code must keep working until the new code is live.
+
 ## Done when
 - The dependency or API is on the target version, every check passes, and the
   changelog / lockfile reflect the new state with its docs updated
