@@ -43,6 +43,7 @@
   "DESC_COUNCIL": "<one-line description: convene distinct viewpoints to debate, then synthesise a verdict>",
   "DESC_DEBUG": "<one-line description: find and fix a bug by evidence — reproduce, isolate, root-cause, verify>",
   "DESC_REFACTOR": "<one-line description: improve structure without changing behaviour, tests green throughout>",
+  "DESC_PONYTAIL": "<one-line description: force the laziest working solution — minimal, shortest path, stdlib/native before custom code; lite/full/ultra intensity>",
   "DESC_PARALLEL_AGENTS": "<one-line description: fan independent subtasks to concurrent subagents, then converge>",
   "DESC_TDD": "<one-line description: drive implementation with a failing test first>",
   "DESC_HANDOFF": "<one-line description: snapshot task state so a fresh context can resume in one read>",

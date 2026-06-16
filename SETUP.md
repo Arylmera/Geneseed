@@ -485,7 +485,7 @@ allowed-dir path.
 | `GENESEED_LLM` | `harness learn` (Claude) | model CLI for distillation, e.g. `claude -p` |
 | `GENESEED_EMIT` | `upgrade.sh` | `opencode-global` \| `opencode` \| unset (plain bundle) |
 | `GENESEED_OUT` / `GENESEED_ROOT` | `upgrade.sh` | bundle / project-root locations |
-| `GENESEED_DEBUG` | context + notify plugins | `1` re-enables discovery/inject logs (context) and decision/delivery logs (notify) |
+| `GENESEED_DEBUG` | context + notify + ponytail plugins | `1` re-enables discovery/inject logs (context), decision/delivery logs (notify), and level-switch logs (ponytail) |
 | `GENESEED_CONTEXT_INJECT` | context plugin | `off` disables the injected block (rely on the AGENT.md law) |
 | `GENESEED_EAGER_FILE_KB` / `GENESEED_EAGER_TOTAL_KB` | context plugin | per-file / total eager injection budget (default 16 / 48) |
 | `GENESEED_LAZY_HEADINGS` | context plugin | cap on lazy-file heading reads per session (default 64) |
@@ -498,6 +498,7 @@ allowed-dir path.
 | `GENESEED_NOTIFY` | notify plugin | `off` disables end-of-run desktop notifications |
 | `GENESEED_NOTIFY_MIN_SECONDS` | notify plugin | minimum turn length, in seconds, before notifying (default 30; `0` = every turn) |
 | `GENESEED_NOTIFY_TITLE` | notify plugin | override the notification title (default `Geneseed`) |
+| `GENESEED_PONYTAIL` | ponytail plugin | default minimal-code level for new installs: `lite` \| `full` \| `ultra` \| `off` (default `off`; switch live with `/ponytail <level>`) |
 | `GENESEED_PRIMARY` | `build.py` | `1` also emits the primary orchestrator agent |
 | `GENESEED_COMMANDS` | `build.py` | `1` also emits the `/slash` command layer |
 | `GENESEED_TUI_ASCII` / `GENESEED_TUI_PLAIN` | TUI / harness | force pure-ASCII / drop emoji + animation in the TUI |

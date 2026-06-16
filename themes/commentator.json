@@ -43,6 +43,7 @@
   "DESC_COUNCIL": "Convene a stewards' panel of opposed voices to debate a call, then hand down a verdict with the dissent kept on the record.",
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce it, isolate it, find the root cause, and prove it fixed.",
   "DESC_REFACTOR": "Rebuild the car without changing how it drives — one named move, trials green throughout.",
+  "DESC_PONYTAIL": "The laziest line that finishes — least code, shortest path; standard kit before custom builds, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several drivers out on independent stints at once, then bring in what they gather.",
   "DESC_TDD": "Let the trial lead the lap — set the failing test first, then only the code to pass it.",
   "DESC_HANDOFF": "Hand over the car — snapshot the state so a fresh driver takes the wheel in one read.",

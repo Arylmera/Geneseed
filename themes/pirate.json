@@ -43,6 +43,7 @@
   "DESC_COUNCIL": "Call a council of opposed voices to argue a decision out, then hand down a verdict with the dissent kept in the log.",
   "DESC_DEBUG": "Hunt the leak by evidence — reproduce, isolate, find the breach, plug it.",
   "DESC_REFACTOR": "Rebuild the hull without changing her handling — one named move, trials green throughout.",
+  "DESC_PONYTAIL": "The laziest haul that floats — least code, shortest course; ship's stores before custom rigging, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several hands on independent tasks at once, then haul in what they bring.",
   "DESC_TDD": "Let the trial lead — set the failing trial first, then only the code to pass it.",
   "DESC_HANDOFF": "Pass the watch — log the state so a fresh hand takes the wheel in one read.",

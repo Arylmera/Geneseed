@@ -43,6 +43,7 @@
   "DESC_COUNCIL": "Convene a panel of opposing positions to war-game a decision, then deliver a verdict with the dissent on record.",
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce, isolate, root-cause, confirm the kill.",
   "DESC_REFACTOR": "Restructure without changing behaviour — one named move, tests green throughout.",
+  "DESC_PONYTAIL": "Minimum viable solution that holds — least code, shortest path; issued kit before custom build, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Deploy independent tasks to concurrent units, then consolidate the results.",
   "DESC_TDD": "Let the test lead — write the failing test first, then the minimum code to pass.",
   "DESC_HANDOFF": "Hand over the watch: snapshot state so a fresh operator resumes in one read.",

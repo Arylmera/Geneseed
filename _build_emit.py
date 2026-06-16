@@ -331,7 +331,7 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
 
 
 def _copy_plugins(dst: Path, owned: list | None = None) -> int:
-    """Copy the static OpenCode plugins (context, learn, guard, workflow, notify) into `dst`.
+    """Copy the static OpenCode plugins (context, learn, guard, workflow, notify, ponytail) into `dst`.
     They are maintained files, not rendered from src, so copy them verbatim. When the
     caller tracks an ownership manifest (the global emit), pass `owned` and each copy
     is appended to it as `plugins/<name>`."""
@@ -459,6 +459,33 @@ def _write_command_layer(items, command_dir: Path) -> list[Path]:
     return written
 
 
+# The ponytail level-switch command is registered UNCONDITIONALLY — independent of
+# GENESEED_COMMANDS and COMMAND_SET. The geneseed-ponytail plugin's
+# `command.execute.before` hook only fires if OpenCode knows a `ponytail` command, so
+# without this the `/ponytail lite|full|ultra|off` switch could never reach the plugin
+# (skills map to the native `skill` tool, NOT slash commands). The full behaviour lives
+# in the native `ponytail` skill + the plugin; this command is only the switch surface.
+PONYTAIL_COMMAND_BODY = (
+    "Ponytail level requested: $ARGUMENTS\n\n"
+    "The geneseed-ponytail plugin records this level and, from your next turn, appends "
+    "the matching \"laziest solution that works\" ruleset to your system prompt — honour "
+    "it going forward, not just this message. An empty argument means `full`; `off` "
+    "disables ponytail. Acknowledge the new level in one line, then continue.\n"
+)
+
+
+def _write_ponytail_command(command_dir: Path) -> Path:
+    """Register the `/ponytail <level>` switch command unconditionally so the
+    geneseed-ponytail plugin's `command.execute.before` hook can fire. Returns the
+    written path (callers append it to their command/owned lists)."""
+    dest = command_dir / "ponytail.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    desc = "Set the ponytail minimal-code level for the session: lite | full | ultra | off"
+    dest.write_text("---\n" + f"description: {json.dumps(desc)}\n" + "---\n\n" + PONYTAIL_COMMAND_BODY,
+                    encoding="utf-8")
+    return dest
+
+
 def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     """Render the standard bundle, then add an OpenCode-native layer derived from
     the same source: capability agents become subagents, skills become native
@@ -494,6 +521,7 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills", overrides)
     primary = _write_primary_agent(oc / "agents", overrides)
     commands = _write_command_layer(items, oc / "command")
+    commands.append(_write_ponytail_command(oc / "command"))   # always-on /ponytail switch
     _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
 
     rel = _rel_under(out, root)

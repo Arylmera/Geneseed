@@ -162,6 +162,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     if primary:
         owned.append(primary.relative_to(cfg).as_posix())
     commands = _write_command_layer(items, cfg / "command")
+    commands.append(_write_ponytail_command(cfg / "command"))   # always-on /ponytail switch
     owned += [p.relative_to(cfg).as_posix() for p in commands]
     theme_file = _write_theme(cfg / "themes", theme_name, theme)   # branded /theme
     owned.append(theme_file.relative_to(cfg).as_posix())

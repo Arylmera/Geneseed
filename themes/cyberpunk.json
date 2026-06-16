@@ -43,6 +43,7 @@
   "DESC_COUNCIL": "Spin up a panel of opposed voices to debate a call, then ship a verdict with the dissent logged.",
   "DESC_DEBUG": "Trace the fault by evidence — reproduce, isolate, root-cause, confirm the patch.",
   "DESC_REFACTOR": "Rewire the structure without changing behaviour — one named pass, tests green throughout.",
+  "DESC_PONYTAIL": "The laziest build that runs — least code, shortest path; stock libs before custom rigs, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Fork independent tasks to concurrent threads, then merge the output.",
   "DESC_TDD": "Let the test drive — write the failing test first, then the minimum code to pass.",
   "DESC_HANDOFF": "Pass the deck — dump the state so a fresh runner picks up in one read.",

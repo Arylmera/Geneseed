@@ -43,6 +43,7 @@
   "DESC_COUNCIL": "Call a crew of opposed voices to argue a call out, then hand down a verdict with the dissent kept in the roadbook.",
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce it, isolate it, kill the root cause, prove it fixed.",
   "DESC_REFACTOR": "Rebuild the bike without changing how it handles — one named move, trials green throughout.",
+  "DESC_PONYTAIL": "The laziest fix that rides — least code, shortest road; stock parts before custom builds, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several riders on independent runs at once, then bring in what they gather.",
   "DESC_TDD": "Let the test lead — set the failing test first, then only the code to pass it.",
   "DESC_HANDOFF": "Hand off the bike — snapshot the state so a fresh rider takes the grips in one read.",

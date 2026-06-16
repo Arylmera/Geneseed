@@ -43,6 +43,7 @@
   "DESC_COUNCIL": "Drag a panel of opposed voices in to argue a call out, then hand down a verdict with the dissent kept on record.",
   "DESC_DEBUG": "Hunt the fault by evidence — reproduce it, isolate it, kill the root cause, prove it dead. No guessing.",
   "DESC_REFACTOR": "Fix the structure without changing behaviour — one named move, tests green throughout.",
+  "DESC_PONYTAIL": "The laziest solution that actually works, no padding — least code, shortest path; stdlib before custom junk, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Put several grunts on independent jobs at once, then pull in what they bring back.",
   "DESC_TDD": "Let the test lead — write the failing test first, then the minimum code to pass. No more.",
   "DESC_HANDOFF": "Snapshot the state so the next poor soul picks it up in one read, instead of guessing what you meant.",

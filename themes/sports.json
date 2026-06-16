@@ -43,6 +43,7 @@
   "DESC_COUNCIL": "Bring a panel of opposing voices to debate the call, then deliver the verdict with the dissent on the tape.",
   "DESC_DEBUG": "Break down the fault on tape — reproduce, isolate, root-cause, confirm the fix.",
   "DESC_REFACTOR": "Rework the formation without changing the result — one named move, tests green throughout.",
+  "DESC_PONYTAIL": "The laziest play that scores — least code, shortest path; standard kit before custom plays, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several players on independent plays at once, then regroup the results.",
   "DESC_TDD": "Let the test lead — set the failing test first, then the minimum code to pass.",
   "DESC_HANDOFF": "Hand off cleanly — snapshot the state so a fresh player picks up in one read.",

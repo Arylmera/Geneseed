@@ -43,6 +43,7 @@
   "DESC_COUNCIL": "Assemble a panel of opposing takes to debate a call, then call the verdict with the dissent kept on record.",
   "DESC_DEBUG": "Hunt the bug by evidence — reproduce, isolate, root-cause, confirm the fix.",
   "DESC_REFACTOR": "Re-spec the build without changing behaviour — one named move, tests green throughout.",
+  "DESC_PONYTAIL": "The laziest run that clears it — least code, shortest path; base kit before custom mods, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send the party on independent objectives at once, then regroup the loot.",
   "DESC_TDD": "Let the test lead — write the failing test first, then the minimum code to pass.",
   "DESC_HANDOFF": "Pass the controller — snapshot the run so a fresh player picks up in one read.",
