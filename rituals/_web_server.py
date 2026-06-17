@@ -110,6 +110,11 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                 if srv is not None:
                     threading.Thread(target=srv.shutdown, daemon=True).start()
                 return self._send_json({"stopping": True})
+            if path == "/api/restart":
+                # Hand off to a detached `web restart` (it stops us, then starts a
+                # fresh server on the same port) so the new daemon survives our exit.
+                request_restart(state.theme)
+                return self._send_json({"restarting": True})
             if path == "/api/mcp":
                 try:
                     res = api_mcp_toggle(state, self._read_json_body())
@@ -245,23 +250,12 @@ def _live_daemon(target: Path) -> "dict | None":
     return None
 
 
-def start_daemon(theme: "str | None", port: int, open_browser: bool = True) -> int:
-    """Start the server detached (singleton). If one is already running, just
-    reopen the browser. Returns 0 on success."""
-    target = WebState(theme=theme).target
-    st = _live_daemon(target)
-    if st:
-        print(f"[web] already running on {st['url']}  (pid {st.get('pid')})")
-        if open_browser:
-            with contextlib.suppress(Exception):
-                webbrowser.open(st["url"])
-        return 0
-    clear_daemon(target)
-    log = target / ".geneseed-web.log"
+def _spawn_detached(web_args: "list[str]", log: Path) -> None:
+    """Popen `harness.py web <web_args>` fully detached, logging to `log`. Used to
+    launch the daemon and (with a `restart` action) to re-launch it out-of-band so
+    the spawner can exit/die without taking the new server down with it."""
     cmd = [sys.executable, str(Path(__file__).resolve().parent.parent / "rituals" / "harness.py"),
-           "web", "--daemon-internal", "--port", str(port), "--no-browser"]
-    if theme:
-        cmd += ["--theme", theme]
+           "web", *web_args]
     kwargs: dict = {"stdin": subprocess.DEVNULL}
     try:
         logf = open(log, "ab")
@@ -275,6 +269,37 @@ def start_daemon(theme: "str | None", port: int, open_browser: bool = True) -> i
     else:
         kwargs["start_new_session"] = True
     subprocess.Popen(cmd, **kwargs)
+
+
+def request_restart(theme: "str | None") -> None:
+    """Spawn a detached `web restart` that will stop this server and start a fresh
+    one on the same port. Detached so it outlives the shutdown of the very process
+    that called it — used by the in-page Restart button."""
+    target = WebState(theme=theme).target
+    log = target / ".geneseed-web.log"
+    args = ["restart", "--no-browser"]
+    if theme:
+        args += ["--theme", theme]
+    _spawn_detached(args, log)
+
+
+def start_daemon(theme: "str | None", port: int, open_browser: bool = True) -> int:
+    """Start the server detached (singleton). If one is already running, just
+    reopen the browser. Returns 0 on success."""
+    target = WebState(theme=theme).target
+    st = _live_daemon(target)
+    if st:
+        print(f"[web] already running on {st['url']}  (pid {st.get('pid')})")
+        if open_browser:
+            with contextlib.suppress(Exception):
+                webbrowser.open(st["url"])
+        return 0
+    clear_daemon(target)
+    log = target / ".geneseed-web.log"
+    cmd = ["--daemon-internal", "--port", str(port), "--no-browser"]
+    if theme:
+        cmd += ["--theme", theme]
+    _spawn_detached(cmd, log)
     # Wait for the child to bind and write its state (pid/port/url).
     for _ in range(60):
         st = read_daemon(target)

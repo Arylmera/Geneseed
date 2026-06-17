@@ -4,3 +4,4 @@ import { get, post } from './http.js'
 
 export const ping = () => get('/api/ping')
 export const shutdown = () => post('/api/shutdown')
+export const restart = () => post('/api/restart')

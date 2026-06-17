@@ -7,6 +7,7 @@ import { Icon } from '../../components/Icon.jsx'
 // request right after the call is still treated as a successful stop.
 export default function ServerControl() {
   const [stopped, setStopped] = useState(false)
+  const [restarting, setRestarting] = useState(false)
 
   const stop = async () => {
     if (
@@ -23,6 +24,33 @@ export default function ServerControl() {
     setStopped(true)
   }
 
+  // Restart comes back on the same port, so reload once it answers /api/ping
+  // again. The connection drops while it bounces — poll past the failures.
+  const restart = async () => {
+    if (!window.confirm('Restart the local Geneseed server? The console reconnects in a moment.'))
+      return
+    setRestarting(true)
+    try {
+      await api.restart()
+    } catch {
+      // connection may drop as the old server goes down — expected
+    }
+    const waitForServer = async (tries = 30) => {
+      for (let i = 0; i < tries; i++) {
+        await new Promise((r) => setTimeout(r, 1000))
+        try {
+          await api.ping()
+          window.location.reload()
+          return
+        } catch {
+          // not back up yet
+        }
+      }
+      window.location.reload()
+    }
+    waitForServer()
+  }
+
   if (stopped) {
     return (
       <p className="sub">
@@ -31,9 +59,15 @@ export default function ServerControl() {
     )
   }
   return (
-    <button className="btn ghost" onClick={stop}>
-      <Icon name="x" />
-      Stop server
-    </button>
+    <div className="row">
+      <button className="btn ghost" onClick={restart} disabled={restarting}>
+        <Icon name="refresh" />
+        {restarting ? 'Restarting…' : 'Restart server'}
+      </button>
+      <button className="btn ghost" onClick={stop} disabled={restarting}>
+        <Icon name="x" />
+        Stop server
+      </button>
+    </div>
   )
 }
