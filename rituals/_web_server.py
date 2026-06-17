@@ -28,6 +28,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
             self.end_headers()
             self.wfile.write(body)
 
+        # Read the `?harness=` query param (the Docs Claude/OpenCode selector);
+        # None when absent, so the API resolves the installed default.
+        def _harness(self):
+            qs = urllib.parse.urlparse(self.path).query
+            return urllib.parse.parse_qs(qs).get("harness", [None])[0]
+
         # ---- GET ---------------------------------------------------------
         def do_GET(self):
             path = self.path.split("?", 1)[0]
@@ -60,11 +66,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                 if path == "/api/diff":
                     return self._send_json(api_diff(state))
                 if path == "/api/docs":
-                    return self._send_json(api_docs(state))
+                    return self._send_json(api_docs(state, self._harness()))
                 if path.startswith("/api/docs/page/"):
                     pid = path[len("/api/docs/page/"):]
                     return self._send_json(
-                        api_docs_page(state, urllib.parse.unquote(pid)))
+                        api_docs_page(state, urllib.parse.unquote(pid),
+                                      self._harness()))
                 if path == "/api/jobs":
                     return self._send_json({"jobs": jm.recent()})
                 if path.startswith("/api/jobs/"):

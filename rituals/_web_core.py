@@ -114,10 +114,12 @@ DOC_GROUPS = [
             "dead links, missing files, or a drifted bundle — each comes "
             "with a fix hint. Press the **Run doctor** button above to run "
             "it from here.\n\n"
-            "### 3. Context delivery (OpenCode only)\n\n"
+            "<!--harness:opencode-->\n"
+            "### 3. Context delivery\n\n"
             "Start a session with `GENESEED_DEBUG=1` set. The context "
             "plugin logs what it discovered and injected; you should see "
-            "the repo's `README.md` and any docs listed.\n\n"
+            "the repo's `README.md` and any docs listed.\n"
+            "<!--/harness-->\n\n"
             "---\n\n"
             "Trouble? See [Troubleshooting](#/docs/trouble).")},
         {"id": "first-session", "title": "Your first session",
@@ -152,10 +154,14 @@ DOC_GROUPS = [
          "(capability specialists you delegate to), **Skills** (repeatable "
          "workflows the agent can invoke), **Memory** (one-fact-per-file "
          "durable knowledge), and a **Notebook** (the agent's own sovereign "
-         "space). On OpenCode, six **Plugins** bind the pieces to the host: "
+         "space).\n"
+         "<!--harness:opencode-->\n"
+         "On OpenCode, six **Plugins** bind the pieces to the host: "
          "context injection, learn-at-session-end, the safety guard, the "
          "saved workflow runner, end-of-run notifications, and an opt-in "
-         "minimal-code mode. The structure "
+         "minimal-code mode.\n"
+         "<!--/harness-->\n"
+         "The structure "
          "is theme-independent — a "
          "theme only changes the *voice* (banner, sigil, prose), never a "
          "folder or a link.\n\n"
@@ -163,8 +169,8 @@ DOC_GROUPS = [
          "The **Library** and **Graph** render the Geneseed source live — "
          "they show the harness that *would* be deployed if you rebuilt "
          "right now. The **Settings** panes and the **Memory** drawer read "
-         "from the deployed harness on disk (`~/.config/opencode/…` for an "
-         "OpenCode global install).\n\n"
+         "from the deployed harness on disk (the harness install dir, e.g. "
+         "`~/.config/opencode/…` for an OpenCode global install).\n\n"
          "If you've built recently, the two match. If you edit a file under "
          "`src/` and reload this panel, the Library updates immediately — "
          "the deployed bundle does not, until the next `geneseed update` or "
@@ -208,6 +214,7 @@ DOC_GROUPS = [
          "kind": "markdown", "source": "DESIGN.md", "anchor": "decisions",
          "slice": True},
         {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
+         "harness": "opencode",
          "link": {"hash": "#/docs/plugin-context",
                   "label": "One page per plugin →"},
          "body": "OpenCode loads six plugins from the deployed bundle:\n\n"
@@ -244,7 +251,8 @@ DOC_GROUPS = [
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "reading-non-markdown-docs", "slice": True},
         {"id": "worktree", "title": "Add git-worktree isolation (OpenCode)",
-         "kind": "markdown", "source": "adapters/opencode/README.md",
+         "kind": "markdown", "harness": "opencode",
+         "source": "adapters/opencode/README.md",
          "anchor": "optional-add-on-git-worktree-isolation-third-party-not-vendored",
          "slice": True},
         {"id": "run-anywhere", "title": "Run `geneseed` from anywhere",
@@ -347,7 +355,7 @@ DOC_GROUPS = [
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "filesystem", "slice": True},
         {"id": "mcp-claude-code", "title": "Claude Code",
-         "kind": "markdown", "source": "SETUP.md",
+         "kind": "markdown", "harness": "claude", "source": "SETUP.md",
          "anchor": "claude-code", "slice": True},
         {"id": "mcp-verify", "title": "Verify",
          "kind": "markdown", "source": "SETUP.md",
@@ -360,7 +368,7 @@ DOC_GROUPS = [
     # The shared install lives once in "Plugin setup" (the first page, sliced
     # from docs/opencode-plugin-setup.md); each plugin page then covers only its
     # own configuration and verify steps and points back to that setup page.
-    {"id": "plugins", "label": "Plugins", "pages": [
+    {"id": "plugins", "label": "Plugins", "harness": "opencode", "pages": [
         {"id": "plugin-setup", "title": "Plugin setup", "kind": "markdown",
          "source": "docs/opencode-plugin-setup.md"},
         {"id": "plugin-context", "title": "geneseed-context", "kind": "concept",
@@ -594,15 +602,17 @@ DOC_GROUPS = [
         {"id": "design", "title": "DESIGN.md — the spec",
          "kind": "markdown", "source": "DESIGN.md"},
         {"id": "adapters-opencode", "title": "OpenCode adapter",
-         "kind": "markdown", "source": "adapters/opencode/README.md"},
+         "kind": "markdown", "harness": "opencode",
+         "source": "adapters/opencode/README.md"},
         {"id": "adapters-opencode-spec", "title": "OpenCode — global harness spec",
-         "kind": "markdown",
+         "kind": "markdown", "harness": "opencode",
          "source": "adapters/opencode/GLOBAL-HARNESS-SPEC.md"},
         {"id": "adapters-opencode-loads", "title": "OpenCode — how it loads",
-         "kind": "markdown",
+         "kind": "markdown", "harness": "opencode",
          "source": "adapters/opencode/HOW-OPENCODE-LOADS.md"},
         {"id": "adapters-claude-code", "title": "Claude Code adapter",
-         "kind": "markdown", "source": "adapters/claude-code/README.md"},
+         "kind": "markdown", "harness": "claude",
+         "source": "adapters/claude-code/README.md"},
         {"id": "about", "title": "About — version, license, links",
          "kind": "about"},
     ]},

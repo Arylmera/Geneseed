@@ -28,6 +28,90 @@ def _read_doc_source(rel: str) -> str:
     return target.read_text(encoding="utf-8", errors="replace")
 
 
+# ---- Harness filtering -----------------------------------------------------
+# The Docs UI carries a Claude-Code / OpenCode selector so a reader sees only
+# the wiring that applies to their host. ~80% of the docs are shared, so we
+# don't split the tree — we tag only what differs, at two granularities:
+#   - page/group: a DOC_GROUPS page (or whole group) gets `"harness": "..."`;
+#     api_docs() drops it from the menu when it doesn't match.
+#   - inline: a span inside an otherwise-shared body is wrapped in HTML-comment
+#     markers `<!--harness:opencode-->...<!--/harness-->` (invisible to GitHub
+#     readers of the canonical SETUP.md/README.md), stripped here per host.
+
+_HARNESSES = ("opencode", "claude")
+_HARNESS_OPEN_RE = re.compile(r"^\s*<!--\s*harness:(opencode|claude)\s*-->\s*$")
+_HARNESS_CLOSE_RE = re.compile(r"^\s*<!--\s*/harness\s*-->\s*$")
+
+
+def _norm_harness(value: "str | None", state: "WebState") -> str:
+    """Resolve a requested harness to one of _HARNESSES. An explicit, valid
+    value wins; otherwise default to the installed host (claude only when the
+    deployed emit is a Claude bundle, else OpenCode — the common case)."""
+    v = (value or "").strip().lower()
+    if v in _HARNESSES:
+        return v
+    return "claude" if (getattr(state, "emit", "") or "").startswith("claude") else "opencode"
+
+
+def _harness_blocks_balanced(lines: list) -> bool:
+    """True when every `<!--harness:X-->` has a matching `<!--/harness-->` with
+    no nesting — the only shape _strip_harness_blocks can filter safely. Used to
+    fail open (leave the body untouched) on a malformed marker rather than
+    silently blanking the rest of a page."""
+    open_ = False
+    for line in lines:
+        if _HARNESS_OPEN_RE.match(line):
+            if open_:
+                return False            # nested open
+            open_ = True
+        elif _HARNESS_CLOSE_RE.match(line):
+            if not open_:
+                return False            # close with no open
+            open_ = False
+    return not open_                    # no dangling open
+
+
+def _strip_harness_blocks(body: str, harness_name: str) -> str:
+    """Drop `<!--harness:X-->...<!--/harness-->` blocks whose X != harness_name
+    and unwrap (keep the inner lines, drop the markers) the ones that match.
+    Line-based and nesting-free — markers must sit on their own line. Malformed
+    (unbalanced / nested) markers fail open: the body is returned untouched so a
+    typo never blanks a page. doctor flags the imbalance separately."""
+    if "<!--harness:" not in body and "<!-- harness:" not in body:
+        return body
+    lines = body.splitlines()
+    if not _harness_blocks_balanced(lines):
+        return body
+    out, keep = [], True
+    for line in lines:
+        m = _HARNESS_OPEN_RE.match(line)
+        if m:
+            keep = (m.group(1) == harness_name)
+            continue
+        if _HARNESS_CLOSE_RE.match(line):
+            keep = True
+            continue
+        if keep:
+            out.append(line)
+    return "\n".join(out)
+
+
+def _visible_groups(harness_name: str) -> list:
+    """DOC_GROUPS filtered to the active harness: a page with a `harness` tag
+    that doesn't match is dropped, a group tag applies to all its pages, and a
+    group left empty is removed. Pure; the source registry is never mutated."""
+    groups = []
+    for g in DOC_GROUPS:
+        g_tag = g.get("harness")
+        if g_tag and g_tag != harness_name:
+            continue
+        pages = [p for p in g["pages"]
+                 if not p.get("harness") or p["harness"] == harness_name]
+        if pages:
+            groups.append({**g, "pages": pages})
+    return groups
+
+
 # Match the slug shape the frontend's `slug()` produces, so a DOC_GROUPS
 # `anchor` written against a heading matches whatever the renderer assigns.
 _SLUG_STRIP_RE = re.compile(r"[^a-z0-9\s-]")
@@ -184,22 +268,28 @@ def _about(state: WebState) -> dict:
     }
 
 
-def api_docs(state: WebState) -> dict:
+def api_docs(state: WebState, harness_name: "str | None" = None) -> dict:
     """Top-level menu the Docs page renders in its left sub-nav: the concepts,
-    references, and the curated DESIGN.md."""
+    references, and the curated DESIGN.md — filtered to the active harness. The
+    resolved `harness` is echoed so the client can adopt the installed default
+    on first load (empty localStorage)."""
+    hn = _norm_harness(harness_name, state)
     groups = [{"id": g["id"], "label": g["label"],
                "pages": [{"id": p["id"], "title": p["title"], "kind": p["kind"]}
                          for p in g["pages"]]}
-              for g in DOC_GROUPS]
-    return {"groups": groups}
+              for g in _visible_groups(hn)]
+    return {"groups": groups, "harness": hn}
 
 
-def api_docs_page(state: WebState, page_id: str) -> dict:
+def api_docs_page(state: WebState, page_id: str,
+                  harness_name: "str | None" = None) -> dict:
     """One docs page, looked up in DOC_GROUPS. Every shape carries a `kind`
-    the frontend dispatches on."""
+    the frontend dispatches on. Markdown/concept bodies are filtered to the
+    active harness (inline `<!--harness:X-->` blocks stripped)."""
     page = _find_doc_page(page_id)
     if not page:
         raise NotFound(page_id)
+    hn = _norm_harness(harness_name, state)
     kind = page["kind"]
     if kind == "markdown":
         body = _read_doc_source(page["source"])
@@ -212,12 +302,13 @@ def api_docs_page(state: WebState, page_id: str) -> dict:
             body, sliced = _slice_section(body, anchor)
             if sliced:
                 anchor = None
+        body = _strip_harness_blocks(body, hn)
         return {"id": page_id, "title": page["title"], "kind": "markdown",
                 "body": body, "source": page["source"],
                 "anchor": anchor,
                 "links": _resolve_links(state, body)}
     if kind == "concept":
-        body = page.get("body", "")
+        body = _strip_harness_blocks(page.get("body", ""), hn)
         return {"id": page_id, "title": page["title"], "kind": "concept",
                 "body": body, "link": page.get("link"),
                 "links": _resolve_links(state, body)}
