@@ -7,7 +7,17 @@ import * as catalog from './catalog.js'
 import * as diff from './diff.js'
 import * as jobs from './jobs.js'
 import * as mcp from './mcp.js'
+import * as installs from './installs.js'
 import * as server from './server.js'
 import * as docs from './docs.js'
 
-export const api = { ...status, ...catalog, ...diff, ...jobs, ...mcp, ...server, ...docs }
+export const api = {
+  ...status,
+  ...catalog,
+  ...diff,
+  ...jobs,
+  ...mcp,
+  ...installs,
+  ...server,
+  ...docs,
+}

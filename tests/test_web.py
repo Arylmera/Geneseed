@@ -399,6 +399,223 @@ class McpTests(unittest.TestCase):
                 web.harness._mcp_targets = saved
 
 
+class InstallActivationTests(unittest.TestCase):
+    """The Harness-installs switch: deactivate moves owned artifacts into a sibling
+    `.geneseed-disabled/` stash and strips the AGENT.md `instructions` entry — never
+    deleting a file — and reactivate restores the exact prior bytes. Backed by the
+    on-disk stash dir alone; no recorded JSON state. Drives the engine through the web
+    API (api_installs / api_install_toggle) with `_install_targets` monkeypatched to a
+    single seeded GLOBAL root, so the suite is hermetic and cwd-independent."""
+
+    DISABLED = ".geneseed-disabled"
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        self.root = (self.tmp / "opencode").resolve()
+        self.root.mkdir(parents=True)
+        self.state = web.WebState(theme="neutral")
+        # One detected install: a GLOBAL root (it carries a manifest). Mirror the
+        # path-allowlist contract of api_install_toggle by pinning _install_targets.
+        self._saved_targets = web.harness._install_targets
+        web.harness._install_targets = lambda: [("global config", self.root)]
+
+    def tearDown(self):
+        import shutil
+        web.harness._install_targets = self._saved_targets
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    # -- seeding -------------------------------------------------------------
+    def _agent_entry(self) -> str:
+        # The global emit wires `instructions` at the absolute AGENT.md posix path
+        # (see _build_global.py:181 / _uninstall_global) — match it exactly.
+        return (self.root / "AGENT.md").as_posix()
+
+    def _seed_global(self, *, opencode_text: "str | None" = None):
+        """A minimal GLOBAL install: AGENT.md + agents/x.md + a manifest listing them
+        (plus VERSION_MARKER, the one marker the real manifest carries) + an
+        opencode.json whose `instructions` already points at AGENT.md."""
+        import json
+        (self.root / "AGENT.md").write_text("# Rules\nbody\n", encoding="utf-8")
+        (self.root / "agents").mkdir()
+        (self.root / "agents" / "x.md").write_text("# agent x\n", encoding="utf-8")
+        # VERSION_MARKER is the only marker that appears in `owned`; deactivate must
+        # leave it in place (theme/version detection keeps working while disabled).
+        (self.root / web.build.VERSION_MARKER).write_text("v\n", encoding="utf-8")
+        manifest = {"owned": sorted(["AGENT.md", "agents/x.md", web.build.VERSION_MARKER])}
+        (self.root / web.build.GLOBAL_MANIFEST).write_text(
+            json.dumps(manifest), encoding="utf-8")
+        cfg = opencode_text if opencode_text is not None else json.dumps(
+            {"instructions": [self._agent_entry()], "lsp": True})
+        (self.root / "opencode.json").write_text(cfg, encoding="utf-8")
+
+    def _instructions(self) -> list:
+        import json
+        data = json.loads((self.root / "opencode.json").read_text(encoding="utf-8"))
+        return data.get("instructions", [])
+
+    def _stash(self) -> Path:
+        return self.root / self.DISABLED
+
+    # -- shape ---------------------------------------------------------------
+    def test_api_installs_shape_and_state_per_scope(self):
+        self._seed_global()
+        res = web.api_installs(self.state)
+        self.assertIn("installs", res)
+        self.assertEqual(len(res["installs"]), 1)          # one row per scope
+        row = res["installs"][0]
+        for key in ("id", "host", "scope", "path", "state"):
+            self.assertIn(key, row)
+        self.assertEqual(row["host"], "opencode")
+        self.assertEqual(row["scope"], "global config")
+        self.assertEqual(row["path"], str(self.root))
+        self.assertEqual(row["state"], "active")           # manifest present, no stash
+
+        # absent: a root with neither manifest nor .opencode/ reports `absent`.
+        web.harness._install_targets = lambda: [("global config", self.tmp / "empty")]
+        (self.tmp / "empty").mkdir()
+        self.assertEqual(
+            web.api_installs(self.state)["installs"][0]["state"], "absent")
+
+    # -- round trip ----------------------------------------------------------
+    def test_deactivate_then_reactivate_restores_exact_bytes(self):
+        self._seed_global()
+        agent_bytes = (self.root / "AGENT.md").read_bytes()
+        x_bytes = (self.root / "agents" / "x.md").read_bytes()
+
+        res = web.api_install_toggle(
+            self.state, {"path": str(self.root), "action": "deactivate"})
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["kind"], "global")
+        self.assertEqual(res["moved"], 2)                  # AGENT.md + agents/x.md
+
+        # artifacts now live under the stash, at their original rel paths...
+        self.assertTrue(self._stash().is_dir())
+        self.assertTrue((self._stash() / "AGENT.md").is_file())
+        self.assertTrue((self._stash() / "agents" / "x.md").is_file())
+        # ...and NO file was deleted — bytes preserved in the stash.
+        self.assertEqual((self._stash() / "AGENT.md").read_bytes(), agent_bytes)
+        self.assertEqual((self._stash() / "agents" / "x.md").read_bytes(), x_bytes)
+        # the live copies are gone from the discovery path...
+        self.assertFalse((self.root / "AGENT.md").exists())
+        self.assertFalse((self.root / "agents" / "x.md").exists())
+        # ...and the emptied owned dir is pruned (uninstall's ancestor-climb).
+        self.assertFalse((self.root / "agents").exists())
+        # the AGENT.md instructions entry is stripped.
+        self.assertNotIn(self._agent_entry(), self._instructions())
+        # VERSION_MARKER stays put — markers are excluded from the move.
+        self.assertTrue((self.root / web.build.VERSION_MARKER).is_file())
+        self.assertFalse((self._stash() / web.build.VERSION_MARKER).exists())
+        # state now reads `disabled` (the stash dir IS the flag).
+        self.assertEqual(
+            web.api_installs(self.state)["installs"][0]["state"], "disabled")
+
+        res = web.api_install_toggle(
+            self.state, {"path": str(self.root), "action": "activate"})
+        self.assertTrue(res["ok"])
+        # restored exactly to the original rel paths, byte-for-byte.
+        self.assertEqual((self.root / "AGENT.md").read_bytes(), agent_bytes)
+        self.assertEqual((self.root / "agents" / "x.md").read_bytes(), x_bytes)
+        # the instructions entry is back.
+        self.assertIn(self._agent_entry(), self._instructions())
+        # the stash dir is removed once everything is restored.
+        self.assertFalse(self._stash().exists())
+        self.assertEqual(
+            web.api_installs(self.state)["installs"][0]["state"], "active")
+
+    # -- roll-back -----------------------------------------------------------
+    def test_deactivate_rolls_back_on_a_failed_move(self):
+        self._seed_global()
+        agent_bytes = (self.root / "AGENT.md").read_bytes()
+        x_bytes = (self.root / "agents" / "x.md").read_bytes()
+        # Plant a plain FILE named like the stash dir. `_install_state` gates on
+        # `(root / DISABLED_STASH).is_dir()`, so a file leaves state `active` (the
+        # op is allowed to start) — but every `mkdir(stash / rel)` then fails,
+        # forcing a mid-operation failure and a full roll-back.
+        self._stash().write_text("not a dir\n", encoding="utf-8")
+
+        res = web.api_install_toggle(
+            self.state, {"path": str(self.root), "action": "deactivate"})
+        self.assertFalse(res["ok"])
+        self.assertIn("failed", res)
+        self.assertTrue(res["failed"])
+
+        # Everything is back where it started — no half-gutted install.
+        self.assertTrue((self.root / "AGENT.md").is_file())
+        self.assertEqual((self.root / "AGENT.md").read_bytes(), agent_bytes)
+        self.assertTrue((self.root / "agents" / "x.md").is_file())
+        self.assertEqual((self.root / "agents" / "x.md").read_bytes(), x_bytes)
+        # The config edit is the LAST step, so a move failure leaves it intact.
+        self.assertIn(self._agent_entry(), self._instructions())
+        # The install is still ACTIVE — the blocking file is not a stash dir.
+        self.assertEqual(
+            web.api_installs(self.state)["installs"][0]["state"], "active")
+        # The blocking artifact we planted is untouched (engine deleted nothing).
+        self.assertEqual(self._stash().read_text(encoding="utf-8"), "not a dir\n")
+
+    # -- re-emit while disabled ---------------------------------------------
+    def test_reactivate_discards_stash_when_files_re_created(self):
+        self._seed_global()
+        res = web.api_install_toggle(
+            self.state, {"path": str(self.root), "action": "deactivate"})
+        self.assertTrue(res["ok"])
+        self.assertTrue(self._stash().is_dir())
+
+        # Simulate `geneseed build` re-creating the live install while disabled:
+        # the manifest + AGENT.md + agents are back on the discovery path.
+        self._seed_global()                               # rewrites live files
+        self.assertTrue((self.root / "AGENT.md").is_file())
+
+        res = web.api_install_toggle(
+            self.state, {"path": str(self.root), "action": "activate"})
+        self.assertTrue(res["ok"])
+        self.assertIn("note", res)
+        self.assertIn("discarded", res["note"])
+        # The stale stash is discarded, the live files are untouched...
+        self.assertFalse(self._stash().exists())
+        self.assertTrue((self.root / "AGENT.md").is_file())
+        # ...and the instructions entry is ensured present.
+        self.assertIn(self._agent_entry(), self._instructions())
+        self.assertEqual(
+            web.api_installs(self.state)["installs"][0]["state"], "active")
+
+    # -- commented .jsonc refusal -------------------------------------------
+    def test_deactivate_refuses_commented_jsonc_and_moves_nothing(self):
+        # OpenCode prefers a present opencode.jsonc; a commented one must not be
+        # rewritten (it would drop the comments), so deactivate aborts up front.
+        self._seed_global()
+        (self.root / "opencode.json").unlink()
+        (self.root / "opencode.jsonc").write_text(
+            '// my notes\n{\n  "instructions": ["' + self._agent_entry() + '"]\n}\n',
+            encoding="utf-8")
+
+        res = web.api_install_toggle(
+            self.state, {"path": str(self.root), "action": "deactivate"})
+        self.assertFalse(res["ok"])
+        self.assertIn("error", res)
+        # Nothing moved: live files in place, no stash created, comments intact.
+        self.assertTrue((self.root / "AGENT.md").is_file())
+        self.assertTrue((self.root / "agents" / "x.md").is_file())
+        self.assertFalse(self._stash().exists())
+        self.assertIn("// my notes",
+                      (self.root / "opencode.jsonc").read_text(encoding="utf-8"))
+        self.assertEqual(
+            web.api_installs(self.state)["installs"][0]["state"], "active")
+
+    # -- endpoint allowlist --------------------------------------------------
+    def test_install_toggle_rejects_unknown_path(self):
+        self._seed_global()
+        with self.assertRaises(web.NotFound):
+            web.api_install_toggle(
+                self.state, {"path": "/no/such/root", "action": "deactivate"})
+
+    def test_install_toggle_unknown_action_is_not_ok(self):
+        self._seed_global()
+        res = web.api_install_toggle(
+            self.state, {"path": str(self.root), "action": "bogus"})
+        self.assertFalse(res["ok"])
+
+
 class GraphTests(unittest.TestCase):
     def test_api_graph_nodes_and_edges_resolve(self):
         state = web.WebState(theme="neutral")
