@@ -13,7 +13,7 @@
   "mcp": {
     "markitdown": {
       "type": "local",
-      "command": ["markitdown-mcp"],
+      "command": ["uvx", "markitdown-mcp"],
       "enabled": true
     },
     "gitlab": {

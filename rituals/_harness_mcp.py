@@ -44,10 +44,11 @@ def _unmerge_opencode_json(path: Path, entry: str) -> bool:
 _MCP_PRESETS = {
     "markitdown": {
         "label": "MarkItDown",
-        "desc": "PDF / Office / HTML -> Markdown for the ingest skill. Install it with "
-                "`pipx install markitdown-mcp` (or switch the command to "
-                "[\"uvx\", \"markitdown-mcp\"]). Exposes one tool: convert_to_markdown(uri).",
-        "block": {"type": "local", "command": ["markitdown-mcp"], "enabled": True},
+        "desc": "PDF / Office / HTML -> Markdown for the ingest skill. Runs via `uvx` "
+                "(needs uv; zero-install, fetches on first call). No uv? Switch the command "
+                "to [\"markitdown-mcp\"] after `pipx install markitdown-mcp`. Exposes one "
+                "tool: convert_to_markdown(uri).",
+        "block": {"type": "local", "command": ["uvx", "markitdown-mcp"], "enabled": True},
     },
     "gitlab": {
         "label": "GitLab",

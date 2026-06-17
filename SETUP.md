@@ -320,24 +320,39 @@ the blanks, then flip the one(s) you want on.
 Wire Microsoft's MarkItDown in as a **local MCP server** so the agent can convert
 PDF / Word / Excel / PowerPoint / HTML → Markdown on demand, exposing a single tool
 `convert_to_markdown(uri)` (`uri` accepts `file:`, `http:`, `https:`, or `data:`).
-The server runs locally and, once installed, does not hit PyPI again.
+The server runs locally and, once cached, does not hit PyPI again.
 
-**1. Install the server** (pipx keeps it in its own venv):
+> **A config entry alone does nothing.** A `local` MCP server is just a command
+> OpenCode launches — if that command isn't on PATH, OpenCode still *lists* the server
+> but it never connects ("shown but not working"). So the command has to resolve in the
+> shell OpenCode starts from. The `uvx` form below is the zero-install way to guarantee
+> that.
+
+**1. Make the command resolve.** Pick one:
+
+- **`uvx` (recommended, zero-install).** If you have [uv](https://docs.astral.sh/uv/)
+  (`uvx` on PATH), nothing to install — `uvx markitdown-mcp` fetches and caches the
+  server on first call. This is the command the reference config and the harness toggle
+  now use.
+- **`pipx` (pinned install).** No uv? `pipx install markitdown-mcp` puts a
+  `markitdown-mcp` binary on PATH; then use `"command": ["markitdown-mcp"]` instead.
+  Verify with `markitdown-mcp --help`.
 
 ```
+# uv route (recommended) — confirm it resolves:
+uvx markitdown-mcp --help
+# pipx route — only if you don't have uv:
 brew install pipx && pipx ensurepath        # macOS;  Debian/Ubuntu: sudo apt install pipx && pipx ensurepath
-pipx install markitdown-mcp
-markitdown-mcp --help                        # verify it resolves
+pipx install markitdown-mcp && markitdown-mcp --help
 ```
 
-Optional OCR / image / audio extras (must land in the *same* venv):
-`pipx inject markitdown-mcp "markitdown[all]"` — needed for scanned/image-only PDFs,
-which otherwise return empty.
+Optional OCR / image / audio extras (needed for scanned/image-only PDFs, which
+otherwise return empty): `uvx --with "markitdown[all]" markitdown-mcp` for the uv route,
+or `pipx inject markitdown-mcp "markitdown[all]"` for the pipx route (same venv).
 
-**2. Corporate TLS (only on a network with SSL inspection).** pipx uses **uv** as its
-backend; uv ships its own root CAs and ignores the OS trust store, so a proxy's
-internal CA fails with `invalid peer certificate: UnknownIssuer`. Point uv at the OS
-trust store *before* installing — don't disable verification:
+**2. Corporate TLS (only on a network with SSL inspection).** uv ships its own root CAs
+and ignores the OS trust store, so a proxy's internal CA fails with `invalid peer
+certificate: UnknownIssuer`. Point uv at the OS trust store — don't disable verification:
 
 ```
 echo 'export UV_SYSTEM_CERTS=true' >> ~/.zshrc && source ~/.zshrc   # older uv: UV_NATIVE_TLS=true
@@ -346,27 +361,28 @@ echo 'export UV_SYSTEM_CERTS=true' >> ~/.zshrc && source ~/.zshrc   # older uv: 
 
 **3. Register it in `opencode.json`** — Geneseed's
 [`adapters/opencode/opencode.json`](adapters/opencode/opencode.json) already carries
-this block; merge it into your config (global `~/.config/opencode/opencode.json` or
-per-repo) under the `mcp` key, alongside any servers you already have:
+this block; merge it into your config (global `~/.config/opencode/opencode.json`, or the
+`.jsonc` variant if you keep one — that's the file OpenCode reads — or per-repo) under
+the `mcp` key, alongside any servers you already have:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "markitdown": { "type": "local", "command": ["markitdown-mcp"], "enabled": true }
+    "markitdown": { "type": "local", "command": ["uvx", "markitdown-mcp"], "enabled": true }
   }
 }
 ```
 
-If `markitdown-mcp` is not on PATH in the shell OpenCode launches from, use the
-zero-install uv form instead: `"command": ["uvx", "markitdown-mcp"]`.
+On the pipx route, swap the command to `["markitdown-mcp"]`.
 
 Prefer not to hand-edit JSON? `./geneseed` → **Settings** → **MCP servers** toggles this exact block
 into your project or global `opencode.json` (and enables/disables it) for you.
 
-**4. Verify.** Restart OpenCode, then `opencode mcp` should list `markitdown` connected.
-The `ingest` skill auto-prefers an MCP converter when one is exposed, so a prompt like
-*"convert file:///path/to/spec.pdf to markdown"* now just works.
+**4. Verify.** Restart OpenCode, then `opencode mcp` should list `markitdown` **connected**
+(not just listed). The `ingest` skill auto-prefers an MCP converter when one is exposed,
+so a prompt like *"convert file:///path/to/spec.pdf to markdown"* now just works. Still
+not connecting? See [MCP server won't connect](#mcp-server-wont-connect) below.
 
 #### GitLab (one entry per instance)
 
@@ -432,8 +448,14 @@ can touch *only* the paths you list, so grant the narrowest set that works:
 }
 ```
 
-> **Least privilege.** Don't point it at `$HOME` or `/`. List only the dirs the task
-> needs — the server refuses any path outside them.
+> **Replace the placeholder.** The reference config and the harness toggle ship the
+> literal arg `/path/to/allowed/dir`. Enabling the server without swapping that for a
+> real path leaves it running but able to touch nothing — the classic "filesystem MCP
+> sees nothing." Edit the path(s) before (or right after) you flip it on.
+
+> **Least privilege.** Prefer the narrowest set of dirs the task needs over `$HOME` or
+> `/` — the server refuses any path outside them, and a broad grant lets the agent reach
+> everything under it.
 
 #### Claude Code
 
@@ -456,7 +478,7 @@ Claude Code reads the same servers from a `.mcp.json` `mcpServers` map — note 
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"]
     },
-    "markitdown": { "command": "markitdown-mcp", "args": [] }
+    "markitdown": { "command": "uvx", "args": ["markitdown-mcp"] }
   }
 }
 ```
@@ -467,10 +489,27 @@ token-safety rule applies.
 #### Verify
 
 Restart your agent. On OpenCode, `opencode mcp` lists each server and whether it
-connected; on Claude Code, `/mcp` shows the same. A GitLab server that won't connect is
-almost always a missing / over-scoped token or the wrong `GITLAB_API_URL` (mind the
-`/api/v4` suffix); a filesystem server that "sees nothing" usually has a wrong
-allowed-dir path.
+**connected**; on Claude Code, `/mcp` shows the same. Listed ≠ working — a `local` server
+appears in the list whether or not its command actually launches.
+
+#### MCP server won't connect
+
+A `local` MCP entry is just a command OpenCode/Claude Code runs. If it's listed but
+not connected, walk these in order:
+
+1. **Does the command resolve?** Run the exact command from a fresh terminal —
+   `uvx markitdown-mcp --help`, `npx -y @modelcontextprotocol/server-filesystem --help`.
+   "command not found" means the binary isn't on PATH in the shell your agent launches
+   from. Fix: use the `uvx`/`npx` zero-install form (these only need uv / Node), or
+   install the tool and point at the absolute path. This is the #1 cause of
+   "shown but not working" for **markitdown** (no `markitdown-mcp` on PATH, no pipx).
+2. **Filesystem sees nothing?** The allowed-dir arg is still the placeholder
+   `/path/to/allowed/dir`, or points somewhere that doesn't exist. Swap in a real path.
+3. **GitLab won't connect?** Almost always a missing / over-scoped token or the wrong
+   `GITLAB_API_URL` — keep the `/api/v4` suffix.
+4. **Right file?** OpenCode reads `opencode.jsonc` if present, else `opencode.json`, at
+   the project root and `~/.config/opencode/`. Editing the wrong one is silent. Use
+   `./geneseed` → **Settings** → **MCP servers** to write to the file OpenCode actually reads.
 
 ### Environment knobs
 

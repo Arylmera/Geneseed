@@ -329,7 +329,14 @@ DOC_GROUPS = [
          "[GitLab](#/docs/mcp-gitlab) · "
          "[Filesystem](#/docs/mcp-filesystem) · "
          "[Claude Code](#/docs/mcp-claude-code) · "
-         "[Verify](#/docs/mcp-verify)"},
+         "[Verify](#/docs/mcp-verify) · "
+         "[Won't connect?](#/docs/mcp-trouble)\n\n"
+         "> **Listed ≠ working.** A `local` server is just a command the agent "
+         "runs — it appears in the list whether or not that command actually "
+         "launches. The usual cause of \"shown but not working\" is the command "
+         "not being on PATH (e.g. `markitdown-mcp` with no `uvx`/pipx install) "
+         "or a filesystem entry left on its placeholder path. "
+         "[Walk the fixes →](#/docs/mcp-trouble)"},
         {"id": "mcp-markitdown", "title": "MarkItDown (PDF/Office)",
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "markitdown-via-mcp-opencode", "slice": True},
@@ -345,6 +352,9 @@ DOC_GROUPS = [
         {"id": "mcp-verify", "title": "Verify",
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "verify", "slice": True},
+        {"id": "mcp-trouble", "title": "Won't connect?",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "mcp-server-wont-connect", "slice": True},
     ]},
     # ── 5. Plugins ────────────────────────────────────────────────────────
     # The shared install lives once in "Plugin setup" (the first page, sliced

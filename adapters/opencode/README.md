@@ -401,16 +401,19 @@ to a converter:
 
 ```json
 "mcp": {
-  "markitdown": { "type": "local", "command": ["markitdown-mcp"], "enabled": true }
+  "markitdown": { "type": "local", "command": ["uvx", "markitdown-mcp"], "enabled": true }
 }
 ```
 
-It's a *reference* entry, not a hard dependency: install the server with
-`pipx install markitdown-mcp` (or swap the command to `["uvx", "markitdown-mcp"]` for
-the zero-install uv form), or drop the block if you don't want it — the skill falls
-back to a CLI converter (MarkItDown / Pandoc / Docling) and never installs one
-silently. Full runbook, including the corporate-TLS (`UV_SYSTEM_CERTS`) step and the
-OCR extras: [SETUP.md → MarkItDown via MCP](../../SETUP.md#markitdown-via-mcp-opencode).
+It's a *reference* entry, not a hard dependency. A `local` server is just a command
+OpenCode runs, so the command has to resolve — the `uvx` form above needs only
+[uv](https://docs.astral.sh/uv/) and installs nothing (it fetches + caches on first
+call). No uv? `pipx install markitdown-mcp` and swap the command to `["markitdown-mcp"]`.
+Or drop the block entirely — the skill falls back to a CLI converter (MarkItDown /
+Pandoc / Docling) and never installs one silently. Listed but not connecting? The
+command isn't on PATH — see [SETUP.md → MCP server won't connect](../../SETUP.md#mcp-server-wont-connect).
+Full runbook, including the corporate-TLS (`UV_SYSTEM_CERTS`) step and the OCR extras:
+[SETUP.md → MarkItDown via MCP](../../SETUP.md#markitdown-via-mcp-opencode).
 
 ## Optional add-on — git-worktree isolation (third-party, not vendored)
 

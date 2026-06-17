@@ -517,7 +517,7 @@ class McpServerTests(unittest.TestCase):
                "permission": {"bash": "allow"}}
         block = harness._MCP_PRESETS["markitdown"]["block"]
         out = harness._mcp_apply(cfg, "markitdown", block)
-        self.assertEqual(out["mcp"]["markitdown"]["command"], ["markitdown-mcp"])
+        self.assertEqual(out["mcp"]["markitdown"]["command"], ["uvx", "markitdown-mcp"])
         self.assertEqual(out["instructions"], ["AGENT.md"])      # untouched
         self.assertEqual(out["permission"], {"bash": "allow"})   # untouched
         self.assertEqual(cfg.get("mcp"), None)                   # input not mutated
@@ -595,7 +595,7 @@ class McpServerTests(unittest.TestCase):
                                      harness._MCP_PRESETS["markitdown"]["block"])
             harness._mcp_save(path, cfg)
             self.assertEqual(harness._mcp_load(path)["mcp"]["markitdown"]["command"],
-                             ["markitdown-mcp"])
+                             ["uvx", "markitdown-mcp"])
             path.write_text("{not json", encoding="utf-8")
             self.assertEqual(harness._mcp_load(path), {})            # malformed -> {}
         finally:
