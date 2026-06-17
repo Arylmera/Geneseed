@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect } from 'react'
 import { api } from '../../api/index.js'
 import { go } from '../../lib/router.js'
 import { useAsync } from '../../hooks/useAsync.js'
+import { useHarness, HARNESSES } from '../../hooks/useHarness.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import MarkdownPage from './MarkdownPage.jsx'
@@ -19,10 +20,10 @@ function defaultPageId(menu) {
 // One docs page rendered, dispatched by `kind`. Keeping the dispatch here
 // keeps each sub-component focused on one shape — the same split harness.py
 // uses to keep its topic submodules small.
-function PageView({ pageId, overview, onAction }) {
+function PageView({ pageId, harness, overview, onAction }) {
   const { data, error, loading } = useAsync(
-    () => (pageId ? api.docsPage(pageId) : Promise.resolve(null)),
-    [pageId],
+    () => (pageId ? api.docsPage(pageId, harness) : Promise.resolve(null)),
+    [pageId, harness],
   )
   if (error) return <ErrorState error={error} style={{ margin: 18 }} />
   if (loading || !data) return <Loading label="Loading page…" />
@@ -57,8 +58,21 @@ function groupOfPage(menu, pageId) {
 }
 
 export default function Docs({ page, query, overview, onAction }) {
-  const { data: menu, error } = useAsync(() => api.docs(), [])
+  const [harness, setHarness] = useHarness()
+  const { data: menu, error } = useAsync(() => api.docs(harness), [harness])
   const pageId = page || defaultPageId(menu)
+
+  // Switching harness (or a deep link) can land on a page the active harness
+  // hides — the server still renders it, but the menu wouldn't list it. Send
+  // such a page back to the default so the list and the pane stay in sync.
+  useEffect(() => {
+    if (!menu || !pageId) return
+    const visible = menu.groups.some((g) => g.pages.some((p) => p.id === pageId))
+    if (!visible) {
+      const def = defaultPageId(menu)
+      if (def && def !== pageId) go(`#/docs/${encodeURIComponent(def)}`)
+    }
+  }, [menu, pageId])
   const activeGroup = groupOfPage(menu, pageId) || menu?.groups?.[0]
   const q = (query || '').toLowerCase().trim()
 
@@ -98,9 +112,24 @@ export default function Docs({ page, query, overview, onAction }) {
           <div className="eyebrow">documentation</div>
           <h1 className="h">Docs</h1>
           <p className="sub">
-            Concept pages, a generated CLI reference, and a glossary. Pick a group, then read a
-            page; the markdown renders inline with wikilink resolution.
+            Concept pages, a generated CLI reference, and a glossary. Pages and config that
+            differ by host are filtered to your selected harness.
           </p>
+        </div>
+        {/* Harness selector — filters the menu and per-page config to the chosen
+            host (OpenCode vs Claude Code). Persists across reloads. Same .seg
+            control the Dashboard uses, so the two surfaces feel coherent. */}
+        <div className="seg" role="group" aria-label="Harness">
+          {HARNESSES.map((h) => (
+            <button
+              key={h.id}
+              className={harness === h.id ? 'on' : ''}
+              onClick={() => setHarness(h.id)}
+              aria-pressed={harness === h.id}
+            >
+              {h.label}
+            </button>
+          ))}
         </div>
       </div>
       {/* Horizontal group chip-bar — same pattern as Library's section bar so
@@ -152,7 +181,7 @@ export default function Docs({ page, query, overview, onAction }) {
           </div>
         </div>
         <div className="card lib-detail">
-          <PageView pageId={pageId} overview={overview} onAction={onAction} />
+          <PageView pageId={pageId} harness={harness} overview={overview} onAction={onAction} />
         </div>
       </div>
     </>
