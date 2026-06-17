@@ -739,6 +739,25 @@ def _deployed(state: WebState) -> bool:
     return (state.target / build.GLOBAL_MANIFEST).exists()
 
 
+def _spec_desc(fm: dict, body: str) -> str:
+    """One-line purpose for a deployed spec. Prefer the `> blockquote` line — the
+    harness convention every rendered skill/agent carries — then fall back to the
+    frontmatter `description`, then the first prose paragraph. The fallbacks exist
+    for VENDORED_SKILL_DIRS (daydream, react-view-transitions), which ride in
+    verbatim with no blockquote, so they'd otherwise show a blank Purpose cell."""
+    bq = build._first_blockquote(body)
+    if bq:
+        return bq
+    desc = str(fm.get("description") or "").strip()
+    if desc:
+        return " ".join(desc.split())
+    for para in body.split("\n\n"):
+        s = " ".join(para.split())
+        if s and not s.startswith(("#", "---", "<!--")):
+            return s
+    return ""
+
+
 def _spec_entries(root: Path, nested: bool) -> list[dict]:
     """Agent/skill specs read straight from a deployed harness dir. Agents are flat
     `<root>/<name>.md` (skipping `_*` templates); skills use OpenCode's folder layout
@@ -761,7 +780,7 @@ def _spec_entries(root: Path, nested: bool) -> list[dict]:
         # path. The title/desc are surfaced separately from the catalog entry.
         _fm, body = harness._frontmatter(text)
         name = p.parent.name if nested else p.stem
-        out.append({"name": name, "desc": build._first_blockquote(body),
+        out.append({"name": name, "desc": _spec_desc(_fm, body),
                     "body": body, "source": str(p.resolve())})
     out.sort(key=lambda e: e["name"])
     return out

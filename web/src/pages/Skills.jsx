@@ -4,6 +4,7 @@ import { go } from '../lib/router.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import Markdown from '../components/Markdown.jsx'
 
 // Six-class taxonomy mirroring the Laws view. The class itself comes from the
 // server (SKILL_CLASS in _harness_tui.py, shipped as `klass`); this map only
@@ -47,9 +48,11 @@ function SkillRow({ skill, isOpen, onToggle }) {
         </span>
       </button>
       {isOpen && (
-        <div className="law-expand">
+        <div className="law-expand skill-expand">
           {detail ? (
-            <pre className="skill-body">{detail.body}</pre>
+            <div className="skill-doc">
+              <Markdown body={detail.body} links={detail.links || []} />
+            </div>
           ) : (
             <p className="dim">Loading…</p>
           )}

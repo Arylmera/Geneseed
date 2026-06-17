@@ -94,6 +94,28 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(row["source"], item["source"])
 
 
+class SpecDescTests(unittest.TestCase):
+    # Purpose derivation for deployed specs: blockquote first, then frontmatter
+    # description, then first prose paragraph — so vendored skills with no
+    # blockquote (daydream, react-view-transitions) never show a blank Purpose.
+    def test_blockquote_wins(self):
+        import _web_core
+        body = "# Title\n\n> the curated purpose\n\nMore text."
+        self.assertEqual(_web_core._spec_desc({"description": "fm desc"}, body),
+                         "the curated purpose")
+
+    def test_falls_back_to_frontmatter_description(self):
+        import _web_core
+        body = "# React View Transitions\n\nAnimate between UI states."
+        self.assertEqual(_web_core._spec_desc({"description": "Guide for view\ntransitions"}, body),
+                         "Guide for view transitions")
+
+    def test_falls_back_to_first_paragraph(self):
+        import _web_core
+        body = "# Vault Daydream Skill\n\nMines the vault\nfor connections.\n\n## Usage"
+        self.assertEqual(_web_core._spec_desc({}, body), "Mines the vault for connections.")
+
+
 class DiffTests(unittest.TestCase):
     def test_diff_no_deployed_install(self):
         # Point at an empty temp dir => no GLOBAL_MANIFEST => deployed False.
