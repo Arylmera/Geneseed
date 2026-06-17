@@ -13,6 +13,7 @@
   "BENEDICTION": "Work with discipline, keep the rules, and ship clean.",
   "DESC_REVIEWER": "Reviews a change for correctness and quality before it merges.",
   "DESC_TESTER": "Writes, runs, and diagnoses tests.",
+  "DESC_THEME": "Create your own OpenCode colour theme \u2014 pick or tweak a palette, get solid and transparent variants, kept across rebuilds.",
   "DESC_ARCHITECT": "Produces a design or implementation plan before code is written.",
   "DESC_DOCS": "Writes and updates user-facing documentation after code lands.",
   "DESC_SECURITY": "Audits changes that touch the security surface.",

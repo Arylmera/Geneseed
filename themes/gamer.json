@@ -13,6 +13,7 @@
   "BENEDICTION": "Play clean, follow the rules, and clear it. GG.",
   "DESC_REVIEWER": "Runs the pre-submit run-check — correctness first, polish second, before it ships.",
   "DESC_TESTER": "Builds the test arena, runs it, and reads the death recap when it fails.",
+  "DESC_THEME": "Craft your own OpenCode colour theme \u2014 pick or remix a palette, unlock solid and transparent skins, they persist through every rebuild.",
   "DESC_ARCHITECT": "Plans the route before the run starts.",
   "DESC_DOCS": "Writes the wiki and patch notes once the feature ships.",
   "DESC_SECURITY": "Runs the anti-cheat pass on anything touching the security surface.",

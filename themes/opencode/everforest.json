@@ -1,0 +1,27 @@
+{
+  "name": "everforest",
+  "label": "Everforest Dark",
+  "mode": "dark",
+  "credit": "https://github.com/sainnhe/everforest",
+  "palette": {
+    "bg": "#2d353b",
+    "bgPanel": "#272e33",
+    "bgElement": "#374247",
+    "fg": "#d3c6aa",
+    "fgMuted": "#859289",
+    "accent": "#a7c080",
+    "secondary": "#d699b6",
+    "border": "#4f585e",
+    "ok": "#a7c080",
+    "warn": "#dbbc7f",
+    "err": "#e67e80",
+    "kw": "#e67e80",
+    "str": "#a7c080",
+    "fn": "#83c092",
+    "num": "#d699b6",
+    "type": "#dbbc7f",
+    "comment": "#7a8478",
+    "addBg": "#313f34",
+    "delBg": "#3c2f31"
+  }
+}

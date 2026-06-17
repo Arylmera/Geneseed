@@ -13,6 +13,7 @@
   "BENEDICTION": "Play disciplined, respect the rules, and close it out clean.",
   "DESC_REVIEWER": "Runs the pre-game review — correctness first, then form, before it ships.",
   "DESC_TESTER": "Sets up the drills, runs them, and breaks down the tape when they fail.",
+  "DESC_THEME": "Train up your own OpenCode colour theme \u2014 pick or tweak a palette, get solid and transparent kits, they stay through every rebuild.",
   "DESC_ARCHITECT": "Draws up the game plan before the first snap.",
   "DESC_DOCS": "Files the post-game report and the playbook once the work lands.",
   "DESC_SECURITY": "Runs the integrity check on anything touching the security surface.",

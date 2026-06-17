@@ -364,6 +364,13 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   theme at `.opencode/themes/geneseed-<theme>.json` (global: `<cfg>/themes/`), tinted by
   the harness theme's accent using terminal-native ANSI colours (always valid, no host
   palette). Select it with e.g. `/theme geneseed-imperial`; ignore it otherwise.
+- **Curated colour themes** (`/theme geneseed-<name>-solid` / `-transparent`). Beyond the
+  accent-tint above, the emit also ships eight full-palette themes — `catppuccin`,
+  `tokyonight`, `rosepine`, `gruvbox`, `nord`, `everforest`, `kanagawa`, `dracula` — each
+  in a **solid** (opaque) and a **transparent** (terminal-background-through) flavour.
+  These are decoupled from the voice theme: any voice theme can run any colour theme.
+  Authored under `themes/opencode/` (see its README and
+  [the spec](../../docs/specs/2026-06-17-opencode-color-themes.md)).
 - **Runtime guard plugin** (`geneseed-guard.js`, installed with the others). Enforces
   the safety Laws at the tool boundary: **blocks** writes to private-key/credential
   files (Law I), catastrophic shell like `rm -rf /` (Law IV), and any mutation under

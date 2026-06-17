@@ -13,6 +13,7 @@
   "BENEDICTION": "Work carefully, keep the Directives, ship it clean. It won't make you happy. Nothing does.",
   "DESC_REVIEWER": "Inspects a change before it passes — correctness first, polish second — and finds the flaw, because there's always a flaw.",
   "DESC_TESTER": "Builds the trials, runs them, and reads the wreckage when they fail. They will fail.",
+  "DESC_THEME": "Make your own OpenCode colour theme, if you must \u2014 pick a palette, get solid and transparent variants, they survive rebuilds. Lucky them.",
   "DESC_ARCHITECT": "Draws up the plan before a single line is committed. It will be a good plan. It will still be ignored.",
   "DESC_DOCS": "Records it all for whoever comes after, once the work is done. They won't read it either.",
   "DESC_SECURITY": "Audits anything touching the security surface, expecting the worst, and is usually right.",

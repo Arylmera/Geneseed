@@ -9,7 +9,7 @@
 [![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![stdlib only](https://img.shields.io/badge/deps-stdlib%20only-success)](build.py)
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
-[![Skills](https://img.shields.io/badge/skills-37-blueviolet)](src/skills/)
+[![Skills](https://img.shields.io/badge/skills-38-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-16-orange)](src/agents/)
 [![Laws](https://img.shields.io/badge/laws-31-critical)](src/laws/universal.md)
 [![OpenCode · Claude Code · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20AGENT.md-1f6feb)](#-2--setup)

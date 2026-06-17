@@ -1,0 +1,27 @@
+{
+  "name": "catppuccin",
+  "label": "Catppuccin Mocha",
+  "mode": "dark",
+  "credit": "https://github.com/catppuccin/catppuccin",
+  "palette": {
+    "bg": "#1e1e2e",
+    "bgPanel": "#181825",
+    "bgElement": "#313244",
+    "fg": "#cdd6f4",
+    "fgMuted": "#a6adc8",
+    "accent": "#89b4fa",
+    "secondary": "#cba6f7",
+    "border": "#45475a",
+    "ok": "#a6e3a1",
+    "warn": "#f9e2af",
+    "err": "#f38ba8",
+    "kw": "#cba6f7",
+    "str": "#a6e3a1",
+    "fn": "#89b4fa",
+    "num": "#fab387",
+    "type": "#f9e2af",
+    "comment": "#6c7086",
+    "addBg": "#26332b",
+    "delBg": "#34232b"
+  }
+}

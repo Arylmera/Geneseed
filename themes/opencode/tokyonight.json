@@ -1,0 +1,27 @@
+{
+  "name": "tokyonight",
+  "label": "Tokyo Night",
+  "mode": "dark",
+  "credit": "https://github.com/folke/tokyonight.nvim",
+  "palette": {
+    "bg": "#1a1b26",
+    "bgPanel": "#16161e",
+    "bgElement": "#2f334d",
+    "fg": "#c0caf5",
+    "fgMuted": "#787c99",
+    "accent": "#7aa2f7",
+    "secondary": "#bb9af7",
+    "border": "#292e42",
+    "ok": "#9ece6a",
+    "warn": "#e0af68",
+    "err": "#f7768e",
+    "kw": "#bb9af7",
+    "str": "#9ece6a",
+    "fn": "#7aa2f7",
+    "num": "#ff9e64",
+    "type": "#2ac3de",
+    "comment": "#565f89",
+    "addBg": "#1f2b25",
+    "delBg": "#2d2030"
+  }
+}

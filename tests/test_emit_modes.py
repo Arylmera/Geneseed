@@ -106,6 +106,32 @@ class OpencodePerRepoTests(_Tmp):
         _quiet(build.emit_opencode, "neutral", out, self.d)
         self.assertFalse(stale.exists(), ".opencode/ is owned and must be wiped on re-emit")
 
+    def test_color_themes_emit_both_flavours(self):
+        out = self.d / "bundle"
+        _quiet(build.emit_opencode, "neutral", out, self.d)
+        themes = self.d / ".opencode" / "themes"
+        names = [p.stem for p in build.color_theme_files()]
+        self.assertTrue(names, "expected curated colour themes to ship")
+        for name in names:
+            solid = json.loads((themes / f"geneseed-{name}-solid.json").read_text())["theme"]
+            trans = json.loads((themes / f"geneseed-{name}-transparent.json").read_text())["theme"]
+            # transparent flips the panel backgrounds to the terminal default…
+            self.assertEqual(trans["background"], "none")
+            self.assertNotEqual(solid["background"], "none")
+            # …but keeps diff +/- line backgrounds tinted (legibility) and accents identical.
+            self.assertEqual(trans["diffAddedBg"], solid["diffAddedBg"])
+            self.assertEqual(trans["primary"], solid["primary"])
+
+    def test_user_theme_survives_rebuild(self):
+        out = self.d / "bundle"
+        _quiet(build.emit_opencode, "neutral", out, self.d)
+        # A user theme is any non-geneseed-* file in the themes dir (spec §8.2).
+        user = self.d / ".opencode" / "themes" / "mybrand.json"
+        user.write_text('{"theme":{"primary":"#abcabc"}}', encoding="utf-8")
+        _quiet(build.emit_opencode, "imperial", out, self.d)   # rebuild, even switching theme
+        self.assertTrue(user.is_file(), "a user theme must survive the .opencode wipe")
+        self.assertIn("#abcabc", user.read_text(encoding="utf-8"))
+
 
 class OpencodeGlobalTests(_Tmp):
     """`emit_opencode_global` — the shared-config deployment with an ownership manifest."""

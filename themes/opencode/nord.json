@@ -1,0 +1,27 @@
+{
+  "name": "nord",
+  "label": "Nord",
+  "mode": "dark",
+  "credit": "https://www.nordtheme.com",
+  "palette": {
+    "bg": "#2e3440",
+    "bgPanel": "#272c36",
+    "bgElement": "#3b4252",
+    "fg": "#d8dee9",
+    "fgMuted": "#7b88a1",
+    "accent": "#88c0d0",
+    "secondary": "#b48ead",
+    "border": "#434c5e",
+    "ok": "#a3be8c",
+    "warn": "#ebcb8b",
+    "err": "#bf616a",
+    "kw": "#81a1c1",
+    "str": "#a3be8c",
+    "fn": "#88c0d0",
+    "num": "#b48ead",
+    "type": "#8fbcbb",
+    "comment": "#616e88",
+    "addBg": "#2c3a33",
+    "delBg": "#3b2f33"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "dracula",
+  "label": "Dracula",
+  "mode": "dark",
+  "credit": "https://draculatheme.com",
+  "palette": {
+    "bg": "#282a36",
+    "bgPanel": "#21222c",
+    "bgElement": "#343746",
+    "fg": "#f8f8f2",
+    "fgMuted": "#9aa3c4",
+    "accent": "#bd93f9",
+    "secondary": "#ff79c6",
+    "border": "#44475a",
+    "ok": "#50fa7b",
+    "warn": "#f1fa8c",
+    "err": "#ff5555",
+    "kw": "#ff79c6",
+    "str": "#f1fa8c",
+    "fn": "#50fa7b",
+    "num": "#bd93f9",
+    "type": "#8be9fd",
+    "comment": "#6272a4",
+    "addBg": "#1f3a2b",
+    "delBg": "#3a2230"
+  }
+}

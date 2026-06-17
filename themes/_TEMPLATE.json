@@ -13,6 +13,7 @@
   "BENEDICTION": "<closing line at the foot of AGENT.md, themed>",
   "DESC_REVIEWER": "<one-line description: reviews a change for correctness and quality before merge>",
   "DESC_TESTER": "<one-line description: writes, runs, and diagnoses tests>",
+  "DESC_THEME": "<one-line description: create your own OpenCode colour theme \u2014 pick/tweak a palette, get solid + transparent variants, kept across rebuilds>",
   "DESC_ARCHITECT": "<one-line description: produces a design/plan before code>",
   "DESC_DOCS": "<one-line description: writes user-facing docs after code lands>",
   "DESC_SECURITY": "<one-line description: audits changes touching the security surface>",

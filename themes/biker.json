@@ -13,6 +13,7 @@
   "BENEDICTION": "Ride disciplined, keep the code, and bring it home clean.",
   "DESC_REVIEWER": "Walks the bike over before it rolls — correctness first, finish second.",
   "DESC_TESTER": "Sets up the test runs, takes them, and reads the wreck when they go down.",
+  "DESC_THEME": "Lay down your own OpenCode paint job \u2014 pick or tweak a palette, get solid and see-through trims, they ride through every rebuild.",
   "DESC_ARCHITECT": "Plans the route before a single line is committed.",
   "DESC_DOCS": "Keeps the roadbook and the notes once the work is done.",
   "DESC_SECURITY": "Goes over anything touching the security surface, bolt by bolt.",

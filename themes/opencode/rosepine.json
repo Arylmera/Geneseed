@@ -1,0 +1,27 @@
+{
+  "name": "rosepine",
+  "label": "Rosé Pine",
+  "mode": "dark",
+  "credit": "https://rosepinetheme.com",
+  "palette": {
+    "bg": "#191724",
+    "bgPanel": "#1f1d2e",
+    "bgElement": "#26233a",
+    "fg": "#e0def4",
+    "fgMuted": "#908caa",
+    "accent": "#c4a7e7",
+    "secondary": "#ebbcba",
+    "border": "#403d52",
+    "ok": "#9ccfd8",
+    "warn": "#f6c177",
+    "err": "#eb6f92",
+    "kw": "#31748f",
+    "str": "#9ccfd8",
+    "fn": "#ebbcba",
+    "num": "#f6c177",
+    "type": "#c4a7e7",
+    "comment": "#6e6a86",
+    "addBg": "#1c2620",
+    "delBg": "#281c24"
+  }
+}

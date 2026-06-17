@@ -1,0 +1,27 @@
+{
+  "name": "kanagawa",
+  "label": "Kanagawa Wave",
+  "mode": "dark",
+  "credit": "https://github.com/rebelot/kanagawa.nvim",
+  "palette": {
+    "bg": "#1f1f28",
+    "bgPanel": "#16161d",
+    "bgElement": "#2a2a37",
+    "fg": "#dcd7ba",
+    "fgMuted": "#727169",
+    "accent": "#7e9cd8",
+    "secondary": "#957fb8",
+    "border": "#54546d",
+    "ok": "#76946a",
+    "warn": "#ff9e3b",
+    "err": "#c34043",
+    "kw": "#957fb8",
+    "str": "#98bb6c",
+    "fn": "#7e9cd8",
+    "num": "#d27e99",
+    "type": "#7aa89f",
+    "comment": "#727169",
+    "addBg": "#2b3328",
+    "delBg": "#43242b"
+  }
+}

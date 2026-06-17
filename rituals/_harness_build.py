@@ -73,6 +73,98 @@ def _theme_parity_problems() -> list[str]:
     return problems
 
 
+_HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _color_theme_problems() -> list[str]:
+    """Every curated colour theme (themes/opencode/*.json) must carry the full palette —
+    a role missing from one theme leaves a slot unfilled only in that theme's emit. Each
+    palette value must be a 6-digit hex. Mirrors voice-theme parity, for colours."""
+    problems: list[str] = []
+    palettes: dict[str, dict] = {}
+    for p in build.color_theme_files():
+        try:
+            spec = json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            problems.append(f"[colors] {p.name} unreadable: {e}")
+            continue
+        pal = spec.get("palette")
+        if not isinstance(pal, dict):
+            problems.append(f"[colors] {p.name} has no 'palette' object")
+            continue
+        palettes[spec.get("name", p.stem)] = pal
+        for role in sorted(build._PALETTE_ROLES - set(pal)):
+            problems.append(f"[colors] '{p.stem}' palette missing role '{role}'")
+        for role, val in pal.items():
+            if not (isinstance(val, str) and _HEX_RE.match(val)):
+                problems.append(f"[colors] '{p.stem}' role '{role}' is not #rrggbb hex: {val!r}")
+    return problems
+
+
+def _resolve_themes_dir(args: argparse.Namespace) -> Path:
+    """Where to write a user theme: an explicit --dir, else the per-repo
+    ./.opencode/themes (if a .opencode/ exists here), else OpenCode's global config
+    themes dir. This is where OpenCode itself reads themes from, so `/theme <name>`
+    just works."""
+    if getattr(args, "dir", None):
+        return Path(args.dir).expanduser().resolve()
+    repo = Path.cwd() / ".opencode"
+    if not getattr(args, "global_dir", False) and repo.is_dir():
+        return repo / "themes"
+    return build._opencode_config_dir() / "themes"
+
+
+def _load_user_palette(args: argparse.Namespace) -> dict:
+    """Assemble a palette from --from (a shipped theme to clone) overlaid with --palette
+    (a JSON file, either {"palette": {...}} or a bare role->hex map). Validated against
+    the same role set and hex rule the shipped themes use."""
+    pal: dict = {}
+    if getattr(args, "from_theme", None):
+        src = build.COLOR_THEMES / f"{args.from_theme}.json"
+        if not src.is_file():
+            avail = ", ".join(p.stem for p in build.color_theme_files())
+            raise SystemExit(f"[theme] no shipped theme '{args.from_theme}'. available: {avail}")
+        pal.update(json.loads(src.read_text(encoding="utf-8")).get("palette", {}))
+    if getattr(args, "palette", None):
+        raw = json.loads(Path(args.palette).read_text(encoding="utf-8"))
+        pal.update(raw.get("palette", raw))   # accept {"palette":{…}} or a bare map
+    if not pal:
+        raise SystemExit("[theme] need a palette: pass --from <shipped> and/or --palette <file.json>")
+    missing = sorted(build._PALETTE_ROLES - set(pal))
+    if missing:
+        raise SystemExit(f"[theme] palette missing role(s): {', '.join(missing)} "
+                         f"(see themes/opencode/README.md; --from seeds them all)")
+    bad = [f"{r}={pal[r]!r}" for r in pal if not (isinstance(pal[r], str) and _HEX_RE.match(pal[r]))]
+    if bad:
+        raise SystemExit(f"[theme] non-#rrggbb value(s): {', '.join(bad)}")
+    return pal
+
+
+def cmd_theme(args: argparse.Namespace) -> int:
+    """Write a user colour theme (both flavours) into the live OpenCode themes dir. The
+    file is the USER's — named without the `geneseed-` prefix, so a harness rebuild never
+    erases it (spec §8.2). Select it in OpenCode with `/theme <name>`."""
+    name = args.name
+    if name.startswith("geneseed-"):
+        raise SystemExit("[theme] 'geneseed-' is the harness's reserved namespace; pick another name")
+    pal = _load_user_palette(args)
+    dest_dir = _resolve_themes_dir(args)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    flavours = [("", False)] if args.solid_only else \
+               [("-transparent", True)] if args.transparent_only else \
+               [("", False), ("-transparent", True)]
+    written = []
+    for suffix, transparent in flavours:
+        dest = dest_dir / f"{name}{suffix}.json"
+        dest.write_text(json.dumps(build._color_theme_json(pal, transparent), indent=2) + "\n",
+                        encoding="utf-8")
+        written.append(dest)
+    print(f"[theme] wrote {', '.join(p.name for p in written)} to {dest_dir}")
+    print(f"[theme] select in OpenCode with: /theme {name}"
+          + ("" if args.solid_only else f"  (or /theme {name}-transparent)"))
+    return 0
+
+
 def _rendered_problems(bundle: Path) -> list[str]:
     """A committed bundle (e.g. ./Harness) must match a fresh render of src/ for its
     own recorded theme, or it has silently drifted — doctor's tmp builds never touch
@@ -285,6 +377,7 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
     if on_progress:
         on_progress(len(themes), total, "parity · authoring · bundle")
     problems += _ran("parity", "Theme parity", _theme_parity_problems())
+    problems += _ran("colors", "Colour themes", _color_theme_problems())
     problems += _ran("authoring", "Authoring gates", _authoring_problems())
     if not no_bundle:
         b = Path(bundle).expanduser().resolve() if bundle else ROOT / "Harness"

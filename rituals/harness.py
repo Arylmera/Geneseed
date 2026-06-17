@@ -107,6 +107,21 @@ def build_argparser() -> argparse.ArgumentParser:
     b.add_argument("--theme", default=None)
     b.set_defaults(fn=cmd_build)
 
+    th = sub.add_parser("theme", help="create a user OpenCode colour theme (solid + transparent) "
+                                      "in the live themes dir; survives rebuilds")
+    th.add_argument("name", help="theme name (selected as /theme <name>; 'geneseed-' is reserved)")
+    th.add_argument("--from", dest="from_theme", default=None, metavar="SHIPPED",
+                    help="seed the full palette from a shipped theme (e.g. tokyonight), then tweak")
+    th.add_argument("--palette", default=None, metavar="FILE",
+                    help="JSON palette to apply: {\"palette\":{…}} or a bare role->#hex map")
+    th.add_argument("--dir", default=None, help="explicit themes dir (default: auto-detect repo/global)")
+    th.add_argument("--global", dest="global_dir", action="store_true",
+                    help="write to OpenCode's global themes dir even inside a repo with .opencode/")
+    g = th.add_mutually_exclusive_group()
+    g.add_argument("--solid-only", action="store_true", help="write only the opaque flavour")
+    g.add_argument("--transparent-only", action="store_true", help="write only the transparent flavour")
+    th.set_defaults(fn=cmd_theme)
+
     d = sub.add_parser("doctor",
                        help="validate the build: unresolved tokens, dead links, "
                             "non-hermetic escapes, theme-key parity, and that a "

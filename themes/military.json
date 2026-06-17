@@ -13,6 +13,7 @@
   "BENEDICTION": "Stay disciplined, hold the line, ship clean. Out.",
   "DESC_REVIEWER": "Runs the pre-deployment inspection — correctness first, then quality, before it ships.",
   "DESC_TESTER": "Writes, runs, and diagnoses the live-fire tests.",
+  "DESC_THEME": "Issue your own OpenCode colour scheme \u2014 select or adjust a palette, receive solid and transparent variants, retained through every rebuild.",
   "DESC_ARCHITECT": "Draws the operation order before a round is fired.",
   "DESC_DOCS": "Files the after-action report and field manual once the work lands.",
   "DESC_SECURITY": "Runs the threat assessment on anything touching the security perimeter.",

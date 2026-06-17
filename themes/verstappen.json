@@ -13,6 +13,7 @@
   "BENEDICTION": "Drive it clean, keep the rules, and take the win.",
   "DESC_REVIEWER": "Checks the car over before it goes out — correctness first, polish second.",
   "DESC_TESTER": "Builds the test runs, sends them, and reads the data when they go wrong.",
+  "DESC_THEME": "Build your own OpenCode colour theme \u2014 pick or fine-tune a palette, get solid and transparent setups, they survive every rebuild.",
   "DESC_ARCHITECT": "Sorts the strategy before a single line is committed.",
   "DESC_DOCS": "Writes up the debrief and the notes once the work is done.",
   "DESC_SECURITY": "Goes over anything touching the security surface with a fine comb.",

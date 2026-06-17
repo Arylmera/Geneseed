@@ -13,6 +13,7 @@
   "BENEDICTION": "Run clean, hold protocol, and ship before the trace lands.",
   "DESC_REVIEWER": "Runs the pre-push scan — correctness first, craft second, before it ships.",
   "DESC_TESTER": "Builds the test rigs, runs them, traces the crash when they fail.",
+  "DESC_THEME": "Skin your own OpenCode palette \u2014 pick or remix the colours, get solid and see-through builds, they persist across rebuilds.",
   "DESC_ARCHITECT": "Maps the run before a single line hits the deck.",
   "DESC_DOCS": "Writes the user-facing data once the code goes live.",
   "DESC_SECURITY": "Breaks and checks ICE — audits anything on the security surface.",

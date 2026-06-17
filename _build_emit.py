@@ -90,6 +90,95 @@ def _write_theme(themes_dir: Path, theme_name: str, theme: dict) -> Path:
     return dest
 
 
+# Curated full-palette OpenCode colour themes (themes/opencode/*.json), decoupled from
+# the voice theme. Each source carries one palette (named roles); the slot map below is
+# shared, so a new theme = one palette file. See docs/specs/2026-06-17-opencode-color-themes.md.
+COLOR_THEMES = THEMES / "opencode"
+
+# OpenCode theme slot -> palette role. Background roles flip to "none" in the transparent
+# flavour (see _TRANSPARENT_NONE) — that's the ONLY difference between the two flavours.
+_SLOT_ROLE = {
+    "primary": "accent", "secondary": "secondary", "accent": "accent",
+    "error": "err", "warning": "warn", "success": "ok", "info": "accent",
+    "text": "fg", "textMuted": "fgMuted",
+    "background": "bg", "backgroundPanel": "bgPanel", "backgroundElement": "bgElement",
+    "border": "border", "borderActive": "accent", "borderSubtle": "border",
+    "diffAdded": "ok", "diffRemoved": "err", "diffContext": "fgMuted",
+    "diffHunkHeader": "accent", "diffHighlightAdded": "ok", "diffHighlightRemoved": "err",
+    "diffAddedBg": "addBg", "diffRemovedBg": "delBg", "diffContextBg": "bgPanel",
+    "diffLineNumber": "fgMuted", "diffAddedLineNumberBg": "addBg", "diffRemovedLineNumberBg": "delBg",
+    "markdownText": "fg", "markdownHeading": "accent", "markdownLink": "secondary",
+    "markdownLinkText": "accent", "markdownCode": "ok", "markdownBlockQuote": "fgMuted",
+    "markdownEmph": "warn", "markdownStrong": "warn", "markdownHorizontalRule": "border",
+    "markdownListItem": "accent", "markdownListEnumeration": "accent", "markdownImage": "secondary",
+    "markdownImageText": "accent", "markdownCodeBlock": "bgElement",
+    "syntaxComment": "comment", "syntaxKeyword": "kw", "syntaxFunction": "fn",
+    "syntaxVariable": "fg", "syntaxString": "str", "syntaxNumber": "num",
+    "syntaxType": "type", "syntaxOperator": "kw", "syntaxPunctuation": "fgMuted",
+}
+# Slots that become the terminal default ("none") in the transparent flavour. The diff
+# *line* backgrounds (addBg/delBg/their line-number bgs) deliberately stay tinted hex even
+# when transparent — going fully none there makes +/- lines unreadable.
+_TRANSPARENT_NONE = {"background", "backgroundPanel", "backgroundElement",
+                     "diffContextBg", "markdownCodeBlock"}
+_PALETTE_ROLES = set(_SLOT_ROLE.values())
+
+
+def _color_theme_json(palette: dict, transparent: bool) -> dict:
+    t = {slot: ("none" if transparent and slot in _TRANSPARENT_NONE else palette[role])
+         for slot, role in _SLOT_ROLE.items()}
+    return {"$schema": "https://opencode.ai/theme.json", "theme": t}
+
+
+def color_theme_files() -> list[Path]:
+    """Shipped colour-theme sources under themes/opencode/, excluding `_`-prefixed scaffolds."""
+    if not COLOR_THEMES.is_dir():
+        return []
+    return sorted(p for p in COLOR_THEMES.glob("*.json") if not p.name.startswith("_"))
+
+
+def user_theme_files(themes_dir: Path) -> list[Path]:
+    """Theme files in `themes_dir` that Geneseed does NOT own — i.e. user-authored themes,
+    anything not named `geneseed-*.json`. Geneseed never creates or deletes these; the
+    `geneseed-` prefix is the ownership boundary (see the spec §8.2)."""
+    if not themes_dir.is_dir():
+        return []
+    return sorted(p for p in themes_dir.glob("*.json") if not p.name.startswith("geneseed-"))
+
+
+def _snapshot_user_themes(themes_dir: Path) -> dict[str, bytes]:
+    """Capture user theme files by name->bytes so a full `.opencode` wipe (which clears
+    stale agents/skills) does not erase the user's themes. Restored by _restore_user_themes."""
+    return {p.name: p.read_bytes() for p in user_theme_files(themes_dir)}
+
+
+def _restore_user_themes(themes_dir: Path, saved: dict[str, bytes]) -> None:
+    """Re-write user themes captured before the wipe, skipping any name the new emit already
+    produced (a user file never shadows a freshly-emitted geneseed-* one — names differ)."""
+    themes_dir.mkdir(parents=True, exist_ok=True)
+    for name, data in saved.items():
+        dest = themes_dir / name
+        if not dest.exists():
+            dest.write_bytes(data)
+
+
+def _write_color_themes(themes_dir: Path) -> list[Path]:
+    """Emit every curated colour theme in both flavours: geneseed-<name>-solid.json and
+    geneseed-<name>-transparent.json (select with `/theme geneseed-<name>-solid`). Returns
+    the written paths."""
+    themes_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for src in color_theme_files():
+        spec = json.loads(src.read_text(encoding="utf-8"))
+        palette = spec["palette"]
+        for flavour, transparent in (("solid", False), ("transparent", True)):
+            dest = themes_dir / f"geneseed-{spec['name']}-{flavour}.json"
+            dest.write_text(json.dumps(_color_theme_json(palette, transparent), indent=2) + "\n",
+                            encoding="utf-8")
+            written.append(dest)
+    return written
+
+
 def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=None) -> tuple[int, int, list[Path]]:
     """Render capability agents and skills into OpenCode-native files.
 
@@ -514,7 +603,10 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
                             encoding="utf-8")
     # `.opencode/` is fully owned by this layer — wipe so a removed agent/skill
     # leaves no stale file behind. (Plural dir names are canonical in OpenCode;
-    # singular is back-compat only.)
+    # singular is back-compat only.) The one carve-out: user-authored themes (any
+    # non-`geneseed-*` file under .opencode/themes/) are snapshot and restored, so a
+    # rebuild never erases them (spec §8.2).
+    saved_themes = _snapshot_user_themes(root / ".opencode" / "themes")
     if (root / ".opencode").is_dir():
         shutil.rmtree(root / ".opencode")
     theme, items = render_all(theme_name)
@@ -528,6 +620,8 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     commands = _write_command_layer(items, oc / "command")
     commands.append(_write_ponytail_command(oc / "command"))   # always-on /ponytail switch
     _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
+    _write_color_themes(oc / "themes")   # curated full-palette colour themes (solid + transparent)
+    _restore_user_themes(oc / "themes", saved_themes)   # user themes survive the wipe (spec §8.2)
 
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"

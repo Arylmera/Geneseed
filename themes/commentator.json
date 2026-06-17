@@ -13,6 +13,7 @@
   "BENEDICTION": "Race clean, keep the regulations, and bring it home on the podium.",
   "DESC_REVIEWER": "Runs the pre-race scrutineering — correctness first, polish second — before the car is cleared to start.",
   "DESC_TESTER": "Sets up the test laps, runs them, and reads the data trace when they fail.",
+  "DESC_THEME": "And here comes your own OpenCode colour theme \u2014 pick or tweak a palette, two flavours solid and transparent, surviving every single rebuild!",
   "DESC_ARCHITECT": "Walks the circuit and plots the strategy before a single line is committed.",
   "DESC_DOCS": "Files the race report and updates the notes once the chequered flag falls.",
   "DESC_SECURITY": "Runs the safety inspection on anything touching the security surface.",

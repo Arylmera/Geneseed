@@ -166,6 +166,8 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     owned += [p.relative_to(cfg).as_posix() for p in commands]
     theme_file = _write_theme(cfg / "themes", theme_name, theme)   # branded /theme
     owned.append(theme_file.relative_to(cfg).as_posix())
+    for p in _write_color_themes(cfg / "themes"):   # curated colour themes (solid + transparent)
+        owned.append(p.relative_to(cfg).as_posix())
 
     n_plugins = _copy_plugins(cfg / "plugins", owned)
     n_workflows = _copy_workflows(cfg / "workflows", owned)
