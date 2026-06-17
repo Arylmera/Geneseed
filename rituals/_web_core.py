@@ -38,7 +38,7 @@ WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 
 
 # ---- Docs registry ---------------------------------------------------------
-# The Docs menu is one rail entry on the web UI ("Learn → Docs") that surfaces
+# The Docs menu is one rail entry on the web UI ("Harness → Docs") that surfaces
 # the on-disk documentation through a left sub-nav. Each entry below becomes
 # one page in that sub-nav. `kind` decides how the page is rendered:
 #
@@ -51,8 +51,6 @@ WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 #   concept  — inline curated blurb; `body` is the markdown. Usually ends with
 #              a `link` into the existing Library route.
 #   cli      — generated CLI reference (introspects harness.build_argparser()).
-#   specs    — sorted index of every `docs/specs/*.md` file.
-#   spec     — one spec rendered (used internally when the index links through).
 #   glossary — theme-aware glossary; reads the deployed theme's JSON tokens.
 #   about    — install snapshot (version, license, repo). Generated.
 #
@@ -60,8 +58,9 @@ WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 # How-to · Reference · Deeper — not around source files. README.md and
 # SETUP.md stay canonical for GitHub readers; the web panel slices them.
 #
-# The discovery of `docs/specs/*` happens in api_docs(), so dropping a new
-# spec into the folder makes it appear without editing this list.
+# Docs pages render explanation files, never `docs/specs/*` — specs are design
+# history, not user-facing docs, and get renamed or removed. A page that needs
+# prose gets its own doc file (e.g. docs/wiki.md) or a slice of a canonical one.
 DOC_GROUPS = [
     # ── 1. Get started ────────────────────────────────────────────────────
     # Short, action-first, hand-written. A first-time reader should be able
@@ -204,8 +203,7 @@ DOC_GROUPS = [
         {"id": "notebook", "title": "Notebook (sovereign space)",
          "kind": "markdown", "source": "src/notebook/README.md"},
         {"id": "wiki", "title": "Wiki (machine knowledge base)",
-         "kind": "markdown",
-         "source": "docs/specs/2026-06-11-wiki-knowledge-base.md"},
+         "kind": "markdown", "source": "docs/wiki.md"},
         {"id": "themes", "title": "Voice vs structure (themes)",
          "kind": "markdown", "source": "DESIGN.md", "anchor": "decisions",
          "slice": True},
