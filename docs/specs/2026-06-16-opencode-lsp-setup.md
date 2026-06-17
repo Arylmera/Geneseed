@@ -30,10 +30,14 @@ what OpenCode handles itself:
 
 Mapping our eight languages:
 
-- **JavaScript · TypeScript · React JS · React Native** → one server,
-  `typescript-language-server`. Built-in, self-downloads, handles
-  `.js/.jsx/.ts/.tsx`. React and React Native need **no separate server** —
-  they are TS/JS. **Zero install work.**
+- **JavaScript · TypeScript · React JS · React Native** → **one server for all
+  four**, `typescript-language-server`. Built-in, self-downloads. Its default
+  extension set is `.ts .tsx .js .jsx .mjs .cjs .mts .cts` — so plain
+  JavaScript and React JS (`.js/.jsx`) are covered with no `.js`-only gap, and
+  React / React Native need **no separate server** (they are TS/JS, JSX
+  included). **One server, zero install work.** The only case that ever needs a
+  *second* JS-family server is Deno, which OpenCode deliberately routes away
+  from the TS server via lockfile detection — out of scope here.
 - **Python** → `pyright`. Built-in, self-downloads (runs on OpenCode's bundled
   node, so it works even without system Python). **Zero install work.**
 - **Java** → `jdtls`. Built-in, OpenCode downloads the jar — but jdtls runs on
@@ -80,7 +84,7 @@ flips LSP on at all (it defaults off).
 > ```json
 > "lsp": {
 >   "typescript": { "command": ["typescript-language-server", "--stdio"],
->                   "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"] },
+>                   "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"] },
 >   "pyright":    { "command": ["pyright-langserver", "--stdio"],
 >                   "extensions": [".py", ".pyi"] },
 >   "jdtls":      { "command": ["jdtls"], "extensions": [".java"] },
@@ -153,9 +157,32 @@ machine concern and belong in the setup summary, not the build check.
 
 ### Part 3 — documentation (a dedicated LSP web section)
 
-Add a **dedicated LSP group** to the web docs registry,
-[`DOC_GROUPS` in rituals/_web_core.py](../../rituals/_web_core.py) (sibling of
-the `"mcp"` and `"plugins"` groups so it reads as a peer capability):
+**This part is data-only — zero `.jsx` changes.** The web docs system keys
+everything (nav menu, page render, "On this page" TOC, and global Spotlight
+search) off the single `DOC_GROUPS` registry. Verified against the code:
+
+- A `kind: "concept"` page needs only `id` / `title` / `body` / optional
+  `link` — [_web_docs.py:219](../../rituals/_web_docs.py). No new page kind.
+- Tables render: the renderer is `marked` v12
+  ([Markdown.jsx](../../web/src/components/Markdown.jsx)), GFM tables on by
+  default.
+- TOC is automatic when a page has ≥3 headings
+  ([MarkdownPage.jsx:196](../../web/src/pages/Docs/MarkdownPage.jsx)) — the page
+  below has three `###`, so it gets one free.
+- The page is auto-indexed for Spotlight search
+  ([useSearchIndex.js:72](../../web/src/hooks/useSearchIndex.js)) at route
+  `#/docs/lsp-overview` — no extra wiring.
+- The `link` field renders as a footer button
+  ([MarkdownPage.jsx:218](../../web/src/pages/Docs/MarkdownPage.jsx)).
+- Do **not** add a `tryActions` button — those are hardcoded per page-id and
+  map to `doctor`/`build`/`update`; LSP prereqs aren't a doctor check, so a
+  button there would mislead.
+
+Add a **dedicated LSP group** to
+[`DOC_GROUPS` in rituals/_web_core.py](../../rituals/_web_core.py), placed
+**between the `"mcp"` group and the `"plugins"` group** so the nav reads as a
+capability cluster — *MCP servers → Language servers → Plugins*, the three
+things OpenCode loads:
 
 ```python
 {"id": "lsp", "label": "Language servers", "pages": [
@@ -189,7 +216,8 @@ the `"mcp"` and `"plugins"` groups so it reads as a peer capability):
         "`OPENCODE_DISABLE_LSP_DOWNLOAD=true` and pre-install each server.\n\n"
         "---\n\n"
         "**Verify:** open a `.ts` and a `.py` file in a session and ask the "
-        "agent for diagnostics — the first open triggers the download.")},
+        "agent for diagnostics — the first open triggers the download."),
+     "link": {"hash": "#/docs/adapters-opencode", "label": "OpenCode adapter →"}},
 ]},
 ```
 
