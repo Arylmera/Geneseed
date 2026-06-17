@@ -112,8 +112,8 @@ export default function Docs({ page, query, overview, onAction }) {
           <div className="eyebrow">documentation</div>
           <h1 className="h">Docs</h1>
           <p className="sub">
-            Concept pages, a generated CLI reference, and a glossary. Pages and config that
-            differ by host are filtered to your selected harness.
+            Concept pages, a generated CLI reference, and a glossary. Pages and config that differ
+            by host are filtered to your selected harness.
           </p>
         </div>
         {/* Harness selector — filters the menu and per-page config to the chosen
