@@ -591,6 +591,7 @@ not connected, walk these in order:
 | `GENESEED_NET_TIMEOUT` | `upgrade` | seconds before download attempts give up (default 20, floor 5) |
 | `GENESEED_NO_WEB` | launcher / menu | `1` disables the web-first default of bare `./geneseed` — falls back to the terminal menu |
 | `OPENCODE_CONFIG_DIR` / `XDG_CONFIG_HOME` | global emit | where the global install is written |
+| `OPENCODE_DISABLE_LSP_DOWNLOAD` | OpenCode (LSP) | `true` stops OpenCode auto-downloading built-in language servers (typescript, pyright, jdtls) — set it on air-gapped machines and pre-install each server yourself |
 
 ---
 

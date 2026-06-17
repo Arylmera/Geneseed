@@ -368,6 +368,47 @@ DOC_GROUPS = [
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "mcp-server-wont-connect", "slice": True},
     ]},
+    # ── Language servers (LSP) ────────────────────────────────────────────
+    # Sits between MCP and Plugins so the nav reads as a capability cluster —
+    # the three things OpenCode loads. OpenCode-only (Claude Code doesn't drive LSP).
+    {"id": "lsp", "label": "Language servers", "harness": "opencode", "pages": [
+        {"id": "lsp-overview", "title": "Code intelligence (LSP)", "kind": "concept",
+         "body": (
+            "OpenCode can drive Language Server Protocol servers so the agent sees "
+            "real diagnostics, type errors, and go-to-definition — not just text. "
+            "Geneseed turns this on for every language OpenCode ships a server for.\n\n"
+            "### What's covered out of the box\n\n"
+            "| Language | Server | You install? |\n"
+            "|---|---|---|\n"
+            "| JavaScript / TypeScript / React / React Native | typescript-language-server | No — OpenCode self-downloads |\n"
+            "| Python | pyright | No — OpenCode self-downloads |\n"
+            "| Java | jdtls | **JDK 21+** (OpenCode downloads jdtls itself) |\n"
+            "| SQL / PostgreSQL / Oracle | *none — by design* | — |\n\n"
+            "One server covers JavaScript, TypeScript, React, and React Native — "
+            "they are all TS/JS, so no extra server is needed.\n\n"
+            "### The one prerequisite the harness can't self-install\n\n"
+            "OpenCode downloads the JS-runtime servers automatically on first use. "
+            "It cannot install a JVM, and jdtls needs one — so the setup wizard "
+            "checks for it and prints an install hint if missing:\n\n"
+            "- **Java 21+** — `brew install openjdk@21`, SDKMAN "
+            "`sdk install java 21-tem`, or your distro's JDK.\n\n"
+            "### Why no SQL server\n\n"
+            "A SQL language server is dialect-locked — a Postgres server flags "
+            "Oracle SQL as errors and vice versa — and a `.sql` file can map to "
+            "only one server, with no signal for which dialect a repo uses. Rather "
+            "than guess wrong for half of all SQL codebases, we ship none. A "
+            "project that knows its dialect can add the matching server in its own "
+            "`opencode.json` under the `lsp` key.\n\n"
+            "### How it's wired\n\n"
+            "`\"lsp\": true` in your emitted `opencode.json` enables every built-in "
+            "server (LSP is off by default). To turn auto-download off (air-gapped "
+            "machines), set `OPENCODE_DISABLE_LSP_DOWNLOAD=true` and pre-install "
+            "each server.\n\n"
+            "---\n\n"
+            "**Verify:** open a `.ts` and a `.py` file in a session and ask the "
+            "agent for diagnostics — the first open triggers the download."),
+         "link": {"hash": "#/docs/adapters-opencode", "label": "OpenCode adapter →"}},
+    ]},
     # ── 5. Plugins ────────────────────────────────────────────────────────
     # The shared install lives once in "Plugin setup" (the first page, sliced
     # from docs/opencode-plugin-setup.md); each plugin page then covers only its

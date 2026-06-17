@@ -391,6 +391,36 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   for the hot skill set (commit, plan, code-review, review-response, verify, ship, debug,
   research) so they get `/name` triggers, alongside the native skills. Off by default.
 
+## Language servers (LSP)
+
+The emitted `opencode.json` carries `"lsp": true`, which turns on **every
+built-in** OpenCode language server (LSP is off by default). That covers the
+languages the harness targets with a single line — no per-language map.
+
+| Language | Server | You install? |
+|---|---|---|
+| JavaScript / TypeScript / React / React Native | `typescript-language-server` | No — OpenCode self-downloads |
+| Python | `pyright` | No — OpenCode self-downloads |
+| Java | `jdtls` | **JDK 21+** — OpenCode downloads jdtls itself, but it runs on a JVM |
+| SQL / PostgreSQL / Oracle | *none — by design* | — |
+
+One server (`typescript-language-server`) covers JS, TS, React, and React
+Native — they are all TS/JS, JSX included — so there is no separate React server.
+
+**The one prerequisite the harness can't self-install:** a **JDK 21+** for
+jdtls. OpenCode downloads the JS-runtime servers itself on first file-open, but
+it can't install a JVM. The setup wizard checks for `java` and prints an install
+hint (`brew install openjdk@21`, SDKMAN `sdk install java 21-tem`, or your
+distro's JDK) when it's missing — it does not auto-install one.
+
+**No SQL server, on purpose.** A SQL language server is dialect-locked
+(`libpg_query`-based Postgres servers flag Oracle SQL as errors and vice versa)
+and a `.sql` file maps to only one server with no per-file dialect signal. Rather
+than mis-flag half of all SQL codebases we ship none; a project that knows its
+dialect adds the matching server under its own `opencode.json` `lsp` key.
+
+Air-gapped? Set `OPENCODE_DISABLE_LSP_DOWNLOAD=true` and pre-install each server.
+
 ## MCP servers — document conversion (MarkItDown)
 
 OpenCode loads MCP servers from the `mcp` key of `opencode.json`. The baseline

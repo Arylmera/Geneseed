@@ -10,6 +10,7 @@
       "git push -f*": "ask"
     }
   },
+  "lsp": true,
   "mcp": {
     "markitdown": {
       "type": "local",

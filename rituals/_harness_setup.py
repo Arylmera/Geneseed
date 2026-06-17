@@ -192,6 +192,33 @@ def _collect_setup() -> "dict | None":
     return _collect_setup_lines()
 
 
+def _java_major_ok(version_output: str, minimum: int = 21) -> bool:
+    """True if a `java -version` stderr names a major >= minimum. Handles modern
+    '21.0.2' (-> 21) and legacy '1.8.0' (-> 1, never >= 21)."""
+    import re
+    m = re.search(r'version "(\d+)', version_output)
+    return bool(m) and int(m.group(1)) >= minimum
+
+
+def _lsp_prereqs() -> list[tuple[str, bool, str]]:
+    """(label, present, install-hint) for the LSP prerequisites OpenCode cannot
+    self-install. Today that's just a JDK 21+ for jdtls; the JS-runtime servers
+    (typescript, pyright) self-download and SQL is uncovered by design. Returns a
+    list so a future prereq drops in without changing callers."""
+    import shutil, subprocess
+    java = shutil.which("java")
+    ok = False
+    if java:
+        try:
+            out = subprocess.run([java, "-version"], capture_output=True, text=True).stderr
+            ok = _java_major_ok(out)
+        except Exception:
+            ok = False
+    return [("Java 21+ (jdtls)", ok,
+             "install a JDK 21+ — e.g. `brew install openjdk@21`, "
+             "SDKMAN `sdk install java 21-tem`, or your distro's package")]
+
+
 def _setup_summary_lines(theme, emit, out, root, ok):
     """Post-build summary as (kind, text) rows. kind is ok | warn | info."""
     agent_md = (build._opencode_config_dir() / "AGENT.md" if emit == "opencode-global"
@@ -219,6 +246,12 @@ def _setup_summary_lines(theme, emit, out, root, ok):
                                   f"not this build; re-run with 'opencode-global' to change it"))
     except Exception:
         pass
+    # LSP prereqs — only for OpenCode emits, which are the ones that get "lsp": true.
+    # Self-installing servers (typescript, pyright) need no line; jdtls needs a JVM.
+    if ok and emit.startswith("opencode"):
+        for label, present, hint in _lsp_prereqs():
+            lines.append(("ok", f"{label} present") if present
+                         else ("warn", f"{label} missing — {hint}"))
     lines.append(("info", f"theme is now '{theme}' — start a NEW OpenCode session for the new voice"))
     return lines
 
