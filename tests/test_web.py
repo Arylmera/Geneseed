@@ -552,5 +552,116 @@ class WebAutoBuildTests(unittest.TestCase):
         self.assertEqual(web._build_plan(self.dist, self.web_dir, "npm", True), "ask")
 
 
+class HarnessFilterTests(unittest.TestCase):
+    """The Docs Claude/OpenCode selector: page/group tags drop from the menu,
+    inline `<!--harness:X-->` blocks strip per host, malformed markers fail open."""
+
+    def setUp(self):
+        self.state = web.WebState(theme="neutral")
+
+    def test_norm_defaults_and_validates(self):
+        # explicit valid value wins; junk and None fall back to the install default
+        self.assertEqual(web._norm_harness("claude", self.state), "claude")
+        self.assertEqual(web._norm_harness("opencode", self.state), "opencode")
+        self.assertIn(web._norm_harness("nonsense", self.state), ("opencode", "claude"))
+        self.assertIn(web._norm_harness(None, self.state), ("opencode", "claude"))
+
+    def test_strip_keeps_matching_drops_other(self):
+        body = ("shared\n"
+                "<!--harness:opencode-->\nopen only\n<!--/harness-->\n"
+                "<!--harness:claude-->\nclaude only\n<!--/harness-->\ntail")
+        oc = web._strip_harness_blocks(body, "opencode")
+        cc = web._strip_harness_blocks(body, "claude")
+        self.assertIn("open only", oc)
+        self.assertNotIn("claude only", oc)
+        self.assertIn("claude only", cc)
+        self.assertNotIn("open only", cc)
+        # markers themselves never survive
+        for out in (oc, cc):
+            self.assertNotIn("<!--harness", out)
+            self.assertNotIn("<!--/harness", out)
+
+    def test_strip_passthrough_and_fail_open(self):
+        self.assertEqual(web._strip_harness_blocks("plain text", "claude"), "plain text")
+        # an unbalanced (dangling) marker must not blank the tail — fail open
+        broken = "keep me\n<!--harness:claude-->\nand this too"
+        self.assertEqual(web._strip_harness_blocks(broken, "opencode"), broken)
+
+    def test_visible_groups_filter_by_tag(self):
+        oc = {p["id"] for g in web._visible_groups("opencode") for p in g["pages"]}
+        cc = {p["id"] for g in web._visible_groups("claude") for p in g["pages"]}
+        # host-specific pages appear only under their host
+        self.assertIn("adapters-opencode", oc)
+        self.assertNotIn("adapters-opencode", cc)
+        self.assertIn("mcp-claude-code", cc)
+        self.assertNotIn("mcp-claude-code", oc)
+        # the whole Plugins group is opencode-only
+        self.assertNotIn("plugins", {g["id"] for g in web._visible_groups("claude")})
+
+    def test_api_docs_echoes_resolved_harness(self):
+        self.assertEqual(web.api_docs(self.state, "claude")["harness"], "claude")
+        self.assertEqual(web.api_docs(self.state, "opencode")["harness"], "opencode")
+
+    def test_api_docs_page_strips_for_host(self):
+        # mcp-verify slices SETUP.md; the opencode clause must vanish under claude
+        oc = web.api_docs_page(self.state, "mcp-verify", "opencode")["body"]
+        cc = web.api_docs_page(self.state, "mcp-verify", "claude")["body"]
+        self.assertIn("opencode mcp", oc)
+        self.assertNotIn("opencode mcp", cc)
+        self.assertNotIn("<!--harness", oc + cc)
+
+    def test_every_doc_body_has_balanced_markers(self):
+        # Guard: an unbalanced/nested marker in any doc source or concept body
+        # fails open (whole page shown) — catch it here, not as a blank panel.
+        def sources():
+            for g in web.DOC_GROUPS:
+                for p in g["pages"]:
+                    if p.get("kind") == "concept":
+                        yield (f"concept:{p['id']}", p.get("body", ""))
+                    elif p.get("kind") == "markdown":
+                        yield (p["source"], web._read_doc_source(p["source"]))
+        for where, text in sources():
+            with self.subTest(source=where):
+                self.assertTrue(
+                    web._harness_blocks_balanced(text.splitlines()),
+                    f"unbalanced harness markers in {where}")
+
+    def test_strip_guard_not_narrower_than_matcher(self):
+        # The early-out guard must catch any marker the open regex accepts —
+        # including odd whitespace — or a stray-spaced marker leaks unstripped.
+        body = "A\n<!--  harness:claude  -->\nSECRET\n<!--/harness-->\nB"
+        out = web._strip_harness_blocks(body, "opencode")
+        self.assertNotIn("SECRET", out)
+        self.assertNotIn("<!--", out)
+
+    def test_strip_ignores_markers_inside_code_fence(self):
+        # A marker shown as example text inside ``` is not a real marker — it
+        # must survive verbatim for both hosts, fences intact.
+        body = ("intro\n```\n<!--harness:opencode-->\nexample\n<!--/harness-->\n```\nouter")
+        for hn in ("opencode", "claude"):
+            out = web._strip_harness_blocks(body, hn)
+            self.assertIn("<!--harness:opencode-->", out, hn)
+            self.assertIn("example", out, hn)
+            self.assertEqual(out.count("```"), 2, hn)
+
+    def test_no_cross_harness_dead_links(self):
+        # Invariant: every `#/docs/<id>` link in a VISIBLE page resolves to a
+        # page visible under the SAME harness — no link dead-ends after filtering.
+        import re
+        link_re = re.compile(r"#/docs/([a-z0-9-]+)")
+        for hn in ("opencode", "claude"):
+            menu = web.api_docs(self.state, hn)
+            visible = {p["id"] for g in menu["groups"] for p in g["pages"]}
+            for g in menu["groups"]:
+                for p in g["pages"]:
+                    body = web.api_docs_page(self.state, p["id"], hn).get("body", "")
+                    for target in set(link_re.findall(body or "")):
+                        with self.subTest(harness=hn, page=p["id"], target=target):
+                            self.assertIn(
+                                target, visible,
+                                f"{hn}: page '{p['id']}' links to '{target}', "
+                                f"hidden under {hn}")
+
+
 if __name__ == "__main__":
     unittest.main()

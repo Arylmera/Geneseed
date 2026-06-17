@@ -324,18 +324,19 @@ DOC_GROUPS = [
          "command and its args are split into `command` + `args`. See "
          "[Claude Code wiring](#/docs/mcp-claude-code).\n"
          "<!--/harness-->\n\n"
+         "<!--harness:opencode-->\n"
          "### Toggle them without hand-editing JSON\n\n"
          "`./geneseed` → **Settings** → **MCP servers** toggles any of the "
          "four presets into your project or global `opencode.json` — and "
          "enables, disables, or removes them — for you. The reference "
          "config ships MarkItDown enabled and the GitLab / Filesystem "
          "entries disabled, so a merge never activates a credential-less "
-         "server: fill the blanks, then flip the one(s) you want on.\n\n"
-         "> **Never commit a real token.** The presets and the reference "
-         "[`adapters/opencode/opencode.json`](#/docs/adapters-opencode) "
-         "carry **empty** `GITLAB_PERSONAL_ACCESS_TOKEN` placeholders (and "
-         "a sample filesystem path) — fill them in your own config, never "
-         "in a tracked file (universal Law I — secrets).\n\n"
+         "server: fill the blanks, then flip the one(s) you want on.\n"
+         "<!--/harness-->\n\n"
+         "> **Never commit a real token.** The presets ship with **empty** "
+         "`GITLAB_PERSONAL_ACCESS_TOKEN` placeholders (and a sample "
+         "filesystem path) — fill them in your own config, never in a "
+         "tracked file (universal Law I — secrets).\n\n"
          "---\n\n"
          "**Wire one up:** [MarkItDown](#/docs/mcp-markitdown) · "
          "[GitLab](#/docs/mcp-gitlab) · "
@@ -350,7 +351,7 @@ DOC_GROUPS = [
          "[Walk the fixes →](#/docs/mcp-trouble)"},
         {"id": "mcp-markitdown", "title": "MarkItDown (PDF/Office)",
          "kind": "markdown", "source": "SETUP.md",
-         "anchor": "markitdown-via-mcp-opencode", "slice": True},
+         "anchor": "markitdown-via-mcp", "slice": True},
         {"id": "mcp-gitlab", "title": "GitLab",
          "kind": "markdown", "source": "SETUP.md",
          "anchor": "gitlab-one-entry-per-instance", "slice": True},

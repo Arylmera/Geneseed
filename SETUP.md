@@ -283,7 +283,7 @@ URL to markdown before reading it — discovery and the read-the-docs law only s
 markdown. Install one converter and the skill uses it:
 
 - **MarkItDown** (Microsoft) — broadest (`pip install markitdown`), or its MCP server
-  (see [MarkItDown via MCP](#markitdown-via-mcp-opencode) below — preferred on an
+  (see [MarkItDown via MCP](#markitdown-via-mcp) below — preferred on an
   MCP-capable host: zero per-call install, one low-cost tool);
 - **Pandoc** — excellent for Office/HTML (single binary);
 - **Docling** (IBM) — best for complex tables / scanned PDFs.
@@ -315,18 +315,17 @@ removes them — for you. The reference config ships MarkItDown enabled and the 
 Filesystem entries disabled, so a merge never activates a credential-less server: fill
 the blanks, then flip the one(s) you want on.
 
-#### MarkItDown via MCP (OpenCode)
+#### MarkItDown via MCP
 
 Wire Microsoft's MarkItDown in as a **local MCP server** so the agent can convert
 PDF / Word / Excel / PowerPoint / HTML → Markdown on demand, exposing a single tool
 `convert_to_markdown(uri)` (`uri` accepts `file:`, `http:`, `https:`, or `data:`).
 The server runs locally and, once cached, does not hit PyPI again.
 
-> **A config entry alone does nothing.** A `local` MCP server is just a command
-> OpenCode launches — if that command isn't on PATH, OpenCode still *lists* the server
-> but it never connects ("shown but not working"). So the command has to resolve in the
-> shell OpenCode starts from. The `uvx` form below is the zero-install way to guarantee
-> that.
+> **A config entry alone does nothing.** A `local` MCP server is just a command your
+> agent launches — if that command isn't on PATH in the shell the agent starts from, the
+> server still *appears* in the list but never connects ("shown but not working"). The
+> `uvx` form below is the zero-install way to guarantee it resolves.
 
 **1. Make the command resolve.** Pick one:
 
@@ -359,11 +358,15 @@ echo 'export UV_SYSTEM_CERTS=true' >> ~/.zshrc && source ~/.zshrc   # older uv: 
 # fallback: export SSL_CERT_FILE=/path/to/corporate-root-ca.pem
 ```
 
-**3. Register it in `opencode.json`** — Geneseed's
+**3. Register it in your host's MCP config** — add the server entry to the file your
+agent reads, alongside any servers you already have:
+
+<!--harness:opencode-->
+On OpenCode that's `opencode.json` (global `~/.config/opencode/opencode.json`, the
+`.jsonc` variant if you keep one — the file OpenCode reads — or per-repo), under the
+`mcp` key. Geneseed's
 [`adapters/opencode/opencode.json`](adapters/opencode/opencode.json) already carries
-this block; merge it into your config (global `~/.config/opencode/opencode.json`, or the
-`.jsonc` variant if you keep one — that's the file OpenCode reads — or per-repo) under
-the `mcp` key, alongside any servers you already have:
+this block:
 
 ```json
 {
@@ -374,13 +377,22 @@ the `mcp` key, alongside any servers you already have:
 }
 ```
 
-On the pipx route, swap the command to `["markitdown-mcp"]`.
+On the pipx route, swap the command to `["markitdown-mcp"]`. Prefer not to hand-edit
+JSON? `./geneseed` → **Settings** → **MCP servers** toggles this exact block in for you.
+<!--/harness-->
+<!--harness:claude-->
+On Claude Code that's `.mcp.json` under `mcpServers`:
 
-Prefer not to hand-edit JSON? `./geneseed` → **Settings** → **MCP servers** toggles this exact block
-into your project or global `opencode.json` (and enables/disables it) for you.
+```json
+{ "mcpServers": { "markitdown": { "command": "uvx", "args": ["markitdown-mcp"] } } }
+```
 
-**4. Verify.** Restart OpenCode, then `opencode mcp` should list `markitdown` **connected**
-(not just listed). The `ingest` skill auto-prefers an MCP converter when one is exposed,
+See the **Claude Code** section for the GitLab / Filesystem shapes.
+<!--/harness-->
+
+**4. Verify.** Restart your agent; its MCP list should show `markitdown` **connected**
+(not just listed). The `ingest` skill auto-prefers an MCP
+converter when one is exposed,
 so a prompt like *"convert file:///path/to/spec.pdf to markdown"* now just works. Still
 not connecting? See [MCP server won't connect](#mcp-server-wont-connect) below.
 
@@ -394,8 +406,11 @@ command serves gitlab.com and any private instance.
 **1. Mint a Personal Access Token** on *each* instance — User Settings → Access Tokens,
 scopes `api` and `read_repository`. Treat it like a password.
 
-**2. Register one `mcp` entry per instance** — same command, different `GITLAB_API_URL`
+**2. Register one entry per instance** — same command, different `GITLAB_API_URL`
 and token. Two instances (e.g. gitlab.com plus a self-hosted server) → two entries:
+
+<!--harness:opencode-->
+On OpenCode, under the `mcp` key of `opencode.json`:
 
 ```json
 {
@@ -421,6 +436,12 @@ and token. Two instances (e.g. gitlab.com plus a self-hosted server) → two ent
   }
 }
 ```
+<!--/harness-->
+<!--harness:claude-->
+On Claude Code, under `mcpServers` in `.mcp.json` — same command, but `env` (not
+`environment`) and `command` + `args` split. See the **Claude Code** section for the
+exact block; add one `mcpServers` entry per instance.
+<!--/harness-->
 
 The entry key is just a label — name them `gitlab` / `gitlab-2`, or after each instance
 (`gitlab`, `gitlab-acme`). What separates the two is the `GITLAB_API_URL` + token pair;
@@ -432,6 +453,9 @@ Give the agent scoped file access via
 [`@modelcontextprotocol/server-filesystem`](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem),
 also through `npx`. The **allowed directories are command-line arguments** — the server
 can touch *only* the paths you list, so grant the narrowest set that works:
+
+<!--harness:opencode-->
+On OpenCode, under the `mcp` key of `opencode.json`:
 
 ```json
 {
@@ -447,6 +471,14 @@ can touch *only* the paths you list, so grant the narrowest set that works:
   }
 }
 ```
+<!--/harness-->
+<!--harness:claude-->
+On Claude Code, under `mcpServers` in `.mcp.json` (`command` + `args` split):
+
+```json
+{ "mcpServers": { "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/project"] } } }
+```
+<!--/harness-->
 
 > **Replace the placeholder.** The reference config and the harness toggle ship the
 > literal arg `/path/to/allowed/dir`. Enabling the server without swapping that for a
@@ -488,8 +520,14 @@ token-safety rule applies.
 
 #### Verify
 
-Restart your agent. On OpenCode, `opencode mcp` lists each server and whether it
-**connected**; on Claude Code, `/mcp` shows the same. Listed ≠ working — a `local` server
+Restart your agent.
+<!--harness:opencode-->
+On OpenCode, `opencode mcp` lists each server and whether it **connected**.
+<!--/harness-->
+<!--harness:claude-->
+On Claude Code, `/mcp` lists each server and whether it connected.
+<!--/harness-->
+Listed ≠ working — a `local` server
 appears in the list whether or not its command actually launches.
 
 #### MCP server won't connect
@@ -507,9 +545,16 @@ not connected, walk these in order:
    `/path/to/allowed/dir`, or points somewhere that doesn't exist. Swap in a real path.
 3. **GitLab won't connect?** Almost always a missing / over-scoped token or the wrong
    `GITLAB_API_URL` — keep the `/api/v4` suffix.
+<!--harness:opencode-->
 4. **Right file?** OpenCode reads `opencode.jsonc` if present, else `opencode.json`, at
    the project root and `~/.config/opencode/`. Editing the wrong one is silent. Use
    `./geneseed` → **Settings** → **MCP servers** to write to the file OpenCode actually reads.
+<!--/harness-->
+<!--harness:claude-->
+4. **Right file?** Claude Code reads `.mcp.json` (project) and the `mcpServers` block in
+   `~/.claude.json` / settings. Editing the wrong one is silent — `claude mcp list`
+   shows which servers actually loaded.
+<!--/harness-->
 
 ### Environment knobs
 

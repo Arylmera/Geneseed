@@ -41,6 +41,10 @@ def _read_doc_source(rel: str) -> str:
 _HARNESSES = ("opencode", "claude")
 _HARNESS_OPEN_RE = re.compile(r"^\s*<!--\s*harness:(opencode|claude)\s*-->\s*$")
 _HARNESS_CLOSE_RE = re.compile(r"^\s*<!--\s*/harness\s*-->\s*$")
+# Cheap presence test for the early-out — must never be narrower than the open
+# regex above (any whitespace after `<!--`), or a stray-spaced marker would slip
+# the guard and leak unstripped.
+_HARNESS_HINT_RE = re.compile(r"<!--\s*harness:")
 
 
 def _norm_harness(value: "str | None", state: "WebState") -> str:
@@ -55,11 +59,17 @@ def _norm_harness(value: "str | None", state: "WebState") -> str:
 
 def _harness_blocks_balanced(lines: list) -> bool:
     """True when every `<!--harness:X-->` has a matching `<!--/harness-->` with
-    no nesting — the only shape _strip_harness_blocks can filter safely. Used to
-    fail open (leave the body untouched) on a malformed marker rather than
-    silently blanking the rest of a page."""
-    open_ = False
+    no nesting — the only shape _strip_harness_blocks can filter safely. Markers
+    inside a ``` code fence are example text, not real markers (same rule as
+    _slice_section). Used to fail open (leave the body untouched) on a malformed
+    marker rather than silently blanking the rest of a page."""
+    open_, in_fence = False, False
     for line in lines:
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
         if _HARNESS_OPEN_RE.match(line):
             if open_:
                 return False            # nested open
@@ -74,23 +84,32 @@ def _harness_blocks_balanced(lines: list) -> bool:
 def _strip_harness_blocks(body: str, harness_name: str) -> str:
     """Drop `<!--harness:X-->...<!--/harness-->` blocks whose X != harness_name
     and unwrap (keep the inner lines, drop the markers) the ones that match.
-    Line-based and nesting-free — markers must sit on their own line. Malformed
-    (unbalanced / nested) markers fail open: the body is returned untouched so a
-    typo never blanks a page. doctor flags the imbalance separately."""
-    if "<!--harness:" not in body and "<!-- harness:" not in body:
+    Line-based and nesting-free — markers must sit on their own line, and a
+    marker inside a ``` fence is left alone (example text, like _slice_section).
+    Malformed (unbalanced / nested) markers fail open: the body is returned
+    untouched so a typo never blanks a page — and the
+    test_every_doc_body_has_balanced_markers unit test catches an imbalance in CI
+    before it ships (there is no separate doctor check)."""
+    if not _HARNESS_HINT_RE.search(body):
         return body
     lines = body.splitlines()
     if not _harness_blocks_balanced(lines):
         return body
-    out, keep = [], True
+    out, keep, in_fence = [], True, False
     for line in lines:
-        m = _HARNESS_OPEN_RE.match(line)
-        if m:
-            keep = (m.group(1) == harness_name)
+        if line.startswith("```"):
+            in_fence = not in_fence
+            if keep:
+                out.append(line)
             continue
-        if _HARNESS_CLOSE_RE.match(line):
-            keep = True
-            continue
+        if not in_fence:
+            m = _HARNESS_OPEN_RE.match(line)
+            if m:
+                keep = (m.group(1) == harness_name)
+                continue
+            if _HARNESS_CLOSE_RE.match(line):
+                keep = True
+                continue
         if keep:
             out.append(line)
     return "\n".join(out)
@@ -285,7 +304,12 @@ def api_docs_page(state: WebState, page_id: str,
                   harness_name: "str | None" = None) -> dict:
     """One docs page, looked up in DOC_GROUPS. Every shape carries a `kind`
     the frontend dispatches on. Markdown/concept bodies are filtered to the
-    active harness (inline `<!--harness:X-->` blocks stripped)."""
+    active harness (inline `<!--harness:X-->` blocks stripped).
+
+    Lookup deliberately ignores the page's `harness` tag: a direct deep-link to a
+    page the active harness hides still resolves (the client redirects it out of
+    view). The invariant that no *visible* page links to a hidden one is enforced
+    by test_no_cross_harness_dead_links, not here."""
     page = _find_doc_page(page_id)
     if not page:
         raise NotFound(page_id)
