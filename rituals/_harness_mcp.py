@@ -306,3 +306,263 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
           f"{'updated' if s['unmerged'] else 'unchanged'}; memory {mem}. "
           f"Start a new OpenCode session to apply.")
     return 0
+
+
+# ---- Install activation (deactivate / reactivate, non-destructive) ----------
+# A whole OpenCode install can be turned OFF without deleting a byte: drop the
+# AGENT.md `instructions` entry and MOVE every owned artifact into a sibling
+# stash. Reactivate moves the same bytes back and re-adds the entry. The stash
+# dir's PRESENCE is the disabled flag; its CONTENTS are the restore source — no
+# recorded JSON state to drift from the filesystem. This is the reversible
+# sibling of `_uninstall_global`: the same owned-file walk + empty-dir prune, but
+# `move` into the stash instead of `unlink`, plus an inverse restore.
+DISABLED_STASH = ".geneseed-disabled"   # sibling dir; presence == disabled
+
+
+def _install_targets() -> "list[tuple[str, Path]]":
+    """Roots that may carry a Geneseed install, most-local first: this project's
+    root, then OpenCode's global config dir. De-duplicated when cwd IS the global
+    config dir (else both rows would point at one root and collide)."""
+    cands = [("this project", Path.cwd())]
+    try:
+        cands.append(("global config", build._opencode_config_dir()))
+    except Exception:
+        pass
+    seen, out = set(), []
+    for label, root in cands:
+        if root.resolve() not in seen:
+            seen.add(root.resolve()); out.append((label, root))
+    return out
+
+
+def _install_kind(root: Path) -> "str | None":
+    """Which move strategy applies at `root`, so the engine never guesses from an
+    untagged path: 'global' when the global manifest is present, else 'project'
+    when a `.opencode/` dir is, else None (no install here). The global manifest is
+    a MARKER left in place while disabled, so a 'global' answer here means "this is
+    (or was) a global install" — not "the content is live"; `_install_relive` is
+    the live-content test the reactivate guard needs."""
+    if (root / build.GLOBAL_MANIFEST).exists():
+        return "global"
+    if (root / ".opencode").is_dir():
+        return "project"
+    return None
+
+
+def _stashed_kind(root: Path) -> "str | None":
+    """Recover which kind of install a stash holds from its CONTENTS, so reactivate
+    can pick the right live-content test without a recorded tag: a project stash
+    carries `.opencode/`, a global one carries the moved owned files (AGENT.md,
+    agents/, …). None when the stash is empty/missing."""
+    stash = root / DISABLED_STASH
+    if (stash / ".opencode").is_dir():
+        return "project"
+    if stash.is_dir() and any(stash.iterdir()):
+        return "global"
+    return None
+
+
+def _install_relive(root: Path) -> bool:
+    """True when a disabled install's CONTENT was re-created live at `root` (the user
+    ran `geneseed build`/`upgrade` while disabled), distinct from leftover markers.
+    The reactivate re-emit guard needs this. The live signal is kind-specific: a
+    global deactivate MOVES AGENT.md aside (and leaves the manifest marker, so
+    `_install_kind` still says 'global'), so a live AGENT.md back at the root means a
+    re-emit; a project deactivate leaves AGENT.md in place and moves `.opencode/`, so
+    a live `.opencode/` is the signal. We read the stashed kind to choose the right
+    test (else a project's untouched AGENT.md would false-positive)."""
+    if _stashed_kind(root) == "project":
+        return (root / ".opencode").is_dir()
+    return (root / "AGENT.md").is_file()
+
+
+def _install_state(root: Path) -> str:
+    """'active' | 'disabled' | 'absent' for the install at `root`."""
+    # ponytail: state is just "does the stash dir exist" + "is an install present".
+    # No JSON record to keep in sync with the filesystem — the dir IS the record.
+    if (root / DISABLED_STASH).is_dir():
+        return "disabled"
+    return "active" if _install_kind(root) is not None else "absent"
+
+
+def _move_tree(src: Path, dst: Path) -> None:
+    """Move `src` (file or dir) to `dst`, creating parent dirs. Raises (caller
+    rolls back) if `dst` already exists — a destination collision must never
+    silently overwrite a file the move-list is responsible for restoring."""
+    if dst.exists():
+        raise FileExistsError(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dst))
+
+
+def _install_move_list(root: Path, kind: str) -> "list[str]":
+    """The relative paths to move aside for `kind` at `root`. project: just the
+    `.opencode/` dir. global: the manifest `owned` list MINUS `VERSION_MARKER`
+    (the only marker in `owned` — markers stay put so theme/emit/version detection
+    keeps working while disabled). Every rel is `_within`-guarded against a
+    `..`-escaping manifest entry, mirroring `api_restore`."""
+    if kind == "project":
+        rels = [".opencode"]
+    else:
+        try:
+            owned = json.loads(
+                (root / build.GLOBAL_MANIFEST).read_text(encoding="utf-8")).get("owned", [])
+        except (json.JSONDecodeError, OSError):
+            owned = []
+        rels = [r for r in owned if r != build.VERSION_MARKER]
+    # Resolve before `_within`, mirroring `api_restore`: `_within` is purely lexical,
+    # so a raw `root / "../evil.md"` would pass as "under root". Resolving collapses
+    # the `..` first, so a manifest entry escaping the root is rejected.
+    rroot = root.resolve()
+    return [r for r in rels if r and _within((rroot / r).resolve(), rroot)]
+
+
+def _install_agent_entry(root: Path, kind: str) -> str:
+    """The AGENT.md `instructions` entry to drop / re-add. For a global install the
+    emit writes the absolute posix path (mirrors `_uninstall_global`); for a
+    per-project install it is the relative `…/AGENT.md` the emit recorded — read it
+    back from the live config so a bundle sub-dir layout round-trips, falling back
+    to the canonical `AGENT.md`."""
+    if kind == "global":
+        return (root / "AGENT.md").as_posix()
+    cfg = _mcp_load(build._opencode_target(root / "opencode.json"))
+    instr = cfg.get("instructions") if isinstance(cfg, dict) else None
+    if isinstance(instr, list):
+        for e in instr:
+            if isinstance(e, str) and not Path(e).is_absolute() \
+                    and Path(e).name == "AGENT.md":
+                return e
+    return "AGENT.md"
+
+
+def _install_readd_entry(target: Path, entry: str) -> bool:
+    """Re-add just the AGENT.md `instructions` entry to `target`, touching nothing
+    else. Deliberately a minimal inline re-add rather than `build._merge_opencode_json`,
+    whose side effects (adding `permission` + `lsp: true` when absent) would clobber
+    values the user may have set since. Mirrors `_unmerge_opencode_json`'s
+    comment-tolerant read and its commented-`.jsonc` refusal. Returns True if the
+    file was changed."""
+    if not target.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(
+            {"$schema": "https://opencode.ai/config.json", "instructions": [entry]},
+            indent=2) + "\n", encoding="utf-8")
+        return True
+    try:
+        cfg, had_comments = build._read_jsonc(target.read_text(encoding="utf-8"))
+    except OSError:
+        return False
+    if not isinstance(cfg, dict):
+        return False
+    instr = cfg.get("instructions")
+    if not isinstance(instr, list):
+        instr = []
+    if entry in instr:
+        return False
+    if target.suffix == ".jsonc" and had_comments:
+        print(f"[activate] {target.name} has comments — not rewriting it. Add this "
+              f"to its \"instructions\" by hand: {json.dumps(entry)}")
+        return False
+    cfg["instructions"] = instr + [entry]
+    target.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    return True
+
+
+def _install_deactivate(root: Path) -> dict:
+    """Turn the install at `root` OFF without deleting a byte: move every owned
+    artifact into `root/DISABLED_STASH/<rel>` and drop the AGENT.md `instructions`
+    entry. ALL-OR-NOTHING — a move failure rolls back every move already done and
+    leaves the install fully `active`, never half-gutted."""
+    if _install_state(root) != "active":
+        return {"ok": False, "error": f"install is not active ({_install_state(root)})"}
+    kind = _install_kind(root)
+    target = build._opencode_target(root / "opencode.json")
+    # A commented `.jsonc` can't be rewritten without dropping the user's comments,
+    # so refuse and move NOTHING — the same refusal `_unmerge_opencode_json` and the
+    # MCP toggle use. (Catch it up front, before any file moves.)
+    if _mcp_commented(target):
+        return {"ok": False, "error": f"{target.name} has comments — refusing to rewrite "
+                f"it. Disable by hand or convert it to plain .json first."}
+    stash = root / DISABLED_STASH
+    rels = _install_move_list(root, kind)
+    done: "list[str]" = []   # rels already moved, for rollback
+    for rel in rels:
+        src, dst = root / rel, stash / rel
+        if not src.exists():
+            continue   # a manifest entry already gone — nothing to move, skip
+        try:
+            _move_tree(src, dst)
+            done.append(rel)
+        except OSError as e:
+            # Roll back every move already done — put each tree back where it was —
+            # then report, having touched nothing else. The install stays `active`.
+            for r in reversed(done):
+                try:
+                    shutil.move(str(stash / r), str(root / r))
+                except OSError:
+                    pass
+            shutil.rmtree(stash, ignore_errors=True)
+            return {"ok": False, "failed": [f"{rel} ({e})"], "rolled_back": len(done)}
+    # ponytail: config edit is the LAST step and the only non-move mutation, so a
+    # move failure rolls back cleanly with the instructions entry still intact.
+    _unmerge_opencode_json(root / "opencode.json", _install_agent_entry(root, kind))
+    # Prune emptied owned dirs the global walk left behind (the `_uninstall_global`
+    # ancestor-climb, not a destructive rmtree). No-op for a project move (its single
+    # `.opencode/` entry already went whole).
+    for d in ("agents", "skills", "plugins", "workflows", "command"):
+        p = root / d
+        try:
+            if p.is_dir() and not any(p.iterdir()):
+                p.rmdir()
+        except OSError:
+            pass
+    return {"ok": True, "kind": kind, "moved": len(done)}
+
+
+def _install_reactivate(root: Path) -> dict:
+    """Turn a disabled install back ON: move every stashed tree back to its original
+    rel path and re-add the AGENT.md `instructions` entry, then remove the empty
+    stash. The inverse of `_install_deactivate`."""
+    if _install_state(root) != "disabled":
+        return {"ok": False, "error": f"install is not disabled ({_install_state(root)})"}
+    stash = root / DISABLED_STASH
+    # Re-emit-while-disabled guard: if live content already exists (the user ran
+    # `geneseed build`/`upgrade` while disabled), the install is already active.
+    # Discard the now-stale snapshot rather than clobber the fresh files, ensure the
+    # instructions entry is present, and report it. `_install_relive` (not
+    # `_install_kind`) is the live-content test — a global deactivate leaves the
+    # manifest marker behind, so `_install_kind` would falsely say 'global' here.
+    if _install_relive(root):
+        kind = _install_kind(root) or "global"
+        shutil.rmtree(stash, ignore_errors=True)
+        _install_readd_entry(build._opencode_target(root / "opencode.json"),
+                             _install_agent_entry(root, kind))
+        return {"ok": True, "note": "install was re-created while disabled; "
+                "discarded the stashed snapshot"}
+    # Walk the stash for the top-level entries to restore (a project stash holds a
+    # single `.opencode/`; a global one holds AGENT.md + agents/ + skills/ + …).
+    leftovers: "list[str]" = []
+    moved = 0
+    for src in sorted(stash.rglob("*")):
+        if src.is_dir():
+            continue
+        rel = src.relative_to(stash)
+        dst = root / rel
+        if dst.exists():
+            # Never delete the stash while anything is unrestored — skip the
+            # collision, keep the stash, report the leftover.
+            leftovers.append(rel.as_posix())
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+        moved += 1
+    if leftovers:
+        return {"ok": False, "failed": leftovers, "moved": moved}
+    # The kind is `project` if a `.opencode/` came back, else `global` (an AGENT.md
+    # at the root). Resolve it now that the files are live again.
+    kind = _install_kind(root) or "global"
+    _install_readd_entry(build._opencode_target(root / "opencode.json"),
+                         _install_agent_entry(root, kind))
+    # Remove the now-empty stash (its dir tree may linger after the file moves).
+    shutil.rmtree(stash, ignore_errors=True)
+    return {"ok": True, "kind": kind, "moved": moved}

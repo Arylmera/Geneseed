@@ -58,6 +58,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     return self._send_json(api_graph(state))
                 if path == "/api/mcp":
                     return self._send_json(api_mcp(state))
+                if path == "/api/installs":
+                    return self._send_json(api_installs(state))
                 if path == "/api/offline-zip":
                     data, name = offline_zip_bytes()
                     return self._send_bytes(
@@ -118,6 +120,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
             if path == "/api/mcp":
                 try:
                     res = api_mcp_toggle(state, self._read_json_body())
+                except NotFound as e:
+                    return self._send_json({"error": f"not found: {e}"}, 404)
+                return self._send_json(res, 200 if res.get("ok") else 409)
+            if path == "/api/install":
+                try:
+                    res = api_install_toggle(state, self._read_json_body())
                 except NotFound as e:
                     return self._send_json({"error": f"not found: {e}"}, 404)
                 return self._send_json(res, 200 if res.get("ok") else 409)

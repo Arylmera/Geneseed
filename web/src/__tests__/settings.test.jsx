@@ -50,6 +50,20 @@ vi.mock('../api/index.js', () => ({
         default: 0,
       }),
     ),
+    installs: vi.fn(() =>
+      Promise.resolve({
+        installs: [
+          {
+            id: 'opencode:global config',
+            host: 'opencode',
+            scope: 'global config',
+            path: 'C:/cfg',
+            state: 'active',
+          },
+        ],
+      }),
+    ),
+    installToggle: vi.fn(() => Promise.resolve({ ok: true })),
   },
 }))
 
@@ -93,6 +107,18 @@ describe('Settings', () => {
         },
       ],
       default: 0,
+    })
+    // No install switch either, so the only switches in play are MCP's (none here)
+    vi.mocked(api.installs).mockResolvedValueOnce({
+      installs: [
+        {
+          id: 'opencode:global config',
+          host: 'opencode',
+          scope: 'global config',
+          path: 'C:/cfg',
+          state: 'absent',
+        },
+      ],
     })
 
     render(<Settings onAction={() => {}} />)

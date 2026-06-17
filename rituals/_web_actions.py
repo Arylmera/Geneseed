@@ -185,3 +185,32 @@ def api_mcp_toggle(state: WebState, body: dict) -> dict:
         cfg = harness._mcp_set_enabled(cfg, name, want)
     harness._mcp_save(path, cfg)
     return {"ok": True, "name": name, "state": harness._mcp_state(cfg, name)}
+
+
+def api_installs(state: WebState) -> dict:
+    """Detected OpenCode installs and their on/off state. One row per scope."""
+    out = []
+    for label, root in harness._install_targets():
+        out.append({"id": f"opencode:{label}", "host": "opencode", "scope": label,
+                    "path": str(root), "state": harness._install_state(root)})
+    return {"installs": out}
+
+
+def api_install_toggle(state: WebState, body: dict) -> dict:
+    """Deactivate or reactivate the install at `path`. Non-destructive."""
+    # Path allowlist — mirror api_mcp_toggle: the body path MUST be one of the
+    # detected roots, else 404. This endpoint moves whole trees; never build the
+    # move root from raw body input.
+    known = {str(r): r for _label, r in harness._install_targets()}
+    root = known.get(body.get("path") or "")
+    if root is None:
+        raise NotFound("unknown install path")
+    action = body.get("action")
+    if action == "deactivate":
+        res = harness._install_deactivate(root)
+    elif action == "activate":
+        res = harness._install_reactivate(root)
+    else:
+        res = {"ok": False, "error": f"unknown action {action!r}"}
+    state.refresh()
+    return res
