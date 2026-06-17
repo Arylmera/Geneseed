@@ -365,7 +365,15 @@ class WikiTests(unittest.TestCase):
 class McpTests(unittest.TestCase):
     def test_api_mcp_lists_targets_and_states(self):
         state = web.WebState(theme="neutral")
-        m = web.api_mcp(state)
+        # api_mcp only lists targets whose install is active; force one so the
+        # structure check doesn't hinge on the host machine having an install.
+        saved_t, saved_s = web.harness._install_targets, web.harness._install_state
+        web.harness._install_targets = lambda: [("this project", Path("."))]
+        web.harness._install_state = lambda root: "active"
+        try:
+            m = web.api_mcp(state)
+        finally:
+            web.harness._install_targets, web.harness._install_state = saved_t, saved_s
         self.assertTrue(m["targets"])
         for t in m["targets"]:
             self.assertIn("path", t)

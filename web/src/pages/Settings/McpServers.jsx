@@ -8,7 +8,7 @@ import ErrorState from '../../components/ErrorState.jsx'
 // enable/disable present ones and Add buttons for absent presets. Targets whose
 // config carries comments are read-only (edited by hand).
 export default function McpServers() {
-  const { data, error, reload } = useAsync(() => api.mcp(), []) // { targets, default }
+  const { data, error } = useAsync(() => api.mcp(), []) // { targets, default }
   const [note, setNote] = useState('')
   const [busyKey, setBusyKey] = useState('')
 
@@ -21,7 +21,7 @@ export default function McpServers() {
     setNote('')
     try {
       await api.mcpToggle(target.path, s.name, s.state !== 'enabled')
-      await reload()
+      window.location.reload()
     } catch (e) {
       setNote(e.message)
     } finally {

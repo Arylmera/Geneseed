@@ -14,7 +14,7 @@ function lineKind(ln) {
   return 'ctx'
 }
 
-export default function Diff() {
+export default function Diff({ onMutated }) {
   const { data, error, reload } = useAsync(() => api.diff(), [])
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
@@ -77,6 +77,7 @@ export default function Diff() {
         : ''
       setNote(`Restored ${res.restored.length}, deleted ${res.deleted.length}${errs}`)
       await reload()
+      onMutated?.() // refresh the shared overview so the Rail's Changes badge updates
     } catch (e) {
       setNote(e.message)
     } finally {

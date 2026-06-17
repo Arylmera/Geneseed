@@ -9,7 +9,7 @@ import ErrorState from '../../components/ErrorState.jsx'
 // aside, not deleted — and reactivates it. The on-disk stash dir is the truth;
 // the switch only triggers the move and reflects the resulting state.
 export default function Installs() {
-  const { data, error, reload } = useAsync(() => api.installs(), []) // { installs }
+  const { data, error } = useAsync(() => api.installs(), []) // { installs }
   const [note, setNote] = useState('')
   const [busyKey, setBusyKey] = useState('')
 
@@ -34,8 +34,11 @@ export default function Installs() {
       if (!res.ok) {
         const failed = Array.isArray(res.failed) ? res.failed.join(', ') : ''
         setNote(res.error || (failed && `unrestored: ${failed}`) || 'action failed')
+        return
       }
-      await reload()
+      // Full reload: toggling an install also changes the MCP card and the
+      // Installation snapshot, which live in sibling components with their own state.
+      window.location.reload()
     } catch (e) {
       setNote(e.message)
     } finally {

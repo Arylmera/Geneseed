@@ -141,7 +141,12 @@ def api_restore(state: WebState, files: list) -> dict:
 def api_mcp(state: WebState) -> dict:
     """MCP servers per config target — the web mirror of the TUI's MCP screen.
     Presets first, then user-defined servers present in each config."""
-    targets = harness._mcp_targets()
+    # Only show MCP wiring for harnesses that are actually installed and active —
+    # an absent/disabled install has no live config to wire. Labels match across
+    # _install_targets/_mcp_targets ("this project", "global config").
+    active = {label for label, root in harness._install_targets()
+              if harness._install_state(root) == "active"}
+    targets = [(l, p) for l, p in harness._mcp_targets() if l in active]
     out = []
     for label, path in targets:
         cfg = harness._mcp_load(path)

@@ -134,7 +134,7 @@ export default function App() {
                   selected={route.name}
                 />
               ))}
-            {route.view === 'diff' && <Diff />}
+            {route.view === 'diff' && <Diff onMutated={reload} />}
             {route.view === 'doctor' && <Doctor />}
             {route.view === 'themes' && <Themes onAction={runAction} />}
             {route.view === 'graph' && <Graph />}
