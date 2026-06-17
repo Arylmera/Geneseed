@@ -131,10 +131,14 @@ def api_catalog(state: WebState, section: str) -> dict:
     if section not in SECTIONS:
         raise NotFound(section)
     inv = state.inventory
-    if section in ("agents", "skills"):
+    if section == "agents":
         items = [{"name": e["name"], "title": e["name"], "desc": e["desc"],
                   "source": e.get("source")}
                  for e in inv[section]]
+    elif section == "skills":
+        items = [{"name": e["name"], "title": e["name"], "desc": e["desc"],
+                  "source": e.get("source"), "klass": e.get("klass", "build")}
+                 for e in inv["skills"]]
     elif section == "laws":
         items = [{"name": e["num"], "title": f"Rule {e['num']} — {e['title']}",
                   "desc": "", "klass": e.get("klass", "craft")}
@@ -183,7 +187,7 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
             raise NotFound(name)
         return {"type": type_, "name": name, "title": name, "desc": e["desc"],
                 "body": e["body"], "links": _resolve_links(state, e["body"]),
-                "source": e.get("source")}
+                "source": e.get("source"), "klass": e.get("klass", "build")}
     if type_ == "law":
         e = next((x for x in inv["laws"] if x["num"] == name), None)
         if not e:

@@ -255,6 +255,51 @@ LAW_CLASS: dict[str, str] = {
     "XXXI": "comms",
 }
 
+# Each skill's category. Six classes mirroring the Laws taxonomy so the web
+# Skills ledger can filter by intent (design, build, review, ship, understand,
+# learn). Keyed by skill file stem — same source of truth across TUI and web.
+# Update when a new skill lands in src/skills/ (doctor enforces full coverage).
+SKILL_CLASS: dict[str, str] = {
+    "brainstorm": "design",
+    "clarify": "design",
+    "plan": "design",
+    "council": "design",
+    "workflow": "design",
+    "parallel-agents": "design",
+    "tdd": "build",
+    "refactor": "build",
+    "debug": "build",
+    "migrate": "build",
+    "frontend-design": "build",
+    "theme": "build",
+    "mcp": "build",
+    "code-review": "review",
+    "fresh-eyes": "review",
+    "gap-detector": "review",
+    "roast-me": "review",
+    "review-response": "review",
+    "ponytail": "review",
+    "commit": "ship",
+    "ship": "ship",
+    "release": "ship",
+    "handoff": "ship",
+    "git-rescue": "ship",
+    "repo-map": "understand",
+    "git-archaeology": "understand",
+    "decode": "understand",
+    "research": "understand",
+    "ingest": "understand",
+    "document-project": "understand",
+    "wiki": "understand",
+    "prose": "understand",
+    "geneseed": "understand",
+    "herdr": "understand",
+    "crash-course": "learn",
+    "drill": "learn",
+    "feynman": "learn",
+    "learning-path": "learn",
+}
+
 
 def _parse_laws(text: str) -> list[dict]:
     """Split the rendered laws file into {num, title, klass, body} entries.
@@ -304,6 +349,7 @@ def _tui_inventory(theme_name: str) -> dict:
             if parts[0] == "agents":
                 agents.append(entry)
             elif parts[0] == "skills":
+                entry["klass"] = SKILL_CLASS.get(parts[1][:-3], "build")
                 skills.append(entry)
         if parts[-1] == "universal.md":
             laws = _parse_laws(text)

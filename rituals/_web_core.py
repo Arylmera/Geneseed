@@ -775,6 +775,12 @@ def _deployed_inventory(state: WebState) -> dict:
     property falls back to the source render otherwise, so a non-deployed dev host
     still shows a gallery."""
     render = harness._tui_inventory(state.theme)
+    # Deployed skill files carry no category, so tag each from SKILL_CLASS by name
+    # (same source of truth the source render uses) — the web Skills ledger filters on it.
+    from _harness_tui import SKILL_CLASS
+    skills = _spec_entries(state.target / "skills", nested=True)
+    for e in skills:
+        e["klass"] = SKILL_CLASS.get(e["name"], "build")
     return {"agents": _spec_entries(state.target / "agents", nested=False),
-            "skills": _spec_entries(state.target / "skills", nested=True),
+            "skills": skills,
             "laws": render["laws"], "theme": state.theme}

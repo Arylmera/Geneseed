@@ -937,6 +937,47 @@ a.rail-item.active { color: var(--text); }
   .law-expand { padding-left: 18px; }
 }
 
+/* Skills ledger — same visual language as Laws, 3-col grid (no № column). The
+   chips (.law-cat), expand panel (.law-expand) and class tag (.law-class) are
+   reused verbatim; only the row layout differs. */
+.skill-rowhead, .skill-row {
+  display: grid; grid-template-columns: 1.1fr 1.7fr 150px; gap: 16px;
+  align-items: center; padding: 13px 18px;
+}
+.skill-rowhead {
+  padding: 11px 18px; border-bottom: 1px solid var(--line); background: var(--bg-2);
+}
+.skill-rowhead span {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.skill-row {
+  width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line);
+  background: transparent; cursor: pointer; font: inherit; color: var(--text);
+  transition: background .1s;
+}
+.skill-row:last-of-type { border-bottom: 0; }
+.skill-row:hover { background: var(--surface-2); }
+.skill-row.on { background: var(--accent-soft); border-bottom-color: transparent; }
+.skill-name {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-display); font-weight: 600; font-size: 15px;
+  color: var(--text); letter-spacing: -.01em;
+}
+.skill-name .x {
+  color: var(--text-3); transition: transform .14s;
+  font-size: 11px; font-family: var(--font-mono);
+}
+.skill-row.on .skill-name .x { transform: rotate(90deg); color: var(--accent); }
+.skill-desc {
+  font-family: var(--font-mono); font-size: 12.5px;
+  color: var(--text-2); line-height: 1.45;
+}
+@media (max-width: 1100px) {
+  .skill-row, .skill-rowhead { grid-template-columns: 1fr 130px; }
+  .skill-desc { display: none; }
+}
+
 /* ============================================================================
    FLAVOURS — three console directions: Cultivar (a), Greenhouse (b),
    Operator HUD (c). The default tokens at :root are Cultivar — fl-a stays a

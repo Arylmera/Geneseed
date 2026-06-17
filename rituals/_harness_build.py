@@ -281,6 +281,15 @@ def _count_table_problems() -> list[str]:
         for orphan in sorted(files - linked[folder]):
             problems.append(f"[authoring] {folder}/{orphan}.md exists but the AGENT.md table omits it")
 
+    # Every skill must carry a category in SKILL_CLASS (drives the web Skills
+    # ledger's filter chips). Same anti-drift guard as the AGENT.md table above.
+    from _harness_tui import SKILL_CLASS
+    skill_files = _src_stems("skills")
+    for missing in sorted(skill_files - set(SKILL_CLASS)):
+        problems.append(f"[authoring] skills/{missing}.md has no category in SKILL_CLASS (_harness_tui.py)")
+    for stale in sorted(set(SKILL_CLASS) - skill_files):
+        problems.append(f"[authoring] SKILL_CLASS lists '{stale}' but no skills/{stale}.md exists")
+
     # README capability badges must match the real counts.
     laws_md = build.SRC / "laws" / "universal.md"
     counts = {

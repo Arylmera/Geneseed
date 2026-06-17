@@ -15,6 +15,7 @@ import Console from './components/Console.jsx'
 import Dashboard from './pages/Dashboard/index.jsx'
 import Library from './pages/Library.jsx'
 import Laws from './pages/Laws.jsx'
+import Skills from './pages/Skills.jsx'
 import Diff from './pages/Diff.jsx'
 import Doctor from './pages/Doctor.jsx'
 import Themes from './pages/Themes.jsx'
@@ -118,15 +119,20 @@ export default function App() {
             )}
             {route.view === 'library' && <Library overview={overview} />}
             {route.view === 'laws' && <Laws />}
+            {route.view === 'skills' && <Skills />}
             {route.view === 'section' &&
               (route.section === 'laws' ? (
                 <Laws />
+              ) : route.section === 'skills' ? (
+                <Skills />
               ) : (
                 <Library overview={overview} section={route.section} />
               ))}
             {route.view === 'item' &&
               (route.type === 'law' ? (
                 <Laws selected={route.name} />
+              ) : route.type === 'skill' ? (
+                <Skills selected={route.name} />
               ) : (
                 <Library
                   overview={overview}

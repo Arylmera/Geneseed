@@ -51,6 +51,30 @@ class ResolveEmitTests(unittest.TestCase):
         self.assertEqual(_update._resolve_emit(self.cfg, self.out), "opencode")
 
 
+class MarkerThemeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.cfg = self.tmp / "cfg"
+        self.out = self.tmp / "out"
+        self.cfg.mkdir()
+        self.out.mkdir()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_empty_when_no_marker(self):
+        self.assertEqual(_update._marker_theme(self.cfg, self.out), "")
+
+    def test_config_dir_marker_wins(self):
+        # Global installs write the theme marker into the config dir, not the bundle.
+        (self.cfg / ".geneseed-theme").write_text("imperial\n", encoding="utf-8")
+        self.assertEqual(_update._marker_theme(self.cfg, self.out), "imperial")
+
+    def test_bundle_marker_used_when_no_config(self):
+        (self.out / ".geneseed-theme").write_text("pirate\n", encoding="utf-8")
+        self.assertEqual(_update._marker_theme(self.cfg, self.out), "pirate")
+
+
 class RefreshItemTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
