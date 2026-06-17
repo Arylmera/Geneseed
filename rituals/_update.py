@@ -370,6 +370,19 @@ def _resolve_emit(cfg: Path, out: Path) -> str:
     return "files"
 
 
+def _marker_theme(cfg: Path, out: Path) -> str:
+    """Theme marker precedence: global-config marker > bundle marker > "" (none).
+    Global installs write .geneseed-theme into the config dir; plain bundles into out."""
+    for marker in (cfg / ".geneseed-theme", out / ".geneseed-theme"):
+        try:
+            val = marker.read_text(encoding="utf-8").strip()
+            if val:
+                return val
+        except OSError:
+            pass
+    return ""
+
+
 def _refresh_item(new_root: Path, here: Path, item: str) -> bool:
     """Stage one factory item with copy -> rm -> mv, shrinking the kill-vulnerable window
     to two instant renames instead of a full-tree copy (parity with upgrade.sh). Returns
@@ -506,12 +519,7 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None,
             if _refresh_item(new_root, here, item):
                 log(f"[geneseed]   refreshed {item}")
 
-        marker_theme = ""
-        try:
-            marker_theme = (out / ".geneseed-theme").read_text(encoding="utf-8").strip()
-        except OSError:
-            pass
-        theme = theme_arg or marker_theme or config_theme
+        theme = theme_arg or _marker_theme(cfg, out) or config_theme
         if not theme:
             sys.stderr.write(
                 f"[geneseed] ⚠️  no theme found — no marker at {out}/.geneseed-theme, no local config theme.\n"
