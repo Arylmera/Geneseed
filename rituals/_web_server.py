@@ -331,6 +331,10 @@ def restart_daemon(theme: "str | None" = None, port: int = 4747,
         return 0
     use_port = (st.get("port") if st and st.get("port") else None) or port
     if live:
+        # ponytail: no portable way to query open browser tabs. A live daemon
+        # means a tab was already opened on this (preserved) port and will
+        # reconnect on its own — so don't pop a duplicate window.
+        open_browser = False
         stop_daemon(theme)
         # Wait briefly for the OS to release the port before re-binding;
         # otherwise start_daemon falls back to a random free port and any
