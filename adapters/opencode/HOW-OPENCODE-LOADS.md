@@ -18,7 +18,7 @@ OpenCode does not read a single config — it **merges several**:
 It also auto-loads an **`AGENTS.md`** at the project root with no config at all.
 
 Because these sources merge rather than replace, **anything referenced in two of
-them loads from each** — which is exactly why a file can show up twice (see §6).
+them loads from each** — which is exactly why a file can show up twice (see §7).
 
 ## 2. `instructions` — the rule/context files
 
@@ -93,7 +93,34 @@ to native **skills**, not slash commands (same `SKILL.md` shape as Claude Code).
 | plugin registering a custom tool | **workflow plugin** — the `workflow` tool runs saved orchestration scripts from `workflows/` |
 | `context.json` / `.harness/` (manifest) | *optional* override when discovery doesn't fit |
 
-## 6. "Why is `context.json` (or `AGENT.md`) listed twice?"
+## 6. LSP — diagnostics, not a tool
+
+Geneseed sets `"lsp": true`, so OpenCode auto-starts a language server matching
+each file's extension **when the file is opened**, and feeds its diagnostics back
+to the model as ambient context.
+
+The thing to know: **the LSP is not a tool the model can call.** There is no
+"use the LSP" action — the model's toolset is `bash`/`read`/`write`/`edit`/`grep`/
+`glob`/`task`/`webfetch` and nothing else. Diagnostics arrive as injected feedback
+when a file is opened or edited; the model cannot summon them on demand. So a model
+that says *"I have no LSP tool"* is **correct**, not broken — asking it to "trigger
+the React LSP" can't be honored as a tool call.
+
+OpenCode's own docs steer you the same way: language servers drift and eat memory,
+so *"it is often better to have the agent run lint, typecheck, or other diagnostic
+CLI tools directly."* A clean `eslint` (and `tsc --noEmit` where there's a TS
+project) is the **same signal** the LSP would inject — just fetched on purpose
+instead of ambiently. That is exactly what a model running `npx eslint <file>` is
+doing, and it's the recommended path.
+
+**JS/JSX caveat (e.g. `web/`):** the bundled TypeScript server attaches to `.jsx`
+by extension even with no config, but only in loose single-file mode. A minimal
+`web/jsconfig.json` (no `checkJs`) scopes the directory as a project so the server
+resolves imports and JSX properly — present in this repo for that reason. Real-bug
+detection still lives in `eslint.config.js`; `jsconfig.json` only makes the LSP
+attach as a project, it does not turn on type-checking.
+
+## 7. "Why is `context.json` (or `AGENT.md`) listed twice?"
 
 Because OpenCode **merges every `opencode.json` it finds** — global, project, and
 any discovered while walking up the tree. If the same file is named in two

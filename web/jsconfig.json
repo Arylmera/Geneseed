@@ -1,0 +1,15 @@
+{
+  // ponytail: scopes web/ as a project so OpenCode's bundled TypeScript LSP
+  // attaches and resolves imports/JSX instead of running loose per-file. No
+  // checkJs — eslint owns real-bug detection; turning it on would flood this
+  // prop-types-free JS codebase with type noise. Add checkJs if you ever want
+  // inline type-checking too.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src"]
+}
