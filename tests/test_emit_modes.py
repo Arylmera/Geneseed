@@ -125,12 +125,18 @@ class OpencodePerRepoTests(_Tmp):
     def test_user_theme_survives_rebuild(self):
         out = self.d / "bundle"
         _quiet(build.emit_opencode, "neutral", out, self.d)
-        # A user theme is any non-geneseed-* file in the themes dir (spec §8.2).
-        user = self.d / ".opencode" / "themes" / "mybrand.json"
-        user.write_text('{"theme":{"primary":"#abcabc"}}', encoding="utf-8")
+        themes = self.d / ".opencode" / "themes"
+        # A user theme is any file the emit does NOT regenerate (spec §8.2) — preserved
+        # whether or not it carries the geneseed- prefix (CLI now brands them geneseed-).
+        plain = themes / "mybrand.json"
+        branded = themes / "geneseed-mybrand.json"
+        plain.write_text('{"theme":{"primary":"#abcabc"}}', encoding="utf-8")
+        branded.write_text('{"theme":{"primary":"#defdef"}}', encoding="utf-8")
         _quiet(build.emit_opencode, "imperial", out, self.d)   # rebuild, even switching theme
-        self.assertTrue(user.is_file(), "a user theme must survive the .opencode wipe")
-        self.assertIn("#abcabc", user.read_text(encoding="utf-8"))
+        self.assertIn("#abcabc", plain.read_text(encoding="utf-8"))
+        self.assertIn("#defdef", branded.read_text(encoding="utf-8"))
+        # …while a shipped theme the emit owns is regenerated, not the stale snapshot.
+        self.assertTrue((themes / "geneseed-catppuccin-solid.json").is_file())
 
 
 class OpencodeGlobalTests(_Tmp):

@@ -29,9 +29,10 @@ them at `--theme` / the setup wizard, not this {{SKILL}}.
    Use `--from` alone to clone-and-rename, `--palette` alone for a from-scratch palette,
    or both (palette overrides the cloned base). `--solid-only` / `--transparent-only` to
    write just one flavour; `--global` to force the global dir from inside a repo.
-5. **Tell the user how to select it:** `/theme <name>` (opaque) or `/theme
-   <name>-transparent` (terminal background shows through). Mention that the file is
-   theirs — named without the `geneseed-` prefix, so a harness rebuild never erases it.
+5. **Tell the user how to select it:** the name is branded `geneseed-<name>` so every
+   harness theme groups together in the picker — `/theme geneseed-<name>` (opaque) or
+   `/theme geneseed-<name>-transparent` (terminal background shows through). A rebuild
+   never erases it — preservation keys off the emit set, not the prefix.
 
 ## Done when
 - Both `<name>.json` (and/or `<name>-transparent.json`) exist in the active themes dir,

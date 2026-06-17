@@ -109,7 +109,7 @@ def build_argparser() -> argparse.ArgumentParser:
 
     th = sub.add_parser("theme", help="create a user OpenCode colour theme (solid + transparent) "
                                       "in the live themes dir; survives rebuilds")
-    th.add_argument("name", help="theme name (selected as /theme <name>; 'geneseed-' is reserved)")
+    th.add_argument("name", help="theme name (auto-prefixed 'geneseed-'; selected as /theme geneseed-<name>)")
     th.add_argument("--from", dest="from_theme", default=None, metavar="SHIPPED",
                     help="seed the full palette from a shipped theme (e.g. tokyonight), then tweak")
     th.add_argument("--palette", default=None, metavar="FILE",

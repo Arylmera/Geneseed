@@ -142,11 +142,11 @@ def _load_user_palette(args: argparse.Namespace) -> dict:
 
 def cmd_theme(args: argparse.Namespace) -> int:
     """Write a user colour theme (both flavours) into the live OpenCode themes dir. The
-    file is the USER's — named without the `geneseed-` prefix, so a harness rebuild never
-    erases it (spec §8.2). Select it in OpenCode with `/theme <name>`."""
+    name is branded with the `geneseed-` prefix so every harness theme groups together in
+    the picker; a rebuild still never erases it — preservation keys off the emit set, not
+    the prefix (spec §8.2). Select it in OpenCode with `/theme geneseed-<name>`."""
     name = args.name
-    if name.startswith("geneseed-"):
-        raise SystemExit("[theme] 'geneseed-' is the harness's reserved namespace; pick another name")
+    full = name if name.startswith("geneseed-") else f"geneseed-{name}"
     pal = _load_user_palette(args)
     dest_dir = _resolve_themes_dir(args)
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -155,13 +155,13 @@ def cmd_theme(args: argparse.Namespace) -> int:
                [("", False), ("-transparent", True)]
     written = []
     for suffix, transparent in flavours:
-        dest = dest_dir / f"{name}{suffix}.json"
+        dest = dest_dir / f"{full}{suffix}.json"
         dest.write_text(json.dumps(build._color_theme_json(pal, transparent), indent=2) + "\n",
                         encoding="utf-8")
         written.append(dest)
     print(f"[theme] wrote {', '.join(p.name for p in written)} to {dest_dir}")
-    print(f"[theme] select in OpenCode with: /theme {name}"
-          + ("" if args.solid_only else f"  (or /theme {name}-transparent)"))
+    print(f"[theme] select in OpenCode with: /theme {full}"
+          + ("" if args.solid_only else f"  (or /theme {full}-transparent)"))
     return 0
 
 

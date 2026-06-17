@@ -184,20 +184,25 @@ So the global path is already correct. Only per-repo erases.
 
 ### 8.2 The ownership rule (the whole design)
 
-> **Geneseed owns exactly `geneseed-*.json` in the themes dir. Every other theme file
-> is the user's, and Geneseed never creates or deletes it.**
+> **Geneseed owns exactly the theme files a given emit *writes*. Any other theme file in
+> the dir is the user's, and is never deleted.**
 
-This is the same boundary the shipped themes already use (`geneseed-<name>-{solid,
-transparent}.json`). It makes preservation a one-liner per mode:
+Preservation keys off the **emit set**, not a filename prefix — so user themes can also
+carry the `geneseed-` prefix (they group with the shipped ones in the picker) and still
+survive. Per mode:
 
-- **Global:** already holds — user files aren't in the manifest. No change.
-- **Per-repo:** snapshot the non-`geneseed-*` files under `.opencode/themes/` before the
-  `rmtree`, restore them after re-emit. ~5 lines. (We still want the full wipe for
-  agents/skills/commands so removed ones leave no stale file — themes are the only
-  carve-out.)
+- **Global:** already holds — user files aren't in the install manifest. No change.
+- **Per-repo:** snapshot **all** theme files under `.opencode/themes/` before the
+  `rmtree`, then after re-emit restore only the ones the emit did *not* regenerate (the
+  shipped themes were just recreated, so they already exist; what's left to restore is
+  exactly the user's themes). The full wipe still applies to agents/skills/commands so
+  removed ones leave no stale file — themes are the only carve-out.
+  *Ceiling (ponytail-flagged in code): deleting a shipped palette source would resurrect
+  its old emitted file rather than drop it — only a maintainer editing `themes/opencode/`
+  would see it; move to a manifest/emit-set diff if it ever matters.*
 
-User themes therefore live **where OpenCode already reads them** (`.opencode/themes/` or
-`<cfg>/themes/`), under any non-`geneseed-` name, selectable as plain `/theme <name>`.
+User themes live **where OpenCode already reads them** (`.opencode/themes/` or
+`<cfg>/themes/`), branded `geneseed-<name>`, selectable as `/theme geneseed-<name>`.
 Bonus: they live in the *config dir*, not the harness checkout, so they also survive a
 harness reinstall / `git pull` / fresh clone — nothing about them depends on the harness
 source tree.
@@ -209,7 +214,7 @@ source tree.
 | Where | `themes/opencode/<name>.json` (palette) | `<themes-dir>/<name>.json` (full theme) |
 | Re-emitted each build | yes (`geneseed-<name>-*`) | no — static user file |
 | Survives harness re-clone | no (untracked in repo) | **yes** (lives in config dir) |
-| Ownership | named `geneseed-*` = ours | non-geneseed = theirs, untouched |
+| Ownership | named `geneseed-*` = ours | preserved by emit-set diff, untouched |
 | Build change needed | none | ~5-line per-repo carve-out |
 
 **Y is chosen** — the stronger "we literally never touch your files" guarantee, clean

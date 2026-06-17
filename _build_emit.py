@@ -137,24 +137,23 @@ def color_theme_files() -> list[Path]:
     return sorted(p for p in COLOR_THEMES.glob("*.json") if not p.name.startswith("_"))
 
 
-def user_theme_files(themes_dir: Path) -> list[Path]:
-    """Theme files in `themes_dir` that Geneseed does NOT own — i.e. user-authored themes,
-    anything not named `geneseed-*.json`. Geneseed never creates or deletes these; the
-    `geneseed-` prefix is the ownership boundary (see the spec §8.2)."""
-    if not themes_dir.is_dir():
-        return []
-    return sorted(p for p in themes_dir.glob("*.json") if not p.name.startswith("geneseed-"))
-
-
 def _snapshot_user_themes(themes_dir: Path) -> dict[str, bytes]:
-    """Capture user theme files by name->bytes so a full `.opencode` wipe (which clears
-    stale agents/skills) does not erase the user's themes. Restored by _restore_user_themes."""
-    return {p.name: p.read_bytes() for p in user_theme_files(themes_dir)}
+    """Capture EVERY theme file (name->bytes) before the full `.opencode` wipe. After the
+    emit re-creates the shipped themes, _restore_user_themes rewrites only the ones that
+    were NOT regenerated — i.e. the user's own themes — so a rebuild never erases them,
+    whether or not they carry the `geneseed-` prefix (spec §8.2). Ownership is thus the
+    set of files this emit writes, not the filename prefix.
+    # ponytail: a shipped theme whose source palette was deleted would be resurrected here
+    # rather than dropped. Only bites a maintainer editing themes/opencode/, who rebuilds
+    # and sees it — switch to a manifest/emit-set diff if that ever matters."""
+    if not themes_dir.is_dir():
+        return {}
+    return {p.name: p.read_bytes() for p in themes_dir.glob("*.json")}
 
 
 def _restore_user_themes(themes_dir: Path, saved: dict[str, bytes]) -> None:
-    """Re-write user themes captured before the wipe, skipping any name the new emit already
-    produced (a user file never shadows a freshly-emitted geneseed-* one — names differ)."""
+    """Re-write captured themes the new emit did NOT regenerate — that leaves exactly the
+    user's own themes, since every shipped theme was just recreated and so already exists."""
     themes_dir.mkdir(parents=True, exist_ok=True)
     for name, data in saved.items():
         dest = themes_dir / name
@@ -603,9 +602,9 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
                             encoding="utf-8")
     # `.opencode/` is fully owned by this layer — wipe so a removed agent/skill
     # leaves no stale file behind. (Plural dir names are canonical in OpenCode;
-    # singular is back-compat only.) The one carve-out: user-authored themes (any
-    # non-`geneseed-*` file under .opencode/themes/) are snapshot and restored, so a
-    # rebuild never erases them (spec §8.2).
+    # singular is back-compat only.) The one carve-out: user-authored themes under
+    # .opencode/themes/ are snapshot and restored (any theme the emit doesn't itself
+    # regenerate), so a rebuild never erases them (spec §8.2).
     saved_themes = _snapshot_user_themes(root / ".opencode" / "themes")
     if (root / ".opencode").is_dir():
         shutil.rmtree(root / ".opencode")

@@ -23,14 +23,16 @@ python rituals/harness.py theme mytheme --from tokyonight   # clone a palette, r
 python rituals/harness.py theme mytheme --palette mine.json # or supply your own palette
 ```
 
-This writes `mytheme.json` + `mytheme-transparent.json` straight into the live OpenCode
-themes dir (per-repo `.opencode/themes/`, else the global config dir). Select with
-`/theme mytheme`. Because the file is **not** named `geneseed-*`, a harness rebuild
-**never erases it** (spec §8.2). The model-invoked `theme` skill (`src/skills/theme.md`)
-drives this whole flow for you — just ask for a custom theme.
+This writes `geneseed-mytheme.json` + `geneseed-mytheme-transparent.json` (the name is
+auto-prefixed `geneseed-` so every harness theme groups together in the picker) straight
+into the live OpenCode themes dir (per-repo `.opencode/themes/`, else the global config
+dir). Select with `/theme geneseed-mytheme`. A harness rebuild **never erases it** —
+preservation keeps any theme the emit doesn't itself regenerate, regardless of the prefix
+(spec §8.2). The model-invoked `theme` skill (`src/skills/theme.md`) drives this whole
+flow for you — just ask for a custom theme.
 
 The two dirs are distinct: **shipped palettes** here (re-emitted as `geneseed-<name>-*`),
-**your themes** in the config dir (yours, untouched).
+**your themes** in the config dir (yours, untouched across rebuilds).
 
 ## Authoring a new SHIPPED theme (maintainers)
 
