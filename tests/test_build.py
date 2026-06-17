@@ -404,7 +404,7 @@ class OpencodeJsoncTests(unittest.TestCase):
             j = d / "opencode.json"
             jc = d / "opencode.jsonc"
             original = ('// notes\n{\n  "instructions": ["AGENT.md"],\n'
-                        '  "permission": {"bash": "allow"}\n}\n')
+                        '  "permission": {"bash": "allow"},\n  "lsp": true\n}\n')
             jc.write_text(original, encoding="utf-8")
             out = self._merge(j)
             self.assertEqual(out, "")                           # nothing to add -> no warning

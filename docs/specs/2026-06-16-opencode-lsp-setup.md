@@ -1,7 +1,7 @@
 # OpenCode LSP — ship code intelligence with the harness
 
 **Date:** 2026-06-16
-**Status:** draft
+**Status:** shipped (2026-06-17)
 
 ## Problem
 

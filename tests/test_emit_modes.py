@@ -93,6 +93,7 @@ class OpencodePerRepoTests(_Tmp):
         self.assertTrue((oc / "skills" / "commit" / "SKILL.md").is_file())
         cfg = json.loads((self.d / "opencode.json").read_text(encoding="utf-8"))
         self.assertIn("AGENT.md", json.dumps(cfg.get("instructions", "")))
+        self.assertIs(cfg.get("lsp"), True)            # code intelligence enabled (all built-in servers)
         # AGENT.md keeps its prose but the per-row spec links are de-linked to names.
         agent_md = (out / "AGENT.md").read_text(encoding="utf-8")
         self.assertEqual(build.CAPABILITY_LINK_RE.findall(agent_md), [])

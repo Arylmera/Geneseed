@@ -710,6 +710,30 @@ class SetupFlairTests(unittest.TestCase):
         self.assertNotIn("art", [k for k, _t in rows])
 
 
+class LspPrereqTests(unittest.TestCase):
+    def test_java_major_parse(self):
+        # modern scheme -> major is the leading number; legacy 1.x -> major 1 (< 21)
+        self.assertTrue(harness._java_major_ok('openjdk version "21.0.2" 2024-01-16'))
+        self.assertTrue(harness._java_major_ok('java version "24" 2025-03-18'))
+        self.assertFalse(harness._java_major_ok('java version "1.8.0_392"'))
+        self.assertFalse(harness._java_major_ok('no version string here'))
+
+    def test_prereqs_shape(self):
+        prereqs = harness._lsp_prereqs()
+        self.assertEqual(len(prereqs), 1)
+        label, present, hint = prereqs[0]
+        self.assertIsInstance(label, str)
+        self.assertIsInstance(present, bool)   # machine-dependent value, but always a bool
+        self.assertIn("JDK 21", hint)
+
+    def test_summary_surfaces_lsp_for_opencode_only(self):
+        # opencode emit gets a Java line; the portable "files" emit must not.
+        oc = " ".join(t for _k, t in harness._setup_summary_lines("neutral", "opencode", None, ".", True))
+        files = " ".join(t for _k, t in harness._setup_summary_lines("neutral", "files", "Bundle", None, True))
+        self.assertIn("Java 21+ (jdtls)", oc)
+        self.assertNotIn("Java 21+ (jdtls)", files)
+
+
 class TuiInventoryTests(unittest.TestCase):
     def test_counts_and_bodies(self):
         inv = harness._tui_inventory("neutral")

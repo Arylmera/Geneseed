@@ -277,7 +277,7 @@ def _read_jsonc(text: str) -> "tuple[object, bool]":
 
 
 def _warn_commented_jsonc(target: Path, agent_path: str, include_permission: bool,
-                          prefix: str = "geneseed") -> None:
+                          include_lsp: bool = False, prefix: str = "geneseed") -> None:
     """Tell the user how to wire Geneseed in by hand. Called only when `target` is a
     `.jsonc` carrying comments and we have a real change to make — we refuse to rewrite
     such a file (it would drop the comments), so we print the exact entry instead."""
@@ -288,6 +288,8 @@ def _warn_commented_jsonc(target: Path, agent_path: str, include_permission: boo
         print(f"[{prefix}] and, for Geneseed's default ask-gates, a \"permission\" key:")
         for line in json.dumps(_default_permission(), indent=2).splitlines():
             print(f"[{prefix}]     {line}")
+    if include_lsp:
+        print(f"[{prefix}] and, to enable code intelligence, a top-level \"lsp\": true")
 
 
 def _merge_opencode_json(path: Path, agent_path: str) -> Path:
@@ -321,10 +323,13 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
     add_perm = "permission" not in config
     if add_perm:
         config["permission"] = _default_permission()
-    if not (add_instr or add_perm):
+    add_lsp = "lsp" not in config
+    if add_lsp:
+        config["lsp"] = True   # enable every built-in server (LSP is off by default)
+    if not (add_instr or add_perm or add_lsp):
         return target   # already wired — leave the file (and any comments) untouched
     if target.suffix == ".jsonc" and had_comments:
-        _warn_commented_jsonc(target, agent_path, add_perm)
+        _warn_commented_jsonc(target, agent_path, add_perm, add_lsp)
         return target
     target.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     return target
