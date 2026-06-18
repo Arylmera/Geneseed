@@ -34,32 +34,28 @@ function TimelineRow({ rec }) {
   )
 }
 
-function GistRow({ who, label, text }) {
-  return (
-    <div className="row gap-10" style={{ alignItems: 'baseline' }}>
-      <span className="badge" style={{ flexShrink: 0, minWidth: 52, justifyContent: 'center' }}>
-        {who}
-      </span>
-      <div style={{ minWidth: 0 }}>
-        <div className="dim" style={{ fontSize: 11 }}>{label}</div>
-        <div style={{ fontSize: 13 }}>{text}</div>
-      </div>
-    </div>
-  )
-}
-
-// The compact default for the timeline: the first ask, the latest ask (when it
-// differs), and the latest reply — the conversation at a glance.
-function Gist({ conv }) {
-  const { first_prompt: first, last_prompt: last, last_response: reply } = conv
-  if (!first && !last && !reply) {
+// The compact default for the timeline: the full conversation as an ordered
+// transcript of bounded turns (you / agent), oldest → newest.
+function Conversation({ turns }) {
+  if (!turns || turns.length === 0) {
     return <div className="dim" style={{ fontSize: 13 }}>No conversation captured yet.</div>
   }
   return (
     <div className="stack gap-12">
-      {first && <GistRow who="you" label="first ask" text={first} />}
-      {last && last !== first && <GistRow who="you" label="latest ask" text={last} />}
-      {reply && <GistRow who="agent" label="latest reply" text={reply} />}
+      {turns.map((m, i) => {
+        const you = m.role === 'user'
+        return (
+          <div key={i} className="row gap-10" style={{ alignItems: 'baseline' }}>
+            <span
+              className={`badge ${you ? '' : 'acc'}`}
+              style={{ flexShrink: 0, minWidth: 52, justifyContent: 'center' }}
+            >
+              {you ? 'you' : 'agent'}
+            </span>
+            <div style={{ minWidth: 0, fontSize: 13, color: you ? 'inherit' : 'var(--text-2)' }}>{m.text}</div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -131,7 +127,7 @@ export default function ActivityDetail({ sid }) {
   const todosShown = !!(todos && todos.items && todos.items.length > 0)
   // Newest first — the latest step is always in view without scrolling a long log.
   const timeline = [...(data.timeline || [])].reverse()
-  const conversation = data.conversation || {}
+  const conversation = data.conversation || []
 
   return (
     <div className="narrow">
@@ -248,7 +244,7 @@ export default function ActivityDetail({ sid }) {
           <h3>Timeline</h3>
           {timeline.length > 0 && (
             <button className="btn ghost sm" onClick={() => setExpanded((v) => !v)}>
-              {expanded ? 'Show gist' : `Show all ${timeline.length} steps`}
+              {expanded ? 'Show conversation' : `Show all ${timeline.length} steps`}
             </button>
           )}
         </div>
@@ -259,7 +255,7 @@ export default function ActivityDetail({ sid }) {
             ))}
           </div>
         ) : (
-          <Gist conv={conversation} />
+          <Conversation turns={conversation} />
         )}
       </div>
     </div>

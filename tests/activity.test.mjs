@@ -273,9 +273,9 @@ test("event hook: v1.2 detail timeline on disk", async () => {
   }
 })
 
-// Conversation gist (v1.2 compact timeline): chat.message captures first/last user
-// prompt; streaming assistant text sets last_response; all land in the detail file.
-test("chat.message + text → conversation gist in the detail file", async () => {
+// Conversation transcript (compact timeline): chat.message appends user turns,
+// streaming assistant text appends/updates assistant turns — an ordered list on disk.
+test("chat.message + text → full conversation transcript in the detail file", async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gs-act-conv-"))
   const saved = process.env.OPENCODE_CONFIG_DIR
   process.env.OPENCODE_CONFIG_DIR = tmp
@@ -285,24 +285,21 @@ test("chat.message + text → conversation gist in the detail file", async () =>
     const fire = (type, properties) => hooks.event({ event: { type, properties } })
     await fire("session.created", { info: { id: "s", title: "t", directory: "/repo" } })
 
-    // first user prompt
-    await hooks["chat.message"]({ sessionID: "s" }, { parts: [{ type: "text", text: "add a toggle" }] })
-    assert.equal(conv().first_prompt, "add a toggle")
-    assert.equal(conv().last_prompt, "add a toggle")
+    // user → assistant (streams, same messageID updates in place) → user
+    await hooks["chat.message"]({ sessionID: "s", messageID: "u1" }, { parts: [{ type: "text", text: "add a toggle" }] })
+    await fire("message.part.updated", { part: { type: "text", id: "p1", messageID: "a1", sessionID: "s", text: "added" } })
+    await fire("message.part.updated", { part: { type: "text", id: "p1", messageID: "a1", sessionID: "s", text: "done — added the switch" } })
+    await hooks["chat.message"]({ sessionID: "s", messageID: "u2" }, { parts: [{ type: "text", text: "now make it 50/50" }] })
 
-    // assistant streams its reply (text flushes are throttled — persisted on the
-    // next forced flush, which the following chat.message triggers)
-    await fire("message.part.updated", { part: { type: "text", id: "tx1", sessionID: "s", text: "done — added the switch" } })
-
-    // a later user prompt updates last_prompt (force-flushes) but not first_prompt
-    await hooks["chat.message"]({ sessionID: "s" }, { parts: [{ type: "text", text: "now make it 50/50" }] })
     const c = conv()
-    assert.equal(c.first_prompt, "add a toggle")     // unchanged
-    assert.equal(c.last_prompt, "now make it 50/50")
-    assert.equal(c.last_response, "done — added the switch")
+    assert.equal(c.length, 3)                                  // a1 streamed once, not per delta
+    assert.deepEqual(c.map((m) => m.role), ["user", "assistant", "user"])
+    assert.equal(c[0].text, "add a toggle")
+    assert.equal(c[1].text, "done — added the switch")         // latest snippet of the assistant turn
+    assert.equal(c[2].text, "now make it 50/50")
 
     // a child/unowned session is ignored
-    await hooks["chat.message"]({ sessionID: "ghost" }, { parts: [{ type: "text", text: "x" }] })
+    await hooks["chat.message"]({ sessionID: "ghost", messageID: "x" }, { parts: [{ type: "text", text: "x" }] })
     assert.ok(!fs.existsSync(path.join(tmp, "activity", "ghost.detail.json")))
   } finally {
     if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR

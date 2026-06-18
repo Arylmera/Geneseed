@@ -75,6 +75,9 @@ const TODO_CAP = 12
 const LOG_CAP = 200
 const DETAIL_THROTTLE_MS = 700
 const SNIPPET_LEN = 160
+// The conversation transcript (one bounded turn per user/assistant message) is capped
+// so a very long chat stays bounded on disk; oldest turns drop first.
+const CONV_CAP = 60
 
 // --- pure helpers (exported for tests) ---------------------------------------
 
@@ -192,9 +195,11 @@ export const GeneseedActivity = async () => {
   const acctFor = (sid) => { let m = accts.get(sid); if (!m) { m = new Map(); accts.set(sid, m) } return m }
   const pendingFor = (sid) => { let s = pending.get(sid); if (!s) { s = new Set(); pending.set(sid, s) } return s }
   const tlFor = (sid) => { let m = timelines.get(sid); if (!m) { m = new Map(); timelines.set(sid, m) } return m }
+  // convo: an ordered Map(messageId -> {role,text,t}) — one bounded turn per message,
+  // keyed by message id so a streaming assistant turn updates in place (not per delta).
   const detFor = (sid) => {
     let d = details.get(sid)
-    if (!d) { d = { files: null, todos: null, lastMs: 0, conv: { first_prompt: null, last_prompt: null, last_response: null } }; details.set(sid, d) }
+    if (!d) { d = { files: null, todos: null, lastMs: 0, convo: new Map() }; details.set(sid, d) }
     return d
   }
   const forget = (sid) => {
@@ -209,6 +214,14 @@ export const GeneseedActivity = async () => {
     m.set(key, rec)
     while (m.size > LOG_CAP) m.delete(m.keys().next().value)
   }
+  // Record a conversation turn (user prompt or assistant reply), keyed by message id so
+  // a streaming assistant turn updates in place. Capped to the most recent CONV_CAP.
+  let userSeq = 0
+  const pushTurn = (sid, key, role, text) => {
+    const c = detFor(sid).convo
+    c.set(key || `u${userSeq++}`, { role, text: snip(text, CONV_LEN), t: Date.now() })
+    while (c.size > CONV_CAP) c.delete(c.keys().next().value)
+  }
   // Rewrite the detail file (uncapped files/todos + timeline). Throttled per session —
   // a text-streaming turn updates the ring in memory but only flushes ~1/700ms, except
   // on `force` (tool end / step / subtask / idle / error) which flushes immediately.
@@ -218,7 +231,7 @@ export const GeneseedActivity = async () => {
       const now = Date.now()
       if (!force && now - d.lastMs < DETAIL_THROTTLE_MS) return
       d.lastMs = now
-      writeJson(detailPath(sid), { files: d.files, todos: d.todos, conversation: d.conv, timeline: [...tlFor(sid).values()] })
+      writeJson(detailPath(sid), { files: d.files, todos: d.todos, conversation: [...d.convo.values()], timeline: [...tlFor(sid).values()] })
     } catch (err) { log(`detail ${sid} failed: ${err?.message ?? err}`) }
   }
   // Record a message part into the timeline. Returns true when it should force a flush.
@@ -236,9 +249,10 @@ export const GeneseedActivity = async () => {
       }
       case "reasoning": pushStep(sid, part.id, { t, kind: "thinking", snippet: snip(part.text) }); return false
       case "text":
-        // Streaming assistant text — the latest is the session's last reply (gist).
+        // Streaming assistant text — a timeline step AND an assistant turn in the
+        // conversation (keyed by message id so the streaming turn updates in place).
         pushStep(sid, part.id, { t, kind: "text", snippet: snip(part.text) })
-        detFor(sid).conv.last_response = snip(part.text, CONV_LEN)
+        pushTurn(sid, part.messageID, "assistant", part.text)
         return false
       case "subtask": pushStep(sid, part.id, { t, kind: "subtask", agent: part.agent, label: part.description }); return true
       case "step-finish": pushStep(sid, part.id, { t, kind: "step", reason: part.reason, cost: part.cost, tokens: (part.tokens?.input || 0) + (part.tokens?.output || 0) }); return true
@@ -389,10 +403,9 @@ export const GeneseedActivity = async () => {
       }
     },
 
-    // Capture the user's prompt for the conversation gist (v1.2 compact timeline):
-    // first_prompt (set once) + last_prompt, as bounded snippets. The purpose-built
-    // signal for "a user message arrived with its text" — assistant replies come from
-    // the streaming text parts above. Gated on the toggle like the event hook.
+    // Capture each user prompt as a conversation turn — the purpose-built signal for
+    // "a user message arrived with its text". Assistant replies come from the streaming
+    // text parts above; together they form the full transcript. Toggle-gated.
     "chat.message": async (input, output) => {
       try {
         if (!isEnabled()) return
@@ -401,9 +414,7 @@ export const GeneseedActivity = async () => {
         const parts = output?.parts || []
         const text = parts.filter((p) => p?.type === "text" && p.text).map((p) => p.text).join(" ").trim()
         if (!text) return
-        const c = detFor(sid).conv
-        if (!c.first_prompt) c.first_prompt = snip(text, CONV_LEN)
-        c.last_prompt = snip(text, CONV_LEN)
+        pushTurn(sid, input.messageID, "user", text)
         flushDetail(sid, true)
       } catch (err) {
         log(`chat.message ${input?.sessionID} failed: ${err?.message ?? err}`)

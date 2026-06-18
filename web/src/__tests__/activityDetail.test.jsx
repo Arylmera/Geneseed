@@ -23,7 +23,11 @@ describe('ActivityDetail page', () => {
             files: { count: 1, items: [{ file: 'a.js', additions: 9, deletions: 1 }] },
             todos: { done: 1, total: 2, items: [{ content: 'do x', status: 'completed' }, { content: 'do y', status: 'pending' }] },
           },
-          conversation: { first_prompt: 'add a toggle', last_prompt: 'make it 50/50', last_response: 'done — added the switch' },
+          conversation: [
+            { role: 'user', text: 'add a toggle' },
+            { role: 'assistant', text: 'done — added the switch' },
+            { role: 'user', text: 'make it 50/50' },
+          ],
           timeline: [
             { kind: 'tool', label: 'Editing a.js', status: 'completed', ms: 1500 },
             { kind: 'text', snippet: 'here is the plan' },

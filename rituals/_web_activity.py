@@ -149,14 +149,13 @@ def api_activity_detail(state: WebState, sid: str) -> dict:
     # The detail file carries the uncapped lists; fall back to the snapshot's capped ones.
     session["files"] = full.get("files") or session.get("files")
     session["todos"] = full.get("todos") or session.get("todos")
-    # Conversation gist (compact timeline): first/last user prompt + last reply. The
-    # first prompt falls back to the title (OpenCode derives it from the first prompt).
-    conv = full.get("conversation") if isinstance(full.get("conversation"), dict) else {}
-    conversation = {
-        "first_prompt": conv.get("first_prompt") or session.get("title"),
-        "last_prompt": conv.get("last_prompt"),
-        "last_response": conv.get("last_response"),
-    }
+    # Conversation transcript (compact timeline): an ordered list of {role,text,t}
+    # turns. Empty → fall back to the title as the opening user turn (OpenCode derives
+    # the title from the first prompt).
+    conv = full.get("conversation")
+    conversation = conv if isinstance(conv, list) else []
+    if not conversation and session.get("title"):
+        conversation = [{"role": "user", "text": session["title"]}]
     return {"session": session, "timeline": timeline, "conversation": conversation}
 
 
