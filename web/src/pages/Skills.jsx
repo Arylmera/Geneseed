@@ -56,7 +56,9 @@ function SkillRow({ skill, isOpen, onToggle }) {
           ) : (
             <p className="dim">Loading…</p>
           )}
-          <div className="law-srcline">$ geneseed skill {skill.name} · skills/{skill.name}.md</div>
+          <div className="law-srcline">
+            $ geneseed skill {skill.name} · skills/{skill.name}.md
+          </div>
         </div>
       )}
     </>

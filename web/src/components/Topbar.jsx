@@ -32,8 +32,7 @@ export default function Topbar({ route, target, query, onQuery, mode, onToggleMo
       <div className="prompt">
         <span className="path">{promptPath(target)}</span>
         <span className="sep">$</span>
-        <span className="cmd">geneseed</span>{' '}
-        <span className="flag">--tab={tabFlag(route)}</span>
+        <span className="cmd">geneseed</span> <span className="flag">--tab={tabFlag(route)}</span>
         <span className="cur" />
       </div>
       <div className="topbar-spacer" />
