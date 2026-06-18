@@ -1332,6 +1332,18 @@ class ImprovementsExportTests(unittest.TestCase):
         self.assertEqual(md.count("```"), 6)
         self.assertIn("+new line", md)
 
+    def test_version_marker_date_drift_is_not_an_edit(self):
+        # Same fingerprint, different build date -> not a local edit.
+        marker = build.VERSION_MARKER
+        self.assertEqual(harness._cmp_key(marker, "abc123 (built 2026-06-18)\n"),
+                         harness._cmp_key(marker, "abc123 (built 2026-06-17)\n"))
+        # Different fingerprint -> still flagged.
+        self.assertNotEqual(harness._cmp_key(marker, "abc123 (built 2026-06-18)\n"),
+                            harness._cmp_key(marker, "def456 (built 2026-06-18)\n"))
+        # Other owned files compare verbatim.
+        self.assertNotEqual(harness._cmp_key("agents/x.md", "a (built 1)"),
+                            harness._cmp_key("agents/x.md", "a (built 2)"))
+
     def test_default_destination_is_inside_the_deployed_dir(self):
         tmp = Path(tempfile.mkdtemp())        # stands in for ~/.config/opencode
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)

@@ -9,6 +9,15 @@ from _harness_core import *  # noqa: F401,F403  shared stdlib + primitives
 
 
 
+def _cmp_key(rel: str, text: str) -> str:
+    """How an owned file is keyed for drift. `.geneseed-version` carries a build-date
+    stamp that is not a local edit, so key it on the fingerprint token alone."""
+    if rel == build.VERSION_MARKER:
+        toks = text.split()
+        return toks[0] if toks else text
+    return text
+
+
 def _owned_set(d: Path) -> set:
     """The files a global Geneseed install owns, per its .geneseed-manifest.json."""
     try:
@@ -44,7 +53,7 @@ def _diff_collect(target=None, theme=None):
             if a.is_file() and b.is_file():
                 ta = a.read_text(encoding="utf-8", errors="replace")
                 tb = b.read_text(encoding="utf-8", errors="replace")
-                if ta != tb:
+                if _cmp_key(rel, ta) != _cmp_key(rel, tb):
                     diff = list(difflib.unified_diff(
                         tb.splitlines(), ta.splitlines(),
                         fromfile=f"source/{rel}", tofile=f"deployed/{rel}", lineterm=""))
