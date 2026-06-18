@@ -19,7 +19,8 @@ describe('Rail navigation', () => {
   })
 
   it('keeps Library lit on section + item routes', () => {
-    render(<Rail route={{ view: 'section', section: 'skills' }} overview={overview} />)
+    // Library owns every section except laws and skills (those have their own tabs).
+    render(<Rail route={{ view: 'section', section: 'memory' }} overview={overview} />)
     expect(screen.getByText('Library').closest('a').className).toContain('active')
   })
 
@@ -39,8 +40,9 @@ describe('Rail navigation', () => {
 
   it('does not render section sub-items in the rail', () => {
     render(<Rail route={{ view: 'library' }} overview={overview} />)
-    // "Skills" used to appear as a sub-menu entry; now it lives in the
-    // Library chip-bar (rendered by the Library page, not the rail).
-    expect(screen.queryByText('Skills')).toBeNull()
+    // Library's sections (Memory, Notebook, Wiki, …) live in the Library
+    // chip-bar, not the rail. Skills and Laws are the exceptions — each is now
+    // its own top-level rail entry.
+    expect(screen.queryByText('Memory')).toBeNull()
   })
 })

@@ -2,17 +2,19 @@ import { describe, it, expect } from 'vitest'
 import { SECTIONS, SECTION_ORDER, TYPE_TO_SECTION } from '../lib/sections.js'
 
 describe('sections taxonomy', () => {
-  it('SECTION_ORDER is the SECTIONS keys minus laws (it has its own tab)', () => {
-    // Laws are governed by the dedicated #/laws ledger, not the Library chip-bar,
-    // so SECTIONS.laws exists (the `law` item type must still resolve) but is
-    // deliberately absent from SECTION_ORDER. Every other key is present.
+  it('SECTION_ORDER is the SECTIONS keys minus laws and skills (each has its own tab)', () => {
+    // Laws and Skills each get a dedicated top-level tab (#/laws, #/skills) with a
+    // purpose-built ledger, not the generic Library chip-bar. SECTIONS.laws/.skills
+    // still exist so the `law`/`skill` item types resolve, but both are deliberately
+    // absent from SECTION_ORDER. Every other key is present.
     expect([...SECTION_ORDER].sort()).toEqual(
       Object.keys(SECTIONS)
-        .filter((k) => k !== 'laws')
+        .filter((k) => k !== 'laws' && k !== 'skills')
         .sort(),
     )
     expect(SECTION_ORDER).not.toContain('laws')
-    expect(SECTION_ORDER).toHaveLength(6)
+    expect(SECTION_ORDER).not.toContain('skills')
+    expect(SECTION_ORDER).toHaveLength(5)
   })
 
   it('every section carries a full set of display metadata', () => {
