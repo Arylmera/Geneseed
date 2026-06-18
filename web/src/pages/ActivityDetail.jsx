@@ -149,7 +149,10 @@ export default function ActivityDetail({ sid }) {
       </div>
 
       {((files && files.items && files.items.length > 0) || (todos && todos.items && todos.items.length > 0)) && (
-        <div className="grid g-2 gap-12" style={{ marginTop: 12 }}>
+        <div
+          className="grid gap-12"
+          style={{ marginTop: 12, gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}
+        >
           {files && files.items && files.items.length > 0 && (
             <div className="card pad-md">
               <div className="card-head">
@@ -160,7 +163,7 @@ export default function ActivityDetail({ sid }) {
               <div className="stack" style={{ gap: 6, marginTop: 8 }}>
                 {files.items.map((f) => (
                   <div key={f.file} className="row between gap-12" style={{ fontSize: 13 }}>
-                    <span className="mono" style={ELLIPSIS} title={f.file}>
+                    <span className="mono" style={{ ...ELLIPSIS, minWidth: 0, flex: 1 }} title={f.file}>
                       {f.file}
                     </span>
                     <span style={{ flexShrink: 0 }}>
