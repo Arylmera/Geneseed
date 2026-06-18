@@ -85,7 +85,21 @@ export default function Activity() {
     }
   }, [])
 
+  // Default on when the field is absent (older server / first paint).
+  const enabled = data ? data.enabled !== false : true
   const sessions = data?.activity || []
+
+  const toggle = async () => {
+    const next = !enabled
+    try {
+      const res = await api.activityToggle(next)
+      // Optimistic: reflect the flip now; the next poll reconciles from disk.
+      setData((d) => ({ ...(d || {}), enabled: res.enabled, activity: res.enabled ? d?.activity || [] : [] }))
+      setError('')
+    } catch (e) {
+      setError(e.message)
+    }
+  }
 
   return (
     <div className="narrow">
@@ -97,10 +111,34 @@ export default function Activity() {
             Refreshes every couple of seconds; sessions drop off when their process exits.
           </p>
         </div>
+        <div className="row gap-10" style={{ alignItems: 'center', flexShrink: 0 }}>
+          <span className="dim mono" style={{ fontSize: 12 }}>
+            {enabled ? 'tracking on' : 'tracking off'}
+          </span>
+          <div
+            className={`sw-toggle${enabled ? ' on' : ''}`}
+            role="switch"
+            aria-checked={enabled}
+            aria-label="Toggle activity tracking"
+            tabIndex={0}
+            onClick={toggle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                if (e.key === ' ') e.preventDefault()
+                toggle()
+              }
+            }}
+          />
+        </div>
       </div>
       <ErrorState error={error} style={{ marginBottom: 12 }} />
       {!data ? (
         <Loading label="Reading live sessions…" />
+      ) : !enabled ? (
+        <div className="empty">
+          <div className="big">Activity tracking is off</div>
+          The plugin isn&apos;t recording sessions. Flip the switch to turn it back on.
+        </div>
       ) : sessions.length === 0 ? (
         <div className="empty">
           <div className="big">No active sessions</div>

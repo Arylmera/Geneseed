@@ -36,4 +36,24 @@ describe('Activity page', () => {
     expect(screen.getByText('your move')).toBeTruthy() // waiting-input → "your move"
     expect(screen.getByText('other-dir')).toBeTruthy() // no title → cwd basename
   })
+
+  it('reflects the disabled flag with an off state and an unchecked switch', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: false, activity: [] })))
+    render(<Activity />)
+    expect(await screen.findByText('Activity tracking is off')).toBeTruthy()
+    expect(document.querySelector('.sw-toggle').getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('posts the new state when the switch is clicked', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: [] })))
+    render(<Activity />)
+    await screen.findByText('No active sessions') // enabled + empty
+    document.querySelector('.sw-toggle').click()
+    await vi.waitFor(() => {
+      const post = global.fetch.mock.calls.find((c) => c[1]?.method === 'POST')
+      expect(post).toBeTruthy()
+      expect(post[0]).toBe('/api/activity')
+      expect(JSON.parse(post[1].body)).toEqual({ enabled: false })
+    })
+  })
 })

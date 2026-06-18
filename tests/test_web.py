@@ -929,7 +929,9 @@ class ActivityTests(unittest.TestCase):
     def test_missing_dir_is_empty(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:
-            self.assertEqual(web.api_activity(self._state(t)), {"activity": []})
+            res = web.api_activity(self._state(t))
+            self.assertEqual(res["activity"], [])
+            self.assertTrue(res["enabled"])
 
     def test_globs_live_entries(self):
         import os
@@ -976,6 +978,36 @@ class ActivityTests(unittest.TestCase):
             d.mkdir()
             (d / "broken.json").write_text("{ not json", encoding="utf-8")
             self.assertEqual(web.api_activity(self._state(t))["activity"], [])
+
+    def test_enabled_by_default(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self.assertTrue(web.api_activity(self._state(t))["enabled"])
+
+    def test_toggle_off_persists_and_gates_output(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            state = self._state(t)
+            # A live entry that would otherwise show.
+            self._write(t, "ses_a.json", {
+                "session_id": "ses_a", "status": "busy",
+                "pid": os.getpid(), "updated_at": time.time(),
+            })
+            self.assertEqual(len(web.api_activity(state)["activity"]), 1)
+            res = web.api_activity_toggle(state, {"enabled": False})
+            self.assertEqual(res, {"ok": True, "enabled": False})
+            self.assertTrue((Path(t) / ".geneseed-activity").is_file())
+            # Disabled → output gated to [], flag reported off (files left for the
+            # plugin to clear on its next event).
+            out = web.api_activity(state)
+            self.assertFalse(out["enabled"])
+            self.assertEqual(out["activity"], [])
+            # Back on → entries flow again.
+            web.api_activity_toggle(state, {"enabled": True})
+            self.assertTrue(web.api_activity(state)["enabled"])
+            self.assertEqual(len(web.api_activity(state)["activity"]), 1)
 
 
 if __name__ == "__main__":

@@ -26,6 +26,22 @@ def _activity_dir(state: WebState) -> Path:
     return state.target / "activity"
 
 
+def _activity_flag(state: WebState) -> Path:
+    """The runtime on/off flag, written by the toggle and read by the plugin each
+    event. Same path both sides resolve (plugin: configBase()/.geneseed-activity)."""
+    return state.target / ".geneseed-activity"
+
+
+def _activity_enabled(state: WebState) -> bool:
+    """Enabled unless the flag file explicitly says off — mirrors the plugin's
+    enabledFromFlag(). Absent file → on (the default)."""
+    try:
+        raw = _activity_flag(state).read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        return True
+    return raw not in ("off", "0", "false", "no")
+
+
 def _pid_alive(pid) -> bool:
     """Best-effort liveness for the writer process. os.kill(pid, 0) raises
     ProcessLookupError if the pid is dead and nothing if it is alive (or
@@ -81,4 +97,18 @@ def _activity_entries(state: WebState) -> list[dict]:
 
 
 def api_activity(state: WebState) -> dict:
-    return {"activity": _activity_entries(state)}
+    enabled = _activity_enabled(state)
+    return {"enabled": enabled, "activity": _activity_entries(state) if enabled else []}
+
+
+def api_activity_toggle(state: WebState, body: dict) -> dict:
+    """Flip the runtime on/off flag. The plugin reads it each event, so the change
+    takes effect without restarting opencode. Writing 'off' also makes the plugin
+    clear its files on its next event; the reader gates output immediately."""
+    enabled = bool(body.get("enabled", True))
+    try:
+        _activity_flag(state).parent.mkdir(parents=True, exist_ok=True)
+        _activity_flag(state).write_text("on" if enabled else "off", encoding="utf-8")
+    except OSError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "enabled": enabled}

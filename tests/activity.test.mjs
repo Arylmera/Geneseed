@@ -8,7 +8,12 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import GeneseedActivity from "../adapters/opencode/plugins/geneseed-activity.js"
-const { sidOf, nextStatus, applyEvent, safeName } = GeneseedActivity
+const { sidOf, nextStatus, applyEvent, safeName, enabledFromFlag } = GeneseedActivity
+
+test("enabledFromFlag: only an explicit off-word disables; absent/blank → on", () => {
+  for (const off of ["off", "OFF", " 0 ", "false", "no"]) assert.equal(enabledFromFlag(off), false)
+  for (const on of ["on", "1", "true", "", "  ", null, undefined, "yes"]) assert.equal(enabledFromFlag(on), true)
+})
 
 test("sidOf: pulls the session id from every event shape", () => {
   assert.equal(sidOf({ sessionID: "ses_a" }), "ses_a")              // session.status

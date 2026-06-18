@@ -25,21 +25,40 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-const OFF = ["off", "0", "false", "no"].includes((process.env.GENESEED_ACTIVITY || "on").toLowerCase())
+// GENESEED_ACTIVITY=off is a hard kill switch at startup; the web console's runtime
+// toggle is the .geneseed-activity flag file checked per event (see isEnabled).
+const ENV_OFF = ["off", "0", "false", "no"].includes((process.env.GENESEED_ACTIVITY || "on").toLowerCase())
 const DEBUG = !!process.env.GENESEED_DEBUG
 const PID = process.pid
 function log(msg) { if (DEBUG) console.error(`[geneseed-activity] ${msg}`) }
 
-// The activity dir, resolved to EXACTLY match the Python reader's
+// The OpenCode config dir, resolved to EXACTLY match the Python reader's
 // build._opencode_config_dir() precedence ($OPENCODE_CONFIG_DIR > $XDG_CONFIG_HOME/
 // opencode > ~/.config/opencode). Copying geneseed-ponytail's statePath() verbatim
 // would check XDG only and diverge from the reader whenever $OPENCODE_CONFIG_DIR is
 // set — the one path-divergence bug this seam exists to avoid.
-function activityDir() {
-  const base =
+function configBase() {
+  return (
     process.env.OPENCODE_CONFIG_DIR ||
     path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "opencode")
-  return path.join(base, "activity")
+  )
+}
+function activityDir() { return path.join(configBase(), "activity") }
+
+// The runtime on/off flag the web console writes (one word). Beside the OpenCode
+// config like geneseed-ponytail's state file, and read every event so the toggle
+// takes effect without restarting opencode. The reader resolves the same path
+// (state.target / ".geneseed-activity").
+function stateFile() { return path.join(configBase(), ".geneseed-activity") }
+
+// Pure: a flag-file body disables only when it explicitly says so; absent/empty/
+// anything-else → enabled. Exported for tests.
+function enabledFromFlag(raw) {
+  return !["off", "0", "false", "no"].includes(String(raw ?? "").trim().toLowerCase())
+}
+function isEnabled() {
+  if (ENV_OFF) return false
+  try { return enabledFromFlag(fs.readFileSync(stateFile(), "utf8")) } catch { return true }
 }
 
 // --- pure helpers (exported for tests) ---------------------------------------
@@ -130,7 +149,13 @@ export const GeneseedActivity = async () => {
 
   return {
     event: async ({ event }) => {
-      if (OFF || !event) return
+      if (!event) return
+      // Runtime toggle: when disabled, stop writing and clear any files we already
+      // own (so the dir empties out), then no-op until re-enabled.
+      if (!isEnabled()) {
+        if (owned.size) { for (const sid of owned.keys()) removeEntry(sid); owned.clear() }
+        return
+      }
       const props = event.properties ?? event.payload ?? {}
       const sid = sidOf(props)
       if (!sid || skipped.has(sid)) return
@@ -180,6 +205,6 @@ export const GeneseedActivity = async () => {
 
 // ponytail: OpenCode treats every export as a plugin and rejects non-functions; hang
 // the test helpers off the factory instead — reachable via import, invisible to the loader.
-Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, safeName, activityDir })
+Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, safeName, activityDir, enabledFromFlag })
 
 export default GeneseedActivity
