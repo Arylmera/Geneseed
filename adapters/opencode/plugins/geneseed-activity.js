@@ -14,12 +14,17 @@
 // the reader from ever seeing a torn file. The reader prunes entries whose `pid` is
 // dead or whose `updated_at` is stale, so a crashed writer's file self-cleans.
 //
-// v1 is FLAT: one entry per top-level session. Sub-agent fan-out (subtask parts,
+// FLAT: one entry per top-level session. Sub-agent fan-out (subtask parts,
 // parent→children tree) is deferred — child sessions (those with a parentID) and the
 // learn plugin's throwaway `geneseed-*` distil sessions are skipped entirely.
 //
+// v1.1 enriches each entry from events/fields it already receives or one `case` away:
+// the current phase (tool/thinking), model, session token+cost totals, turn-elapsed,
+// files-touched + churn, the todo/plan, blocked-on-permission, and the last error.
+//
 // GENESEED_ACTIVITY=off disables it. GENESEED_DEBUG=1 logs writes. Every failure is
-// swallowed — it never blocks a session. See docs/specs/2026-06-15-live-activity-surface.md.
+// swallowed — it never blocks a session. See docs/specs/2026-06-15-live-activity-surface.md
+// and docs/specs/2026-06-18-activity-v1.1-enriched-cards.md.
 
 import fs from "node:fs"
 import os from "node:os"
@@ -61,12 +66,16 @@ function isEnabled() {
   try { return enabledFromFlag(fs.readFileSync(stateFile(), "utf8")) } catch { return true }
 }
 
+// Bound the inline lists written per session; the v1.2 detail page carries the full ones.
+const FILE_CAP = 8
+const TODO_CAP = 12
+
 // --- pure helpers (exported for tests) ---------------------------------------
 
 // Session id from an event's properties, across the shapes OpenCode uses:
-// session.status carries `sessionID`; message.updated's `info` (a Message) carries
-// `sessionID`; message.part.updated's `part` carries `sessionID`; session.* carry
-// `info` (a Session) whose own id is `id`.
+// session.status / permission.* carry `sessionID`; message.updated's `info` (a Message)
+// carries `sessionID`; message.part.updated's `part` carries `sessionID`; session.*
+// carry `info` (a Session) whose own id is `id`.
 function sidOf(props) {
   if (!props) return null
   return props.sessionID
@@ -90,8 +99,29 @@ function nextStatus(type, statusType) {
   }
 }
 
+// A readable one-liner from an OpenCode error — a plain string (ToolStateError) or the
+// {name, data:{message}} union (AssistantMessage.error / session.error). null → null.
+function errStr(e) {
+  if (!e) return null
+  if (typeof e === "string") return e
+  return e.data?.message || e.name || "error"
+}
+
+// Per-session token+cost accumulator. cost/tokens are per-AssistantMessage and
+// message.updated re-fires for the SAME streaming message (same id, growing numbers),
+// so we key by message id and sum — same id overwrites (streaming), new id adds (next
+// turn). Mutates `map`, returns the session totals. Exported for tests.
+function acctTotals(map, msgId, cost, tokens) {
+  map.set(msgId, { cost: cost || 0, tokens: tokens || 0 })
+  let c = 0, t = 0
+  for (const v of map.values()) { c += v.cost; t += v.tokens }
+  return { cost: c, tokens: t }
+}
+
 // Pure reducer: prev entry (or null) + an extracted event → next entry, or null to
-// delete the file. The hook does the IO (read meta, write/unlink); this is the logic.
+// delete the file. The hook does the IO + derivation; this just merges. Truthy-set
+// fields (title/cwd/agent/model) only overwrite when provided; clearable fields
+// (phase/turn_started_at/error/blocked_on) use `in` so null can reset them.
 function applyEvent(prev, ev) {
   if (ev.type === "session.deleted") return null
   const next = prev
@@ -101,7 +131,16 @@ function applyEvent(prev, ev) {
   if (ev.title != null) next.title = ev.title || null
   if (ev.cwd) next.cwd = ev.cwd
   if (ev.agent) next.agent = ev.agent
-  const st = nextStatus(ev.type, ev.statusType)
+  if (ev.model) next.model = ev.model
+  if (ev.cost != null) next.cost = ev.cost
+  if (ev.tokens != null) next.tokens = ev.tokens
+  if (ev.files !== undefined) next.files = ev.files
+  if (ev.todos !== undefined) next.todos = ev.todos
+  if ("phase" in ev) next.phase = ev.phase
+  if ("turn_started_at" in ev) next.turn_started_at = ev.turn_started_at
+  if ("error" in ev) next.error = ev.error
+  if ("blocked_on" in ev) next.blocked_on = ev.blocked_on
+  const st = ev.status || nextStatus(ev.type, ev.statusType)
   if (st) next.status = st
   return next
 }
@@ -130,6 +169,12 @@ function removeEntry(sid) {
 export const GeneseedActivity = async () => {
   const owned = new Map()    // sid -> entry (top-level sessions this process tracks)
   const skipped = new Set()  // sid -> child / geneseed throwaway, ignored from here on
+  const accts = new Map()    // sid -> Map(messageId -> {cost,tokens}) — token/cost accumulation
+  const pending = new Map()  // sid -> Set(permissionId) — open permission prompts (→ blocked)
+
+  const acctFor = (sid) => { let m = accts.get(sid); if (!m) { m = new Map(); accts.set(sid, m) } return m }
+  const pendingFor = (sid) => { let s = pending.get(sid); if (!s) { s = new Set(); pending.set(sid, s) } return s }
+  const forget = (sid) => { owned.delete(sid); accts.delete(sid); pending.delete(sid); removeEntry(sid) }
 
   const isThrowaway = (title, parentID) =>
     !!parentID || (typeof title === "string" && title.startsWith("geneseed-"))
@@ -139,7 +184,7 @@ export const GeneseedActivity = async () => {
       const next = applyEvent(owned.get(sid) || null, {
         ...ev, sid, pid: PID, nowSec: Math.floor(Date.now() / 1000),
       })
-      if (next === null) { owned.delete(sid); removeEntry(sid); return }
+      if (next === null) { forget(sid); return }
       owned.set(sid, next)
       writeEntry(next)
     } catch (err) {
@@ -153,7 +198,7 @@ export const GeneseedActivity = async () => {
       // Runtime toggle: when disabled, stop writing and clear any files we already
       // own (so the dir empties out), then no-op until re-enabled.
       if (!isEnabled()) {
-        if (owned.size) { for (const sid of owned.keys()) removeEntry(sid); owned.clear() }
+        if (owned.size) { for (const sid of [...owned.keys()]) forget(sid) }
         return
       }
       const props = event.properties ?? event.payload ?? {}
@@ -166,36 +211,103 @@ export const GeneseedActivity = async () => {
           const info = props.info ?? {}
           // A child/subagent session or a geneseed-* distil session is background
           // machinery — drop it (and any file we already wrote when its title was
-          // still blank). Sub-agent fan-out is the deferred v2 tree.
+          // still blank). Sub-agent fan-out is the deferred tree.
           if (isThrowaway(info.title, info.parentID ?? info.parentId)) {
             skipped.add(sid)
-            if (owned.has(sid)) { owned.delete(sid); removeEntry(sid) }
+            if (owned.has(sid)) forget(sid)
             return
           }
-          if (event.type === "session.created" || owned.has(sid))
-            persist(sid, { type: event.type, title: info.title ?? null, cwd: info.directory })
+          if (event.type !== "session.created" && !owned.has(sid)) return
+          const ev = { type: event.type, title: info.title ?? null, cwd: info.directory }
+          // Files touched + churn ride the session summary (cumulative).
+          const s = info.summary
+          if (s) ev.files = {
+            count: s.files || 0, additions: s.additions || 0, deletions: s.deletions || 0,
+            items: (s.diffs || []).slice(0, FILE_CAP).map((d) => ({
+              file: d.file, additions: d.additions, deletions: d.deletions,
+            })),
+          }
+          persist(sid, ev)
           return
         }
         case "session.deleted":
-          owned.delete(sid); removeEntry(sid)
+          forget(sid)
           return
         case "session.idle":
-          if (owned.has(sid)) persist(sid, { type: event.type })
+          // Turn finished — stop the elapsed clock and clear the live phase.
+          if (owned.has(sid)) persist(sid, { type: event.type, phase: null, turn_started_at: null })
           return
-        case "session.status":
-          if (owned.has(sid)) persist(sid, { type: event.type, statusType: props.status?.type })
-          return
-        case "message.updated": {
+        case "session.status": {
           if (!owned.has(sid)) return
-          // The running agent's name + cwd live on the AssistantMessage only.
-          const info = props.info ?? {}
-          const asst = info.role === "assistant"
-          persist(sid, { type: event.type, agent: asst ? info.mode : undefined, cwd: asst ? info.path?.cwd : undefined })
+          const st = props.status?.type
+          const ev = { type: event.type, statusType: st }
+          if (st === "idle") { ev.phase = null; ev.turn_started_at = null }
+          else if (st === "retry") ev.phase = "Retrying…"
+          persist(sid, ev)
           return
         }
-        case "message.part.updated":
-          if (owned.has(sid)) persist(sid, { type: event.type })   // streaming → busy + bump
+        case "message.updated": {
+          if (!owned.has(sid)) return
+          const info = props.info ?? {}
+          if (info.role !== "assistant") { persist(sid, { type: event.type }); return }   // user msg → bump busy
+          const m = acctFor(sid)
+          const isNewTurn = !m.has(info.id)
+          const totals = acctTotals(m, info.id,
+            info.cost, (info.tokens?.input || 0) + (info.tokens?.output || 0))
+          const ev = {
+            type: event.type,
+            agent: info.mode, cwd: info.path?.cwd, model: info.modelID,
+            cost: totals.cost, tokens: totals.tokens,
+            // Elapsed ticks from the current assistant turn's start; cleared on completion.
+            turn_started_at: info.time?.completed ? null
+              : (info.time?.created ? Math.floor(info.time.created / 1000) : null),
+          }
+          if (info.error) ev.error = errStr(info.error)
+          else if (isNewTurn) ev.error = null   // a fresh turn clears a stale error
+          persist(sid, ev)
           return
+        }
+        case "message.part.updated": {
+          if (!owned.has(sid)) return
+          const part = props.part ?? {}
+          const ev = { type: event.type }   // any part → busy + bump
+          if (part.type === "tool") {
+            const ts = part.state ?? {}
+            if (ts.status === "running") ev.phase = ts.title || part.tool || "working"
+            else if (ts.status === "error") ev.error = errStr(ts.error)
+          } else if (part.type === "reasoning") {
+            ev.phase = "Thinking"
+          }
+          persist(sid, ev)
+          return
+        }
+        case "todo.updated": {
+          if (!owned.has(sid)) return
+          const todos = props.todos || []
+          persist(sid, { type: event.type, todos: {
+            done: todos.filter((t) => t.status === "completed").length,
+            total: todos.length,
+            items: todos.slice(0, TODO_CAP).map((t) => ({ content: t.content, status: t.status })),
+          } })
+          return
+        }
+        case "permission.updated": {
+          if (!owned.has(sid)) return
+          pendingFor(sid).add(props.id)
+          persist(sid, { type: event.type, status: "blocked", blocked_on: props.title || props.type || "permission" })
+          return
+        }
+        case "permission.replied": {
+          if (!owned.has(sid)) return
+          const p = pendingFor(sid); p.delete(props.permissionID)
+          persist(sid, { type: event.type, status: p.size ? "blocked" : "busy", blocked_on: p.size ? undefined : null })
+          return
+        }
+        case "session.error": {
+          if (!owned.has(sid)) return
+          persist(sid, { type: event.type, error: errStr(props.error) })
+          return
+        }
         default:
           return
       }
@@ -205,6 +317,6 @@ export const GeneseedActivity = async () => {
 
 // ponytail: OpenCode treats every export as a plugin and rejects non-functions; hang
 // the test helpers off the factory instead — reachable via import, invisible to the loader.
-Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, safeName, activityDir, enabledFromFlag })
+Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, acctTotals, errStr, safeName, activityDir, enabledFromFlag })
 
 export default GeneseedActivity

@@ -91,6 +91,17 @@ def _activity_entries(state: WebState) -> list[dict]:
             "cwd": entry.get("cwd"),
             "status": entry.get("status") or "idle",
             "updated_at": updated,
+            # v1.1 enrichment — passed through verbatim; a v1 writer omits these,
+            # so default to None/0 and let the UI hide what's absent.
+            "model": entry.get("model"),
+            "phase": entry.get("phase"),
+            "turn_started_at": entry.get("turn_started_at"),
+            "cost": entry.get("cost") or 0,
+            "tokens": entry.get("tokens") or 0,
+            "files": entry.get("files"),
+            "todos": entry.get("todos"),
+            "blocked_on": entry.get("blocked_on"),
+            "error": entry.get("error"),
         })
     out.sort(key=lambda e: e["updated_at"], reverse=True)
     return out

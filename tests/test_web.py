@@ -979,6 +979,45 @@ class ActivityTests(unittest.TestCase):
             (d / "broken.json").write_text("{ not json", encoding="utf-8")
             self.assertEqual(web.api_activity(self._state(t))["activity"], [])
 
+    def test_v11_fields_pass_through(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {
+                "session_id": "s", "status": "busy", "pid": os.getpid(),
+                "updated_at": time.time(), "model": "opus", "phase": "Editing x",
+                "cost": 0.62, "tokens": 48000,
+                "files": {"count": 2, "additions": 10, "deletions": 1, "items": []},
+                "todos": {"done": 1, "total": 3, "items": []},
+                "error": "oops", "blocked_on": None, "turn_started_at": time.time(),
+            })
+            e = web.api_activity(self._state(t))["activity"][0]
+            self.assertEqual(e["model"], "opus")
+            self.assertEqual(e["phase"], "Editing x")
+            self.assertEqual(e["cost"], 0.62)
+            self.assertEqual(e["tokens"], 48000)
+            self.assertEqual(e["files"]["count"], 2)
+            self.assertEqual(e["todos"]["done"], 1)
+            self.assertEqual(e["error"], "oops")
+
+    def test_v1_file_gets_safe_defaults(self):
+        # A pre-v1.1 writer omits the new keys; the reader must fill safe defaults.
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {
+                "session_id": "s", "status": "idle", "pid": os.getpid(),
+                "updated_at": time.time(),
+            })
+            e = web.api_activity(self._state(t))["activity"][0]
+            self.assertIsNone(e["model"])
+            self.assertIsNone(e["phase"])
+            self.assertIsNone(e["files"])
+            self.assertEqual(e["cost"], 0)
+            self.assertEqual(e["tokens"], 0)
+
     def test_enabled_by_default(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:

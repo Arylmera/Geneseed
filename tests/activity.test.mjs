@@ -11,7 +11,23 @@ import os from "node:os"
 import path from "node:path"
 
 import GeneseedActivity from "../adapters/opencode/plugins/geneseed-activity.js"
-const { sidOf, nextStatus, applyEvent, safeName, enabledFromFlag } = GeneseedActivity
+const { sidOf, nextStatus, applyEvent, safeName, enabledFromFlag, acctTotals, errStr } = GeneseedActivity
+
+test("acctTotals: same id overwrites (streaming), new id adds (next turn)", () => {
+  const m = new Map()
+  assert.deepEqual(acctTotals(m, "m1", 0.1, 100), { cost: 0.1, tokens: 100 })
+  assert.deepEqual(acctTotals(m, "m1", 0.3, 250), { cost: 0.3, tokens: 250 })   // same id → overwrite
+  const t = acctTotals(m, "m2", 0.2, 50)                                        // new id → add
+  assert.equal(t.tokens, 300)
+  assert.ok(Math.abs(t.cost - 0.5) < 1e-9)
+})
+
+test("errStr: plain string, the {name,data:{message}} union, and null", () => {
+  assert.equal(errStr("boom"), "boom")
+  assert.equal(errStr({ name: "APIError", data: { message: "rate limited" } }), "rate limited")
+  assert.equal(errStr({ name: "UnknownError", data: {} }), "UnknownError")
+  assert.equal(errStr(null), null)
+})
 
 test("enabledFromFlag: only an explicit off-word disables; absent/blank → on", () => {
   for (const off of ["off", "OFF", " 0 ", "false", "no"]) assert.equal(enabledFromFlag(off), false)
@@ -131,6 +147,74 @@ test("event hook: full session lifecycle, filtering, and toggle (on disk)", asyn
     // explicit deletion removes the file
     await fire("session.deleted", { info: { id: "ses_2" } })
     assert.equal(exists("ses_2"), false)
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
+    else process.env.OPENCODE_CONFIG_DIR = saved
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
+// Integration: the v1.1 enrichment fields land on disk from real event shapes.
+test("event hook: v1.1 enrichment on disk (phase, tokens/cost, files, todos, blocked, error)", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gs-act-v11-"))
+  const saved = process.env.OPENCODE_CONFIG_DIR
+  process.env.OPENCODE_CONFIG_DIR = tmp
+  const read = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.json"), "utf8"))
+  try {
+    const hooks = await GeneseedActivity()
+    const fire = (type, properties) => hooks.event({ event: { type, properties } })
+
+    await fire("session.created", { info: { id: "s", title: "t", directory: "/repo" } })
+
+    // assistant message → model, agent, session token/cost totals, turn start
+    await fire("message.updated", { info: {
+      role: "assistant", id: "m1", sessionID: "s", mode: "build", modelID: "opus",
+      path: { cwd: "/repo" }, cost: 0.5, tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: 1000000 } } })
+    let e = read()
+    assert.equal(e.model, "opus"); assert.equal(e.agent, "build")
+    assert.equal(e.tokens, 150); assert.equal(e.cost, 0.5)
+    assert.equal(e.turn_started_at, 1000)   // ms → s
+
+    // streaming re-fires the SAME message id → totals replace, not double-count
+    await fire("message.updated", { info: {
+      role: "assistant", id: "m1", sessionID: "s", mode: "build", path: { cwd: "/repo" },
+      cost: 0.7, tokens: { input: 120, output: 80, reasoning: 0, cache: { read: 0, write: 0 } } } })
+    e = read(); assert.equal(e.tokens, 200); assert.equal(e.cost, 0.7)
+
+    // a running tool sets the live phase
+    await fire("message.part.updated", { part: {
+      type: "tool", sessionID: "s", tool: "edit",
+      state: { status: "running", title: "Editing Activity.jsx", input: {}, time: { start: 1 } } } })
+    assert.equal(read().phase, "Editing Activity.jsx")
+
+    // session summary → files touched + churn
+    await fire("session.updated", { info: { id: "s", title: "t", directory: "/repo",
+      summary: { files: 2, additions: 30, deletions: 5, diffs: [{ file: "a.js", additions: 20, deletions: 2, before: "", after: "" }] } } })
+    e = read(); assert.equal(e.files.count, 2); assert.equal(e.files.additions, 30); assert.equal(e.files.items[0].file, "a.js")
+
+    // todos → done/total
+    await fire("todo.updated", { sessionID: "s", todos: [
+      { id: "1", content: "a", status: "completed", priority: "high" },
+      { id: "2", content: "b", status: "pending", priority: "low" } ] })
+    e = read(); assert.equal(e.todos.done, 1); assert.equal(e.todos.total, 2)
+
+    // permission pending → blocked; replied → unblocked
+    await fire("permission.updated", { id: "p1", sessionID: "s", title: "bash: rm", type: "bash", messageID: "m", metadata: {}, time: { created: 1 } })
+    assert.equal(read().status, "blocked"); assert.equal(read().blocked_on, "bash: rm")
+    await fire("permission.replied", { sessionID: "s", permissionID: "p1", response: "allow" })
+    e = read(); assert.equal(e.status, "busy"); assert.equal(e.blocked_on, null)
+
+    // tool error and session error both surface a readable string
+    await fire("message.part.updated", { part: { type: "tool", sessionID: "s", tool: "bash",
+      state: { status: "error", error: "exit 1", input: {}, time: { start: 1, end: 2 } } } })
+    assert.equal(read().error, "exit 1")
+    await fire("session.error", { sessionID: "s", error: { name: "APIError", data: { message: "boom" } } })
+    assert.equal(read().error, "boom")
+
+    // idle stops the clock and clears the phase
+    await fire("session.idle", { sessionID: "s" })
+    e = read(); assert.equal(e.status, "waiting-input"); assert.equal(e.phase, null); assert.equal(e.turn_started_at, null)
   } finally {
     if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
     else process.env.OPENCODE_CONFIG_DIR = saved

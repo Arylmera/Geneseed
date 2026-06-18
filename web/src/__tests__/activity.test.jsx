@@ -37,6 +37,52 @@ describe('Activity page', () => {
     expect(screen.getByText('other-dir')).toBeTruthy() // no title → cwd basename
   })
 
+  it('renders the enriched card: phase, model, counters, churn, todo strip', async () => {
+    const now = Date.now() / 1000
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp({
+          enabled: true,
+          activity: [
+            {
+              session_id: 's', title: 'fix parser', cwd: '/repo/app', status: 'busy', updated_at: now,
+              model: 'opus-4.8', phase: 'Editing Activity.jsx', agent: 'build',
+              tokens: 48200, cost: 0.62, turn_started_at: now - 5,
+              files: { count: 3, additions: 124, deletions: 18, items: [] },
+              todos: { done: 3, total: 5, items: [] }, error: null, blocked_on: null,
+            },
+          ],
+        }),
+      ),
+    )
+    render(<Activity />)
+    expect(await screen.findByText('Editing Activity.jsx')).toBeTruthy()
+    expect(screen.getByText('opus-4.8')).toBeTruthy()
+    expect(screen.getByText('build')).toBeTruthy()
+    expect(screen.getByText('working')).toBeTruthy()
+    const txt = document.body.textContent
+    expect(txt).toContain('48.2k tok')
+    expect(txt).toContain('$0.62')
+    expect(txt).toContain('3 files')
+    expect(txt).toContain('plan 3/5')
+  })
+
+  it('shows the blocked status and its label', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp({
+          enabled: true,
+          activity: [
+            { session_id: 's', title: 't', cwd: '/r', status: 'blocked', updated_at: Date.now() / 1000, blocked_on: 'bash: rm -rf build/', error: null },
+          ],
+        }),
+      ),
+    )
+    render(<Activity />)
+    expect(await screen.findByText('blocked')).toBeTruthy()
+    expect(screen.getByText('bash: rm -rf build/')).toBeTruthy()
+  })
+
   it('reflects the disabled flag with an off state and an unchecked switch', async () => {
     global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: false, activity: [] })))
     render(<Activity />)
