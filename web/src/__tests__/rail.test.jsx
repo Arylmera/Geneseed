@@ -38,6 +38,13 @@ describe('Rail navigation', () => {
     expect(lawsLink.textContent).toContain('20')
   })
 
+  it('exposes Activity as its own rail entry', () => {
+    render(<Rail route={{ view: 'activity' }} overview={overview} />)
+    const link = screen.getByText('Activity').closest('a')
+    expect(link.getAttribute('href')).toBe('#/activity')
+    expect(link.className).toContain('active')
+  })
+
   it('does not render section sub-items in the rail', () => {
     render(<Rail route={{ view: 'library' }} overview={overview} />)
     // Library's sections (Memory, Notebook, Wiki, …) live in the Library

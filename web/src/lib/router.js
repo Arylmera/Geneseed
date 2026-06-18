@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 // flat view per top-level page (#/diff, #/settings, …). The docs view also
 // carries a sub-page id: #/docs (default page) or #/docs/<page-id>.
 const FLAT_VIEWS = new Set([
+  'activity',
   'diff',
   'settings',
   'doctor',

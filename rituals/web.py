@@ -23,6 +23,7 @@ import _web_actions
 import _web_graph
 import _web_docs
 import _web_overview
+import _web_activity
 import _web_server
 
 _SUBMODULES = (
@@ -33,6 +34,7 @@ _SUBMODULES = (
     _web_graph,
     _web_docs,
     _web_overview,
+    _web_activity,
     _web_server,
 )
 _SHARED = {}

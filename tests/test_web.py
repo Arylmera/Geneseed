@@ -910,5 +910,73 @@ class HarnessFilterTests(unittest.TestCase):
                                 f"hidden under {hn}")
 
 
+class ActivityTests(unittest.TestCase):
+    """The live-activity reader: globs <target>/activity/*.json, prunes dead/stale
+    writers (self-cleaning their files), and never raises on a missing dir or a
+    garbage file."""
+
+    def _state(self, tmp):
+        return web.WebState(theme="neutral", target=Path(tmp))
+
+    def _write(self, tmp, name, entry):
+        import json
+        d = Path(tmp) / "activity"
+        d.mkdir(exist_ok=True)
+        p = d / name
+        p.write_text(json.dumps(entry), encoding="utf-8")
+        return p
+
+    def test_missing_dir_is_empty(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self.assertEqual(web.api_activity(self._state(t)), {"activity": []})
+
+    def test_globs_live_entries(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "ses_a.json", {
+                "session_id": "ses_a", "agent": "reviewer", "title": "fix it",
+                "cwd": "/repo", "status": "busy", "pid": os.getpid(),
+                "updated_at": time.time(),
+            })
+            res = web.api_activity(self._state(t))
+            self.assertEqual(len(res["activity"]), 1)
+            self.assertEqual(res["activity"][0]["agent"], "reviewer")
+            self.assertEqual(res["activity"][0]["status"], "busy")
+
+    def test_prunes_dead_pid_and_self_cleans(self):
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            # A pid that is virtually never alive — os.kill(pid, 0) raises ESRCH.
+            p = self._write(t, "ses_dead.json", {
+                "session_id": "ses_dead", "status": "busy",
+                "pid": 2_147_483_647, "updated_at": time.time(),
+            })
+            self.assertEqual(web.api_activity(self._state(t))["activity"], [])
+            self.assertFalse(p.exists())   # stale file removed
+
+    def test_prunes_stale_entry(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "ses_old.json", {
+                "session_id": "ses_old", "status": "idle",
+                "pid": os.getpid(), "updated_at": time.time() - 10_000,
+            })
+            self.assertEqual(web.api_activity(self._state(t))["activity"], [])
+
+    def test_garbage_file_never_raises(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / "activity"
+            d.mkdir()
+            (d / "broken.json").write_text("{ not json", encoding="utf-8")
+            self.assertEqual(web.api_activity(self._state(t))["activity"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
