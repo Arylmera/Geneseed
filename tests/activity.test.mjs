@@ -6,6 +6,9 @@
 //   node --test tests/activity.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 
 import GeneseedActivity from "../adapters/opencode/plugins/geneseed-activity.js"
 const { sidOf, nextStatus, applyEvent, safeName, enabledFromFlag } = GeneseedActivity
@@ -68,4 +71,69 @@ test("applyEvent: session.deleted returns null (= remove the file)", () => {
 test("safeName: keeps session ids filesystem-safe", () => {
   assert.equal(safeName("ses_abc-123.x"), "ses_abc-123.x")
   assert.equal(safeName("a/b\\c:d"), "a_b_c_d")
+})
+
+// Integration: drive the REAL event hook through a full session lifecycle against a
+// temp config dir, asserting the on-disk file lifecycle + filtering + runtime toggle.
+// This covers the hook wiring (the switch + IO) that the pure-helper tests above
+// don't — the one piece that has to match how OpenCode delivers events.
+test("event hook: full session lifecycle, filtering, and toggle (on disk)", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gs-act-"))
+  const saved = process.env.OPENCODE_CONFIG_DIR
+  process.env.OPENCODE_CONFIG_DIR = tmp
+  const dir = path.join(tmp, "activity")
+  const read = (sid) => JSON.parse(fs.readFileSync(path.join(dir, `${sid}.json`), "utf8"))
+  const exists = (sid) => fs.existsSync(path.join(dir, `${sid}.json`))
+  try {
+    const hooks = await GeneseedActivity()
+    const fire = (type, properties) => hooks.event({ event: { type, properties } })
+
+    // created → file with idle status, title + cwd captured from the Session
+    await fire("session.created", { info: { id: "ses_1", title: "do the thing", directory: "/repo" } })
+    assert.equal(read("ses_1").status, "idle")
+    assert.equal(read("ses_1").title, "do the thing")
+    assert.equal(read("ses_1").cwd, "/repo")
+
+    // session.status busy → busy
+    await fire("session.status", { sessionID: "ses_1", status: { type: "busy" } })
+    assert.equal(read("ses_1").status, "busy")
+
+    // assistant message → agent (mode) captured, status busy
+    await fire("message.updated", { info: { role: "assistant", sessionID: "ses_1", mode: "build", path: { cwd: "/repo" } } })
+    assert.equal(read("ses_1").agent, "build")
+
+    // turn finished → waiting-input, agent preserved
+    await fire("session.idle", { sessionID: "ses_1" })
+    assert.equal(read("ses_1").status, "waiting-input")
+    assert.equal(read("ses_1").agent, "build")
+
+    // a child/subagent session (has parentID) is never written
+    await fire("session.created", { info: { id: "ses_child", title: "sub", parentID: "ses_1", directory: "/repo" } })
+    assert.equal(exists("ses_child"), false)
+
+    // a geneseed-* throwaway distil session is never written
+    await fire("session.created", { info: { id: "ses_distil", title: "geneseed-learn (auto)", directory: "/repo" } })
+    assert.equal(exists("ses_distil"), false)
+
+    // toggle OFF (write the flag the web console writes) → next event clears owned files
+    fs.writeFileSync(path.join(tmp, ".geneseed-activity"), "off")
+    await fire("message.part.updated", { part: { sessionID: "ses_1" } })
+    assert.equal(exists("ses_1"), false)
+
+    // toggle back ON → activity flows again
+    fs.writeFileSync(path.join(tmp, ".geneseed-activity"), "on")
+    await fire("session.status", { sessionID: "ses_1", status: { type: "busy" } })
+    // session.status only updates a KNOWN session; after the off-clear ses_1 is gone,
+    // so re-create it the way a fresh turn would, then confirm it writes.
+    await fire("session.created", { info: { id: "ses_2", title: "again", directory: "/repo" } })
+    assert.equal(read("ses_2").status, "idle")
+
+    // explicit deletion removes the file
+    await fire("session.deleted", { info: { id: "ses_2" } })
+    assert.equal(exists("ses_2"), false)
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
+    else process.env.OPENCODE_CONFIG_DIR = saved
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
 })
