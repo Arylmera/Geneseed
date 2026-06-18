@@ -47,6 +47,8 @@ function SessionCard({ s }) {
             <span className="dot" />
             {st.label}
           </span>
+          {/* affordance: this card opens the session detail (the card itself is the link) */}
+          <Icon name="chevron" className="glyph act-chev" />
         </div>
       </div>
 
