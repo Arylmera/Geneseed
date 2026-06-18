@@ -272,3 +272,41 @@ test("event hook: v1.2 detail timeline on disk", async () => {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
 })
+
+// Conversation gist (v1.2 compact timeline): chat.message captures first/last user
+// prompt; streaming assistant text sets last_response; all land in the detail file.
+test("chat.message + text → conversation gist in the detail file", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gs-act-conv-"))
+  const saved = process.env.OPENCODE_CONFIG_DIR
+  process.env.OPENCODE_CONFIG_DIR = tmp
+  const conv = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.detail.json"), "utf8")).conversation
+  try {
+    const hooks = await GeneseedActivity()
+    const fire = (type, properties) => hooks.event({ event: { type, properties } })
+    await fire("session.created", { info: { id: "s", title: "t", directory: "/repo" } })
+
+    // first user prompt
+    await hooks["chat.message"]({ sessionID: "s" }, { parts: [{ type: "text", text: "add a toggle" }] })
+    assert.equal(conv().first_prompt, "add a toggle")
+    assert.equal(conv().last_prompt, "add a toggle")
+
+    // assistant streams its reply (text flushes are throttled — persisted on the
+    // next forced flush, which the following chat.message triggers)
+    await fire("message.part.updated", { part: { type: "text", id: "tx1", sessionID: "s", text: "done — added the switch" } })
+
+    // a later user prompt updates last_prompt (force-flushes) but not first_prompt
+    await hooks["chat.message"]({ sessionID: "s" }, { parts: [{ type: "text", text: "now make it 50/50" }] })
+    const c = conv()
+    assert.equal(c.first_prompt, "add a toggle")     // unchanged
+    assert.equal(c.last_prompt, "now make it 50/50")
+    assert.equal(c.last_response, "done — added the switch")
+
+    // a child/unowned session is ignored
+    await hooks["chat.message"]({ sessionID: "ghost" }, { parts: [{ type: "text", text: "x" }] })
+    assert.ok(!fs.existsSync(path.join(tmp, "activity", "ghost.detail.json")))
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
+    else process.env.OPENCODE_CONFIG_DIR = saved
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})

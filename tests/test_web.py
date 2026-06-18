@@ -1094,6 +1094,24 @@ class ActivityTests(unittest.TestCase):
             self.assertEqual(res["timeline"], [])
             self.assertEqual(res["session"]["session_id"], "s")
 
+    def test_detail_conversation_with_title_fallback(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {"session_id": "s", "title": "the very first ask", "status": "busy", "pid": os.getpid(), "updated_at": time.time()})
+            # no detail file → first_prompt falls back to the session title
+            conv = web.api_activity_detail(self._state(t), "s")["conversation"]
+            self.assertEqual(conv["first_prompt"], "the very first ask")
+            self.assertIsNone(conv["last_response"])
+            # with a captured conversation → those values win
+            self._write(t, "s.detail.json", {"timeline": [], "conversation": {
+                "first_prompt": "add a toggle", "last_prompt": "make it 50/50", "last_response": "done"}})
+            conv = web.api_activity_detail(self._state(t), "s")["conversation"]
+            self.assertEqual(conv["first_prompt"], "add a toggle")
+            self.assertEqual(conv["last_prompt"], "make it 50/50")
+            self.assertEqual(conv["last_response"], "done")
+
 
 if __name__ == "__main__":
     unittest.main()

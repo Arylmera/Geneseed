@@ -156,7 +156,9 @@ function safeName(sid) {
 }
 
 // One-line snippet for a transcript/timeline text record (no full prose persisted).
-const snip = (s) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, SNIPPET_LEN)
+// Conversation prompts/replies pass a longer cap so the question stays readable.
+const snip = (s, n = SNIPPET_LEN) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n)
+const CONV_LEN = 240
 
 // --- IO ----------------------------------------------------------------------
 
@@ -190,7 +192,11 @@ export const GeneseedActivity = async () => {
   const acctFor = (sid) => { let m = accts.get(sid); if (!m) { m = new Map(); accts.set(sid, m) } return m }
   const pendingFor = (sid) => { let s = pending.get(sid); if (!s) { s = new Set(); pending.set(sid, s) } return s }
   const tlFor = (sid) => { let m = timelines.get(sid); if (!m) { m = new Map(); timelines.set(sid, m) } return m }
-  const detFor = (sid) => { let d = details.get(sid); if (!d) { d = { files: null, todos: null, lastMs: 0 }; details.set(sid, d) } return d }
+  const detFor = (sid) => {
+    let d = details.get(sid)
+    if (!d) { d = { files: null, todos: null, lastMs: 0, conv: { first_prompt: null, last_prompt: null, last_response: null } }; details.set(sid, d) }
+    return d
+  }
   const forget = (sid) => {
     owned.delete(sid); accts.delete(sid); pending.delete(sid); timelines.delete(sid); details.delete(sid)
     removeEntry(sid); removeDetail(sid)
@@ -212,7 +218,7 @@ export const GeneseedActivity = async () => {
       const now = Date.now()
       if (!force && now - d.lastMs < DETAIL_THROTTLE_MS) return
       d.lastMs = now
-      writeJson(detailPath(sid), { files: d.files, todos: d.todos, timeline: [...tlFor(sid).values()] })
+      writeJson(detailPath(sid), { files: d.files, todos: d.todos, conversation: d.conv, timeline: [...tlFor(sid).values()] })
     } catch (err) { log(`detail ${sid} failed: ${err?.message ?? err}`) }
   }
   // Record a message part into the timeline. Returns true when it should force a flush.
@@ -229,7 +235,11 @@ export const GeneseedActivity = async () => {
         return s.status === "completed" || s.status === "error"
       }
       case "reasoning": pushStep(sid, part.id, { t, kind: "thinking", snippet: snip(part.text) }); return false
-      case "text": pushStep(sid, part.id, { t, kind: "text", snippet: snip(part.text) }); return false
+      case "text":
+        // Streaming assistant text — the latest is the session's last reply (gist).
+        pushStep(sid, part.id, { t, kind: "text", snippet: snip(part.text) })
+        detFor(sid).conv.last_response = snip(part.text, CONV_LEN)
+        return false
       case "subtask": pushStep(sid, part.id, { t, kind: "subtask", agent: part.agent, label: part.description }); return true
       case "step-finish": pushStep(sid, part.id, { t, kind: "step", reason: part.reason, cost: part.cost, tokens: (part.tokens?.input || 0) + (part.tokens?.output || 0) }); return true
       case "retry": pushStep(sid, part.id, { t, kind: "retry", label: `retry #${part.attempt}` }); return true
@@ -376,6 +386,27 @@ export const GeneseedActivity = async () => {
         }
         default:
           return
+      }
+    },
+
+    // Capture the user's prompt for the conversation gist (v1.2 compact timeline):
+    // first_prompt (set once) + last_prompt, as bounded snippets. The purpose-built
+    // signal for "a user message arrived with its text" — assistant replies come from
+    // the streaming text parts above. Gated on the toggle like the event hook.
+    "chat.message": async (input, output) => {
+      try {
+        if (!isEnabled()) return
+        const sid = input?.sessionID
+        if (!sid || skipped.has(sid) || !owned.has(sid)) return
+        const parts = output?.parts || []
+        const text = parts.filter((p) => p?.type === "text" && p.text).map((p) => p.text).join(" ").trim()
+        if (!text) return
+        const c = detFor(sid).conv
+        if (!c.first_prompt) c.first_prompt = snip(text, CONV_LEN)
+        c.last_prompt = snip(text, CONV_LEN)
+        flushDetail(sid, true)
+      } catch (err) {
+        log(`chat.message ${input?.sessionID} failed: ${err?.message ?? err}`)
       }
     },
   }

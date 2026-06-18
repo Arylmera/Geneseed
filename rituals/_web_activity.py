@@ -149,7 +149,15 @@ def api_activity_detail(state: WebState, sid: str) -> dict:
     # The detail file carries the uncapped lists; fall back to the snapshot's capped ones.
     session["files"] = full.get("files") or session.get("files")
     session["todos"] = full.get("todos") or session.get("todos")
-    return {"session": session, "timeline": timeline}
+    # Conversation gist (compact timeline): first/last user prompt + last reply. The
+    # first prompt falls back to the title (OpenCode derives it from the first prompt).
+    conv = full.get("conversation") if isinstance(full.get("conversation"), dict) else {}
+    conversation = {
+        "first_prompt": conv.get("first_prompt") or session.get("title"),
+        "last_prompt": conv.get("last_prompt"),
+        "last_response": conv.get("last_response"),
+    }
+    return {"session": session, "timeline": timeline, "conversation": conversation}
 
 
 def api_activity_toggle(state: WebState, body: dict) -> dict:

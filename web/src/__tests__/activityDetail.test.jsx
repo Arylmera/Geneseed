@@ -12,7 +12,7 @@ afterEach(() => {
 })
 
 describe('ActivityDetail page', () => {
-  it('renders header, files, plan, and the timeline', async () => {
+  it('renders header + files + plan, the conversation gist by default, and expands to the timeline', async () => {
     const now = Date.now() / 1000
     global.fetch = vi.fn(() =>
       Promise.resolve(
@@ -23,6 +23,7 @@ describe('ActivityDetail page', () => {
             files: { count: 1, items: [{ file: 'a.js', additions: 9, deletions: 1 }] },
             todos: { done: 1, total: 2, items: [{ content: 'do x', status: 'completed' }, { content: 'do y', status: 'pending' }] },
           },
+          conversation: { first_prompt: 'add a toggle', last_prompt: 'make it 50/50', last_response: 'done — added the switch' },
           timeline: [
             { kind: 'tool', label: 'Editing a.js', status: 'completed', ms: 1500 },
             { kind: 'text', snippet: 'here is the plan' },
@@ -34,12 +35,21 @@ describe('ActivityDetail page', () => {
     render(<ActivityDetail sid="s" />)
     expect(await screen.findByText('fix parser')).toBeTruthy()
     expect(screen.getByText('Activity')).toBeTruthy() // back link
+
+    // gist by default
     const txt = document.body.textContent
-    expect(txt).toContain('a.js')
-    expect(txt).toContain('here is the plan') // text snippet in timeline
-    expect(txt).toContain('do y') // uncapped todo
-    expect(txt).toContain('1.5s') // tool duration
-    expect(txt).toContain('140 tok') // step tokens
+    expect(txt).toContain('add a toggle') // first ask
+    expect(txt).toContain('make it 50/50') // latest ask
+    expect(txt).toContain('done — added the switch') // latest reply
+    expect(txt).toContain('do y') // uncapped plan
+    // full timeline hidden until expanded
+    expect(screen.queryByText('here is the plan')).toBeNull()
+
+    // expand → the full step timeline
+    screen.getByText(/Show all 3 steps/).click()
+    expect(await screen.findByText('here is the plan')).toBeTruthy()
+    expect(document.body.textContent).toContain('1.5s') // tool duration
+    expect(document.body.textContent).toContain('140 tok') // step tokens
   })
 
   it('shows "Session ended" on a 404', async () => {

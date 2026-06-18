@@ -120,7 +120,7 @@ export default function App() {
               />
             )}
             {route.view === 'activity' && <Activity />}
-            {route.view === 'activity-detail' && <ActivityDetail sid={route.sid} />}
+            {route.view === 'activity-detail' && <ActivityDetail key={route.sid} sid={route.sid} />}
             {route.view === 'library' && <Library overview={overview} />}
             {route.view === 'laws' && <Laws />}
             {route.view === 'skills' && <Skills />}
