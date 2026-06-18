@@ -221,3 +221,54 @@ test("event hook: v1.1 enrichment on disk (phase, tokens/cost, files, todos, blo
     fs.rmSync(tmp, { recursive: true, force: true })
   }
 })
+
+// Integration: the v1.2 detail file gets a step timeline + uncapped files/todos,
+// and is removed with the session.
+test("event hook: v1.2 detail timeline on disk", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gs-act-v12-"))
+  const saved = process.env.OPENCODE_CONFIG_DIR
+  process.env.OPENCODE_CONFIG_DIR = tmp
+  const detail = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.detail.json"), "utf8"))
+  const detailExists = () => fs.existsSync(path.join(tmp, "activity", "s.detail.json"))
+  try {
+    const hooks = await GeneseedActivity()
+    const fire = (type, properties) => hooks.event({ event: { type, properties } })
+    await fire("session.created", { info: { id: "s", title: "t", directory: "/repo" } })
+
+    // a completed tool → a timeline record with duration (force-flushed)
+    await fire("message.part.updated", { part: {
+      type: "tool", sessionID: "s", callID: "c1", tool: "edit",
+      state: { status: "completed", title: "Editing a.js", input: {}, output: "ok", metadata: {}, time: { start: 1000, end: 2500 } } } })
+    let d = detail()
+    const tool = d.timeline.find((r) => r.kind === "tool")
+    assert.equal(tool.label, "Editing a.js"); assert.equal(tool.status, "completed"); assert.equal(tool.ms, 1500)
+
+    // streaming text re-fires the SAME part id → one record, updated in place (no flood)
+    await fire("message.part.updated", { part: { type: "text", id: "t1", sessionID: "s", text: "Hello" } })
+    await fire("message.part.updated", { part: { type: "text", id: "t1", sessionID: "s", text: "Hello world, here is the plan" } })
+    await fire("session.idle", { sessionID: "s" })   // force flush
+    d = detail()
+    const texts = d.timeline.filter((r) => r.kind === "text")
+    assert.equal(texts.length, 1); assert.equal(texts[0].snippet, "Hello world, here is the plan")
+
+    // step-finish carries tokens/cost; subtask names the agent
+    await fire("message.part.updated", { part: { type: "step-finish", id: "sf1", sessionID: "s", reason: "stop", cost: 0.2, tokens: { input: 100, output: 40, reasoning: 0, cache: { read: 0, write: 0 } } } })
+    await fire("message.part.updated", { part: { type: "subtask", id: "st1", sessionID: "s", prompt: "x", description: "review the diff", agent: "reviewer" } })
+    d = detail()
+    assert.equal(d.timeline.find((r) => r.kind === "step").tokens, 140)
+    assert.equal(d.timeline.find((r) => r.kind === "subtask").agent, "reviewer")
+
+    // uncapped files/todos live in the detail file
+    await fire("session.updated", { info: { id: "s", title: "t", directory: "/repo",
+      summary: { files: 1, additions: 9, deletions: 1, diffs: [{ file: "a.js", additions: 9, deletions: 1, before: "", after: "" }] } } })
+    assert.equal(detail().files.items[0].file, "a.js")
+
+    // deletion removes the detail file too
+    await fire("session.deleted", { info: { id: "s" } })
+    assert.equal(detailExists(), false)
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
+    else process.env.OPENCODE_CONFIG_DIR = saved
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})

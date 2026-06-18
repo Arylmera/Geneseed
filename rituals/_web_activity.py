@@ -62,47 +62,64 @@ def _pid_alive(pid) -> bool:
     return True
 
 
+def _normalize_entry(entry: dict, stem: str) -> dict:
+    """One session snapshot → the stable shape the UI consumes. v1 writers omit the
+    enrichment keys, so default to None/0 and let the UI hide what's absent."""
+    return {
+        "session_id": entry.get("session_id") or stem,
+        "agent": entry.get("agent"),
+        "title": entry.get("title"),
+        "cwd": entry.get("cwd"),
+        "status": entry.get("status") or "idle",
+        "updated_at": entry.get("updated_at") or 0,
+        "model": entry.get("model"),
+        "phase": entry.get("phase"),
+        "turn_started_at": entry.get("turn_started_at"),
+        "cost": entry.get("cost") or 0,
+        "tokens": entry.get("tokens") or 0,
+        "files": entry.get("files"),
+        "todos": entry.get("todos"),
+        "blocked_on": entry.get("blocked_on"),
+        "error": entry.get("error"),
+    }
+
+
+def _read_entry(p: Path) -> "dict | None":
+    """Parse one snapshot file; None on a missing/garbage/non-dict file (never raises)."""
+    try:
+        entry = json.loads(p.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):   # ValueError covers json.JSONDecodeError
+        return None
+    return entry if isinstance(entry, dict) else None
+
+
+def _is_live(entry: dict, now: float) -> bool:
+    """A snapshot is live while its writer pid is alive and it's not stale."""
+    updated = entry.get("updated_at") or 0
+    return (now - updated) <= ACTIVITY_STALE_SECONDS and _pid_alive(entry.get("pid"))
+
+
 def _activity_entries(state: WebState) -> list[dict]:
     """Every live session entry, dead/stale ones pruned (and their files removed so
     the dir self-cleans). Never raises: a missing dir → [], a garbage file → skipped,
-    newest first."""
+    newest first. Detail files (*.detail.json) are skipped — they aren't snapshots."""
     d = _activity_dir(state)
     if not d.is_dir():
         return []
     now = time.time()
     out = []
     for p in sorted(d.glob("*.json")):
-        try:
-            entry = json.loads(p.read_text(encoding="utf-8", errors="replace"))
-        except (OSError, ValueError):   # ValueError covers json.JSONDecodeError
+        if p.name.endswith(".detail.json"):
             continue
-        if not isinstance(entry, dict):
+        entry = _read_entry(p)
+        if entry is None:
             continue
-        updated = entry.get("updated_at") or 0
-        stale = (now - updated) > ACTIVITY_STALE_SECONDS
-        if stale or not _pid_alive(entry.get("pid")):
+        if not _is_live(entry, now):
             with contextlib.suppress(OSError):
-                p.unlink()   # crashed / abandoned writer: drop the file
+                p.unlink()                                   # crashed / abandoned writer
+                (p.parent / f"{p.stem}.detail.json").unlink()   # its detail file too
             continue
-        out.append({
-            "session_id": entry.get("session_id") or p.stem,
-            "agent": entry.get("agent"),
-            "title": entry.get("title"),
-            "cwd": entry.get("cwd"),
-            "status": entry.get("status") or "idle",
-            "updated_at": updated,
-            # v1.1 enrichment — passed through verbatim; a v1 writer omits these,
-            # so default to None/0 and let the UI hide what's absent.
-            "model": entry.get("model"),
-            "phase": entry.get("phase"),
-            "turn_started_at": entry.get("turn_started_at"),
-            "cost": entry.get("cost") or 0,
-            "tokens": entry.get("tokens") or 0,
-            "files": entry.get("files"),
-            "todos": entry.get("todos"),
-            "blocked_on": entry.get("blocked_on"),
-            "error": entry.get("error"),
-        })
+        out.append(_normalize_entry(entry, p.stem))
     out.sort(key=lambda e: e["updated_at"], reverse=True)
     return out
 
@@ -110,6 +127,42 @@ def _activity_entries(state: WebState) -> list[dict]:
 def api_activity(state: WebState) -> dict:
     enabled = _activity_enabled(state)
     return {"enabled": enabled, "activity": _activity_entries(state) if enabled else []}
+
+
+def api_activity_detail(state: WebState, sid: str) -> dict:
+    """One session's detail (v1.2): the snapshot plus its step timeline and the
+    uncapped files/todos. 404 (NotFound) if the session is absent or pruned; a
+    missing/garbage detail file degrades to an empty timeline, never a 500."""
+    d = _activity_dir(state)
+    # Resolve by the writer's safe-name scheme, but keep it inside the dir.
+    stem = re.sub(r"[^A-Za-z0-9_.-]", "_", sid)
+    snap = d / f"{stem}.json"
+    entry = _read_entry(snap) if snap.is_file() else None
+    if entry is None or not _is_live(entry, time.time()):
+        raise NotFound(sid)
+    session = _normalize_entry(entry, stem)
+    timeline, full = [], {}
+    det = _read_entry(d / f"{stem}.detail.json")
+    if det:
+        timeline = det.get("timeline") if isinstance(det.get("timeline"), list) else []
+        full = det
+    # The detail file carries the uncapped lists; fall back to the snapshot's capped ones.
+    session["files"] = full.get("files") or session.get("files")
+    session["todos"] = full.get("todos") or session.get("todos")
+    return {"session": session, "timeline": timeline}
+
+
+def api_activity_toggle(state: WebState, body: dict) -> dict:
+    """Flip the runtime on/off flag. The plugin reads it each event, so the change
+    takes effect without restarting opencode. Writing 'off' also makes the plugin
+    clear its files on its next event; the reader gates output immediately."""
+    enabled = bool(body.get("enabled", True))
+    try:
+        _activity_flag(state).parent.mkdir(parents=True, exist_ok=True)
+        _activity_flag(state).write_text("on" if enabled else "off", encoding="utf-8")
+    except OSError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "enabled": enabled}
 
 
 def api_activity_toggle(state: WebState, body: dict) -> dict:

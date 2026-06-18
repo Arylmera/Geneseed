@@ -14,6 +14,7 @@ import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
 import Dashboard from './pages/Dashboard/index.jsx'
 import Activity from './pages/Activity.jsx'
+import ActivityDetail from './pages/ActivityDetail.jsx'
 import Library from './pages/Library.jsx'
 import Laws from './pages/Laws.jsx'
 import Skills from './pages/Skills.jsx'
@@ -119,6 +120,7 @@ export default function App() {
               />
             )}
             {route.view === 'activity' && <Activity />}
+            {route.view === 'activity-detail' && <ActivityDetail sid={route.sid} />}
             {route.view === 'library' && <Library overview={overview} />}
             {route.view === 'laws' && <Laws />}
             {route.view === 'skills' && <Skills />}

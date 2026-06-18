@@ -1048,6 +1048,52 @@ class ActivityTests(unittest.TestCase):
             self.assertTrue(web.api_activity(state)["enabled"])
             self.assertEqual(len(web.api_activity(state)["activity"]), 1)
 
+    def test_list_skips_detail_files(self):
+        # *.detail.json is the v1.2 timeline sidecar, not a session snapshot.
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {"session_id": "s", "status": "busy", "pid": os.getpid(), "updated_at": time.time()})
+            self._write(t, "s.detail.json", {"timeline": [{"kind": "tool"}], "files": None, "todos": None})
+            acts = web.api_activity(self._state(t))["activity"]
+            self.assertEqual([a["session_id"] for a in acts], ["s"])   # detail file not listed
+
+    def test_detail_returns_session_and_timeline(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {"session_id": "s", "status": "busy", "pid": os.getpid(), "updated_at": time.time(), "files": {"count": 1, "items": [{"file": "a"}]}})
+            self._write(t, "s.detail.json", {
+                "timeline": [{"kind": "tool", "label": "Editing a.js"}],
+                "files": {"count": 9, "items": [{"file": f"f{i}.js", "additions": 1, "deletions": 0} for i in range(20)]},
+                "todos": {"done": 1, "total": 2, "items": [{"content": "a", "status": "completed"}]},
+            })
+            res = web.api_activity_detail(self._state(t), "s")
+            self.assertEqual(res["session"]["session_id"], "s")
+            self.assertEqual(res["timeline"][0]["label"], "Editing a.js")
+            # detail file's UNCAPPED lists win over the snapshot's capped ones
+            self.assertEqual(len(res["session"]["files"]["items"]), 20)
+            self.assertEqual(res["session"]["todos"]["total"], 2)
+
+    def test_detail_404_on_unknown(self):
+        import tempfile
+        from web import NotFound
+        with tempfile.TemporaryDirectory() as t:
+            with self.assertRaises(NotFound):
+                web.api_activity_detail(self._state(t), "nope")
+
+    def test_detail_tolerates_missing_detail_file(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {"session_id": "s", "status": "idle", "pid": os.getpid(), "updated_at": time.time()})
+            res = web.api_activity_detail(self._state(t), "s")   # no s.detail.json
+            self.assertEqual(res["timeline"], [])
+            self.assertEqual(res["session"]["session_id"], "s")
+
 
 if __name__ == "__main__":
     unittest.main()

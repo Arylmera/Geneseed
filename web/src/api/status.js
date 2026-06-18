@@ -5,6 +5,7 @@ import { get, post } from './http.js'
 
 export const overview = () => get('/api/overview')
 export const activity = () => get('/api/activity')
+export const activityDetail = (sid) => get('/api/activity/' + encodeURIComponent(sid))
 export const activityToggle = (enabled) => post('/api/activity', { enabled })
 export const setup = () => get('/api/setup')
 export const doctor = () => get('/api/doctor')

@@ -69,6 +69,12 @@ function isEnabled() {
 // Bound the inline lists written per session; the v1.2 detail page carries the full ones.
 const FILE_CAP = 8
 const TODO_CAP = 12
+// v1.2 detail file (timeline). LOG_CAP bounds the ring; the detail write is throttled
+// so a text-streaming turn doesn't rewrite the file per delta; SNIPPET_LEN bounds the
+// one-line text/reasoning records (no full prose to the console).
+const LOG_CAP = 200
+const DETAIL_THROTTLE_MS = 700
+const SNIPPET_LEN = 160
 
 // --- pure helpers (exported for tests) ---------------------------------------
 
@@ -149,20 +155,27 @@ function safeName(sid) {
   return String(sid).replace(/[^A-Za-z0-9_.-]/g, "_")
 }
 
+// One-line snippet for a transcript/timeline text record (no full prose persisted).
+const snip = (s) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, SNIPPET_LEN)
+
 // --- IO ----------------------------------------------------------------------
 
-function writeEntry(entry) {
-  const dir = activityDir()
-  const file = path.join(dir, `${safeName(entry.session_id)}.json`)
+// Atomic write: tmp + rename so the reader never sees a half-written file.
+function writeJson(file, obj) {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
   const tmp = `${file}.${PID}.tmp`
-  fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(tmp, JSON.stringify(entry))
-  fs.renameSync(tmp, file)   // atomic: the reader never sees a half-written file
+  fs.writeFileSync(tmp, JSON.stringify(obj))
+  fs.renameSync(tmp, file)
 }
 
-function removeEntry(sid) {
-  try { fs.unlinkSync(path.join(activityDir(), `${safeName(sid)}.json`)) } catch {}
-}
+const entryPath = (sid) => path.join(activityDir(), `${safeName(sid)}.json`)
+// Detail file (v1.2): full files/todos + the step timeline. Named *.detail.json so
+// the list glob (which skips that suffix) never mistakes it for a session snapshot.
+const detailPath = (sid) => path.join(activityDir(), `${safeName(sid)}.detail.json`)
+
+function writeEntry(entry) { writeJson(entryPath(entry.session_id), entry) }
+function removeEntry(sid) { try { fs.unlinkSync(entryPath(sid)) } catch {} }
+function removeDetail(sid) { try { fs.unlinkSync(detailPath(sid)) } catch {} }
 
 // --- plugin ------------------------------------------------------------------
 
@@ -171,10 +184,58 @@ export const GeneseedActivity = async () => {
   const skipped = new Set()  // sid -> child / geneseed throwaway, ignored from here on
   const accts = new Map()    // sid -> Map(messageId -> {cost,tokens}) — token/cost accumulation
   const pending = new Map()  // sid -> Set(permissionId) — open permission prompts (→ blocked)
+  const timelines = new Map() // sid -> Map(key -> step record) — the v1.2 detail ring (insertion-ordered)
+  const details = new Map()  // sid -> { files, todos, lastMs } — uncapped lists + flush throttle
 
   const acctFor = (sid) => { let m = accts.get(sid); if (!m) { m = new Map(); accts.set(sid, m) } return m }
   const pendingFor = (sid) => { let s = pending.get(sid); if (!s) { s = new Set(); pending.set(sid, s) } return s }
-  const forget = (sid) => { owned.delete(sid); accts.delete(sid); pending.delete(sid); removeEntry(sid) }
+  const tlFor = (sid) => { let m = timelines.get(sid); if (!m) { m = new Map(); timelines.set(sid, m) } return m }
+  const detFor = (sid) => { let d = details.get(sid); if (!d) { d = { files: null, todos: null, lastMs: 0 }; details.set(sid, d) } return d }
+  const forget = (sid) => {
+    owned.delete(sid); accts.delete(sid); pending.delete(sid); timelines.delete(sid); details.delete(sid)
+    removeEntry(sid); removeDetail(sid)
+  }
+
+  // Push a step into the ring; the same key (callID / part id) updates in place so a
+  // streaming part doesn't flood, and the ring is capped to the most recent LOG_CAP.
+  const pushStep = (sid, key, rec) => {
+    const m = tlFor(sid)
+    m.set(key, rec)
+    while (m.size > LOG_CAP) m.delete(m.keys().next().value)
+  }
+  // Rewrite the detail file (uncapped files/todos + timeline). Throttled per session —
+  // a text-streaming turn updates the ring in memory but only flushes ~1/700ms, except
+  // on `force` (tool end / step / subtask / idle / error) which flushes immediately.
+  const flushDetail = (sid, force) => {
+    try {
+      const d = detFor(sid)
+      const now = Date.now()
+      if (!force && now - d.lastMs < DETAIL_THROTTLE_MS) return
+      d.lastMs = now
+      writeJson(detailPath(sid), { files: d.files, todos: d.todos, timeline: [...tlFor(sid).values()] })
+    } catch (err) { log(`detail ${sid} failed: ${err?.message ?? err}`) }
+  }
+  // Record a message part into the timeline. Returns true when it should force a flush.
+  const recordPart = (sid, part) => {
+    const t = Date.now()
+    switch (part.type) {
+      case "tool": {
+        const s = part.state ?? {}
+        pushStep(sid, `tool:${part.callID}`, {
+          t, kind: "tool", label: s.title || part.tool || "tool", tool: part.tool, status: s.status,
+          ms: s.time?.end && s.time?.start ? s.time.end - s.time.start : undefined,
+          error: s.status === "error" ? errStr(s.error) : undefined,
+        })
+        return s.status === "completed" || s.status === "error"
+      }
+      case "reasoning": pushStep(sid, part.id, { t, kind: "thinking", snippet: snip(part.text) }); return false
+      case "text": pushStep(sid, part.id, { t, kind: "text", snippet: snip(part.text) }); return false
+      case "subtask": pushStep(sid, part.id, { t, kind: "subtask", agent: part.agent, label: part.description }); return true
+      case "step-finish": pushStep(sid, part.id, { t, kind: "step", reason: part.reason, cost: part.cost, tokens: (part.tokens?.input || 0) + (part.tokens?.output || 0) }); return true
+      case "retry": pushStep(sid, part.id, { t, kind: "retry", label: `retry #${part.attempt}` }); return true
+      default: return false
+    }
+  }
 
   const isThrowaway = (title, parentID) =>
     !!parentID || (typeof title === "string" && title.startsWith("geneseed-"))
@@ -221,13 +282,14 @@ export const GeneseedActivity = async () => {
           const ev = { type: event.type, title: info.title ?? null, cwd: info.directory }
           // Files touched + churn ride the session summary (cumulative).
           const s = info.summary
-          if (s) ev.files = {
-            count: s.files || 0, additions: s.additions || 0, deletions: s.deletions || 0,
-            items: (s.diffs || []).slice(0, FILE_CAP).map((d) => ({
-              file: d.file, additions: d.additions, deletions: d.deletions,
-            })),
+          if (s) {
+            const all = (s.diffs || []).map((d) => ({ file: d.file, additions: d.additions, deletions: d.deletions }))
+            const files = { count: s.files || 0, additions: s.additions || 0, deletions: s.deletions || 0 }
+            ev.files = { ...files, items: all.slice(0, FILE_CAP) }          // card: capped
+            detFor(sid).files = { ...files, items: all }                    // detail: uncapped
           }
           persist(sid, ev)
+          if (s) flushDetail(sid, true)
           return
         }
         case "session.deleted":
@@ -235,7 +297,7 @@ export const GeneseedActivity = async () => {
           return
         case "session.idle":
           // Turn finished — stop the elapsed clock and clear the live phase.
-          if (owned.has(sid)) persist(sid, { type: event.type, phase: null, turn_started_at: null })
+          if (owned.has(sid)) { persist(sid, { type: event.type, phase: null, turn_started_at: null }); flushDetail(sid, true) }
           return
         case "session.status": {
           if (!owned.has(sid)) return
@@ -279,16 +341,17 @@ export const GeneseedActivity = async () => {
             ev.phase = "Thinking"
           }
           persist(sid, ev)
+          flushDetail(sid, recordPart(sid, part))   // v1.2: record the step; force-flush on completion
           return
         }
         case "todo.updated": {
           if (!owned.has(sid)) return
           const todos = props.todos || []
-          persist(sid, { type: event.type, todos: {
-            done: todos.filter((t) => t.status === "completed").length,
-            total: todos.length,
-            items: todos.slice(0, TODO_CAP).map((t) => ({ content: t.content, status: t.status })),
-          } })
+          const counts = { done: todos.filter((t) => t.status === "completed").length, total: todos.length }
+          const items = todos.map((t) => ({ content: t.content, status: t.status }))
+          persist(sid, { type: event.type, todos: { ...counts, items: items.slice(0, TODO_CAP) } })  // card: capped
+          detFor(sid).todos = { ...counts, items }                                                   // detail: uncapped
+          flushDetail(sid, true)
           return
         }
         case "permission.updated": {
@@ -305,7 +368,10 @@ export const GeneseedActivity = async () => {
         }
         case "session.error": {
           if (!owned.has(sid)) return
-          persist(sid, { type: event.type, error: errStr(props.error) })
+          const msg = errStr(props.error)
+          persist(sid, { type: event.type, error: msg })
+          pushStep(sid, `err:${Date.now()}`, { t: Date.now(), kind: "error", label: msg })
+          flushDetail(sid, true)
           return
         }
         default:
@@ -317,6 +383,6 @@ export const GeneseedActivity = async () => {
 
 // ponytail: OpenCode treats every export as a plugin and rejects non-functions; hang
 // the test helpers off the factory instead — reachable via import, invisible to the loader.
-Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, acctTotals, errStr, safeName, activityDir, enabledFromFlag })
+Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, acctTotals, errStr, snip, safeName, activityDir, enabledFromFlag })
 
 export default GeneseedActivity
