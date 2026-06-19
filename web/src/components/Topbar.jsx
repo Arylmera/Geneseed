@@ -2,6 +2,7 @@ import React from 'react'
 import { promptPath } from '../lib/format.js'
 import { Icon } from './Icon.jsx'
 import Search from './Search.jsx'
+import HarnessSelector from './HarnessSelector.jsx'
 
 // Route view -> the --tab flag the fake prompt displays.
 const TAB_FLAG = {
@@ -26,7 +27,17 @@ function tabFlag(route) {
 // The top bar: a faux `geneseed --tab=…` prompt, the global search, the
 // light/dark toggle, and the stop-server button (same /api/shutdown as
 // `geneseed web stop` and the Settings → Server card).
-export default function Topbar({ route, target, query, onQuery, mode, onToggleMode, onShutdown }) {
+export default function Topbar({
+  route,
+  target,
+  query,
+  onQuery,
+  mode,
+  onToggleMode,
+  onShutdown,
+  dataRev,
+  onSwitch,
+}) {
   return (
     <div className="topbar">
       <div className="prompt">
@@ -36,6 +47,7 @@ export default function Topbar({ route, target, query, onQuery, mode, onToggleMo
         <span className="cur" />
       </div>
       <div className="topbar-spacer" />
+      <HarnessSelector dataRev={dataRev} onSwitch={onSwitch} />
       <Search value={query} onChange={onQuery} />
       <button
         className="iconbtn"

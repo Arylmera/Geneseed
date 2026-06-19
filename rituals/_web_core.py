@@ -726,13 +726,37 @@ class WebState:
         self._doctor = {"ok": not problems, "problems": problems,
                         "checked_at": time.strftime("%Y-%m-%d %H:%M")}
 
+    def _detect_emit(self) -> str:
+        """The emit mode of the CURRENT target, read from its own `.geneseed-emit`
+        marker — so refresh() and a re-pointed view keep the right mode instead of
+        always falling back to the OpenCode default."""
+        try:
+            em = self.target / ".geneseed-emit"
+            if em.is_file():
+                v = em.read_text(encoding="utf-8").strip()
+                if v:
+                    return v
+        except OSError:
+            pass
+        return "claude-global" if (self.target / "CLAUDE.md").exists() else "opencode-global"
+
+    def select_view(self, target: Path):
+        """Re-point the whole console at a different detected install's data dir — every
+        card (inventory, memory, notebook, diff) then reads from `target`."""
+        self.target = Path(target)
+        self.theme = harness._theme_of_dir(self.target) or "neutral"
+        self.emit = self._detect_emit()
+        self._inv = None
+        self._doctor = None
+
     def refresh(self):
         """Drop caches and re-detect the deployed theme/emit — a finished Build may
-        have re-themed the install, and the gallery's 'current' must follow it."""
+        have re-themed the install, and the gallery's 'current' must follow it. Reads
+        from the CURRENT target's markers, so a selected (non-default) view is kept."""
         self._inv = None
         self._doctor = None
         self.theme = harness._theme_of_dir(self.target) or self.theme
-        self.emit = harness._installed_defaults().get("emit") or self.emit
+        self.emit = self._detect_emit() or self.emit
 
 
 def _deployed(state: WebState) -> bool:

@@ -200,11 +200,34 @@ def api_installs(state: WebState) -> dict:
     (host, scope, path) tuple — see harness._install_targets. Both OpenCode and Claude,
     global and per-repo, are listed so the dashboard can manage them in parallel."""
     out = []
+    cur = state.target.resolve()
     for host, scope, root in harness._install_targets():
         out.append({"id": f"{host}:{scope}", "host": host, "scope": scope,
                     "path": str(root), "state": harness._install_state(root, host, scope),
-                    "theme": harness._theme_of_dir(root)})   # the install's own voice (None if absent)
+                    "theme": harness._theme_of_dir(root),   # the install's own voice (None if absent)
+                    "selected": _view_cfg(host, scope, root).resolve() == cur})
     return {"installs": out}
+
+
+def _view_cfg(host: str, scope: str, root) -> Path:
+    """The data dir to read an install's inventory/memory/diff from. Global installs (and
+    the OpenCode per-repo bundle) keep it at the root; a Claude per-repo install keeps it
+    under <repo>/.claude."""
+    return (root / ".claude") if (host == "claude" and scope == "project") else root
+
+
+def api_select_view(state: WebState, body: dict) -> dict:
+    """Re-point the whole console at a detected install (the harness selector). The
+    (host, path) pair MUST be one of the detected targets; state.target/theme/emit are
+    re-pointed to the install's data dir so the next overview/catalog/diff GET reflects
+    it. Raises NotFound for an unknown pair."""
+    known = {(h, str(r)): (h, s, r) for h, s, r in harness._install_targets()}
+    hit = known.get((body.get("host") or "", body.get("path") or ""))
+    if hit is None:
+        raise NotFound("unknown install (host, path)")
+    host, scope, root = hit
+    state.select_view(_view_cfg(host, scope, root))
+    return {"ok": True, "target": str(state.target), "theme": state.theme, "emit": state.emit}
 
 
 _EMIT_FOR = {

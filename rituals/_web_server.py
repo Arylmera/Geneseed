@@ -129,6 +129,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                 except NotFound as e:
                     return self._send_json({"error": f"not found: {e}"}, 404)
                 return self._send_json(res, 200 if res.get("ok") else 409)
+            if path == "/api/view":
+                try:
+                    res = api_select_view(state, self._read_json_body())
+                except NotFound as e:
+                    return self._send_json({"error": f"not found: {e}"}, 404)
+                return self._send_json(res, 200 if res.get("ok") else 409)
             if path == "/api/memory/delete":
                 try:
                     return self._send_json(

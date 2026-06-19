@@ -704,6 +704,48 @@ class InstallCreateTests(unittest.TestCase):
             web.api_install_cmd(self.state, {"host": "claude", "path": "/no/such/root"})
 
 
+class SelectViewTests(unittest.TestCase):
+    """The harness selector: api_select_view re-points the whole console at a detected
+    install (target/theme/emit), and api_installs marks the current one selected."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        self.oc = (self.tmp / "oc").resolve(); self.oc.mkdir()
+        self.cl = (self.tmp / "cl").resolve(); self.cl.mkdir()
+        (self.cl / ".geneseed-emit").write_text("claude-global", encoding="utf-8")
+        (self.cl / ".geneseed-theme").write_text("imperial", encoding="utf-8")
+        self.state = web.WebState(theme="neutral", target=self.oc)
+        self._saved = web.harness._install_targets
+        web.harness._install_targets = lambda: [
+            ("opencode", "global", self.oc), ("claude", "global", self.cl)]
+
+    def tearDown(self):
+        import shutil
+        web.harness._install_targets = self._saved
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_select_repoints_target_theme_and_emit(self):
+        res = web.api_select_view(self.state, {"host": "claude", "path": str(self.cl)})
+        self.assertTrue(res["ok"])
+        self.assertEqual(Path(self.state.target), self.cl)
+        self.assertEqual(self.state.theme, "imperial")        # read from cl's marker
+        self.assertEqual(self.state.emit, "claude-global")     # read from cl's marker
+
+    def test_select_unknown_pair_raises(self):
+        with self.assertRaises(web.NotFound):
+            web.api_select_view(self.state, {"host": "claude", "path": "/no/such/root"})
+
+    def test_installs_marks_the_current_view_selected(self):
+        rows = web.api_installs(self.state)["installs"]
+        selected = [r for r in rows if r["selected"]]
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["host"], "opencode")     # state.target starts at oc
+        web.api_select_view(self.state, {"host": "claude", "path": str(self.cl)})
+        rows = web.api_installs(self.state)["installs"]
+        self.assertEqual([r for r in rows if r["selected"]][0]["host"], "claude")
+
+
 class GraphTests(unittest.TestCase):
     def test_api_graph_nodes_and_edges_resolve(self):
         state = web.WebState(theme="neutral")

@@ -114,6 +114,8 @@ export default function App() {
           mode={mode}
           onToggleMode={toggleMode}
           onShutdown={handleShutdown}
+          dataRev={dataRev}
+          onSwitch={refresh}
         />
         <div className="page">
           <div className="pad">
@@ -125,7 +127,7 @@ export default function App() {
                 flavour={flavour}
               />
             )}
-            {route.view === 'library' && <Library overview={overview} />}
+            {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
             {route.view === 'laws' && <Laws />}
             {route.view === 'skills' && <Skills />}
             {route.view === 'section' &&
@@ -134,7 +136,7 @@ export default function App() {
               ) : route.section === 'skills' ? (
                 <Skills />
               ) : (
-                <Library overview={overview} section={route.section} />
+                <Library overview={overview} section={route.section} dataRev={dataRev} />
               ))}
             {route.view === 'item' &&
               (route.type === 'law' ? (
@@ -146,9 +148,10 @@ export default function App() {
                   overview={overview}
                   section={TYPE_TO_SECTION[route.type] || route.type}
                   selected={route.name}
+                  dataRev={dataRev}
                 />
               ))}
-            {route.view === 'diff' && <Diff onMutated={reload} />}
+            {route.view === 'diff' && <Diff onMutated={reload} dataRev={dataRev} />}
             {route.view === 'doctor' && <Doctor />}
             {route.view === 'themes' && <Themes onAction={runAction} />}
             {route.view === 'graph' && <Graph />}

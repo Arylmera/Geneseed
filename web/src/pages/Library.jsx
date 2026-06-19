@@ -55,7 +55,7 @@ function EmptyDoc({ section, source }) {
 //
 // Selecting a row pushes the matching #/item/.../<name> URL so deep-linking
 // keeps working from the search spotlight and the Graph.
-export default function Library({ overview, section, selected }) {
+export default function Library({ overview, section, selected, dataRev }) {
   const initialSec = section && SECTIONS[section] ? section : SECTION_ORDER[0]
   const [sec, setSec] = useState(initialSec)
   const rowsRef = useRef(null)
@@ -69,7 +69,7 @@ export default function Library({ overview, section, selected }) {
     data: catalog,
     error: catErr,
     reload: reloadCatalog,
-  } = useAsync(() => api.catalog(sec), [sec])
+  } = useAsync(() => api.catalog(sec), [sec, dataRev])
 
   // useAsync keeps the prior section's catalog in `data` while the new one is
   // in flight (so the list doesn't flash empty). Guard against that staleness:
@@ -86,7 +86,7 @@ export default function Library({ overview, section, selected }) {
   const activeName = selected || items[0]?.name || null
   const { data: item, error: itemErr } = useAsync(
     () => (activeName ? api.item(SECTIONS[sec].type, activeName) : Promise.resolve(null)),
-    [sec, activeName],
+    [sec, activeName, dataRev],
   )
 
   const err = catErr || itemErr

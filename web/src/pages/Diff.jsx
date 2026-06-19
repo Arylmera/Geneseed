@@ -17,8 +17,8 @@ function lineKind(ln) {
   return 'ctx'
 }
 
-export default function Diff({ onMutated }) {
-  const { data, error, reload } = useAsync(() => api.diff(), [])
+export default function Diff({ onMutated, dataRev }) {
+  const { data, error, reload } = useAsync(() => api.diff(), [dataRev])
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
   const [sel, setSel] = useState(() => new Set())
