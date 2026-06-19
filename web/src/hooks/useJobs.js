@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/index.js'
 
+// How often the running job is polled for fresh output while the console streams.
+const JOB_POLL_INTERVAL_MS = 600
+
 // Owns the console's run history and the running-job poller. On mount it
 // hydrates from the server's job history (so runs survive reload/restart) and
 // resumes polling any still-running job. `runAction` kicks off a named action
@@ -61,7 +64,7 @@ export function useJobs({ onFinish, onError } = {}) {
       } catch {
         clearInterval(t)
       }
-    }, 600)
+    }, JOB_POLL_INTERVAL_MS)
     return () => clearInterval(t)
     // the poller keys off activeId; onFinish is a stable callback we omit
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
+import { romanToInt } from '../lib/roman.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
@@ -16,17 +17,7 @@ function layout(nodes, cols, rowH, top) {
     if (groups[key]) groups[key].push(n)
   }
   // Stable sort: laws by Roman→Arabic, others alphabetically by id.
-  const ROMAN = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 }
-  const roman = (s) => {
-    let t = 0
-    for (let i = 0; i < s.length; i++) {
-      const v = ROMAN[s[i]] || 0
-      const nx = ROMAN[s[i + 1]] || 0
-      t += nx > v ? -v : v
-    }
-    return t
-  }
-  groups.laws.sort((a, b) => roman(a.id) - roman(b.id))
+  groups.laws.sort((a, b) => romanToInt(a.id) - romanToInt(b.id))
   groups.agents.sort((a, b) => a.id.localeCompare(b.id))
   groups.skills.sort((a, b) => a.id.localeCompare(b.id))
   const pos = new Map()

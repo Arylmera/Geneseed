@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useLocalStorage } from './useLocalStorage.js'
 
 const FLAV_KEY = 'geneseed-flavour'
 
@@ -30,22 +30,8 @@ export const FLAVOURS = [
 
 const VALID = new Set(FLAVOURS.map((f) => f.id))
 
-// Persisted to localStorage, defaulting to `a`. Same shape as useColorMode so
-// App can stay flat. Returns [id, set] — set is a plain setter, no toggle,
-// because there are three values not two.
+// Persisted to localStorage, defaulting to `a`. Returns [id, set] — a plain setter,
+// no toggle, because there are three values not two.
 export function useFlavour() {
-  const [id, setId] = useState(() => {
-    try {
-      const stored = localStorage.getItem(FLAV_KEY)
-      return stored && VALID.has(stored) ? stored : 'a'
-    } catch {
-      return 'a'
-    }
-  })
-  useEffect(() => {
-    try {
-      localStorage.setItem(FLAV_KEY, id)
-    } catch {}
-  }, [id])
-  return [id, setId]
+  return useLocalStorage(FLAV_KEY, (v) => (v && VALID.has(v) ? v : 'a'))
 }

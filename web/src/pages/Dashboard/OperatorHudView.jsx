@@ -1,7 +1,13 @@
 import React from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import { editCount } from '../../lib/format.js'
+import { bucketJobsByDay } from '../../lib/jobBuckets.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
+
+// RECENT // RUN LOG table: how many jobs to list, and how much of each job's first
+// output line to show as a preview.
+const MAX_RECENT_JOBS = 14
+const MAX_OUTPUT_PREVIEW = 120
 
 // One module panel — header tab + title + body. Operator HUD's basic container.
 function CMod({ title, right, children, span }) {
@@ -63,27 +69,6 @@ function CheckBand({ checks }) {
   )
 }
 
-// Bucket the job log into per-day [{t, v}]. Same helper Greenhouse uses but
-// with shorter day labels suited to the dense Operator readout.
-function runsByDay(jobs, days = 10) {
-  const buckets = new Array(days).fill(0).map((_, i) => ({
-    t: i === days - 1 ? '0d' : `${days - 1 - i}d`,
-    v: 0,
-  }))
-  const now = Date.now()
-  const dayMs = 86400000
-  for (const j of jobs) {
-    const ts = j.started || j.finished || j.created || j.ts
-    if (!ts) continue
-    const ms = typeof ts === 'string' ? Date.parse(ts) : ts * 1000
-    if (!Number.isFinite(ms)) continue
-    const ageDays = Math.floor((now - ms) / dayMs)
-    if (ageDays < 0 || ageDays >= days) continue
-    buckets[days - 1 - ageDays].v += 1
-  }
-  return buckets
-}
-
 // Roll up the job log into a per-action-type tally for the RUN LOG // BY TYPE
 // table. Sorted by count descending so the most common runs sit on top.
 function runMix(jobs) {
@@ -106,7 +91,7 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
   const max = Math.max(...SECTION_ORDER.map((k) => c[k] || 0), 1)
   const checks = doctor?.groups || []
   const pass = checks.filter((g) => g.problems.length === 0).length
-  const series = runsByDay(jobs || [], 10)
+  const series = bucketJobsByDay(jobs || [], 10, '0d')
   const runsTotal = series.reduce((s, d) => s + d.v, 0)
   const mix = runMix(jobs)
   const mixMax = Math.max(...mix.map((m) => m.value), 1)
@@ -287,11 +272,13 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
         <CMod title="RECENT // RUN LOG" span={3}>
           <table className="c-tbl">
             <tbody>
-              {(jobs || []).slice(0, 14).map((j) => {
+              {(jobs || []).slice(0, MAX_RECENT_JOBS).map((j) => {
                 const ok = j.status === 'done'
                 const bad = j.status === 'failed'
                 const cls = bad ? 'bad' : ok ? 'ok' : 'acc'
-                const preview = j.output ? j.output.split('\n')[0].slice(0, 120) : '—'
+                const preview = j.output
+                  ? j.output.split('\n')[0].slice(0, MAX_OUTPUT_PREVIEW)
+                  : '—'
                 return (
                   <tr key={j.id}>
                     <td style={{ width: 96 }}>

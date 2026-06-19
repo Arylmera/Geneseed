@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
 import { Icon } from '../../components/Icon.jsx'
 
+// How long the "Copied" confirmation stays on the copy button.
+const COPY_FEEDBACK_MS = 1200
+
 // Render one positional or option argument with its help text. Compact —
 // we render up to ~20 commands and each has a few args, so visual density
 // matters here.
@@ -28,7 +31,7 @@ function CopyBtn({ text }) {
     try {
       await navigator.clipboard.writeText(text)
       setDone(true)
-      setTimeout(() => setDone(false), 1200)
+      setTimeout(() => setDone(false), COPY_FEEDBACK_MS)
     } catch {
       // clipboard blocked — quietly ignore (the user can still select+copy).
     }

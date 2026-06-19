@@ -1,7 +1,13 @@
 import React from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import { editCount } from '../../lib/format.js'
+import { bucketJobsByDay } from '../../lib/jobBuckets.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
+
+// Recent-activity panel: how many jobs to list, and how much of each job's first
+// output line to show as a preview.
+const MAX_TIMELINE_JOBS = 12
+const MAX_OUTPUT_PREVIEW = 120
 
 // Greenhouse "category" palette — warm rich tones that survive on both the
 // deep-forest dark and cream-paper light variants. Stable index per section
@@ -148,27 +154,6 @@ function BTile({ label, value, sub, color, icon }) {
   )
 }
 
-// Bucket the job log into a per-day [{t, v}] series for the last `days` days.
-// The job log is what /api/jobs returns; we accept it raw.
-function runsByDay(jobs, days = 10) {
-  const buckets = new Array(days).fill(0).map((_, i) => ({
-    t: i === days - 1 ? 'today' : `${days - 1 - i}d`,
-    v: 0,
-  }))
-  const now = Date.now()
-  const dayMs = 86400000
-  for (const j of jobs) {
-    const ts = j.started || j.finished || j.created || j.ts
-    if (!ts) continue
-    const ms = typeof ts === 'string' ? Date.parse(ts) : ts * 1000
-    if (!Number.isFinite(ms)) continue
-    const ageDays = Math.floor((now - ms) / dayMs)
-    if (ageDays < 0 || ageDays >= days) continue
-    buckets[days - 1 - ageDays].v += 1
-  }
-  return buckets
-}
-
 // Voice-flavoured headline copy. Same lookup as Cultivar's StatusView so the
 // hero feels coherent across flavours — only the wrapping changes.
 const HEADLINES = {
@@ -209,7 +194,7 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
     color: B_CATS[i % B_CATS.length],
   }))
   const mixTotal = mix.reduce((s, m) => s + m.value, 0)
-  const series = runsByDay(jobs || [], 10)
+  const series = bucketJobsByDay(jobs || [], 10)
   const runsTotal = series.reduce((s, d) => s + d.v, 0)
 
   return (
@@ -357,7 +342,7 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
           </div>
         </div>
         <div className="b-timeline">
-          {(jobs || []).slice(0, 12).map((j) => {
+          {(jobs || []).slice(0, MAX_TIMELINE_JOBS).map((j) => {
             const ok = j.status === 'done'
             const bad = j.status === 'failed'
             const cls = bad ? 'warn' : ok ? 'ok' : 'acc'
@@ -366,7 +351,7 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
                 <span className={`b-tl-node ${cls}`} />
                 <div className="b-tl-body">
                   <b>{j.action}</b>
-                  {j.output ? ` — ${j.output.split('\n')[0].slice(0, 120)}` : ''}
+                  {j.output ? ` — ${j.output.split('\n')[0].slice(0, MAX_OUTPUT_PREVIEW)}` : ''}
                 </div>
                 <span className="b-tl-when">{j.duration ? `${j.duration}s` : j.status}</span>
               </div>

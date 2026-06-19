@@ -26,14 +26,19 @@ describe('api surface', () => {
       'memoryDelete',
       'diff',
       'restore',
+      'docs',
+      'docsPage',
       'job',
       'jobs',
       'cancelJob',
       'action',
       'mcp',
       'mcpToggle',
+      'installs',
+      'installToggle',
       'ping',
       'shutdown',
+      'restart',
     ]
     for (const name of names) expect(typeof api[name]).toBe('function')
   })

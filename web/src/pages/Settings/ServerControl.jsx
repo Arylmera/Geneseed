@@ -2,6 +2,11 @@ import React, { useState } from 'react'
 import { api } from '../../api/index.js'
 import { Icon } from '../../components/Icon.jsx'
 
+// Restart polling: ping the server every interval until it answers, up to a ~30s
+// budget (RESTART_MAX_TRIES × RESTART_POLL_INTERVAL_MS).
+const RESTART_MAX_TRIES = 30
+const RESTART_POLL_INTERVAL_MS = 1000
+
 // Stops the local server from the page (same /api/shutdown that `geneseed web
 // stop` uses). The connection may drop as the server goes down, so a rejected
 // request right after the call is still treated as a successful stop.
@@ -35,9 +40,9 @@ export default function ServerControl() {
     } catch {
       // connection may drop as the old server goes down — expected
     }
-    const waitForServer = async (tries = 30) => {
+    const waitForServer = async (tries = RESTART_MAX_TRIES) => {
       for (let i = 0; i < tries; i++) {
-        await new Promise((r) => setTimeout(r, 1000))
+        await new Promise((r) => setTimeout(r, RESTART_POLL_INTERVAL_MS))
         try {
           await api.ping()
           window.location.reload()
