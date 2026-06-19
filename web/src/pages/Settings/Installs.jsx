@@ -24,10 +24,11 @@ export default function Installs() {
       )
     )
       return
-    setBusyKey(inst.path)
+    setBusyKey(inst.id)
     setNote('')
     try {
       const res = await api.installToggle(
+        inst.host,
         inst.path,
         inst.state === 'active' ? 'deactivate' : 'activate',
       )
@@ -50,7 +51,7 @@ export default function Installs() {
     <>
       {note ? <p className="badge bad">{note}</p> : null}
       {data.installs.map((inst) => {
-        const isDisabled = busyKey === inst.path
+        const isDisabled = busyKey === inst.id
         const on = inst.state === 'active'
         const badge =
           inst.state === 'active'
@@ -59,7 +60,7 @@ export default function Installs() {
               ? 'disabled'
               : 'not installed'
         return (
-          <div className="mcp-row" key={inst.path}>
+          <div className="mcp-row" key={inst.id}>
             <div className="mcp-info">
               <div className="mi-top">
                 <strong>

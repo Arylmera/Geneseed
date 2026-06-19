@@ -178,23 +178,108 @@ def _write_color_themes(themes_dir: Path) -> list[Path]:
     return written
 
 
-def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=None) -> tuple[int, int, list[Path]]:
-    """Render capability agents and skills into OpenCode-native files.
+def _claude_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[str]:
+    """Claude Code subagent frontmatter (~/.claude/agents/<name>.md or project
+    .claude/agents/). Required `name` + `description`; a read-only agent maps
+    OpenCode's `permission` deny-tree onto Claude's `disallowedTools:` denylist
+    (Write/Edit/WebFetch, plus Bash unless the spec opts in with `<!-- bash: allow -->`).
+    Claude has no `mode:`/`color:`/`permission:` keys, so those are omitted. Only a
+    `model:` override carries over (Claude has no temperature/variant/steps)."""
+    fm = [f"name: {stem}", f"description: {json.dumps(desc_of(text))}"]
+    ov = overrides.get(stem) or {}
+    if ov.get("model"):
+        fm.append(f"model: {ov['model']}")
+    if _is_readonly(text):
+        denied = ["Write", "Edit", "WebFetch"]
+        if "<!-- bash: allow -->" not in text:
+            denied.append("Bash")
+        fm.append("disallowedTools: " + ", ".join(denied))
+    return fm
 
-    - Agents -> `<agents_dir>/<name>.md`  (frontmatter: description, mode: subagent,
-      and read-only tool gating).
-    - Skills -> `<skills_dir>/<name>/SKILL.md`  (native skills: model-invoked via the
-      `skill` tool with progressive disclosure — NOT slash commands. Frontmatter is
-      the skill schema: name + description. The command-only
-      `agent:` / `model:` keys are intentionally dropped; a skill runs in the current
-      agent context. See adapters/opencode/GLOBAL-HARNESS-SPEC.md §9.1.)
+
+def _opencode_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[str]:
+    """OpenCode subagent frontmatter: description, mode: subagent, a NAMED theme-slot
+    colour, optional per-agent overrides, and (for read-only agents) the permission
+    deny-tree. Factored out of _write_native_layer so the Claude dialect is a sibling."""
+    fm = [f"description: {json.dumps(desc_of(text))}", "mode: subagent"]
+    # Per-agent display colour — one of OpenCode's NAMED theme slots (never a raw
+    # hex/ANSI name), so it follows whatever theme the host has active and stays
+    # portable. Capability roles get distinct semantic slots; everything else (the
+    # council seats) shares 'secondary'. Cosmetic only.
+    fm.append(f"color: {AGENT_COLORS.get(stem, 'secondary')}")
+    # Per-agent overrides (O2): emit model/temperature/variant/steps ONLY when
+    # configured; with no override the line is omitted so the agent inherits the
+    # host's current model as-is. Empty agent-overrides.json => zero change.
+    ov = overrides.get(stem) or {}
+    if ov.get("model"):
+        fm.append(f"model: {ov['model']}")
+    if ov.get("temperature") is not None:
+        fm.append(f"temperature: {ov['temperature']}")
+    if ov.get("variant"):
+        fm.append(f"variant: {ov['variant']}")
+    if ov.get("steps") is not None:
+        fm.append(f"steps: {ov['steps']}")
+    if _is_readonly(text):
+        # A "Read-only" agent must not be able to mutate the repo — and that
+        # includes the shell: `tools: {write,edit: false}` alone still leaves
+        # `bash` open, through which a read-only agent could write or fetch.
+        # Use OpenCode's permission model. bash is denied by default; a spec
+        # that genuinely runs read-only commands (tests, linters, scanners)
+        # opts in with the `<!-- bash: allow -->` marker (then gated to ask).
+        fm += ["permission:", "  edit: deny", "  webfetch: deny"]
+        if "<!-- bash: allow -->" in text:
+            fm += ["  bash:", '    "*": ask']
+        else:
+            fm += ["  bash: deny"]
+    return fm
+
+
+def desc_of(text: str) -> str:
+    """The first block-quote of a spec — its one-line purpose. Thin alias for
+    _first_blockquote so the frontmatter builders read cleanly."""
+    return _first_blockquote(text)
+
+
+def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=None,
+                        host: str = "opencode", old_owned=None,
+                        cfg: Path | None = None) -> tuple[int, int, list[Path]]:
+    """Render capability agents and skills into host-native files.
+
+    - Agents -> `<agents_dir>/<name>.md`. `host` selects the frontmatter dialect:
+      'opencode' (description, mode: subagent, color, permission deny-tree) or
+      'claude' (name, description, disallowedTools denylist). See the two
+      `_*_agent_frontmatter` builders.
+    - Skills -> `<skills_dir>/<name>/SKILL.md`. BYTE-IDENTICAL across hosts: name +
+      description, body link-stripped. Model-invoked via the `skill` tool, NOT slash
+      commands. See adapters/opencode/GLOBAL-HARNESS-SPEC.md §9.1.
+
+    User-content safety (claim-on-create): when BOTH `old_owned` and `cfg` are given, a
+    target that ALREADY EXISTS and is NOT in the prior manifest is the user's own — it
+    is left untouched (a warning is printed) and never added to the returned owned set,
+    so a re-emit never clobbers a same-named user agent/skill and uninstall never
+    deletes it. With `old_owned`/`cfg` omitted (the per-repo and portable bundle emits,
+    which write into a dir they fully own) every file is written unconditionally.
 
     Keys off the SOURCE folder name (always neutral) so a theme can rename the
-    rendered bundle dirs without moving OpenCode's fixed `agents/` and `skills/`.
+    rendered bundle dirs without moving the host's fixed `agents/`/`skills/`.
     Returns (n_agents, n_skills, written_paths)."""
     overrides = overrides or {}
+    old_set = set(old_owned) if old_owned is not None else None
     n_agents = n_skills = 0
     written: list[Path] = []
+
+    def _claim(dest: Path) -> bool:
+        # True -> ok to (over)write; False -> a pre-existing file we never owned, so it
+        # is the user's: leave it, warn, and keep it out of the manifest.
+        if old_set is None or cfg is None or not dest.exists():
+            return True
+        rel = dest.relative_to(cfg).as_posix()
+        if rel in old_set:
+            return True
+        print(f"[geneseed] kept your existing {rel} — skipped Geneseed's copy to avoid "
+              f"clobbering it", file=sys.stderr)
+        return False
+
     for _out_rel, text, src in items:
         sparts = src.relative_to(SRC).as_posix().split("/")
         # Vendored third-party skill folders (skills/<name>/…) ride along verbatim into
@@ -204,6 +289,8 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
         # as a native SKILL.md — and never counted as harness skills.
         if len(sparts) >= 2 and sparts[0] == "skills" and sparts[1] in VENDORED_SKILL_DIRS:
             dest = skills_dir.joinpath(*sparts[1:])
+            if not _claim(dest):
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             if text is not None:
                 dest.write_text(text, encoding="utf-8")
@@ -226,56 +313,35 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
             # Not counted as an
             # agent/skill, and not discovered by OpenCode (it scans <name>/SKILL.md).
             dest = target_dir / fname
+            if not _claim(dest):
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(text.lstrip("\n"), encoding="utf-8")
             written.append(dest)
             continue
         stem = fname[:-3]
-        desc = _first_blockquote(text)
         body = text.lstrip("\n")
         if folder == "agents":
-            fm = [f"description: {json.dumps(desc)}", "mode: subagent"]
-            # Per-agent display colour — one of OpenCode's NAMED theme slots (never a raw
-            # hex/ANSI name), so it follows whatever theme the host has active and stays
-            # portable. Capability roles get distinct semantic slots; everything else (the
-            # council seats) shares 'secondary'. Cosmetic only.
-            fm.append(f"color: {AGENT_COLORS.get(stem, 'secondary')}")
-            # Per-agent overrides (O2): emit model/temperature/variant/steps ONLY when
-            # configured; with no override the line is omitted so the agent inherits the
-            # host's current model as-is. Empty agent-overrides.json => zero change.
-            ov = overrides.get(stem) or {}
-            if ov.get("model"):
-                fm.append(f"model: {ov['model']}")
-            if ov.get("temperature") is not None:
-                fm.append(f"temperature: {ov['temperature']}")
-            if ov.get("variant"):
-                fm.append(f"variant: {ov['variant']}")
-            if ov.get("steps") is not None:
-                fm.append(f"steps: {ov['steps']}")
-            if _is_readonly(text):
-                # A "Read-only" agent must not be able to mutate the repo — and that
-                # includes the shell: `tools: {write,edit: false}` alone still leaves
-                # `bash` open, through which a read-only agent could write or fetch.
-                # Use OpenCode's permission model. bash is denied by default; a spec
-                # that genuinely runs read-only commands (tests, linters, scanners)
-                # opts in with the `<!-- bash: allow -->` marker (then gated to ask).
-                fm += ["permission:", "  edit: deny", "  webfetch: deny"]
-                if "<!-- bash: allow -->" in text:
-                    fm += ["  bash:", '    "*": ask']
-                else:
-                    fm += ["  bash: deny"]
+            fm = (_claude_agent_frontmatter(stem, text, overrides) if host == "claude"
+                  else _opencode_agent_frontmatter(stem, text, overrides))
             dest = agents_dir / f"{stem}.md"
-            n_agents += 1
+            kind = "agent"
         elif folder == "skills":
-            fm = [f"name: {stem}", f"description: {json.dumps(desc)}"]
-            body = _strip_skill_body_links(body)   # OpenCode never follows these — plain text
+            fm = [f"name: {stem}", f"description: {json.dumps(desc_of(text))}"]
+            body = _strip_skill_body_links(body)   # the host never follows these — plain text
             dest = skills_dir / stem / "SKILL.md"
-            n_skills += 1
+            kind = "skill"
         else:
+            continue
+        if not _claim(dest):
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text("---\n" + "\n".join(fm) + "\n---\n\n" + body, encoding="utf-8")
         written.append(dest)
+        if kind == "agent":
+            n_agents += 1
+        else:
+            n_skills += 1
     return n_agents, n_skills, written
 
 
@@ -421,6 +487,175 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
         return target
     target.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     return target
+
+
+# ---- Claude Code wiring: settings.json hooks + the CLAUDE.md managed block --------
+# Claude has no `instructions` array (it auto-loads CLAUDE.md by location) and no JS
+# plugins (~/.claude/plugins/ is a managed marketplace, never written). The harness
+# reaches Claude through settings.json HOOKS instead — context injection, learn, and
+# the git-gate, the same three `harness.py` subcommands the OpenCode plugins drive.
+
+# The adapter's adapters/claude-code/settings.json is the reference for a MANUAL /
+# vendored-in-repo install (project-relative, assumes rituals/ at the repo root). A
+# GENERATED install (global or an arbitrary folder) can't assume that, so the hooks are
+# built programmatically here with ABSOLUTE paths: the interpreter + absolute harness.py
+# (known at emit time), and `learn --memory <install>/memory` so memory lands in the
+# install's store, not the project cwd. The `cat AGENT.md` startup hooks are dropped —
+# CLAUDE.md auto-loads by location, so re-injecting it would double up and would error in
+# any repo without an AGENT.md. Hooks run with the project cwd, which is exactly what
+# `context` wants (it auto-discovers the project's docs).
+def _claude_hook_groups(cfg: Path) -> dict:
+    """Geneseed's Claude hooks for an install rooted at `cfg`, keyed by event."""
+    py = f'"{sys.executable}"'
+    h = f'"{ROOT / "rituals" / "harness.py"}"'
+    mem = f'--memory "{cfg / "memory"}"'
+    context = f"{py} {h} context"
+    return {
+        "PreToolUse": [
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": f"{py} {h} git-gate"}]},
+        ],
+        "SessionStart": [
+            {"matcher": "startup|clear", "hooks": [{"type": "command", "command": context}]},
+            {"matcher": "resume", "hooks": [{"type": "command", "command": context}]},
+        ],
+        "Stop": [
+            {"hooks": [{"type": "command", "command": f"{py} {h} learn {mem} || true"}]},
+        ],
+    }
+
+
+def _merge_claude_settings(path: Path, scope: str = "global") -> "tuple[Path, list]":
+    """Surgically merge Geneseed's Claude hooks into the user's settings.json,
+    preserving every other key AND the user's own hook entries. The install root is
+    `path.parent` (so `learn` is pointed at <root>/memory). Returns (target, added)
+    where `added` is the list of {event, group} entries actually written — recorded in
+    the manifest so unwire/uninstall removes EXACTLY those and nothing else. Idempotent
+    (a group already present is not re-added). A settings.json carrying comments is
+    never rewritten — the user is warned and nothing changes (mirrors the commented
+    `.jsonc` refusal for opencode.json). `scope` is accepted for caller symmetry; the
+    generated hooks are absolute either way."""
+    config: dict = {}
+    had_comments = False
+    if path.exists():
+        try:
+            loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                config = loaded
+        except OSError:
+            pass
+    hooks = config.get("hooks")
+    if not isinstance(hooks, dict):
+        hooks = {}
+    added: list = []
+    for event, new_groups in _claude_hook_groups(path.parent).items():
+        arr = hooks.get(event)
+        if not isinstance(arr, list):
+            arr = []
+        for g in new_groups:
+            if g in arr:
+                continue
+            arr.append(g)
+            added.append({"event": event, "group": g})
+        hooks[event] = arr
+    if not added:
+        return path, []   # already wired (or nothing to add) — leave the file untouched
+    if had_comments:
+        print(f"[geneseed] {path.name} has comments — not rewriting it (your edits are "
+              f"kept). Add Geneseed's hooks by hand from adapters/claude-code/settings.json.",
+              file=sys.stderr)
+        return path, []
+    config["hooks"] = hooks
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return path, added
+
+
+def _unwire_claude_settings(path: Path, added: list) -> None:
+    """Reverse _merge_claude_settings: remove exactly the recorded hook groups, leaving
+    the user's own keys and hooks intact. An emptied event key is dropped; an emptied
+    `hooks` block is dropped. A commented settings.json is never rewritten."""
+    if not path.exists() or not added:
+        return
+    try:
+        loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
+    except OSError:
+        return
+    if had_comments or not isinstance(loaded, dict):
+        return
+    hooks = loaded.get("hooks")
+    if not isinstance(hooks, dict):
+        return
+    for rec in added:
+        event, group = rec.get("event"), rec.get("group")
+        arr = hooks.get(event)
+        if isinstance(arr, list) and group in arr:
+            arr.remove(group)
+        if isinstance(arr, list) and not arr:
+            hooks.pop(event, None)
+    if not hooks:
+        loaded.pop("hooks", None)
+    path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
+
+
+_BLOCK_BEGIN = "<!-- BEGIN {id} -->"
+_BLOCK_END = "<!-- END {id} -->"
+
+
+def _managed_block_write(path: Path, content: str, block_id: str = "GENESEED") -> str:
+    """Write `content` into a single delimited managed block in `path`. Absent file ->
+    create it whole (returns 'created'). Existing block -> replace it in place (returns
+    'updated'). Otherwise append the block, preserving the user's prose around it
+    (returns 'merged'). Idempotent: a re-emit replaces the block, never stacks them."""
+    begin, end = _BLOCK_BEGIN.format(id=block_id), _BLOCK_END.format(id=block_id)
+    block = f"{begin}\n{content.rstrip()}\n{end}\n"
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(block, encoding="utf-8")
+        return "created"
+    existing = path.read_text(encoding="utf-8")
+    if begin in existing and end in existing:
+        pre = existing.split(begin, 1)[0]
+        post = existing.split(end, 1)[1]
+        path.write_text(pre + block + post.lstrip("\n"), encoding="utf-8")
+        return "updated"
+    sep = "" if existing.endswith("\n") else "\n"
+    path.write_text(existing + sep + "\n" + block, encoding="utf-8")
+    return "merged"
+
+
+def _managed_block_remove(path: Path, block_id: str = "GENESEED", whole: bool = False) -> None:
+    """Reverse _managed_block_write. `whole` (Geneseed created the file) -> delete it.
+    Otherwise excise just the delimited block, keeping the user's prose; a file left
+    empty after excision is removed."""
+    if not path.exists():
+        return
+    if whole:
+        path.unlink()
+        return
+    begin, end = _BLOCK_BEGIN.format(id=block_id), _BLOCK_END.format(id=block_id)
+    existing = path.read_text(encoding="utf-8")
+    if begin not in existing or end not in existing:
+        return
+    pre = existing.split(begin, 1)[0]
+    post = existing.split(end, 1)[1]
+    rest = (pre.rstrip("\n") + "\n" + post.lstrip("\n")).strip()
+    if rest:
+        path.write_text(rest + "\n", encoding="utf-8")
+    else:
+        path.unlink()
+
+
+def _managed_block_read(path: Path, block_id: str = "GENESEED") -> "str | None":
+    """Return the inner content of the managed block in `path` (between the delimiters,
+    exclusive), or None if absent. Lets a deactivate stash the block for an exact
+    restore on reactivate without re-rendering."""
+    if not path.exists():
+        return None
+    begin, end = _BLOCK_BEGIN.format(id=block_id), _BLOCK_END.format(id=block_id)
+    text = path.read_text(encoding="utf-8")
+    if begin not in text or end not in text:
+        return None
+    return text.split(begin, 1)[1].split(end, 1)[0].strip("\n")
 
 
 def _copy_plugins(dst: Path, owned: list | None = None) -> int:

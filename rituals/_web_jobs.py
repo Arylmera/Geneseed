@@ -153,6 +153,10 @@ def action_commands(action: str, theme: str = "neutral",
     return {
         "doctor": [[py, h, "doctor"]],
         "build": [[py, b, *build_argv]],
+        # Rebuild EVERY active install in place (each in its own theme+emit). The
+        # per-install resolution lives in the rebuild-all subcommand, so the web layer
+        # threads no theme/emit — one job, best-effort across all installs.
+        "build-all": [[py, h, "rebuild-all"]],
         "update": [[py, h, "sync-self"], [py, h, "upgrade"]],
         "export": [[py, h, "diff", "--out"]],
         # Local-machine maintenance, surfaced in the web Settings. uninstall keeps

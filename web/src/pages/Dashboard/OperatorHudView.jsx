@@ -155,10 +155,7 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
             <Icon name="refresh" />
             UPDATE
           </button>
-          <button
-            className="btn ghost"
-            onClick={() => onAction('build', { theme: overview.theme, emit: overview.emit })}
-          >
+          <button className="btn ghost" onClick={() => onAction('build-all')}>
             REBUILD
           </button>
           <button className="btn ghost" onClick={() => onAction('doctor')}>

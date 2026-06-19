@@ -49,7 +49,7 @@ def _setup_build_args(theme: str, emit: str, out: str | None = None,
     """The build.py argv for a wizard selection (pure — unit-tested). The global
     emit takes no out/root; the others may."""
     argv = ["--theme", theme, "--emit", emit]
-    if emit != "opencode-global":
+    if emit not in ("opencode-global", "claude-global"):   # both globals take no out/root
         if out:
             argv += ["--out", out]
         if root:
@@ -118,7 +118,9 @@ def _theme_of_dir(d: Path) -> "str | None":
                 return name
     except OSError:
         pass
-    return _theme_from_agent(d / "AGENT.md")
+    # Sigil fallback: AGENT.md (OpenCode) first, then CLAUDE.md (Claude installs carry
+    # the rendered instructions — and the theme sigil — inside their managed block).
+    return _theme_from_agent(d / "AGENT.md") or _theme_from_agent(d / "CLAUDE.md")
 
 
 def _installed_defaults() -> dict:
@@ -129,10 +131,12 @@ def _installed_defaults() -> dict:
     (the recommended install), then common bundle locations."""
     found = {"theme": None, "emit": None}
     candidates = []
-    try:
-        candidates.append(build._opencode_config_dir())
-    except Exception:
-        pass
+    # OpenCode global first (the recommended primary), then Claude global, then bundles.
+    for cfg_dir in (lambda: build._opencode_config_dir(), lambda: build._claude_config_dir()):
+        try:
+            candidates.append(cfg_dir())
+        except Exception:
+            pass
     candidates += [ROOT / "Harness", ROOT.parent / "Harness", Path.cwd() / "Harness"]
     for base in candidates:
         try:
@@ -141,7 +145,9 @@ def _installed_defaults() -> dict:
                 if em.is_file():
                     found["emit"] = em.read_text(encoding="utf-8").strip() or None
                 elif (base / ".geneseed-manifest.json").is_file():
-                    found["emit"] = "opencode-global"
+                    # A manifest with no emit marker (pre-marker install): tell the hosts
+                    # apart by the manifest shape (Claude records a managed CLAUDE.md).
+                    found["emit"] = "claude-global" if _manifest_is_claude(base) else "opencode-global"
             if found["theme"] is None:
                 found["theme"] = _theme_of_dir(base)
         except OSError:
@@ -151,7 +157,9 @@ def _installed_defaults() -> dict:
 
 EMIT_OPTIONS = [
     ("opencode-global", "OpenCode global config dir — every repo inherits it (recommended)."),
+    ("claude-global", "Claude Code global config dir (~/.claude) — CLAUDE.md, agents, skills, hooks."),
     ("opencode", "Per-repo .opencode/ layer committed into one repository."),
+    ("claude", "Per-repo CLAUDE.md + .claude/ committed into one repository."),
     ("files", "Plain bundle for any AGENT.md tool."),
 ]
 

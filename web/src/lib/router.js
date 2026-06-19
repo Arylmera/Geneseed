@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 const FLAT_VIEWS = new Set([
   'diff',
   'settings',
+  'harnesses',
   'doctor',
   'themes',
   'graph',

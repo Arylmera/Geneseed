@@ -5,8 +5,6 @@ import { useAsync } from '../../hooks/useAsync.js'
 import { FLAVOURS } from '../../hooks/useFlavour.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
-import Installs from './Installs.jsx'
-import McpServers from './McpServers.jsx'
 import ServerControl from './ServerControl.jsx'
 
 // The settings page: the console direction picker, the install snapshot, the
@@ -168,30 +166,6 @@ export default function Settings({ onAction, flavour, onFlavour }) {
             </button>
           </div>
         )}
-      </div>
-
-      {/* Harness installs card */}
-      <div className="card pad-lg mb-16">
-        <div className="card-head">
-          <h3>Harness installs</h3>
-        </div>
-        <p className="sub mb-16">
-          Turn a whole OpenCode install off without deleting it. Deactivating moves the rules and
-          owned artifacts aside; reactivating restores the exact bytes.
-        </p>
-        <Installs />
-      </div>
-
-      {/* MCP servers card */}
-      <div className="card pad-lg mb-16">
-        <div className="card-head">
-          <h3>MCP servers</h3>
-        </div>
-        <p className="sub mb-16">
-          Wire MCP servers into OpenCode, per project or globally. Toggles rewrite only the{' '}
-          <code>mcp</code> block.
-        </p>
-        <McpServers />
       </div>
 
       {/* Maintenance card */}

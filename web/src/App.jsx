@@ -21,6 +21,7 @@ import Doctor from './pages/Doctor.jsx'
 import Themes from './pages/Themes.jsx'
 import Graph from './pages/Graph.jsx'
 import Settings from './pages/Settings/index.jsx'
+import Harnesses from './pages/Harnesses.jsx'
 import Docs from './pages/Docs/index.jsx'
 import About from './pages/About.jsx'
 
@@ -147,6 +148,7 @@ export default function App() {
             {route.view === 'settings' && (
               <Settings onAction={runAction} flavour={flavour} onFlavour={setFlavour} />
             )}
+            {route.view === 'harnesses' && <Harnesses onAction={runAction} />}
             {route.view === 'docs' && (
               <Docs page={route.page} query={query} onAction={runAction} overview={overview} />
             )}

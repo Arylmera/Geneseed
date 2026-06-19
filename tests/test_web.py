@@ -390,8 +390,8 @@ class McpTests(unittest.TestCase):
         # api_mcp only lists targets whose install is active; force one so the
         # structure check doesn't hinge on the host machine having an install.
         saved_t, saved_s = web.harness._install_targets, web.harness._install_state
-        web.harness._install_targets = lambda: [("this project", Path("."))]
-        web.harness._install_state = lambda root: "active"
+        web.harness._install_targets = lambda: [("opencode", "project", Path("."))]
+        web.harness._install_state = lambda root, host="opencode", scope="global": "active"
         try:
             m = web.api_mcp(state)
         finally:
@@ -448,7 +448,7 @@ class InstallActivationTests(unittest.TestCase):
         # One detected install: a GLOBAL root (it carries a manifest). Mirror the
         # path-allowlist contract of api_install_toggle by pinning _install_targets.
         self._saved_targets = web.harness._install_targets
-        web.harness._install_targets = lambda: [("global config", self.root)]
+        web.harness._install_targets = lambda: [("opencode", "global", self.root)]
 
     def tearDown(self):
         import shutil
@@ -497,12 +497,12 @@ class InstallActivationTests(unittest.TestCase):
         for key in ("id", "host", "scope", "path", "state"):
             self.assertIn(key, row)
         self.assertEqual(row["host"], "opencode")
-        self.assertEqual(row["scope"], "global config")
+        self.assertEqual(row["scope"], "global")
         self.assertEqual(row["path"], str(self.root))
         self.assertEqual(row["state"], "active")           # manifest present, no stash
 
         # absent: a root with neither manifest nor .opencode/ reports `absent`.
-        web.harness._install_targets = lambda: [("global config", self.tmp / "empty")]
+        web.harness._install_targets = lambda: [("opencode", "global", self.tmp / "empty")]
         (self.tmp / "empty").mkdir()
         self.assertEqual(
             web.api_installs(self.state)["installs"][0]["state"], "absent")
@@ -514,7 +514,7 @@ class InstallActivationTests(unittest.TestCase):
         x_bytes = (self.root / "agents" / "x.md").read_bytes()
 
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "deactivate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "deactivate"})
         self.assertTrue(res["ok"])
         self.assertEqual(res["kind"], "global")
         self.assertEqual(res["moved"], 2)                  # AGENT.md + agents/x.md
@@ -541,7 +541,7 @@ class InstallActivationTests(unittest.TestCase):
             web.api_installs(self.state)["installs"][0]["state"], "disabled")
 
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "activate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "activate"})
         self.assertTrue(res["ok"])
         # restored exactly to the original rel paths, byte-for-byte.
         self.assertEqual((self.root / "AGENT.md").read_bytes(), agent_bytes)
@@ -565,7 +565,7 @@ class InstallActivationTests(unittest.TestCase):
         self._stash().write_text("not a dir\n", encoding="utf-8")
 
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "deactivate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "deactivate"})
         self.assertFalse(res["ok"])
         self.assertIn("failed", res)
         self.assertTrue(res["failed"])
@@ -587,7 +587,7 @@ class InstallActivationTests(unittest.TestCase):
     def test_reactivate_discards_stash_when_files_re_created(self):
         self._seed_global()
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "deactivate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "deactivate"})
         self.assertTrue(res["ok"])
         self.assertTrue(self._stash().is_dir())
 
@@ -597,7 +597,7 @@ class InstallActivationTests(unittest.TestCase):
         self.assertTrue((self.root / "AGENT.md").is_file())
 
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "activate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "activate"})
         self.assertTrue(res["ok"])
         self.assertIn("note", res)
         self.assertIn("discarded", res["note"])
@@ -620,7 +620,7 @@ class InstallActivationTests(unittest.TestCase):
             encoding="utf-8")
 
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "deactivate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "deactivate"})
         self.assertFalse(res["ok"])
         self.assertIn("error", res)
         # Nothing moved: live files in place, no stash created, comments intact.
@@ -642,7 +642,7 @@ class InstallActivationTests(unittest.TestCase):
     def test_install_toggle_unknown_action_is_not_ok(self):
         self._seed_global()
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "bogus"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "bogus"})
         self.assertFalse(res["ok"])
 
 

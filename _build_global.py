@@ -19,6 +19,14 @@ def _opencode_config_dir() -> Path:
     return (base / "opencode").resolve()
 
 
+def _claude_config_dir() -> Path:
+    """Claude Code's global/user config dir: ~/.claude (Windows: %USERPROFILE%\\.claude,
+    which Path.home() resolves). Unlike OpenCode there is no documented env var that
+    relocates it, so — by design — this resolver is simpler than its sibling: no env
+    branch. (configuration: https://code.claude.com/docs/en/configuration)"""
+    return (Path.home() / ".claude").resolve()
+
+
 GLOBAL_MANIFEST = ".geneseed-manifest.json"
 
 
@@ -156,7 +164,9 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
     ensure_agent_overrides_stub(cfg)
     overrides = _load_agent_overrides(cfg)
-    n_agents, n_skills, written = _write_native_layer(items, cfg / "agents", cfg / "skills", overrides)
+    n_agents, n_skills, written = _write_native_layer(
+        items, cfg / "agents", cfg / "skills", overrides,
+        host="opencode", old_owned=old_owned, cfg=cfg)
     owned += [p.relative_to(cfg).as_posix() for p in written]
     primary = _write_primary_agent(cfg / "agents", overrides)
     if primary:
@@ -214,5 +224,155 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
           f"{n_plugins} plugin(s), {n_workflows} workflow file(s), AGENT.md, {mem_status}, {nb_status}, "
           f"{cfg_name} (no context.json){extra}. "
           f"The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.")
+
+
+def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
+                      out: Path | None = None) -> tuple:
+    """Shared engine for both Claude emits (global → ~/.claude, folder → <repo>/.claude).
+    Mirrors emit_opencode_global's manifest + write-before-delete prune, but for the
+    Claude layout: CLAUDE.md as a managed block (auto-loaded by Claude), agents in the
+    Claude subagent dialect, byte-identical skills, settings.json hooks merged
+    surgically. NO plugins/workflows/colour-themes (Claude has no analogue; its
+    plugins/ dir is a managed marketplace, never written). User content is never
+    clobbered: agents/skills collide → claim-on-create skip; CLAUDE.md → block merge;
+    settings.json → surgical, recorded hook merge. memory/notebook/wiki are host state,
+    never tracked, never deleted. Returns
+    (n_agents, n_skills, n_hook_groups, mem_status, nb_status, managed)."""
+    theme, items = render_all(theme_name)
+    assert_source_complete(items, context=f"claude-{scope}")
+    cfg.mkdir(parents=True, exist_ok=True)
+
+    manifest_path = cfg / GLOBAL_MANIFEST
+    old_owned: list[str] = []
+    old_managed: dict = {}
+    if manifest_path.exists():
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            old_owned = data.get("owned", []) or []
+            om = data.get("managed")
+            old_managed = om if isinstance(om, dict) else {}
+        except (json.JSONDecodeError, OSError):
+            old_owned, old_managed = [], {}
+
+    owned: list[str] = []
+    managed: dict = {}
+
+    # CLAUDE.md — Claude auto-loads it by location; merge as a delimited block so any
+    # user prose around it survives. `whole` (Geneseed created the file) sticks across
+    # re-emits so uninstall knows whether to delete the file or just excise the block.
+    agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
+    if agent_text is not None:
+        status = _managed_block_write(claude_md, _strip_capability_links(agent_text))
+        prior_whole = bool((old_managed.get("claude_md") or {}).get("whole"))
+        managed["claude_md"] = {
+            "rel": os.path.relpath(claude_md, cfg).replace(os.sep, "/"),
+            "whole": (status == "created") or prior_whole,
+        }
+
+    ensure_agent_overrides_stub(cfg)
+    n_agents, n_skills, written = _write_native_layer(
+        items, cfg / "agents", cfg / "skills", _load_agent_overrides(cfg),
+        host="claude", old_owned=old_owned, cfg=cfg)
+    owned += [p.relative_to(cfg).as_posix() for p in written]
+
+    mem_status = _global_memory(cfg, theme, items, out)
+    ensure_memory_index(cfg / "memory")
+    nb_status = _global_notebook(cfg, theme, items, out)
+    ensure_notebook_index(cfg / "notebook")
+    ensure_wiki_stub(cfg)
+
+    write_version(cfg)
+    owned.append(VERSION_MARKER)
+
+    _settings, added_hooks = _merge_claude_settings(cfg / "settings.json", scope)
+    prior_hooks = old_managed.get("settings_hooks")
+    prior_hooks = prior_hooks if isinstance(prior_hooks, list) else []
+    # Dedup so the manifest can't grow unbounded if a user edits a managed hook and a
+    # re-emit re-adds the canonical group (already recorded in prior_hooks).
+    managed["settings_hooks"] = prior_hooks + [a for a in added_hooks if a not in prior_hooks]
+
+    # Write-before-delete prune: now that the whole current set is on disk, remove only
+    # what we owned before but no longer produce. A live file is never momentarily absent.
+    prune_failed = []
+    for relp in sorted(set(old_owned) - set(owned)):
+        victim = cfg / relp
+        try:
+            if victim.is_file():
+                victim.unlink()
+                if victim.name == "SKILL.md" and victim.parent != cfg \
+                        and not any(victim.parent.iterdir()):
+                    victim.parent.rmdir()
+        except OSError as e:
+            prune_failed.append(f"{relp} ({e})")
+    if prune_failed:
+        print("[geneseed] WARN: could not remove stale owned file(s): "
+              + ", ".join(prune_failed), file=sys.stderr)
+
+    manifest_path.write_text(
+        json.dumps({"_comment": "Files owned by Geneseed's Claude emit. Do not edit; removed on "
+                                "re-emit. The memory and notebook stores are NOT listed — never "
+                                "deleted. `managed` records the CLAUDE.md block + settings.json "
+                                "hooks so uninstall removes exactly those.",
+                    "owned": sorted(owned), "managed": managed}, indent=2) + "\n",
+        encoding="utf-8")
+    return n_agents, n_skills, len(managed.get("settings_hooks", [])), mem_status, nb_status, managed
+
+
+def emit_claude_global(theme_name: str, out: Path | None = None, cfg: Path | None = None) -> None:
+    """Render the harness into Claude Code's GLOBAL config dir (~/.claude) — the Claude
+    sibling of emit_opencode_global. Self-contained: writes ONLY into <cfg>, builds no
+    bundle. CLAUDE.md carries the instructions (auto-loaded), agents use Claude's
+    subagent schema, skills are byte-identical to the OpenCode emit, and settings.json
+    gains Geneseed's hooks with ABSOLUTE harness.py paths (hooks run with the project
+    cwd, not the config dir). `cfg` overrides the target (used by tests / doctor to
+    render an expected copy into a temp dir)."""
+    cfg = cfg or _claude_config_dir()
+    n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
+        theme_name, cfg, cfg / "CLAUDE.md", "global", out)
+    print(f"[geneseed] claude-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
+          f"CLAUDE.md, {n_hooks} hook group(s), settings.json, {mem_status}, {nb_status}. "
+          f"No plugins/workflows/themes (no Claude analogue); ~/.claude/plugins is never touched. "
+          f"Hooks call harness.py by absolute path; set GENESEED_HARNESS only to relocate memory.")
+
+
+def emit_claude(theme_name: str, out: Path, root: Path | None = None) -> None:
+    """Per-repo Claude install: CLAUDE.md at the repo root + a project `.claude/` layer
+    (agents, skills, settings.json hooks with absolute harness.py paths — same as the
+    global emit; scope doesn't change the generated paths).
+    Reuses the same manifest + claim-on-create machinery as the global emit, so a user's
+    own project `.claude/` files are never clobbered. `out`/`root` mirror emit_opencode;
+    the harness lands under `root` (default: `out`)."""
+    root = root or out
+    cfg = root / ".claude"
+    n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
+        theme_name, cfg, root / "CLAUDE.md", "project", out)
+    print(f"[geneseed] claude (folder) -> {root}: CLAUDE.md + .claude/ "
+          f"({n_agents} subagents, {n_skills} skills, {n_hooks} hook group(s), settings.json), "
+          f"{mem_status}, {nb_status}.")
+
+
+# The host registry — the single source of truth shared by build dispatch and the
+# install-detection/activation layer (rituals/_harness_mcp.py). Bounded to the two
+# hosts that exist (YAGNI): each row is the data those layers need to stop hardcoding
+# ".opencode"/"AGENT.md"/"opencode.json". wire/unwire are NOT here — their signatures
+# differ per host (opencode.json `instructions` splice vs settings.json hook merge), so
+# the activation layer dispatches them with a small host branch rather than forcing a
+# uniform-but-dishonest callable.
+HOSTS = {
+    "opencode": {
+        "config_dir": _opencode_config_dir,
+        "config_file": "opencode.json",
+        "project_marker": ".opencode",
+        "agent_file": "AGENT.md",
+        "emit_global": emit_opencode_global,
+    },
+    "claude": {
+        "config_dir": _claude_config_dir,
+        "config_file": "settings.json",
+        "project_marker": ".claude",
+        "agent_file": "CLAUDE.md",
+        "emit_global": emit_claude_global,
+    },
+}
 
 

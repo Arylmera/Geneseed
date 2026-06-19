@@ -218,12 +218,16 @@ def _archive_memory(memory_dir: Path) -> Path:
     return dest
 
 
-def _uninstall_global(target: Path, archive_memory: bool) -> dict:
+def _uninstall_global(target: Path, archive_memory: bool, host: str = "opencode") -> dict:
     """Reverse a global install at `target` using its manifest: remove owned files,
     prune emptied dirs, drop the AGENT.md entry from opencode.json, and delete the
     markers. The memory store is NEVER deleted — kept in place by default, or moved to
     a sibling `archived-memory/<timestamp>/` when archive_memory. Returns a summary
-    dict (with `archived` = the archive path, or None)."""
+    dict (with `archived` = the archive path, or None). Host-aware: a Claude install is
+    reversed by `_claude_uninstall` (no opencode.json — settings.json hooks + the
+    CLAUDE.md block instead)."""
+    if host == "claude":
+        return _claude_uninstall(target, archive_memory)
     try:
         owned = json.loads((target / build.GLOBAL_MANIFEST).read_text(encoding="utf-8")).get("owned", [])
     except (json.JSONDecodeError, OSError):
@@ -285,10 +289,15 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
             f"[uninstall] per-repo installs: rm -rf .opencode and drop AGENT.md from "
             f"opencode.json's instructions.\n")
         return 1
+    host = "claude" if _manifest_is_claude(target) else "opencode"
     has_memory = (target / "memory").is_dir()
-    print(f"[uninstall] target: {target}")
-    print("[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the "
-          "opencode.json instructions entry.")
+    print(f"[uninstall] target: {target} ({host})")
+    if host == "claude":
+        print("[uninstall] removes: agents/, skills/, markers, the CLAUDE.md block, and "
+              "Geneseed's settings.json hooks (your own keys/hooks are kept).")
+    else:
+        print("[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the "
+              "opencode.json instructions entry.")
     if has_memory:
         print("[uninstall] memory: " + ("will be ARCHIVED to archived-memory/ (never deleted)"
                                          if args.archive_memory
@@ -300,11 +309,12 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         if not _confirm("Proceed with uninstall?", False):
             print("[uninstall] cancelled — nothing removed.")
             return 0
-    s = _uninstall_global(target, args.archive_memory)
+    s = _uninstall_global(target, args.archive_memory, host)
     mem = f"archived -> {s['archived']}" if s["archived"] else "kept in place"
-    print(f"[uninstall] done — removed {s['removed']} file(s); opencode.json "
+    cfgfile = "settings.json" if host == "claude" else "opencode.json"
+    print(f"[uninstall] done — removed {s['removed']} file(s); {cfgfile} "
           f"{'updated' if s['unmerged'] else 'unchanged'}; memory {mem}. "
-          f"Start a new OpenCode session to apply.")
+          f"Start a new session to apply.")
     return 0
 
 
@@ -319,19 +329,30 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
 DISABLED_STASH = ".geneseed-disabled"   # sibling dir; presence == disabled
 
 
-def _install_targets() -> "list[tuple[str, Path]]":
-    """Roots that may carry a Geneseed install, most-local first: this project's
-    root, then OpenCode's global config dir. De-duplicated when cwd IS the global
-    config dir (else both rows would point at one root and collide)."""
-    cands = [("this project", Path.cwd())]
-    try:
-        cands.append(("global config", build._opencode_config_dir()))
-    except Exception:
-        pass
-    seen, out = set(), []
-    for label, root in cands:
-        if root.resolve() not in seen:
-            seen.add(root.resolve()); out.append((label, root))
+def _install_targets() -> "list[tuple[str, str, Path]]":
+    """Every (host, scope, root) an install may live at, most-local first. For each
+    host in build.HOSTS: a `global` row (the host's config dir) and a `project` row
+    (the cwd) when that host's project marker is present there. De-duplicated on the
+    (host, resolved-path) PAIR — so a cwd that carries BOTH `.opencode/` and `.claude/`
+    yields two independent, correctly-typed rows, and a cwd that IS a global config dir
+    never doubles its own host's row."""
+    out: "list[tuple[str, str, Path]]" = []
+    seen = set()
+
+    def _add(host: str, scope: str, root: Path) -> None:
+        key = (host, root.resolve())
+        if key not in seen:
+            seen.add(key); out.append((host, scope, root))
+
+    cwd = Path.cwd()
+    for host, spec in build.HOSTS.items():
+        if (cwd / spec["project_marker"]).is_dir():
+            _add(host, "project", cwd)
+    for host, spec in build.HOSTS.items():
+        try:
+            _add(host, "global", spec["config_dir"]())
+        except Exception:
+            pass
     return out
 
 
@@ -376,8 +397,13 @@ def _install_relive(root: Path) -> bool:
     return (root / "AGENT.md").is_file()
 
 
-def _install_state(root: Path) -> str:
-    """'active' | 'disabled' | 'absent' for the install at `root`."""
+def _install_state(root: Path, host: str = "opencode", scope: str = "global") -> str:
+    """'active' | 'disabled' | 'absent' for the install at `root`. Host-aware: the
+    OpenCode path is unchanged; Claude dispatches to `_claude_state` (its manifest and
+    stash live under a host-specific cfg dir — ~/.claude for global, <repo>/.claude for
+    a project install)."""
+    if host == "claude":
+        return _claude_state(root, scope)
     # ponytail: state is just "does the stash dir exist" + "is an install present".
     # No JSON record to keep in sync with the filesystem — the dir IS the record.
     if (root / DISABLED_STASH).is_dir():
@@ -468,11 +494,14 @@ def _install_readd_entry(target: Path, entry: str) -> bool:
     return True
 
 
-def _install_deactivate(root: Path) -> dict:
+def _install_deactivate(root: Path, host: str = "opencode", scope: str = "global") -> dict:
     """Turn the install at `root` OFF without deleting a byte: move every owned
     artifact into `root/DISABLED_STASH/<rel>` and drop the AGENT.md `instructions`
     entry. ALL-OR-NOTHING — a move failure rolls back every move already done and
-    leaves the install fully `active`, never half-gutted."""
+    leaves the install fully `active`, never half-gutted. Host-aware: Claude has its
+    own (manifest-driven) deactivate — see `_claude_deactivate`."""
+    if host == "claude":
+        return _claude_deactivate(root, scope)
     if _install_state(root) != "active":
         return {"ok": False, "error": f"install is not active ({_install_state(root)})"}
     kind = _install_kind(root)
@@ -519,10 +548,13 @@ def _install_deactivate(root: Path) -> dict:
     return {"ok": True, "kind": kind, "moved": len(done)}
 
 
-def _install_reactivate(root: Path) -> dict:
+def _install_reactivate(root: Path, host: str = "opencode", scope: str = "global") -> dict:
     """Turn a disabled install back ON: move every stashed tree back to its original
     rel path and re-add the AGENT.md `instructions` entry, then remove the empty
-    stash. The inverse of `_install_deactivate`."""
+    stash. The inverse of `_install_deactivate`. Host-aware: Claude has its own
+    reactivate — see `_claude_reactivate`."""
+    if host == "claude":
+        return _claude_reactivate(root, scope)
     if _install_state(root) != "disabled":
         return {"ok": False, "error": f"install is not disabled ({_install_state(root)})"}
     stash = root / DISABLED_STASH
@@ -566,3 +598,184 @@ def _install_reactivate(root: Path) -> dict:
     # Remove the now-empty stash (its dir tree may linger after the file moves).
     shutil.rmtree(stash, ignore_errors=True)
     return {"ok": True, "kind": kind, "moved": moved}
+
+
+# ---- Claude install activation (manifest-driven, host-tagged stash) ----------
+# Claude installs have NO `instructions` array — the harness reaches Claude via the
+# CLAUDE.md managed block (auto-loaded by location) and settings.json hooks. So a Claude
+# deactivate (1) stashes the owned agents/skills, (2) excises the CLAUDE.md block —
+# stashing its content for an exact restore — and (3) unwires the settings.json hooks
+# (the recorded groups only). The stash lives under a host-tagged subdir so a cwd that
+# carries BOTH an OpenCode and a Claude project install can disable each independently.
+
+def _claude_cfg(root: Path, scope: str) -> Path:
+    """The dir holding a Claude install's manifest/agents/skills: ~/.claude for a global
+    install (root IS the cfg), <repo>/.claude for a project install."""
+    return root if scope == "global" else (root / ".claude")
+
+
+def _clean_host_stash(cfg: Path, host: str = "claude") -> None:
+    """Remove a host's stash subdir (DISABLED_STASH/<host>) and the parent
+    DISABLED_STASH dir if it is then empty — so 'disabled' never lingers as an empty
+    marker, and a same-root other-host stash is left untouched."""
+    shutil.rmtree(cfg / DISABLED_STASH / host, ignore_errors=True)
+    parent = cfg / DISABLED_STASH
+    try:
+        if parent.is_dir() and not any(parent.iterdir()):
+            parent.rmdir()
+    except OSError:
+        pass
+
+
+def _claude_read_manifest(cfg: Path) -> dict:
+    try:
+        data = json.loads((cfg / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _manifest_is_claude(cfg: Path) -> bool:
+    """True when the manifest at `cfg` was written by a Claude emit (it records a
+    `managed.claude_md`). Lets cmd_uninstall pick the right reversal without a flag."""
+    mg = _claude_read_manifest(cfg).get("managed")
+    return isinstance(mg, dict) and "claude_md" in mg
+
+
+def _claude_state(root: Path, scope: str = "global") -> str:
+    """'active' | 'disabled' | 'absent' for the Claude install rooted at `root`."""
+    cfg = _claude_cfg(root, scope)
+    if (cfg / DISABLED_STASH / "claude").is_dir():
+        return "disabled"
+    return "active" if (cfg / build.GLOBAL_MANIFEST).exists() else "absent"
+
+
+def _claude_md_path(cfg: Path, managed: dict) -> Path:
+    """The CLAUDE.md the manifest's `managed.claude_md.rel` points at (relative to cfg —
+    "../CLAUDE.md" for a project install). Falls back to <cfg>/CLAUDE.md."""
+    rel = ((managed.get("claude_md") or {}).get("rel")) or "CLAUDE.md"
+    return (cfg / rel).resolve()
+
+
+def _claude_deactivate(root: Path, scope: str = "global") -> dict:
+    cfg = _claude_cfg(root, scope)
+    if _claude_state(root, scope) != "active":
+        return {"ok": False, "error": f"install is not active ({_claude_state(root, scope)})"}
+    man = _claude_read_manifest(cfg)
+    managed = man.get("managed") if isinstance(man.get("managed"), dict) else {}
+    stash = cfg / DISABLED_STASH / "claude"
+    rroot = cfg.resolve()
+    rels = [r for r in man.get("owned", []) if r and r != build.VERSION_MARKER
+            and _within((rroot / r).resolve(), rroot)]
+    done: "list[str]" = []
+    for rel in rels:
+        src, dst = cfg / rel, stash / rel
+        if not src.exists():
+            continue
+        try:
+            _move_tree(src, dst)
+            done.append(rel)
+        except OSError as e:
+            for r in reversed(done):
+                try:
+                    shutil.move(str(stash / r), str(cfg / r))
+                except OSError:
+                    pass
+            _clean_host_stash(cfg, "claude")
+            return {"ok": False, "failed": [f"{rel} ({e})"], "rolled_back": len(done)}
+    # Unwire the settings.json hooks (exact recorded groups only) — the user's own
+    # keys/hooks are untouched.
+    build._unwire_claude_settings(cfg / "settings.json", managed.get("settings_hooks", []))
+    # Excise the CLAUDE.md block, stashing its content for an exact restore.
+    cm = _claude_md_path(cfg, managed)
+    block = build._managed_block_read(cm)
+    stash.mkdir(parents=True, exist_ok=True)   # presence == disabled, even if nothing moved
+    if block is not None:
+        (stash / "_claude_md_block.txt").write_text(block, encoding="utf-8")
+        build._managed_block_remove(cm, whole=bool((managed.get("claude_md") or {}).get("whole")))
+    for d in ("agents", "skills"):
+        p = cfg / d
+        try:
+            if p.is_dir() and not any(p.iterdir()):
+                p.rmdir()
+        except OSError:
+            pass
+    return {"ok": True, "kind": "claude", "moved": len(done)}
+
+
+def _claude_reactivate(root: Path, scope: str = "global") -> dict:
+    cfg = _claude_cfg(root, scope)
+    if _claude_state(root, scope) != "disabled":
+        return {"ok": False, "error": f"install is not disabled ({_claude_state(root, scope)})"}
+    stash = cfg / DISABLED_STASH / "claude"
+    block_file = stash / "_claude_md_block.txt"
+    # Re-emit-while-disabled guard (mirrors _install_reactivate's _install_relive): if
+    # the harness was rebuilt live while disabled, the CLAUDE.md block is back and the
+    # manifest is fresh — discard the stale stash rather than collide with the new files.
+    relive_managed = _claude_read_manifest(cfg).get("managed") or {}
+    if build._managed_block_read(_claude_md_path(cfg, relive_managed)) is not None:
+        build._merge_claude_settings(cfg / "settings.json")   # ensure hooks are present
+        _clean_host_stash(cfg, "claude")
+        return {"ok": True, "note": "install was re-created while disabled; "
+                "discarded the stashed snapshot"}
+    leftovers: "list[str]" = []
+    moved = 0
+    for src in sorted(stash.rglob("*")):
+        if src.is_dir():
+            continue
+        rel = src.relative_to(stash)
+        if rel.as_posix() == "_claude_md_block.txt":
+            continue   # restored separately, below
+        dst = cfg / rel
+        if dst.exists():
+            leftovers.append(rel.as_posix())
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+        moved += 1
+    if leftovers:
+        return {"ok": False, "failed": leftovers, "moved": moved}
+    # Re-wire: re-merge the hooks (idempotent) and re-insert the CLAUDE.md block.
+    build._merge_claude_settings(cfg / "settings.json")
+    managed = _claude_read_manifest(cfg).get("managed") or {}
+    if block_file.exists():
+        build._managed_block_write(_claude_md_path(cfg, managed),
+                                   block_file.read_text(encoding="utf-8"))
+    _clean_host_stash(cfg, "claude")
+    return {"ok": True, "kind": "claude", "moved": moved}
+
+
+def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:
+    """Reverse a Claude install at `cfg` via its manifest: remove owned files, unwire
+    the settings.json hooks, excise/delete the CLAUDE.md block, drop the markers. The
+    memory store is NEVER deleted (kept, or archived). Mirrors `_uninstall_global`."""
+    man = _claude_read_manifest(cfg)
+    managed = man.get("managed") if isinstance(man.get("managed"), dict) else {}
+    removed, failed = 0, []
+    for rel in man.get("owned", []):
+        victim = cfg / rel
+        try:
+            if victim.is_file():
+                victim.unlink()
+                removed += 1
+                d = victim.parent
+                while d != cfg and d.is_dir() and not any(d.iterdir()):
+                    d.rmdir(); d = d.parent
+        except OSError as e:
+            failed.append(f"{rel} ({e})")
+    if failed:
+        sys.stderr.write("[uninstall] WARN: could not remove "
+                         f"{len(failed)} owned file(s): {', '.join(failed)}\n")
+    hooks = managed.get("settings_hooks", [])
+    build._unwire_claude_settings(cfg / "settings.json", hooks)
+    build._managed_block_remove(_claude_md_path(cfg, managed),
+                                whole=bool((managed.get("claude_md") or {}).get("whole")))
+    for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit", build.VERSION_MARKER):
+        try:
+            (cfg / m).unlink()
+        except OSError:
+            pass
+    archived = None
+    if archive_memory and (cfg / "memory").is_dir():
+        archived = _archive_memory(cfg / "memory")
+    return {"removed": removed, "unmerged": bool(hooks), "archived": archived}

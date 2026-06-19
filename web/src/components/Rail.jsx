@@ -78,6 +78,13 @@ const NAV = [
   },
   { group: 'Configure' },
   {
+    hash: '#/harnesses',
+    id: 'harnesses',
+    label: 'Harnesses',
+    icon: 'layers',
+    match: (r) => r.view === 'harnesses',
+  },
+  {
     hash: '#/themes',
     id: 'themes',
     label: 'Themes',

@@ -227,10 +227,7 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
             <Icon name="refresh" />
             Update
           </button>
-          <button
-            className="btn ghost"
-            onClick={() => onAction('build', { theme: overview.theme, emit: overview.emit })}
-          >
+          <button className="btn ghost" onClick={() => onAction('build-all')}>
             <Icon name="build" />
             Rebuild
           </button>
