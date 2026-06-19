@@ -206,6 +206,36 @@ def api_installs(state: WebState) -> dict:
     return {"installs": out}
 
 
+_EMIT_FOR = {
+    ("opencode", "global"): "opencode-global", ("opencode", "project"): "opencode",
+    ("claude", "global"): "claude-global", ("claude", "project"): "claude",
+}
+
+
+def api_install_cmd(state: WebState, body: dict) -> dict:
+    """Resolve the build command that installs Geneseed into a detected-but-ABSENT
+    location. The (host, path) pair MUST be one of the detected install targets — mirrors
+    api_install_toggle's allowlist, so the target is never built from raw body input — and
+    it must currently be `absent` (an active/disabled row is rebuilt or toggled, not
+    installed). The new install inherits the current deployed voice (state.theme), and a
+    per-repo install lands under the row's own path. Returns {"cmd": [...]} for the job
+    runner, or {"error": ...}; raises NotFound for an unknown (host, path)."""
+    known = {(host, str(r)): (host, scope, r)
+             for host, scope, r in harness._install_targets()}
+    hit = known.get((body.get("host") or "", body.get("path") or ""))
+    if hit is None:
+        raise NotFound("unknown install (host, path)")
+    host, scope, root = hit
+    if harness._install_state(root, host, scope) != "absent":
+        return {"error": "already installed — use Rebuild or the activate toggle instead"}
+    emit = _EMIT_FOR.get((host, scope))
+    if emit is None:
+        return {"error": f"no install mode for {host}:{scope}"}
+    out = None if scope == "global" else str(root)
+    argv = harness._setup_build_args(state.theme or "neutral", emit, out, out)
+    return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
+
+
 def api_install_toggle(state: WebState, body: dict) -> dict:
     """Deactivate or reactivate one install. Non-destructive. Keyed on the
     (host, path) PAIR — a cwd can carry both an OpenCode and a Claude install at the

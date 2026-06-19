@@ -72,6 +72,20 @@ describe('Harnesses', () => {
     expect(onAction).toHaveBeenCalledWith('build-all')
   })
 
+  it('offers Install on an absent row and dispatches the install action', async () => {
+    const onAction = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<Harnesses onAction={onAction} />)
+    // The mock's claude:global row is absent -> exactly one Install button.
+    const btn = await screen.findByRole('button', { name: 'Install' })
+    fireEvent.click(btn)
+    expect(onAction).toHaveBeenCalledWith('install', {
+      host: 'claude',
+      scope: 'global',
+      path: 'C:/.claude',
+    })
+  })
+
   it('renders switch toggles for the active install and present MCP servers', async () => {
     render(<Harnesses onAction={() => {}} />)
     await waitFor(() => expect(screen.getAllByRole('switch').length).toBeGreaterThan(0))

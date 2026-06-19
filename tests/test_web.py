@@ -646,6 +646,42 @@ class InstallActivationTests(unittest.TestCase):
         self.assertFalse(res["ok"])
 
 
+class InstallCreateTests(unittest.TestCase):
+    """api_install_cmd resolves the build command for a detected-but-absent location,
+    keyed on the (host, path) allowlist; refuses an already-installed row and an
+    unknown pair."""
+
+    def setUp(self):
+        self.state = web.WebState(theme="neutral")
+        self._saved = (web.harness._install_targets, web.harness._install_state)
+        self.cl = Path("/home/.claude")
+        self.oc = Path("/home/.config/opencode")
+        web.harness._install_targets = lambda: [
+            ("claude", "global", self.cl), ("opencode", "global", self.oc)]
+        st = {(str(self.cl), "claude"): "absent", (str(self.oc), "opencode"): "active"}
+        web.harness._install_state = lambda r, h="opencode", s="global": \
+            st.get((str(r), h), "absent")
+
+    def tearDown(self):
+        web.harness._install_targets, web.harness._install_state = self._saved
+
+    def test_install_cmd_for_absent_global_target(self):
+        plan = web.api_install_cmd(self.state, {"host": "claude", "path": str(self.cl)})
+        self.assertIn("cmd", plan)
+        self.assertIn("claude-global", plan["cmd"])
+        self.assertIn("neutral", plan["cmd"])           # inherits the current voice
+        self.assertNotIn("--out", plan["cmd"])          # a global install takes no out/root
+
+    def test_install_cmd_refuses_already_installed(self):
+        plan = web.api_install_cmd(self.state, {"host": "opencode", "path": str(self.oc)})
+        self.assertIn("error", plan)
+        self.assertIn("already installed", plan["error"])
+
+    def test_install_cmd_unknown_pair_raises(self):
+        with self.assertRaises(web.NotFound):
+            web.api_install_cmd(self.state, {"host": "claude", "path": "/no/such/root"})
+
+
 class GraphTests(unittest.TestCase):
     def test_api_graph_nodes_and_edges_resolve(self):
         state = web.WebState(theme="neutral")

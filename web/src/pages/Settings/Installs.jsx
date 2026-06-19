@@ -8,13 +8,27 @@ import ErrorState from '../../components/ErrorState.jsx'
 // global config) with a switch that deactivates a whole install — files moved
 // aside, not deleted — and reactivates it. The on-disk stash dir is the truth;
 // the switch only triggers the move and reflects the resulting state.
-export default function Installs() {
+export default function Installs({ onAction }) {
   const { data, error } = useAsync(() => api.installs(), []) // { installs }
   const [note, setNote] = useState('')
   const [busyKey, setBusyKey] = useState('')
 
   if (error) return <ErrorState error={error} />
   if (!data) return <Loading />
+
+  // Install Geneseed into a detected-but-absent location — it inherits the current
+  // deployed voice. Runs as a background job streamed to the console; on finish the page
+  // reloads and the row flips to active. Non-destructive — deactivate/uninstall undo it.
+  const install = (inst) => {
+    if (
+      window.confirm(
+        `Install Geneseed into ${inst.path} with the current voice? Files are added ` +
+          `non-destructively (your own config is left untouched); you can deactivate or ` +
+          `uninstall it later.`,
+      )
+    )
+      onAction?.('install', { host: inst.host, scope: inst.scope, path: inst.path })
+  }
 
   const toggle = async (inst) => {
     if (
@@ -91,6 +105,10 @@ export default function Installs() {
                       }
                 }
               />
+            ) : onAction ? (
+              <button className="btn ghost" onClick={() => install(inst)}>
+                Install
+              </button>
             ) : null}
           </div>
         )

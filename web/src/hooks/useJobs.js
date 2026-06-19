@@ -51,11 +51,11 @@ export function useJobs({ onFinish, onError } = {}) {
         if (j.status !== 'running') {
           clearInterval(t)
           setActiveId(null)
-          // A build re-themes the install and rebuilds the served web assets, so
-          // the page must fully reload to pick them up — same as a restart. Other
-          // actions just refetch the overview.
+          // A build/install re-renders the install (and may rebuild the served web
+          // assets), so the page must fully reload to pick them up — same as a restart.
+          // Other actions just refetch the overview.
           const finished = runs.find((r) => r.id === activeId)
-          if (finished?.action.startsWith('build')) window.location.reload()
+          if (/^(build|install)/.test(finished?.action || '')) window.location.reload()
           else onFinish?.()
         }
       } catch {
