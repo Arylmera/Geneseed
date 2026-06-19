@@ -12,25 +12,45 @@ function dotFor(rec) {
   return { retry: 'warn', error: 'bad', subtask: 'acc', text: 'acc' }[rec.kind] || ''
 }
 
-function TimelineRow({ rec }) {
-  const soft = rec.kind === 'text' || rec.kind === 'thinking' || rec.kind === 'step'
-  const label = rec.label || rec.snippet || rec.kind
+// One row of the expanded stream: a you/agent badge, then either the user's prompt
+// (you) or the agent step — status dot, label, and any meta (duration / tokens / cost).
+function StreamRow({ rec }) {
+  const you = rec.who === 'you'
   const meta = []
-  if (rec.kind === 'tool' && rec.ms != null) meta.push(`${(rec.ms / 1000).toFixed(1)}s`)
-  if (rec.kind === 'step') {
-    if (rec.tokens) meta.push(`${compact(rec.tokens)} tok`)
-    if (rec.cost) meta.push(`$${rec.cost.toFixed(2)}`)
+  if (!you) {
+    if (rec.kind === 'tool' && rec.ms != null) meta.push(`${(rec.ms / 1000).toFixed(1)}s`)
+    if (rec.kind === 'step') {
+      if (rec.tokens) meta.push(`${compact(rec.tokens)} tok`)
+      if (rec.cost) meta.push(`$${rec.cost.toFixed(2)}`)
+    }
+    if (rec.kind === 'subtask' && rec.agent) meta.unshift(rec.agent)
   }
-  if (rec.kind === 'subtask' && rec.agent) meta.unshift(rec.agent)
+  const soft = !you && (rec.kind === 'text' || rec.kind === 'thinking' || rec.kind === 'step')
+  const label = you ? rec.text : rec.label || rec.snippet || rec.kind
   return (
-    <div className="feed-row">
-      <span className={`feed-dot ${dotFor(rec) || 'acc'}`} />
-      <span className="feed-txt" style={ELLIPSIS}>
-        {rec.kind === 'thinking' && <span className="dim">thinking: </span>}
-        {soft ? <span className="dim">{label}</span> : <b>{label}</b>}
-        {rec.error && <span className="dim"> — {rec.error}</span>}
+    <div className="row gap-10" style={{ alignItems: 'baseline' }}>
+      <span
+        className={`badge ${you ? '' : 'acc'}`}
+        style={{ flexShrink: 0, minWidth: 52, justifyContent: 'center' }}
+      >
+        {you ? 'you' : 'agent'}
       </span>
-      <span className="feed-when">{meta.join(' · ')}</span>
+      <div style={{ minWidth: 0, flex: 1, fontSize: 13 }}>
+        {!you && (
+          <span
+            className={`feed-dot ${dotFor(rec) || 'acc'}`}
+            style={{ display: 'inline-block', marginRight: 8, verticalAlign: 'middle' }}
+          />
+        )}
+        {rec.kind === 'thinking' && <span className="dim">thinking: </span>}
+        {soft ? <span className="dim">{label}</span> : you ? label : <b>{label}</b>}
+        {rec.error && <span className="dim"> — {rec.error}</span>}
+      </div>
+      {meta.length > 0 && (
+        <span className="dim mono" style={{ flexShrink: 0, fontSize: 12 }}>
+          {meta.join(' · ')}
+        </span>
+      )}
     </div>
   )
 }
@@ -136,9 +156,17 @@ export default function ActivityDetail({ sid }) {
   const todos = s.todos
   const filesShown = !!(files && files.items && files.items.length > 0)
   const todosShown = !!(todos && todos.items && todos.items.length > 0)
-  // Newest first — the latest step is always in view without scrolling a long log.
-  const timeline = [...(data.timeline || [])].reverse()
   const conversation = data.conversation || []
+  const steps = data.timeline || []
+  // The expanded stream interleaves the user's prompts (you) with the agent's steps
+  // (agent), chronological so it reads like a transcript. Assistant text already rides
+  // the timeline as `text` steps, so only the user turns are pulled from the convo.
+  const stream = [
+    ...conversation
+      .filter((m) => m.role === 'user')
+      .map((m) => ({ who: 'you', text: m.text, t: m.t || 0 })),
+    ...steps.map((r) => ({ ...r, who: 'agent' })),
+  ].sort((a, b) => (a.t || 0) - (b.t || 0))
 
   return (
     <div className="narrow">
@@ -268,16 +296,16 @@ export default function ActivityDetail({ sid }) {
       <div className="card pad-md" style={{ marginTop: 12 }}>
         <div className="card-head" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
           <h3>Timeline</h3>
-          {timeline.length > 0 && (
+          {steps.length > 0 && (
             <button className="btn ghost sm" onClick={() => setExpanded((v) => !v)}>
-              {expanded ? 'Show conversation' : `Show all ${timeline.length} steps`}
+              {expanded ? 'Show conversation' : `Show all ${steps.length} steps`}
             </button>
           )}
         </div>
         {expanded ? (
-          <div className="feed">
-            {timeline.map((rec, i) => (
-              <TimelineRow key={i} rec={rec} />
+          <div className="stack gap-12">
+            {stream.map((rec, i) => (
+              <StreamRow key={i} rec={rec} />
             ))}
           </div>
         ) : (
