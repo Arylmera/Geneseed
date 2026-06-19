@@ -104,10 +104,35 @@ describe('Harnesses', () => {
         themes={[{ name: 'neutral' }, { name: 'imperial' }]}
       />,
     )
-    const select = await screen.findByLabelText('voice for the new install')
+    const select = await screen.findByLabelText('voice for claude · global')
     fireEvent.change(select, { target: { value: 'neutral' } })
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))
     expect(onAction).toHaveBeenCalledWith('install', expect.objectContaining({ theme: 'neutral' }))
+  })
+
+  it('re-themes an active install via the voice picker', async () => {
+    const onAction = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(api.installs).mockResolvedValueOnce({
+      installs: [
+        {
+          id: 'opencode:global',
+          host: 'opencode',
+          scope: 'global',
+          path: 'C:/cfg',
+          state: 'active',
+          theme: 'neutral',
+        },
+      ],
+    })
+    render(<Harnesses onAction={onAction} themes={[{ name: 'neutral' }, { name: 'imperial' }]} />)
+    const select = await screen.findByLabelText('voice for opencode · global')
+    fireEvent.change(select, { target: { value: 'imperial' } }) // Re-theme enables on change
+    fireEvent.click(screen.getByRole('button', { name: 'Re-theme' }))
+    expect(onAction).toHaveBeenCalledWith(
+      'install',
+      expect.objectContaining({ host: 'opencode', theme: 'imperial' }),
+    )
   })
 
   it('renders switch toggles for the active install and present MCP servers', async () => {

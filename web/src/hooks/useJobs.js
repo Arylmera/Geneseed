@@ -54,12 +54,10 @@ export function useJobs({ onFinish, onError } = {}) {
         if (j.status !== 'running') {
           clearInterval(t)
           setActiveId(null)
-          // A build/install re-renders the install (and may rebuild the served web
-          // assets), so the page must fully reload to pick them up — same as a restart.
-          // Other actions just refetch the overview.
-          const finished = runs.find((r) => r.id === activeId)
-          if (/^(build|install)/.test(finished?.action || '')) window.location.reload()
-          else onFinish?.()
+          // Every action re-emits the harness (never the served web assets), so a soft
+          // refresh is enough — onFinish refetches the overview + the install/MCP panels.
+          // No full page reload, so nothing flashes.
+          onFinish?.()
         }
       } catch {
         clearInterval(t)

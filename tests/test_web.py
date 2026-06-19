@@ -647,18 +647,21 @@ class InstallActivationTests(unittest.TestCase):
 
 
 class InstallCreateTests(unittest.TestCase):
-    """api_install_cmd resolves the build command for a detected-but-absent location,
-    keyed on the (host, path) allowlist; refuses an already-installed row and an
-    unknown pair."""
+    """api_install_cmd resolves the build command for an install/re-theme, keyed on the
+    (host, path) allowlist; installs an absent row, rebuilds an active one, refuses a
+    disabled one and an unknown pair."""
 
     def setUp(self):
         self.state = web.WebState(theme="neutral")
         self._saved = (web.harness._install_targets, web.harness._install_state)
-        self.cl = Path("/home/.claude")
-        self.oc = Path("/home/.config/opencode")
+        self.cl = Path("/home/.claude")              # absent (claude)
+        self.oc = Path("/home/.config/opencode")     # active (opencode)
+        self.dis = Path("/home/proj")                # disabled (opencode project)
         web.harness._install_targets = lambda: [
-            ("claude", "global", self.cl), ("opencode", "global", self.oc)]
-        st = {(str(self.cl), "claude"): "absent", (str(self.oc), "opencode"): "active"}
+            ("claude", "global", self.cl), ("opencode", "global", self.oc),
+            ("opencode", "project", self.dis)]
+        st = {(str(self.cl), "claude"): "absent", (str(self.oc), "opencode"): "active",
+              (str(self.dis), "opencode"): "disabled"}
         web.harness._install_state = lambda r, h="opencode", s="global": \
             st.get((str(r), h), "absent")
 
@@ -683,10 +686,18 @@ class InstallCreateTests(unittest.TestCase):
         self.assertNotIn("../evil", plan["cmd"])        # never reaches the argv
         self.assertIn("neutral", plan["cmd"])           # falls back to state.theme
 
-    def test_install_cmd_refuses_already_installed(self):
-        plan = web.api_install_cmd(self.state, {"host": "opencode", "path": str(self.oc)})
+    def test_install_cmd_rebuilds_an_active_install(self):
+        # An active row re-themes/rebuilds in place — same build command, no refusal.
+        plan = web.api_install_cmd(
+            self.state, {"host": "opencode", "path": str(self.oc), "theme": "imperial"})
+        self.assertIn("cmd", plan)
+        self.assertIn("opencode-global", plan["cmd"])
+        self.assertIn("imperial", plan["cmd"])
+
+    def test_install_cmd_refuses_a_disabled_install(self):
+        plan = web.api_install_cmd(self.state, {"host": "opencode", "path": str(self.dis)})
         self.assertIn("error", plan)
-        self.assertIn("already installed", plan["error"])
+        self.assertIn("disabled", plan["error"])
 
     def test_install_cmd_unknown_pair_raises(self):
         with self.assertRaises(web.NotFound):

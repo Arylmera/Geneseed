@@ -421,6 +421,20 @@ def _move_tree(src: Path, dst: Path) -> None:
     shutil.move(str(src), str(dst))
 
 
+def _prune_empty_ancestors(start: Path, stop: Path) -> None:
+    """Remove `start` and its now-empty ancestor dirs, climbing up to (not including)
+    `stop`. Clears the leftover `skills/<name>/` (and nested vendored-skill) folders a
+    move/unlink leaves behind once their file is gone — the same ancestor-climb
+    `_uninstall_global` does, so deactivate leaves no empty husks either."""
+    d = start
+    while d != stop and d.is_dir() and not any(d.iterdir()):
+        try:
+            d.rmdir()
+        except OSError:
+            break
+        d = d.parent
+
+
 def _install_move_list(root: Path, kind: str) -> "list[str]":
     """The relative paths to move aside for `kind` at `root`. project: just the
     `.opencode/` dir. global: the manifest `owned` list MINUS `VERSION_MARKER`
@@ -535,16 +549,11 @@ def _install_deactivate(root: Path, host: str = "opencode", scope: str = "global
     # ponytail: config edit is the LAST step and the only non-move mutation, so a
     # move failure rolls back cleanly with the instructions entry still intact.
     _unmerge_opencode_json(root / "opencode.json", _install_agent_entry(root, kind))
-    # Prune emptied owned dirs the global walk left behind (the `_uninstall_global`
-    # ancestor-climb, not a destructive rmtree). No-op for a project move (its single
-    # `.opencode/` entry already went whole).
-    for d in ("agents", "skills", "plugins", "workflows", "command"):
-        p = root / d
-        try:
-            if p.is_dir() and not any(p.iterdir()):
-                p.rmdir()
-        except OSError:
-            pass
+    # Prune the dirs each moved file emptied — climbing from its parent so a
+    # skills/<name>/ husk goes too, not just the top-level skills/. No-op for a project
+    # move (its single `.opencode/` entry already went whole).
+    for rel in done:
+        _prune_empty_ancestors((root / rel).parent, root)
     return {"ok": True, "kind": kind, "moved": len(done)}
 
 
@@ -693,13 +702,9 @@ def _claude_deactivate(root: Path, scope: str = "global") -> dict:
     if block is not None:
         (stash / "_claude_md_block.txt").write_text(block, encoding="utf-8")
         build._managed_block_remove(cm, whole=bool((managed.get("claude_md") or {}).get("whole")))
-    for d in ("agents", "skills"):
-        p = cfg / d
-        try:
-            if p.is_dir() and not any(p.iterdir()):
-                p.rmdir()
-        except OSError:
-            pass
+    # Prune the dirs each moved file emptied — climbs so skills/<name>/ husks go too.
+    for rel in done:
+        _prune_empty_ancestors((cfg / rel).parent, cfg)
     return {"ok": True, "kind": "claude", "moved": len(done)}
 
 

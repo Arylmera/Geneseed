@@ -41,8 +41,15 @@ export default function App() {
 
   const onError = (e) => setToast({ kind: 'err', msg: e.message })
   const { overview, themes, reload } = useOverview(onError)
+  const [dataRev, setDataRev] = useState(0)
+  // Soft refresh after a mutation: refetch the overview (dashboard accent + counts) and
+  // bump a revision the install/MCP panels depend on — no full page reload, so no flash.
+  const refresh = () => {
+    reload()
+    setDataRev((v) => v + 1)
+  }
   const { runs, activeId, consoleOpen, setConsoleOpen, runAction, cancelJob, clearRuns } = useJobs({
-    onFinish: reload,
+    onFinish: refresh,
     onError,
   })
 
@@ -149,7 +156,13 @@ export default function App() {
               <Settings onAction={runAction} flavour={flavour} onFlavour={setFlavour} />
             )}
             {route.view === 'harnesses' && (
-              <Harnesses onAction={runAction} themes={themes} currentTheme={overview?.theme} />
+              <Harnesses
+                onAction={runAction}
+                themes={themes}
+                currentTheme={overview?.theme}
+                dataRev={dataRev}
+                onMutated={refresh}
+              />
             )}
             {route.view === 'docs' && (
               <Docs page={route.page} query={query} onAction={runAction} overview={overview} />

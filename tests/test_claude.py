@@ -225,6 +225,14 @@ class ClaudeActivationTests(unittest.TestCase):
         self.assertTrue((self.cfg / "agents" / "reviewer.md").is_file())
         self.assertEqual(harness._install_state(self.cfg, "claude", "global"), "active")
 
+    def test_deactivate_leaves_no_empty_skill_folders(self):
+        # tdd is a real Geneseed skill, emitted at skills/tdd/SKILL.md.
+        self.assertTrue((self.cfg / "skills" / "tdd" / "SKILL.md").is_file())
+        harness._install_deactivate(self.cfg, "claude", "global")
+        # the file is stashed AND its now-empty folder is climbed away (no husk left).
+        self.assertFalse((self.cfg / "skills" / "tdd").exists(), "empty skill folder left behind")
+        self.assertFalse((self.cfg / "skills").exists(), "empty skills/ left behind")
+
 
 class InstallTargetsTests(unittest.TestCase):
     def test_yields_host_scope_root_triples_for_both_hosts(self):

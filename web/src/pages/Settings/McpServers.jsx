@@ -7,8 +7,8 @@ import ErrorState from '../../components/ErrorState.jsx'
 // The MCP-server wiring panel: per-target lists of servers with switches to
 // enable/disable present ones and Add buttons for absent presets. Targets whose
 // config carries comments are read-only (edited by hand).
-export default function McpServers() {
-  const { data, error } = useAsync(() => api.mcp(), []) // { targets, default }
+export default function McpServers({ dataRev, onMutated }) {
+  const { data, error } = useAsync(() => api.mcp(), [dataRev]) // { targets, default }
   const [note, setNote] = useState('')
   const [busyKey, setBusyKey] = useState('')
 
@@ -21,7 +21,7 @@ export default function McpServers() {
     setNote('')
     try {
       await api.mcpToggle(target.path, s.name, s.state !== 'enabled')
-      window.location.reload()
+      onMutated?.()
     } catch (e) {
       setNote(e.message)
     } finally {

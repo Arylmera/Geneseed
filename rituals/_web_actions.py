@@ -202,7 +202,8 @@ def api_installs(state: WebState) -> dict:
     out = []
     for host, scope, root in harness._install_targets():
         out.append({"id": f"{host}:{scope}", "host": host, "scope": scope,
-                    "path": str(root), "state": harness._install_state(root, host, scope)})
+                    "path": str(root), "state": harness._install_state(root, host, scope),
+                    "theme": harness._theme_of_dir(root)})   # the install's own voice (None if absent)
     return {"installs": out}
 
 
@@ -213,21 +214,22 @@ _EMIT_FOR = {
 
 
 def api_install_cmd(state: WebState, body: dict) -> dict:
-    """Resolve the build command that installs Geneseed into a detected-but-ABSENT
-    location. The (host, path) pair MUST be one of the detected install targets — mirrors
+    """Resolve the build command that installs Geneseed into a detected location, or
+    re-themes an already-active one (an in-place re-emit — same build command either way).
+    The (host, path) pair MUST be one of the detected install targets — mirrors
     api_install_toggle's allowlist, so the target is never built from raw body input — and
-    it must currently be `absent` (an active/disabled row is rebuilt or toggled, not
-    installed). The new install inherits the current deployed voice (state.theme), and a
-    per-repo install lands under the row's own path. Returns {"cmd": [...]} for the job
-    runner, or {"error": ...}; raises NotFound for an unknown (host, path)."""
+    it must not be `disabled` (reactivate first). The voice is the picked theme if valid,
+    else the current deployed voice; a per-repo install lands under the row's own path.
+    Returns {"cmd": [...]} for the job runner, or {"error": ...}; raises NotFound for an
+    unknown (host, path)."""
     known = {(host, str(r)): (host, scope, r)
              for host, scope, r in harness._install_targets()}
     hit = known.get((body.get("host") or "", body.get("path") or ""))
     if hit is None:
         raise NotFound("unknown install (host, path)")
     host, scope, root = hit
-    if harness._install_state(root, host, scope) != "absent":
-        return {"error": "already installed — use Rebuild or the activate toggle instead"}
+    if harness._install_state(root, host, scope) == "disabled":
+        return {"error": "install is disabled — reactivate it before (re)building"}
     emit = _EMIT_FOR.get((host, scope))
     if emit is None:
         return {"error": f"no install mode for {host}:{scope}"}
