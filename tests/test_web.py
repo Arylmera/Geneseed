@@ -910,5 +910,208 @@ class HarnessFilterTests(unittest.TestCase):
                                 f"hidden under {hn}")
 
 
+class ActivityTests(unittest.TestCase):
+    """The live-activity reader: globs <target>/activity/*.json, prunes dead/stale
+    writers (self-cleaning their files), and never raises on a missing dir or a
+    garbage file."""
+
+    def _state(self, tmp):
+        return web.WebState(theme="neutral", target=Path(tmp))
+
+    def _write(self, tmp, name, entry):
+        import json
+        d = Path(tmp) / "activity"
+        d.mkdir(exist_ok=True)
+        p = d / name
+        p.write_text(json.dumps(entry), encoding="utf-8")
+        return p
+
+    def test_missing_dir_is_empty(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            res = web.api_activity(self._state(t))
+            self.assertEqual(res["activity"], [])
+            self.assertTrue(res["enabled"])
+
+    def test_globs_live_entries(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "ses_a.json", {
+                "session_id": "ses_a", "agent": "reviewer", "title": "fix it",
+                "cwd": "/repo", "status": "busy", "pid": os.getpid(),
+                "updated_at": time.time(),
+            })
+            res = web.api_activity(self._state(t))
+            self.assertEqual(len(res["activity"]), 1)
+            self.assertEqual(res["activity"][0]["agent"], "reviewer")
+            self.assertEqual(res["activity"][0]["status"], "busy")
+
+    def test_prunes_dead_pid_and_self_cleans(self):
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            # A pid that is virtually never alive — os.kill(pid, 0) raises ESRCH.
+            p = self._write(t, "ses_dead.json", {
+                "session_id": "ses_dead", "status": "busy",
+                "pid": 2_147_483_647, "updated_at": time.time(),
+            })
+            self.assertEqual(web.api_activity(self._state(t))["activity"], [])
+            self.assertFalse(p.exists())   # stale file removed
+
+    def test_prunes_stale_entry(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "ses_old.json", {
+                "session_id": "ses_old", "status": "idle",
+                "pid": os.getpid(), "updated_at": time.time() - 10_000,
+            })
+            self.assertEqual(web.api_activity(self._state(t))["activity"], [])
+
+    def test_garbage_file_never_raises(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / "activity"
+            d.mkdir()
+            (d / "broken.json").write_text("{ not json", encoding="utf-8")
+            self.assertEqual(web.api_activity(self._state(t))["activity"], [])
+
+    def test_v11_fields_pass_through(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {
+                "session_id": "s", "status": "busy", "pid": os.getpid(),
+                "updated_at": time.time(), "model": "opus", "phase": "Editing x",
+                "cost": 0.62, "tokens": 48000,
+                "files": {"count": 2, "additions": 10, "deletions": 1, "items": []},
+                "todos": {"done": 1, "total": 3, "items": []},
+                "error": "oops", "blocked_on": None, "turn_started_at": time.time(),
+            })
+            e = web.api_activity(self._state(t))["activity"][0]
+            self.assertEqual(e["model"], "opus")
+            self.assertEqual(e["phase"], "Editing x")
+            self.assertEqual(e["cost"], 0.62)
+            self.assertEqual(e["tokens"], 48000)
+            self.assertEqual(e["files"]["count"], 2)
+            self.assertEqual(e["todos"]["done"], 1)
+            self.assertEqual(e["error"], "oops")
+
+    def test_v1_file_gets_safe_defaults(self):
+        # A pre-v1.1 writer omits the new keys; the reader must fill safe defaults.
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {
+                "session_id": "s", "status": "idle", "pid": os.getpid(),
+                "updated_at": time.time(),
+            })
+            e = web.api_activity(self._state(t))["activity"][0]
+            self.assertIsNone(e["model"])
+            self.assertIsNone(e["phase"])
+            self.assertIsNone(e["files"])
+            self.assertEqual(e["cost"], 0)
+            self.assertEqual(e["tokens"], 0)
+
+    def test_enabled_by_default(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self.assertTrue(web.api_activity(self._state(t))["enabled"])
+
+    def test_toggle_off_persists_and_gates_output(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            state = self._state(t)
+            # A live entry that would otherwise show.
+            self._write(t, "ses_a.json", {
+                "session_id": "ses_a", "status": "busy",
+                "pid": os.getpid(), "updated_at": time.time(),
+            })
+            self.assertEqual(len(web.api_activity(state)["activity"]), 1)
+            res = web.api_activity_toggle(state, {"enabled": False})
+            self.assertEqual(res, {"ok": True, "enabled": False})
+            self.assertTrue((Path(t) / ".geneseed-activity").is_file())
+            # Disabled → output gated to [], flag reported off (files left for the
+            # plugin to clear on its next event).
+            out = web.api_activity(state)
+            self.assertFalse(out["enabled"])
+            self.assertEqual(out["activity"], [])
+            # Back on → entries flow again.
+            web.api_activity_toggle(state, {"enabled": True})
+            self.assertTrue(web.api_activity(state)["enabled"])
+            self.assertEqual(len(web.api_activity(state)["activity"]), 1)
+
+    def test_list_skips_detail_files(self):
+        # *.detail.json is the v1.2 timeline sidecar, not a session snapshot.
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {"session_id": "s", "status": "busy", "pid": os.getpid(), "updated_at": time.time()})
+            self._write(t, "s.detail.json", {"timeline": [{"kind": "tool"}], "files": None, "todos": None})
+            acts = web.api_activity(self._state(t))["activity"]
+            self.assertEqual([a["session_id"] for a in acts], ["s"])   # detail file not listed
+
+    def test_detail_returns_session_and_timeline(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {"session_id": "s", "status": "busy", "pid": os.getpid(), "updated_at": time.time(), "files": {"count": 1, "items": [{"file": "a"}]}})
+            self._write(t, "s.detail.json", {
+                "timeline": [{"kind": "tool", "label": "Editing a.js"}],
+                "files": {"count": 9, "items": [{"file": f"f{i}.js", "additions": 1, "deletions": 0} for i in range(20)]},
+                "todos": {"done": 1, "total": 2, "items": [{"content": "a", "status": "completed"}]},
+            })
+            res = web.api_activity_detail(self._state(t), "s")
+            self.assertEqual(res["session"]["session_id"], "s")
+            self.assertEqual(res["timeline"][0]["label"], "Editing a.js")
+            # detail file's UNCAPPED lists win over the snapshot's capped ones
+            self.assertEqual(len(res["session"]["files"]["items"]), 20)
+            self.assertEqual(res["session"]["todos"]["total"], 2)
+
+    def test_detail_404_on_unknown(self):
+        import tempfile
+        from web import NotFound
+        with tempfile.TemporaryDirectory() as t:
+            with self.assertRaises(NotFound):
+                web.api_activity_detail(self._state(t), "nope")
+
+    def test_detail_tolerates_missing_detail_file(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {"session_id": "s", "status": "idle", "pid": os.getpid(), "updated_at": time.time()})
+            res = web.api_activity_detail(self._state(t), "s")   # no s.detail.json
+            self.assertEqual(res["timeline"], [])
+            self.assertEqual(res["session"]["session_id"], "s")
+
+    def test_detail_conversation_transcript_with_title_fallback(self):
+        import os
+        import time
+        import tempfile
+        with tempfile.TemporaryDirectory() as t:
+            self._write(t, "s.json", {"session_id": "s", "title": "the very first ask", "status": "busy", "pid": os.getpid(), "updated_at": time.time()})
+            # no detail file → a single opening user turn from the session title
+            conv = web.api_activity_detail(self._state(t), "s")["conversation"]
+            self.assertEqual(conv, [{"role": "user", "text": "the very first ask"}])
+            # with a captured transcript → it's returned as-is, ordered
+            turns = [
+                {"role": "user", "text": "add a toggle"},
+                {"role": "assistant", "text": "done"},
+                {"role": "user", "text": "make it 50/50"},
+            ]
+            self._write(t, "s.detail.json", {"timeline": [], "conversation": turns})
+            self.assertEqual(web.api_activity_detail(self._state(t), "s")["conversation"], turns)
+
+
 if __name__ == "__main__":
     unittest.main()

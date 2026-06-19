@@ -424,7 +424,7 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
 
 
 def _copy_plugins(dst: Path, owned: list | None = None) -> int:
-    """Copy the static OpenCode plugins (context, learn, guard, workflow, notify, ponytail) into `dst`.
+    """Copy the static OpenCode plugins (context, learn, guard, workflow, notify, ponytail, activity) into `dst`.
     They are maintained files, not rendered from src, so copy them verbatim. When the
     caller tracks an ownership manifest (the global emit), pass `owned` and each copy
     is appended to it as `plugins/<name>`."""

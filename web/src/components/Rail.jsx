@@ -17,6 +17,13 @@ const NAV = [
     match: (r) => r.view === 'dashboard',
   },
   {
+    hash: '#/activity',
+    id: 'activity',
+    label: 'Activity',
+    icon: 'activity',
+    match: (r) => r.view === 'activity',
+  },
+  {
     hash: '#/laws',
     id: 'laws',
     label: 'Laws',

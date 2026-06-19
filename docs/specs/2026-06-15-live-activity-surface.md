@@ -1,7 +1,32 @@
 # Live activity surface
 
-**Date:** 2026-06-15 · revised 2026-06-17
-**Status:** ready to build
+**Date:** 2026-06-15 · revised 2026-06-18
+**Status:** v1 scope locked 2026-06-18 — ready to build
+
+## v1 scope (locked 2026-06-18)
+
+Decided with the maintainer. The rest of this doc is the full design reference;
+this section is what v1 actually ships:
+
+- **Flat list, no fan-out tree.** One entry per session (cwd, title, agent,
+  status). The §3 `subtask`-part tracking and the parent→children tree (writer,
+  reader, and the nested UI) are **deferred** until parallel fan-outs are common
+  enough to miss them.
+- **OpenCode writer only.** The `geneseed-activity` plugin. No Claude Code
+  adapter in v1 — the view is empty outside OpenCode sessions, by choice.
+- **Dedicated rail page "Activity"** (Harness group, near Overview) — its own
+  `pages/Activity.jsx`, not a Dashboard panel. Distinct from the existing
+  Dashboard `ActivityFeed` (which logs console actions, not live sessions).
+- **Rich `.card` per session:** cwd basename · title · agent badge · status
+  badge (`busy`→accent, `waiting-input`→warn, `idle`→dim) · relative
+  `updated_at`. Empty state: "No active sessions."
+- **Defaults:** 2 s poll (not 1 s); reader prunes by pid-liveness + 5-min
+  staleness backstop (Windows: staleness only); global config dir only.
+- **Writer must honor `$OPENCODE_CONFIG_DIR`** (see §1) — copying ponytail's
+  `statePath()` verbatim would not, and would diverge from the reader's
+  `_opencode_config_dir()` whenever that env var is set.
+- **Drop `"version": 1`** from the schema and the Library agent-card cross-link;
+  add either when a second schema version or the link actually exists.
 
 ## Problem
 
@@ -71,14 +96,21 @@ Two parts, decoupled by a directory of small JSON files in the OpenCode config d
 
 A seventh plugin, sibling to the existing six in `adapters/opencode/plugins/`,
 following their exact module shape (named async factory + default export,
-returning a map of hook handlers). Resolve the OpenCode config dir the way
-`geneseed-ponytail` already does — copy `statePath()` verbatim
-([geneseed-ponytail.js:80](../../adapters/opencode/plugins/geneseed-ponytail.js)):
+returning a map of hook handlers). Resolve the OpenCode config dir to **exactly
+match the Python reader's `_opencode_config_dir()` precedence**
+([_build_global.py:10](../../_build_global.py)) — `$OPENCODE_CONFIG_DIR` first,
+then `$XDG_CONFIG_HOME/opencode`, then `~/.config/opencode`. Ponytail's
+`statePath()` ([geneseed-ponytail.js:80](../../adapters/opencode/plugins/geneseed-ponytail.js))
+checks `$XDG_CONFIG_HOME` only, so copying it verbatim would put the writer in a
+different dir than the reader whenever `$OPENCODE_CONFIG_DIR` is set — the same
+path-divergence bug §1 exists to kill. Resolve it fully:
 
 ```js
 function activityDir() {
-  const cfg = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config")
-  return path.join(cfg, "opencode", "activity")   // <cfg>/opencode/activity/
+  const base =
+    process.env.OPENCODE_CONFIG_DIR ||
+    path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "opencode")
+  return path.join(base, "activity")   // <opencode-cfg>/activity/
 }
 ```
 
