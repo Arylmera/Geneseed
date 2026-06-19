@@ -198,7 +198,7 @@ DOC_GROUPS = [
          "link": {"hash": "#/section/skills", "label": "Browse the catalog →"},
          "body": "25 repeatable workflows the agent can invoke by name — "
          "[[brainstorm]], [[clarify]], [[plan]], [[tdd]], [[debug]], "
-         "[[refactor]], [[code-review]], [[fresh-eyes]], [[review-response]], "
+         "[[refactor]], [[geneseed-code-review]], [[fresh-eyes]], [[review-response]], "
          "[[commit]], [[ship]], [[release]], [[migrate]], [[git-archaeology]], "
          "[[git-rescue]], [[repo-map]], [[document-project]], [[ingest]], "
          "[[research]], [[handoff]], [[roast-me]], [[council]], "
