@@ -197,9 +197,8 @@ button { font-family: inherit; }
 .spot-group + .spot-group { border-top: 1px solid var(--line-2); margin-top: 4px; padding-top: 4px; }
 .spot-group-head { font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em;
   text-transform: uppercase; color: var(--text-3); padding: 6px 14px 4px; }
-.spot-row { padding: 7px 14px; cursor: pointer; border-left: 2px solid transparent; }
-.spot-row.on { background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border-left-color: var(--accent); }
+.spot-row { padding: 7px 14px; cursor: pointer; }
+.spot-row.on { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .spot-title { font-size: 13px; color: var(--text); }
 .spot-desc { font-size: 11.5px; color: var(--text-3); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -358,6 +357,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   border-radius: 2px; }
 .kpi .kval { font-family: var(--font-display); font-weight: 500; font-size: 40px;
   letter-spacing: -.03em; line-height: 1; margin-top: 12px; font-variant-numeric: tabular-nums; }
+.kpi .kval.zero { color: var(--text-3); }
 .kpi .kfoot { margin-top: 8px; font-size: 12.5px; color: var(--text-2); display: flex;
   align-items: center; gap: 8px; }
 .delta { font-family: var(--font-mono); font-size: 11.5px; }
@@ -366,13 +366,18 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 
 /* capability genome grid */
 .genome { display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 14px; }
-.gcell { padding: 18px; cursor: pointer; transition: border-color .15s, transform .15s, background .15s;
+/* Recessed wells, not cards: the section card already carries the chrome, so the
+   cells drop the gradient + shadow and sit inset (darker fill, tighter radius) —
+   one panel subdivided, never cards stacked on a card. */
+.gcell { padding: 18px; cursor: pointer; background: var(--bg-2); box-shadow: none;
+  border-radius: var(--r-md); transition: border-color .15s, transform .15s, background .15s;
   position: relative; overflow: hidden; }
-.gcell:hover { border-color: var(--accent-line); transform: translateY(-2px); }
+.gcell:hover { border-color: var(--accent-line); background: var(--surface-2); transform: translateY(-2px); }
 .gcell .gtop { display: flex; align-items: center; justify-content: space-between; }
 .gcell .gname { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
 .gcell .gcount { font-family: var(--font-display); font-weight: 500; font-size: 34px;
   letter-spacing: -.02em; line-height: 1; margin: 14px 0 4px; font-variant-numeric: tabular-nums; }
+.gcell .gcount.zero { color: var(--text-3); }
 .gcell .gdesc { font-size: 12.5px; color: var(--text-2); }
 .gcell .gicon { width: 20px; height: 20px; color: var(--text-3); }
 .gcell:hover .gicon { color: var(--accent); }
@@ -698,7 +703,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 /* ============================ VOICE READOUT ========================== */
 .voice-readout { display: flex; align-items: center; gap: 10px; margin: 4px 0 16px;
   font-family: var(--font-mono); font-size: 12.5px; color: var(--text-2);
-  background: var(--bg-2); border: 1px solid var(--line); border-left: 2px solid var(--accent);
+  background: var(--bg-2); border: 1px solid var(--line);
   border-radius: var(--r-sm); padding: 9px 13px; max-width: 64ch; }
 .voice-readout .vr-cur { color: var(--accent); font-weight: 600; flex: none; }
 .voice-readout .vr-txt { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1434,6 +1439,7 @@ a.rail-item.active { color: var(--text); }
   font-family: var(--font-display);
   font-size: 32px; font-weight: 600; letter-spacing: -.02em; line-height: 1;
 }
+.b-tile-val.zero { color: var(--text-3); }
 .b-tile-label { font-size: 13px; color: var(--text-2); }
 .b-tile-sub {
   position: absolute; top: 18px; right: 18px;
@@ -1579,6 +1585,7 @@ a.rail-item.active { color: var(--text); }
   font-size: 29px; font-weight: 500; letter-spacing: -.02em;
   margin-top: 6px; font-variant-numeric: tabular-nums; color: var(--text);
 }
+.c-kpi-val.zero { color: var(--text-3); }
 
 .c-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;

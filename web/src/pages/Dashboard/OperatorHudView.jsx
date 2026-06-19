@@ -27,7 +27,7 @@ function CKpi({ label, value }) {
   return (
     <div className="c-kpi">
       <div className="c-kpi-label">{label}</div>
-      <div className="c-kpi-val">{value}</div>
+      <div className={'c-kpi-val' + (value === 0 ? ' zero' : '')}>{value}</div>
     </div>
   )
 }
@@ -194,7 +194,7 @@ export default function OperatorHudView({ overview, jobs, doctor, onAction }) {
                       />
                     </div>
                   </td>
-                  <td className="num">{c[k] ?? 0}</td>
+                  <td className={(c[k] || 0) > 0 ? 'num' : 'num c-dim'}>{c[k] ?? 0}</td>
                 </tr>
               ))}
             </tbody>

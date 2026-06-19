@@ -9,6 +9,7 @@ export default function Genome({ overview }) {
     <div className="genome">
       {SECTION_ORDER.map((key, i) => {
         const m = SECTIONS[key]
+        const n = overview.counts?.[key]
         return (
           <div
             className="card gcell rise"
@@ -20,7 +21,7 @@ export default function Genome({ overview }) {
               <span className="gname">{m.label}</span>
               <Icon name={m.icon} className="gicon" />
             </div>
-            <div className="gcount">{overview.counts?.[key] ?? '—'}</div>
+            <div className={'gcount' + (n === 0 ? ' zero' : '')}>{n ?? '—'}</div>
             <div className="gdesc">{m.desc}</div>
           </div>
         )

@@ -146,7 +146,7 @@ function BTile({ label, value, sub, color, icon }) {
         <Icon name={icon} />
       </span>
       <div className="b-tile-body">
-        <div className="b-tile-val">{value}</div>
+        <div className={'b-tile-val' + (value === 0 ? ' zero' : '')}>{value}</div>
         <div className="b-tile-label">{label}</div>
       </div>
       <div className="b-tile-sub">{sub}</div>
