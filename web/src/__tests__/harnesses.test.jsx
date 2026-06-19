@@ -72,10 +72,17 @@ describe('Harnesses', () => {
     expect(onAction).toHaveBeenCalledWith('build-all')
   })
 
-  it('offers Install on an absent row and dispatches the install action', async () => {
+  it('offers Install on an absent row and dispatches install with the chosen voice', async () => {
     const onAction = vi.fn()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    render(<Harnesses onAction={onAction} />)
+    // The voice picker defaults to the current deployed voice.
+    render(
+      <Harnesses
+        onAction={onAction}
+        currentTheme="imperial"
+        themes={[{ name: 'neutral' }, { name: 'imperial' }]}
+      />,
+    )
     // The mock's claude:global row is absent -> exactly one Install button.
     const btn = await screen.findByRole('button', { name: 'Install' })
     fireEvent.click(btn)
@@ -83,7 +90,24 @@ describe('Harnesses', () => {
       host: 'claude',
       scope: 'global',
       path: 'C:/.claude',
+      theme: 'imperial',
     })
+  })
+
+  it('the voice picker changes the install theme', async () => {
+    const onAction = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(
+      <Harnesses
+        onAction={onAction}
+        currentTheme="imperial"
+        themes={[{ name: 'neutral' }, { name: 'imperial' }]}
+      />,
+    )
+    const select = await screen.findByLabelText('voice for the new install')
+    fireEvent.change(select, { target: { value: 'neutral' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }))
+    expect(onAction).toHaveBeenCalledWith('install', expect.objectContaining({ theme: 'neutral' }))
   })
 
   it('renders switch toggles for the active install and present MCP servers', async () => {

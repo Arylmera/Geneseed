@@ -9,7 +9,7 @@ import McpServers from './Settings/McpServers.jsx'
 // a single background job (the per-install resolution lives in the rebuild-all
 // subcommand, so the UI threads no theme/emit). MCP servers live here too because the
 // wiring is install-scoped config (OpenCode only — Claude MCP isn't managed by Geneseed).
-export default function Harnesses({ onAction }) {
+export default function Harnesses({ onAction, themes, currentTheme }) {
   return (
     <>
       <div className="card pad-lg mb-16">
@@ -25,7 +25,7 @@ export default function Harnesses({ onAction }) {
           <strong>Rebuild all</strong> re-emits every active install in its own theme and mode, as
           one background job.
         </p>
-        <Installs onAction={onAction} />
+        <Installs onAction={onAction} themes={themes} currentTheme={currentTheme} />
       </div>
 
       <div className="card pad-lg mb-16">

@@ -4,30 +4,36 @@ import { useAsync } from '../../hooks/useAsync.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 
-// The harness-install panel: one row per detected OpenCode install (this project,
-// global config) with a switch that deactivates a whole install — files moved
-// aside, not deleted — and reactivates it. The on-disk stash dir is the truth;
-// the switch only triggers the move and reflects the resulting state.
-export default function Installs({ onAction }) {
+// The harness-install panel: one row per detected install (host × scope). An active
+// or disabled install shows a switch that deactivates the whole install — files moved
+// aside, not deleted — and reactivates it (the on-disk stash dir is the truth). A
+// not-installed location shows a voice picker + an Install button to deploy it there.
+export default function Installs({ onAction, themes = [], currentTheme }) {
   const { data, error } = useAsync(() => api.installs(), []) // { installs }
   const [note, setNote] = useState('')
   const [busyKey, setBusyKey] = useState('')
+  const [voice, setVoice] = useState({}) // chosen install voice, keyed by row id
 
   if (error) return <ErrorState error={error} />
   if (!data) return <Loading />
 
-  // Install Geneseed into a detected-but-absent location — it inherits the current
-  // deployed voice. Runs as a background job streamed to the console; on finish the page
-  // reloads and the row flips to active. Non-destructive — deactivate/uninstall undo it.
+  // The voice a fresh install gets — the per-row pick, defaulting to the current deployed
+  // voice so a new Claude install matches your OpenCode one unless you change it.
+  const voiceFor = (inst) => voice[inst.id] || currentTheme || 'neutral'
+
+  // Install Geneseed into a detected-but-absent location with the chosen voice. Runs as a
+  // background job streamed to the console; on finish the page reloads and the row flips to
+  // active. Non-destructive — deactivate/uninstall undo it.
   const install = (inst) => {
+    const theme = voiceFor(inst)
     if (
       window.confirm(
-        `Install Geneseed into ${inst.path} with the current voice? Files are added ` +
+        `Install Geneseed into ${inst.path} with the “${theme}” voice? Files are added ` +
           `non-destructively (your own config is left untouched); you can deactivate or ` +
           `uninstall it later.`,
       )
     )
-      onAction?.('install', { host: inst.host, scope: inst.scope, path: inst.path })
+      onAction?.('install', { host: inst.host, scope: inst.scope, path: inst.path, theme })
   }
 
   const toggle = async (inst) => {
@@ -106,9 +112,25 @@ export default function Installs({ onAction }) {
                 }
               />
             ) : onAction ? (
-              <button className="btn ghost" onClick={() => install(inst)}>
-                Install
-              </button>
+              <div className="row gap-8">
+                {themes.length ? (
+                  <select
+                    className="sel"
+                    aria-label="voice for the new install"
+                    value={voiceFor(inst)}
+                    onChange={(e) => setVoice((v) => ({ ...v, [inst.id]: e.target.value }))}
+                  >
+                    {themes.map((t) => (
+                      <option key={t.name} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                <button className="btn ghost" onClick={() => install(inst)}>
+                  Install
+                </button>
+              </div>
             ) : null}
           </div>
         )

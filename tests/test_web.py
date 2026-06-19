@@ -672,6 +672,17 @@ class InstallCreateTests(unittest.TestCase):
         self.assertIn("neutral", plan["cmd"])           # inherits the current voice
         self.assertNotIn("--out", plan["cmd"])          # a global install takes no out/root
 
+    def test_install_cmd_honours_a_valid_picked_theme(self):
+        plan = web.api_install_cmd(
+            self.state, {"host": "claude", "path": str(self.cl), "theme": "imperial"})
+        self.assertIn("imperial", plan["cmd"])
+
+    def test_install_cmd_rejects_a_bogus_theme_and_falls_back(self):
+        plan = web.api_install_cmd(
+            self.state, {"host": "claude", "path": str(self.cl), "theme": "../evil"})
+        self.assertNotIn("../evil", plan["cmd"])        # never reaches the argv
+        self.assertIn("neutral", plan["cmd"])           # falls back to state.theme
+
     def test_install_cmd_refuses_already_installed(self):
         plan = web.api_install_cmd(self.state, {"host": "opencode", "path": str(self.oc)})
         self.assertIn("error", plan)

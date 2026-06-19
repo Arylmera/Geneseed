@@ -231,8 +231,12 @@ def api_install_cmd(state: WebState, body: dict) -> dict:
     emit = _EMIT_FOR.get((host, scope))
     if emit is None:
         return {"error": f"no install mode for {host}:{scope}"}
+    # The new install's voice: a valid picked theme wins, else the current deployed
+    # voice — so a bogus body value can never reach the build argv (mirrors _build_override).
+    themes = {c["name"] for c in _theme_choices()}
+    theme = body.get("theme") if body.get("theme") in themes else state.theme
     out = None if scope == "global" else str(root)
-    argv = harness._setup_build_args(state.theme or "neutral", emit, out, out)
+    argv = harness._setup_build_args(theme or "neutral", emit, out, out)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 
 
