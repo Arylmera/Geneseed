@@ -5,7 +5,12 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import ActivityDetail from '../pages/ActivityDetail.jsx'
 
 const okResp = (body) => ({ ok: true, json: () => Promise.resolve(body) })
-const errResp = (status) => ({ ok: false, status, statusText: 'ERR', json: () => Promise.resolve({ error: 'not found' }) })
+const errResp = (status) => ({
+  ok: false,
+  status,
+  statusText: 'ERR',
+  json: () => Promise.resolve({ error: 'not found' }),
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -18,10 +23,26 @@ describe('ActivityDetail page', () => {
       Promise.resolve(
         okResp({
           session: {
-            session_id: 's', title: 'fix parser', cwd: '/repo', status: 'busy', updated_at: now,
-            model: 'opus-4.8', agent: 'build', phase: 'Editing a.js', tokens: 1200, cost: 0.05, turn_started_at: now - 3,
+            session_id: 's',
+            title: 'fix parser',
+            cwd: '/repo',
+            status: 'busy',
+            updated_at: now,
+            model: 'opus-4.8',
+            agent: 'build',
+            phase: 'Editing a.js',
+            tokens: 1200,
+            cost: 0.05,
+            turn_started_at: now - 3,
             files: { count: 1, items: [{ file: 'a.js', additions: 9, deletions: 1 }] },
-            todos: { done: 1, total: 2, items: [{ content: 'do x', status: 'completed' }, { content: 'do y', status: 'pending' }] },
+            todos: {
+              done: 1,
+              total: 2,
+              items: [
+                { content: 'do x', status: 'completed' },
+                { content: 'do y', status: 'pending' },
+              ],
+            },
           },
           conversation: [
             { role: 'user', text: 'add a toggle' },

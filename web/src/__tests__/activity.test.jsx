@@ -23,8 +23,22 @@ describe('Activity page', () => {
       Promise.resolve(
         okResp({
           activity: [
-            { session_id: 'ses_a', agent: 'reviewer', title: 'fix the parser', cwd: '/repo/app', status: 'busy', updated_at: now },
-            { session_id: 'ses_b', agent: null, title: null, cwd: '/work/other-dir', status: 'waiting-input', updated_at: now },
+            {
+              session_id: 'ses_a',
+              agent: 'reviewer',
+              title: 'fix the parser',
+              cwd: '/repo/app',
+              status: 'busy',
+              updated_at: now,
+            },
+            {
+              session_id: 'ses_b',
+              agent: null,
+              title: null,
+              cwd: '/work/other-dir',
+              status: 'waiting-input',
+              updated_at: now,
+            },
           ],
         }),
       ),
@@ -45,11 +59,21 @@ describe('Activity page', () => {
           enabled: true,
           activity: [
             {
-              session_id: 's', title: 'fix parser', cwd: '/repo/app', status: 'busy', updated_at: now,
-              model: 'opus-4.8', phase: 'Editing Activity.jsx', agent: 'build',
-              tokens: 48200, cost: 0.62, turn_started_at: now - 5,
+              session_id: 's',
+              title: 'fix parser',
+              cwd: '/repo/app',
+              status: 'busy',
+              updated_at: now,
+              model: 'opus-4.8',
+              phase: 'Editing Activity.jsx',
+              agent: 'build',
+              tokens: 48200,
+              cost: 0.62,
+              turn_started_at: now - 5,
               files: { count: 3, additions: 124, deletions: 18, items: [] },
-              todos: { done: 3, total: 5, items: [] }, error: null, blocked_on: null,
+              todos: { done: 3, total: 5, items: [] },
+              error: null,
+              blocked_on: null,
             },
           ],
         }),
@@ -73,7 +97,15 @@ describe('Activity page', () => {
         okResp({
           enabled: true,
           activity: [
-            { session_id: 's', title: 't', cwd: '/r', status: 'blocked', updated_at: Date.now() / 1000, blocked_on: 'bash: rm -rf build/', error: null },
+            {
+              session_id: 's',
+              title: 't',
+              cwd: '/r',
+              status: 'blocked',
+              updated_at: Date.now() / 1000,
+              blocked_on: 'bash: rm -rf build/',
+              error: null,
+            },
           ],
         }),
       ),

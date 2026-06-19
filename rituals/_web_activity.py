@@ -43,16 +43,21 @@ def _activity_enabled(state: WebState) -> bool:
 
 
 def _pid_alive(pid) -> bool:
-    """Best-effort liveness for the writer process. os.kill(pid, 0) raises
-    ProcessLookupError if the pid is dead and nothing if it is alive (or
-    PermissionError — alive but not ours). On Windows signal 0 isn't portable, so an
-    'unknown' answer is treated as alive and the staleness backstop carries it."""
+    """Best-effort liveness for the writer process, cross-platform.
+
+    POSIX: os.kill(pid, 0) — signal 0 only probes existence. Windows: os.kill is NOT
+    a probe there — signal 0 is CTRL_C_EVENT, so os.kill(pid, 0) sends Ctrl-C to our
+    OWN process group and aborts the reader with KeyboardInterrupt. So on Windows we
+    query the process via OpenProcess instead. Any inconclusive answer errs toward
+    'alive' and lets the staleness backstop prune it."""
     try:
         pid = int(pid)
     except (TypeError, ValueError):
         return False
     if pid <= 0:
         return False
+    if os.name == "nt":
+        return _win_pid_alive(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -60,6 +65,28 @@ def _pid_alive(pid) -> bool:
     except (PermissionError, OSError):
         return True   # exists (or can't tell) — let staleness decide
     return True
+
+
+def _win_pid_alive(pid: int) -> bool:
+    """Windows liveness via OpenProcess — never os.kill (signal 0 is CTRL_C_EVENT).
+    A freed pid can't be opened → dead; an open handle reporting STILL_ACTIVE → alive;
+    anything unreadable errs toward alive (staleness backstop prunes it)."""
+    import ctypes
+    from ctypes import wintypes
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    STILL_ACTIVE = 259
+    kernel32 = ctypes.windll.kernel32  # noqa: not reached off Windows (os.name guard)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return False   # no such process
+    try:
+        code = wintypes.DWORD()
+        if kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return code.value == STILL_ACTIVE
+        return True
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def _normalize_entry(entry: dict, stem: str) -> dict:

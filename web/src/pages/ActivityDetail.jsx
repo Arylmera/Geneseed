@@ -7,7 +7,8 @@ import Loading from '../components/Loading.jsx'
 
 // Timeline-row dot colour by record kind/outcome.
 function dotFor(rec) {
-  if (rec.kind === 'tool') return rec.status === 'error' ? 'bad' : rec.status === 'completed' ? 'ok' : 'acc'
+  if (rec.kind === 'tool')
+    return rec.status === 'error' ? 'bad' : rec.status === 'completed' ? 'ok' : 'acc'
   return { retry: 'warn', error: 'bad', subtask: 'acc', text: 'acc' }[rec.kind] || ''
 }
 
@@ -38,7 +39,11 @@ function TimelineRow({ rec }) {
 // transcript of bounded turns (you / agent), oldest → newest.
 function Conversation({ turns }) {
   if (!turns || turns.length === 0) {
-    return <div className="dim" style={{ fontSize: 13 }}>No conversation captured yet.</div>
+    return (
+      <div className="dim" style={{ fontSize: 13 }}>
+        No conversation captured yet.
+      </div>
+    )
   }
   return (
     <div className="stack gap-12">
@@ -52,7 +57,9 @@ function Conversation({ turns }) {
             >
               {you ? 'you' : 'agent'}
             </span>
-            <div style={{ minWidth: 0, fontSize: 13, color: you ? 'inherit' : 'var(--text-2)' }}>{m.text}</div>
+            <div style={{ minWidth: 0, fontSize: 13, color: you ? 'inherit' : 'var(--text-2)' }}>
+              {m.text}
+            </div>
           </div>
         )
       })}
@@ -94,7 +101,11 @@ export default function ActivityDetail({ sid }) {
   }, [sid])
 
   const back = (
-    <a className="btn ghost sm" href="#/activity" style={{ marginBottom: 12, display: 'inline-flex', gap: 6 }}>
+    <a
+      className="btn ghost sm"
+      href="#/activity"
+      style={{ marginBottom: 12, display: 'inline-flex', gap: 6 }}
+    >
       <Icon name="arrow" style={{ transform: 'rotate(180deg)' }} /> Activity
     </a>
   )
@@ -132,12 +143,18 @@ export default function ActivityDetail({ sid }) {
   return (
     <div className="narrow">
       {back}
-      {error && <p className="badge bad" style={{ marginBottom: 12 }}>{error}</p>}
+      {error && (
+        <p className="badge bad" style={{ marginBottom: 12 }}>
+          {error}
+        </p>
+      )}
 
       <div className="card pad-md" style={{ borderLeft: `3px solid ${st.accent}` }}>
         <div className="row between wrap gap-12">
           <div style={{ minWidth: 0 }}>
-            <h1 className="h" style={{ margin: 0 }}>{s.title || baseName(s.cwd) || s.session_id}</h1>
+            <h1 className="h" style={{ margin: 0 }}>
+              {s.title || baseName(s.cwd) || s.session_id}
+            </h1>
             {s.cwd && (
               <div className="dim mono" style={{ fontSize: 12, ...ELLIPSIS }} title={s.cwd}>
                 {s.cwd}
@@ -159,7 +176,10 @@ export default function ActivityDetail({ sid }) {
             <span style={ELLIPSIS}>{s.phase}</span>
           </div>
         )}
-        <div className="row wrap" style={{ gap: 16, marginTop: 12, fontSize: 13, color: 'var(--text-2)' }}>
+        <div
+          className="row wrap"
+          style={{ gap: 16, marginTop: 12, fontSize: 13, color: 'var(--text-2)' }}
+        >
           {s.tokens > 0 && <span>{compact(s.tokens)} tok</span>}
           {s.cost > 0 && <span>${s.cost.toFixed(2)}</span>}
           {s.turn_started_at ? (
@@ -197,7 +217,11 @@ export default function ActivityDetail({ sid }) {
               <div className="stack" style={{ gap: 6, marginTop: 8 }}>
                 {files.items.map((f) => (
                   <div key={f.file} className="row between gap-12" style={{ fontSize: 13 }}>
-                    <span className="mono" style={{ ...ELLIPSIS, minWidth: 0, flex: 1 }} title={f.file}>
+                    <span
+                      className="mono"
+                      style={{ ...ELLIPSIS, minWidth: 0, flex: 1 }}
+                      title={f.file}
+                    >
                       {f.file}
                     </span>
                     <span style={{ flexShrink: 0 }}>
@@ -222,7 +246,9 @@ export default function ActivityDetail({ sid }) {
               <div className="stack" style={{ gap: 6, marginTop: 8 }}>
                 {todos.items.map((t, i) => (
                   <div key={i} className="row gap-8" style={{ fontSize: 13 }}>
-                    <span className={`feed-dot ${t.status === 'completed' ? 'ok' : t.status === 'in_progress' ? 'acc' : ''}`} />
+                    <span
+                      className={`feed-dot ${t.status === 'completed' ? 'ok' : t.status === 'in_progress' ? 'acc' : ''}`}
+                    />
                     <span
                       style={{
                         textDecoration: t.status === 'completed' ? 'line-through' : 'none',

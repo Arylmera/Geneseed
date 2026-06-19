@@ -60,7 +60,10 @@ function SessionCard({ s }) {
       )}
 
       {(s.tokens > 0 || s.cost > 0 || s.turn_started_at || (files && files.count > 0)) && (
-        <div className="row wrap" style={{ gap: 16, marginTop: 12, fontSize: 13, color: 'var(--text-2)' }}>
+        <div
+          className="row wrap"
+          style={{ gap: 16, marginTop: 12, fontSize: 13, color: 'var(--text-2)' }}
+        >
           {s.tokens > 0 && <span>{compact(s.tokens)} tok</span>}
           {s.cost > 0 && <span>${s.cost.toFixed(2)}</span>}
           {s.turn_started_at ? (
@@ -148,7 +151,11 @@ export default function Activity() {
     try {
       const res = await api.activityToggle(next)
       // Optimistic: reflect the flip now; the next poll reconciles from disk.
-      setData((d) => ({ ...(d || {}), enabled: res.enabled, activity: res.enabled ? d?.activity || [] : [] }))
+      setData((d) => ({
+        ...(d || {}),
+        enabled: res.enabled,
+        activity: res.enabled ? d?.activity || [] : [],
+      }))
       setError('')
     } catch (e) {
       setError(e.message)
