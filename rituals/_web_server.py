@@ -47,7 +47,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     return self._send_json(api_catalog(state, path.rsplit("/", 1)[1]))
                 if path.startswith("/api/item/"):
                     _, _, _, type_, name = path.split("/", 4)
-                    return self._send_json(api_item(state, type_, name))
+                    return self._send_json(
+                        api_item(state, type_, urllib.parse.unquote(name)))
                 if path == "/api/themes":
                     return self._send_json(api_themes(state))
                 if path == "/api/setup":
