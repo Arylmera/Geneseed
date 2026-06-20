@@ -56,7 +56,7 @@ export const CURATED_ACCENT = {
   operator: { dark: '#E8A23B', light: '#8F5E10', ink: '#1A1306', inkLight: '#FFFFFF' },
   heirloom: { dark: '#B9A6C6', light: '#6E5A7C', ink: '#1B1622', inkLight: '#FFFFFF' },
   matrix: { dark: '#19E37C', light: '#0B7A47', ink: '#04140C', inkLight: '#FFFFFF' },
-  aurora: { dark: '#46D6F2', light: '#0E7C97', ink: '#04222A', inkLight: '#FFFFFF' },
+  aurora: { dark: '#2DE0B8', light: '#0B7D62', ink: '#04231A', inkLight: '#FFFFFF' },
   perspective: { dark: '#FF7A59', light: '#C24A2C', ink: '#2A0E04', inkLight: '#FFFFFF' },
   sequencer: { dark: '#5B57E8', light: '#4F46E5', ink: '#FFFFFF', inkLight: '#FFFFFF' },
   cobalt: { dark: '#2BA8FF', light: '#1668A8', ink: '#021018', inkLight: '#FFFFFF' },

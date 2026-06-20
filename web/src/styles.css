@@ -1454,17 +1454,17 @@ a.rail-item.active { color: var(--text); }
 
 /* ---- Flavour · Aurora ---- */
 .fl-aurora {
-  --bg:        #070C18;
-  --bg-2:      #0B1222;
-  --surface:   rgba(38, 58, 110, 0.62);
-  --surface-2: rgba(30, 46, 88, 0.40);
-  --surface-3: rgba(120, 150, 210, 0.24);
-  --line:      rgba(150, 178, 230, 0.16);
-  --line-2:    rgba(160, 188, 240, 0.26);
-  --line-3:    rgba(176, 202, 248, 0.40);
-  --text:      #EAF0FF;
-  --text-2:    #9FB0CC;
-  --text-3:    #6E80A0;
+  --bg:        #04130E;
+  --bg-2:      #06180F;
+  --surface:   rgba(20, 74, 60, 0.50);
+  --surface-2: rgba(16, 62, 50, 0.30);
+  --surface-3: rgba(90, 180, 150, 0.18);
+  --line:      rgba(120, 210, 180, 0.16);
+  --line-2:    rgba(130, 220, 190, 0.26);
+  --line-3:    rgba(150, 230, 200, 0.40);
+  --text:      #E8F6EF;
+  --text-2:    #A2CFC0;
+  --text-3:    #6E9A8C;
   --good:      #34D9A6;
   --warn:      #FBBF24;
   --bad:       #FB6F84;
@@ -1476,29 +1476,29 @@ a.rail-item.active { color: var(--text); }
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-ui:      'Inter', system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', ui-monospace, monospace;
-  --shadow-card: 0 10px 36px -8px rgba(0, 8, 24, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-card: 0 10px 36px -8px rgba(0, 16, 10, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
 }
 .fl-aurora.light {
-  --bg:        #E7F0F7;
-  --bg-2:      #DBE8F2;
+  --bg:        #E8F4EE;
+  --bg-2:      #DCEDE3;
   --surface:   rgba(255, 255, 255, 0.70);
   --surface-2: rgba(255, 255, 255, 0.52);
   --surface-3: rgba(255, 255, 255, 0.88);
-  --line:      rgba(20, 38, 74, 0.12);
-  --line-2:    rgba(20, 38, 74, 0.18);
-  --line-3:    rgba(20, 38, 74, 0.30);
-  --text:      #10203A;
-  --text-2:    #42536E;
-  --text-3:    #5E708C;
+  --line:      rgba(16, 58, 44, 0.12);
+  --line-2:    rgba(16, 58, 44, 0.18);
+  --line-3:    rgba(16, 58, 44, 0.30);
+  --text:      #0E241C;
+  --text-2:    #3E5A4E;
+  --text-3:    #5E7A6E;
   --good:      #0A8068;
   --warn:      #B45309;
   --bad:       #BE123C;
 }
-/* The ONE glass skin: frosted navy panels floating over a cyan→violet aurora.
-   Translucent surfaces + glass-shadow come from the tokens; the blur that turns
-   them into glass can't live on a custom property, so it's applied to the
-   surface elements below. Accent follows the live voice (App.jsx writes
-   --accent inline); the aurora's sky-blue + violet companions stay fixed. */
+/* The ONE glass skin: frosted teal-green panels floating over a turquoise→emerald
+   aurora with a pink curtain edge. Translucent surfaces + glass-shadow come from
+   the tokens; the blur that turns them into glass can't live on a custom property,
+   so it's applied to the surface elements below. Accent follows the live voice
+   (App.jsx writes --accent inline); the aurora's emerald + pink companions stay fixed. */
 .fl-aurora .card,
 .fl-aurora .seg,
 .fl-aurora .spotlight,
@@ -1508,7 +1508,15 @@ a.rail-item.active { color: var(--text); }
   backdrop-filter: blur(22px) saturate(165%) !important;
   -webkit-backdrop-filter: blur(22px) saturate(165%) !important;
 }
-/* Rail is glass too — a faint top→bottom sheen over the navy bg. */
+/* The console is text-heavy — give it a more opaque frosted backing than the
+   decorative cards, plus its own blur, so the logs stay crisp over the aurora
+   instead of the dashboard bleeding through the translucent surface. */
+.fl-aurora .console {
+  background: linear-gradient(180deg, rgba(8, 30, 23, 0.88), rgba(5, 22, 15, 0.95));
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+}
+/* Rail is glass too — a faint top→bottom sheen over the teal-green bg. */
 .fl-aurora .rail { background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02)); }
 /* Airy display: Space Grotesk headings, calm tracking; card titles inherit it. */
 .fl-aurora h1.h, .fl-aurora h2, .fl-aurora h3 { font-family: var(--font-display); letter-spacing: -.015em; }
@@ -1520,21 +1528,21 @@ a.rail-item.active { color: var(--text); }
 }
 /* Pill badges suit the soft-glass geometry. */
 .fl-aurora .badge { border-radius: 999px; }
-/* Layered aurora backdrop — coloured light for the glass to refract: accent
-   bloom top-left, sky-blue top-right, violet rising from the floor. */
+/* Layered aurora backdrop — coloured light for the glass to refract: turquoise
+   accent bloom top-left, emerald top-right, a pink curtain rising from the floor. */
 .fl-aurora .atmos {
   opacity: 1;
   background:
     radial-gradient(720px 480px at 12% -6%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 60%),
-    radial-gradient(680px 520px at 90% 6%, color-mix(in srgb, #38BDF8 20%, transparent), transparent 62%),
-    radial-gradient(820px 660px at 50% 112%, color-mix(in srgb, #A78BFA 18%, transparent), transparent 60%);
+    radial-gradient(680px 520px at 90% 6%, color-mix(in srgb, #2FD39A 20%, transparent), transparent 62%),
+    radial-gradient(820px 660px at 50% 112%, color-mix(in srgb, #E879C9 15%, transparent), transparent 60%);
 }
 /* Light mode — same aurora, dialled down so it reads as tint on the pale glass. */
 .fl-aurora.light .atmos {
   background:
     radial-gradient(720px 480px at 12% -6%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 62%),
-    radial-gradient(680px 520px at 90% 6%, color-mix(in srgb, #38BDF8 12%, transparent), transparent 64%),
-    radial-gradient(820px 660px at 50% 112%, color-mix(in srgb, #A78BFA 11%, transparent), transparent 62%);
+    radial-gradient(680px 520px at 90% 6%, color-mix(in srgb, #2FD39A 12%, transparent), transparent 64%),
+    radial-gradient(820px 660px at 50% 112%, color-mix(in srgb, #E879C9 10%, transparent), transparent 62%);
 }
 
 
@@ -2013,12 +2021,12 @@ a.rail-item.active { color: var(--text); }
 .dir-matrix .dir-thumb-bar:nth-child(3) { background: #18242C; }
 .dir-matrix .dir-thumb-dot { background: #19E37C; box-shadow: 0 0 8px #19E37C; }
 
-.dir-aurora .dir-thumb { background: #070C18; border-radius: 16px; }
+.dir-aurora .dir-thumb { background: #04130E; border-radius: 16px; }
 .dir-aurora .dir-thumb-rail { background: rgba(255,255,255,0.06); border-right: 1px solid rgba(255,255,255,0.12); }
-.dir-aurora .dir-thumb-bar { background: #5EE0C8; }
+.dir-aurora .dir-thumb-bar { background: #2DE0B8; }
 .dir-aurora .dir-thumb-bar:nth-child(2) { background: rgba(255,255,255,0.16); }
 .dir-aurora .dir-thumb-bar:nth-child(3) { background: rgba(255,255,255,0.16); }
-.dir-aurora .dir-thumb-dot { background: #5EE0C8; box-shadow: 0 0 8px #5EE0C8; }
+.dir-aurora .dir-thumb-dot { background: #2DE0B8; box-shadow: 0 0 8px #2DE0B8; }
 
 .dir-perspective .dir-thumb { background: #0E1117; border-radius: 7px; }
 .dir-perspective .dir-thumb-rail { background: #161B22; border-right: 1px solid #232C36; }
