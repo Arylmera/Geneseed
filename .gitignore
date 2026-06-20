@@ -10,6 +10,8 @@ Harness/
 improvements/
 # Host-specific project-context manifest, if a build drops one at the repo root.
 /context.json
+# Agent Notebook — personal/agent scratch space, never committed (AGENT.md §5).
+notebook/
 
 # Brainstorming visual companion (transient)
 .superpowers/

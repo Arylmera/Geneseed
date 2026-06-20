@@ -388,7 +388,8 @@ class McpTests(unittest.TestCase):
     def test_api_mcp_lists_targets_and_states(self):
         state = web.WebState(theme="neutral")
         # api_mcp only lists targets whose install is active; force one so the
-        # structure check doesn't hinge on the host machine having an install.
+        # structure check doesn't hinge on the host machine having an install. Each
+        # target now carries its owning install's (host, root) for the table to join on.
         saved_t, saved_s = web.harness._install_targets, web.harness._install_state
         web.harness._install_targets = lambda: [("opencode", "project", Path("."))]
         web.harness._install_state = lambda root, host="opencode", scope="global": "active"
@@ -400,24 +401,29 @@ class McpTests(unittest.TestCase):
         for t in m["targets"]:
             self.assertIn("path", t)
             self.assertIn("commented", t)
+            self.assertIn(t["host"], ("opencode", "claude"))
+            self.assertIn("root", t)
             for s in t["servers"]:
                 self.assertIn(s["state"], ("enabled", "disabled", "absent"))
                 self.assertIn("label", s)
         self.assertIsInstance(m["default"], int)
 
-    def test_api_mcp_toggle_add_then_disable(self):
+    def test_api_mcp_toggle_opencode_add_then_disable(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:
-            cfg_path = Path(t) / "opencode.json"
+            root = Path(t)
+            cfg_path = root / "opencode.json"
             state = web.WebState(theme="neutral")
             preset = next(iter(web.harness._MCP_PRESETS))
-            saved = web.harness._mcp_targets
-            web.harness._mcp_targets = lambda: [("test", cfg_path)]
+            saved = web.harness._mcp_install_targets
+            web.harness._mcp_install_targets = \
+                lambda: [("test", cfg_path, "opencode", "project", root)]
             try:
                 res = web.api_mcp_toggle(
                     state, {"path": str(cfg_path), "name": preset, "enabled": True})
                 self.assertTrue(res["ok"])
                 self.assertEqual(res["state"], "enabled")
+                # OpenCode keeps the entry and flips its enabled flag → 'disabled'.
                 res = web.api_mcp_toggle(
                     state, {"path": str(cfg_path), "name": preset, "enabled": False})
                 self.assertTrue(res["ok"])
@@ -426,7 +432,93 @@ class McpTests(unittest.TestCase):
                     web.api_mcp_toggle(state, {"path": "bogus", "name": preset,
                                                "enabled": True})
             finally:
-                web.harness._mcp_targets = saved
+                web.harness._mcp_install_targets = saved
+
+    def test_api_mcp_toggle_claude_add_then_remove(self):
+        import tempfile, json as _json
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            cfg_path = root / ".mcp.json"
+            state = web.WebState(theme="neutral")
+            saved = web.harness._mcp_install_targets
+            web.harness._mcp_install_targets = \
+                lambda: [("project config", cfg_path, "claude", "project", root)]
+            try:
+                # Add markitdown → written under `mcpServers` in Claude's split shape.
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": "markitdown", "enabled": True})
+                self.assertTrue(res["ok"])
+                self.assertEqual(res["state"], "enabled")
+                cfg = _json.loads(cfg_path.read_text())
+                self.assertEqual(cfg["mcpServers"]["markitdown"],
+                                 {"command": "uvx", "args": ["markitdown-mcp"]})
+                self.assertNotIn("mcp", cfg)            # not OpenCode's key
+                # Claude has no enabled flag → toggling off REMOVES the entry (state absent).
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": "markitdown", "enabled": False})
+                self.assertTrue(res["ok"])
+                self.assertEqual(res["state"], "absent")
+                self.assertNotIn("markitdown",
+                                 _json.loads(cfg_path.read_text()).get("mcpServers", {}))
+            finally:
+                web.harness._mcp_install_targets = saved
+
+    def test_api_mcp_toggle_claude_preserves_other_keys_and_refuses_unparseable(self):
+        import tempfile, json as _json
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            cfg_path = root / ".claude.json"            # the user-scope config holds far more than MCP
+            state = web.WebState(theme="neutral")
+            saved = web.harness._mcp_install_targets
+            web.harness._mcp_install_targets = \
+                lambda: [("global config", cfg_path, "claude", "global", root)]
+            try:
+                cfg_path.write_text(_json.dumps(
+                    {"numStartups": 7, "projects": {"/x": {}}}))
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": "gitlab", "enabled": True})
+                self.assertTrue(res["ok"])
+                after = _json.loads(cfg_path.read_text())
+                self.assertEqual(after["numStartups"], 7)         # unrelated keys preserved
+                self.assertIn("gitlab", after["mcpServers"])
+                # A config we can't parse is refused, never clobbered.
+                cfg_path.write_text("{ not json")
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": "markitdown", "enabled": True})
+                self.assertFalse(res["ok"])
+                self.assertEqual(cfg_path.read_text(), "{ not json")
+            finally:
+                web.harness._mcp_install_targets = saved
+
+    def test_api_mcp_toggle_claude_does_not_mangle_string_values(self):
+        """A Claude config is strict JSON and must round-trip byte-faithfully: a string
+        value holding ',]' or ', }' (realistic in ~/.claude.json history/prompts) must NOT
+        have its comma silently dropped by the OpenCode comment-stripper's trailing-comma
+        pass. Regression guard for the parser-mismatch data-loss bug."""
+        import tempfile, json as _json
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            cfg_path = root / ".claude.json"
+            state = web.WebState(theme="neutral")
+            # Values that the non-string-aware trailing-comma regex would corrupt.
+            booby = {"history": [{"display": "jq .a[] | select(.x,]"},
+                                 {"display": "rewrite {a, } please"}],
+                     "note": "fix [1,2,] and {b, }"}
+            cfg_path.write_text(_json.dumps(booby))
+            saved = web.harness._mcp_install_targets
+            web.harness._mcp_install_targets = \
+                lambda: [("global config", cfg_path, "claude", "global", root)]
+            try:
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": "markitdown", "enabled": True})
+                self.assertTrue(res["ok"])
+                after = _json.loads(cfg_path.read_text())
+                # Every booby-trapped string survives intact — no dropped commas.
+                self.assertEqual(after["history"], booby["history"])
+                self.assertEqual(after["note"], booby["note"])
+                self.assertIn("markitdown", after["mcpServers"])
+            finally:
+                web.harness._mcp_install_targets = saved
 
 
 class InstallActivationTests(unittest.TestCase):

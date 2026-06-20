@@ -421,9 +421,21 @@ def _read_jsonc(text: str) -> "tuple[object, bool]":
                 i += 1
             i += 2
             continue
+        if ch in "}]":
+            # Structural close, outside any string: drop a trailing comma before it
+            # (with intervening whitespace). String-aware by construction — a comma
+            # inside a string is followed by that string's closing quote, never by a
+            # bare structural brace, so it is never the char we pop here.
+            while out and out[-1] in " \t\r\n":
+                out.pop()
+            if out and out[-1] == ",":
+                out.pop()
+            out.append(ch)
+            i += 1
+            continue
         out.append(ch)
         i += 1
-    stripped = re.sub(r",(\s*[}\]])", r"\1", "".join(out))
+    stripped = "".join(out)
     try:
         return json.loads(stripped), had_comments
     except (json.JSONDecodeError, ValueError):

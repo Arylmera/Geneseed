@@ -87,53 +87,100 @@ _MCP_PRESETS = {
 }
 
 
-def _mcp_apply(config: dict, name: str, block: "dict | None") -> dict:
-    """Pure: return a copy of `config` with MCP server `name` set to `block`, or
-    removed when `block` is None. Never touches another key; drops an emptied `mcp`
-    map; keeps `$schema` so a freshly created file is valid."""
+def _mcp_servers_key(host: str) -> str:
+    """The config key holding the server map for `host`: OpenCode nests servers under
+    `mcp`, Claude Code under `mcpServers`."""
+    return "mcpServers" if host == "claude" else "mcp"
+
+
+def _mcp_preset_block(name: str, host: str = "opencode") -> dict:
+    """The server block to WRITE for preset `name`, shaped for `host`. OpenCode takes the
+    preset block verbatim (`type` / `command`-list / `environment` / `enabled`). Claude
+    splits the command list into `command` (head) + `args` (tail), renames
+    `environment` → `env`, and drops the `type` / `enabled` keys it has no concept of —
+    matching SETUP.md's `.mcp.json` shape."""
+    block = dict(_MCP_PRESETS[name]["block"])
+    if host != "claude":
+        return block
+    cmd = list(block.get("command") or [])
+    out: dict = {"command": cmd[0] if cmd else "", "args": cmd[1:]}
+    env = block.get("environment")
+    if env:
+        out["env"] = dict(env)
+    return out
+
+
+def _mcp_apply(config: dict, name: str, block: "dict | None", host: str = "opencode") -> dict:
+    """Pure: return a copy of `config` with MCP server `name` set to `block`, or removed
+    when `block` is None. Never touches another key; drops an emptied servers map.
+    Host-aware: OpenCode keeps servers under `mcp` and stamps a `$schema` onto a freshly
+    created file; Claude keeps them under `mcpServers` and adds no schema."""
     cfg = dict(config)
-    cfg.setdefault("$schema", "https://opencode.ai/config.json")
-    servers = dict(cfg.get("mcp") or {})
+    key = _mcp_servers_key(host)
+    if host == "opencode":
+        cfg.setdefault("$schema", "https://opencode.ai/config.json")
+    servers = dict(cfg.get(key) or {})
     if block is None:
         servers.pop(name, None)
     else:
         servers[name] = block
     if servers:
-        cfg["mcp"] = servers
+        cfg[key] = servers
     else:
-        cfg.pop("mcp", None)
+        cfg.pop(key, None)
     return cfg
 
 
-def _mcp_state(config: dict, name: str) -> str:
-    """'enabled' | 'disabled' | 'absent' for server `name`. A server with no explicit
-    `enabled` key counts as enabled (OpenCode's default)."""
-    server = (config.get("mcp") or {}).get(name)
+def _mcp_state(config: dict, name: str, host: str = "opencode") -> str:
+    """'enabled' | 'disabled' | 'absent' for server `name`. OpenCode: a present server
+    with no explicit `enabled` key counts as enabled (its default), `enabled: false` is
+    'disabled'. Claude `.mcp.json` has no per-server enabled flag, so a present server is
+    always 'enabled' and 'disabled' never occurs — toggling off removes the entry."""
+    server = (config.get(_mcp_servers_key(host)) or {}).get(name)
     if not isinstance(server, dict):
         return "absent"
+    if host == "claude":
+        return "enabled"
     return "enabled" if server.get("enabled", True) else "disabled"
 
 
-def _mcp_set_enabled(config: dict, name: str, enabled: bool) -> dict:
-    """Pure: flip a present server's `enabled` flag. No-op when the server is absent."""
-    server = (config.get("mcp") or {}).get(name)
+def _mcp_set_enabled(config: dict, name: str, enabled: bool, host: str = "opencode") -> dict:
+    """Pure: flip a present server's enabled-ness. OpenCode toggles its `enabled` flag.
+    Claude has no such flag, so enabling is a no-op (presence == enabled) and disabling
+    removes the entry. No-op when the server is absent."""
+    server = (config.get(_mcp_servers_key(host)) or {}).get(name)
     if not isinstance(server, dict):
         return config
+    if host == "claude":
+        return config if enabled else _mcp_apply(config, name, None, host)
     block = dict(server)
     block["enabled"] = enabled
-    return _mcp_apply(config, name, block)
+    return _mcp_apply(config, name, block, host)
 
 
-def _mcp_load(path: Path) -> dict:
-    """Read an OpenCode config into a dict; {} if missing or malformed. Comment-tolerant
-    so a hand-maintained `opencode.jsonc` parses (its `//` and `/* */` are stripped)."""
+def _mcp_load(path: Path, host: str = "opencode") -> dict:
+    """Read an MCP config into a dict; {} if missing or malformed. OpenCode is parsed
+    comment-tolerantly (a hand-maintained `opencode.jsonc` carries `//` and `/* */`).
+    Claude configs (`.mcp.json`, `~/.claude.json`) are STRICT JSON — machine-written, no
+    comments — and are parsed with `json.loads`: the comment-stripper's trailing-comma
+    pass is not string-aware and would silently drop a comma from any string value
+    containing `,]` or `, }`, corrupting unrelated data (a `~/.claude.json` holds projects
+    and history far beyond MCP). The catalog/TUI callers pass no host and keep the
+    OpenCode-tolerant behaviour."""
     if not path.exists():
         return {}
     try:
-        data, _ = build._read_jsonc(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
+        text = path.read_text(encoding="utf-8")
     except OSError:
         return {}
+    if host == "claude":
+        try:
+            data = json.loads(text)
+        except ValueError:                 # JSONDecodeError ⊂ ValueError
+            return {}
+        return data if isinstance(data, dict) else {}
+    data, _ = build._read_jsonc(text)
+    return data if isinstance(data, dict) else {}
 
 
 def _mcp_commented(path: Path) -> bool:
@@ -150,9 +197,16 @@ def _mcp_commented(path: Path) -> bool:
 
 
 def _mcp_save(path: Path, config: dict) -> None:
-    """Write `config` back as pretty JSON (the same shape build.py emits)."""
+    """Write `config` back as pretty JSON (the same shape build.py emits), ATOMICALLY:
+    serialise to a sibling temp file, then os.replace it into place. A plain truncate-then-
+    write leaves the file empty/partial if the process is killed or the disk fills mid-write
+    — survivable for a small opencode.json, ruinous for the large ~/.claude.json, which
+    holds projects/history. The rename is atomic on the same filesystem (same dir guarantees
+    it), so a reader/crash sees either the whole old file or the whole new one."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def _mcp_targets() -> "list[tuple[str, Path]]":
@@ -170,6 +224,33 @@ def _mcp_targets() -> "list[tuple[str, Path]]":
     return targets
 
 
+def _mcp_config_for(host: str, scope: str, root: Path) -> "Path | None":
+    """The MCP config file an install writes its servers into. OpenCode: the
+    `opencode.json(c)` under the install root (a present `.jsonc` sibling wins). Claude:
+    `<root>/.mcp.json` for a project install, `~/.claude.json` (the user-scope config) for
+    the global one. None for a host that carries no MCP wiring."""
+    if host == "opencode":
+        return build._opencode_target(root / "opencode.json")
+    if host == "claude":
+        return (root / ".mcp.json") if scope == "project" else (Path.home() / ".claude.json").resolve()
+    return None
+
+
+def _mcp_install_targets() -> "list[tuple[str, Path, str, str, Path]]":
+    """(label, config_file, host, scope, install_root) for every detected install that can
+    carry MCP wiring — both OpenCode and Claude, global and per-repo. The web MCP screen
+    filters these to ACTIVE installs and joins each to its harness row by (host,
+    install_root); see api_mcp. (The TUI's MCP screen uses the OpenCode-only
+    `_mcp_targets` above, which offers both project + global configs regardless of install
+    state — a different shape for a different screen.)"""
+    out: "list[tuple[str, Path, str, str, Path]]" = []
+    for host, scope, root in _install_targets():
+        cfg = _mcp_config_for(host, scope, root)
+        if cfg is not None:
+            out.append((f"{scope} config", cfg, host, scope, root))
+    return out
+
+
 def _mcp_default_target(targets: "list[tuple[str, Path]]") -> int:
     """Pick which target the screen opens on. The strongest signal is which config
     file already exists — that's the one OpenCode actually reads — so if exactly one
@@ -185,12 +266,13 @@ def _mcp_default_target(targets: "list[tuple[str, Path]]") -> int:
     return next((i for i, (label, _p) in enumerate(targets) if label == prefer), 0)
 
 
-def _mcp_known_names(config: dict) -> list:
+def _mcp_known_names(config: dict, host: str = "opencode") -> list:
     """Server names to show in the MCP screen: the built-in presets first, then any
     server already present in THIS config that isn't a preset — so user-added servers
-    (gitlab, filesystem, …) are visible and manageable, not just the presets. Pure."""
+    (gitlab, filesystem, …) are visible and manageable, not just the presets. Pure;
+    host-aware so it reads the right server map (`mcp` vs `mcpServers`)."""
     names = list(_MCP_PRESETS)
-    present = list((config.get("mcp") or {}).keys()) if isinstance(config, dict) else []
+    present = list((config.get(_mcp_servers_key(host)) or {}).keys()) if isinstance(config, dict) else []
     names += [n for n in present if n not in _MCP_PRESETS]
     return names
 

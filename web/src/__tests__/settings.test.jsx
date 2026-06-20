@@ -70,12 +70,13 @@ vi.mock('../api/index.js', () => ({
 import Settings from '../pages/Settings/index.jsx'
 
 describe('Settings', () => {
-  it('renders the install snapshot and the build picker', async () => {
+  it('renders the install snapshot and maintenance actions', async () => {
     render(<Settings onAction={() => {}} />)
     await waitFor(() => expect(screen.getByText('up to date')).toBeTruthy())
     expect(screen.getAllByText(/opencode-global/).length).toBeGreaterThan(0)
     expect(screen.getByText('C:/geneseed')).toBeTruthy() // source root
-    expect(screen.getByText('Build')).toBeTruthy()
-    expect(screen.getByText('Update')).toBeTruthy()
+    // Build/update moved to the Harnesses tab + Dashboard; Settings keeps maintenance.
+    expect(screen.getByText('Add to PATH')).toBeTruthy()
+    expect(screen.getByText('Download offline package')).toBeTruthy()
   })
 })

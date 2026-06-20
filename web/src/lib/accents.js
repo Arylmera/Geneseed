@@ -45,3 +45,34 @@ export function applyAccent(el, name, mode) {
   el.style.setProperty('--accent-2', ACCENT_2[name] || ACCENT_2.cyan)
   el.style.setProperty('--accent-ink', ink)
 }
+
+// Each flavour's CURATED signature accent — used when the accent mode is 'curated'
+// instead of the deployed voice's accent. `dark` is the bright on-dark value;
+// `light` is the deeper companion (also the gradient end / --accent-2); `ink` /
+// `inkLight` are the readable text colour on a filled accent in each mode.
+export const CURATED_ACCENT = {
+  cultivar:    { dark: '#3AD4C4', light: '#1F9E92', ink: '#06100D', inkLight: '#FFFFFF' },
+  greenhouse:  { dark: '#5BD08A', light: '#2C9A5E', ink: '#06100D', inkLight: '#FFFFFF' },
+  operator:    { dark: '#E8A23B', light: '#B07914', ink: '#1A1306', inkLight: '#FFFFFF' },
+  heirloom:    { dark: '#B9A6C6', light: '#6E5A7C', ink: '#1B1622', inkLight: '#FFFFFF' },
+  matrix:      { dark: '#26A17B', light: '#18815F', ink: '#06100D', inkLight: '#FFFFFF' },
+  aurora:      { dark: '#8AFFC4', light: '#0EA66D', ink: '#04231A', inkLight: '#FFFFFF' },
+  perspective: { dark: '#00BD7D', light: '#00A86E', ink: '#04130D', inkLight: '#04130D' },
+  sequencer:   { dark: '#155DFC', light: '#1447E6', ink: '#FFFFFF', inkLight: '#FFFFFF' },
+  cobalt:      { dark: '#389DC6', light: '#1E6F92', ink: '#021015', inkLight: '#FFFFFF' },
+  cosmic:      { dark: '#2670AD', light: '#1A5080', ink: '#E6F2FF', inkLight: '#FFFFFF' },
+  neon:        { dark: '#F44174', light: '#D81E5B', ink: '#FFFFFF', inkLight: '#FFFFFF' },
+}
+
+// Write a flavour's curated accent on the app root (light reads the deeper
+// companion). Returns false when the flavour has no curated entry, so the caller
+// can fall back to the voice accent.
+export function applyCuratedAccent(el, flavour, mode) {
+  const c = CURATED_ACCENT[flavour]
+  if (!el || !c) return false
+  const light = mode === 'light'
+  el.style.setProperty('--accent', light ? c.light : c.dark)
+  el.style.setProperty('--accent-2', c.light)
+  el.style.setProperty('--accent-ink', light ? c.inkLight : c.ink)
+  return true
+}

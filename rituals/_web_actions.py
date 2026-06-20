@@ -142,57 +142,79 @@ def api_restore(state: WebState, files: list) -> dict:
 
 
 def api_mcp(state: WebState) -> dict:
-    """MCP servers per config target — the web mirror of the TUI's MCP screen.
-    Presets first, then user-defined servers present in each config."""
-    # Only show MCP wiring for harnesses that are actually installed and active —
-    # an absent/disabled install has no live config to wire. MCP is OpenCode-only, so
-    # gate each mcp target on its OWN root's OpenCode install state (root = the config
-    # file's parent dir).
-    targets = [(l, p) for l, p in harness._mcp_targets()
-               if harness._install_state(p.parent, "opencode") == "active"]
+    """MCP servers per ACTIVE install — the web mirror of the TUI's MCP screen, now
+    host-aware. Each target is one active install's MCP config (OpenCode's opencode.json,
+    or Claude's .mcp.json / ~/.claude.json); the harness table joins it to its row by
+    (host, root). Presets first, then any user-defined server already in the config. An
+    absent/disabled install has no live config to wire, so it contributes no target."""
+    targets = [t for t in harness._mcp_install_targets()
+               if harness._install_state(t[4], t[2], t[3]) == "active"]
     out = []
-    for label, path in targets:
-        cfg = harness._mcp_load(path)
+    for label, path, host, _scope, root in targets:
+        cfg = harness._mcp_load(path, host)
         servers = []
-        for name in harness._mcp_known_names(cfg):
+        for name in harness._mcp_known_names(cfg, host):
             lbl, desc = harness._mcp_meta(name)
             servers.append({"name": name, "label": lbl, "desc": desc,
                             "preset": name in harness._MCP_PRESETS,
-                            "state": harness._mcp_state(cfg, name)})
-        out.append({"label": label, "path": str(path), "exists": path.is_file(),
-                    "commented": harness._mcp_commented(path),
+                            "state": harness._mcp_state(cfg, name, host)})
+        out.append({"label": label, "path": str(path), "host": host, "root": str(root),
+                    "exists": path.is_file(), "commented": harness._mcp_commented(path),
                     "servers": servers})
-    return {"targets": out, "default": harness._mcp_default_target(targets)}
+    # `default` is kept for response-shape stability; the table nests MCP per install and
+    # no longer opens on a single target, so the value is unused by the UI.
+    return {"targets": out, "default": 0}
 
 
 def api_mcp_toggle(state: WebState, body: dict) -> dict:
-    """Enable/disable — or first-add a preset — MCP server `name` in the target
-    config at `path`. Same non-destructive rewrite as the TUI (only the mcp
-    block changes); a hand-commented .jsonc is refused, never rewritten."""
+    """Enable/disable — or first-add a preset — MCP server `name` in the config at `path`.
+    Host-aware: OpenCode flips the server's `enabled` flag (non-destructive); Claude's
+    .mcp.json has no such flag, so toggling a server off REMOVES its entry (re-add to
+    restore). A hand-commented opencode.jsonc is refused, and a Claude config that does
+    not parse is refused rather than clobbered — it may be the large ~/.claude.json that
+    holds far more than MCP wiring."""
     name = str(body.get("name") or "")
     want = bool(body.get("enabled"))
     path_arg = str(body.get("path") or "")
-    known = {str(p): p for _label, p in harness._mcp_targets()}
-    path = known.get(path_arg)
-    if path is None or not name:
+    known = {str(cfg): (cfg, host) for _l, cfg, host, _s, _r in harness._mcp_install_targets()}
+    hit = known.get(path_arg)
+    if hit is None or not name:
         raise NotFound(f"mcp target {path_arg or '(none)'}")
+    path, host = hit
     if harness._mcp_commented(path):
         return {"ok": False,
                 "error": "config holds comments — edit it by hand to keep them"}
-    cfg = harness._mcp_load(path)
-    current = harness._mcp_state(cfg, name)
+    if host == "claude":
+        # Claude configs are strict JSON. Parse ONCE, strictly, and rewrite THAT exact dict
+        # — so the safety check and the value we save come from the same read (no
+        # parser-mismatch, no time-of-check/time-of-use gap) and a string value containing
+        # ',]' / ', }' is never mangled by the comment-stripper's trailing-comma pass.
+        # Refuse an existing file we cannot parse rather than clobber it: it may be the
+        # large ~/.claude.json, which holds projects/history far beyond MCP wiring.
+        if path.is_file():
+            try:
+                cfg = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                cfg = None
+            if not isinstance(cfg, dict):
+                return {"ok": False,
+                        "error": "couldn't parse this config — edit it by hand to avoid data loss"}
+        else:
+            cfg = {}
+    else:
+        cfg = harness._mcp_load(path)
+    current = harness._mcp_state(cfg, name, host)
     if current == "absent":
-        preset = harness._MCP_PRESETS.get(name)
-        if preset is None:
+        if name not in harness._MCP_PRESETS:
             return {"ok": False, "error": f"unknown server '{name}'"}
         if not want:
             return {"ok": False, "error": f"'{name}' is not configured"}
-        cfg = harness._mcp_apply(cfg, name, dict(preset["block"]))
-        cfg = harness._mcp_set_enabled(cfg, name, True)
+        cfg = harness._mcp_apply(cfg, name, harness._mcp_preset_block(name, host), host)
+        cfg = harness._mcp_set_enabled(cfg, name, True, host)
     else:
-        cfg = harness._mcp_set_enabled(cfg, name, want)
+        cfg = harness._mcp_set_enabled(cfg, name, want, host)
     harness._mcp_save(path, cfg)
-    return {"ok": True, "name": name, "state": harness._mcp_state(cfg, name)}
+    return {"ok": True, "name": name, "state": harness._mcp_state(cfg, name, host)}
 
 
 def api_installs(state: WebState) -> dict:

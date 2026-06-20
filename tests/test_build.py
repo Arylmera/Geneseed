@@ -352,6 +352,15 @@ class OpencodeJsoncTests(unittest.TestCase):
         self.assertEqual(data["$schema"], "https://opencode.ai/config.json")
         self.assertFalse(had)
 
+    def test_read_jsonc_trailing_comma_strip_is_string_aware(self):
+        # A string value containing `,]` or `, }` must round-trip byte-faithfully —
+        # the trailing-comma stripper must not reach inside string literals.
+        data, _ = build._read_jsonc('{"n": "fix [1,2,] and {b, }"}')
+        self.assertEqual(data["n"], "fix [1,2,] and {b, }")
+        # ...while genuine structural trailing commas are still removed.
+        self.assertEqual(build._read_jsonc("[1,2,]")[0], [1, 2])
+        self.assertEqual(build._read_jsonc('{"a":1,}')[0], {"a": 1})
+
     def test_read_jsonc_malformed_returns_empty(self):
         data, had = build._read_jsonc("{not json at all")
         self.assertEqual(data, {})

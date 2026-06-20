@@ -1,32 +1,27 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { api } from '../../api/index.js'
 import { Icon } from '../../components/Icon.jsx'
 import { useAsync } from '../../hooks/useAsync.js'
 import { FLAVOURS } from '../../hooks/useFlavour.js'
+import { ACCENT_MODES } from '../../hooks/useAccentMode.js'
+import { LAYOUTS, defaultLayoutFor } from '../../hooks/useLayout.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import ServerControl from './ServerControl.jsx'
 
-// The settings page: the console direction picker, the install snapshot, the
-// build/update picker, the MCP wiring panel (its own component), and the
-// offline-package download.
-export default function Settings({ onAction, flavour, onFlavour }) {
+// The settings page: the console direction picker, the install snapshot,
+// machine maintenance (PATH/uninstall), the offline package, and server control.
+// Building and updating live in the Harnesses tab (per-install) and the Dashboard.
+export default function Settings({
+  onAction,
+  flavour,
+  onFlavour,
+  accentMode,
+  onAccentMode,
+  layout,
+  onLayout,
+}) {
   const { data: setup, error } = useAsync(() => api.setup(), [])
-  const [choices, setChoices] = useState(null) // { themes, emits, current }
-  const [theme, setTheme] = useState('')
-  const [emit, setEmit] = useState('')
-
-  // Themes seed the build picker's defaults, so this load keeps its own effect.
-  useEffect(() => {
-    api
-      .themes()
-      .then((t) => {
-        setChoices(t)
-        setTheme(t.current.theme)
-        setEmit(t.current.emit)
-      })
-      .catch(() => {})
-  }, [])
 
   if (error) return <ErrorState error={error} />
   if (!setup) return <Loading />
@@ -39,8 +34,8 @@ export default function Settings({ onAction, flavour, onFlavour }) {
         <div>
           <h1 className="h">Settings</h1>
           <p className="sub">
-            The deployed install at a glance, plus the same actions as the TUI: build, update, MCP
-            wiring, and an offline package.
+            The deployed install at a glance, plus machine maintenance, an offline package, and
+            server control. Build and update from the Harnesses tab and the Dashboard.
           </p>
         </div>
       </div>
@@ -53,9 +48,68 @@ export default function Settings({ onAction, flavour, onFlavour }) {
             <h3>Console direction</h3>
           </div>
           <p className="sub mb-16">
-            Three takes on the same data. Pick a direction — it applies instantly and persists
-            across reloads.
+            {FLAVOURS.length} takes on the same data. Pick a direction — it applies instantly and
+            persists across reloads.
           </p>
+
+          {/* Accent source — chosen independently of the skin below. 'Auto'
+              follows the deployed voice's accent; 'Curated' gives each theme its
+              own designed signature colour. Live, persisted across reloads. */}
+          {accentMode && onAccentMode && (
+            <div className="dir-layout">
+              <span className="tick" id="dir-accent-label">
+                Accent
+              </span>
+              <div className="seg" role="group" aria-labelledby="dir-accent-label">
+                {ACCENT_MODES.map((m) => (
+                  <button
+                    key={m.id}
+                    className={accentMode === m.id ? 'on' : ''}
+                    onClick={() => onAccentMode(m.id)}
+                    aria-pressed={accentMode === m.id}
+                    title={m.tagline}
+                  >
+                    {m.short}
+                  </button>
+                ))}
+              </div>
+              <span className="dir-layout-note sub" role="status" aria-live="polite">
+                {ACCENT_MODES.find((m) => m.id === accentMode)?.tagline ?? ''}
+              </span>
+            </div>
+          )}
+
+          {/* Dashboard layout — the Status lens, chosen independently of the
+              skin chosen below. 'Auto' follows the layout each theme was
+              designed around; the others force one regardless of skin. */}
+          {layout && onLayout && (
+            <div className="dir-layout">
+              <span className="tick" id="dir-layout-label">
+                Dashboard layout
+              </span>
+              <div className="seg" role="group" aria-labelledby="dir-layout-label">
+                {LAYOUTS.map((l) => (
+                  <button
+                    key={l.id}
+                    className={layout === l.id ? 'on' : ''}
+                    onClick={() => onLayout(l.id)}
+                    aria-pressed={layout === l.id}
+                    title={l.tagline}
+                  >
+                    {l.short}
+                  </button>
+                ))}
+              </div>
+              <span className="dir-layout-note sub" role="status" aria-live="polite">
+                {layout === 'auto'
+                  ? `Following the theme — ${
+                      LAYOUTS.find((l) => l.id === defaultLayoutFor(flavour))?.short ?? ''
+                    }.`
+                  : (LAYOUTS.find((l) => l.id === layout)?.tagline ?? '')}
+              </span>
+            </div>
+          )}
+
           <div className="dir-grid">
             {FLAVOURS.map((f) => (
               <button
@@ -123,49 +177,6 @@ export default function Settings({ onAction, flavour, onFlavour }) {
           </div>
         ))}
         {/* eslint-enable react/jsx-key */}
-      </div>
-
-      {/* Build & update card */}
-      <div className="card pad-lg mb-16">
-        <div className="card-head">
-          <h3>Build &amp; update</h3>
-        </div>
-        <p className="sub mb-16">
-          Rebuild the deployed harness in a chosen voice and mode, or pull the latest Geneseed and
-          re-render. Either runs live in the terminal.
-        </p>
-        {choices && (
-          <div className="row wrap gap-16" style={{ alignItems: 'flex-end' }}>
-            <label className="stack" style={{ gap: 6 }}>
-              <span className="tick">Voice</span>
-              <select className="sel" value={theme} onChange={(e) => setTheme(e.target.value)}>
-                {choices.themes.map((t) => (
-                  <option key={t.name} value={t.name}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="stack" style={{ gap: 6 }}>
-              <span className="tick">Mode</span>
-              <select className="sel" value={emit} onChange={(e) => setEmit(e.target.value)}>
-                {choices.emits.map((em) => (
-                  <option key={em.name} value={em.name}>
-                    {em.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className="btn ghost" onClick={() => onAction('build', { theme, emit })}>
-              <Icon name="build" />
-              Build
-            </button>
-            <button className="btn" onClick={() => onAction('update')}>
-              <Icon name="refresh" />
-              Update
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Maintenance card */}

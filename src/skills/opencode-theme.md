@@ -1,4 +1,4 @@
-# {{SKILL}}: theme
+# {{SKILL}}: opencode-theme
 
 > {{DESC_THEME}}
 

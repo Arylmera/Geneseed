@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 // State persisted to localStorage. `read` maps the stored string (or null when the key
 // is absent) to the initial value — do validation + fallback there. Storage access is
 // wrapped so a disabled or throwing localStorage degrades to in-memory state. This is
-// the shared base for useColorMode / useFlavour / useHarness, so the try/catch + effect
+// the shared base for useColorMode / useFlavour / useHarness / useLayout, so the try/catch + effect
 // pattern lives in exactly one place. Returns [value, setValue].
 export function useLocalStorage(key, read) {
   const [value, setValue] = useState(() => {

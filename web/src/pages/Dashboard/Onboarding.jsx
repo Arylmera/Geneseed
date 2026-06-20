@@ -94,7 +94,7 @@ export default function Onboarding({ onAction }) {
       </div>
 
       <button
-        className="btn"
+        className="btn btn-grid"
         disabled={!theme || !emit}
         onClick={() => onAction('build', { theme, emit })}
       >

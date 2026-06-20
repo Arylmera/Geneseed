@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from './api/index.js'
 import { useRoute } from './lib/router.js'
-import { applyAccent } from './lib/accents.js'
+import { applyAccent, applyCuratedAccent } from './lib/accents.js'
 import { TYPE_TO_SECTION } from './lib/sections.js'
 import { useColorMode } from './hooks/useColorMode.js'
 import { useFlavour } from './hooks/useFlavour.js'
+import { useAccentMode } from './hooks/useAccentMode.js'
+import { useLayout } from './hooks/useLayout.js'
 import { useOverview } from './hooks/useOverview.js'
 import { useJobs } from './hooks/useJobs.js'
 import Rail from './components/Rail.jsx'
@@ -37,6 +39,8 @@ export default function App() {
   const [stopped, setStopped] = useState(false)
   const [mode, toggleMode] = useColorMode()
   const [flavour, setFlavour] = useFlavour()
+  const [accentMode, setAccentMode] = useAccentMode()
+  const [layout, setLayout] = useLayout()
   const appRef = useRef(null)
 
   const onError = (e) => setToast({ kind: 'err', msg: e.message })
@@ -53,10 +57,15 @@ export default function App() {
     onError,
   })
 
-  // The UI wears the deployed theme's accent, adjusted for light/dark mode.
+  // The accent is either the flavour's curated signature ('curated' mode) or the
+  // deployed voice's accent ('auto'), adjusted for light/dark. Curated wins when
+  // the flavour has an entry; otherwise we always fall back to the voice.
   useEffect(() => {
-    if (overview?.accent) applyAccent(appRef.current, overview.accent, mode)
-  }, [overview, mode])
+    const el = appRef.current
+    if (!el) return
+    if (accentMode === 'curated' && applyCuratedAccent(el, flavour, mode)) return
+    if (overview?.accent) applyAccent(el, overview.accent, mode)
+  }, [overview, mode, accentMode, flavour])
 
   // Stop the local server (same /api/shutdown the Settings card uses). The
   // connection drops as the server goes down, so a rejected request right
@@ -125,6 +134,7 @@ export default function App() {
                 themes={themes}
                 onAction={runAction}
                 flavour={flavour}
+                layout={layout}
               />
             )}
             {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
@@ -156,7 +166,15 @@ export default function App() {
             {route.view === 'themes' && <Themes onAction={runAction} />}
             {route.view === 'graph' && <Graph />}
             {route.view === 'settings' && (
-              <Settings onAction={runAction} flavour={flavour} onFlavour={setFlavour} />
+              <Settings
+                onAction={runAction}
+                flavour={flavour}
+                onFlavour={setFlavour}
+                accentMode={accentMode}
+                onAccentMode={setAccentMode}
+                layout={layout}
+                onLayout={setLayout}
+              />
             )}
             {route.view === 'harnesses' && (
               <Harnesses

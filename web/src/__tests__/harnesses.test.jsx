@@ -31,6 +31,8 @@ vi.mock('../api/index.js', () => ({
           {
             label: 'global config',
             path: 'C:/cfg/opencode.json',
+            host: 'opencode',
+            root: 'C:/cfg',
             exists: true,
             commented: false,
             servers: [
@@ -135,20 +137,34 @@ describe('Harnesses', () => {
     )
   })
 
-  it('renders switch toggles for the active install and present MCP servers', async () => {
+  it('renders switch toggles for the active install and its nested MCP servers', async () => {
     render(<Harnesses onAction={() => {}} />)
+    // The active OpenCode row carries its own install switch, on by default.
     await waitFor(() => expect(screen.getAllByRole('switch').length).toBeGreaterThan(0))
     const switches = screen.getAllByRole('switch')
-    // at least one is "on" (the active install and the enabled MCP server)
     expect(switches.some((s) => s.getAttribute('aria-checked') === 'true')).toBe(true)
+    // Its MCP servers (under C:/cfg/opencode.json) are nested in the row, shown by default.
+    expect(screen.getByText('MarkItDown')).toBeTruthy()
   })
 
-  it('renders an Add button for absent preset MCP servers (OpenCode-scoped)', async () => {
+  it('collapses and re-expands an active row’s MCP wiring via the chevron', async () => {
+    render(<Harnesses onAction={() => {}} />)
+    await waitFor(() => expect(screen.getByText('MarkItDown')).toBeTruthy())
+    const chevron = screen.getByRole('button', { name: /collapse MCP for opencode/i })
+    fireEvent.click(chevron)
+    expect(screen.queryByText('MarkItDown')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /expand MCP for opencode/i }))
+    expect(screen.getByText('MarkItDown')).toBeTruthy()
+  })
+
+  it('renders an Add button for absent preset MCP servers nested under their active harness', async () => {
     vi.mocked(api.mcp).mockResolvedValueOnce({
       targets: [
         {
           label: 'global config',
           path: 'C:/cfg/opencode.json',
+          host: 'opencode',
+          root: 'C:/cfg',
           exists: true,
           commented: false,
           servers: [
@@ -159,7 +175,7 @@ describe('Harnesses', () => {
       ],
       default: 0,
     })
-    // No active install either, so no install switch — only MCP's Add button is in play.
+    // The install owning the MCP target must be active for it to nest (api_mcp's own contract).
     vi.mocked(api.installs).mockResolvedValueOnce({
       installs: [
         {
@@ -167,13 +183,60 @@ describe('Harnesses', () => {
           host: 'opencode',
           scope: 'global',
           path: 'C:/cfg',
-          state: 'absent',
+          state: 'active',
+          theme: 'neutral',
         },
       ],
     })
-    render(<Harnesses onAction={() => {}} />)
+    render(<Harnesses onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    // Absent preset → Add button; absent non-preset → nothing. One Add in total.
     await waitFor(() => expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy())
     expect(screen.getAllByRole('button', { name: 'Add' }).length).toBe(1)
-    expect(screen.queryAllByRole('switch').length).toBe(0)
+  })
+
+  it('nests MCP under an active CLAUDE install, joined by (host, root) not dirname', async () => {
+    // A Claude global install: its config (~/.claude.json) sits OUTSIDE its root
+    // (~/.claude), so the row only finds its servers via the (host, root) join.
+    vi.mocked(api.installs).mockResolvedValueOnce({
+      installs: [
+        {
+          id: 'claude:global',
+          host: 'claude',
+          scope: 'global',
+          path: '/home/u/.claude',
+          state: 'active',
+          theme: 'neutral',
+        },
+      ],
+    })
+    vi.mocked(api.mcp).mockResolvedValueOnce({
+      targets: [
+        {
+          label: 'global config',
+          path: '/home/u/.claude.json', // dirname is /home/u — NOT the install root
+          host: 'claude',
+          root: '/home/u/.claude',
+          exists: true,
+          commented: false,
+          servers: [
+            // Claude is two-state: present = enabled, no 'disabled'.
+            {
+              name: 'markitdown',
+              label: 'MarkItDown',
+              desc: 'docs',
+              preset: true,
+              state: 'enabled',
+            },
+            { name: 'gitlab', label: 'GitLab', desc: 'mr', preset: true, state: 'absent' },
+          ],
+        },
+      ],
+      default: 0,
+    })
+    render(<Harnesses onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    // The enabled Claude server shows nested; the absent preset offers Add.
+    await waitFor(() => expect(screen.getByText('MarkItDown')).toBeTruthy())
+    expect(screen.getByText('GitLab')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy()
   })
 })

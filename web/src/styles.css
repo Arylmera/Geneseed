@@ -4,7 +4,7 @@
    Accent is theme-driven (set --accent / --accent-2 on .app at runtime).
    ============================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=IBM+Plex+Serif:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Audiowide&family=Geist+Mono:wght@400;500;600&display=swap');
 
 :root {
   /* base ink palette — cool neutral graphite (Reactor colorway) */
@@ -64,7 +64,10 @@ body {
 
 a { color: var(--accent); text-decoration: none; }
 button { font-family: inherit; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+/* The focus ring follows each theme's corner radius (var(--r-xs)) so a square
+   theme gets a square ring, not a templated rounded one. The 3 reference themes
+   resolve --r-xs to the :root 4px, so their ring is unchanged. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-xs); }
 
 /* atmosphere: faint contour glow + grain, set on the app root */
 .atmos {
@@ -272,6 +275,29 @@ svg.glyph { width: 16px; height: 16px; flex: none; }
 .btn.sm { padding: 5px 10px; font-size: 12px; }
 .btn .glyph { width: 15px; height: 15px; }
 
+/* Disabled primary buttons must read as inert, not lit/pressable. The glint
+   themes layer an accent glow on the primary button — clear it (and the highlight
+   overlay) when disabled. Selectors match each glint's specificity so the reset
+   wins; Matrix .btn-grid self-handles its disabled state. */
+.fl-heirloom .btn:not(.ghost):not(.soft):disabled,
+.fl-perspective .btn:not(.ghost):not(.soft):disabled,
+.fl-matrix .btn:not(.ghost):not(.soft):not(.btn-grid):disabled {
+  box-shadow: none;
+  background-image: none;
+}
+/* On the frosted themes a 0.45-opacity button over translucent glass can vanish;
+   give disabled an opaque, clearly-dead floor instead (Cosmic needs the higher
+   specificity to beat its own button glint). */
+.fl-aurora .btn:disabled,
+.fl-neon .btn:disabled,
+.fl-cosmic .btn:not(.ghost):not(.soft):disabled {
+  opacity: 1;
+  background: var(--surface-3);
+  color: var(--text-3);
+  box-shadow: none;
+  background-image: none;
+}
+
 /* segmented control */
 .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface);
   border: 1px solid var(--line); border-radius: var(--r-sm); }
@@ -381,6 +407,11 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .gcell .gdesc { font-size: 12.5px; color: var(--text-2); }
 .gcell .gicon { width: 20px; height: 20px; color: var(--text-3); }
 .gcell:hover .gicon { color: var(--accent); }
+/* Aurora's genome wells must use its frosted card surface, not the opaque base
+   var(--bg-2) which punches a solid block through the glass. (Cosmic/Neon already
+   get this from their own .fl-*.card background; in light mode .app.light .card
+   wins for all three; flat themes keep the opaque default.) */
+.fl-aurora .gcell { background: var(--surface); }
 
 /* activity feed */
 .feed { display: flex; flex-direction: column; }
@@ -407,6 +438,32 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .tbl .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
 .tbl .name { font-weight: 600; }
 .tbl .clickable { cursor: pointer; }
+
+/* harness table: install rows that expand to their MCP wiring */
+.tbl-scroll { overflow-x: auto; }
+.harness-tbl td { white-space: nowrap; }
+.harness-tbl th.th-acts { width: 1%; }
+.harness-tbl .h-exp-cell { width: 1%; padding-right: 0; }
+.harness-tbl .h-path { display: block; margin-top: 3px; max-width: 280px; overflow: hidden;
+  text-overflow: ellipsis; color: var(--text-3); font-family: var(--font-mono); font-size: 11.5px; }
+.harness-tbl .h-acts { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+/* Pin each action slot to a fixed width so the dropdown, the Install/Re-theme button, and
+   the toggle line up across every row regardless of which controls a row shows. */
+.harness-tbl .h-acts .sel { width: 180px; min-width: 0; }
+.harness-tbl .h-acts .btn { min-width: 88px; justify-content: center; }
+.harness-tbl .h-sw-spacer { width: 38px; flex: none; } /* holds the toggle's place on absent rows */
+.harness-tbl .h-exp { display: inline-flex; padding: 4px; background: none; border: 0; cursor: pointer;
+  color: var(--text-3); }
+.harness-tbl .h-exp:hover { color: var(--text); }
+.harness-tbl .h-exp .glyph { transition: transform .15s; }
+.harness-tbl .h-exp .glyph.open { transform: rotate(90deg); }
+.harness-tbl tbody tr.h-detail-row:hover { background: none; }
+.harness-tbl .h-detail { white-space: normal; padding-top: 4px; padding-bottom: 16px; }
+.harness-tbl .h-detail .mcp-target { margin-bottom: 0; }
+/* The detail panel must wrap — a long config path or server blurb mustn't widen the
+   whole table and push the row's own controls (switch, re-theme) off-screen. */
+.harness-tbl .h-detail .mt-head,
+.harness-tbl .h-detail .mcp-info p { white-space: normal; overflow-wrap: anywhere; }
 
 /* health bar inline */
 .hbar { width: 100%; height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; min-width: 80px; }
@@ -1027,22 +1084,22 @@ a.rail-item.active { color: var(--text); }
 }
 
 /* ============================================================================
-   FLAVOURS — three console directions: Cultivar (a), Greenhouse (b),
-   Operator HUD (c). The default tokens at :root are Cultivar — fl-a stays a
-   no-op so it loads with no class flicker on first paint. fl-b and fl-c
-   override the palette, radius, and where it matters the display font.
-   The component layouts stay the same across flavours; only the visual
-   personality swaps.
+   FLAVOURS — console directions applied as `fl-<slug>` on .app. The default
+   tokens at :root ARE Cultivar, so there is no .fl-cultivar block — it loads with
+   no class flicker on first paint. Every other slug (.fl-greenhouse, .fl-matrix,
+   …) overrides the palette, radius, and where it matters the display font. The
+   component layouts stay the same across flavours; only the visual personality
+   swaps. Slugs are defined in hooks/useFlavour.js.
    ============================================================================ */
 
-/* ---- Flavour A · Cultivar Evolved (default) ---- */
+/* ---- Flavour · Cultivar Evolved (default) ---- */
 /* Tokens already declared at :root — kept as a placeholder hook so future
    per-flavour tweaks can attach here without restructuring. */
 
-/* ---- Flavour B · Greenhouse ---- */
+/* ---- Flavour · Greenhouse ---- */
 /* Warm, organic, generous radius, soft cards. Same accent system, different
    ink. Dark by default; light mode is cream paper. */
-.fl-b {
+.fl-greenhouse {
   --bg:        #11160F;
   --bg-2:      #0D120C;
   --surface:   #171E14;
@@ -1062,7 +1119,7 @@ a.rail-item.active { color: var(--text); }
   --r-lg: 20px;
   --shadow-card: 0 1px 0 rgba(255,255,255,.03) inset, 0 22px 50px -30px rgba(0,0,0,.85);
 }
-.fl-b.light {
+.fl-greenhouse.light {
   --bg:        #F4F1E8;
   --bg-2:      #EDE9DC;
   --surface:   #FFFFFF;
@@ -1079,12 +1136,12 @@ a.rail-item.active { color: var(--text); }
   --bad:       #D2504B;
   --shadow-card: 0 1px 2px rgba(60,50,30,.05), 0 18px 44px -28px rgba(60,50,30,.45);
 }
-.fl-b h1.h { font-size: 31px; letter-spacing: -.025em; }
+.fl-greenhouse h1.h { font-size: 31px; letter-spacing: -.025em; }
 
-/* ---- Flavour C · Operator HUD ---- */
+/* ---- Flavour · Operator HUD ---- */
 /* Dense terminal readout: near-black, sharp panels, all-mono. Radius tokens
    collapse to 0 so the cards read as flat instrument panels. */
-.fl-c {
+.fl-operator {
   --bg:        #06080B;
   --bg-2:      #080A0E;
   --surface:   #0E1217;
@@ -1107,7 +1164,7 @@ a.rail-item.active { color: var(--text); }
   --font-ui: 'JetBrains Mono', ui-monospace, monospace;
   --shadow-card: none;
 }
-.fl-c.light {
+.fl-operator.light {
   --bg:        #E9ECEF;
   --bg-2:      #E1E5E9;
   --surface:   #FFFFFF;
@@ -1124,16 +1181,618 @@ a.rail-item.active { color: var(--text); }
   --bad:       #D23A37;
 }
 /* In Operator HUD, headings and buttons read tighter and all-mono. */
-.fl-c h1.h, .fl-c h2, .fl-c h3 { letter-spacing: .02em; }
-.fl-c .btn { border-radius: 0; font-family: var(--font-mono); letter-spacing: .04em; }
-.fl-c .badge { border-radius: 2px; }
+.fl-operator h1.h, .fl-operator h2, .fl-operator h3 { letter-spacing: .02em; }
+.fl-operator .btn { border-radius: 0; font-family: var(--font-mono); letter-spacing: .04em; }
+.fl-operator .badge { border-radius: 2px; }
+
+/* ---- Flavour · Sequencer ---- */
+/* Bright clinical dashboard: clean white/slate cards, structured grid, Inter
+   throughout, subtle shadow-xs, 8px radius. The accent follows the selected
+   voice (App.jsx writes --accent inline); Inter + flat slate cards carry the
+   identity, not a fixed hue. Light & dark both ship. */
+.fl-sequencer {
+  --bg:        #030712;   /* neutral-primary — deepest page */
+  --bg-2:      #0A0F1A;   /* rail / recessed wells */
+  --surface:   #101828;   /* neutral-primary-soft — the card */
+  --surface-2: #1E2939;   /* neutral-primary-medium — row hover / inset */
+  --surface-3: #333E4F;   /* neutral-primary-strong — bar tracks */
+  --line:      #1F2937;   /* border-default */
+  --line-2:    #374151;   /* border-default-medium */
+  --line-3:    #4B5563;   /* border-default-strong */
+  --text:      #FFFFFF;   /* heading */
+  --text-2:    #9CA3AF;   /* body */
+  --text-3:    #6B7280;   /* body-subtle */
+  --good:      #009966;   /* success */
+  --warn:      #F97316;   /* warning */
+  --bad:       #F43F5E;   /* fg-danger — bright on dark */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 12px;
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-ui: 'Inter', system-ui, sans-serif;
+  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.5);   /* shadow-xs */
+}
+.fl-sequencer.light {
+  --bg:        #F9FAFB;   /* neutral-secondary-soft — page */
+  --bg-2:      #F3F4F6;   /* neutral-tertiary — wells */
+  --surface:   #FFFFFF;   /* neutral-primary-soft — card */
+  --surface-2: #F9FAFB;   /* row hover */
+  --surface-3: #F3F4F6;   /* bar tracks */
+  --line:      #E5E7EB;   /* border-default */
+  --line-2:    #D1D5DC;   /* gray */
+  --line-3:    #9CA3AF;
+  --text:      #111827;   /* heading */
+  --text-2:    #4B5563;   /* body */
+  --text-3:    #6B7280;   /* body-subtle */
+  --good:      #007A55;
+  --warn:      #C2410C;   /* warning-strong — readable on light */
+  --bad:       #C70036;   /* danger */
+  --shadow-card: 0 1px 2px 0 rgba(16, 24, 40, 0.06);
+}
+/* Flat by intent — cards drop Cultivar's gradient onto one solid surface,
+   keeping only the subtle shadow-xs (the design system bans gradient fills). */
+.fl-sequencer .card { background: var(--surface); }
+
+/* ---- Flavour · Heirloom ---- */
+/* Premium editorial: deep plum surface (#13111C), elevated plum-ink cards with a
+   barely-visible vertical gradient, a muted-plum brand, IBM Plex Serif display
+   headings over Inter body, generous 16px radius. Calm and expensive, dark-first;
+   light mode is a pale plum paper. */
+.fl-heirloom {
+  --bg:        #13111C;   /* section surface — one tone, no alternation */
+  --bg-2:      #13111C;
+  --surface:   #181621;   /* neutral-primary-soft — card base */
+  --surface-2: #26222F;   /* neutral-secondary-medium — row hover / input fill */
+  --surface-3: #2D2A38;   /* neutral-tertiary-soft — bar tracks, recessed slots */
+  --line:      #33313B;   /* border-default */
+  --line-2:    #3A3744;   /* border-default-medium */
+  --line-3:    #45414F;   /* border-default-strong */
+  --text:      #FFFFFF;   /* heading */
+  --text-2:    #D4D0DC;   /* body */
+  --text-3:    #A8A3B0;   /* body-subtle */
+  --good:      #8AB89A;   /* fg-success-strong */
+  --warn:      #D49A5A;   /* warning */
+  --bad:       #C9596A;   /* danger */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 16px;
+  --r-xl: 16px;
+  --font-display: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Inter', system-ui, sans-serif;
+  --shadow-card: 0 1px 0 rgba(255,255,255,.02) inset, 0 18px 44px -30px rgba(0,0,0,.85);
+  /* Accent follows the selected voice (App.jsx writes --accent inline on .app).
+     Heirloom's identity is its plum-tinted surfaces + serif display, not a hue. */
+}
+.fl-heirloom.light {
+  --bg:        #F4F1F7;
+  --bg-2:      #ECE8F1;
+  --surface:   #FFFFFF;
+  --surface-2: #F7F4FA;
+  --surface-3: #EFEAF4;
+  --line:      #E2DCEC;
+  --line-2:    #CFC6DC;
+  --line-3:    #A99EBC;
+  --text:      #1E1826;
+  --text-2:    #574E63;
+  --text-3:    #837A90;
+  --good:      #3C8B5E;
+  --warn:      #B07914;
+  --bad:       #C24452;
+}
+/* Editorial headings: serif display with calm tracking; card titles go serif too. */
+.fl-heirloom h1.h, .fl-heirloom h2, .fl-heirloom h3 { font-family: var(--font-display); letter-spacing: -.01em; }
+.fl-heirloom .card-head h3 { font-family: var(--font-display); font-weight: 600; }
+/* Signature card: a barely-visible top→bottom plum gradient over the flat base,
+   so cards read with quiet depth instead of a hard fill (design-system spec). */
+.fl-heirloom .card {
+  background: linear-gradient(
+    180deg,
+    #181621 0%,
+    #181621 55%,
+    color-mix(in srgb, #26222F 14%, #181621) 82%,
+    color-mix(in srgb, #3A3744 22%, #181621) 100%
+  );
+}
+/* Primary button keeps the design-system "glint" — a hairline drop, an inset
+   top-edge highlight, and a faint outer glow — so it reads lit-from-within. The
+   fill is the voice accent (base .btn); the glow tracks it. Ghost/soft excluded. */
+.fl-heirloom .btn:not(.ghost):not(.soft) {
+  background-image: linear-gradient(rgba(255,255,255,.12), transparent);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,.25),
+    inset 0 6px 0 -5px rgba(255,255,255,.12),
+    0 4px 12px -5px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* Settings picker thumbnail for the Heirloom direction. */
+.dir-heirloom .dir-thumb { background: linear-gradient(160deg, #181621, #13111C); border-radius: 12px; }
+.dir-heirloom .dir-thumb-rail { background: #181621; border-right: 1px solid #33313B; }
+.dir-heirloom .dir-thumb-bar { background: #B9A6C6; }
+.dir-heirloom .dir-thumb-bar:nth-child(2) { background: #33313B; }
+.dir-heirloom .dir-thumb-bar:nth-child(3) { background: #33313B; }
+.dir-heirloom .dir-thumb-dot { background: #B9A6C6; box-shadow: 0 0 9px #8E7A9B; }
+
+/* ---- Flavour · Matrix ---- */
+/* A separate "cyber-slick" order-book direction: one flat #0A0D14 surface, a
+   single pinned brand-green accent, Space Mono, hairline borders, near-square
+   2px corners. Reuses the dense Operator-HUD dashboard layout, re-skinned green.
+   Green is fixed by definition (pinned !important); light & dark both ship. */
+.fl-matrix {
+  --bg:        #0A0D14;   /* neutral-primary-soft — single page surface */
+  --bg-2:      #0A0D14;   /* no alternating tone — rail/wells share the surface */
+  --surface:   #11141D;   /* neutral-primary-medium — the one card elevation */
+  --surface-2: #181C28;   /* neutral-tertiary — row hover / inset lift */
+  --surface-3: #1F2433;   /* bar tracks, recessed slots */
+  --line:      #1F2433;   /* border-default */
+  --line-2:    #2A2F3D;   /* border-default-medium */
+  --line-3:    #383D4D;   /* border-default-strong */
+  --text:      #E6E9EF;   /* heading */
+  --text-2:    #A0A8B5;   /* body */
+  --text-3:    #6E7786;   /* body-subtle */
+  --good:      #2DC093;   /* fg-success-strong */
+  --warn:      #D4A024;   /* warning */
+  --bad:       #E03050;   /* danger */
+  --r-xs: 2px;
+  --r-sm: 2px;
+  --r-md: 2px;
+  --r-lg: 2px;
+  --r-xl: 2px;
+  --font-display: 'Space Mono', ui-monospace, monospace;
+  --font-ui: 'Space Mono', ui-monospace, monospace;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+  --shadow-card: none;
+  /* Accent comes from the live mode (App.jsx writes it inline): the deployed
+     voice in Auto, or Matrix's curated green (CURATED_ACCENT, accents.js) in
+     Curated. No pin here, so Auto can re-tint the whole skin. */
+}
+/* Light mode — a pale green-tinted paper. Accent comes from the live mode
+   (curated green deepens for light via CURATED_ACCENT). */
+.fl-matrix.light {
+  --bg:        #EBEFEC;
+  --bg-2:      #EBEFEC;
+  --surface:   #FFFFFF;
+  --surface-2: #EAF1ED;
+  --surface-3: #DFE9E3;
+  --line:      #D4E0D9;
+  --line-2:    #BBCCC3;
+  --line-3:    #8FA89C;
+  --text:      #0C1512;
+  --text-2:    #44574F;
+  --text-3:    #6B7E76;
+  --good:      #1F8A5B;
+  --warn:      #B07914;
+  --bad:       #C2403F;
+}
+/* Flat by intent — cards drop the gradient + shadow onto the single surface. */
+.fl-matrix .card { background: var(--surface); box-shadow: none; }
+.fl-matrix h1.h, .fl-matrix h2, .fl-matrix h3 { letter-spacing: .02em; }
+/* Button glint — base hairline shadow + inset green top-edge highlight + faint
+   green outer halo, so the primary action reads "lit from within" on the dark
+   surface. Ghost/soft/gridline buttons are excluded. */
+.fl-matrix .btn:not(.ghost):not(.soft):not(.btn-grid) {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(38, 161, 123, 0.18),
+    0 2px 9px -3px rgba(38, 161, 123, 0.3);
+}
+
+/* Brand "gridline" button — the design system's signature hero CTA. A flat
+   surface lit by a centred radial halo, threaded with a faint scan-line grid,
+   and edged top + bottom by a hairline that fades to nothing at the corners.
+   Reserved for ONE primary action per screen (the onboarding deploy CTA).
+   Accent-driven, so it tracks the Matrix accent rather than a hardcoded green. */
+.fl-matrix .btn.btn-grid {
+  position: relative;
+  width: 100%;
+  justify-content: center;
+  padding: 16px 48px;
+  border: 0;
+  border-block: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, var(--accent) 50%, transparent) 1;
+  border-radius: 0;
+  background-color: transparent;
+  /* layered top→bottom: radial halo · horizontal scan-lines · vertical scan-lines */
+  background-image:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 36%, transparent), transparent 95%),
+    linear-gradient(0deg, color-mix(in srgb, var(--accent) 7%, transparent) 0 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent) 0 1px, transparent 1px);
+  background-repeat: no-repeat, repeat, repeat;
+  background-size: 100% 100%, 100% 15px, 15px 100%;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  box-shadow: none;
+  transition: background-size 200ms ease, filter 150ms ease;
+}
+/* Hover — the scan-line grid tightens 15px → 10px, pulling toward the surface. */
+.fl-matrix .btn.btn-grid:hover {
+  filter: none;
+  background-size: 100% 100%, 100% 10px, 10px 100%;
+}
+/* Active — the whole grid hue-rotates toward violet for the press, then snaps back. */
+.fl-matrix .btn.btn-grid:active { transform: none; filter: hue-rotate(250deg); }
+.fl-matrix .btn.btn-grid:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+/* Disabled — halo, grid, and edges desaturate to grey; no press shift. */
+.fl-matrix .btn.btn-grid:disabled {
+  cursor: not-allowed;
+  color: var(--text-3);
+  filter: none;
+  background-image:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--line-3) 22%, transparent), transparent 95%),
+    linear-gradient(0deg, color-mix(in srgb, var(--line) 70%, transparent) 0 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 70%, transparent) 0 1px, transparent 1px);
+  border-image: linear-gradient(90deg, transparent, var(--line-2) 50%, transparent) 1;
+}
+/* Flat atmosphere — no radial accent-glow (gradients are banned on layout
+   surfaces); only a faint instrument dot-grid remains. */
+.fl-matrix .atmos { background: none; }
+.fl-matrix .atmos::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  /* ink-relative so the dot-grid survives light mode (a fixed dark RGBA vanishes
+     on the pale-green paper); keeps the theme's own green-white ink. */
+  background-image: radial-gradient(color-mix(in srgb, var(--text) 7%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+/* Settings picker thumbnail for the Matrix direction. */
+.dir-matrix .dir-thumb { background: #0A0D14; border-radius: 2px; }
+.dir-matrix .dir-thumb-rail { background: #11141D; border-right: 1px solid #1F2433; }
+.dir-matrix .dir-thumb-bar { background: #26A17B; border-radius: 2px; }
+.dir-matrix .dir-thumb-bar:nth-child(2) { background: #1F2433; }
+.dir-matrix .dir-thumb-bar:nth-child(3) { background: #1F2433; }
+.dir-matrix .dir-thumb-dot { background: #26A17B; box-shadow: 0 0 8px #26A17B; }
+
+/* ---- Flavour · Aurora Glass ---- */
+/* Glassmorphism: frosted, translucent surfaces floating over a deep navy
+   atmosphere lit by soft aurora colour. Surfaces are translucent white here;
+   the backdrop blur that turns them into glass can't live on a custom property,
+   so it's applied to the surface elements below. The accent follows the selected
+   voice (App.jsx writes --accent inline); the aurora's sky-blue and violet
+   companions stay fixed so the backdrop keeps its glow. Light & dark both ship. */
+.fl-aurora {
+  --bg:        #060A12;   /* deep navy-black — glass floats above it */
+  --bg-2:      #0B0F19;
+  --surface:   rgba(255, 255, 255, 0.07);   /* glass-bg — frosted white */
+  --surface-2: rgba(255, 255, 255, 0.04);   /* card-gradient tail */
+  --surface-3: rgba(255, 255, 255, 0.12);   /* hover / raised */
+  --line:      rgba(255, 255, 255, 0.12);   /* glass-border */
+  --line-2:    rgba(255, 255, 255, 0.20);
+  --line-3:    rgba(255, 255, 255, 0.30);
+  --text:      #F0F6FC;   /* heading */
+  --text-2:    #94A3B8;   /* body */
+  --text-3:    #64748B;   /* body-subtle */
+  --good:      #10B981;
+  --warn:      #FBBF24;
+  --bad:       #F43F5E;
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 20px;
+  --r-xl: 24px;
+  /* glass-shadow — soft drop + inset top/bottom refraction highlights */
+  --shadow-card:
+    0 8px 32px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+.fl-aurora.light {
+  --bg:        #E7F0EB;
+  --bg-2:      #DBEAE2;
+  --surface:   rgba(255, 255, 255, 0.55);
+  --surface-2: rgba(255, 255, 255, 0.40);
+  --surface-3: rgba(255, 255, 255, 0.72);
+  --line:      rgba(15, 23, 42, 0.10);
+  --line-2:    rgba(15, 23, 42, 0.16);
+  --line-3:    rgba(15, 23, 42, 0.28);
+  --text:      #0F172A;
+  --text-2:    #475569;
+  --text-3:    #64748B;
+  --good:      #007A55;
+  --warn:      #C2410C;
+  --bad:       #BE123C;
+  --shadow-card:
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.70),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.25);
+}
+/* The frost: blur whatever sits behind each glass surface. -webkit- pairs it
+   for Safari; !important keeps a stray reset from dropping the blur. */
+.fl-aurora .card,
+.fl-aurora .seg,
+.fl-aurora .spotlight,
+.fl-aurora .rail {
+  backdrop-filter: blur(20px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+}
+.fl-aurora .rail {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+/* Layered aurora backdrop — coloured light for the glass to refract. */
+.fl-aurora .atmos {
+  opacity: 1;
+  background:
+    radial-gradient(720px 480px at 12% -6%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 60%),
+    radial-gradient(680px 520px at 90% 6%, color-mix(in srgb, #38BDF8 20%, transparent), transparent 62%),
+    radial-gradient(820px 660px at 50% 112%, color-mix(in srgb, #A78BFA 18%, transparent), transparent 60%);
+}
+.fl-aurora.light .atmos {
+  background:
+    radial-gradient(720px 480px at 12% -6%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 62%),
+    radial-gradient(680px 520px at 90% 6%, color-mix(in srgb, #38BDF8 13%, transparent), transparent 64%),
+    radial-gradient(820px 660px at 50% 112%, color-mix(in srgb, #A78BFA 11%, transparent), transparent 62%);
+}
+/* Settings picker thumbnail for the Aurora Glass direction. */
+.dir-aurora .dir-thumb {
+  background:
+    radial-gradient(130% 130% at 0% 0%, rgba(138, 255, 196, 0.24), transparent 55%),
+    linear-gradient(160deg, #0B0F19, #060A12);
+  border-radius: 16px;
+}
+.dir-aurora .dir-thumb-rail { background: rgba(255, 255, 255, 0.06); border-right: 1px solid rgba(255, 255, 255, 0.12); }
+.dir-aurora .dir-thumb-bar { background: #8AFFC4; }
+.dir-aurora .dir-thumb-bar:nth-child(2) { background: rgba(255, 255, 255, 0.16); }
+.dir-aurora .dir-thumb-bar:nth-child(3) { background: rgba(255, 255, 255, 0.16); }
+.dir-aurora .dir-thumb-dot { background: #8AFFC4; box-shadow: 0 0 12px #8AFFC4; }
+
+/* ---- Flavour · Perspective ---- */
+/* Depth-driven: solid layered surfaces and real cast shadows do the work — cards
+   physically lift off a recessed base, and the eye reads elevation as hierarchy.
+   The accent follows the selected voice (App.jsx writes --accent inline); depth —
+   layered surfaces and cast shadows — is the identity here, not a hue. Oswald
+   punches the headings forward; Poppins carries the body. Dark by default; light
+   mode is the canonical white-surface Perspective. */
+.fl-perspective {
+  --bg:        #0A0D11;   /* recessed base plane — everything else sits above it */
+  --bg-2:      #0E1217;
+  --surface:   #161B22;   /* card plane */
+  --surface-2: #1D232C;   /* gradient tail / raised */
+  --surface-3: #262E39;   /* inputs, hover, top plane */
+  --line:      #2A323D;
+  --line-2:    #39434F;
+  --line-3:    #4D5867;
+  --text:      #F2F6FA;   /* high contrast — near-white ink on dark surfaces */
+  --text-2:    #A6B2BF;
+  --text-3:    #6E7A88;
+  --good:      #22C55E;   /* success — grass green, distinct from the teal accent */
+  --warn:      #F59E0B;
+  --bad:       #F0524B;
+  --r-xs: 5px;
+  --r-sm: 9px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 26px;
+  --font-display: 'Oswald', system-ui, sans-serif;
+  --font-ui: 'Poppins', system-ui, sans-serif;
+  /* Layered elevation — the signature. A crisp near shadow plus a deep soft cast,
+     so each card reads as a plane floating above the recessed base. */
+  --shadow-card:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 2px 5px rgba(0, 0, 0, 0.40),
+    0 26px 52px -26px rgba(0, 0, 0, 0.90);
+  --shadow-pop:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 8px 18px rgba(0, 0, 0, 0.45),
+    0 44px 80px -28px rgba(0, 0, 0, 0.92);
+}
+.fl-perspective.light {
+  --bg:        #ECEFF3;   /* light field — recedes behind the white cards */
+  --bg-2:      #E2E7ED;
+  --surface:   #FFFFFF;   /* cards lift white off the grey field */
+  --surface-2: #F7F9FB;
+  --surface-3: #EEF2F6;
+  --line:      #E1E7EE;
+  --line-2:    #CBD4DD;
+  --line-3:    #9EAAB6;
+  --text:      #111827;   /* canonical Perspective ink */
+  --text-2:    #4B5563;
+  --text-3:    #6B7280;
+  --good:      #16A34A;
+  --warn:      #D97706;
+  --bad:       #DC2626;
+  /* Soft, realistic elevation — white cards float a few millimetres off the page. */
+  --shadow-card:
+    0 1px 2px rgba(16, 24, 40, 0.05),
+    0 14px 30px -18px rgba(16, 24, 40, 0.22);
+  --shadow-pop:
+    0 4px 10px rgba(16, 24, 40, 0.08),
+    0 30px 60px -24px rgba(16, 24, 40, 0.30);
+}
+/* Elevation as interaction — interactive tiles rise toward the cursor. */
+.fl-perspective .gcell { transition: transform .14s ease, box-shadow .14s ease; }
+.fl-perspective .gcell:hover { transform: translateY(-3px); box-shadow: var(--shadow-pop); }
+/* Oswald display — condensed and advancing; a hair of tracking lets it breathe. */
+.fl-perspective h1.h, .fl-perspective h2.h, .fl-perspective .card-head h3 { letter-spacing: .006em; }
+.fl-perspective h1.h { font-size: 30px; }
+/* Primary action — a raised, green-lit slab; ghost/soft buttons stay flat. */
+.fl-perspective .btn:not(.ghost):not(.soft) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 5px rgba(0, 0, 0, 0.30),
+    0 8px 18px -7px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.fl-perspective .btn:not(.ghost):not(.soft):hover { transform: translateY(-1px); }
+/* Settings picker thumbnail for the Perspective direction. */
+.dir-perspective .dir-thumb { background: linear-gradient(160deg, #1D232C, #0E1217); border-radius: 14px; }
+.dir-perspective .dir-thumb-rail { background: #161B22; border-right: 1px solid #2A323D; }
+.dir-perspective .dir-thumb-bar { background: #00BD7D; border-radius: 4px; }
+.dir-perspective .dir-thumb-bar:nth-child(2) { background: #2A323D; }
+.dir-perspective .dir-thumb-bar:nth-child(3) { background: #2A323D; }
+.dir-perspective .dir-thumb-dot { background: #00BD7D; box-shadow: 0 0 9px #00BD7D; }
+
+/* ---- Flavour · Cosmic ---- */
+/* A deep-space sci-fi direction from the cosmic design brief: a navy void
+   (#040B17) under a pinned luminous blue accent, Audiowide on the display
+   surfaces, gradient-glow uppercase headings, frosted-glass cards, cut-corner
+   (chamfer) buttons, and a glow-orb + grid atmosphere. Audiowide is display-only
+   — dense UI/table text keeps the readable base faces, since a console isn't a
+   landing page (the brief's literal "Audiowide throughout" would wreck legibility
+   at 12px). The accent follows the selected voice (App.jsx writes --accent inline);
+   Audiowide display + cut-corner chamfer + the glow-orb/grid atmosphere carry the
+   sci-fi identity, and every glow tracks the voice accent. Light & dark both ship. */
+.fl-cosmic {
+  --bg:        #040B17;   /* neutral-primary-soft — the single page void */
+  --bg-2:      #040B17;   /* no alternating tone */
+  --surface:   #071420;   /* neutral-primary-medium — card elevation */
+  --surface-2: #0C2236;   /* neutral-tertiary-medium — row hover / inset */
+  --surface-3: #0F2A42;   /* neutral-quaternary — bar tracks, wells */
+  --line:      #0A1C2E;   /* border-default */
+  --line-2:    #0D2740;   /* border-default-medium */
+  --line-3:    #123650;   /* border-default-strong */
+  --text:      #E2E8F0;   /* heading */
+  --text-2:    #7A8BA0;   /* body */
+  --text-3:    #5A6B80;   /* body-subtle */
+  --good:      #10B981;   /* fg-success-strong */
+  --warn:      #FBBF24;   /* fg-warning */
+  --bad:       #F43F5E;   /* fg-danger */
+  --r-xs: 4px; --r-sm: 4px; --r-md: 4px; --r-lg: 4px; --r-xl: 4px;
+  --font-display: 'Audiowide', system-ui, sans-serif;
+  --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 0 24px -10px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* Light mode — a pale sky paper keeps the void's blue cast without the dark; the
+   gradient-glow headings and grid atmosphere read the voice accent below. */
+.fl-cosmic.light {
+  --bg:        #EAF0F7;
+  --bg-2:      #EAF0F7;
+  --surface:   #FFFFFF;
+  --surface-2: #E6EEF6;
+  --surface-3: #DBE6F1;
+  --line:      #CCDAE8;
+  --line-2:    #B4C7DA;
+  --line-3:    #8AA3BC;
+  --text:      #0B1B2B;
+  --text-2:    #44586C;
+  --text-3:    #6B7E92;
+  --good:      #007A55;
+  --warn:      #C2410C;
+  --bad:       #C70036;
+  --shadow-card: 0 1px 2px rgba(20,40,70,.06), 0 0 24px -12px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+/* Gradient-glow headings — the cosmic signature. background-clip:text shows the
+   blue gradient through the glyphs; drop-shadow glows them (no DOM wrapper). */
+.fl-cosmic h1.h {
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 50%, transparent));
+}
+.fl-cosmic h1.h, .fl-cosmic h2.h { text-transform: uppercase; letter-spacing: .07em; }
+/* Frosted-glass cards with a faint blue glow edge (--shadow-card above). */
+.fl-cosmic .card {
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border-color: var(--line-2);
+}
+/* Cut-corner buttons — the headline trait. Pure clip-path chamfer; the inset
+   glint reads "lit from within". The brief's wrapper-border halo is omitted (it
+   needs a DOM wrapper around every button); clip-path also eats the focus
+   outline, so :focus-visible gets an inset ring that survives the clip. */
+.fl-cosmic .btn:not(.ghost):not(.soft) {
+  clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px), calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), inset 0 0 12px -4px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* The chamfer clips a plain inset ring at the corners; keep the glint and stack a
+   2px ring + 4px halo so it stays continuous along the straight edges. */
+.fl-cosmic .btn:not(.ghost):not(.soft):focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.10),
+    inset 0 0 12px -4px color-mix(in srgb, var(--accent) 55%, transparent),
+    inset 0 0 0 2px var(--accent),
+    inset 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.fl-cosmic .badge { border-radius: 2px; }
+/* Cosmic depth: the base .atmos radial orbs glow from the voice accent; overlay
+   the brief's 64px geometric grid, tinted by the accent, for the sci-fi texture. */
+.fl-cosmic .atmos::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px);
+  background-size: 64px 64px; opacity: .6;
+}
+/* Settings picker thumbnail for the Cosmic direction. */
+.dir-cosmic .dir-thumb { background: linear-gradient(160deg, #040B17, #071420); border-radius: 4px; }
+.dir-cosmic .dir-thumb-rail { background: #071420; border-right: 1px solid #0D2740; }
+.dir-cosmic .dir-thumb-bar { background: #2670AD; }
+.dir-cosmic .dir-thumb-bar:nth-child(2) { background: #0D2740; }
+.dir-cosmic .dir-thumb-bar:nth-child(3) { background: #0D2740; }
+.dir-cosmic .dir-thumb-dot { background: #2670AD; box-shadow: 0 0 10px #2670AD; }
+
+/* ---- Flavour · #F44174 on near-black ---- */
+/* The "neon" design system: mono/matrix dark — layered near-black surfaces, a
+   hot-pink #F44174 brand, Geist Mono throughout, rounded 12px corners, and
+   frosted-glass cards. The pink atmosphere glow comes free: the base .atmos
+   reads --accent, pinned here; the grain overlay (base .atmos::after) is kept.
+   Pink is fixed by definition (pinned !important); light & dark both ship. */
+.fl-neon {
+  --bg:        #050505;   /* neutral-primary — deepest page void */
+  --bg-2:      #0A0A0A;   /* rail / recessed wells (neutral-primary-soft) */
+  --surface:   #0E0E0E;   /* the card, barely lifted (neutral-tertiary-soft) */
+  --surface-2: #141414;   /* row hover / inset */
+  --surface-3: #1A1A1A;   /* bar tracks, wells (neutral-quaternary) */
+  --line:      #1A1A1A;   /* border-default */
+  --line-2:    #222222;   /* border-default-medium */
+  --line-3:    #333333;   /* border-default-strong */
+  --text:      #EDEDED;   /* heading */
+  --text-2:    #888888;   /* body */
+  --text-3:    #666666;   /* body-subtle */
+  --good:      #00CC88;   /* success */
+  --warn:      #FF8833;   /* warning */
+  --bad:       #FF3355;   /* danger */
+  --r-xs: 4px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+  --font-display: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --font-ui:      'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --font-mono:    'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  /* Accent comes from the live mode (App.jsx writes it inline): the deployed
+     voice in Auto, or Neon's curated hot-pink (CURATED_ACCENT) in Curated. */
+}
+/* Light mode — a near-white paper; the hot-pink deepens so it stays legible as
+   text/links on white, while fills keep white ink. Frosted cards carry over. */
+.fl-neon.light {
+  --bg:        #F5F5F6;
+  --bg-2:      #EFEFF1;
+  --surface:   #FFFFFF;
+  --surface-2: #F4F4F6;
+  --surface-3: #ECECEF;
+  --line:      #E2E2E6;
+  --line-2:    #D2D2D8;
+  --line-3:    #A8A8B0;
+  --text:      #161618;
+  --text-2:    #56565C;
+  --text-3:    #7E7E86;
+  --good:      #00A371;
+  --warn:      #C2410C;
+  --bad:       #D7263D;
+}
+/* Frosted-glass cards — the design's signature panel floating over the glow. */
+.fl-neon .card {
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  /* a whisper of the pinned pink on the edge so the panel reads "neon-lit",
+     not neutral glass like Aurora. */
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--line-2));
+}
+.fl-neon h1.h, .fl-neon h2, .fl-neon h3 { letter-spacing: -.01em; }
+
+/* Settings picker thumbnail for the Neon direction. */
+.dir-neon .dir-thumb { background: #050505; border-radius: 8px; }
+.dir-neon .dir-thumb-rail { background: #0A0A0A; border-right: 1px solid #1A1A1A; }
+.dir-neon .dir-thumb-bar { background: #F44174; }
+.dir-neon .dir-thumb-bar:nth-child(2) { background: #1A1A1A; }
+.dir-neon .dir-thumb-bar:nth-child(3) { background: #1A1A1A; }
+.dir-neon .dir-thumb-dot { background: #F44174; box-shadow: 0 0 8px #F44174; }
 
 /* ============================================================================
    SETTINGS — Console direction picker tiles (one per flavour).
    Mini schematic + name + tagline; the active tile gets an accent ring.
    ============================================================================ */
 .dir-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;
   margin-top: 4px;
 }
 .dir-tile {
@@ -1166,26 +1825,34 @@ a.rail-item.active { color: var(--text); }
 /* Per-direction thumbnail palettes — distilled from each flavour's dark mode.
    Always painted in the direction's own colours, not the active flavour's,
    so the picker reads the same regardless of what's currently selected. */
-.dir-a .dir-thumb { background: linear-gradient(160deg, #101317, #14181D); }
-.dir-a .dir-thumb-rail { background: #14181D; border-right: 1px solid #2C333B; }
-.dir-a .dir-thumb-bar { background: #3AD4C4; }
-.dir-a .dir-thumb-bar:nth-child(2) { background: #2C333B; }
-.dir-a .dir-thumb-bar:nth-child(3) { background: #2C333B; }
-.dir-a .dir-thumb-dot { background: #3AD4C4; box-shadow: 0 0 8px #3AD4C4; }
+.dir-cultivar .dir-thumb { background: linear-gradient(160deg, #101317, #14181D); }
+.dir-cultivar .dir-thumb-rail { background: #14181D; border-right: 1px solid #2C333B; }
+.dir-cultivar .dir-thumb-bar { background: #3AD4C4; }
+.dir-cultivar .dir-thumb-bar:nth-child(2) { background: #2C333B; }
+.dir-cultivar .dir-thumb-bar:nth-child(3) { background: #2C333B; }
+.dir-cultivar .dir-thumb-dot { background: #3AD4C4; box-shadow: 0 0 8px #3AD4C4; }
 
-.dir-b .dir-thumb { background: linear-gradient(160deg, #171E14, #1C2419); border-radius: 14px; }
-.dir-b .dir-thumb-rail { background: #1C2419; border-right: 1px solid #2C3826; }
-.dir-b .dir-thumb-bar { background: #5BD08A; }
-.dir-b .dir-thumb-bar:nth-child(2) { background: #2C3826; }
-.dir-b .dir-thumb-bar:nth-child(3) { background: #2C3826; }
-.dir-b .dir-thumb-dot { background: #5BD08A; box-shadow: 0 0 10px #5BD08A; }
+.dir-greenhouse .dir-thumb { background: linear-gradient(160deg, #171E14, #1C2419); border-radius: 14px; }
+.dir-greenhouse .dir-thumb-rail { background: #1C2419; border-right: 1px solid #2C3826; }
+.dir-greenhouse .dir-thumb-bar { background: #5BD08A; }
+.dir-greenhouse .dir-thumb-bar:nth-child(2) { background: #2C3826; }
+.dir-greenhouse .dir-thumb-bar:nth-child(3) { background: #2C3826; }
+.dir-greenhouse .dir-thumb-dot { background: #5BD08A; box-shadow: 0 0 10px #5BD08A; }
 
-.dir-c .dir-thumb { background: #0E1217; border-radius: 0; }
-.dir-c .dir-thumb-rail { background: #11161C; border-right: 1px solid #1B222B; }
-.dir-c .dir-thumb-bar { background: #3FB68B; border-radius: 0; }
-.dir-c .dir-thumb-bar:nth-child(2) { background: #26303B; }
-.dir-c .dir-thumb-bar:nth-child(3) { background: #26303B; }
-.dir-c .dir-thumb-dot { background: #E8A23B; box-shadow: none; border-radius: 0; }
+.dir-operator .dir-thumb { background: #0E1217; border-radius: 0; }
+.dir-operator .dir-thumb-rail { background: #11161C; border-right: 1px solid #1B222B; }
+.dir-operator .dir-thumb-bar { background: #3FB68B; border-radius: 0; }
+.dir-operator .dir-thumb-bar:nth-child(2) { background: #26303B; }
+.dir-operator .dir-thumb-bar:nth-child(3) { background: #26303B; }
+.dir-operator .dir-thumb-dot { background: #E8A23B; box-shadow: none; border-radius: 0; }
+
+/* Settings picker thumbnail for the Sequencer direction. */
+.dir-sequencer .dir-thumb { background: linear-gradient(160deg, #101828, #030712); border-radius: 8px; }
+.dir-sequencer .dir-thumb-rail { background: #1E2939; border-right: 1px solid #1F2937; }
+.dir-sequencer .dir-thumb-bar { background: #9CA3AF; }
+.dir-sequencer .dir-thumb-bar:nth-child(2) { background: #1F2937; }
+.dir-sequencer .dir-thumb-bar:nth-child(3) { background: #1F2937; }
+.dir-sequencer .dir-thumb-dot { background: #9CA3AF; box-shadow: 0 0 8px rgba(156,163,175,.55); }
 
 .dir-meta { display: flex; flex-direction: column; gap: 4px; }
 .dir-name {
@@ -1197,6 +1864,14 @@ a.rail-item.active { color: var(--text); }
   margin-left: auto;
 }
 .dir-tag { font-size: 12px; color: var(--text-2); line-height: 1.45; }
+
+/* Dashboard-layout picker — a labelled segmented control above the skin grid. */
+.dir-layout {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line);
+}
+.dir-layout .tick { color: var(--text-2); }
+.dir-layout-note { font-size: 12px; }
 
 @media (max-width: 900px) {
   .dir-grid { grid-template-columns: 1fr; }
@@ -1211,26 +1886,26 @@ a.rail-item.active { color: var(--text); }
    ============================================================================ */
 
 /* ---- Greenhouse · b ---- */
-.fl-b .hero { padding: 4px 0; gap: 32px; }
-.fl-b .hero-facts .ttl { font-size: 30px; letter-spacing: -.018em; }
-.fl-b .chip {
+.fl-greenhouse .hero { padding: 4px 0; gap: 32px; }
+.fl-greenhouse .hero-facts .ttl { font-size: 30px; letter-spacing: -.018em; }
+.fl-greenhouse .chip {
   background: var(--surface-3);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 7px 14px;
 }
-.fl-b .chip .ck { color: var(--text-3); }
-.fl-b .chip .cv { color: var(--text); font-weight: 500; }
-.fl-b .kpi {
+.fl-greenhouse .chip .ck { color: var(--text-3); }
+.fl-greenhouse .chip .cv { color: var(--text); font-weight: 500; }
+.fl-greenhouse .kpi {
   border-radius: var(--r-lg);
   background: var(--surface);
   border: 1px solid var(--line);
 }
-.fl-b .kpi .kval { font-size: 42px; letter-spacing: -.02em; }
-.fl-b .gcell { border-radius: var(--r-md); }
-.fl-b .gcell:hover { transform: translateY(-3px); }
-.fl-b .feed-row { padding: 13px 0; }
-.fl-b .card-head h3 {
+.fl-greenhouse .kpi .kval { font-size: 42px; letter-spacing: -.02em; }
+.fl-greenhouse .gcell { border-radius: var(--r-md); }
+.fl-greenhouse .gcell:hover { transform: translateY(-3px); }
+.fl-greenhouse .feed-row { padding: 13px 0; }
+.fl-greenhouse .card-head h3 {
   font-family: var(--font-display);
   letter-spacing: -.01em;
 }
@@ -1239,17 +1914,17 @@ a.rail-item.active { color: var(--text); }
 /* Cards flatten into instrument-panel modules. Cultivar's card chrome
    (rounded corners, shadow, gradient) is stripped; in its place a hard
    1px outline + mono uppercase head, all stacked tight. */
-.fl-c .card {
+.fl-operator .card {
   background: var(--surface);
   border-radius: 0;
   box-shadow: none;
 }
-.fl-c .card-head {
+.fl-operator .card-head {
   border-bottom: 1px solid var(--line);
   padding-bottom: 11px;
   margin-bottom: 14px;
 }
-.fl-c .card-head h3 {
+.fl-operator .card-head h3 {
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 500;
@@ -1259,25 +1934,25 @@ a.rail-item.active { color: var(--text); }
   position: relative;
   padding-left: 22px;
 }
-.fl-c .card-head h3::before {
+.fl-operator .card-head h3::before {
   content: '';
   position: absolute; left: 0; top: 50%; transform: translateY(-50%);
   width: 14px; height: 2px; background: var(--accent);
 }
-.fl-c .hero-facts .ttl {
+.fl-operator .hero-facts .ttl {
   font-family: var(--font-mono);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
-.fl-c .voice-readout .vr-txt {
+.fl-operator .voice-readout .vr-txt {
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--text-3);
   letter-spacing: .02em;
 }
-.fl-c .chip {
+.fl-operator .chip {
   background: transparent;
   border: 1px solid var(--line);
   border-radius: 2px;
@@ -1287,65 +1962,65 @@ a.rail-item.active { color: var(--text); }
   letter-spacing: .08em;
   text-transform: uppercase;
 }
-.fl-c .chip .ck { color: var(--text-3); }
-.fl-c .chip .cv { color: var(--text); }
-.fl-c .kpi {
+.fl-operator .chip .ck { color: var(--text-3); }
+.fl-operator .chip .cv { color: var(--text); }
+.fl-operator .kpi {
   border-radius: 0;
   border: 1px solid var(--line);
   padding: 12px 14px;
 }
-.fl-c .kpi .klabel {
+.fl-operator .kpi .klabel {
   font-size: 9px;
   letter-spacing: .14em;
 }
-.fl-c .kpi .klabel::before { display: none; }
-.fl-c .kpi .kval {
+.fl-operator .kpi .klabel::before { display: none; }
+.fl-operator .kpi .kval {
   font-family: var(--font-mono);
   font-size: 28px;
   font-weight: 500;
   letter-spacing: -.01em;
   margin-top: 6px;
 }
-.fl-c .kpi .kfoot {
+.fl-operator .kpi .kfoot {
   font-family: var(--font-mono);
   font-size: 10.5px;
   letter-spacing: .04em;
 }
-.fl-c .gcell {
+.fl-operator .gcell {
   border-radius: 0;
   border: 1px solid var(--line);
   padding: 14px 16px;
 }
-.fl-c .gcell .gname {
+.fl-operator .gcell .gname {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--text-2);
 }
-.fl-c .gcell .gcount {
+.fl-operator .gcell .gcount {
   font-family: var(--font-mono);
   font-size: 30px;
   letter-spacing: -.01em;
 }
-.fl-c .gcell .gdesc {
+.fl-operator .gcell .gdesc {
   font-family: var(--font-mono);
   font-size: 10.5px;
   letter-spacing: .04em;
   color: var(--text-3);
 }
-.fl-c .feed-row {
+.fl-operator .feed-row {
   border-bottom: 1px solid var(--line);
   padding: 9px 0;
   font-family: var(--font-mono);
   font-size: 12px;
 }
-.fl-c .seg {
+.fl-operator .seg {
   border-radius: 0;
   border: 1px solid var(--line);
   background: var(--surface);
 }
-.fl-c .seg button {
+.fl-operator .seg button {
   border-radius: 0;
   font-family: var(--font-mono);
   letter-spacing: .06em;
@@ -1355,20 +2030,20 @@ a.rail-item.active { color: var(--text); }
 /* Operator's atmos overlay is a faint dot grid instead of the radial glow,
    matching the design's "instrument panel" feel. The original .atmos
    keeps its accent-tint gradients; we layer a subtle dot field on top. */
-.fl-c .atmos::after {
+.fl-operator .atmos::after {
   content: '';
   position: absolute; inset: 0; pointer-events: none;
   background-image: radial-gradient(rgba(255,255,255,.025) 1px, transparent 1px);
   background-size: 22px 22px;
 }
-.fl-c.light .atmos::after {
+.fl-operator.light .atmos::after {
   background-image: radial-gradient(rgba(20,28,38,.04) 1px, transparent 1px);
 }
 
 /* ============================================================================
    GREENHOUSE · b-* — warm, friendly dashboard with hero ring, four KPI tiles,
-   capability donut, and timeline activity. Used only when fl-b is active so
-   classes don't need a flavour prefix; the scoping is positional.
+   capability donut, and timeline activity. Used only when the Greenhouse layout
+   is active so classes don't need a flavour prefix; the scoping is positional.
    ============================================================================ */
 .b-greet {
   display: flex; align-items: flex-end; justify-content: space-between;
@@ -1516,8 +2191,8 @@ a.rail-item.active { color: var(--text); }
 
 /* ============================================================================
    OPERATOR HUD · c-* — flat instrument panels, mono everywhere, dense tables.
-   Used only when fl-c is active so classes need no flavour prefix; the
-   markup is positional.
+   Used only when the Operator layout is active so classes need no flavour
+   prefix; the markup is positional.
    ============================================================================ */
 .c-root { font-family: var(--font-mono); }
 .c-titlebar {
@@ -1535,13 +2210,13 @@ a.rail-item.active { color: var(--text); }
 }
 .c-root .btn {
   font-family: var(--font-mono); font-size: 11px;
-  letter-spacing: .05em; border-radius: 0;
+  letter-spacing: .05em; border-radius: var(--r-sm);
 }
 
 .c-strip {
   display: grid; grid-template-columns: repeat(7, 1fr);
   border: 1px solid var(--line); background: var(--surface);
-  margin-bottom: 14px;
+  border-radius: var(--r-sm); margin-bottom: 14px;
 }
 .c-strip-cell {
   padding: 11px 14px; border-right: 1px solid var(--line);
@@ -1561,7 +2236,7 @@ a.rail-item.active { color: var(--text); }
   display: inline-block;
   font-size: 9.5px; letter-spacing: .08em;
   padding: 2px 7px; border: 1px solid currentColor;
-  text-transform: uppercase;
+  border-radius: var(--r-sm); text-transform: uppercase;
 }
 .c-pill.ok { color: var(--good); }
 .c-pill.warn { color: var(--warn); }
@@ -1570,7 +2245,7 @@ a.rail-item.active { color: var(--text); }
 .c-kpi-row {
   display: grid; grid-template-columns: repeat(6, 1fr);
   border: 1px solid var(--line); background: var(--surface);
-  margin-bottom: 14px;
+  border-radius: var(--r-sm); margin-bottom: 14px;
 }
 .c-kpi {
   padding: 14px 16px; border-right: 1px solid var(--line);
@@ -1592,7 +2267,7 @@ a.rail-item.active { color: var(--text); }
 }
 .c-mod {
   border: 1px solid var(--line); background: var(--surface);
-  display: flex; flex-direction: column; min-width: 0;
+  border-radius: var(--r-sm); display: flex; flex-direction: column; min-width: 0;
 }
 .c-mod-head {
   display: flex; align-items: center; gap: 9px;
@@ -1631,7 +2306,7 @@ a.rail-item.active { color: var(--text); }
 .c-dim { color: var(--text-3); }
 .c-bar {
   height: 7px; background: var(--surface-3); overflow: hidden;
-  border-radius: 0;
+  border-radius: var(--r-sm);
 }
 .c-bar i { display: block; height: 100%; }
 .c-check-list { display: flex; flex-direction: column; margin-top: 12px; }
@@ -1927,3 +2602,81 @@ a.rail-item.active { color: var(--text); }
   .spec-date { grid-column: 1 / -1; margin-bottom: 4px; }
   .spec-status { grid-column: 1 / -1; justify-self: start; margin-top: 4px; }
 }
+
+/* ============================================================================
+   Flavour · Cobalt Terminal  (user-supplied "matrix-blue" design system)
+   Monospace-first hacker terminal: blue #389DC6 accent on a single near-black
+   surface, IBM Plex Mono, sharp 2px corners, no shadows — depth comes from
+   brand-blue hairline borders only. Reuses the dense Operator-HUD dashboard
+   layout (see Dashboard routing). Light & dark both ship. Two-char id `cb` and an
+   EOF placement deliberately sidestep the concurrent theme-build rewriting the
+   single-letter flavour blocks above.
+   ============================================================================ */
+.fl-cobalt {
+  --bg:        #020804;   /* the single black surface — every section, no exceptions */
+  --bg-2:      #020804;
+  --surface:   #061319;   /* the one card lift, barely above black */
+  --surface-2: #08222B;   /* row hover / inset */
+  --surface-3: #0B2C38;   /* bar tracks, recessed slots */
+  --line:      #0F3A48;   /* brand-blue hairline (border-default, dimmed) */
+  --line-2:    #163E4F;   /* brand-soft */
+  --line-3:    #2A7A9B;   /* brand-strong — brightest border */
+  --text:      #CFEAF6;   /* heading — light blue-white, no cream */
+  --text-2:    #84BBD6;   /* body — mid blue */
+  --text-3:    #4E7E96;   /* subtle — dim blue */
+  --good:      #10B981;   /* status colours: the sole non-brand exception */
+  --warn:      #FBBF24;
+  --bad:       #F43F5E;
+  --r-xs: 2px;
+  --r-sm: 2px;
+  --r-md: 2px;
+  --r-lg: 2px;
+  --r-xl: 2px;
+  --font-display: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --font-ui:      'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --font-mono:    'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+  --shadow-card: none;
+  /* Accent comes from the live mode (App.jsx writes it inline): the deployed
+     voice in Auto, or Cobalt's curated blue (CURATED_ACCENT) in Curated. */
+}
+/* Light mode — a blue-tinted paper; depth still comes from brand-blue hairlines,
+   and the blue deepens so it reads as text/links on white. */
+.fl-cobalt.light {
+  --bg:        #EAF1F4;
+  --bg-2:      #EAF1F4;
+  --surface:   #FFFFFF;
+  --surface-2: #E4EFF4;
+  --surface-3: #D8E8F0;
+  --line:      #BFD9E5;
+  --line-2:    #A6C8D8;
+  --line-3:    #6FA3BC;
+  --text:      #0A2530;
+  --text-2:    #3C6378;
+  --text-3:    #5E8092;
+  --good:      #007A55;
+  --warn:      #C2410C;
+  --bad:       #C70036;
+}
+/* Flat by intent — black cards, brand-blue borders (via --line), no shadow. */
+.fl-cobalt .card { background: var(--surface); box-shadow: none; }
+.fl-cobalt h1.h, .fl-cobalt h2, .fl-cobalt h3 { letter-spacing: .02em; }
+.fl-cobalt .btn { border-radius: 2px; font-family: var(--font-mono); letter-spacing: .04em; }
+.fl-cobalt .badge { border-radius: 2px; }
+/* CRT scanlines in brand blue at low opacity — the only atmosphere; gradients
+   are banned on layout surfaces in this design. */
+.fl-cobalt .atmos { background: none; }
+.fl-cobalt .atmos::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  /* ink-relative so the scanlines survive light mode (a fixed dark RGBA vanishes
+     on the blue paper); keeps the theme's own blue-white ink. */
+  background-image: repeating-linear-gradient(
+    0deg, color-mix(in srgb, var(--text) 6%, transparent) 0 1px, transparent 1px 3px);
+  opacity: 1; mix-blend-mode: normal;
+}
+/* Settings picker thumbnail for the Cobalt direction. */
+.dir-cobalt .dir-thumb { background: #020804; border-radius: 2px; }
+.dir-cobalt .dir-thumb-rail { background: #061319; border-right: 1px solid #163E4F; }
+.dir-cobalt .dir-thumb-bar { background: #389DC6; border-radius: 2px; }
+.dir-cobalt .dir-thumb-bar:nth-child(2) { background: #163E4F; }
+.dir-cobalt .dir-thumb-bar:nth-child(3) { background: #163E4F; }
+.dir-cobalt .dir-thumb-dot { background: #389DC6; box-shadow: 0 0 8px #389DC6; }
