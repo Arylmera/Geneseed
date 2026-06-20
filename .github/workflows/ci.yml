@@ -22,13 +22,16 @@ jobs:
           python-version: "3.x"
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       - name: doctor (every theme + parity + authoring gates)
         run: python rituals/harness.py doctor --all
       - name: unit tests
         run: python -m unittest discover -s tests -p "test_*.py"
+      # Auto-discover every tests/*.test.mjs (workflow runtime + plugins) — node
+      # expands the glob itself, so it's shell-agnostic (bash + pwsh) and a new test
+      # file is picked up without editing this workflow. Needs Node >= 21.
       - name: node test suites (workflow runtime + plugins)
-        run: node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs tests/context_wiki.test.mjs tests/context_delivery.test.mjs tests/context_extras.test.mjs tests/notify.test.mjs tests/ponytail.test.mjs
+        run: node --test "tests/**/*.test.mjs"
 
   # The web UI (web/) is a Vite/React app with its own toolchain, so it gets a
   # dedicated job: lint, format check, unit tests, and a production build. Linux
@@ -42,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci

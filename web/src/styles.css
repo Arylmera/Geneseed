@@ -234,6 +234,12 @@ svg.glyph { width: 16px; height: 16px; flex: none; }
   border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-card); }
 .card.pad-lg { padding: 22px 24px; }
 .card.pad-md { padding: 18px 20px; }
+/* Activity cards open the session detail — a chevron affordance + a subtle hover
+   lift that brightens the chevron and nudges it right (click-to-open signal). */
+.act-card { transition: border-color .15s, transform .12s; }
+.act-card:hover { border-color: var(--line-2); transform: translateY(-1px); }
+.act-chev { color: var(--text-3); transition: color .14s, transform .14s; }
+.act-card:hover .act-chev { color: var(--text); transform: translateX(2px); }
 .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .card-head h3 { margin: 0; font-family: var(--font-display); font-weight: 600;
   font-size: 15px; letter-spacing: -.01em; }

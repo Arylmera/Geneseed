@@ -15,6 +15,8 @@ import VoicePopover from './components/VoicePopover.jsx'
 import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
 import Dashboard from './pages/Dashboard/index.jsx'
+import Activity from './pages/Activity.jsx'
+import ActivityDetail from './pages/ActivityDetail.jsx'
 import Library from './pages/Library.jsx'
 import Laws from './pages/Laws.jsx'
 import Skills from './pages/Skills.jsx'
@@ -137,6 +139,8 @@ export default function App() {
                 layout={layout}
               />
             )}
+            {route.view === 'activity' && <Activity />}
+            {route.view === 'activity-detail' && <ActivityDetail key={route.sid} sid={route.sid} />}
             {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
             {route.view === 'laws' && <Laws />}
             {route.view === 'skills' && <Skills />}
