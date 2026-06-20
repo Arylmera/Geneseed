@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { useAsync } from '../hooks/useAsync.js'
+import { romanToInt } from '../lib/roman.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 
@@ -67,25 +68,6 @@ function LawText({ text }) {
       })}
     </>
   )
-}
-
-// The laws API returns `name` as a Roman numeral (I, II, … XX) — that's the
-// shape `_parse_laws` extracts from the source markdown's headings. Convert to
-// an Arabic integer so we can use it as a LAW_META key and pad the displayed
-// numeral. Returns NaN for anything that isn't a recognised Roman numeral, in
-// which case the caller falls back to the raw `name`.
-const ROMAN_VAL = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 }
-function romanToInt(raw) {
-  if (!raw) return NaN
-  const s = String(raw).toUpperCase()
-  if (!/^[IVXLCDM]+$/.test(s)) return NaN
-  let total = 0
-  for (let i = 0; i < s.length; i++) {
-    const v = ROMAN_VAL[s[i]]
-    const next = ROMAN_VAL[s[i + 1]]
-    total += next && next > v ? -v : v
-  }
-  return total
 }
 
 // Strip the "Rule <num> — " prefix the catalog includes in `title`, so the

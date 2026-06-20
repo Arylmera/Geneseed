@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useLocalStorage } from './useLocalStorage.js'
 
 const HARNESS_KEY = 'geneseed-harness'
 export const HARNESSES = [
@@ -6,24 +6,9 @@ export const HARNESSES = [
   { id: 'claude', label: 'Claude Code' },
 ]
 
-// Which host the Docs are filtered for. Persisted to localStorage, defaulting
-// to OpenCode (the common install, and the server's own default). The server
-// hides the other host's pages and strips its inline blocks; this hook is just
-// the selector state. Same shape as useColorMode so the chrome stays free of
-// storage plumbing.
+// Which host the Docs are filtered for. Persisted to localStorage, defaulting to
+// OpenCode (the common install, and the server's own default). The server hides the
+// other host's pages and strips its inline blocks; this hook is just the selector state.
 export function useHarness() {
-  const [harness, set] = useState(() => {
-    try {
-      const v = localStorage.getItem(HARNESS_KEY)
-      return v === 'claude' || v === 'opencode' ? v : 'opencode'
-    } catch {
-      return 'opencode'
-    }
-  })
-  useEffect(() => {
-    try {
-      localStorage.setItem(HARNESS_KEY, harness)
-    } catch {}
-  }, [harness])
-  return [harness, set]
+  return useLocalStorage(HARNESS_KEY, (v) => (v === 'claude' || v === 'opencode' ? v : 'opencode'))
 }

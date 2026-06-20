@@ -68,70 +68,15 @@ vi.mock('../api/index.js', () => ({
 }))
 
 import Settings from '../pages/Settings/index.jsx'
-import { api } from '../api/index.js'
 
 describe('Settings', () => {
-  it('renders the install snapshot and the build picker', async () => {
+  it('renders the install snapshot and maintenance actions', async () => {
     render(<Settings onAction={() => {}} />)
     await waitFor(() => expect(screen.getByText('up to date')).toBeTruthy())
     expect(screen.getAllByText(/opencode-global/).length).toBeGreaterThan(0)
     expect(screen.getByText('C:/geneseed')).toBeTruthy() // source root
-    expect(screen.getByText('Build')).toBeTruthy()
-    expect(screen.getByText('Update')).toBeTruthy()
-  })
-
-  it('renders switch toggles for present servers', async () => {
-    render(<Settings onAction={() => {}} />)
-    // Wait for MCP data to load
-    await waitFor(() => expect(screen.getAllByRole('switch').length).toBeGreaterThan(0))
-    // enabled server renders as a switch
-    const switches = screen.getAllByRole('switch')
-    expect(switches.length).toBeGreaterThanOrEqual(1)
-    // the enabled server's switch has aria-checked=true
-    expect(switches[0].getAttribute('aria-checked')).toBe('true')
-  })
-
-  it('renders Add button for absent preset servers', async () => {
-    // Override mcp for this test: one absent preset server + one absent non-preset server
-    vi.mocked(api.mcp).mockResolvedValueOnce({
-      targets: [
-        {
-          label: 'global config',
-          path: 'C:/cfg/opencode.json',
-          exists: true,
-          commented: false,
-          servers: [
-            { name: 'context7', label: 'Context7', desc: 'docs', preset: true, state: 'absent' },
-            { name: 'custom-srv', label: 'Custom', desc: 'custom', preset: false, state: 'absent' },
-          ],
-        },
-      ],
-      default: 0,
-    })
-    // No install switch either, so the only switches in play are MCP's (none here)
-    vi.mocked(api.installs).mockResolvedValueOnce({
-      installs: [
-        {
-          id: 'opencode:global config',
-          host: 'opencode',
-          scope: 'global config',
-          path: 'C:/cfg',
-          state: 'absent',
-        },
-      ],
-    })
-
-    render(<Settings onAction={() => {}} />)
-
-    // Absent preset server renders an Add button
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy())
-
-    // Absent non-preset server renders no switch and no Add button (only one Add total)
-    const addButtons = screen.getAllByRole('button', { name: 'Add' })
-    expect(addButtons.length).toBe(1)
-
-    // No switch for either absent server
-    const switches = screen.queryAllByRole('switch')
-    expect(switches.length).toBe(0)
+    // Build/update moved to the Harnesses tab + Dashboard; Settings keeps maintenance.
+    expect(screen.getByText('Add to PATH')).toBeTruthy()
+    expect(screen.getByText('Download offline package')).toBeTruthy()
   })
 })

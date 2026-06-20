@@ -114,9 +114,12 @@ def api_restore(state: WebState, files: list) -> dict:
     target = state.target.resolve()
     with tempfile.TemporaryDirectory() as tmp:
         expected = (Path(tmp) / "expected").resolve()
+        # Render the EXPECTED copy with the deployed install's own host emit, so a
+        # restore on a Claude row renders Claude (not a silently-OpenCode expected).
+        emitter = (build.emit_claude_global if (state.emit or "").startswith("claude")
+                   else build.emit_opencode_global)
         with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's own log
-            build.emit_opencode_global(state.theme, out=Path(tmp) / "bundle",
-                                       cfg=expected)
+            emitter(state.theme, out=Path(tmp) / "bundle", cfg=expected)
         for rel in files or []:
             rel = str(rel).replace("\\", "/").strip().lstrip("/")
             dst = (target / rel).resolve()
@@ -139,82 +142,168 @@ def api_restore(state: WebState, files: list) -> dict:
 
 
 def api_mcp(state: WebState) -> dict:
-    """MCP servers per config target — the web mirror of the TUI's MCP screen.
-    Presets first, then user-defined servers present in each config."""
-    # Only show MCP wiring for harnesses that are actually installed and active —
-    # an absent/disabled install has no live config to wire. Labels match across
-    # _install_targets/_mcp_targets ("this project", "global config").
-    active = {label for label, root in harness._install_targets()
-              if harness._install_state(root) == "active"}
-    targets = [(l, p) for l, p in harness._mcp_targets() if l in active]
+    """MCP servers per ACTIVE install — the web mirror of the TUI's MCP screen, now
+    host-aware. Each target is one active install's MCP config (OpenCode's opencode.json,
+    or Claude's .mcp.json / ~/.claude.json); the harness table joins it to its row by
+    (host, root). Presets first, then any user-defined server already in the config. An
+    absent/disabled install has no live config to wire, so it contributes no target."""
+    targets = [t for t in harness._mcp_install_targets()
+               if harness._install_state(t[4], t[2], t[3]) == "active"]
     out = []
-    for label, path in targets:
-        cfg = harness._mcp_load(path)
+    for label, path, host, _scope, root in targets:
+        cfg = harness._mcp_load(path, host)
         servers = []
-        for name in harness._mcp_known_names(cfg):
+        for name in harness._mcp_known_names(cfg, host):
             lbl, desc = harness._mcp_meta(name)
             servers.append({"name": name, "label": lbl, "desc": desc,
                             "preset": name in harness._MCP_PRESETS,
-                            "state": harness._mcp_state(cfg, name)})
-        out.append({"label": label, "path": str(path), "exists": path.is_file(),
-                    "commented": harness._mcp_commented(path),
+                            "state": harness._mcp_state(cfg, name, host)})
+        out.append({"label": label, "path": str(path), "host": host, "root": str(root),
+                    "exists": path.is_file(), "commented": harness._mcp_commented(path),
                     "servers": servers})
-    return {"targets": out, "default": harness._mcp_default_target(targets)}
+    # `default` is kept for response-shape stability; the table nests MCP per install and
+    # no longer opens on a single target, so the value is unused by the UI.
+    return {"targets": out, "default": 0}
 
 
 def api_mcp_toggle(state: WebState, body: dict) -> dict:
-    """Enable/disable — or first-add a preset — MCP server `name` in the target
-    config at `path`. Same non-destructive rewrite as the TUI (only the mcp
-    block changes); a hand-commented .jsonc is refused, never rewritten."""
+    """Enable/disable — or first-add a preset — MCP server `name` in the config at `path`.
+    Host-aware: OpenCode flips the server's `enabled` flag (non-destructive); Claude's
+    .mcp.json has no such flag, so toggling a server off REMOVES its entry (re-add to
+    restore). A hand-commented opencode.jsonc is refused, and a Claude config that does
+    not parse is refused rather than clobbered — it may be the large ~/.claude.json that
+    holds far more than MCP wiring."""
     name = str(body.get("name") or "")
     want = bool(body.get("enabled"))
     path_arg = str(body.get("path") or "")
-    known = {str(p): p for _label, p in harness._mcp_targets()}
-    path = known.get(path_arg)
-    if path is None or not name:
+    known = {str(cfg): (cfg, host) for _l, cfg, host, _s, _r in harness._mcp_install_targets()}
+    hit = known.get(path_arg)
+    if hit is None or not name:
         raise NotFound(f"mcp target {path_arg or '(none)'}")
+    path, host = hit
     if harness._mcp_commented(path):
         return {"ok": False,
                 "error": "config holds comments — edit it by hand to keep them"}
-    cfg = harness._mcp_load(path)
-    current = harness._mcp_state(cfg, name)
+    if host == "claude":
+        # Claude configs are strict JSON. Parse ONCE, strictly, and rewrite THAT exact dict
+        # — so the safety check and the value we save come from the same read (no
+        # parser-mismatch, no time-of-check/time-of-use gap) and a string value containing
+        # ',]' / ', }' is never mangled by the comment-stripper's trailing-comma pass.
+        # Refuse an existing file we cannot parse rather than clobber it: it may be the
+        # large ~/.claude.json, which holds projects/history far beyond MCP wiring.
+        if path.is_file():
+            try:
+                cfg = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                cfg = None
+            if not isinstance(cfg, dict):
+                return {"ok": False,
+                        "error": "couldn't parse this config — edit it by hand to avoid data loss"}
+        else:
+            cfg = {}
+    else:
+        cfg = harness._mcp_load(path)
+    current = harness._mcp_state(cfg, name, host)
     if current == "absent":
-        preset = harness._MCP_PRESETS.get(name)
-        if preset is None:
+        if name not in harness._MCP_PRESETS:
             return {"ok": False, "error": f"unknown server '{name}'"}
         if not want:
             return {"ok": False, "error": f"'{name}' is not configured"}
-        cfg = harness._mcp_apply(cfg, name, dict(preset["block"]))
-        cfg = harness._mcp_set_enabled(cfg, name, True)
+        cfg = harness._mcp_apply(cfg, name, harness._mcp_preset_block(name, host), host)
+        cfg = harness._mcp_set_enabled(cfg, name, True, host)
     else:
-        cfg = harness._mcp_set_enabled(cfg, name, want)
+        cfg = harness._mcp_set_enabled(cfg, name, want, host)
     harness._mcp_save(path, cfg)
-    return {"ok": True, "name": name, "state": harness._mcp_state(cfg, name)}
+    return {"ok": True, "name": name, "state": harness._mcp_state(cfg, name, host)}
 
 
 def api_installs(state: WebState) -> dict:
-    """Detected OpenCode installs and their on/off state. One row per scope."""
+    """Detected installs across host x scope and their on/off state. One row per
+    (host, scope, path) tuple — see harness._install_targets. Both OpenCode and Claude,
+    global and per-repo, are listed so the dashboard can manage them in parallel."""
     out = []
-    for label, root in harness._install_targets():
-        out.append({"id": f"opencode:{label}", "host": "opencode", "scope": label,
-                    "path": str(root), "state": harness._install_state(root)})
+    cur = state.target.resolve()
+    for host, scope, root in harness._install_targets():
+        out.append({"id": f"{host}:{scope}", "host": host, "scope": scope,
+                    "path": str(root), "state": harness._install_state(root, host, scope),
+                    "theme": harness._theme_of_dir(root),   # the install's own voice (None if absent)
+                    "selected": _view_cfg(host, scope, root).resolve() == cur})
     return {"installs": out}
 
 
+def _view_cfg(host: str, scope: str, root) -> Path:
+    """The data dir to read an install's inventory/memory/diff from. Global installs (and
+    the OpenCode per-repo bundle) keep it at the root; a Claude per-repo install keeps it
+    under <repo>/.claude."""
+    return (root / ".claude") if (host == "claude" and scope == "project") else root
+
+
+def api_select_view(state: WebState, body: dict) -> dict:
+    """Re-point the whole console at a detected install (the harness selector). The
+    (host, path) pair MUST be one of the detected targets; state.target/theme/emit are
+    re-pointed to the install's data dir so the next overview/catalog/diff GET reflects
+    it. Raises NotFound for an unknown pair."""
+    known = {(h, str(r)): (h, s, r) for h, s, r in harness._install_targets()}
+    hit = known.get((body.get("host") or "", body.get("path") or ""))
+    if hit is None:
+        raise NotFound("unknown install (host, path)")
+    host, scope, root = hit
+    state.select_view(_view_cfg(host, scope, root))
+    return {"ok": True, "target": str(state.target), "theme": state.theme, "emit": state.emit}
+
+
+_EMIT_FOR = {
+    ("opencode", "global"): "opencode-global", ("opencode", "project"): "opencode",
+    ("claude", "global"): "claude-global", ("claude", "project"): "claude",
+}
+
+
+def api_install_cmd(state: WebState, body: dict) -> dict:
+    """Resolve the build command that installs Geneseed into a detected location, or
+    re-themes an already-active one (an in-place re-emit — same build command either way).
+    The (host, path) pair MUST be one of the detected install targets — mirrors
+    api_install_toggle's allowlist, so the target is never built from raw body input — and
+    it must not be `disabled` (reactivate first). The voice is the picked theme if valid,
+    else the current deployed voice; a per-repo install lands under the row's own path.
+    Returns {"cmd": [...]} for the job runner, or {"error": ...}; raises NotFound for an
+    unknown (host, path)."""
+    known = {(host, str(r)): (host, scope, r)
+             for host, scope, r in harness._install_targets()}
+    hit = known.get((body.get("host") or "", body.get("path") or ""))
+    if hit is None:
+        raise NotFound("unknown install (host, path)")
+    host, scope, root = hit
+    if harness._install_state(root, host, scope) == "disabled":
+        return {"error": "install is disabled — reactivate it before (re)building"}
+    emit = _EMIT_FOR.get((host, scope))
+    if emit is None:
+        return {"error": f"no install mode for {host}:{scope}"}
+    # The new install's voice: a valid picked theme wins, else the current deployed
+    # voice — so a bogus body value can never reach the build argv (mirrors _build_override).
+    themes = {c["name"] for c in _theme_choices()}
+    theme = body.get("theme") if body.get("theme") in themes else state.theme
+    out = None if scope == "global" else str(root)
+    argv = harness._setup_build_args(theme or "neutral", emit, out, out)
+    return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
+
+
 def api_install_toggle(state: WebState, body: dict) -> dict:
-    """Deactivate or reactivate the install at `path`. Non-destructive."""
-    # Path allowlist — mirror api_mcp_toggle: the body path MUST be one of the
-    # detected roots, else 404. This endpoint moves whole trees; never build the
-    # move root from raw body input.
-    known = {str(r): r for _label, r in harness._install_targets()}
-    root = known.get(body.get("path") or "")
-    if root is None:
-        raise NotFound("unknown install path")
+    """Deactivate or reactivate one install. Non-destructive. Keyed on the
+    (host, path) PAIR — a cwd can carry both an OpenCode and a Claude install at the
+    same path, so path alone is ambiguous; and the pair MUST be one of the detected
+    installs, else 404 (this endpoint moves whole trees — never build the root from raw
+    body input)."""
+    known = {(host, str(r)): (host, scope, r)
+             for host, scope, r in harness._install_targets()}
+    hit = known.get((body.get("host") or "", body.get("path") or ""))
+    if hit is None:
+        raise NotFound("unknown install (host, path)")
+    host, scope, root = hit
     action = body.get("action")
     if action == "deactivate":
-        res = harness._install_deactivate(root)
+        res = harness._install_deactivate(root, host, scope)
     elif action == "activate":
-        res = harness._install_reactivate(root)
+        res = harness._install_reactivate(root, host, scope)
     else:
         res = {"ok": False, "error": f"unknown action {action!r}"}
     state.refresh()

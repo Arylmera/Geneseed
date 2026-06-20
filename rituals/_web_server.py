@@ -52,7 +52,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     return self._send_json(api_catalog(state, path.rsplit("/", 1)[1]))
                 if path.startswith("/api/item/"):
                     _, _, _, type_, name = path.split("/", 4)
-                    return self._send_json(api_item(state, type_, name))
+                    return self._send_json(
+                        api_item(state, type_, urllib.parse.unquote(name)))
                 if path == "/api/themes":
                     return self._send_json(api_themes(state))
                 if path == "/api/setup":
@@ -134,6 +135,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                 except NotFound as e:
                     return self._send_json({"error": f"not found: {e}"}, 404)
                 return self._send_json(res, 200 if res.get("ok") else 409)
+            if path == "/api/view":
+                try:
+                    res = api_select_view(state, self._read_json_body())
+                except NotFound as e:
+                    return self._send_json({"error": f"not found: {e}"}, 404)
+                return self._send_json(res, 200 if res.get("ok") else 409)
             if path == "/api/activity":
                 return self._send_json(api_activity_toggle(state, self._read_json_body()))
             if path == "/api/memory/delete":
@@ -155,6 +162,20 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                 if action == "restore":
                     return self._send_json(
                         api_restore(state, body.get("files") or []))
+                # Install into a detected-but-absent location: resolve a validated build
+                # command from the (host, scope, path) body, then run it as a job. Same
+                # streamed-console + refresh-on-finish path as Build.
+                if action == "install":
+                    try:
+                        plan = api_install_cmd(state, body)
+                    except NotFound as e:
+                        return self._send_json({"error": f"not found: {e}"}, 404)
+                    if "error" in plan:
+                        return self._send_json(plan, 409)
+                    jid = jm.start("install", plan["cmd"], on_done=state.refresh)
+                    if jid is None:
+                        return self._send_json({"error": "busy"}, 409)
+                    return self._send_json({"job_id": jid}, 202)
                 # Build can be re-themed/re-targeted from the UI picker; the other
                 # actions self-resolve the deployed theme downstream.
                 if action == "build":

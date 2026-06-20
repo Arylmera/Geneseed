@@ -1,8 +1,10 @@
 import React, { useEffect } from 'react'
 
+const TOAST_DURATION_MS = 3500
+
 export default function Toast({ toast, onClose }) {
   useEffect(() => {
-    const t = setTimeout(onClose, 3500)
+    const t = setTimeout(onClose, TOAST_DURATION_MS)
     return () => clearTimeout(t)
     // the dismiss timer is (re)armed per toast; onClose is intentionally omitted
     // eslint-disable-next-line react-hooks/exhaustive-deps

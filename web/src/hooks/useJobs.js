@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/index.js'
 
+// How often the running job is polled for fresh output while the console streams.
+const JOB_POLL_INTERVAL_MS = 600
+
 // Owns the console's run history and the running-job poller. On mount it
 // hydrates from the server's job history (so runs survive reload/restart) and
 // resumes polling any still-running job. `runAction` kicks off a named action
@@ -51,17 +54,15 @@ export function useJobs({ onFinish, onError } = {}) {
         if (j.status !== 'running') {
           clearInterval(t)
           setActiveId(null)
-          // A build re-themes the install and rebuilds the served web assets, so
-          // the page must fully reload to pick them up — same as a restart. Other
-          // actions just refetch the overview.
-          const finished = runs.find((r) => r.id === activeId)
-          if (finished?.action.startsWith('build')) window.location.reload()
-          else onFinish?.()
+          // Every action re-emits the harness (never the served web assets), so a soft
+          // refresh is enough — onFinish refetches the overview + the install/MCP panels.
+          // No full page reload, so nothing flashes.
+          onFinish?.()
         }
       } catch {
         clearInterval(t)
       }
-    }, 600)
+    }, JOB_POLL_INTERVAL_MS)
     return () => clearInterval(t)
     // the poller keys off activeId; onFinish is a stable callback we omit
     // eslint-disable-next-line react-hooks/exhaustive-deps

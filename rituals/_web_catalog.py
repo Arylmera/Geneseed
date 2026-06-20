@@ -42,7 +42,8 @@ def _notebook_items(state: WebState) -> list[dict]:
             for p in sorted(d.glob("*.md"))]
 
 
-WIKI_FILE_CAP = 300  # per manifest entry — a vault folder can be huge
+WIKI_FILE_CAP = 5000  # per manifest entry — safety valve only; names are cheap, the
+# web list renders 50 at a time and filters client-side, so a big vault is fine
 
 
 def _wiki_manifest(state: WebState) -> list:

@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from './api/index.js'
 import { useRoute } from './lib/router.js'
-import { applyAccent } from './lib/accents.js'
+import { applyAccent, applyCuratedAccent } from './lib/accents.js'
 import { TYPE_TO_SECTION } from './lib/sections.js'
 import { useColorMode } from './hooks/useColorMode.js'
 import { useFlavour } from './hooks/useFlavour.js'
+import { useAccentMode } from './hooks/useAccentMode.js'
+import { useLayout } from './hooks/useLayout.js'
 import { useOverview } from './hooks/useOverview.js'
 import { useJobs } from './hooks/useJobs.js'
 import Rail from './components/Rail.jsx'
@@ -23,6 +25,7 @@ import Doctor from './pages/Doctor.jsx'
 import Themes from './pages/Themes.jsx'
 import Graph from './pages/Graph.jsx'
 import Settings from './pages/Settings/index.jsx'
+import Harnesses from './pages/Harnesses.jsx'
 import Docs from './pages/Docs/index.jsx'
 import About from './pages/About.jsx'
 
@@ -38,19 +41,33 @@ export default function App() {
   const [stopped, setStopped] = useState(false)
   const [mode, toggleMode] = useColorMode()
   const [flavour, setFlavour] = useFlavour()
+  const [accentMode, setAccentMode] = useAccentMode()
+  const [layout, setLayout] = useLayout()
   const appRef = useRef(null)
 
   const onError = (e) => setToast({ kind: 'err', msg: e.message })
   const { overview, themes, reload } = useOverview(onError)
+  const [dataRev, setDataRev] = useState(0)
+  // Soft refresh after a mutation: refetch the overview (dashboard accent + counts) and
+  // bump a revision the install/MCP panels depend on — no full page reload, so no flash.
+  const refresh = () => {
+    reload()
+    setDataRev((v) => v + 1)
+  }
   const { runs, activeId, consoleOpen, setConsoleOpen, runAction, cancelJob, clearRuns } = useJobs({
-    onFinish: reload,
+    onFinish: refresh,
     onError,
   })
 
-  // The UI wears the deployed theme's accent, adjusted for light/dark mode.
+  // The accent is either the flavour's curated signature ('curated' mode) or the
+  // deployed voice's accent ('auto'), adjusted for light/dark. Curated wins when
+  // the flavour has an entry; otherwise we always fall back to the voice.
   useEffect(() => {
-    if (overview?.accent) applyAccent(appRef.current, overview.accent, mode)
-  }, [overview, mode])
+    const el = appRef.current
+    if (!el) return
+    if (accentMode === 'curated' && applyCuratedAccent(el, flavour, mode)) return
+    if (overview?.accent) applyAccent(el, overview.accent, mode)
+  }, [overview, mode, accentMode, flavour])
 
   // Stop the local server (same /api/shutdown the Settings card uses). The
   // connection drops as the server goes down, so a rejected request right
@@ -108,6 +125,8 @@ export default function App() {
           mode={mode}
           onToggleMode={toggleMode}
           onShutdown={handleShutdown}
+          dataRev={dataRev}
+          onSwitch={refresh}
         />
         <div className="page">
           <div className="pad">
@@ -117,11 +136,12 @@ export default function App() {
                 themes={themes}
                 onAction={runAction}
                 flavour={flavour}
+                layout={layout}
               />
             )}
             {route.view === 'activity' && <Activity />}
             {route.view === 'activity-detail' && <ActivityDetail key={route.sid} sid={route.sid} />}
-            {route.view === 'library' && <Library overview={overview} />}
+            {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
             {route.view === 'laws' && <Laws />}
             {route.view === 'skills' && <Skills />}
             {route.view === 'section' &&
@@ -130,7 +150,7 @@ export default function App() {
               ) : route.section === 'skills' ? (
                 <Skills />
               ) : (
-                <Library overview={overview} section={route.section} />
+                <Library overview={overview} section={route.section} dataRev={dataRev} />
               ))}
             {route.view === 'item' &&
               (route.type === 'law' ? (
@@ -142,14 +162,32 @@ export default function App() {
                   overview={overview}
                   section={TYPE_TO_SECTION[route.type] || route.type}
                   selected={route.name}
+                  dataRev={dataRev}
                 />
               ))}
-            {route.view === 'diff' && <Diff onMutated={reload} />}
+            {route.view === 'diff' && <Diff onMutated={reload} dataRev={dataRev} />}
             {route.view === 'doctor' && <Doctor />}
             {route.view === 'themes' && <Themes onAction={runAction} />}
             {route.view === 'graph' && <Graph />}
             {route.view === 'settings' && (
-              <Settings onAction={runAction} flavour={flavour} onFlavour={setFlavour} />
+              <Settings
+                onAction={runAction}
+                flavour={flavour}
+                onFlavour={setFlavour}
+                accentMode={accentMode}
+                onAccentMode={setAccentMode}
+                layout={layout}
+                onLayout={setLayout}
+              />
+            )}
+            {route.view === 'harnesses' && (
+              <Harnesses
+                onAction={runAction}
+                themes={themes}
+                currentTheme={overview?.theme}
+                dataRev={dataRev}
+                onMutated={refresh}
+              />
             )}
             {route.view === 'docs' && (
               <Docs page={route.page} query={query} onAction={runAction} overview={overview} />

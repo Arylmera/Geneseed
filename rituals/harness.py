@@ -107,6 +107,11 @@ def build_argparser() -> argparse.ArgumentParser:
     b.add_argument("--theme", default=None)
     b.set_defaults(fn=cmd_build)
 
+    rb = sub.add_parser("rebuild-all",
+                        help="rebuild every active install in place (each in its own "
+                             "theme+emit), best-effort — continue past failures")
+    rb.set_defaults(fn=cmd_rebuild_all)
+
     th = sub.add_parser("theme", help="create a user OpenCode colour theme (solid + transparent) "
                                       "in the live themes dir; survives rebuilds")
     th.add_argument("name", help="theme name (auto-prefixed 'geneseed-'; selected as /theme geneseed-<name>)")

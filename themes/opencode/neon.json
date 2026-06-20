@@ -1,0 +1,27 @@
+{
+  "name": "neon",
+  "label": "Neon",
+  "mode": "dark",
+  "credit": "neon design system — mono/matrix, Geist Mono, brand #F44174",
+  "palette": {
+    "bg": "#050505",
+    "bgPanel": "#0A0A0A",
+    "bgElement": "#1A1A1A",
+    "fg": "#EDEDED",
+    "fgMuted": "#888888",
+    "accent": "#F44174",
+    "secondary": "#0EA5E9",
+    "border": "#333333",
+    "ok": "#00CC88",
+    "warn": "#FF8833",
+    "err": "#FF3355",
+    "kw": "#F44174",
+    "str": "#84CC16",
+    "fn": "#0EA5E9",
+    "num": "#FB923C",
+    "type": "#A855F7",
+    "comment": "#666666",
+    "addBg": "#061A14",
+    "delBg": "#1A0508"
+  }
+}

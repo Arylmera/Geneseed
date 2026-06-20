@@ -6,14 +6,16 @@ import OperatorView from './OperatorView.jsx'
 import GreenhouseView from './GreenhouseView.jsx'
 import OperatorHudView from './OperatorHudView.jsx'
 import Onboarding from './Onboarding.jsx'
+import { resolveLayout } from '../../hooks/useLayout.js'
 
 // The dashboard shell: loads the supplementary data (install snapshot, job
 // history, graph, doctor) the directions share, then renders the chosen
-// direction. The Status lens swaps per flavour — Cultivar's classic
-// hero+kpi+genome, Greenhouse's ring+tiles+donut, or Operator HUD's strip+
-// modules — while Lineage and Operator stay one shared layout (they're
-// optional data dives, not flavour variants).
-export default function Dashboard({ overview, themes, onAction, flavour = 'a' }) {
+// direction. The Status lens is a layout chosen independently of the flavour
+// (skin) — Cultivar's hero+kpi+genome, Greenhouse's ring+tiles+donut, or
+// Operator HUD's strip+modules — while Lineage and Operator stay one shared
+// layout (they're optional data dives, not layout variants).
+export default function Dashboard({ overview, themes, onAction, flavour = 'a', layout = 'auto' }) {
+  const lens = resolveLayout(flavour, layout)
   const [dir, setDir] = useState('status')
   const [setup, setSetup] = useState(null)
   const [jobs, setJobs] = useState([])
@@ -38,7 +40,7 @@ export default function Dashboard({ overview, themes, onAction, flavour = 'a' })
     // Doctor is only needed by Greenhouse (ring + check chips) and Operator
     // HUD (check matrix). Cultivar's Status lens doesn't read it, so the load
     // is lazy: skipping it on Cultivar saves a round-trip on dashboard mount.
-    if (flavour === 'b' || flavour === 'c') {
+    if (lens === 'greenhouse' || lens === 'operator') {
       api
         .doctor()
         .then((v) => alive && setDoctor(v))
@@ -47,7 +49,7 @@ export default function Dashboard({ overview, themes, onAction, flavour = 'a' })
     return () => {
       alive = false
     }
-  }, [flavour])
+  }, [lens])
 
   if (!overview) return <div className="loading">Loading&#8230;</div>
 
@@ -77,7 +79,7 @@ export default function Dashboard({ overview, themes, onAction, flavour = 'a' })
           ))}
         </div>
       </div>
-      {dir === 'status' && flavour === 'a' && (
+      {dir === 'status' && lens === 'cultivar' && (
         <StatusView
           overview={overview}
           sigil={sigil}
@@ -86,7 +88,7 @@ export default function Dashboard({ overview, themes, onAction, flavour = 'a' })
           onAction={onAction}
         />
       )}
-      {dir === 'status' && flavour === 'b' && (
+      {dir === 'status' && lens === 'greenhouse' && (
         <GreenhouseView
           overview={overview}
           sigil={sigil}
@@ -95,7 +97,7 @@ export default function Dashboard({ overview, themes, onAction, flavour = 'a' })
           onAction={onAction}
         />
       )}
-      {dir === 'status' && flavour === 'c' && (
+      {dir === 'status' && lens === 'operator' && (
         <OperatorHudView overview={overview} jobs={jobs} doctor={doctor} onAction={onAction} />
       )}
       {dir === 'lineage' && (

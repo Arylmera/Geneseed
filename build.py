@@ -73,12 +73,17 @@ def main() -> None:
     ap.add_argument("--out", "--target", dest="out", default="Harness",
                     help="output directory — absolute, or relative to the current "
                          "directory (default: ./Harness)")
-    ap.add_argument("--emit", choices=["files", "opencode", "opencode-global"], default="files",
+    ap.add_argument("--emit",
+                    choices=["files", "opencode", "opencode-global", "claude", "claude-global"],
+                    default="files",
                     help="files: plain bundle (default). opencode: bundle + per-repo "
                          ".opencode/ subagents, native skills & opencode.json. "
                          "opencode-global: render straight into OpenCode's global config "
                          "dir ($OPENCODE_CONFIG_DIR / ~/.config/opencode) — everything "
-                         "global, zero per-repo files (GLOBAL-HARNESS-SPEC.md)")
+                         "global, zero per-repo files (GLOBAL-HARNESS-SPEC.md). "
+                         "claude: per-repo CLAUDE.md + .claude/ (agents, skills, hooks). "
+                         "claude-global: render into Claude Code's global config dir "
+                         "(~/.claude) — CLAUDE.md, agents, skills, settings.json hooks")
     ap.add_argument("--root", default=None,
                     help="project root the agent/OpenCode run from — where opencode.json "
                          "and .opencode/ are placed (default: same as --out). Set this when "
@@ -92,25 +97,33 @@ def main() -> None:
         emit_opencode(args.theme, out, root)
     elif args.emit == "opencode-global":
         emit_opencode_global(args.theme, out)
+    elif args.emit == "claude":
+        emit_claude(args.theme, out, root)
+    elif args.emit == "claude-global":
+        emit_claude_global(args.theme, out)
     else:
         build(args.theme, out)
 
-    # Persist the emit mode (host state) so a later bare `./upgrade.sh` keeps
-    # deploying the same way — regardless of which entrypoint chose it. Global mode's
-    # marker lives in the config dir (no Harness is built); other modes' in `out`.
-    emit_marker = (_opencode_config_dir() if args.emit == "opencode-global" else out) / ".geneseed-emit"
+    # Persist the emit mode + theme (host state) so a later bare `./upgrade.sh` keeps
+    # deploying the same way and the setup wizard can detect the install. A global emit
+    # renders into the config dir without calling build(), so its markers go there;
+    # other modes' go in `out`. The emit name disambiguates the target — no --host flag.
+    if args.emit == "opencode-global":
+        marker_dir = _opencode_config_dir()
+    elif args.emit == "claude-global":
+        marker_dir = _claude_config_dir()
+    else:
+        marker_dir = out
     try:
-        emit_marker.parent.mkdir(parents=True, exist_ok=True)
-        emit_marker.write_text(args.emit + "\n", encoding="utf-8")
+        marker_dir.mkdir(parents=True, exist_ok=True)
+        (marker_dir / ".geneseed-emit").write_text(args.emit + "\n", encoding="utf-8")
     except OSError:
         pass
-
-    # build() already drops a .geneseed-theme marker in `out`; the global emit renders
-    # into the config dir without calling build(), so record the theme there too —
-    # so tools (e.g. the setup wizard) can detect the installed theme later.
-    if args.emit == "opencode-global":
+    # build() already drops a .geneseed-theme marker in `out`; the global emits render
+    # into the config dir without calling build(), so record the theme there too.
+    if args.emit in ("opencode-global", "claude-global"):
         try:
-            (_opencode_config_dir() / ".geneseed-theme").write_text(args.theme + "\n", encoding="utf-8")
+            (marker_dir / ".geneseed-theme").write_text(args.theme + "\n", encoding="utf-8")
         except OSError:
             pass
 

@@ -1,22 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useLocalStorage } from './useLocalStorage.js'
 
 const MODE_KEY = 'geneseed-mode'
 
 // Light/dark mode persisted to localStorage, defaulting to dark. Returns the
 // current mode and a toggle, so the chrome stays free of storage plumbing.
 export function useColorMode() {
-  const [mode, setMode] = useState(() => {
-    try {
-      return localStorage.getItem(MODE_KEY) || 'dark'
-    } catch {
-      return 'dark'
-    }
-  })
-  useEffect(() => {
-    try {
-      localStorage.setItem(MODE_KEY, mode)
-    } catch {}
-  }, [mode])
+  const [mode, setMode] = useLocalStorage(MODE_KEY, (v) => (v === 'light' ? 'light' : 'dark'))
   const toggle = () => setMode((m) => (m === 'light' ? 'dark' : 'light'))
   return [mode, toggle]
 }

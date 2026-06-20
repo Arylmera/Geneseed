@@ -5,6 +5,9 @@ import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 
+// How often the export job is polled for completion.
+const EXPORT_POLL_INTERVAL_MS = 700
+
 // Map a unified-diff line to its display class. Headers (+++/---) and hunk
 // markers read as hunks; the synthetic added/missing banners read as context.
 function lineKind(ln) {
@@ -14,8 +17,8 @@ function lineKind(ln) {
   return 'ctx'
 }
 
-export default function Diff({ onMutated }) {
-  const { data, error, reload } = useAsync(() => api.diff(), [])
+export default function Diff({ onMutated, dataRev }) {
+  const { data, error, reload } = useAsync(() => api.diff(), [dataRev])
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
   const [sel, setSel] = useState(() => new Set())
@@ -46,7 +49,7 @@ export default function Diff({ onMutated }) {
       const { job_id } = await api.action('export')
       let j
       do {
-        await new Promise((r) => setTimeout(r, 700))
+        await new Promise((r) => setTimeout(r, EXPORT_POLL_INTERVAL_MS))
         j = await api.job(job_id)
       } while (j.status === 'running')
       setNote(j.status === 'done' ? 'Improvements file written.' : 'Export failed. See logs.')

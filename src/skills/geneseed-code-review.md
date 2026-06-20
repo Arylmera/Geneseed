@@ -1,4 +1,4 @@
-# {{SKILL}}: code-review
+# {{SKILL}}: geneseed-code-review
 
 > {{DESC_CODE_REVIEW}}
 

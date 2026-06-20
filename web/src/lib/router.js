@@ -7,6 +7,7 @@ const FLAT_VIEWS = new Set([
   'activity',
   'diff',
   'settings',
+  'harnesses',
   'doctor',
   'themes',
   'graph',

@@ -388,10 +388,11 @@ class McpTests(unittest.TestCase):
     def test_api_mcp_lists_targets_and_states(self):
         state = web.WebState(theme="neutral")
         # api_mcp only lists targets whose install is active; force one so the
-        # structure check doesn't hinge on the host machine having an install.
+        # structure check doesn't hinge on the host machine having an install. Each
+        # target now carries its owning install's (host, root) for the table to join on.
         saved_t, saved_s = web.harness._install_targets, web.harness._install_state
-        web.harness._install_targets = lambda: [("this project", Path("."))]
-        web.harness._install_state = lambda root: "active"
+        web.harness._install_targets = lambda: [("opencode", "project", Path("."))]
+        web.harness._install_state = lambda root, host="opencode", scope="global": "active"
         try:
             m = web.api_mcp(state)
         finally:
@@ -400,24 +401,29 @@ class McpTests(unittest.TestCase):
         for t in m["targets"]:
             self.assertIn("path", t)
             self.assertIn("commented", t)
+            self.assertIn(t["host"], ("opencode", "claude"))
+            self.assertIn("root", t)
             for s in t["servers"]:
                 self.assertIn(s["state"], ("enabled", "disabled", "absent"))
                 self.assertIn("label", s)
         self.assertIsInstance(m["default"], int)
 
-    def test_api_mcp_toggle_add_then_disable(self):
+    def test_api_mcp_toggle_opencode_add_then_disable(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:
-            cfg_path = Path(t) / "opencode.json"
+            root = Path(t)
+            cfg_path = root / "opencode.json"
             state = web.WebState(theme="neutral")
             preset = next(iter(web.harness._MCP_PRESETS))
-            saved = web.harness._mcp_targets
-            web.harness._mcp_targets = lambda: [("test", cfg_path)]
+            saved = web.harness._mcp_install_targets
+            web.harness._mcp_install_targets = \
+                lambda: [("test", cfg_path, "opencode", "project", root)]
             try:
                 res = web.api_mcp_toggle(
                     state, {"path": str(cfg_path), "name": preset, "enabled": True})
                 self.assertTrue(res["ok"])
                 self.assertEqual(res["state"], "enabled")
+                # OpenCode keeps the entry and flips its enabled flag → 'disabled'.
                 res = web.api_mcp_toggle(
                     state, {"path": str(cfg_path), "name": preset, "enabled": False})
                 self.assertTrue(res["ok"])
@@ -426,7 +432,93 @@ class McpTests(unittest.TestCase):
                     web.api_mcp_toggle(state, {"path": "bogus", "name": preset,
                                                "enabled": True})
             finally:
-                web.harness._mcp_targets = saved
+                web.harness._mcp_install_targets = saved
+
+    def test_api_mcp_toggle_claude_add_then_remove(self):
+        import tempfile, json as _json
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            cfg_path = root / ".mcp.json"
+            state = web.WebState(theme="neutral")
+            saved = web.harness._mcp_install_targets
+            web.harness._mcp_install_targets = \
+                lambda: [("project config", cfg_path, "claude", "project", root)]
+            try:
+                # Add markitdown → written under `mcpServers` in Claude's split shape.
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": "markitdown", "enabled": True})
+                self.assertTrue(res["ok"])
+                self.assertEqual(res["state"], "enabled")
+                cfg = _json.loads(cfg_path.read_text())
+                self.assertEqual(cfg["mcpServers"]["markitdown"],
+                                 {"command": "uvx", "args": ["markitdown-mcp"]})
+                self.assertNotIn("mcp", cfg)            # not OpenCode's key
+                # Claude has no enabled flag → toggling off REMOVES the entry (state absent).
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": "markitdown", "enabled": False})
+                self.assertTrue(res["ok"])
+                self.assertEqual(res["state"], "absent")
+                self.assertNotIn("markitdown",
+                                 _json.loads(cfg_path.read_text()).get("mcpServers", {}))
+            finally:
+                web.harness._mcp_install_targets = saved
+
+    def test_api_mcp_toggle_claude_preserves_other_keys_and_refuses_unparseable(self):
+        import tempfile, json as _json
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            cfg_path = root / ".claude.json"            # the user-scope config holds far more than MCP
+            state = web.WebState(theme="neutral")
+            saved = web.harness._mcp_install_targets
+            web.harness._mcp_install_targets = \
+                lambda: [("global config", cfg_path, "claude", "global", root)]
+            try:
+                cfg_path.write_text(_json.dumps(
+                    {"numStartups": 7, "projects": {"/x": {}}}))
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": "gitlab", "enabled": True})
+                self.assertTrue(res["ok"])
+                after = _json.loads(cfg_path.read_text())
+                self.assertEqual(after["numStartups"], 7)         # unrelated keys preserved
+                self.assertIn("gitlab", after["mcpServers"])
+                # A config we can't parse is refused, never clobbered.
+                cfg_path.write_text("{ not json")
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": "markitdown", "enabled": True})
+                self.assertFalse(res["ok"])
+                self.assertEqual(cfg_path.read_text(), "{ not json")
+            finally:
+                web.harness._mcp_install_targets = saved
+
+    def test_api_mcp_toggle_claude_does_not_mangle_string_values(self):
+        """A Claude config is strict JSON and must round-trip byte-faithfully: a string
+        value holding ',]' or ', }' (realistic in ~/.claude.json history/prompts) must NOT
+        have its comma silently dropped by the OpenCode comment-stripper's trailing-comma
+        pass. Regression guard for the parser-mismatch data-loss bug."""
+        import tempfile, json as _json
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            cfg_path = root / ".claude.json"
+            state = web.WebState(theme="neutral")
+            # Values that the non-string-aware trailing-comma regex would corrupt.
+            booby = {"history": [{"display": "jq .a[] | select(.x,]"},
+                                 {"display": "rewrite {a, } please"}],
+                     "note": "fix [1,2,] and {b, }"}
+            cfg_path.write_text(_json.dumps(booby))
+            saved = web.harness._mcp_install_targets
+            web.harness._mcp_install_targets = \
+                lambda: [("global config", cfg_path, "claude", "global", root)]
+            try:
+                res = web.api_mcp_toggle(
+                    state, {"path": str(cfg_path), "name": "markitdown", "enabled": True})
+                self.assertTrue(res["ok"])
+                after = _json.loads(cfg_path.read_text())
+                # Every booby-trapped string survives intact — no dropped commas.
+                self.assertEqual(after["history"], booby["history"])
+                self.assertEqual(after["note"], booby["note"])
+                self.assertIn("markitdown", after["mcpServers"])
+            finally:
+                web.harness._mcp_install_targets = saved
 
 
 class InstallActivationTests(unittest.TestCase):
@@ -448,7 +540,7 @@ class InstallActivationTests(unittest.TestCase):
         # One detected install: a GLOBAL root (it carries a manifest). Mirror the
         # path-allowlist contract of api_install_toggle by pinning _install_targets.
         self._saved_targets = web.harness._install_targets
-        web.harness._install_targets = lambda: [("global config", self.root)]
+        web.harness._install_targets = lambda: [("opencode", "global", self.root)]
 
     def tearDown(self):
         import shutil
@@ -497,12 +589,12 @@ class InstallActivationTests(unittest.TestCase):
         for key in ("id", "host", "scope", "path", "state"):
             self.assertIn(key, row)
         self.assertEqual(row["host"], "opencode")
-        self.assertEqual(row["scope"], "global config")
+        self.assertEqual(row["scope"], "global")
         self.assertEqual(row["path"], str(self.root))
         self.assertEqual(row["state"], "active")           # manifest present, no stash
 
         # absent: a root with neither manifest nor .opencode/ reports `absent`.
-        web.harness._install_targets = lambda: [("global config", self.tmp / "empty")]
+        web.harness._install_targets = lambda: [("opencode", "global", self.tmp / "empty")]
         (self.tmp / "empty").mkdir()
         self.assertEqual(
             web.api_installs(self.state)["installs"][0]["state"], "absent")
@@ -514,7 +606,7 @@ class InstallActivationTests(unittest.TestCase):
         x_bytes = (self.root / "agents" / "x.md").read_bytes()
 
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "deactivate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "deactivate"})
         self.assertTrue(res["ok"])
         self.assertEqual(res["kind"], "global")
         self.assertEqual(res["moved"], 2)                  # AGENT.md + agents/x.md
@@ -541,7 +633,7 @@ class InstallActivationTests(unittest.TestCase):
             web.api_installs(self.state)["installs"][0]["state"], "disabled")
 
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "activate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "activate"})
         self.assertTrue(res["ok"])
         # restored exactly to the original rel paths, byte-for-byte.
         self.assertEqual((self.root / "AGENT.md").read_bytes(), agent_bytes)
@@ -565,7 +657,7 @@ class InstallActivationTests(unittest.TestCase):
         self._stash().write_text("not a dir\n", encoding="utf-8")
 
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "deactivate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "deactivate"})
         self.assertFalse(res["ok"])
         self.assertIn("failed", res)
         self.assertTrue(res["failed"])
@@ -587,7 +679,7 @@ class InstallActivationTests(unittest.TestCase):
     def test_reactivate_discards_stash_when_files_re_created(self):
         self._seed_global()
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "deactivate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "deactivate"})
         self.assertTrue(res["ok"])
         self.assertTrue(self._stash().is_dir())
 
@@ -597,7 +689,7 @@ class InstallActivationTests(unittest.TestCase):
         self.assertTrue((self.root / "AGENT.md").is_file())
 
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "activate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "activate"})
         self.assertTrue(res["ok"])
         self.assertIn("note", res)
         self.assertIn("discarded", res["note"])
@@ -620,7 +712,7 @@ class InstallActivationTests(unittest.TestCase):
             encoding="utf-8")
 
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "deactivate"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "deactivate"})
         self.assertFalse(res["ok"])
         self.assertIn("error", res)
         # Nothing moved: live files in place, no stash created, comments intact.
@@ -642,8 +734,108 @@ class InstallActivationTests(unittest.TestCase):
     def test_install_toggle_unknown_action_is_not_ok(self):
         self._seed_global()
         res = web.api_install_toggle(
-            self.state, {"path": str(self.root), "action": "bogus"})
+            self.state, {"host": "opencode", "path": str(self.root), "action": "bogus"})
         self.assertFalse(res["ok"])
+
+
+class InstallCreateTests(unittest.TestCase):
+    """api_install_cmd resolves the build command for an install/re-theme, keyed on the
+    (host, path) allowlist; installs an absent row, rebuilds an active one, refuses a
+    disabled one and an unknown pair."""
+
+    def setUp(self):
+        self.state = web.WebState(theme="neutral")
+        self._saved = (web.harness._install_targets, web.harness._install_state)
+        self.cl = Path("/home/.claude")              # absent (claude)
+        self.oc = Path("/home/.config/opencode")     # active (opencode)
+        self.dis = Path("/home/proj")                # disabled (opencode project)
+        web.harness._install_targets = lambda: [
+            ("claude", "global", self.cl), ("opencode", "global", self.oc),
+            ("opencode", "project", self.dis)]
+        st = {(str(self.cl), "claude"): "absent", (str(self.oc), "opencode"): "active",
+              (str(self.dis), "opencode"): "disabled"}
+        web.harness._install_state = lambda r, h="opencode", s="global": \
+            st.get((str(r), h), "absent")
+
+    def tearDown(self):
+        web.harness._install_targets, web.harness._install_state = self._saved
+
+    def test_install_cmd_for_absent_global_target(self):
+        plan = web.api_install_cmd(self.state, {"host": "claude", "path": str(self.cl)})
+        self.assertIn("cmd", plan)
+        self.assertIn("claude-global", plan["cmd"])
+        self.assertIn("neutral", plan["cmd"])           # inherits the current voice
+        self.assertNotIn("--out", plan["cmd"])          # a global install takes no out/root
+
+    def test_install_cmd_honours_a_valid_picked_theme(self):
+        plan = web.api_install_cmd(
+            self.state, {"host": "claude", "path": str(self.cl), "theme": "imperial"})
+        self.assertIn("imperial", plan["cmd"])
+
+    def test_install_cmd_rejects_a_bogus_theme_and_falls_back(self):
+        plan = web.api_install_cmd(
+            self.state, {"host": "claude", "path": str(self.cl), "theme": "../evil"})
+        self.assertNotIn("../evil", plan["cmd"])        # never reaches the argv
+        self.assertIn("neutral", plan["cmd"])           # falls back to state.theme
+
+    def test_install_cmd_rebuilds_an_active_install(self):
+        # An active row re-themes/rebuilds in place — same build command, no refusal.
+        plan = web.api_install_cmd(
+            self.state, {"host": "opencode", "path": str(self.oc), "theme": "imperial"})
+        self.assertIn("cmd", plan)
+        self.assertIn("opencode-global", plan["cmd"])
+        self.assertIn("imperial", plan["cmd"])
+
+    def test_install_cmd_refuses_a_disabled_install(self):
+        plan = web.api_install_cmd(self.state, {"host": "opencode", "path": str(self.dis)})
+        self.assertIn("error", plan)
+        self.assertIn("disabled", plan["error"])
+
+    def test_install_cmd_unknown_pair_raises(self):
+        with self.assertRaises(web.NotFound):
+            web.api_install_cmd(self.state, {"host": "claude", "path": "/no/such/root"})
+
+
+class SelectViewTests(unittest.TestCase):
+    """The harness selector: api_select_view re-points the whole console at a detected
+    install (target/theme/emit), and api_installs marks the current one selected."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        self.oc = (self.tmp / "oc").resolve(); self.oc.mkdir()
+        self.cl = (self.tmp / "cl").resolve(); self.cl.mkdir()
+        (self.cl / ".geneseed-emit").write_text("claude-global", encoding="utf-8")
+        (self.cl / ".geneseed-theme").write_text("imperial", encoding="utf-8")
+        self.state = web.WebState(theme="neutral", target=self.oc)
+        self._saved = web.harness._install_targets
+        web.harness._install_targets = lambda: [
+            ("opencode", "global", self.oc), ("claude", "global", self.cl)]
+
+    def tearDown(self):
+        import shutil
+        web.harness._install_targets = self._saved
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_select_repoints_target_theme_and_emit(self):
+        res = web.api_select_view(self.state, {"host": "claude", "path": str(self.cl)})
+        self.assertTrue(res["ok"])
+        self.assertEqual(Path(self.state.target), self.cl)
+        self.assertEqual(self.state.theme, "imperial")        # read from cl's marker
+        self.assertEqual(self.state.emit, "claude-global")     # read from cl's marker
+
+    def test_select_unknown_pair_raises(self):
+        with self.assertRaises(web.NotFound):
+            web.api_select_view(self.state, {"host": "claude", "path": "/no/such/root"})
+
+    def test_installs_marks_the_current_view_selected(self):
+        rows = web.api_installs(self.state)["installs"]
+        selected = [r for r in rows if r["selected"]]
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["host"], "opencode")     # state.target starts at oc
+        web.api_select_view(self.state, {"host": "claude", "path": str(self.cl)})
+        rows = web.api_installs(self.state)["installs"]
+        self.assertEqual([r for r in rows if r["selected"]][0]["host"], "claude")
 
 
 class GraphTests(unittest.TestCase):

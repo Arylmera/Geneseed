@@ -100,9 +100,12 @@ streams the output of background jobs and keeps their history across reloads.
 - **Themes** (`#/themes`) — a gallery of the shipped voices (name, tagline, sigil, accent
   glow). **Apply** a voice to rebuild the deployed harness in that theme; the current one
   is marked.
-- **Settings** (`#/settings`) — the install snapshot (deployed/target/theme/version/memory
-  store/Python), a build & update picker (theme + emit), MCP server wiring, a Maintenance
-  card (PATH link/unlink, uninstall), and server controls (Stop).
+- **Settings** (`#/settings`) — a **Console direction** picker (the visual flavour of the
+  console) with a **Dashboard layout** control (Auto follows each theme's designed Status
+  lens; Cultivar / Greenhouse / Operator force one regardless of skin), the install snapshot
+  (deployed/target/theme/version/memory store/Python), a Maintenance card (PATH link/unlink,
+  uninstall), an offline package download, and server controls (Stop). Build, update, and MCP
+  wiring live in the Harnesses tab.
 
 ### ℹ️ About
 

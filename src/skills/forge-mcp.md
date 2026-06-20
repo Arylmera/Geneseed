@@ -1,4 +1,4 @@
-# {{SKILL}}: mcp
+# {{SKILL}}: forge-mcp
 
 > {{DESC_MCP}}
 

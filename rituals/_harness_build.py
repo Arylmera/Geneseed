@@ -14,6 +14,46 @@ def cmd_build(args: argparse.Namespace) -> int:
     return run([sys.executable, str(BUILD), *extra]).returncode
 
 
+# Default emit per (host, scope) when an install carries no `.geneseed-emit` marker
+# (a pre-marker install) — used by rebuild-all to rebuild it in its own mode.
+_DEFAULT_EMIT = {
+    ("opencode", "global"): "opencode-global", ("opencode", "project"): "opencode",
+    ("claude", "global"): "claude-global", ("claude", "project"): "claude",
+}
+
+
+def cmd_rebuild_all(args: argparse.Namespace) -> int:
+    """Rebuild every ACTIVE install in place, best-effort: each is re-emitted in its
+    own detected theme + emit (read from its markers), continuing past a failure so one
+    broken install never blocks the rest. Disabled/absent installs are skipped (an
+    absent row must never be CREATED by a rebuild). Returns non-zero if any failed."""
+    targets = [(h, s, r) for h, s, r in _install_targets()
+               if _install_state(r, h, s) == "active"]
+    if not targets:
+        print("[rebuild-all] no active installs detected.")
+        return 0
+    failures = []
+    for host, scope, root in targets:
+        em = root / ".geneseed-emit"
+        emit = (em.read_text(encoding="utf-8").strip() if em.is_file() else None) \
+            or _DEFAULT_EMIT.get((host, scope), "opencode-global")
+        theme = _theme_of_dir(root) or _default_theme()
+        out = None if scope == "global" else str(root)
+        argv = _setup_build_args(theme, emit, out, out)
+        label = f"{host}:{scope} ({root})"
+        print(f"[rebuild-all] {label}: theme={theme} emit={emit}")
+        rc = run([sys.executable, str(BUILD), *argv]).returncode
+        if rc != 0:
+            failures.append(label)
+            sys.stderr.write(f"[rebuild-all] FAILED {label} (exit {rc})\n")
+    if failures:
+        sys.stderr.write(f"[rebuild-all] {len(failures)}/{len(targets)} install(s) failed: "
+                         f"{', '.join(failures)}\n")
+        return 1
+    print(f"[rebuild-all] rebuilt {len(targets)} install(s).")
+    return 0
+
+
 def _link_problems(md: Path, text: str, out: Path, rel: Path) -> list[str]:
     """Dead links AND non-hermetic links — any target that leaves the bundle.
     Hermeticity (DESIGN Decision 5) is the invariant that lets the bundle be
