@@ -19,12 +19,14 @@ export const LAYOUTS = [
 
 const VALID = new Set(LAYOUTS.map((l) => l.id))
 
-// The layout each flavour was designed around — the 'auto' fallback. Greenhouse
-// gets its own layout; the dense terminal skins (Operator, Matrix, Cobalt) share
-// the Operator-HUD readout, and every other skin defaults to Cultivar.
+// The layout each flavour was designed around — the 'auto' fallback. The three
+// mono terminals are deliberately split across all three layouts so they no longer
+// present identically: Operator keeps the dense HUD readout, Cobalt takes the
+// Greenhouse ring, and Matrix falls through to the Cultivar genome grid (a grid of
+// cells suits "the matrix"). Greenhouse keeps its ring; every other skin → Cultivar.
 export function defaultLayoutFor(flavour) {
-  if (flavour === 'greenhouse') return 'greenhouse'
-  if (flavour === 'operator' || flavour === 'matrix' || flavour === 'cobalt') return 'operator'
+  if (flavour === 'greenhouse' || flavour === 'cobalt') return 'greenhouse'
+  if (flavour === 'operator') return 'operator'
   return 'cultivar'
 }
 

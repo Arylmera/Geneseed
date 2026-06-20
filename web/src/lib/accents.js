@@ -51,17 +51,17 @@ export function applyAccent(el, name, mode) {
 // `light` is the deeper companion (also the gradient end / --accent-2); `ink` /
 // `inkLight` are the readable text colour on a filled accent in each mode.
 export const CURATED_ACCENT = {
-  cultivar:    { dark: '#3AD4C4', light: '#1F9E92', ink: '#06100D', inkLight: '#FFFFFF' },
-  greenhouse:  { dark: '#5BD08A', light: '#2C9A5E', ink: '#06100D', inkLight: '#FFFFFF' },
-  operator:    { dark: '#E8A23B', light: '#B07914', ink: '#1A1306', inkLight: '#FFFFFF' },
-  heirloom:    { dark: '#B9A6C6', light: '#6E5A7C', ink: '#1B1622', inkLight: '#FFFFFF' },
-  matrix:      { dark: '#26A17B', light: '#18815F', ink: '#06100D', inkLight: '#FFFFFF' },
-  aurora:      { dark: '#8AFFC4', light: '#0EA66D', ink: '#04231A', inkLight: '#FFFFFF' },
-  perspective: { dark: '#00BD7D', light: '#00A86E', ink: '#04130D', inkLight: '#04130D' },
-  sequencer:   { dark: '#155DFC', light: '#1447E6', ink: '#FFFFFF', inkLight: '#FFFFFF' },
-  cobalt:      { dark: '#389DC6', light: '#1E6F92', ink: '#021015', inkLight: '#FFFFFF' },
-  cosmic:      { dark: '#2670AD', light: '#1A5080', ink: '#E6F2FF', inkLight: '#FFFFFF' },
-  neon:        { dark: '#F44174', light: '#D81E5B', ink: '#FFFFFF', inkLight: '#FFFFFF' },
+  cultivar: { dark: '#3AD4C4', light: '#127E73', ink: '#06100D', inkLight: '#FFFFFF' },
+  greenhouse: { dark: '#74CE86', light: '#1C8450', ink: '#06140C', inkLight: '#FFFFFF' },
+  operator: { dark: '#E8A23B', light: '#8F5E10', ink: '#1A1306', inkLight: '#FFFFFF' },
+  heirloom: { dark: '#B9A6C6', light: '#6E5A7C', ink: '#1B1622', inkLight: '#FFFFFF' },
+  matrix: { dark: '#19E37C', light: '#0B7A47', ink: '#04140C', inkLight: '#FFFFFF' },
+  aurora: { dark: '#46D6F2', light: '#0E7C97', ink: '#04222A', inkLight: '#FFFFFF' },
+  perspective: { dark: '#FF7A59', light: '#C24A2C', ink: '#2A0E04', inkLight: '#FFFFFF' },
+  sequencer: { dark: '#5B57E8', light: '#4F46E5', ink: '#FFFFFF', inkLight: '#FFFFFF' },
+  cobalt: { dark: '#2BA8FF', light: '#1668A8', ink: '#021018', inkLight: '#FFFFFF' },
+  cosmic: { dark: '#C081FF', light: '#7A33CC', ink: '#1A0833', inkLight: '#FFFFFF' },
+  neon: { dark: '#DB245C', light: '#D81E5B', ink: '#FFFFFF', inkLight: '#FFFFFF' },
 }
 
 // Write a flavour's curated accent on the app root (light reads the deeper

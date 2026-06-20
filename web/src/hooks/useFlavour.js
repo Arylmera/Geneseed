@@ -21,67 +21,74 @@ export const FLAVOURS = [
     id: 'cultivar',
     short: 'Cultivar',
     name: 'Cultivar Evolved',
-    tagline: 'The current console, modernised — clinical & calm.',
+    tagline:
+      'The calm default — cool teal ink, geometric sans, soft flat cards lit by one quiet shadow.',
   },
   {
     id: 'greenhouse',
     short: 'Greenhouse',
     name: 'Greenhouse',
-    tagline: 'Warm, organic, friendly — generous radius, soft cards.',
+    tagline:
+      'Warm loam dark, fresh sage green, rounded humanist type — the softest, friendliest skin.',
   },
   {
     id: 'operator',
     short: 'Operator',
     name: 'Operator HUD',
-    tagline: 'Dense terminal readout — sharp panels, numbers not chrome.',
+    tagline: 'Amber phosphor on cool charcoal — all-mono, zero-radius instrument readout.',
   },
   {
     id: 'heirloom',
     short: 'Heirloom',
     name: 'Heirloom',
-    tagline: 'Premium editorial — plum-tinted surfaces, serif display, deep calm.',
+    tagline: 'Aubergine plum and serif display — the one luxe, calm, editorial skin.',
   },
   {
     id: 'matrix',
     short: 'Matrix',
     name: 'Matrix',
-    tagline: 'Cyber-slick order-book — flat green, Space Mono, 2px corners.',
+    tagline:
+      'Acid-green order-book terminal on pure black — all Space Mono, square 2px, a faint code-grid.',
   },
   {
     id: 'aurora',
     short: 'Aurora',
     name: 'Aurora Glass',
-    tagline: 'Glassmorphism — frosted surfaces, aurora-lit deep navy.',
+    tagline:
+      'The glass skin — frosted navy panels lit by a cyan-to-violet aurora, airy and weightless.',
   },
   {
     id: 'perspective',
     short: 'Perspective',
     name: 'Perspective',
-    tagline: 'Depth-driven — layered surfaces, cast shadows, Oswald display.',
+    tagline:
+      'Coral on cool slate, condensed-architectural headings, cards that physically lift off the page.',
   },
   {
     id: 'sequencer',
     short: 'Sequencer',
     name: 'Sequencer',
-    tagline: 'Bright clinical dashboard — clean Inter cards, light or dark.',
+    tagline:
+      'A quant terminal in daylight — indigo on white, Inter, lining numerals on a fine ruled grid.',
   },
   {
     id: 'cobalt',
     short: 'Cobalt',
     name: 'Cobalt Terminal',
-    tagline: 'Matrix-inspired terminal — blue #389DC6 on black, IBM Plex Mono, sharp.',
+    tagline: 'Electric-blue hacker terminal — all-mono, 2px corners, CRT scanlines on near-black.',
   },
   {
     id: 'cosmic',
     short: 'Cosmic',
     name: 'Cosmic',
-    tagline: 'Deep-space sci-fi — navy void, Audiowide, glow & cut corners.',
+    tagline:
+      'Violet-magenta nebula on near-black — wide Audiowide wordmark, chamfered sci-fi instrumentation.',
   },
   {
     id: 'neon',
     short: 'Neon',
     name: 'Neon',
-    tagline: 'Mono/matrix dark — hot-pink #F44174 on near-black, Geist Mono, glass.',
+    tagline: 'Neon-noir: hot-pink edge-glow on near-black, all-mono Geist, frosted glass.',
   },
 ]
 
@@ -90,8 +97,16 @@ const VALID = new Set(FLAVOURS.map((f) => f.id))
 // Old single-letter ids (pre-rename) → current slugs, so a stored selection
 // survives the rename instead of silently resetting to the default.
 const LEGACY = {
-  a: 'cultivar', b: 'greenhouse', c: 'operator', d: 'heirloom', e: 'matrix',
-  f: 'aurora', g: 'perspective', z: 'sequencer', cb: 'cobalt', cm: 'cosmic',
+  a: 'cultivar',
+  b: 'greenhouse',
+  c: 'operator',
+  d: 'heirloom',
+  e: 'matrix',
+  f: 'aurora',
+  g: 'perspective',
+  z: 'sequencer',
+  cb: 'cobalt',
+  cm: 'cosmic',
 }
 
 // Persisted to localStorage, defaulting to `cultivar`. Returns [id, set] — a plain
