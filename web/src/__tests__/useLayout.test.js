@@ -12,7 +12,17 @@ describe('defaultLayoutFor', () => {
   // The original blank-tab bug: flavours with no dispatch branch (neon, perspective)
   // must fall back to a real lens, not undefined. Matrix now rides this fallback too.
   it('falls back to cultivar for every other flavour', () => {
-    for (const f of ['cultivar', 'heirloom', 'matrix', 'aurora', 'perspective', 'sequencer', 'cosmic', 'neon', undefined])
+    for (const f of [
+      'cultivar',
+      'heirloom',
+      'matrix',
+      'aurora',
+      'perspective',
+      'sequencer',
+      'cosmic',
+      'neon',
+      undefined,
+    ])
       expect(defaultLayoutFor(f)).toBe('cultivar')
   })
 })
@@ -30,7 +40,15 @@ describe('resolveLayout', () => {
   })
 
   it('never returns auto', () => {
-    for (const f of ['cultivar', 'greenhouse', 'operator', 'matrix', 'cobalt', 'neon', 'perspective'])
+    for (const f of [
+      'cultivar',
+      'greenhouse',
+      'operator',
+      'matrix',
+      'cobalt',
+      'neon',
+      'perspective',
+    ])
       expect(resolveLayout(f, 'auto')).not.toBe('auto')
   })
 })
