@@ -197,16 +197,3 @@ def api_activity_toggle(state: WebState, body: dict) -> dict:
     except OSError as e:
         return {"ok": False, "error": str(e)}
     return {"ok": True, "enabled": enabled}
-
-
-def api_activity_toggle(state: WebState, body: dict) -> dict:
-    """Flip the runtime on/off flag. The plugin reads it each event, so the change
-    takes effect without restarting opencode. Writing 'off' also makes the plugin
-    clear its files on its next event; the reader gates output immediately."""
-    enabled = bool(body.get("enabled", True))
-    try:
-        _activity_flag(state).parent.mkdir(parents=True, exist_ok=True)
-        _activity_flag(state).write_text("on" if enabled else "off", encoding="utf-8")
-    except OSError as e:
-        return {"ok": False, "error": str(e)}
-    return {"ok": True, "enabled": enabled}
