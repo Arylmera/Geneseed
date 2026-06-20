@@ -58,11 +58,16 @@ function EmptyDoc({ section, source }) {
 export default function Library({ overview, section, selected, dataRev }) {
   const initialSec = section && SECTIONS[section] ? section : SECTION_ORDER[0]
   const [sec, setSec] = useState(initialSec)
+  const [q, setQ] = useState('')
   const rowsRef = useRef(null)
 
-  // Sync sec from prop whenever the route hands us a different section.
+  // Sync sec from prop whenever the route hands us a different section, and drop
+  // any filter text so it doesn't carry across sections.
   useEffect(() => {
-    if (section && SECTIONS[section] && section !== sec) setSec(section)
+    if (section && SECTIONS[section] && section !== sec) {
+      setSec(section)
+      setQ('')
+    }
   }, [section]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const {
@@ -99,6 +104,22 @@ export default function Library({ overview, section, selected, dataRev }) {
     : null
   const activeItem = fromCatalog || synthetic
   const counts = overview?.counts || {}
+
+  // Render-cap the list so a big section (a wiki vault is the case that bites)
+  // doesn't paint hundreds of rows. With no filter we show the first 50; typing
+  // searches the full client-side list by title/name/path. The active item is
+  // always kept in view so a deep-link past row 50 still highlights.
+  const CAP = 50
+  const ql = q.trim().toLowerCase()
+  const matches = ql
+    ? items.filter((it) =>
+        `${it.title || ''} ${it.name || ''} ${it.desc || ''}`.toLowerCase().includes(ql),
+      )
+    : items.slice(0, CAP)
+  const shown =
+    !ql && activeName && !matches.some((it) => it.name === activeName)
+      ? [...matches, ...items.filter((it) => it.name === activeName)]
+      : matches
 
   // Keep the active row in view inside the master scroller without using
   // scrollIntoView (which would also scroll the page). Only re-center when
@@ -176,10 +197,20 @@ export default function Library({ overview, section, selected, dataRev }) {
         <div className="card lib-main">
           <div className="lib-head">
             <span className="lib-head-label">{SECTIONS[sec].label}</span>
-            <span className="lib-head-count">{items.length} items</span>
+            <span className="lib-head-count">
+              {ql ? `${matches.length} of ${items.length}` : `${items.length} items`}
+            </span>
           </div>
+          <input
+            className="lib-filter"
+            type="text"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={`Filter ${SECTIONS[sec].label.toLowerCase()}…`}
+            aria-label={`Filter ${SECTIONS[sec].label}`}
+          />
           <div className="lib-rows" ref={rowsRef}>
-            {items.map((it) => (
+            {shown.map((it) => (
               <LibRow
                 key={it.name}
                 item={it}
@@ -187,6 +218,17 @@ export default function Library({ overview, section, selected, dataRev }) {
                 onOpen={() => openItem(it.name)}
               />
             ))}
+            {!ql && items.length > CAP && (
+              <div className="lib-more">
+                Showing {CAP} of {items.length} — type to search the rest.
+              </div>
+            )}
+            {ql && matches.length === 0 && (
+              <div className="empty" style={{ padding: 32 }}>
+                <div className="big">No matches</div>
+                Nothing in {SECTIONS[sec].label.toLowerCase()} matches “{q.trim()}”.
+              </div>
+            )}
             {items.length === 0 && (
               <div className="empty" style={{ padding: 32 }}>
                 <div className="big">Nothing here yet</div>

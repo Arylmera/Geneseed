@@ -503,6 +503,13 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   text-transform: uppercase; color: var(--text-2); }
 .lib-head-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
   font-variant-numeric: tabular-nums; }
+.lib-filter { width: 100%; box-sizing: border-box; background: var(--surface);
+  color: var(--text); border: 0; border-bottom: 1px solid var(--line);
+  padding: 10px 16px; font-family: var(--font-mono); font-size: 12px; }
+.lib-filter:focus { outline: none; border-bottom-color: var(--accent-line); }
+.lib-filter::placeholder { color: var(--text-3); }
+.lib-more { padding: 12px 16px; font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-3); border-bottom: 1px solid var(--line); }
 .lib-rows { max-height: calc(100vh - 280px); overflow: auto; }
 .lib-row {
   display: block; width: 100%; text-align: left;
