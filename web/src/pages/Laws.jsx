@@ -51,6 +51,9 @@ const LAW_META = {
   29: ['comms', 'Match confidence to evidence; say what you did not verify.'],
   30: ['comms', 'Be useful, not agreeable; disagree on facts, then commit.'],
   31: ['comms', 'Surface real alternatives; keep the human the decision-maker.'],
+  32: ['craft', 'Edit the authoritative source layer, not the rendered output.'],
+  33: ['craft', 'Finish a delete or rename — reconcile every reference, no danglers.'],
+  34: ['verify', 'Record how to derive a volatile fact, not its stale value.'],
 }
 
 // Tiny inline formatter: render `code` spans and *emphasis* in plain rule text.

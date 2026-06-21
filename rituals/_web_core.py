@@ -127,7 +127,7 @@ DOC_GROUPS = [
             "Once installed, the agent doesn't change *how* you talk to "
             "your tool — it changes what the tool already knows when you do.\n\n"
             "### What loaded automatically\n\n"
-            "- **`AGENT.md`** — 21 universal Rules the agent obeys.\n"
+            "- **`AGENT.md`** — 34 universal Rules the agent obeys.\n"
             "- **Your repo's docs** — `README.md`, `CONTRIBUTING.md`, "
             "anything under `docs/` the harness discovers.\n"
             "- **Your machine's wiki** (if you set one up) — eager entries "
@@ -177,7 +177,7 @@ DOC_GROUPS = [
          "`build`."},
         {"id": "rules", "title": "Rules (Laws)", "kind": "concept",
          "link": {"hash": "#/laws", "label": "Browse the ledger →"},
-         "body": "21 universal laws the agent obeys — secrets handling, "
+         "body": "34 universal laws the agent obeys — secrets handling, "
          "scope discipline, verify-before-assert, surface-failures, context "
          "economy, load-the-docs, tool-discovery, non-interactive-shell, and "
          "more. Each law is a "

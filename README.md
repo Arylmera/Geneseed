@@ -11,7 +11,7 @@
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
 [![Skills](https://img.shields.io/badge/skills-38-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-16-orange)](src/agents/)
-[![Laws](https://img.shields.io/badge/laws-31-critical)](src/laws/universal.md)
+[![Laws](https://img.shields.io/badge/laws-34-critical)](src/laws/universal.md)
 [![OpenCode · Claude Code · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20AGENT.md-1f6feb)](#-2--setup)
 
 [**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & TUI**](#-3--web--tui) · [**What you get**](#-4--what-you-get)
@@ -141,7 +141,7 @@ The harness ships as a small set of layers, mirrored one-for-one in the web cons
 
 | Layer | What it is |
 | --- | --- |
-| **🛡️ Rules** (`laws/`) | 31 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery, non-interactive-shell, untrusted-content, least-privilege, root-cause, idempotency, calibrated-honesty… |
+| **🛡️ Rules** (`laws/`) | 34 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery, non-interactive-shell, untrusted-content, least-privilege, root-cause, idempotency, calibrated-honesty, source-over-surface, total-teardown… |
 | **🤖 Agents** (16) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
 | **🛠 Skills** (37) | repeatable workflows: brainstorm · **clarify** · plan · tdd · debug · refactor · **ponytail** · **forge-mcp** · geneseed-code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **learning-path** · **gap-detector** · **feynman** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **herdr** |
 | **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes; `geneseed-ponytail` holds a minimal-code mode (`/ponytail lite\|full\|ultra\|off`), opt-in, injecting the laziest-that-works ruleset every turn so it doesn't drift |
