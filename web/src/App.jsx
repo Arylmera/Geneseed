@@ -14,6 +14,7 @@ import Topbar from './components/Topbar.jsx'
 import VoicePopover from './components/VoicePopover.jsx'
 import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
+import BootSplash from './components/BootSplash.jsx'
 import Dashboard from './pages/Dashboard/index.jsx'
 import Activity from './pages/Activity.jsx'
 import ActivityDetail from './pages/ActivityDetail.jsx'
@@ -43,6 +44,7 @@ export default function App() {
   const [flavour, setFlavour] = useFlavour()
   const [accentMode, setAccentMode] = useAccentMode()
   const [layout, setLayout] = useLayout()
+  const [booting, setBooting] = useState(true)
   const appRef = useRef(null)
 
   const onError = (e) => setToast({ kind: 'err', msg: e.message })
@@ -205,6 +207,7 @@ export default function App() {
         />
       </div>
       {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
+      {booting && <BootSplash ready={!!overview} onDone={() => setBooting(false)} />}
     </div>
   )
 }

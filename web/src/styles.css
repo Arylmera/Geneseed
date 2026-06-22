@@ -2824,3 +2824,39 @@ a.rail-item.active { color: var(--text); }
   .spec-date { grid-column: 1 / -1; margin-bottom: 4px; }
   .spec-status { grid-column: 1 / -1; justify-self: start; margin-top: 4px; }
 }
+
+/* ============================ BOOT SPLASH ============================== */
+/* Startup overlay — sprout germinates inside the dial, ring fills, then fades.
+   Plays once per app load; accent inherits from .app's --accent so the user's
+   selected voice/flavour tints every part. */
+.boot-splash { position: fixed; inset: 0; z-index: 100; display: flex;
+  flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  background: var(--bg); }
+.boot-splash.fading { animation: splashOut .55s ease forwards; }
+.boot-dial { position: relative; width: 172px; height: 172px;
+  animation: glowPulse 1.8s ease-in-out infinite; }
+.boot-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+.boot-progress { stroke-dasharray: 452; stroke-dashoffset: 452; --end: 0;
+  animation: ringFill 2.2s cubic-bezier(.2,.7,.2,1) .35s forwards; }
+.boot-sprout { position: absolute; top: 50%; left: 50%;
+  width: 58px; height: 58px; transform: translate(-50%,-50%); overflow: visible; }
+.boot-sprout .bs-stem { transform-origin: 12px 21.5px; transform: scaleY(0);
+  animation: stemGrow .6s cubic-bezier(.2,.7,.2,1) .4s forwards; }
+.boot-sprout .bs-leaf { transform-origin: 12px 12px; transform: scale(0); }
+.boot-sprout .bs-leaf-main {
+  animation: leafIn .5s cubic-bezier(.34,1.56,.64,1) 1s forwards; }
+.boot-sprout .bs-leaf-back {
+  animation: leafIn .5s cubic-bezier(.34,1.56,.64,1) 1.25s forwards; }
+.boot-status { display: flex; align-items: center;
+  font: 500 12px var(--font-mono); color: var(--text-2); }
+.boot-caret { width: 6px; height: 13px; background: var(--accent);
+  margin-left: 7px; animation: blink 1s steps(1) infinite; }
+
+@keyframes splashOut { to { opacity: 0; visibility: hidden; } }
+@keyframes stemGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes leafIn { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes ringFill { to { stroke-dashoffset: var(--end); } }
+@keyframes glowPulse {
+  0%, 100% { filter: drop-shadow(0 0 6px var(--accent-soft)); }
+  50%      { filter: drop-shadow(0 0 16px var(--accent-line)); }
+}
