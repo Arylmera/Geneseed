@@ -74,7 +74,8 @@ def main() -> None:
                     help="output directory — absolute, or relative to the current "
                          "directory (default: ./Harness)")
     ap.add_argument("--emit",
-                    choices=["files", "opencode", "opencode-global", "claude", "claude-global"],
+                    choices=["files", "opencode", "opencode-global", "claude", "claude-global",
+                             "bob", "bob-global"],
                     default="files",
                     help="files: plain bundle (default). opencode: bundle + per-repo "
                          ".opencode/ subagents, native skills & opencode.json. "
@@ -83,7 +84,9 @@ def main() -> None:
                          "global, zero per-repo files (GLOBAL-HARNESS-SPEC.md). "
                          "claude: per-repo CLAUDE.md + .claude/ (agents, skills, hooks). "
                          "claude-global: render into Claude Code's global config dir "
-                         "(~/.claude) — CLAUDE.md, agents, skills, settings.json hooks")
+                         "(~/.claude) — CLAUDE.md, agents, skills, settings.json hooks. "
+                         "bob: per-repo AGENTS.md + .bob/ for IBM Bob (agents, skills, "
+                         "settings.json). bob-global: render into ~/.bob ($BOB_CONFIG_DIR)")
     ap.add_argument("--root", default=None,
                     help="project root the agent/OpenCode run from — where opencode.json "
                          "and .opencode/ are placed (default: same as --out). Set this when "
@@ -101,6 +104,10 @@ def main() -> None:
         emit_claude(args.theme, out, root)
     elif args.emit == "claude-global":
         emit_claude_global(args.theme, out)
+    elif args.emit == "bob":
+        emit_bob(args.theme, out, root)
+    elif args.emit == "bob-global":
+        emit_bob_global(args.theme, out)
     else:
         build(args.theme, out)
 
@@ -112,6 +119,8 @@ def main() -> None:
         marker_dir = _opencode_config_dir()
     elif args.emit == "claude-global":
         marker_dir = _claude_config_dir()
+    elif args.emit == "bob-global":
+        marker_dir = _bob_config_dir()
     else:
         marker_dir = out
     try:
@@ -121,10 +130,24 @@ def main() -> None:
         pass
     # build() already drops a .geneseed-theme marker in `out`; the global emits render
     # into the config dir without calling build(), so record the theme there too.
-    if args.emit in ("opencode-global", "claude-global"):
+    if args.emit in ("opencode-global", "claude-global", "bob-global"):
         try:
             (marker_dir / ".geneseed-theme").write_text(args.theme + "\n", encoding="utf-8")
         except OSError:
+            pass
+    # Register per-repo HOST deploy roots so the web console lists harnesses deployed
+    # outside its cwd / the global config dirs. Allow-list (not "not global") so a plain
+    # `--emit files` bundle — the default dev build — never pollutes the registry: only
+    # opencode/claude project emits are ones _EMIT_HOST_SCOPE can map back to a row.
+    # Best-effort — mirrors the marker writes above; a registry hiccup must never fail
+    # a build. Records `out` (where the marker is); the web Deploy always sends out==root.
+    # ponytail: a CLI `--root != --out` bundle records `out` and may read 'absent' (the
+    # install layer sits under `root`) — unsupported edge; fix marker_dir=root if needed.
+    if args.emit in ("opencode", "claude", "bob"):
+        try:
+            import _install_registry
+            _install_registry.record(marker_dir)
+        except Exception:
             pass
 
 

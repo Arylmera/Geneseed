@@ -576,31 +576,11 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .problem .x { color: var(--bad); }
 
 /* ============================ GRAPH ================================== */
-.graph-wrap { padding: 14px; overflow: hidden; }
-.graph-wrap svg { width: 100%; height: auto; display: block; touch-action: none;
-  user-select: none; }
-.graph-toolbar { display: flex; align-items: center; gap: 10px; padding: 0 2px 10px;
-  font-family: var(--font-mono); font-size: 11.5px; color: var(--text-2); }
 .graph-search { background: var(--surface); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: 5px 10px; font-family: var(--font-mono); font-size: 12px;
-  width: 220px; transition: border-color .15s, width .15s; }
-.graph-search:focus { border-color: var(--accent-line); outline: none; width: 260px; }
+  width: 200px; transition: border-color .15s, width .15s; }
+.graph-search:focus { border-color: var(--accent-line); outline: none; width: 240px; }
 .graph-search::placeholder { color: var(--text-3); }
-.gedge { stroke: var(--line-2); stroke-width: 1.1; transition: stroke .15s, opacity .15s,
-  stroke-width .15s; opacity: .7; }
-.gedge.lit { stroke: var(--accent); stroke-width: 1.6; opacity: .95; }
-.gedge.dim { opacity: .12; }
-.gnode { cursor: pointer; }
-.gnode circle { stroke: var(--bg); stroke-width: 1.6; transition: r .15s; }
-.gnode .ghub { stroke: none; pointer-events: none; }
-.gnode.agent > circle:not(.ghub) { fill: var(--accent); }
-.gnode.skill > circle:not(.ghub) { fill: var(--good); }
-.gnode.law > circle:not(.ghub) { fill: var(--warn); }
-.gnode text { fill: var(--text-2); font-family: var(--font-mono); font-size: 11px;
-  pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px;
-  stroke-linejoin: round; }
-.gnode:hover text, .gnode.near text { fill: var(--text); }
-.gnode.dim { opacity: .22; }
 .legend { display: flex; gap: 18px; align-items: center; font-family: var(--font-mono);
   font-size: 11.5px; color: var(--text-2); }
 .legend .sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block;
@@ -2660,67 +2640,49 @@ a.rail-item.active { color: var(--text); }
 }
 
 /* ============================================================================
-   GRAPH — layered column layout. Three vertical columns (Laws · Agents ·
-   Skills); edges are bezier curves crossing the column gutters. Replaces the
-   prior force-directed canvas; the data shape is the same.
+   GRAPH EXPLORER — three lenses (matrix · arc · network) on the same graph.
+   Tabs reuse .seg; the SVGs keep their natural pixel size and scroll inside
+   .gx-canvas. Node colours go through inline `style` (var(--…) doesn't resolve
+   in SVG fill/stroke attributes) so the graph restains with the active theme.
    ============================================================================ */
-.graph-scroll {
-  overflow: auto;
-  max-height: calc(100vh - 240px);
-  scrollbar-width: thin;
-}
-/* Width-fill + auto-height so the canvas extends downward with the data
-   instead of being letterboxed when the container is wider than viewBox. */
-.graph-svg { display: block; height: auto; max-width: 100%; }
+.gx-stats { text-align: right; font-size: 11px; color: var(--text-3); line-height: 1.7;
+  white-space: nowrap; }
+.gx-stats span { color: var(--text); font-size: 13px; }
 
-.gcol-title {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: .14em;
-}
+.gx-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 0 2px 14px; font-family: var(--font-mono); }
+.gx-search { position: relative; display: inline-flex; }
+.gx-search .graph-search { padding-left: 28px; }
+.gx-search-ic { position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+  color: var(--text-3); font-size: 13px; pointer-events: none; }
+.gx-filters { display: flex; gap: 6px; }
+.gx-filter { display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 11.5px; padding: 6px 11px;
+  border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface-2);
+  color: var(--text); transition: opacity .15s, border-color .15s, background .15s, color .15s; }
+.gx-filter:hover { border-color: var(--line-3); }
+.gx-filter.off { background: transparent; border-color: var(--line); color: var(--text-3); }
+.gx-filter.off .dot { opacity: .35; }
+.gx-filter .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.gx-readout { margin-left: auto; min-height: 18px; font-size: 11.5px; color: var(--text-2); }
 
-/* Edges are the whole point of the constellation, so the idle stroke needs
-   to read at a glance — not the near-invisible 1px line-2 of the old graph.
-   text-2 at full opacity gives a solid medium-grey line that pops on dark
-   ink without overwhelming the nodes. Lit/dim states still take over on
-   hover trace. */
-.gedge2 {
-  fill: none;
-  stroke: var(--text-2);
-  stroke-width: 1.3;
-  opacity: .55;
-  transition: stroke .12s, opacity .12s, stroke-width .12s;
-}
-.gedge2.lit { stroke: var(--accent); stroke-width: 2; opacity: 1; }
-.gedge2.dim { opacity: .07; }
-
-.gnode2 { cursor: pointer; }
-/* Invisible hit rect spans the full row so hover lands easily — the 3.4px
-   coloured circle alone is too small a target. The rect catches the pointer
-   first; the visible circle and text sit on top of it. */
-.gnode2 .ghit { fill: transparent; }
-.gnode2 circle:not(.ghit) {
-  stroke: var(--bg);
-  stroke-width: 1.4;
-  transition: r .12s;
-  pointer-events: none;
-}
-.gnode2.agent > circle:not(.ghit) { fill: var(--accent); }
-.gnode2.skill > circle:not(.ghit) { fill: var(--good); }
-.gnode2.law > circle:not(.ghit) { fill: var(--warn); }
-.gnode2 text {
-  fill: var(--text-2);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  pointer-events: none;
-  dominant-baseline: middle;
-}
-.gnode2:hover text,
-.gnode2.near text { fill: var(--text); }
-.gnode2:hover circle:not(.ghit),
-.gnode2.near circle:not(.ghit) { r: 4.2; }
-.gnode2.dim { opacity: .22; }
+.gx-canvas { overflow: auto; border: 1px solid var(--line); border-radius: var(--r-md);
+  background-color: var(--bg-2);
+  background-image: linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px);
+  background-size: 24px 24px;
+  box-shadow: 0 14px 40px -28px rgba(0,0,0,.9) inset;
+  max-height: calc(100vh - 300px); scrollbar-width: thin; }
+.gx-inner { min-width: max-content; padding: 8px; animation: gxfade .25s ease; }
+/* Matrix gets the full canvas width to work with, but the svg keeps its native
+   cell/label sizing — it only shrinks to fit (max-width), never upscales — and
+   centres in the leftover space instead of hugging the left edge. */
+.gx-inner.fluid { min-width: 0; width: 100%; display: flex; justify-content: center;
+  align-items: flex-start; }
+.gx-svg.gx-fluid { max-width: 100%; height: auto; }
+.gx-svg { display: block; font-family: var(--font-mono); user-select: none; }
+.gx-hint { margin: 14px 2px 0; font-size: 11px; color: var(--text-3); line-height: 1.6; }
+@keyframes gxfade { from { opacity: 0; } to { opacity: 1; } }
 
 /* ============================================================================
    SPECS — collapsible single-column list. Each row is a card; clicking the
@@ -2860,3 +2822,19 @@ a.rail-item.active { color: var(--text); }
   0%, 100% { filter: drop-shadow(0 0 6px var(--accent-soft)); }
   50%      { filter: drop-shadow(0 0 16px var(--accent-line)); }
 }
+
+/* Deploy-to-folder popover (Harnesses page): a small inline form under the card head.
+   Native folder picker lives server-side, so the text field is the source of truth and
+   stays editable. Self-contained block — appended to dodge the styles.css merge race. */
+.deploy-pop { border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  background: var(--surface); padding: 12px; margin-bottom: 16px;
+  display: flex; flex-direction: column; gap: 10px; }
+.deploy-pop .dp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.deploy-pop .dp-path { flex: 1 1 260px; min-width: 200px; background: var(--surface-2);
+  color: var(--text); border: 1px solid var(--line-2); border-radius: var(--r-xs);
+  padding: 7px 10px; font-family: var(--font-mono, monospace); font-size: 13px; }
+.deploy-pop .dp-path:focus { outline: none; border-color: var(--accent-line); }
+.deploy-pop .dp-note { margin: 0; color: var(--text-2); }
+.deploy-pop .dp-note code { color: var(--text); }
+.deploy-pop .dp-field { display: flex; align-items: center; gap: 6px; }
+.deploy-pop .dp-field > span { color: var(--text-2); font-size: 12px; white-space: nowrap; }

@@ -43,11 +43,21 @@ def _diff_collect(target=None, theme=None):
         cfgp = ROOT / "harness.config.json"
         theme = (json.loads(cfgp.read_text(encoding="utf-8")).get("theme", "neutral")
                  if cfgp.exists() else "neutral")
+    # Render the 'expected' copy with the deployed install's OWN host emit (read from its
+    # `.geneseed-emit` marker), so a Claude/Bob install isn't diffed against an
+    # OpenCode-dialect tree — which would flag every agent + AGENT.md/opencode.json as
+    # drift. Fall back to OpenCode for an unknown/missing marker.
+    try:
+        emit = (target / ".geneseed-emit").read_text(encoding="utf-8").strip()
+    except OSError:
+        emit = ""
+    host = _EMIT_HOST_SCOPE.get(emit, ("opencode", "global"))[0]
+    emitter = build.HOSTS.get(host, build.HOSTS["opencode"])["emit_global"]
     files = []
     with tempfile.TemporaryDirectory() as tmp:
         expected = Path(tmp) / "expected"
         with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's own log
-            build.emit_opencode_global(theme, out=Path(tmp) / "bundle", cfg=expected)
+            emitter(theme, out=Path(tmp) / "bundle", cfg=expected)
         for rel in sorted(_owned_set(target) | _owned_set(expected)):
             a, b = target / rel, expected / rel
             if a.is_file() and b.is_file():

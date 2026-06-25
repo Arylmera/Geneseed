@@ -69,6 +69,8 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
   const [mcpBusy, setMcpBusy] = useState('') // mcp server toggle in flight
   const [pick, setPick] = useState({}) // chosen voice, keyed by row id
   const [collapsed, setCollapsed] = useState({}) // explicit collapses; MCP rows open by default
+  const [deploy, setDeploy] = useState(null) // null = closed; { path, host, theme } = the deploy form
+  const [browsing, setBrowsing] = useState(false) // native folder picker in flight
 
   // Group MCP targets by their owning install (host, root). api_mcp only returns targets
   // for active installs, so every group has a matching harness row to nest beneath.
@@ -150,6 +152,51 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
 
   const toggleOpen = (id) => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
 
+  // Deploy a fresh per-repo harness into a folder the user chooses — the open-ended
+  // sibling of a row's Install (which only targets pre-detected locations). The build
+  // registers the new root, so it then shows up as its own row. Default the host to the
+  // one you already use (selected view → any active install → first row) so a Claude
+  // shop isn't silently pushed toward OpenCode.
+  const defaultHost = () =>
+    installs.find((i) => i.selected)?.host ||
+    installs.find((i) => i.state === 'active')?.host ||
+    installs[0]?.host ||
+    'opencode'
+  const openDeploy = () =>
+    setDeploy({ path: '', host: defaultHost(), theme: currentTheme || 'neutral' })
+
+  // The native folder chooser lives on the daemon host: a browser can't reveal a disk
+  // path, so the server pops a real Finder/dialog on the user's own screen.
+  const browseFolder = async () => {
+    setBrowsing(true)
+    setNote('')
+    try {
+      const r = await api.pickFolder()
+      // Guard d: the user may have cancelled the popover during the (blocking) native
+      // dialog — don't resurrect a closed form with an undefined host/theme.
+      if (r.path) setDeploy((d) => (d ? { ...d, path: r.path } : d))
+      else if (r.error) setNote(r.error)
+    } catch (e) {
+      setNote(e.message)
+    } finally {
+      setBrowsing(false)
+    }
+  }
+
+  const submitDeploy = async () => {
+    const path = (deploy?.path || '').trim()
+    if (!path) {
+      setNote('Choose or type a folder to deploy into.')
+      return
+    }
+    setNote('')
+    // Close only if the job was accepted (truthy job id). A rejected path (400 —
+    // missing/unwritable folder, the editable field's main failure mode) keeps the
+    // popover open with the typed path intact; the error shows as a toast.
+    const jobId = await onAction?.('deploy', { host: deploy.host, path, theme: deploy.theme })
+    if (jobId) setDeploy(null)
+  }
+
   return (
     <div className="card pad-lg mb-16">
       <div className="card-head">
@@ -158,11 +205,75 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
           <span className="tick">
             {activeCount} active · {installs.length} total
           </span>
+          {onAction ? (
+            <button className="btn" onClick={() => (deploy ? setDeploy(null) : openDeploy())}>
+              <Icon name="folder" /> Deploy to folder…
+            </button>
+          ) : null}
           <button className="btn" onClick={() => onAction('build-all')}>
             <Icon name="refresh" /> Rebuild all
           </button>
         </div>
       </div>
+
+      {deploy ? (
+        <div className="deploy-pop">
+          <div className="dp-row">
+            <input
+              className="inp dp-path"
+              type="text"
+              placeholder="/path/to/project — or click Browse…"
+              value={deploy.path}
+              onChange={(e) => setDeploy((d) => ({ ...d, path: e.target.value }))}
+              onKeyDown={(e) => e.key === 'Enter' && submitDeploy()}
+            />
+            <button className="btn ghost sm" disabled={browsing} onClick={browseFolder}>
+              {browsing ? 'Choosing…' : 'Browse…'}
+            </button>
+          </div>
+          <div className="dp-row">
+            <label className="dp-field">
+              <span>Deploy as</span>
+              <select
+                className="sel"
+                aria-label="host for the new harness"
+                value={deploy.host}
+                onChange={(e) => setDeploy((d) => ({ ...d, host: e.target.value }))}
+              >
+                <option value="opencode">OpenCode</option>
+                <option value="claude">Claude Code</option>
+                <option value="bob">BOB (IBM)</option>
+              </select>
+            </label>
+            <label className="dp-field">
+              <span>Voice</span>
+              <VoiceSelect
+                label="voice for the new harness"
+                value={deploy.theme}
+                themes={themes}
+                onChange={(v) => setDeploy((d) => ({ ...d, theme: v }))}
+              />
+            </label>
+            <button className="btn sm" onClick={submitDeploy}>
+              Deploy
+            </button>
+            <button className="btn ghost sm" onClick={() => setDeploy(null)}>
+              Cancel
+            </button>
+          </div>
+          <p className="sub dp-note">
+            Adds a per-repo harness (
+            <code>
+              {deploy.host === 'claude'
+                ? '.claude/ + CLAUDE.md'
+                : deploy.host === 'bob'
+                  ? '.bob/ + AGENTS.md'
+                  : '.opencode/ + AGENT.md'}
+            </code>
+            ) into the folder, non-destructively. It’s then tracked here even after you leave its directory.
+          </p>
+        </div>
+      ) : null}
       <p className="sub mb-16">
         Every Geneseed install on this machine — OpenCode and Claude Code, global and per-repo.
         Toggle one off without deleting it (files move aside, reactivate any time). Active rows

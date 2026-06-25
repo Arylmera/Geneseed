@@ -114,10 +114,10 @@ def api_restore(state: WebState, files: list) -> dict:
     target = state.target.resolve()
     with tempfile.TemporaryDirectory() as tmp:
         expected = (Path(tmp) / "expected").resolve()
-        # Render the EXPECTED copy with the deployed install's own host emit, so a
-        # restore on a Claude row renders Claude (not a silently-OpenCode expected).
-        emitter = (build.emit_claude_global if (state.emit or "").startswith("claude")
-                   else build.emit_opencode_global)
+        # Render the EXPECTED copy with the deployed install's OWN host emit, so a
+        # restore renders the right dialect (Claude/Bob agents, not a silently-OpenCode
+        # expected that would overwrite them with the wrong frontmatter / delete them).
+        emitter = _global_emitter_for(state.emit)
         with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's own log
             emitter(state.theme, out=Path(tmp) / "bundle", cfg=expected)
         for rel in files or []:
@@ -184,13 +184,14 @@ def api_mcp_toggle(state: WebState, body: dict) -> dict:
     if harness._mcp_commented(path):
         return {"ok": False,
                 "error": "config holds comments — edit it by hand to keep them"}
-    if host == "claude":
-        # Claude configs are strict JSON. Parse ONCE, strictly, and rewrite THAT exact dict
-        # — so the safety check and the value we save come from the same read (no
-        # parser-mismatch, no time-of-check/time-of-use gap) and a string value containing
-        # ',]' / ', }' is never mangled by the comment-stripper's trailing-comma pass.
-        # Refuse an existing file we cannot parse rather than clobber it: it may be the
-        # large ~/.claude.json, which holds projects/history far beyond MCP wiring.
+    if host in ("claude", "bob"):
+        # Claude AND Bob configs are strict JSON. Parse ONCE, strictly, and rewrite THAT
+        # exact dict — so the safety check and the value we save come from the same read
+        # (no parser-mismatch, no time-of-check/time-of-use gap) and a string value
+        # containing ',]' / ', }' is never mangled by the comment-stripper's trailing-comma
+        # pass. Refuse an existing file we cannot parse rather than clobber it: it may be
+        # ~/.claude.json (projects/history) or Bob's settings.json (hooks/permissions far
+        # beyond MCP wiring).
         if path.is_file():
             try:
                 cfg = json.loads(path.read_text(encoding="utf-8"))
@@ -233,9 +234,20 @@ def api_installs(state: WebState) -> dict:
 
 def _view_cfg(host: str, scope: str, root) -> Path:
     """The data dir to read an install's inventory/memory/diff from. Global installs (and
-    the OpenCode per-repo bundle) keep it at the root; a Claude per-repo install keeps it
-    under <repo>/.claude."""
-    return (root / ".claude") if (host == "claude" and scope == "project") else root
+    the OpenCode per-repo bundle) keep it at the root; a Claude OR Bob per-repo install
+    keeps it under its marker dir (<repo>/.claude, <repo>/.bob) — host-driven so a new
+    nested-marker host can't silently read the bare root."""
+    if scope == "project" and host in ("claude", "bob"):
+        return root / build.HOSTS[host]["project_marker"]
+    return root
+
+
+def _global_emitter_for(emit: "str | None"):
+    """The global emit fn matching a deployed install's `.geneseed-emit` value, so the
+    'expected' render (restore/diff) uses the install's OWN host dialect. Falls back to
+    the OpenCode global emit for an unknown/missing marker."""
+    host = harness._EMIT_HOST_SCOPE.get(emit or "", ("opencode", "global"))[0]
+    return build.HOSTS.get(host, build.HOSTS["opencode"])["emit_global"]
 
 
 def api_select_view(state: WebState, body: dict) -> dict:
@@ -255,6 +267,7 @@ def api_select_view(state: WebState, body: dict) -> dict:
 _EMIT_FOR = {
     ("opencode", "global"): "opencode-global", ("opencode", "project"): "opencode",
     ("claude", "global"): "claude-global", ("claude", "project"): "claude",
+    ("bob", "global"): "bob-global", ("bob", "project"): "bob",
 }
 
 
@@ -285,6 +298,89 @@ def api_install_cmd(state: WebState, body: dict) -> dict:
     out = None if scope == "global" else str(root)
     argv = harness._setup_build_args(theme or "neutral", emit, out, out)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
+
+
+def api_deploy_cmd(state: WebState, body: dict) -> dict:
+    """Resolve the build command that deploys a FRESH per-repo harness into an arbitrary
+    folder the user chose — the open-ended sibling of api_install_cmd (which only
+    (re)builds a pre-detected target from a tight allowlist). Scope is always 'project':
+    a global lands in the host's config dir, never a chosen folder. The path is validated
+    here as an existing, writable directory (this endpoint takes a raw path, so it's the
+    trust boundary); host must be known; voice is a valid picked theme else the current
+    one. The deploy records its root in the registry (build.py choke point), so the new
+    harness then appears in the installs list. Returns {"cmd": [...]} or {"error": ...}."""
+    host = (body.get("host") or "").strip()
+    if host not in build.HOSTS:
+        return {"error": f"unknown host: {host or '(none)'}"}
+    raw = (body.get("path") or "").strip()
+    if not raw:
+        return {"error": "no folder given"}
+    root = Path(raw).expanduser()
+    try:
+        root = root.resolve()
+    except OSError:
+        return {"error": f"bad path: {raw}"}
+    if not root.is_dir():
+        return {"error": f"not a folder: {root}"}
+    if not os.access(root, os.W_OK):
+        return {"error": f"folder not writable: {root}"}
+    # A host's own global config dir isn't a per-repo deploy target — deploying a
+    # 'project' emit there would mislabel as the global row (dedup collision). Send the
+    # user to the existing global row instead.
+    cfgdirs = set()
+    for cfgfn in (build._opencode_config_dir, build._claude_config_dir):
+        try:
+            cfgdirs.add(cfgfn().resolve())
+        except Exception:
+            pass
+    if root in cfgdirs:
+        return {"error": "that's a host global config dir — use its existing row to build a global install"}
+    themes = {c["name"] for c in _theme_choices()}
+    theme = body.get("theme") if body.get("theme") in themes else state.theme
+    emit = host   # project-scope emit name == host name (opencode / claude / bob)
+    argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root))
+    return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
+
+
+def api_pick_folder(state: WebState | None = None, body: dict | None = None) -> dict:
+    """Open the OS-native folder chooser ON THE DAEMON HOST and return the picked
+    absolute path. For a local console the daemon shares the user's screen, so this IS a
+    native picker — a browser can't reveal a disk path itself. macOS: osascript `choose
+    folder` (a StandardAdditions command — runs in-process, no automation-consent
+    prompt). Else: a one-shot tkinter askdirectory subprocess (kept off the server thread).
+    Returns {"path": ...} | {"cancelled": True} | {"error": ...}; on error (e.g. a headless
+    daemon with no GUI session) the UI falls back to its editable path field."""
+    import subprocess
+    if sys.platform == "darwin":
+        osa = ('set f to POSIX path of (choose folder with prompt '
+               '"Choose a folder to deploy the harness into")\nreturn f')
+        try:
+            r = subprocess.run(["osascript", "-e", osa],
+                               capture_output=True, text=True, timeout=300)
+        except (OSError, subprocess.SubprocessError) as e:
+            return {"error": f"folder picker unavailable: {e}"}
+        if r.returncode == 0:
+            return {"path": r.stdout.strip()}
+        err = (r.stderr or "").strip()
+        if "-128" in err or "User canceled" in err:
+            return {"cancelled": True}
+        return {"error": err or "folder picker failed"}
+    code = ("import tkinter, tkinter.filedialog as fd\n"
+            "r = tkinter.Tk(); r.withdraw()\n"
+            "print(fd.askdirectory(title='Choose a folder to deploy the harness into') or '')\n")
+    try:
+        r = subprocess.run([sys.executable, "-c", code],
+                           capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError) as e:
+        return {"error": f"folder picker unavailable: {e}"}
+    if r.returncode != 0:
+        # tkinter failed to even open (no $DISPLAY on a headless/SSH daemon, or no
+        # python3-tk). Surface it as an error so the UI keeps its editable path field —
+        # NOT a silent {cancelled} no-op. (askdirectory returns '' on a real cancel.)
+        lines = (r.stderr or "").strip().splitlines()
+        return {"error": lines[-1] if lines else "folder picker unavailable"}
+    picked = (r.stdout or "").strip()
+    return {"path": picked} if picked else {"cancelled": True}
 
 
 def api_install_toggle(state: WebState, body: dict) -> dict:

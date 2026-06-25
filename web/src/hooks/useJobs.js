@@ -75,6 +75,7 @@ export function useJobs({ onFinish, onError } = {}) {
       setRuns((rs) => [...rs, { id: job_id, action: label, status: 'running', output: '' }])
       setActiveId(job_id)
       setConsoleOpen(true)
+      return job_id // truthy on success so callers can close a form only when accepted
     } catch (e) {
       onError?.(e)
     }

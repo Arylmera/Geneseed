@@ -401,7 +401,7 @@ class McpTests(unittest.TestCase):
         for t in m["targets"]:
             self.assertIn("path", t)
             self.assertIn("commented", t)
-            self.assertIn(t["host"], ("opencode", "claude"))
+            self.assertIn(t["host"], ("opencode", "claude", "bob"))
             self.assertIn("root", t)
             for s in t["servers"]:
                 self.assertIn(s["state"], ("enabled", "disabled", "absent"))
@@ -849,6 +849,11 @@ class GraphTests(unittest.TestCase):
             self.assertIn(n["type"], ("agent", "skill", "law"))
         # Laws contribute at least the universal set; they appear as nodes.
         self.assertTrue(any(n["type"] == "law" for n in g["nodes"]))
+        # Agents/skills cite each other via Markdown cross-links, not just laws —
+        # otherwise the only citation targets are laws and the matrix collapses to
+        # a single law column. At least one edge must target a non-law node.
+        type_of = {n["id"]: n["type"] for n in g["nodes"]}
+        self.assertTrue(any(type_of[e["target"]] != "law" for e in g["edges"]))
         for e in g["edges"]:
             self.assertIn(e["source"], ids)                  # edges resolve
             self.assertIn(e["target"], ids)
@@ -1303,6 +1308,147 @@ class ActivityTests(unittest.TestCase):
             ]
             self._write(t, "s.detail.json", {"timeline": [], "conversation": turns})
             self.assertEqual(web.api_activity_detail(self._state(t), "s")["conversation"], turns)
+
+
+class DeployTests(unittest.TestCase):
+    """Deploy a fresh per-repo harness into a user-chosen folder, and have it persist in
+    the installs list via the registry (the open-ended sibling of the row Install)."""
+
+    def setUp(self):
+        self.state = web.WebState(theme="neutral")
+
+    def test_deploy_cmd_validates_host_and_path(self):
+        import tempfile, os
+        bad_host = web.api_deploy_cmd(self.state, {"host": "nope", "path": "/tmp"})
+        self.assertIn("unknown host", bad_host["error"])
+        self.assertIn("no folder", web.api_deploy_cmd(
+            self.state, {"host": "opencode", "path": "  "})["error"])
+        self.assertIn("not a folder", web.api_deploy_cmd(
+            self.state, {"host": "opencode", "path": "/no/such/dir/zzz"})["error"])
+        with tempfile.TemporaryDirectory() as d:
+            plan = web.api_deploy_cmd(
+                self.state, {"host": "opencode", "path": d, "theme": "imperial"})
+            cmd = plan["cmd"]
+            self.assertEqual(cmd[cmd.index("--emit") + 1], "opencode")        # project, never global
+            self.assertEqual(cmd[cmd.index("--theme") + 1], "imperial")
+            self.assertEqual(cmd[cmd.index("--out") + 1], str(Path(d).resolve()))
+            self.assertEqual(cmd[cmd.index("--root") + 1], str(Path(d).resolve()))
+
+    def test_deploy_cmd_bogus_theme_falls_back_to_state(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            plan = web.api_deploy_cmd(
+                self.state, {"host": "claude", "path": d, "theme": "not-a-theme"})
+            cmd = plan["cmd"]
+            self.assertEqual(cmd[cmd.index("--theme") + 1], "neutral")  # state.theme wins
+            self.assertEqual(cmd[cmd.index("--emit") + 1], "claude")
+
+    def test_deploy_cmd_rejects_host_config_dir(self):
+        import tempfile, build
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            with mock.patch.object(build, "_opencode_config_dir", lambda: Path(d)):
+                res = web.api_deploy_cmd(self.state, {"host": "opencode", "path": d})
+        self.assertIn("global config dir", res.get("error", ""))
+
+    def test_pick_folder_tkinter_nonzero_is_error_not_cancel(self):
+        # A headless/SSH daemon: tkinter exits non-zero with a traceback. Must surface as
+        # an error (so the UI keeps its editable field), never a silent {cancelled}.
+        import subprocess
+        from unittest import mock
+        fake = mock.Mock(returncode=1, stdout="",
+                         stderr="Traceback ...\n_tkinter.TclError: no display name")
+        with mock.patch("sys.platform", "linux"), \
+                mock.patch.object(subprocess, "run", return_value=fake):
+            res = web.api_pick_folder()
+        self.assertNotIn("cancelled", res)
+        self.assertIn("TclError", res.get("error", ""))
+
+    def test_pick_folder_tkinter_empty_stdout_is_cancel(self):
+        import subprocess
+        from unittest import mock
+        fake = mock.Mock(returncode=0, stdout="\n", stderr="")
+        with mock.patch("sys.platform", "linux"), \
+                mock.patch.object(subprocess, "run", return_value=fake):
+            self.assertEqual(web.api_pick_folder(), {"cancelled": True})
+
+    def test_deploy_cmd_bob_maps_to_bob_emit(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            plan = web.api_deploy_cmd(self.state, {"host": "bob", "path": d, "theme": "imperial"})
+            cmd = plan["cmd"]
+            self.assertEqual(cmd[cmd.index("--emit") + 1], "bob")        # project, never global
+            self.assertEqual(cmd[cmd.index("--theme") + 1], "imperial")
+
+    def test_bob_emit_layout_and_disable_reactivate_lifecycle(self):
+        # IBM Bob is a first-class host: a .bob/ project layer + AGENTS.md, riding the
+        # Claude-style manifest lifecycle (deactivate stashes, reactivate restores).
+        import tempfile, build
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            build.emit_bob("neutral", root, root)
+            self.assertTrue((root / "AGENTS.md").is_file())
+            self.assertTrue((root / ".bob").is_dir())
+            self.assertEqual(web.harness._install_state(root, "bob", "project"), "active")
+            self.assertEqual(web.harness._mcp_servers_key("bob"), "mcpServers")
+            self.assertEqual(web.harness._mcp_config_for("bob", "project", root),
+                             root / ".bob" / "settings.json")
+            off = web.harness._install_deactivate(root, "bob", "project")
+            self.assertTrue(off["ok"]) and self.assertEqual(off["kind"], "bob")
+            self.assertEqual(web.harness._install_state(root, "bob", "project"), "disabled")
+            on = web.harness._install_reactivate(root, "bob", "project")
+            self.assertTrue(on["ok"])
+            self.assertEqual(web.harness._install_state(root, "bob", "project"), "active")
+
+    def test_bob_view_cfg_and_restore_emitter_are_host_correct(self):
+        # A bob PROJECT install's data lives under <repo>/.bob (not the bare root), and a
+        # restore must render the bob 'expected' tree, not OpenCode's (would corrupt agents).
+        import build
+        self.assertEqual(web._view_cfg("bob", "project", Path("/r")), Path("/r") / ".bob")
+        self.assertEqual(web._view_cfg("bob", "global", Path("/r")), Path("/r"))   # global == root
+        self.assertIs(web._global_emitter_for("bob-global"), build.emit_bob_global)
+        self.assertIs(web._global_emitter_for("claude-global"), build.emit_claude_global)
+        self.assertIs(web._global_emitter_for("opencode-global"), build.emit_opencode_global)
+        self.assertIs(web._global_emitter_for(None), build.emit_opencode_global)   # safe fallback
+
+    def test_bob_mcp_toggle_off_removes_entry(self):
+        # Bob shares Claude's flag-less mcpServers shape: disable REMOVES the server (a
+        # stray enabled:false would be ignored by Bob, leaving it live).
+        cfg = {"mcpServers": {"md": {"command": "uvx", "args": ["x"]}}}
+        self.assertEqual(web.harness._mcp_state(cfg, "md", "bob"), "enabled")
+        off = web.harness._mcp_set_enabled(cfg, "md", False, "bob")
+        self.assertEqual(off.get("mcpServers", {}), {})
+        self.assertNotIn("enabled", off.get("mcpServers", {}).get("md", {}))
+
+    def test_bob_theme_detected_from_agents_md(self):
+        import tempfile, build
+        with tempfile.TemporaryDirectory() as d:
+            build.emit_bob("imperial", Path(d), Path(d))
+            self.assertEqual(web.harness._theme_of_dir(Path(d)), "imperial")
+
+    def test_registry_round_trip_and_install_targets_merge_and_prune(self):
+        import tempfile, os
+        import _install_registry
+        saved_xdg = os.environ.get("XDG_CONFIG_HOME")
+        with tempfile.TemporaryDirectory() as cfg, tempfile.TemporaryDirectory() as live:
+            os.environ["XDG_CONFIG_HOME"] = cfg
+            try:
+                (Path(live) / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
+                _install_registry.record(live)
+                _install_registry.record(live)  # idempotent
+                rows = web.harness._install_targets()
+                mine = [r for r in rows if r[2].resolve() == Path(live).resolve()]
+                self.assertEqual([(r[0], r[1]) for r in mine], [("opencode", "project")])
+                # drop the marker -> the registry self-prunes and the row disappears
+                (Path(live) / ".geneseed-emit").unlink()
+                self.assertEqual(_install_registry.roots(), [])
+                rows2 = web.harness._install_targets()
+                self.assertFalse([r for r in rows2 if r[2].resolve() == Path(live).resolve()])
+            finally:
+                if saved_xdg is None:
+                    os.environ.pop("XDG_CONFIG_HOME", None)
+                else:
+                    os.environ["XDG_CONFIG_HOME"] = saved_xdg
 
 
 if __name__ == "__main__":

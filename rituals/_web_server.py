@@ -123,6 +123,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                 # fresh server on the same port) so the new daemon survives our exit.
                 request_restart(state.theme)
                 return self._send_json({"restarting": True})
+            if path == "/api/pick-folder":
+                # Pop the OS-native folder chooser on the daemon host (== the user's
+                # screen for a local console) and hand back the picked path. Synchronous,
+                # not a job; the call blocks on the modal dialog, so it has its own
+                # timeout inside api_pick_folder.
+                return self._send_json(api_pick_folder(state))
             if path == "/api/mcp":
                 try:
                     res = api_mcp_toggle(state, self._read_json_body())
@@ -173,6 +179,17 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     if "error" in plan:
                         return self._send_json(plan, 409)
                     jid = jm.start("install", plan["cmd"], on_done=state.refresh)
+                    if jid is None:
+                        return self._send_json({"error": "busy"}, 409)
+                    return self._send_json({"job_id": jid}, 202)
+                # Deploy a fresh per-repo harness into a user-chosen folder. Same
+                # streamed-console + refresh-on-finish path as install; the build records
+                # the new root, so state.refresh() picks it up into the installs list.
+                if action == "deploy":
+                    plan = api_deploy_cmd(state, body)
+                    if "error" in plan:
+                        return self._send_json(plan, 400)
+                    jid = jm.start("deploy", plan["cmd"], on_done=state.refresh)
                     if jid is None:
                         return self._send_json({"error": "busy"}, 409)
                     return self._send_json({"job_id": jid}, 202)

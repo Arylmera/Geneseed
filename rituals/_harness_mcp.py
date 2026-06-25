@@ -89,8 +89,8 @@ _MCP_PRESETS = {
 
 def _mcp_servers_key(host: str) -> str:
     """The config key holding the server map for `host`: OpenCode nests servers under
-    `mcp`, Claude Code under `mcpServers`."""
-    return "mcpServers" if host == "claude" else "mcp"
+    `mcp`, Claude Code and IBM Bob under `mcpServers`."""
+    return "mcpServers" if host in ("claude", "bob") else "mcp"
 
 
 def _mcp_preset_block(name: str, host: str = "opencode") -> dict:
@@ -100,7 +100,7 @@ def _mcp_preset_block(name: str, host: str = "opencode") -> dict:
     `environment` → `env`, and drops the `type` / `enabled` keys it has no concept of —
     matching SETUP.md's `.mcp.json` shape."""
     block = dict(_MCP_PRESETS[name]["block"])
-    if host != "claude":
+    if host not in ("claude", "bob"):   # Bob shares Claude's command/args + env shape
         return block
     cmd = list(block.get("command") or [])
     out: dict = {"command": cmd[0] if cmd else "", "args": cmd[1:]}
@@ -139,7 +139,7 @@ def _mcp_state(config: dict, name: str, host: str = "opencode") -> str:
     server = (config.get(_mcp_servers_key(host)) or {}).get(name)
     if not isinstance(server, dict):
         return "absent"
-    if host == "claude":
+    if host in ("claude", "bob"):   # flag-less mcpServers: present == enabled
         return "enabled"
     return "enabled" if server.get("enabled", True) else "disabled"
 
@@ -151,7 +151,7 @@ def _mcp_set_enabled(config: dict, name: str, enabled: bool, host: str = "openco
     server = (config.get(_mcp_servers_key(host)) or {}).get(name)
     if not isinstance(server, dict):
         return config
-    if host == "claude":
+    if host in ("claude", "bob"):   # no enabled flag: enable is a no-op, disable removes
         return config if enabled else _mcp_apply(config, name, None, host)
     block = dict(server)
     block["enabled"] = enabled
@@ -233,6 +233,12 @@ def _mcp_config_for(host: str, scope: str, root: Path) -> "Path | None":
         return build._opencode_target(root / "opencode.json")
     if host == "claude":
         return (root / ".mcp.json") if scope == "project" else (Path.home() / ".claude.json").resolve()
+    if host == "bob":
+        # Bob keeps MCP under `mcpServers` in its settings.json (bob.ibm.com/docs/ide):
+        # <repo>/.bob/settings.json for a project install, ~/.bob/settings.json globally —
+        # the same file the emit writes hooks into (the MCP merge only touches mcpServers).
+        return (root / ".bob" / "settings.json") if scope == "project" \
+            else (build._bob_config_dir() / "settings.json")
     return None
 
 
@@ -307,8 +313,8 @@ def _uninstall_global(target: Path, archive_memory: bool, host: str = "opencode"
     a sibling `archived-memory/<timestamp>/` when archive_memory. Returns a summary
     dict (with `archived` = the archive path, or None). Host-aware: a Claude install is
     reversed by `_claude_uninstall` (no opencode.json — settings.json hooks + the
-    CLAUDE.md block instead)."""
-    if host == "claude":
+    CLAUDE.md block instead); IBM Bob rides the same manifest-driven reversal."""
+    if host in ("claude", "bob"):
         return _claude_uninstall(target, archive_memory)
     try:
         owned = json.loads((target / build.GLOBAL_MANIFEST).read_text(encoding="utf-8")).get("owned", [])
@@ -411,13 +417,48 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
 DISABLED_STASH = ".geneseed-disabled"   # sibling dir; presence == disabled
 
 
+# Inverse of _web_actions._EMIT_FOR: a registered root's `.geneseed-emit` marker names
+# its emit, which fixes (host, scope) with no stored state to drift.
+_EMIT_HOST_SCOPE = {
+    "opencode": ("opencode", "project"), "opencode-global": ("opencode", "global"),
+    "claude": ("claude", "project"), "claude-global": ("claude", "global"),
+    "bob": ("bob", "project"), "bob-global": ("bob", "global"),
+}
+
+
+def _registered_targets() -> "list[tuple[str, str, Path]]":
+    """(host, scope, root) for every folder a harness was deployed into, recovered from
+    the persistent registry — the installs `_install_targets` can't rediscover because
+    they're neither the cwd nor a global config dir. Each root's own `.geneseed-emit`
+    marker fixes (host, scope); dead roots are pruned by the registry on read. Empty and
+    silent if the registry is unavailable (it's a convenience layer, never required)."""
+    try:
+        import _install_registry
+        roots = _install_registry.roots()
+    except Exception:
+        return []
+    out: "list[tuple[str, str, Path]]" = []
+    for root in roots:
+        try:
+            emit = (root / ".geneseed-emit").read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        hs = _EMIT_HOST_SCOPE.get(emit)
+        if hs:
+            out.append((hs[0], hs[1], root))
+    return out
+
+
 def _install_targets() -> "list[tuple[str, str, Path]]":
     """Every (host, scope, root) an install may live at, most-local first. For each
     host in build.HOSTS: a `global` row (the host's config dir) and a `project` row
-    (the cwd) when that host's project marker is present there. De-duplicated on the
-    (host, resolved-path) PAIR — so a cwd that carries BOTH `.opencode/` and `.claude/`
-    yields two independent, correctly-typed rows, and a cwd that IS a global config dir
-    never doubles its own host's row."""
+    (the cwd) when that host's project marker is present there. Then every folder a
+    harness was deployed into outside those (the persistent registry), so the console
+    lists installs it can't otherwise rediscover. De-duplicated on the (host,
+    resolved-path) PAIR — so a cwd that carries BOTH `.opencode/` and `.claude/` yields
+    two independent, correctly-typed rows, a cwd that IS a global config dir never
+    doubles its own host's row, and a registered root that's also the cwd/global never
+    doubles either."""
     out: "list[tuple[str, str, Path]]" = []
     seen = set()
 
@@ -435,6 +476,8 @@ def _install_targets() -> "list[tuple[str, str, Path]]":
             _add(host, "global", spec["config_dir"]())
         except Exception:
             pass
+    for host, scope, root in _registered_targets():
+        _add(host, scope, root)
     return out
 
 
@@ -484,8 +527,8 @@ def _install_state(root: Path, host: str = "opencode", scope: str = "global") ->
     OpenCode path is unchanged; Claude dispatches to `_claude_state` (its manifest and
     stash live under a host-specific cfg dir — ~/.claude for global, <repo>/.claude for
     a project install)."""
-    if host == "claude":
-        return _claude_state(root, scope)
+    if host in ("claude", "bob"):
+        return _claude_state(root, scope, host)
     # ponytail: state is just "does the stash dir exist" + "is an install present".
     # No JSON record to keep in sync with the filesystem — the dir IS the record.
     if (root / DISABLED_STASH).is_dir():
@@ -595,9 +638,10 @@ def _install_deactivate(root: Path, host: str = "opencode", scope: str = "global
     artifact into `root/DISABLED_STASH/<rel>` and drop the AGENT.md `instructions`
     entry. ALL-OR-NOTHING — a move failure rolls back every move already done and
     leaves the install fully `active`, never half-gutted. Host-aware: Claude has its
-    own (manifest-driven) deactivate — see `_claude_deactivate`."""
-    if host == "claude":
-        return _claude_deactivate(root, scope)
+    own (manifest-driven) deactivate — see `_claude_deactivate`. IBM Bob rides the same
+    Claude-style path (manifest + AGENTS.md block), tagged by host."""
+    if host in ("claude", "bob"):
+        return _claude_deactivate(root, scope, host)
     if _install_state(root) != "active":
         return {"ok": False, "error": f"install is not active ({_install_state(root)})"}
     kind = _install_kind(root)
@@ -643,9 +687,9 @@ def _install_reactivate(root: Path, host: str = "opencode", scope: str = "global
     """Turn a disabled install back ON: move every stashed tree back to its original
     rel path and re-add the AGENT.md `instructions` entry, then remove the empty
     stash. The inverse of `_install_deactivate`. Host-aware: Claude has its own
-    reactivate — see `_claude_reactivate`."""
-    if host == "claude":
-        return _claude_reactivate(root, scope)
+    reactivate — see `_claude_reactivate`. IBM Bob rides the same Claude-style path."""
+    if host in ("claude", "bob"):
+        return _claude_reactivate(root, scope, host)
     if _install_state(root) != "disabled":
         return {"ok": False, "error": f"install is not disabled ({_install_state(root)})"}
     stash = root / DISABLED_STASH
@@ -699,10 +743,15 @@ def _install_reactivate(root: Path, host: str = "opencode", scope: str = "global
 # (the recorded groups only). The stash lives under a host-tagged subdir so a cwd that
 # carries BOTH an OpenCode and a Claude project install can disable each independently.
 
-def _claude_cfg(root: Path, scope: str) -> Path:
-    """The dir holding a Claude install's manifest/agents/skills: ~/.claude for a global
-    install (root IS the cfg), <repo>/.claude for a project install."""
-    return root if scope == "global" else (root / ".claude")
+def _claude_cfg(root: Path, scope: str, host: str = "claude") -> Path:
+    """The dir holding a Claude-style install's manifest/agents/skills: the config dir for
+    a global install (root IS the cfg), <repo>/<marker> for a project install. Host-aware
+    so IBM Bob (marker `.bob`) reuses the whole Claude lifecycle — the marker comes from
+    build.HOSTS, so the only Bob-vs-Claude difference is which subdir."""
+    if scope == "global":
+        return root
+    marker = build.HOSTS.get(host, {}).get("project_marker", ".claude")
+    return root / marker
 
 
 def _clean_host_stash(cfg: Path, host: str = "claude") -> None:
@@ -733,10 +782,11 @@ def _manifest_is_claude(cfg: Path) -> bool:
     return isinstance(mg, dict) and "claude_md" in mg
 
 
-def _claude_state(root: Path, scope: str = "global") -> str:
-    """'active' | 'disabled' | 'absent' for the Claude install rooted at `root`."""
-    cfg = _claude_cfg(root, scope)
-    if (cfg / DISABLED_STASH / "claude").is_dir():
+def _claude_state(root: Path, scope: str = "global", host: str = "claude") -> str:
+    """'active' | 'disabled' | 'absent' for the Claude-style install rooted at `root`
+    (Claude or IBM Bob — the stash is tagged by host)."""
+    cfg = _claude_cfg(root, scope, host)
+    if (cfg / DISABLED_STASH / host).is_dir():
         return "disabled"
     return "active" if (cfg / build.GLOBAL_MANIFEST).exists() else "absent"
 
@@ -748,13 +798,13 @@ def _claude_md_path(cfg: Path, managed: dict) -> Path:
     return (cfg / rel).resolve()
 
 
-def _claude_deactivate(root: Path, scope: str = "global") -> dict:
-    cfg = _claude_cfg(root, scope)
-    if _claude_state(root, scope) != "active":
-        return {"ok": False, "error": f"install is not active ({_claude_state(root, scope)})"}
+def _claude_deactivate(root: Path, scope: str = "global", host: str = "claude") -> dict:
+    cfg = _claude_cfg(root, scope, host)
+    if _claude_state(root, scope, host) != "active":
+        return {"ok": False, "error": f"install is not active ({_claude_state(root, scope, host)})"}
     man = _claude_read_manifest(cfg)
     managed = man.get("managed") if isinstance(man.get("managed"), dict) else {}
-    stash = cfg / DISABLED_STASH / "claude"
+    stash = cfg / DISABLED_STASH / host
     rroot = cfg.resolve()
     rels = [r for r in man.get("owned", []) if r and r != build.VERSION_MARKER
             and _within((rroot / r).resolve(), rroot)]
@@ -772,7 +822,7 @@ def _claude_deactivate(root: Path, scope: str = "global") -> dict:
                     shutil.move(str(stash / r), str(cfg / r))
                 except OSError:
                     pass
-            _clean_host_stash(cfg, "claude")
+            _clean_host_stash(cfg, host)
             return {"ok": False, "failed": [f"{rel} ({e})"], "rolled_back": len(done)}
     # Unwire the settings.json hooks (exact recorded groups only) — the user's own
     # keys/hooks are untouched.
@@ -787,14 +837,14 @@ def _claude_deactivate(root: Path, scope: str = "global") -> dict:
     # Prune the dirs each moved file emptied — climbs so skills/<name>/ husks go too.
     for rel in done:
         _prune_empty_ancestors((cfg / rel).parent, cfg)
-    return {"ok": True, "kind": "claude", "moved": len(done)}
+    return {"ok": True, "kind": host, "moved": len(done)}
 
 
-def _claude_reactivate(root: Path, scope: str = "global") -> dict:
-    cfg = _claude_cfg(root, scope)
-    if _claude_state(root, scope) != "disabled":
-        return {"ok": False, "error": f"install is not disabled ({_claude_state(root, scope)})"}
-    stash = cfg / DISABLED_STASH / "claude"
+def _claude_reactivate(root: Path, scope: str = "global", host: str = "claude") -> dict:
+    cfg = _claude_cfg(root, scope, host)
+    if _claude_state(root, scope, host) != "disabled":
+        return {"ok": False, "error": f"install is not disabled ({_claude_state(root, scope, host)})"}
+    stash = cfg / DISABLED_STASH / host
     block_file = stash / "_claude_md_block.txt"
     # Re-emit-while-disabled guard (mirrors _install_reactivate's _install_relive): if
     # the harness was rebuilt live while disabled, the CLAUDE.md block is back and the
@@ -802,7 +852,7 @@ def _claude_reactivate(root: Path, scope: str = "global") -> dict:
     relive_managed = _claude_read_manifest(cfg).get("managed") or {}
     if build._managed_block_read(_claude_md_path(cfg, relive_managed)) is not None:
         build._merge_claude_settings(cfg / "settings.json")   # ensure hooks are present
-        _clean_host_stash(cfg, "claude")
+        _clean_host_stash(cfg, host)
         return {"ok": True, "note": "install was re-created while disabled; "
                 "discarded the stashed snapshot"}
     leftovers: "list[str]" = []
@@ -828,8 +878,8 @@ def _claude_reactivate(root: Path, scope: str = "global") -> dict:
     if block_file.exists():
         build._managed_block_write(_claude_md_path(cfg, managed),
                                    block_file.read_text(encoding="utf-8"))
-    _clean_host_stash(cfg, "claude")
-    return {"ok": True, "kind": "claude", "moved": moved}
+    _clean_host_stash(cfg, host)
+    return {"ok": True, "kind": host, "moved": moved}
 
 
 def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:

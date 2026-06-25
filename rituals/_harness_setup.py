@@ -49,7 +49,7 @@ def _setup_build_args(theme: str, emit: str, out: str | None = None,
     """The build.py argv for a wizard selection (pure — unit-tested). The global
     emit takes no out/root; the others may."""
     argv = ["--theme", theme, "--emit", emit]
-    if emit not in ("opencode-global", "claude-global"):   # both globals take no out/root
+    if emit not in ("opencode-global", "claude-global", "bob-global"):   # globals take no out/root
         if out:
             argv += ["--out", out]
         if root:
@@ -118,9 +118,11 @@ def _theme_of_dir(d: Path) -> "str | None":
                 return name
     except OSError:
         pass
-    # Sigil fallback: AGENT.md (OpenCode) first, then CLAUDE.md (Claude installs carry
-    # the rendered instructions — and the theme sigil — inside their managed block).
-    return _theme_from_agent(d / "AGENT.md") or _theme_from_agent(d / "CLAUDE.md")
+    # Sigil fallback: AGENT.md (OpenCode), CLAUDE.md (Claude), AGENTS.md (Bob) — each
+    # host's managed instructions block carries the theme sigil. Per-repo Claude/Bob
+    # installs write no .geneseed-theme marker, so this is their ONLY detection path.
+    return (_theme_from_agent(d / "AGENT.md") or _theme_from_agent(d / "CLAUDE.md")
+            or _theme_from_agent(d / "AGENTS.md"))
 
 
 def _installed_defaults() -> dict:
@@ -130,24 +132,28 @@ def _installed_defaults() -> dict:
     predating the markers are still recognised. Checks the global config dir first
     (the recommended install), then common bundle locations."""
     found = {"theme": None, "emit": None}
+    # (base, known_global_emit). Each host's config dir first (OpenCode global is the
+    # recommended primary, then Claude, then Bob — every host in build.HOSTS, so a new
+    # host can't be forgotten), then common bundle locations (host unknown -> None).
     candidates = []
-    # OpenCode global first (the recommended primary), then Claude global, then bundles.
-    for cfg_dir in (lambda: build._opencode_config_dir(), lambda: build._claude_config_dir()):
+    for host, spec in build.HOSTS.items():
         try:
-            candidates.append(cfg_dir())
+            candidates.append((spec["config_dir"](), f"{host}-global"))
         except Exception:
             pass
-    candidates += [ROOT / "Harness", ROOT.parent / "Harness", Path.cwd() / "Harness"]
-    for base in candidates:
+    candidates += [(p, None) for p in (ROOT / "Harness", ROOT.parent / "Harness",
+                                       Path.cwd() / "Harness")]
+    for base, known_emit in candidates:
         try:
             if found["emit"] is None:
                 em = base / ".geneseed-emit"
                 if em.is_file():
                     found["emit"] = em.read_text(encoding="utf-8").strip() or None
                 elif (base / ".geneseed-manifest.json").is_file():
-                    # A manifest with no emit marker (pre-marker install): tell the hosts
-                    # apart by the manifest shape (Claude records a managed CLAUDE.md).
-                    found["emit"] = "claude-global" if _manifest_is_claude(base) else "opencode-global"
+                    # A manifest with no emit marker (pre-marker install): a known config
+                    # dir names its own host; a bundle tells Claude from OpenCode by shape.
+                    found["emit"] = known_emit or (
+                        "claude-global" if _manifest_is_claude(base) else "opencode-global")
             if found["theme"] is None:
                 found["theme"] = _theme_of_dir(base)
         except OSError:
@@ -160,6 +166,8 @@ EMIT_OPTIONS = [
     ("claude-global", "Claude Code global config dir (~/.claude) — CLAUDE.md, agents, skills, hooks."),
     ("opencode", "Per-repo .opencode/ layer committed into one repository."),
     ("claude", "Per-repo CLAUDE.md + .claude/ committed into one repository."),
+    ("bob-global", "IBM Bob global config dir (~/.bob) — AGENTS.md, agents, skills, settings.json."),
+    ("bob", "Per-repo AGENTS.md + .bob/ for IBM Bob, committed into one repository."),
     ("files", "Plain bundle for any AGENT.md tool."),
 ]
 

@@ -19,6 +19,7 @@ def cmd_build(args: argparse.Namespace) -> int:
 _DEFAULT_EMIT = {
     ("opencode", "global"): "opencode-global", ("opencode", "project"): "opencode",
     ("claude", "global"): "claude-global", ("claude", "project"): "claude",
+    ("bob", "global"): "bob-global", ("bob", "project"): "bob",
 }
 
 

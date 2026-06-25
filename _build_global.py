@@ -27,6 +27,16 @@ def _claude_config_dir() -> Path:
     return (Path.home() / ".claude").resolve()
 
 
+def _bob_config_dir() -> Path:
+    """IBM Bob's global config dir: ~/.bob (its global skills live at ~/.bob/skills per
+    bob.ibm.com/docs/ide). $BOB_CONFIG_DIR relocates it (mirrors the OpenCode env knob),
+    so a CI/locked-down setup can point it at a git-tracked folder."""
+    env = os.environ.get("BOB_CONFIG_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    return (Path.home() / ".bob").resolve()
+
+
 GLOBAL_MANIFEST = ".geneseed-manifest.json"
 
 
@@ -351,6 +361,37 @@ def emit_claude(theme_name: str, out: Path, root: Path | None = None) -> None:
           f"{mem_status}, {nb_status}.")
 
 
+# IBM Bob (bob.ibm.com) is Claude-Code-shaped: a `.bob/` project layer + an AGENTS.md
+# instructions file (auto-loaded), SKILL.md skills, agents, and a settings.json that also
+# carries `mcpServers`. So both Bob emits REUSE the Claude engine, only swapping the
+# marker dir (.bob) and the instructions filename (AGENTS.md). Best-effort: the agent
+# frontmatter + settings.json hook merge use the Claude dialect (unverified for Bob, but
+# Bob is Claude-derived); MCP wiring lives in rituals/_harness_mcp (settings.json key
+# `mcpServers`). If Bob's exact layout differs, only these two wrappers need adjusting.
+def emit_bob_global(theme_name: str, out: Path | None = None, cfg: Path | None = None) -> None:
+    """Render the harness into Bob's GLOBAL config dir (~/.bob). AGENTS.md carries the
+    instructions; agents/skills/settings.json mirror the Claude global emit. `cfg`
+    overrides the target (tests/doctor)."""
+    cfg = cfg or _bob_config_dir()
+    n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
+        theme_name, cfg, cfg / "AGENTS.md", "global", out)
+    print(f"[geneseed] bob-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
+          f"AGENTS.md, {n_hooks} hook group(s), settings.json, {mem_status}, {nb_status}.")
+
+
+def emit_bob(theme_name: str, out: Path, root: Path | None = None) -> None:
+    """Per-repo Bob install: AGENTS.md at the repo root + a project `.bob/` layer (agents,
+    skills, settings.json). Reuses the Claude engine's manifest + claim-on-create, so a
+    user's own `.bob/` files are never clobbered. `out`/`root` mirror emit_claude."""
+    root = root or out
+    cfg = root / ".bob"
+    n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
+        theme_name, cfg, root / "AGENTS.md", "project", out)
+    print(f"[geneseed] bob (folder) -> {root}: AGENTS.md + .bob/ "
+          f"({n_agents} subagents, {n_skills} skills, {n_hooks} hook group(s), settings.json), "
+          f"{mem_status}, {nb_status}.")
+
+
 # The host registry — the single source of truth shared by build dispatch and the
 # install-detection/activation layer (rituals/_harness_mcp.py). Bounded to the two
 # hosts that exist (YAGNI): each row is the data those layers need to stop hardcoding
@@ -372,6 +413,13 @@ HOSTS = {
         "project_marker": ".claude",
         "agent_file": "CLAUDE.md",
         "emit_global": emit_claude_global,
+    },
+    "bob": {
+        "config_dir": _bob_config_dir,
+        "config_file": "settings.json",
+        "project_marker": ".bob",
+        "agent_file": "AGENTS.md",
+        "emit_global": emit_bob_global,
     },
 }
 

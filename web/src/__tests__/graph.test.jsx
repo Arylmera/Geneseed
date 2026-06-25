@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
@@ -23,11 +23,21 @@ vi.mock('../api/index.js', () => ({
 import Graph from '../pages/Graph.jsx'
 
 describe('Graph', () => {
-  it('renders every node label and counts links', async () => {
+  it('opens in Matrix view: shows the citing/cited nodes and the readout', async () => {
     render(<Graph />)
+    // Matrix rows = citers (scribe → out-edge), columns = cited (git → in-edge).
     await waitFor(() => expect(screen.getByText('scribe')).toBeTruthy())
     expect(screen.getByText('git')).toBeTruthy()
+    // `loner` has no edges, so it has neither a row nor a column in the matrix.
+    expect(screen.queryByText('loner')).toBeNull()
+    expect(screen.getByText(/3 nodes · 1 links shown/)).toBeTruthy()
+  })
+
+  it('Network view lists every node, including unlinked ones', async () => {
+    render(<Graph />)
+    await waitFor(() => expect(screen.getByText('scribe')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Network' }))
     expect(screen.getByText('loner')).toBeTruthy()
-    expect(screen.getByText(/3 nodes · 1 links/)).toBeTruthy()
+    expect(screen.getByText('git')).toBeTruthy()
   })
 })

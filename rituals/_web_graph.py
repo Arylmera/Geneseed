@@ -6,6 +6,13 @@ from __future__ import annotations
 from _web_core import *  # noqa: F401,F403  shared stdlib + primitives
 
 
+# Agents/skills cross-reference each other as Markdown links — `[reviewer](reviewer.md)`
+# or `[skeptic](../{{DIR_AGENTS}}/skeptic.md)` — not [[wikilinks]]. Capture the link
+# target; the basename (sans .md) is the referenced node id. Without this, no agent
+# or skill is ever a citation target and the matrix/graph shows only the law column.
+MDLINK_RE = re.compile(r"\]\(([^)]+?)\.md\)")
+
+
 def _law_ref_re(theme: dict) -> "re.Pattern[str]":
     """Regex matching a plain-text law reference like "Rule III" / "Dictate III".
 
@@ -22,10 +29,19 @@ def _law_ref_re(theme: dict) -> "re.Pattern[str]":
 
 def api_graph(state: WebState) -> dict:
     """Cross-link graph over agents + skills + laws: one node per item, one edge
-    per [[wikilink]] (agents/skills) or per `Rule N` / `Law N` plain-text reference
-    (any entity → laws). Laws have no wikilink target since their id is a Roman
-    numeral; the prose pattern catches both law↔law cross-references and any
-    agent/skill that names a rule by number."""
+    per Markdown cross-link (`[reviewer](reviewer.md)`) between agents/skills, or
+    per `Rule N` / `Law N` plain-text reference (any entity → laws). Laws have no
+    wikilink target since their id is a Roman numeral; the prose pattern catches
+    both law↔law cross-references and any agent/skill that names a rule by number.
+
+    Nodes come from state.inventory (the deployed set the rest of the console
+    shows — keeps it consistent with the Skills ledger count), but edges are parsed
+    from the SOURCE render's bodies. A deployed install flattens skill cross-links
+    to bare prose names (the `[…](….md)` markup is dropped from SKILL.md), which
+    would leave skills uncitable and the matrix single-banded; the source render
+    keeps the markup for both agents and skills. Skills that exist only as a
+    deployed vendor bundle (no flat source) fall back to their deployed body — they
+    carry no cross-links anyway, just law references."""
     inv = state.inventory
     law_ref_re = _law_ref_re(build.load_theme(state.theme))
     known = {}
@@ -45,21 +61,33 @@ def api_graph(state: WebState) -> dict:
             seen.add((src, dst))
             edges.append({"source": src, "target": dst})
 
+    # Prefer source-render bodies (cross-link markup intact); fall back to the
+    # deployed body for anything the source render doesn't carry.
+    src_body = {}
+    render = harness._tui_inventory(state.theme)
+    for kind in ("agents", "skills"):
+        for e in render[kind]:
+            src_body[e["name"]] = e["body"]
+
     for kind in ("agents", "skills"):
         for e in inv[kind]:
-            src = e["name"]
-            for m in WIKILINK_RE.finditer(e["body"]):
+            node = e["name"]
+            body = src_body.get(node, e["body"])
+            for m in WIKILINK_RE.finditer(body):
                 dst = m.group(1).strip()
                 if dst in known and known[dst] != "law":
-                    add_edge(src, dst)
-            for m in law_ref_re.finditer(e["body"]):
+                    add_edge(node, dst)
+            for m in MDLINK_RE.finditer(body):
+                dst = m.group(1).rsplit("/", 1)[-1]
+                if dst in known and known[dst] != "law":
+                    add_edge(node, dst)
+            for m in law_ref_re.finditer(body):
                 if m.group(1) in law_nums:
-                    add_edge(src, m.group(1))
+                    add_edge(node, m.group(1))
     for e in inv["laws"]:
-        src = e["num"]
         for m in law_ref_re.finditer(e["body"]):
             if m.group(1) in law_nums:
-                add_edge(src, m.group(1))
+                add_edge(e["num"], m.group(1))
     return {"nodes": nodes, "edges": edges}
 
 

@@ -19,6 +19,7 @@ export const ICONS = {
   clear: 'M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14',
   download: 'M12 3v12m0 0l-4-4m4 4l4-4M4 19h16',
   refresh: 'M21 12a9 9 0 1 1-3-6.7M21 4v5h-5',
+  folder: 'M3 7a2 2 0 0 1 2-2h3.5l2 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z',
   build: 'M14 3l-1 4 4-1 3 3-4 1 1 4-3 3-1-4-4 1-3-3 4-1-1-4 3-3 5 0Z',
   arrow: 'M5 12h14M13 6l6 6-6 6',
   external: 'M14 5h5v5M19 5l-8 8M12 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6',
