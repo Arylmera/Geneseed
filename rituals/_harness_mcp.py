@@ -463,6 +463,17 @@ def _install_targets() -> "list[tuple[str, str, Path]]":
     seen = set()
 
     def _add(host: str, scope: str, root: Path) -> None:
+        # A "project" whose marker dir IS this host's global config dir is the global
+        # install seen from its parent (the common case: the daemon's cwd is $HOME, where
+        # $HOME/.claude == ~/.claude) — NOT a separate project. Surfacing it would alias
+        # the global's files, so toggling/removing one row would hit both. Drop it.
+        if scope != "global":
+            try:
+                spec = build.HOSTS[host]
+                if (root / spec["project_marker"]).resolve() == spec["config_dir"]().resolve():
+                    return
+            except Exception:
+                pass
         key = (host, root.resolve())
         if key not in seen:
             seen.add(key); out.append((host, scope, root))

@@ -247,6 +247,27 @@ class InstallTargetsTests(unittest.TestCase):
         self.assertIn(("opencode", "global"), scopes)
         self.assertIn(("claude", "global"), scopes)
 
+    def test_cwd_whose_marker_is_the_global_config_dir_is_not_a_phantom_project(self):
+        # Daemon cwd == $HOME, where $HOME/.claude IS ~/.claude: the cwd-scan must NOT
+        # surface a "claude project" at $HOME aliasing the global (toggling one hit both).
+        tmp = Path(tempfile.mkdtemp())
+        home = tmp / "home"
+        (home / ".claude").mkdir(parents=True)
+        (home / ".claude" / build.GLOBAL_MANIFEST).write_text("{}", encoding="utf-8")
+        saved = build.HOSTS["claude"]["config_dir"]
+        cwd0 = Path.cwd()
+        try:
+            build.HOSTS["claude"]["config_dir"] = lambda: home / ".claude"
+            os.chdir(home)
+            claude = [(s, Path(r).resolve()) for h, s, r in harness._install_targets() if h == "claude"]
+            self.assertNotIn(("project", home.resolve()), claude, "phantom project at $HOME surfaced")
+            self.assertIn(("global", (home / ".claude").resolve()), claude)
+        finally:
+            os.chdir(cwd0)
+            build.HOSTS["claude"]["config_dir"] = saved
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 class RebuildAllTests(unittest.TestCase):
     """rebuild-all rebuilds every ACTIVE install in its own emit, best-effort:
