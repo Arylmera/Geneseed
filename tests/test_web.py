@@ -1451,5 +1451,125 @@ class DeployTests(unittest.TestCase):
                     os.environ["XDG_CONFIG_HOME"] = saved_xdg
 
 
+class TestInstallRemove(unittest.TestCase):
+    """The trash icon: api_install_toggle's `remove` action permanently deletes a folder
+    install and de-lists it (the registry self-prunes once the root `.geneseed-emit` is
+    gone). memory/ + notebook/ follow the `memory` disposition; the file removal never
+    touches them, so the default keep can't lose a learned fact. OpenCode project is the
+    interesting case — no manifest, so the bundle dirs (laws/agents/skills) + AGENT.md are
+    reversed by name (build() owns and clobbers them each run)."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _seed_opencode_project(self, root: Path):
+        import json
+        root.mkdir(parents=True, exist_ok=True)
+        for d in (".opencode", "laws", "agents", "skills", "memory", "notebook"):
+            (root / d).mkdir()
+            (root / d / "f").write_text("x", encoding="utf-8")
+        (root / "AGENT.md").write_text("# rules\n", encoding="utf-8")
+        (root / "opencode.json").write_text(
+            json.dumps({"instructions": ["AGENT.md"], "lsp": True}), encoding="utf-8")
+        (root / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
+        (root / ".geneseed-theme").write_text("neutral\n", encoding="utf-8")
+        (root / web.build.VERSION_MARKER).write_text("v\n", encoding="utf-8")
+
+    def test_remove_opencode_project_deletes_files_keeps_memory(self):
+        import json
+        root = (self.tmp / "repo").resolve()
+        self._seed_opencode_project(root)
+        res = web.harness._install_uninstall(root, "opencode", "project", "keep")
+        self.assertTrue(res["ok"])
+        for d in (".opencode", "laws", "agents", "skills"):
+            self.assertFalse((root / d).exists(), f"{d} should be gone")
+        self.assertFalse((root / "AGENT.md").exists())
+        # opencode.json kept; its instructions entry dropped
+        instr = json.loads((root / "opencode.json").read_text(encoding="utf-8"))["instructions"]
+        self.assertNotIn("AGENT.md", instr)
+        # registry + theme/version markers gone -> the row self-prunes
+        for m in (".geneseed-emit", ".geneseed-theme", web.build.VERSION_MARKER):
+            self.assertFalse((root / m).exists(), m)
+        # memory + notebook KEPT (default disposition can't lose a fact)
+        self.assertTrue((root / "memory" / "f").exists())
+        self.assertTrue((root / "notebook" / "f").exists())
+
+    def test_remove_memory_archive_then_delete(self):
+        root = (self.tmp / "repo2").resolve()
+        self._seed_opencode_project(root)
+        res = web.harness._install_uninstall(root, "opencode", "project", "archive")
+        self.assertTrue(res["ok"])
+        self.assertFalse((root / "memory").exists())          # moved aside, not deleted
+        self.assertTrue(any((root / "archived-memory").glob("*/f")))
+        self.assertTrue(any((root / "archived-notebook").glob("*/f")))
+
+        root2 = (self.tmp / "repo3").resolve()
+        self._seed_opencode_project(root2)
+        res2 = web.harness._install_uninstall(root2, "opencode", "project", "delete")
+        self.assertTrue(res2["ok"])
+        self.assertFalse((root2 / "memory").exists())
+        self.assertFalse((root2 / "notebook").exists())
+        self.assertEqual(res2["memory"], "delete")
+
+    def test_api_remove_action_wired_and_allowlisted(self):
+        root = (self.tmp / "repo4").resolve()
+        self._seed_opencode_project(root)
+        saved = web.harness._install_targets
+        web.harness._install_targets = lambda: [("opencode", "project", root)]
+        try:
+            state = web.WebState(theme="neutral")
+            with self.assertRaises(web.NotFound):    # (host, path) not in the detected set
+                web.api_install_toggle(
+                    state, {"host": "opencode", "path": "/nope", "action": "remove"})
+            res = web.api_install_toggle(
+                state, {"host": "opencode", "path": str(root),
+                        "action": "remove", "memory": "keep"})
+            self.assertTrue(res["ok"])
+            self.assertFalse((root / ".opencode").exists())
+        finally:
+            web.harness._install_targets = saved
+
+    def test_remove_claude_and_bob_project_installs(self):
+        # Real per-repo emits (manifest-backed) -> remove must reverse them host-agnostically.
+        for host, emit in (("claude", web.build.emit_claude), ("bob", web.build.emit_bob)):
+            root = (self.tmp / f"repo_{host}").resolve()
+            root.mkdir()
+            emit("neutral", root)
+            marker = web.build.HOSTS[host]["project_marker"]
+            self.assertEqual(web.harness._install_state(root, host, "project"), "active", host)
+            res = web.harness._install_uninstall(root, host, "project", "keep")
+            self.assertTrue(res["ok"], (host, res))
+            self.assertEqual(web.harness._install_state(root, host, "project"), "absent", host)
+            self.assertFalse((root / marker / web.build.GLOBAL_MANIFEST).exists(), host)
+            # memory kept (default disposition) — the per-host store survives the removal
+            self.assertTrue((root / marker / "memory").is_dir(), host)
+
+    def test_remove_deregisters_via_registry_prune(self):
+        import os
+        import _install_registry
+        saved_xdg = os.environ.get("XDG_CONFIG_HOME")
+        cfg = self.tmp / "xdg"
+        cfg.mkdir()
+        os.environ["XDG_CONFIG_HOME"] = str(cfg)
+        try:
+            root = (self.tmp / "deployed").resolve()
+            self._seed_opencode_project(root)
+            _install_registry.record(root)
+            self.assertIn(root, [r.resolve() for r in _install_registry.roots()])
+            web.harness._install_uninstall(root, "opencode", "project", "keep")
+            # `.geneseed-emit` gone -> the registry self-prunes the row on next read
+            self.assertEqual(_install_registry.roots(), [])
+        finally:
+            if saved_xdg is None:
+                os.environ.pop("XDG_CONFIG_HOME", None)
+            else:
+                os.environ["XDG_CONFIG_HOME"] = saved_xdg
+
+
 if __name__ == "__main__":
     unittest.main()

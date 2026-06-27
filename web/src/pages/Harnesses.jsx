@@ -61,6 +61,23 @@ function Switch({ on, disabled, label, onToggle }) {
 // root — still attach to the right row.
 const installKey = (host, root) => `${host} ${root}`
 
+// A short, honest description of what `remove` deletes, by host × scope — shown in the
+// confirm. A project install is the deployed bundle; a global is the config-dir layer.
+const removeLayer = (host, scope) => {
+  if (scope === 'project') {
+    return host === 'claude'
+      ? '.claude/ + the CLAUDE.md block'
+      : host === 'bob'
+        ? '.bob/ + the AGENTS.md block'
+        : '.opencode/ + AGENT.md + the bundle'
+  }
+  return host === 'claude'
+    ? "~/.claude's agents/skills + the CLAUDE.md block + settings hooks"
+    : host === 'bob'
+      ? "~/.bob's agents/skills + the AGENTS.md block + settings hooks"
+      : "~/.config/opencode's AGENT.md, agents, skills, plugins + the opencode.json entry"
+}
+
 export default function Harnesses({ onAction, themes = [], currentTheme, dataRev, onMutated }) {
   const { data: instData, error: instErr } = useAsync(() => api.installs(), [dataRev]) // { installs }
   const { data: mcpData, error: mcpErr } = useAsync(() => api.mcp(), [dataRev]) // { targets }
@@ -71,6 +88,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
   const [collapsed, setCollapsed] = useState({}) // explicit collapses; MCP rows open by default
   const [deploy, setDeploy] = useState(null) // null = closed; { path, host, theme } = the deploy form
   const [browsing, setBrowsing] = useState(false) // native folder picker in flight
+  const [removing, setRemoving] = useState(null) // null = closed; { id, host, path, memory } = remove-confirm
 
   // Group MCP targets by their owning install (host, root). api_mcp only returns targets
   // for active installs, so every group has a matching harness row to nest beneath.
@@ -88,6 +106,25 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
 
   const installs = instData.installs
   const activeCount = installs.filter((i) => i.state === 'active').length
+
+  // Two sections: machine-wide globals first, then the per-repo (folder) installs. Same
+  // columns and row renderer (renderInstall) — only the grouping differs.
+  const sections = [
+    {
+      key: 'global',
+      title: 'Global',
+      sub: 'machine-wide',
+      rows: installs.filter((i) => i.scope === 'global'),
+      empty: 'No global installs detected.',
+    },
+    {
+      key: 'project',
+      title: 'Per-project',
+      sub: 'one folder each',
+      rows: installs.filter((i) => i.scope !== 'global'),
+      empty: 'No per-project installs yet — use “Deploy to folder…”.',
+    },
+  ]
 
   // The voice a row acts on: the explicit pick, else the install's own theme (active
   // rows), else the current deployed voice — so a new install matches your existing one.
@@ -129,6 +166,28 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
         return
       }
       onMutated?.() // refetch installs + MCP (the active set drives MCP targets) — no full reload
+    } catch (e) {
+      setNote(e.message)
+    } finally {
+      setBusyKey('')
+    }
+  }
+
+  // Permanently delete a folder install (the trash icon's confirm sub-row). Destructive
+  // and irreversible — the on-disk confirm + the memory disposition are the only guards.
+  const confirmRemove = async () => {
+    const r = removing
+    if (!r) return
+    setBusyKey(r.id)
+    setNote('')
+    try {
+      const res = await api.installRemove(r.host, r.path, r.memory)
+      if (!res.ok) {
+        setNote(res.error || 'remove failed')
+        return
+      }
+      setRemoving(null)
+      onMutated?.() // refetch installs + MCP — the removed row drops out
     } catch (e) {
       setNote(e.message)
     } finally {
@@ -295,9 +354,34 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
               <th className="th-acts" />
             </tr>
           </thead>
-          <tbody>
-            {installs.map((inst) => {
-              const on = inst.state === 'active'
+          {sections.map((sec) => (
+            <tbody key={sec.key}>
+              <tr className="h-group">
+                <td colSpan={6}>
+                  {sec.title}
+                  <span className="hg-sub"> · {sec.sub}</span>
+                </td>
+              </tr>
+              {sec.rows.length ? (
+                sec.rows.map(renderInstall)
+              ) : (
+                <tr className="h-empty-row">
+                  <td colSpan={6} className="h-empty">
+                    {sec.empty}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          ))}
+        </table>
+      </div>
+    </div>
+  )
+
+  // One install row + its (conditional) remove-confirm and MCP-detail sub-rows. A function
+  // declaration so it hoists above the return; closes over this render's state/handlers.
+  function renderInstall(inst) {
+    const on = inst.state === 'active'
               const targets = mcpByInstall[installKey(inst.host, inst.path)] || []
               const hasMcp = targets.length > 0
               const open = hasMcp && !collapsed[inst.id]
@@ -342,28 +426,26 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                       <span className={`badge ${on ? 'ok' : ''}`}>{badge}</span>
                     </td>
                     <td>
+                      {/* Four fixed lanes so controls align into columns regardless of which
+                          ones a row shows: voice · install/re-theme · switch · trash. Every
+                          lane is always rendered (empty when N/A) so nothing shifts sideways. */}
                       <div className="h-acts">
-                        {inst.state === 'absent' && onAction ? (
-                          <>
+                        <div className="ha-cell ha-voice">
+                          {(inst.state === 'absent' || on) && onAction ? (
                             <VoiceSelect
                               label={label}
                               value={voiceFor(inst)}
                               themes={themes}
                               onChange={(v) => setVoice(inst, v)}
                             />
+                          ) : null}
+                        </div>
+                        <div className="ha-cell ha-btn">
+                          {inst.state === 'absent' && onAction ? (
                             <button className="btn ghost sm" onClick={() => applyVoice(inst)}>
                               Install
                             </button>
-                          </>
-                        ) : null}
-                        {on && onAction ? (
-                          <>
-                            <VoiceSelect
-                              label={label}
-                              value={voiceFor(inst)}
-                              themes={themes}
-                              onChange={(v) => setVoice(inst, v)}
-                            />
+                          ) : on && onAction ? (
                             <button
                               className="btn ghost sm"
                               disabled={voiceFor(inst) === inst.theme}
@@ -371,23 +453,88 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                             >
                               Re-theme
                             </button>
-                          </>
-                        ) : null}
-                        {inst.state !== 'absent' ? (
-                          <Switch
-                            on={on}
-                            disabled={busyKey === inst.id}
-                            label={`activate ${inst.host} · ${inst.scope}`}
-                            onToggle={() => toggleInstall(inst)}
-                          />
-                        ) : (
-                          // No switch when nothing's installed — but hold its place so the
-                          // dropdown + Install button stay aligned with the active rows.
-                          <span className="h-sw-spacer" aria-hidden="true" />
-                        )}
+                          ) : null}
+                        </div>
+                        <div className="ha-cell ha-sw">
+                          {inst.state !== 'absent' ? (
+                            <Switch
+                              on={on}
+                              disabled={busyKey === inst.id}
+                              label={`activate ${inst.host} · ${inst.scope}`}
+                              onToggle={() => toggleInstall(inst)}
+                            />
+                          ) : null}
+                        </div>
+                        <div className="ha-cell ha-trash">
+                          {inst.state !== 'absent' && onAction ? (
+                            <button
+                              className="btn ghost sm h-trash"
+                              aria-label={`remove ${inst.host} · ${inst.scope} from ${inst.path}`}
+                              title="Remove this harness"
+                              disabled={busyKey === inst.id}
+                              onClick={() =>
+                                setRemoving((r) =>
+                                  r?.id === inst.id
+                                    ? null
+                                    : { id: inst.id, host: inst.host, path: inst.path, memory: 'keep' },
+                                )
+                              }
+                            >
+                              <Icon name="clear" />
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </td>
                   </tr>
+                  {removing?.id === inst.id ? (
+                    <tr className="h-detail-row h-remove-row">
+                      <td />
+                      <td colSpan={5} className="h-detail">
+                        <div className="h-remove">
+                          <div className="hr-msg">
+                            <strong>
+                              {inst.scope === 'project'
+                                ? 'Remove this harness from the folder?'
+                                : `Remove the global ${inst.host} install?`}
+                            </strong>
+                            <span className="sub">
+                              Deletes <code>{removeLayer(inst.host, inst.scope)}</code>
+                              {inst.scope === 'project'
+                                ? ' and de-lists it.'
+                                : '; the row stays, marked “not installed.”'}{' '}
+                              This can’t be undone.
+                            </span>
+                          </div>
+                          <label className="hr-field">
+                            <span>Memory &amp; notebook</span>
+                            <select
+                              className="sel"
+                              aria-label="memory disposition"
+                              value={removing.memory}
+                              onChange={(e) => setRemoving((r) => ({ ...r, memory: e.target.value }))}
+                            >
+                              <option value="keep">keep in place</option>
+                              <option value="archive">archive aside</option>
+                              <option value="delete">delete too</option>
+                            </select>
+                          </label>
+                          <div className="hr-acts">
+                            <button
+                              className="btn sm hr-go"
+                              disabled={busyKey === inst.id}
+                              onClick={confirmRemove}
+                            >
+                              {busyKey === inst.id ? 'Removing…' : 'Remove'}
+                            </button>
+                            <button className="btn ghost sm" onClick={() => setRemoving(null)}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
                   {open ? (
                     <tr className="h-detail-row">
                       <td />
@@ -440,10 +587,5 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                   ) : null}
                 </React.Fragment>
               )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
+  }
 }

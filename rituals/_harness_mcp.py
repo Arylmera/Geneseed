@@ -916,3 +916,109 @@ def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:
     if archive_memory and (cfg / "memory").is_dir():
         archived = _archive_memory(cfg / "memory")
     return {"removed": removed, "unmerged": bool(hooks), "archived": archived}
+
+
+# ---- Folder-install removal (the destructive sibling of deactivate) ----------
+# Deactivate moves a deployed harness aside (reversible); REMOVE deletes it for good and
+# de-lists it. Reuses the per-host reversal cmd_uninstall already drives, then clears the
+# ROOT registry markers so `_install_registry.roots()` self-prunes the row (a project
+# install keeps `.geneseed-emit` at the repo root, OUTSIDE the per-host cfg). Memory and
+# notebook are runtime stores — NEVER removed by the file deletion itself, so the default
+# 'keep' can't lose a learned fact; the caller opts into archive/delete explicitly.
+
+def _install_data_dir(root: Path, host: str = "opencode", scope: str = "global") -> Path:
+    """The dir holding an install's manifest + memory/notebook stores: <root>/<marker>
+    for a Claude/Bob PROJECT install, else `root`. Mirrors _web_actions._view_cfg, kept
+    here too so the uninstall path carries no web dependency."""
+    if scope == "project" and host in ("claude", "bob"):
+        return root / build.HOSTS[host]["project_marker"]
+    return root
+
+
+def _archive_store(store: Path) -> Path:
+    """Move a runtime store (memory/ or notebook/) aside to a sibling
+    `archived-<name>/<timestamp>/` — the generic form of _archive_memory, so a 'set aside,
+    never delete' covers the notebook too. Returns the archive path."""
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    dest = store.parent / f"archived-{store.name}" / stamp
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(store), str(dest))
+    return dest
+
+
+def _opencode_project_uninstall(root: Path) -> dict:
+    """Reverse a per-repo OpenCode emit at `root` (which carries no manifest): delete the
+    fully-owned layers — `.opencode/` plus the bundle dirs the build WIPES every run
+    (laws/agents/skills; folder names are always neutral, never themed) and AGENT.md — and
+    drop the opencode.json `instructions` entry. memory/ + notebook/ and the user-owned
+    stubs (context.json, wiki.jsonc, .gitignore) are left for the caller / kept as data.
+    # ponytail: the deploy itself clobbers laws/agents/skills (build() rmtrees them each
+    # run), so removing them here is the exact inverse — not a guess at user files. If a
+    # repo ever needs them preserved through an uninstall, give the project emit a manifest."""
+    entry = _install_agent_entry(root, "project")   # read the wire BEFORE deleting AGENT.md
+    removed = 0
+    for d in (".opencode", "laws", "agents", "skills"):
+        p = root / d
+        if p.is_dir():
+            shutil.rmtree(p, ignore_errors=True)
+            removed += 1
+    am = root / "AGENT.md"
+    if am.is_file():
+        try:
+            am.unlink(); removed += 1
+        except OSError:
+            pass
+    unmerged = _unmerge_opencode_json(root / "opencode.json", entry)
+    return {"removed": removed, "unmerged": unmerged, "archived": None}
+
+
+def _install_uninstall(root: Path, host: str = "opencode", scope: str = "global",
+                       memory: str = "keep") -> dict:
+    """Permanently REMOVE the install at `root` — owned files, config wiring, markers —
+    then de-list it. The destructive sibling of `_install_deactivate`. `memory` ∈
+    {keep, archive, delete} governs the memory/ + notebook/ runtime stores only. Every op
+    is best-effort and idempotent, so a partly-removed install can simply be retried."""
+    if memory not in ("keep", "archive", "delete"):
+        memory = "keep"
+    if _install_state(root, host, scope) == "absent":
+        return {"ok": False, "error": "nothing installed here"}
+    data = _install_data_dir(root, host, scope)
+    # 1. Delete the harness files via the matching per-host reversal, then drop any
+    #    disabled-state stash (its bytes are this install's, removed with it).
+    if host in ("claude", "bob"):
+        summary = _claude_uninstall(data, archive_memory=False)
+        shutil.rmtree(data / DISABLED_STASH / host, ignore_errors=True)
+    elif _install_kind(root) == "global":
+        summary = _uninstall_global(root, False, "opencode")
+        shutil.rmtree(root / DISABLED_STASH, ignore_errors=True)
+    else:
+        summary = _opencode_project_uninstall(root)
+        shutil.rmtree(root / DISABLED_STASH, ignore_errors=True)
+    # 2. Memory + notebook disposition (independent of the owned-file removal above).
+    archived: "list[str]" = []
+    for name in ("memory", "notebook"):
+        store = data / name
+        if not store.is_dir():
+            continue
+        if memory == "archive":
+            archived.append(str(_archive_store(store)))
+        elif memory == "delete":
+            shutil.rmtree(store, ignore_errors=True)
+    # 3. Clear the ROOT registry markers so the registry self-prunes this row. Done for
+    #    every scope: harmless where the reversal already removed them, essential for a
+    #    project install (its markers live at the repo root, not under cfg).
+    for m in (".geneseed-emit", ".geneseed-theme", build.VERSION_MARKER):
+        try:
+            (root / m).unlink()
+        except OSError:
+            pass
+    # 4. Tidy an emptied marker dir (.claude/.bob) so no husk lingers in the repo.
+    if data != root and data.is_dir() and not any(data.iterdir()):
+        try:
+            data.rmdir()
+        except OSError:
+            pass
+    out = {"ok": True, "removed": summary.get("removed", 0), "memory": memory}
+    if archived:
+        out["archived"] = archived
+    return out

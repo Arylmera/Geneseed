@@ -384,11 +384,12 @@ def api_pick_folder(state: WebState | None = None, body: dict | None = None) -> 
 
 
 def api_install_toggle(state: WebState, body: dict) -> dict:
-    """Deactivate or reactivate one install. Non-destructive. Keyed on the
-    (host, path) PAIR — a cwd can carry both an OpenCode and a Claude install at the
-    same path, so path alone is ambiguous; and the pair MUST be one of the detected
-    installs, else 404 (this endpoint moves whole trees — never build the root from raw
-    body input)."""
+    """Deactivate, reactivate, or REMOVE one install. Deactivate/activate are
+    non-destructive (files move aside); `remove` deletes the harness from the folder and
+    de-lists it (memory disposition via `memory`). Keyed on the (host, path) PAIR — a cwd
+    can carry both an OpenCode and a Claude install at the same path, so path alone is
+    ambiguous; and the pair MUST be one of the detected installs, else 404 (this endpoint
+    moves/deletes whole trees — never build the root from raw body input)."""
     known = {(host, str(r)): (host, scope, r)
              for host, scope, r in harness._install_targets()}
     hit = known.get((body.get("host") or "", body.get("path") or ""))
@@ -400,6 +401,11 @@ def api_install_toggle(state: WebState, body: dict) -> dict:
         res = harness._install_deactivate(root, host, scope)
     elif action == "activate":
         res = harness._install_reactivate(root, host, scope)
+    elif action == "remove":
+        # Destructive: delete the harness from the folder and de-list it. `memory` ∈
+        # {keep, archive, delete} governs the memory/notebook stores (validated in the
+        # engine; an unknown value falls back to keep, never a surprise delete).
+        res = harness._install_uninstall(root, host, scope, body.get("memory") or "keep")
     else:
         res = {"ok": False, "error": f"unknown action {action!r}"}
     state.refresh()

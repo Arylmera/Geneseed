@@ -1,17 +1,13 @@
 import React from 'react'
-import { api } from '../../api/index.js'
 import { Icon } from '../../components/Icon.jsx'
-import { useAsync } from '../../hooks/useAsync.js'
 import { FLAVOURS } from '../../hooks/useFlavour.js'
 import { ACCENT_MODES } from '../../hooks/useAccentMode.js'
 import { LAYOUTS, defaultLayoutFor } from '../../hooks/useLayout.js'
-import Loading from '../../components/Loading.jsx'
-import ErrorState from '../../components/ErrorState.jsx'
 import ServerControl from './ServerControl.jsx'
 
-// The settings page: the console direction picker, the install snapshot,
-// machine maintenance (PATH/uninstall), the offline package, and server control.
-// Building and updating live in the Harnesses tab (per-install) and the Dashboard.
+// The settings page: the console direction picker, machine maintenance
+// (PATH/uninstall), the offline package, and server control. Per-install detail and
+// building/updating live in the Harnesses tab and the Dashboard.
 export default function Settings({
   onAction,
   flavour,
@@ -21,21 +17,14 @@ export default function Settings({
   layout,
   onLayout,
 }) {
-  const { data: setup, error } = useAsync(() => api.setup(), [])
-
-  if (error) return <ErrorState error={error} />
-  if (!setup) return <Loading />
-
-  const upToDate = (setup.version_verdict || '').includes('up to date')
-
   return (
     <div className="narrow-lg">
       <div className="head-row mb-18">
         <div>
           <h1 className="h">Settings</h1>
           <p className="sub">
-            The deployed install at a glance, plus machine maintenance, an offline package, and
-            server control. Build and update from the Harnesses tab and the Dashboard.
+            Console direction, machine maintenance, an offline package, and server control. See
+            per-install detail in the Harnesses tab; build and update from there and the Dashboard.
           </p>
         </div>
       </div>
@@ -137,47 +126,6 @@ export default function Settings({
           </div>
         </div>
       )}
-
-      {/* Installation card */}
-      <div className="card pad-lg mb-16">
-        <div className="card-head">
-          <h3>Installation</h3>
-        </div>
-        {/* These JSX values are tuple data, not list items — each rendered row
-            is keyed by `k` in the .map below, so the inner elements need no key. */}
-        {/* eslint-disable react/jsx-key */}
-        {[
-          [
-            'Deployed',
-            <span className={`badge ${setup.deployed ? 'ok' : 'warn'}`}>
-              {setup.deployed ? 'yes' : 'no'}
-            </span>,
-          ],
-          ['Target', <code>{setup.target}</code>],
-          ['Install mode', setup.emit],
-          ['Theme', <span style={{ textTransform: 'capitalize' }}>{setup.theme}</span>],
-          [
-            'Version',
-            <span className={`badge ${upToDate ? 'ok' : 'warn'}`}>{setup.version_verdict}</span>,
-          ],
-          ['Installed build', <span className="mono">{setup.installed_fp || '(none)'}</span>],
-          ['Source build', <span className="mono">{setup.source_fp}</span>],
-          ['Source root', setup.root],
-          [
-            'Memory store',
-            <span>
-              {setup.memory_dir || '(not found)'} · {setup.facts} fact{setup.facts === 1 ? '' : 's'}
-            </span>,
-          ],
-          ['Python', setup.python],
-        ].map(([k, v]) => (
-          <div className="kv" key={k}>
-            <span className="k">{k}</span>
-            <span className="v">{v}</span>
-          </div>
-        ))}
-        {/* eslint-enable react/jsx-key */}
-      </div>
 
       {/* Maintenance card */}
       <div className="card pad-lg mb-16">

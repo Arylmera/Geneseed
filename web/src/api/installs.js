@@ -7,6 +7,10 @@ import { get, post } from './http.js'
 // Claude install at the same path, so path alone is ambiguous.
 export const installs = () => get('/api/installs')
 export const installToggle = (host, path, action) => post('/api/install', { host, path, action })
+// Permanently delete a folder install and de-list it. `memory` ∈ {keep, archive, delete}
+// governs the memory/notebook stores. Same (host, path) allowlist as installToggle.
+export const installRemove = (host, path, memory) =>
+  post('/api/install', { host, path, action: 'remove', memory })
 // Re-point the whole console at a detected install (the harness selector).
 export const selectView = (host, path) => post('/api/view', { host, path })
 // Open the OS-native folder chooser on the daemon host and return the picked absolute

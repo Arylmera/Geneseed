@@ -452,12 +452,18 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .harness-tbl .h-exp-cell { width: 1%; padding-right: 0; }
 .harness-tbl .h-path { display: block; margin-top: 3px; max-width: 280px; overflow: hidden;
   text-overflow: ellipsis; color: var(--text-3); font-family: var(--font-mono); font-size: 11.5px; }
-.harness-tbl .h-acts { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-/* Pin each action slot to a fixed width so the dropdown, the Install/Re-theme button, and
-   the toggle line up across every row regardless of which controls a row shows. */
-.harness-tbl .h-acts .sel { width: 180px; min-width: 0; }
-.harness-tbl .h-acts .btn { min-width: 88px; justify-content: center; }
-.harness-tbl .h-sw-spacer { width: 38px; flex: none; } /* holds the toggle's place on absent rows */
+/* Four fixed lanes — voice · install/re-theme · switch · trash — so every control lines up
+   into its own column regardless of which ones a row shows. Each row always renders all four
+   .ha-cell lanes (empty when N/A), so a missing control reserves its space instead of
+   letting the rest slide sideways. */
+.harness-tbl .h-acts { display: grid; grid-template-columns: 180px 92px 38px 32px; gap: 8px;
+  align-items: center; justify-content: end; }
+.harness-tbl .h-acts .ha-cell { display: flex; align-items: center; min-width: 0; }
+.harness-tbl .h-acts .ha-voice { justify-content: stretch; }
+.harness-tbl .h-acts .ha-btn { justify-content: stretch; }
+.harness-tbl .h-acts .ha-sw, .harness-tbl .h-acts .ha-trash { justify-content: center; }
+.harness-tbl .h-acts .sel { width: 100%; min-width: 0; }
+.harness-tbl .h-acts .btn { width: 100%; min-width: 0; justify-content: center; }
 .harness-tbl .h-exp { display: inline-flex; padding: 4px; background: none; border: 0; cursor: pointer;
   color: var(--text-3); }
 .harness-tbl .h-exp:hover { color: var(--text); }
@@ -2838,3 +2844,32 @@ a.rail-item.active { color: var(--text); }
 .deploy-pop .dp-note code { color: var(--text); }
 .deploy-pop .dp-field { display: flex; align-items: center; gap: 6px; }
 .deploy-pop .dp-field > span { color: var(--text-2); font-size: 12px; white-space: nowrap; }
+
+/* Remove-folder-install trash icon + its inline confirm sub-row (Harnesses page). The
+   trash is icon-only, so it opts out of the .h-acts .btn min-width; danger tint on hover
+   and on the confirm's Remove button. Self-contained EOF block (styles.css merge race). */
+.harness-tbl .h-acts .btn.h-trash { min-width: 0; width: 100%; padding: 6px 0; }
+.harness-tbl .h-acts .btn.h-trash:hover { color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--line-2)); }
+.h-remove { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--bad) 35%, var(--line-2));
+  border-radius: var(--r-sm); background: color-mix(in srgb, var(--bad) 7%, transparent); }
+.h-remove .hr-msg { display: flex; flex-direction: column; gap: 2px; flex: 1 1 280px; }
+.h-remove .hr-msg .sub { color: var(--text-2); }
+.h-remove .hr-msg code { color: var(--text); }
+.h-remove .hr-field { display: flex; align-items: center; gap: 6px; }
+.h-remove .hr-field > span { color: var(--text-2); font-size: 12px; white-space: nowrap; }
+.h-remove .hr-acts { display: flex; align-items: center; gap: 8px; }
+.h-remove .btn.hr-go { background: var(--bad); color: #fff; border-color: transparent; }
+.h-remove .btn.hr-go:hover { filter: brightness(1.08); }
+
+/* Harness-tab section grouping: a Global tbody then a Per-project tbody, each led by an
+   h-group label row. Empty per-project section shows a muted hint instead of rows. */
+.harness-tbl tbody tr.h-group td { padding: 18px 0 8px; border: 0;
+  font-family: var(--font-display); font-weight: 600; font-size: 12px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
+.harness-tbl tbody tr.h-group .hg-sub { text-transform: none; letter-spacing: 0;
+  font-weight: 400; color: var(--text-3); font-family: var(--font-mono); font-size: 11px; }
+.harness-tbl tbody tr.h-group:hover,
+.harness-tbl tbody tr.h-empty-row:hover { background: none; }
+.harness-tbl .h-empty { color: var(--text-3); padding: 6px 0 16px; border: 0; font-size: 13px; }
