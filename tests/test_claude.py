@@ -5,6 +5,7 @@ hook merge), and the deactivate/reactivate/uninstall activation. Stdlib unittest
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -288,6 +289,123 @@ class RebuildAllTests(unittest.TestCase):
         self.assertIn("opencode-global", emits)
         self.assertIn("claude-global", emits)
         self.assertEqual(rc, 1, "a failed install -> non-zero, but the others still ran")
+
+
+class ProjectBypassesGlobalTests(unittest.TestCase):
+    """Project-bypasses-global: a project install suppresses the same host's GLOBAL
+    preamble (claudeMdExcludes) and its global context hook stands down in-repo."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        # Keep the opt-out env out of every assertion unless a test sets it.
+        self._saved_env = {k: os.environ.pop(k, None)
+                           for k in ("GENESEED_STACK_GLOBAL", "GENESEED_ROOT")}
+
+    def tearDown(self):
+        import shutil
+        for k, v in self._saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _settings(self, repo, marker=".claude"):
+        return json.loads(_read(repo / marker / "settings.json"))
+
+    def test_project_emit_writes_exclude_and_scoped_hook(self):
+        repo = (self.tmp / "repo").resolve(); repo.mkdir()
+        build.emit_claude("neutral", repo)
+        s = self._settings(repo)
+        # claudeMdExcludes suppresses the GLOBAL ~/.claude/CLAUDE.md, and only that.
+        want = str((build._claude_config_dir() / "CLAUDE.md").resolve())
+        self.assertIn(want, s.get("claudeMdExcludes", []))
+        # context hook is scope-aware: --root points at the project's own .claude.
+        ctx = [c for c in _hook_cmds(s) if "context" in c]
+        self.assertTrue(ctx and "--root" in ctx[0])
+        self.assertIn(str(repo / ".claude"), ctx[0])
+        # manifest records the exclude so deactivate/uninstall can remove exactly it.
+        man = json.loads(_read(repo / ".claude" / build.GLOBAL_MANIFEST))
+        self.assertIn(want, man["managed"].get("settings_excludes", []))
+
+    def test_global_emit_writes_no_exclude(self):
+        cfg = self.tmp / "dotclaude"
+        build.emit_claude_global("neutral", cfg=cfg)
+        s = json.loads(_read(cfg / "settings.json"))
+        self.assertNotIn("claudeMdExcludes", s)
+
+    def test_bob_project_excludes_its_own_global_preamble(self):
+        repo = (self.tmp / "bobrepo").resolve(); repo.mkdir()
+        build.emit_bob("neutral", repo)
+        s = self._settings(repo, ".bob")
+        want = str((build._bob_config_dir() / "AGENTS.md").resolve())
+        self.assertIn(want, s.get("claudeMdExcludes", []))
+
+    def test_stack_global_env_suppresses_the_exclude(self):
+        repo = (self.tmp / "repo2").resolve(); repo.mkdir()
+        os.environ["GENESEED_STACK_GLOBAL"] = "1"
+        build.emit_claude("neutral", repo)
+        s = self._settings(repo)
+        self.assertNotIn("claudeMdExcludes", s)
+        # and a re-emit WITHOUT the env adds it; re-emit WITH it strips it again.
+        del os.environ["GENESEED_STACK_GLOBAL"]
+        build.emit_claude("neutral", repo)
+        self.assertIn("claudeMdExcludes", self._settings(repo))
+        os.environ["GENESEED_STACK_GLOBAL"] = "1"
+        build.emit_claude("neutral", repo)
+        self.assertNotIn("claudeMdExcludes", self._settings(repo))
+
+    def _mk_install(self, parent, marker=".claude"):
+        d = (parent / marker)
+        d.mkdir(parents=True)
+        (d / build.GLOBAL_MANIFEST).write_text("{}", encoding="utf-8")
+        return d
+
+    def test_detector_global_stands_down_only_for_matching_project(self):
+        import _harness_context as hc
+        gcfg = self._mk_install(self.tmp / "home")          # global ~/.claude analogue
+        repo = (self.tmp / "repo").resolve()
+        pcfg = self._mk_install(repo)                        # project <repo>/.claude
+        # global hook in the repo -> stands down (project hook will inject)
+        self.assertTrue(hc._global_hook_standing_down(gcfg, repo))
+        # the project's OWN hook never stands down
+        self.assertFalse(hc._global_hook_standing_down(pcfg, repo))
+        # no project install in cwd -> global injects
+        empty = (self.tmp / "elsewhere").resolve(); empty.mkdir()
+        self.assertFalse(hc._global_hook_standing_down(gcfg, empty))
+        # up-walk: a subdir of the repo still triggers stand-down
+        sub = repo / "a" / "b"; sub.mkdir(parents=True)
+        self.assertTrue(hc._global_hook_standing_down(gcfg, sub))
+        # per-host: a project .opencode never silences a global .claude (different marker)
+        bobg = self._mk_install(self.tmp / "bobhome", ".bob")
+        self.assertFalse(hc._global_hook_standing_down(bobg, repo))
+
+    def test_cmd_context_stand_down_is_silent_and_opt_out_works(self):
+        import io
+        import argparse
+        import contextlib
+        import _harness_context as hc
+        repo = (self.tmp / "repo").resolve()
+        build.emit_claude("neutral", repo)                  # project install + repo/CLAUDE.md
+        gcfg = self._mk_install(self.tmp / "home")          # a foreign global install
+        os.environ["GENESEED_ROOT"] = str(repo)
+        # global hook -> silent (stands down)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = hc.cmd_context(argparse.Namespace(root=str(gcfg)))
+        self.assertEqual(rc, 0)
+        self.assertEqual(buf.getvalue().strip(), "", "global hook should inject nothing in-repo")
+        # the project's own hook injects (its --root is the repo's .claude)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            hc.cmd_context(argparse.Namespace(root=str(repo / ".claude")))
+        self.assertIn("PROJECT CONTEXT", buf.getvalue())
+        # opt out: GENESEED_STACK_GLOBAL makes the global hook inject too (stacking)
+        os.environ["GENESEED_STACK_GLOBAL"] = "1"
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            hc.cmd_context(argparse.Namespace(root=str(gcfg)))
+        self.assertIn("PROJECT CONTEXT", buf.getvalue())
 
 
 if __name__ == "__main__":

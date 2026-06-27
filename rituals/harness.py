@@ -148,6 +148,10 @@ def build_argparser() -> argparse.ArgumentParser:
     p.set_defaults(fn=cmd_prompt)
 
     c = sub.add_parser("context", help="print context.json eager entries for a SessionStart hook (Rule XVIII)")
+    c.add_argument("--root", default=None,
+                   help="the install's own dir (set by the emitted hook). A GLOBAL install's "
+                        "hook stands down when a Geneseed project install of the same host is "
+                        "at/above cwd (project-bypasses-global); GENESEED_STACK_GLOBAL=1 disables.")
     c.set_defaults(fn=cmd_context)
 
     gg = sub.add_parser("git-gate", help="PreToolUse hook: force an ASK before every git commit/push (Law XX backstop)")

@@ -827,6 +827,7 @@ def _claude_deactivate(root: Path, scope: str = "global", host: str = "claude") 
     # Unwire the settings.json hooks (exact recorded groups only) — the user's own
     # keys/hooks are untouched.
     build._unwire_claude_settings(cfg / "settings.json", managed.get("settings_hooks", []))
+    build._unwire_claude_excludes(cfg / "settings.json", managed.get("settings_excludes", []))
     # Excise the CLAUDE.md block, stashing its content for an exact restore.
     cm = _claude_md_path(cfg, managed)
     block = build._managed_block_read(cm)
@@ -875,6 +876,7 @@ def _claude_reactivate(root: Path, scope: str = "global", host: str = "claude") 
     # Re-wire: re-merge the hooks (idempotent) and re-insert the CLAUDE.md block.
     build._merge_claude_settings(cfg / "settings.json")
     managed = _claude_read_manifest(cfg).get("managed") or {}
+    build._wire_claude_excludes(cfg / "settings.json", managed.get("settings_excludes", []))
     if block_file.exists():
         build._managed_block_write(_claude_md_path(cfg, managed),
                                    block_file.read_text(encoding="utf-8"))
@@ -905,6 +907,7 @@ def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:
                          f"{len(failed)} owned file(s): {', '.join(failed)}\n")
     hooks = managed.get("settings_hooks", [])
     build._unwire_claude_settings(cfg / "settings.json", hooks)
+    build._unwire_claude_excludes(cfg / "settings.json", managed.get("settings_excludes", []))
     build._managed_block_remove(_claude_md_path(cfg, managed),
                                 whole=bool((managed.get("claude_md") or {}).get("whole")))
     for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit", build.VERSION_MARKER):

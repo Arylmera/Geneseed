@@ -39,6 +39,11 @@ def _bob_config_dir() -> Path:
 
 GLOBAL_MANIFEST = ".geneseed-manifest.json"
 
+# Project-bypasses-global (Claude-engine hosts only): map a preamble filename to the
+# GLOBAL config dir holding the copy a project install suppresses via claudeMdExcludes.
+# OpenCode gates differently (its cwd-aware context plugin), so it is not here.
+_PREAMBLE_CONFIG_DIR = {"CLAUDE.md": _claude_config_dir, "AGENTS.md": _bob_config_dir}
+
 
 def _global_memory(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
     """Ensure the global memory store exists at <cfg>/memory. If it already holds
@@ -300,6 +305,28 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     # Dedup so the manifest can't grow unbounded if a user edits a managed hook and a
     # re-emit re-adds the canonical group (already recorded in prior_hooks).
     managed["settings_hooks"] = prior_hooks + [a for a in added_hooks if a not in prior_hooks]
+
+    # Project-bypasses-global: a PROJECT install suppresses the SAME host's GLOBAL preamble
+    # (auto-loaded ~/.claude/CLAUDE.md or ~/.bob/AGENTS.md) while cwd is this repo, via
+    # Claude's native claudeMdExcludes. Written only when this run actually emitted the
+    # project's own preamble (never suppress with no replacement); GENESEED_STACK_GLOBAL=1
+    # opts out (and a re-emit with it set strips a prior exclude). Recorded in the manifest
+    # so deactivate/uninstall remove exactly it. The companion context-hook stand-down
+    # (cmd_context) handles the injected-context half and works even where the exclude does
+    # not (e.g. Bob keys it on the CLAUDE.md filename).
+    prior_excl = old_managed.get("settings_excludes")
+    prior_excl = prior_excl if isinstance(prior_excl, list) else []
+    cfgdir = _PREAMBLE_CONFIG_DIR.get(claude_md.name)
+    if scope == "project" and agent_text is not None and cfgdir:
+        want_excl = [str((cfgdir() / claude_md.name).resolve())]
+        if os.environ.get("GENESEED_STACK_GLOBAL"):
+            _unwire_claude_excludes(cfg / "settings.json", want_excl)
+            managed["settings_excludes"] = []
+        else:
+            added_excl = _wire_claude_excludes(cfg / "settings.json", want_excl)
+            managed["settings_excludes"] = sorted(set(prior_excl) | set(added_excl) | set(want_excl))
+    elif prior_excl:
+        managed["settings_excludes"] = prior_excl
 
     # Write-before-delete prune: now that the whole current set is on disk, remove only
     # what we owned before but no longer produce. A live file is never momentarily absent.

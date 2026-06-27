@@ -339,6 +339,13 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
         expand to wire their MCP servers. <strong>Rebuild all</strong> re-emits every active install
         in its own voice and mode, as one background job.
       </p>
+      <p className="sub mb-16">
+        <strong>Per-folder now overrides global.</strong> Inside a folder that has its own
+        harness, the <em>same host’s</em> global harness steps aside — only the folder’s harness
+        loads there (the global one still applies everywhere else). Set{' '}
+        <code>GENESEED_STACK_GLOBAL=1</code> to load both. Existing installs pick this up on their
+        next rebuild.
+      </p>
 
       {note ? <p className="badge bad mb-16">{note}</p> : null}
 

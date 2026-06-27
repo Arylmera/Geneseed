@@ -521,7 +521,9 @@ def _claude_hook_groups(cfg: Path) -> dict:
     py = f'"{sys.executable}"'
     h = f'"{ROOT / "rituals" / "harness.py"}"'
     mem = f'--memory "{cfg / "memory"}"'
-    context = f"{py} {h} context"
+    # --root carries the install's own dir so a GLOBAL hook can stand down when a project
+    # install of the same host sits at/above cwd (project-bypasses-global; see cmd_context).
+    context = f'{py} {h} context --root "{cfg}"'
     return {
         "PreToolUse": [
             {"matcher": "Bash", "hooks": [{"type": "command", "command": f"{py} {h} git-gate"}]},
@@ -606,6 +608,68 @@ def _unwire_claude_settings(path: Path, added: list) -> None:
             hooks.pop(event, None)
     if not hooks:
         loaded.pop("hooks", None)
+    path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
+
+
+def _wire_claude_excludes(path: Path, excludes: list) -> list:
+    """Add absolute path(s) to a settings.json `claudeMdExcludes` array — Claude's native
+    knob to skip a CLAUDE.md by path. A PROJECT install writes the GLOBAL same-host
+    preamble here so it is suppressed while cwd is this repo (project-bypasses-global),
+    and nowhere else (a project settings.json only merges in its own repo). Append-if-
+    absent, every other key preserved, a commented file never rewritten (warned instead).
+    Returns the entries actually written."""
+    want = [e for e in (excludes or []) if e]
+    if not want:
+        return []
+    config: dict = {}
+    had_comments = False
+    if path.exists():
+        try:
+            loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                config = loaded
+        except OSError:
+            pass
+    cur = config.get("claudeMdExcludes")
+    if not isinstance(cur, list):
+        cur = []
+    added = [e for e in want if e not in cur]
+    if not added:
+        return []
+    if had_comments:
+        print(f"[geneseed] {path.name} has comments — not rewriting it (your edits are "
+              f'kept). Add to its "claudeMdExcludes" array by hand: {json.dumps(added)}',
+              file=sys.stderr)
+        return []
+    cur.extend(added)
+    config["claudeMdExcludes"] = cur
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return added
+
+
+def _unwire_claude_excludes(path: Path, excludes: list) -> None:
+    """Reverse _wire_claude_excludes: remove exactly these paths from `claudeMdExcludes`,
+    dropping the key when it empties. The user's own excludes and keys are untouched; a
+    commented file is never rewritten."""
+    if not path.exists() or not excludes:
+        return
+    try:
+        loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
+    except OSError:
+        return
+    if had_comments or not isinstance(loaded, dict):
+        return
+    cur = loaded.get("claudeMdExcludes")
+    if not isinstance(cur, list):
+        return
+    for e in excludes:
+        if e in cur:
+            cur.remove(e)
+    if cur:
+        loaded["claudeMdExcludes"] = cur
+    else:
+        loaded.pop("claudeMdExcludes", None)
     path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
 
 

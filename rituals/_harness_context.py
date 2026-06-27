@@ -20,6 +20,32 @@ EXCLUDE_DIRS = {"node_modules", ".git", "dist", "build", "vendor", ".next",
                 "target", ".venv", "__pycache__", ".opencode", ".harness"}
 
 
+# ---- project-bypasses-global stand-down ------------------------------------------
+# The emitted SessionStart hook passes its own install dir as --root. A GLOBAL install's
+# hook (root is a host config dir, e.g. ~/.claude) must stand down when a Geneseed PROJECT
+# install of the SAME host sits at/above cwd — the project's own hook injects, so the
+# global one must not double up. Detection is an up-walk for the host's marker dir carrying
+# a Geneseed manifest, matching how Claude itself finds CLAUDE.md/settings from a subdir.
+# Literals (not imported from build) keep the hook dependency-free. GENESEED_STACK_GLOBAL=1
+# restores the old stacking.
+_CLAUDE_MARKERS = (".claude", ".bob")
+_GENESEED_MANIFEST = ".geneseed-manifest.json"
+
+
+def _global_hook_standing_down(hook_root: Path, cwd: Path) -> bool:
+    """True iff `hook_root` is a host marker dir and a Geneseed project install of the SAME
+    host (its marker + manifest) sits at/above `cwd` and is a DIFFERENT install — i.e. this
+    is the global hook and a project hook will cover the session."""
+    marker = hook_root.name
+    if marker not in _CLAUDE_MARKERS:
+        return False
+    for d in (cwd, *cwd.parents):
+        cand = d / marker
+        if (cand / _GENESEED_MANIFEST).is_file():
+            return cand.resolve() != hook_root.resolve()
+    return False
+
+
 def _disp(path_str: str, root: Path) -> str:
     """Show a path relative to the repo root when it sits under it, else verbatim."""
     try:
@@ -151,6 +177,13 @@ def cmd_context(args: argparse.Namespace) -> int:
     # hooks with cwd = repo root), not the harness package dir — so the project's own
     # docs are found. $GENESEED_ROOT overrides for non-standard layouts.
     root = Path(os.environ.get("GENESEED_ROOT") or Path.cwd()).resolve()
+    # Project-bypasses-global: a global install's hook stands down when a project install of
+    # the same host covers this repo (the project hook injects instead). Opt out with
+    # GENESEED_STACK_GLOBAL=1. Never blocks a session — worst case it injects as before.
+    hook_root = Path(args.root).resolve() if getattr(args, "root", None) else None
+    if hook_root and not os.environ.get("GENESEED_STACK_GLOBAL") \
+            and _global_hook_standing_down(hook_root, root):
+        return 0
     eager, lazy, source = _resolve_context_sets(root)
     if not eager and not lazy:
         sys.stderr.write(f"[context] nothing to load for {root} "

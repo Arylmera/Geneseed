@@ -9,6 +9,16 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **Project bypasses global harness**: when a repo carries its own Geneseed
+  install, the same host's GLOBAL harness no longer double-loads there. For
+  Claude/Bob a project emit writes the global preamble into `claudeMdExcludes`
+  (native, repo-scoped) and the global SessionStart context hook stands down via
+  an up-walk marker check — so a session started anywhere in the repo gets the
+  project harness only, and the global one elsewhere. OpenCode already scopes its
+  context to the cwd (the context plugin dedups), and its `instructions[]`
+  preamble double-load remains the documented harmless cost (moving it would
+  strip subagents of the laws). Opt out — restore stacking — with
+  `GENESEED_STACK_GLOBAL=1` (honoured at emit and in the hook).
 - **Law XXI — Commands Must Return**: a non-interactive-shell law forbidding
   commands that hang on a TTY (interactive prompts, pagers, REPLs, editors,
   unbounded processes) and directing the agent to the non-interactive form
