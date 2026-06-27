@@ -247,25 +247,47 @@ class InstallTargetsTests(unittest.TestCase):
         self.assertIn(("opencode", "global"), scopes)
         self.assertIn(("claude", "global"), scopes)
 
-    def test_cwd_whose_marker_is_the_global_config_dir_is_not_a_phantom_project(self):
-        # Daemon cwd == $HOME, where $HOME/.claude IS ~/.claude: the cwd-scan must NOT
-        # surface a "claude project" at $HOME aliasing the global (toggling one hit both).
+    def test_no_host_doubles_its_global_config_dir_as_a_phantom_project(self):
+        # For EVERY host (claude/bob share the ~/.X shape; opencode differs): a cwd whose
+        # marker dir resolves to that host's own global config dir must yield a single
+        # global row — never a phantom project aliasing it (toggling one would hit both).
+        import shutil
+        for host, spec in build.HOSTS.items():
+            tmp = Path(tempfile.mkdtemp())
+            cfgdir = tmp / "cfg" / spec["project_marker"]   # <cwd>/<marker> IS the global dir
+            cfgdir.mkdir(parents=True)
+            (cfgdir / build.GLOBAL_MANIFEST).write_text("{}", encoding="utf-8")
+            cwd = tmp / "cfg"
+            saved = spec["config_dir"]
+            cwd0 = Path.cwd()
+            try:
+                spec["config_dir"] = lambda c=cfgdir: c
+                os.chdir(cwd)
+                mine = [(s, Path(r).resolve())
+                        for h, s, r in harness._install_targets() if h == host]
+                self.assertNotIn(("project", cwd.resolve()), mine,
+                                 f"{host}: phantom project aliasing its own global")
+                self.assertIn(("global", cfgdir.resolve()), mine, f"{host}: global row missing")
+            finally:
+                os.chdir(cwd0)
+                spec["config_dir"] = saved
+                shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_genuine_project_marker_is_not_over_suppressed(self):
+        # The guard must NOT eat a real per-repo install: a repo's .claude is not ~/.claude,
+        # so it still appears as a project row.
+        import shutil
         tmp = Path(tempfile.mkdtemp())
-        home = tmp / "home"
-        (home / ".claude").mkdir(parents=True)
-        (home / ".claude" / build.GLOBAL_MANIFEST).write_text("{}", encoding="utf-8")
-        saved = build.HOSTS["claude"]["config_dir"]
+        repo = tmp / "repo"
+        (repo / ".claude").mkdir(parents=True)
+        (repo / ".claude" / build.GLOBAL_MANIFEST).write_text("{}", encoding="utf-8")
         cwd0 = Path.cwd()
         try:
-            build.HOSTS["claude"]["config_dir"] = lambda: home / ".claude"
-            os.chdir(home)
-            claude = [(s, Path(r).resolve()) for h, s, r in harness._install_targets() if h == "claude"]
-            self.assertNotIn(("project", home.resolve()), claude, "phantom project at $HOME surfaced")
-            self.assertIn(("global", (home / ".claude").resolve()), claude)
+            os.chdir(repo)
+            rows = [(h, s, Path(r).resolve()) for h, s, r in harness._install_targets()]
+            self.assertIn(("claude", "project", repo.resolve()), rows)
         finally:
             os.chdir(cwd0)
-            build.HOSTS["claude"]["config_dir"] = saved
-            import shutil
             shutil.rmtree(tmp, ignore_errors=True)
 
 
