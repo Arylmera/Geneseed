@@ -179,6 +179,8 @@ A second per-install dial, **footprint**, sets how much of the Rules `AGENT.md` 
 
 Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Use **full** when token cost is a non-issue or you run a smaller model; use **lean** to reclaim context on long sessions, large repos, or cost-sensitive runs. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob).
 
+Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates each Rule's *reasoning* to on-demand (and adds the standalone laws file to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer — which is why it stays the default.
+
 ---
 
 ## 🗂 Layout

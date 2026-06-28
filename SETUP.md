@@ -186,6 +186,15 @@ turn at the cost of one extra fetch when a rule's nuance matters. Prefer **lean*
 sessions, large repos, or cost-sensitive runs; keep **full** when cost is a non-issue or
 you run a smaller model.
 
+**Same harness, either way.** Footprint changes neither what the harness *is* nor what it
+can *do*: lean and full emit identical files (same agents, skills, plugins, commands, memory,
+notebook, hooks) and every Rule is present and binding. The only structural difference is
+that a lean install on a global / Claude / Bob target also ships the standalone
+`laws/universal.md` (project bundles already carry it); the only behavioural difference is
+that each Rule's reasoning loads on demand instead of every turn — which is why full, with
+the rationale always in front of the model, applies a rule's nuance more reliably on subtle
+edge cases (or with a weaker model), and stays the default.
+
 Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** toggle in
 the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It is
 remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
