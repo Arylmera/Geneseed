@@ -85,7 +85,21 @@ def _load_learn_prompt_head() -> str:
 LEARN_PROMPT_HEAD = _load_learn_prompt_head()
 
 
+# Windows spawns a visible console window for every child console process started
+# from a console-less parent (the detached web server). CREATE_NO_WINDOW suppresses
+# that window while still allowing piped stdout/stderr; on POSIX it is an empty dict.
+# Fold it into every short-lived spawn so the web UI does not flash a burst of
+# consoles — the Doctor page is the worst case, building every theme in its own
+# process. NOT for the detached daemon launch, which already uses DETACHED_PROCESS.
+NO_WINDOW: dict = (
+    {"creationflags": subprocess.CREATE_NO_WINDOW}
+    if sys.platform == "win32" else {}
+)
+
+
 def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
+    if NO_WINDOW and "creationflags" not in kw:
+        kw.update(NO_WINDOW)
     return subprocess.run(cmd, **kw)
 
 

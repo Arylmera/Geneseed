@@ -81,7 +81,8 @@ class JobManager:
                 p = subprocess.Popen(
                     cmd, cwd=str(ROOT), stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, text=True,
-                    encoding="utf-8", errors="replace", bufsize=1)
+                    encoding="utf-8", errors="replace", bufsize=1,
+                    **harness.NO_WINDOW)
                 with self._lock:
                     self._procs[jid] = p   # reachable for cancel()
                 for line in p.stdout:

@@ -104,7 +104,7 @@ def offline_zip_bytes() -> "tuple[bytes, str]":
     try:
         p = subprocess.run(
             ["git", "archive", "--format=zip", "--prefix=geneseed-offline/", "HEAD"],
-            cwd=str(ROOT), capture_output=True, timeout=60)
+            cwd=str(ROOT), capture_output=True, timeout=60, **harness.NO_WINDOW)
         if p.returncode == 0 and p.stdout:
             return p.stdout, name
     except (OSError, subprocess.TimeoutExpired):

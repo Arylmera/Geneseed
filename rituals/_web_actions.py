@@ -370,7 +370,8 @@ def api_pick_folder(state: WebState | None = None, body: dict | None = None) -> 
             "print(fd.askdirectory(title='Choose a folder to deploy the harness into') or '')\n")
     try:
         r = subprocess.run([sys.executable, "-c", code],
-                           capture_output=True, text=True, timeout=300)
+                           capture_output=True, text=True, timeout=300,
+                           **harness.NO_WINDOW)
     except (OSError, subprocess.SubprocessError) as e:
         return {"error": f"folder picker unavailable: {e}"}
     if r.returncode != 0:
