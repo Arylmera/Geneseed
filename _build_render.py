@@ -41,8 +41,43 @@ def substitute(text: str, theme: dict) -> str:
     return TOKEN_RE.sub(repl, text)
 
 
-def render_file(path: Path, theme: dict, _visiting: "frozenset[Path]" = frozenset()) -> str:
+def _terse_laws(text: str, theme: dict, laws_prefix: str = "") -> str:
+    """Lean rendering of the (already-themed) laws: each law's heading + its first
+    sentence (the rule itself), elaboration dropped, plus a pointer to the full
+    standalone file. Keeps the agent rule-aware in §1 while the rationale loads on
+    demand — the lean footprint's whole point.
+
+    ponytail: naive first-sentence split (`.`/`!`/`?` + space). It governs only how
+    much of each law shows inline — the binding full text always ships at
+    `<laws>/universal.md`, so a mis-split costs a slightly long line, never meaning."""
+    blocks = re.split(r"(?m)^(?=### )", text)
+    out = [blocks[0].rstrip()]   # preamble before the first law heading, kept verbatim
+    for b in blocks[1:]:
+        lines = b.splitlines()
+        heading = lines[0].rstrip()
+        body = " ".join(l.strip() for l in lines[1:]).strip()
+        m = re.match(r"(.+?[.!?])(?:\s|$)", body, re.S)
+        out.append(f"{heading}\n{m.group(1).strip() if m else body}")
+    law = theme.get("LAW", "Law")
+    laws_dir = theme.get("DIR_LAWS", "laws")
+    pointer = (
+        f"> Each {law} above is given in brief — the rule, not its reasoning. The "
+        f"complete, binding text of every {law} is in `{laws_prefix}{laws_dir}/universal.md`; "
+        f"read it whenever a {law}'s application is unclear, and before any act touching "
+        f"secrets, deletion, git history, scope, or untrusted content."
+    )
+    return "\n\n".join(out) + "\n\n" + pointer
+
+
+def render_file(path: Path, theme: dict, footprint: str = "full",
+                laws_prefix: str = "", _visiting: "frozenset[Path]" = frozenset()) -> str:
     """Render one source file: inline INCLUDE directives, then substitute tokens.
+
+    `footprint='lean'` replaces the INLINED copy of laws/universal.md (AGENT.md §1)
+    with a terse rule-only digest + a pointer to the standalone full file; `laws_prefix`
+    prefixes that pointer for hosts whose laws dir sits under a marker dir beside the
+    instructions file (e.g. '.claude/'). The STANDALONE laws file is rendered by
+    render_all's own loop, never through this inline path, so it always stays full.
 
     `_visiting` carries the chain of files currently being inlined, so a circular
     INCLUDE (a -> b -> a, or a file including itself) is caught and reported as a
@@ -51,12 +86,16 @@ def render_file(path: Path, theme: dict, _visiting: "frozenset[Path]" = frozense
     text = path.read_text(encoding="utf-8")
 
     def inline(m: re.Match) -> str:
-        target = (SRC / m.group("path")).resolve()
+        rel = m.group("path")
+        target = (SRC / rel).resolve()
         if not target.exists():
-            return f"<!-- MISSING INCLUDE: {m.group('path')} -->"
+            return f"<!-- MISSING INCLUDE: {rel} -->"
         if target == here or target in _visiting:
-            return f"<!-- CIRCULAR INCLUDE: {m.group('path')} -->"
-        return render_file(target, theme, _visiting | {here}).rstrip("\n")
+            return f"<!-- CIRCULAR INCLUDE: {rel} -->"
+        inner = render_file(target, theme, footprint, laws_prefix, _visiting | {here}).rstrip("\n")
+        if footprint == "lean" and rel == "laws/universal.md":
+            inner = _terse_laws(inner, theme, laws_prefix)
+        return inner
 
     text = INCLUDE_RE.sub(inline, text)
     return substitute(text, theme)
@@ -194,9 +233,10 @@ wiki.json
 # Per-agent model/temperature overrides — host-specific; never commit.
 agent-overrides.json
 
-# Which theme + emit mode this host last built (local build state, must not travel).
+# Which theme + emit mode + footprint this host last built (local build state, must not travel).
 .geneseed-theme
 .geneseed-emit
+.geneseed-footprint
 
 # memory/ keeps its own .gitignore so learned facts stay on this machine.
 # notebook/ keeps its own .gitignore so the agent's own files stay on this machine.
@@ -255,13 +295,18 @@ def dest_rel(rel: Path) -> Path:
     return rel
 
 
-def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]]]:
+def render_all(theme_name: str, footprint: str = "full",
+               laws_prefix: str = "") -> tuple[dict, list[tuple[str, str | None, Path]]]:
     """Render every source file once. Returns (theme, items) where each item is
     (output_relpath, rendered_text_or_None, source_path). Text files carry their
     rendered text; binary files carry None text and are copied from source_path.
 
     Renders with `effective_theme` — the chosen theme's voice over the fixed neutral
     STRUCTURE — so section names and folder names are theme-independent everywhere.
+
+    `footprint='lean'` makes AGENT.md's inlined §1 laws terse (see render_file); the
+    standalone laws/universal.md item stays full. `laws_prefix` is the pointer prefix
+    for hosts whose laws dir lives under a marker dir (e.g. '.claude/').
 
     Shared by `build()` (writes to a directory) and the prompt emitter (embeds
     the text in a single self-contained prompt) so the two never drift."""
@@ -273,7 +318,7 @@ def render_all(theme_name: str) -> tuple[dict, list[tuple[str, str | None, Path]
         rel = path.relative_to(SRC)
         out_rel = dest_rel(themed_rel(rel, theme)).as_posix()
         if path.suffix in TEXT_SUFFIXES:
-            items.append((out_rel, render_file(path, theme), path))
+            items.append((out_rel, render_file(path, theme, footprint, laws_prefix), path))
         else:
             items.append((out_rel, None, path))
     return theme, items
@@ -315,8 +360,13 @@ def read_version(path: Path) -> "str | None":
     return txt.split()[0] if txt else None
 
 
-def build(theme_name: str, out: Path) -> None:
+def build(theme_name: str, out: Path, footprint: str = "full") -> None:
     """Render the bundle into `out`.
+
+    `footprint='lean'` renders AGENT.md's §1 laws terse (rule + pointer); the
+    standalone laws/<universal>.md beside it stays full as the on-demand fallback.
+    The `.geneseed-footprint` marker is written by build.py main() (the single
+    marker choke point), not here.
 
     Before rendering, the dirs the build fully owns (`OWNED_SRC_DIRS` — laws,
     agents, skills, in their themed form) are wiped, so a renamed or removed source
@@ -327,7 +377,7 @@ def build(theme_name: str, out: Path) -> None:
     and `context.json` — written once, beside
     AGENT.md, and never touched again. The build therefore cleans its own footprint
     without ever destroying the user's repository or data."""
-    theme, items = render_all(theme_name)
+    theme, items = render_all(theme_name, footprint)
     assert_source_complete(items, context=f"theme '{theme_name}'")
     out.mkdir(parents=True, exist_ok=True)
 

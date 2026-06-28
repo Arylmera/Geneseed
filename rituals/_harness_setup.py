@@ -45,15 +45,19 @@ def _ask_choice(prompt: str, options: list[tuple[str, str]], default: str) -> st
 
 
 def _setup_build_args(theme: str, emit: str, out: str | None = None,
-                      root: str | None = None) -> list[str]:
+                      root: str | None = None, footprint: str = "full") -> list[str]:
     """The build.py argv for a wizard selection (pure — unit-tested). The global
-    emit takes no out/root; the others may."""
+    emit takes no out/root; the others may. `footprint` adds --footprint only when it
+    departs from build.py's own default ('full'), so existing call sites and the argv
+    stay byte-identical for full installs."""
     argv = ["--theme", theme, "--emit", emit]
     if emit not in ("opencode-global", "claude-global", "bob-global"):   # globals take no out/root
         if out:
             argv += ["--out", out]
         if root:
             argv += ["--root", root]
+    if footprint and footprint != "full":
+        argv += ["--footprint", footprint]
     return argv
 
 
@@ -125,13 +129,30 @@ def _theme_of_dir(d: Path) -> "str | None":
             or _theme_from_agent(d / "AGENTS.md"))
 
 
+def _footprint_of_dir(d: Path) -> str:
+    """The instruction-set footprint a deployed harness in `d` was built with: the
+    `.geneseed-footprint` marker if present, else 'full'. Unlike theme, footprint can't
+    be inferred from content, so a pre-marker install (or any built before footprints
+    existed) reads as 'full' — which is exactly what it is. Single source of footprint
+    detection, mirroring _theme_of_dir."""
+    try:
+        marker = d / ".geneseed-footprint"
+        if marker.is_file():
+            v = marker.read_text(encoding="utf-8").strip()
+            if v in ("lean", "full"):
+                return v
+    except OSError:
+        pass
+    return "full"
+
+
 def _installed_defaults() -> dict:
     """Best-effort detection of the CURRENT install's theme + emit, so the wizard can
     pre-select them. Prefers the .geneseed-* markers; falls back to inferring the theme
     from a deployed AGENT.md's sigil and the emit from a global manifest — so installs
     predating the markers are still recognised. Checks the global config dir first
     (the recommended install), then common bundle locations."""
-    found = {"theme": None, "emit": None}
+    found = {"theme": None, "emit": None, "footprint": None}
     # (base, known_global_emit). Each host's config dir first (OpenCode global is the
     # recommended primary, then Claude, then Bob — every host in build.HOSTS, so a new
     # host can't be forgotten), then common bundle locations (host unknown -> None).
@@ -156,6 +177,8 @@ def _installed_defaults() -> dict:
                         "claude-global" if _manifest_is_claude(base) else "opencode-global")
             if found["theme"] is None:
                 found["theme"] = _theme_of_dir(base)
+            if found["footprint"] is None and (base / ".geneseed-footprint").is_file():
+                found["footprint"] = _footprint_of_dir(base)
         except OSError:
             pass
     return found
@@ -172,6 +195,14 @@ EMIT_OPTIONS = [
 ]
 
 
+# Instruction-set footprint — how much of the laws AGENT.md §1 carries inline. Lean
+# trades a per-turn token saving for a one-read indirection; full is the original.
+FOOTPRINT_OPTIONS = [
+    ("full", "Full — every law's complete text inlined in AGENT.md (original)."),
+    ("lean", "Lean — terse rule lines + a pointer to the full laws file (lighter context)."),
+]
+
+
 def _collect_setup_lines() -> "dict | None":
     """Line-based selection — the cross-platform / no-curses fallback. Returns the
     confirmed selection dict, or None if cancelled."""
@@ -179,16 +210,19 @@ def _collect_setup_lines() -> "dict | None":
     inst = _installed_defaults()
     theme = _ask_choice("Theme", _theme_options(), inst["theme"] or _default_theme())
     emit = _ask_choice("Install mode", EMIT_OPTIONS, inst["emit"] or "opencode-global")
+    footprint = _ask_choice("Footprint", [(k, d) for k, d in FOOTPRINT_OPTIONS],
+                            inst["footprint"] or "full")
     out = root = None
     if emit == "opencode":
         root = _ask("Repo root to install into", ".")
         out = root
     elif emit == "files":
         out = _ask("Output dir for the bundle", "Harness")
-    print("\nAbout to run:  python build.py " + " ".join(_setup_build_args(theme, emit, out, root)))
+    print("\nAbout to run:  python build.py "
+          + " ".join(_setup_build_args(theme, emit, out, root, footprint)))
     if not _confirm("Proceed?", True):
         return None
-    return {"theme": theme, "emit": emit, "out": out, "root": root}
+    return {"theme": theme, "emit": emit, "out": out, "root": root, "footprint": footprint}
 
 
 def _collect_setup() -> "dict | None":
@@ -279,6 +313,7 @@ def _setup_lines() -> int:
         print("[setup] cancelled — nothing written.")
         return 0
     theme, emit, out, root = sel["theme"], sel["emit"], sel.get("out"), sel.get("root")
+    footprint = sel.get("footprint", "full")
     if emit == "opencode-global":
         # The build below overwrites the deployed global harness; the self-improvement
         # loops may have edited it in place. Preserve that drift first.
@@ -289,7 +324,7 @@ def _setup_lines() -> int:
                 print("  (hand that file to your agent to back-port them into src/)")
         except Exception as e:
             print(f"! could not export local edits ({e}) — continuing.")
-    argv = _setup_build_args(theme, emit, out, root)
+    argv = _setup_build_args(theme, emit, out, root, footprint)
     print("Running:  python build.py " + " ".join(argv))
     rc = run([sys.executable, str(BUILD), *argv]).returncode
     if rc != 0:

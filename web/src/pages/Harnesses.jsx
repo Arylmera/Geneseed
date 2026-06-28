@@ -32,6 +32,22 @@ function VoiceSelect({ label, value, themes, onChange }) {
   )
 }
 
+// A footprint <select> in the app's `.sel` style: lean | full. A fixed two-option pair,
+// so unlike VoiceSelect it needs no async list — the choice is the same on every host.
+function FootprintSelect({ label, value, onChange }) {
+  return (
+    <select
+      className="sel"
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="full">full</option>
+      <option value="lean">lean</option>
+    </select>
+  )
+}
+
 // An on/off switch — deactivates a whole install (files moved aside, not deleted) or
 // reactivates it; also drives individual MCP servers. The on-disk stash is the truth.
 function Switch({ on, disabled, label, onToggle }) {
@@ -85,6 +101,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
   const [busyKey, setBusyKey] = useState('') // install toggle in flight
   const [mcpBusy, setMcpBusy] = useState('') // mcp server toggle in flight
   const [pick, setPick] = useState({}) // chosen voice, keyed by row id
+  const [fpick, setFpick] = useState({}) // chosen footprint, keyed by row id
   const [collapsed, setCollapsed] = useState({}) // explicit collapses; MCP rows open by default
   const [deploy, setDeploy] = useState(null) // null = closed; { path, host, theme } = the deploy form
   const [browsing, setBrowsing] = useState(false) // native folder picker in flight
@@ -130,18 +147,27 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
   // rows), else the current deployed voice — so a new install matches your existing one.
   const voiceFor = (inst) => pick[inst.id] || inst.theme || currentTheme || 'neutral'
   const setVoice = (inst, v) => setPick((p) => ({ ...p, [inst.id]: v }))
+  // The footprint a row acts on: the explicit pick, else the install's own, else full.
+  const footprintFor = (inst) => fpick[inst.id] || inst.footprint || 'full'
+  const setFootprint = (inst, v) => setFpick((p) => ({ ...p, [inst.id]: v }))
+  // True when neither voice nor footprint differs from what's deployed — the Apply
+  // button on an active row stays disabled until one of them actually changes.
+  const unchanged = (inst) =>
+    voiceFor(inst) === inst.theme && footprintFor(inst) === (inst.footprint || 'full')
 
-  // Install a not-installed location, or re-theme an active one — both rebuild via the
-  // 'install' action (a non-destructive in-place re-emit), streamed to the console.
+  // Install a not-installed location, or rebuild an active one with the picked voice +
+  // footprint — both go through the 'install' action (a non-destructive in-place
+  // re-emit), streamed to the console.
   const applyVoice = (inst) => {
     const theme = voiceFor(inst)
+    const footprint = footprintFor(inst)
     const msg =
       inst.state === 'absent'
-        ? `Install Geneseed into ${inst.path} with the “${theme}” voice? Files are added ` +
-          `non-destructively (your own config is left untouched); deactivate or uninstall later.`
-        : `Re-theme this install to the “${theme}” voice? It rebuilds in place — non-destructive.`
+        ? `Install Geneseed into ${inst.path} with the “${theme}” voice (${footprint} footprint)? ` +
+          `Files are added non-destructively (your own config is left untouched); deactivate or uninstall later.`
+        : `Rebuild this install — voice “${theme}”, ${footprint} footprint? It rebuilds in place — non-destructive.`
     if (window.confirm(msg))
-      onAction?.('install', { host: inst.host, scope: inst.scope, path: inst.path, theme })
+      onAction?.('install', { host: inst.host, scope: inst.scope, path: inst.path, theme, footprint })
   }
 
   const toggleInstall = async (inst) => {
@@ -222,7 +248,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
     installs[0]?.host ||
     'opencode'
   const openDeploy = () =>
-    setDeploy({ path: '', host: defaultHost(), theme: currentTheme || 'neutral' })
+    setDeploy({ path: '', host: defaultHost(), theme: currentTheme || 'neutral', footprint: 'full' })
 
   // The native folder chooser lives on the daemon host: a browser can't reveal a disk
   // path, so the server pops a real Finder/dialog on the user's own screen.
@@ -252,7 +278,12 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
     // Close only if the job was accepted (truthy job id). A rejected path (400 —
     // missing/unwritable folder, the editable field's main failure mode) keeps the
     // popover open with the typed path intact; the error shows as a toast.
-    const jobId = await onAction?.('deploy', { host: deploy.host, path, theme: deploy.theme })
+    const jobId = await onAction?.('deploy', {
+      host: deploy.host,
+      path,
+      theme: deploy.theme,
+      footprint: deploy.footprint,
+    })
     if (jobId) setDeploy(null)
   }
 
@@ -311,6 +342,14 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                 value={deploy.theme}
                 themes={themes}
                 onChange={(v) => setDeploy((d) => ({ ...d, theme: v }))}
+              />
+            </label>
+            <label className="dp-field">
+              <span>Footprint</span>
+              <FootprintSelect
+                label="footprint for the new harness"
+                value={deploy.footprint}
+                onChange={(v) => setDeploy((d) => ({ ...d, footprint: v }))}
               />
             </label>
             <button className="btn sm" onClick={submitDeploy}>
@@ -433,9 +472,9 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                       <span className={`badge ${on ? 'ok' : ''}`}>{badge}</span>
                     </td>
                     <td>
-                      {/* Four fixed lanes so controls align into columns regardless of which
-                          ones a row shows: voice · install/re-theme · switch · trash. Every
-                          lane is always rendered (empty when N/A) so nothing shifts sideways. */}
+                      {/* Five fixed lanes so controls align into columns regardless of which
+                          ones a row shows: voice · footprint · install/apply · switch · trash.
+                          Every lane is always rendered (empty when N/A) so nothing shifts. */}
                       <div className="h-acts">
                         <div className="ha-cell ha-voice">
                           {(inst.state === 'absent' || on) && onAction ? (
@@ -447,6 +486,15 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                             />
                           ) : null}
                         </div>
+                        <div className="ha-cell ha-fp">
+                          {(inst.state === 'absent' || on) && onAction ? (
+                            <FootprintSelect
+                              label={`footprint for ${inst.host} · ${inst.scope}`}
+                              value={footprintFor(inst)}
+                              onChange={(v) => setFootprint(inst, v)}
+                            />
+                          ) : null}
+                        </div>
                         <div className="ha-cell ha-btn">
                           {inst.state === 'absent' && onAction ? (
                             <button className="btn ghost sm" onClick={() => applyVoice(inst)}>
@@ -455,10 +503,10 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                           ) : on && onAction ? (
                             <button
                               className="btn ghost sm"
-                              disabled={voiceFor(inst) === inst.theme}
+                              disabled={unchanged(inst)}
                               onClick={() => applyVoice(inst)}
                             >
-                              Re-theme
+                              Apply
                             </button>
                           ) : null}
                         </div>

@@ -39,10 +39,11 @@ def cmd_rebuild_all(args: argparse.Namespace) -> int:
         emit = (em.read_text(encoding="utf-8").strip() if em.is_file() else None) \
             or _DEFAULT_EMIT.get((host, scope), "opencode-global")
         theme = _theme_of_dir(root) or _default_theme()
+        footprint = _footprint_of_dir(root)   # preserve lean/full — a rebuild must not flip it
         out = None if scope == "global" else str(root)
-        argv = _setup_build_args(theme, emit, out, out)
+        argv = _setup_build_args(theme, emit, out, out, footprint)
         label = f"{host}:{scope} ({root})"
-        print(f"[rebuild-all] {label}: theme={theme} emit={emit}")
+        print(f"[rebuild-all] {label}: theme={theme} emit={emit} footprint={footprint}")
         rc = run([sys.executable, str(BUILD), *argv]).returncode
         if rc != 0:
             failures.append(label)

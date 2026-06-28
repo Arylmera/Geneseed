@@ -9,6 +9,7 @@ import ServerControl from './ServerControl.jsx'
 // (PATH/uninstall), the offline package, and server control. Per-install detail and
 // building/updating live in the Harnesses tab and the Dashboard.
 export default function Settings({
+  overview,
   onAction,
   flavour,
   onFlavour,
@@ -17,14 +18,27 @@ export default function Settings({
   layout,
   onLayout,
 }) {
+  const install = overview?.install
+  const footprint = overview?.footprint
+  const setFootprint = (fp) => {
+    if (!install || fp === footprint) return
+    if (
+      window.confirm(
+        `Rebuild ${install.host} · ${install.scope} with the “${fp}” footprint? ` +
+          `It rebuilds in place — non-destructive.`,
+      )
+    )
+      onAction?.('install', { ...install, footprint: fp })
+  }
   return (
     <div className="narrow-lg">
       <div className="head-row mb-18">
         <div>
           <h1 className="h">Settings</h1>
           <p className="sub">
-            Console direction, machine maintenance, an offline package, and server control. See
-            per-install detail in the Harnesses tab; build and update from there and the Dashboard.
+            Console direction, harness footprint, machine maintenance, an offline package, and
+            server control. See per-install detail in the Harnesses tab; build and update from there
+            and the Dashboard.
           </p>
         </div>
       </div>
@@ -123,6 +137,45 @@ export default function Settings({
                 </span>
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Harness footprint — how much of the Rules AGENT.md carries inline for the
+          current install. A token-cost dial; flipping it rebuilds the install in place
+          (re-emit), unlike the live console-direction controls above. */}
+      {install && footprint && (
+        <div className="card pad-lg mb-16">
+          <div className="card-head">
+            <h3>Harness footprint</h3>
+          </div>
+          <p className="sub mb-16">
+            How much of the Rules <code>AGENT.md</code> carries inline each turn, for the current
+            install (<code>{install.host} · {install.scope}</code>). A token-cost dial — every Rule
+            stays in force either way. Changing it rebuilds the install in place.{' '}
+            <a href="#/docs/footprint">Learn more →</a>
+          </p>
+          <div className="dir-layout">
+            <span className="tick" id="footprint-label">
+              Footprint
+            </span>
+            <div className="seg" role="group" aria-labelledby="footprint-label">
+              {['full', 'lean'].map((fp) => (
+                <button
+                  key={fp}
+                  className={footprint === fp ? 'on' : ''}
+                  onClick={() => setFootprint(fp)}
+                  aria-pressed={footprint === fp}
+                >
+                  {fp}
+                </button>
+              ))}
+            </div>
+            <span className="dir-layout-note sub" role="status" aria-live="polite">
+              {footprint === 'lean'
+                ? 'Lean — terse rule lines + a pointer to the full law file (~40% smaller, lighter context per turn).'
+                : 'Full — every Rule’s complete text and rationale inlined (maximum guidance, largest context).'}
+            </span>
           </div>
         </div>
       )}

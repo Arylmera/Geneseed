@@ -228,6 +228,9 @@ def api_installs(state: WebState) -> dict:
         out.append({"id": f"{host}:{scope}", "host": host, "scope": scope,
                     "path": str(root), "state": harness._install_state(root, host, scope),
                     "theme": harness._theme_of_dir(root),   # the install's own voice (None if absent)
+                    # Footprint marker lands at the install root (== build --out) for every
+                    # emit — same dir theme reads from, so detect it the same way.
+                    "footprint": harness._footprint_of_dir(root),   # 'full' when no marker
                     "selected": _view_cfg(host, scope, root).resolve() == cur})
     return {"installs": out}
 
@@ -295,8 +298,12 @@ def api_install_cmd(state: WebState, body: dict) -> dict:
     # voice — so a bogus body value can never reach the build argv (mirrors _build_override).
     themes = {c["name"] for c in _theme_choices()}
     theme = body.get("theme") if body.get("theme") in themes else state.theme
+    # Footprint: a valid pick wins, else keep the install's own — so a re-theme never
+    # silently flips footprint, and a bogus body value can't reach the argv.
+    fp = body.get("footprint")
+    fp = fp if fp in ("lean", "full") else harness._footprint_of_dir(root)
     out = None if scope == "global" else str(root)
-    argv = harness._setup_build_args(theme or "neutral", emit, out, out)
+    argv = harness._setup_build_args(theme or "neutral", emit, out, out, fp)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 
 
@@ -337,8 +344,10 @@ def api_deploy_cmd(state: WebState, body: dict) -> dict:
         return {"error": "that's a host global config dir — use its existing row to build a global install"}
     themes = {c["name"] for c in _theme_choices()}
     theme = body.get("theme") if body.get("theme") in themes else state.theme
+    fp = body.get("footprint")
+    fp = fp if fp in ("lean", "full") else "full"   # a fresh deploy defaults to full
     emit = host   # project-scope emit name == host name (opencode / claude / bob)
-    argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root))
+    argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root), fp)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 
 

@@ -166,6 +166,11 @@ def _setup_tui(stdscr):
                  [(k, k, d) for k, d in EMIT_OPTIONS], default=inst["emit"] or "opencode-global")
     if emit is None:
         return None
+    fp_prompt = "Choose a footprint" + (f"   (installed: {inst['footprint']})" if inst["footprint"] else "")
+    footprint = _menu(stdscr, curses, fp_prompt,
+                      [(k, k, d) for k, d in FOOTPRINT_OPTIONS], default=inst["footprint"] or "full")
+    if footprint is None:
+        return None
     out = root = None
     if emit == "opencode":
         root = _text_input(stdscr, curses, "Repo root to install into", ".")
@@ -178,7 +183,8 @@ def _setup_tui(stdscr):
             return None
     target = out or root
     flair = _theme_flair(theme)
-    summary = f"theme = {theme}     mode = {emit}" + (f"     target = {target}" if target else "")
+    summary = (f"theme = {theme}     mode = {emit}     footprint = {footprint}"
+               + (f"     target = {target}" if target else ""))
     # Once a theme is chosen the confirm step speaks in its voice: the tagline is the
     # prompt and the accent tints the frame, so you feel the flavour you're about to
     # implant before committing to the build.
@@ -187,7 +193,8 @@ def _setup_tui(stdscr):
                    [("go", "Build now", summary),
                     ("cancel", "Cancel", "Make no changes and exit.")],
                    default="go", accent=flair["accent"])
-    return {"theme": theme, "emit": emit, "out": out, "root": root} if choice == "go" else None
+    return ({"theme": theme, "emit": emit, "out": out, "root": root, "footprint": footprint}
+            if choice == "go" else None)
 
 
 def _retheme_tui(stdscr):
@@ -203,14 +210,20 @@ def _retheme_tui(stdscr):
     if theme is None:
         return None
     emit = inst["emit"] or "opencode-global"
+    fp_prompt = "Choose a footprint" + (f"   (installed: {inst['footprint']})" if inst["footprint"] else "")
+    footprint = _menu(stdscr, curses, fp_prompt,
+                      [(k, k, d) for k, d in FOOTPRINT_OPTIONS], default=inst["footprint"] or "full")
+    if footprint is None:
+        return None
     flair = _theme_flair(theme)
-    summary = f"theme = {theme}     mode = {emit} (unchanged)"
+    summary = f"theme = {theme}     mode = {emit} (unchanged)     footprint = {footprint}"
     prompt = flair["tagline"] or "Ready to rebuild the harness?"
     choice = _menu(stdscr, curses, prompt,
                    [("go", "Build now", summary),
                     ("cancel", "Cancel", "Make no changes and exit.")],
                    default="go", accent=flair["accent"])
-    return {"theme": theme, "emit": emit, "out": None, "root": None} if choice == "go" else None
+    return ({"theme": theme, "emit": emit, "out": None, "root": None, "footprint": footprint}
+            if choice == "go" else None)
 
 
 # Law heading in the rendered laws file, e.g. "### Rule XVIII — Load the Project Context".

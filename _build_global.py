@@ -119,7 +119,24 @@ def _global_notebook(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
     return f"seeded {nb_name}/"
 
 
-def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | None = None) -> None:
+def _ship_lean_laws(items, theme, cfg: Path, owned: list) -> None:
+    """Under the lean footprint, AGENT.md's §1 is terse and points at the standalone
+    laws file — which the global/claude/bob emits don't otherwise write (the full
+    footprint inlines the laws, so a standalone copy would be dead weight). Materialise
+    it from the rendered items so the pointer resolves, and record it in `owned` so a
+    later switch back to full prunes it. Written under <cfg>/<themed laws dir>/."""
+    laws_dir = theme.get("DIR_LAWS", "laws")
+    for rel, text, _src in items:
+        parts = Path(rel).parts
+        if text is not None and parts and parts[0] == laws_dir:
+            dest = cfg / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(text, encoding="utf-8")
+            owned.append(rel)
+
+
+def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | None = None,
+                         footprint: str = "full") -> None:
     """Render the harness straight into OpenCode's GLOBAL config dir — the
     "everything global, zero per-repo" deployment (GLOBAL-HARNESS-SPEC.md).
 
@@ -144,7 +161,9 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     `cfg` overrides the target dir (default: the resolved OpenCode config dir) — used
     by `harness.py diff` to render an 'expected' copy into a temp dir for comparison."""
     cfg = cfg or _opencode_config_dir()
-    theme, items = render_all(theme_name)
+    # laws_prefix='' — the standalone laws dir sits beside AGENT.md in <cfg>, so the
+    # lean pointer's relative `laws/universal.md` resolves with no prefix.
+    theme, items = render_all(theme_name, footprint)
     assert_source_complete(items, context="opencode-global")
     cfg.mkdir(parents=True, exist_ok=True)
 
@@ -207,6 +226,9 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     owned.append(VERSION_MARKER)
     cfg_name = _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix()).name
 
+    if footprint == "lean":
+        _ship_lean_laws(items, theme, cfg, owned)
+
     # Now that the whole current set is on disk, remove only what we owned before but
     # no longer produce (a removed agent/skill, a disabled primary/command). Everything
     # current was just (over)written above, so a live file is never momentarily absent.
@@ -216,8 +238,9 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
         try:
             if victim.is_file():
                 victim.unlink()
-                if victim.name == "SKILL.md" and victim.parent != cfg \
-                        and not any(victim.parent.iterdir()):
+                # Drop a now-empty owned dir (a per-skill <name>/ folder, or the laws/
+                # dir a switch from lean back to full just emptied) — never <cfg> itself.
+                if victim.parent != cfg and not any(victim.parent.iterdir()):
                     victim.parent.rmdir()
         except OSError as e:
             prune_failed.append(f"{relp} ({e})")
@@ -242,7 +265,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
 
 def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
-                      out: Path | None = None) -> tuple:
+                      out: Path | None = None, footprint: str = "full") -> tuple:
     """Shared engine for both Claude emits (global → ~/.claude, folder → <repo>/.claude).
     Mirrors emit_opencode_global's manifest + write-before-delete prune, but for the
     Claude layout: CLAUDE.md as a managed block (auto-loaded by Claude), agents in the
@@ -253,7 +276,14 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     settings.json → surgical, recorded hook merge. memory/notebook/wiki are host state,
     never tracked, never deleted. Returns
     (n_agents, n_skills, n_hook_groups, mem_status, nb_status, managed)."""
-    theme, items = render_all(theme_name)
+    # Lean footprint: the standalone laws file lands under <cfg> (e.g. <repo>/.claude),
+    # but CLAUDE.md/AGENTS.md sits at claude_md's own dir (the repo root for a project
+    # install). The lean §1 pointer must be RELATIVE to the instructions file, so prefix
+    # it with the path from that dir to <cfg> — '' for a global install (same dir),
+    # '.claude/' or '.bob/' for a project one.
+    rel_cfg = os.path.relpath(cfg, claude_md.parent).replace(os.sep, "/")
+    laws_prefix = "" if rel_cfg == "." else rel_cfg + "/"
+    theme, items = render_all(theme_name, footprint, laws_prefix)
     assert_source_complete(items, context=f"claude-{scope}")
     cfg.mkdir(parents=True, exist_ok=True)
 
@@ -328,6 +358,9 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     elif prior_excl:
         managed["settings_excludes"] = prior_excl
 
+    if footprint == "lean":
+        _ship_lean_laws(items, theme, cfg, owned)
+
     # Write-before-delete prune: now that the whole current set is on disk, remove only
     # what we owned before but no longer produce. A live file is never momentarily absent.
     prune_failed = []
@@ -336,8 +369,9 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
         try:
             if victim.is_file():
                 victim.unlink()
-                if victim.name == "SKILL.md" and victim.parent != cfg \
-                        and not any(victim.parent.iterdir()):
+                # Drop a now-empty owned dir (a per-skill <name>/ folder, or the laws/
+                # dir a switch from lean back to full just emptied) — never <cfg> itself.
+                if victim.parent != cfg and not any(victim.parent.iterdir()):
                     victim.parent.rmdir()
         except OSError as e:
             prune_failed.append(f"{relp} ({e})")
@@ -355,7 +389,8 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     return n_agents, n_skills, len(managed.get("settings_hooks", [])), mem_status, nb_status, managed
 
 
-def emit_claude_global(theme_name: str, out: Path | None = None, cfg: Path | None = None) -> None:
+def emit_claude_global(theme_name: str, out: Path | None = None, cfg: Path | None = None,
+                       footprint: str = "full") -> None:
     """Render the harness into Claude Code's GLOBAL config dir (~/.claude) — the Claude
     sibling of emit_opencode_global. Self-contained: writes ONLY into <cfg>, builds no
     bundle. CLAUDE.md carries the instructions (auto-loaded), agents use Claude's
@@ -365,14 +400,15 @@ def emit_claude_global(theme_name: str, out: Path | None = None, cfg: Path | Non
     render an expected copy into a temp dir)."""
     cfg = cfg or _claude_config_dir()
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
-        theme_name, cfg, cfg / "CLAUDE.md", "global", out)
+        theme_name, cfg, cfg / "CLAUDE.md", "global", out, footprint)
     print(f"[geneseed] claude-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
           f"CLAUDE.md, {n_hooks} hook group(s), settings.json, {mem_status}, {nb_status}. "
           f"No plugins/workflows/themes (no Claude analogue); ~/.claude/plugins is never touched. "
           f"Hooks call harness.py by absolute path; set GENESEED_HARNESS only to relocate memory.")
 
 
-def emit_claude(theme_name: str, out: Path, root: Path | None = None) -> None:
+def emit_claude(theme_name: str, out: Path, root: Path | None = None,
+                footprint: str = "full") -> None:
     """Per-repo Claude install: CLAUDE.md at the repo root + a project `.claude/` layer
     (agents, skills, settings.json hooks with absolute harness.py paths — same as the
     global emit; scope doesn't change the generated paths).
@@ -382,7 +418,7 @@ def emit_claude(theme_name: str, out: Path, root: Path | None = None) -> None:
     root = root or out
     cfg = root / ".claude"
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
-        theme_name, cfg, root / "CLAUDE.md", "project", out)
+        theme_name, cfg, root / "CLAUDE.md", "project", out, footprint)
     print(f"[geneseed] claude (folder) -> {root}: CLAUDE.md + .claude/ "
           f"({n_agents} subagents, {n_skills} skills, {n_hooks} hook group(s), settings.json), "
           f"{mem_status}, {nb_status}.")
@@ -395,25 +431,27 @@ def emit_claude(theme_name: str, out: Path, root: Path | None = None) -> None:
 # frontmatter + settings.json hook merge use the Claude dialect (unverified for Bob, but
 # Bob is Claude-derived); MCP wiring lives in rituals/_harness_mcp (settings.json key
 # `mcpServers`). If Bob's exact layout differs, only these two wrappers need adjusting.
-def emit_bob_global(theme_name: str, out: Path | None = None, cfg: Path | None = None) -> None:
+def emit_bob_global(theme_name: str, out: Path | None = None, cfg: Path | None = None,
+                    footprint: str = "full") -> None:
     """Render the harness into Bob's GLOBAL config dir (~/.bob). AGENTS.md carries the
     instructions; agents/skills/settings.json mirror the Claude global emit. `cfg`
     overrides the target (tests/doctor)."""
     cfg = cfg or _bob_config_dir()
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
-        theme_name, cfg, cfg / "AGENTS.md", "global", out)
+        theme_name, cfg, cfg / "AGENTS.md", "global", out, footprint)
     print(f"[geneseed] bob-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
           f"AGENTS.md, {n_hooks} hook group(s), settings.json, {mem_status}, {nb_status}.")
 
 
-def emit_bob(theme_name: str, out: Path, root: Path | None = None) -> None:
+def emit_bob(theme_name: str, out: Path, root: Path | None = None,
+             footprint: str = "full") -> None:
     """Per-repo Bob install: AGENTS.md at the repo root + a project `.bob/` layer (agents,
     skills, settings.json). Reuses the Claude engine's manifest + claim-on-create, so a
     user's own `.bob/` files are never clobbered. `out`/`root` mirror emit_claude."""
     root = root or out
     cfg = root / ".bob"
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
-        theme_name, cfg, root / "AGENTS.md", "project", out)
+        theme_name, cfg, root / "AGENTS.md", "project", out, footprint)
     print(f"[geneseed] bob (folder) -> {root}: AGENTS.md + .bob/ "
           f"({n_agents} subagents, {n_skills} skills, {n_hooks} hook group(s), settings.json), "
           f"{mem_status}, {nb_status}.")

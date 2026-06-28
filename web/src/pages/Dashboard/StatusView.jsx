@@ -61,6 +61,10 @@ export default function StatusView({ overview, sigil, setup, jobs, onAction }) {
                 <span className="cv">{overview.emit}</span>
               </span>
               <span className="chip">
+                <span className="ck">footprint</span>
+                <span className="cv">{overview.footprint}</span>
+              </span>
+              <span className="chip">
                 <span className="ck">built</span>
                 <span className="cv">{overview.build_time || 'unknown'}</span>
               </span>

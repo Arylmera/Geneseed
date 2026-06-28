@@ -166,6 +166,31 @@ Choose any of the 14 themes in `themes/` — `neutral` (plain), `imperial` (Warh
 `.geneseed-theme` marker, so later upgrades keep it. Adding your own is one JSON file
 of voice tokens; `doctor` checks every theme defines the same keys.
 
+### Footprint (lean vs full)
+
+**Footprint** sets how much of the Rules `AGENT.md` carries *inline* on every turn — a
+token-cost dial, not a change to which Rules apply. Both states keep all Rules in force:
+
+- **full** (default) — Section 1 inlines every Rule's complete text *and* rationale.
+  Maximum guidance density; the largest always-loaded block in the harness.
+- **lean** — Section 1 carries each Rule's heading + the rule line, then a pointer to the
+  full law file. ~40% smaller; the complete `laws/universal.md` still ships beside
+  `AGENT.md` and the agent reads it on demand (and is told to before acting on secrets,
+  deletion, git history, scope, or untrusted content).
+
+**Why:** context is scarce and metered. Lean reclaims that budget — and the tokens you
+pay for it — for the task, moving the *rationale* one read away while keeping the rules
+themselves present. **Pros & cons:** full = always-present reasoning (better for smaller
+models, zero indirection) at the highest token cost; lean = cheaper, leaner context every
+turn at the cost of one extra fetch when a rule's nuance matters. Prefer **lean** for long
+sessions, large repos, or cost-sensitive runs; keep **full** when cost is a non-issue or
+you run a smaller model.
+
+Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** toggle in
+the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It is
+remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
+host (OpenCode, Claude Code, Bob).
+
 ### Project context (usually nothing)
 
 On OpenCode the context plugin auto-discovers a repo's docs every session:

@@ -164,7 +164,8 @@ DOC_GROUPS = [
          "The structure "
          "is theme-independent — a "
          "theme only changes the *voice* (banner, sigil, prose), never a "
-         "folder or a link.\n\n"
+         "folder or a link. A separate dial, the **[footprint](#/docs/footprint)**, "
+         "sets how much of the Rules load inline each turn (full vs lean).\n\n"
          "### What this UI actually shows\n\n"
          "The **Library** and **Graph** render the Geneseed source live — "
          "they show the harness that *would* be deployed if you rebuilt "
@@ -213,6 +214,59 @@ DOC_GROUPS = [
         {"id": "themes", "title": "Voice vs structure (themes)",
          "kind": "markdown", "source": "DESIGN.md", "anchor": "decisions",
          "slice": True},
+        {"id": "footprint", "title": "Footprint (lean vs full)", "kind": "concept",
+         "link": {"hash": "#/settings", "label": "Toggle it in Settings →"},
+         "body":
+         "**Footprint** controls how much of the Rules your agent carries *inline* "
+         "in `AGENT.md` every turn. Two states — **full** (the default) and "
+         "**lean** — set per install. It's a token-cost dial, not a change to which "
+         "Rules apply: every Rule is always in force.\n\n"
+         "### The difference\n\n"
+         "- **Full** — Section 1 of `AGENT.md` inlines every Rule's complete text "
+         "*and* its reasoning. The agent sees the full law set, rationale included, "
+         "on every single turn.\n"
+         "- **Lean** — Section 1 carries each Rule as its **heading + the rule "
+         "itself** (one line), followed by a pointer to the complete law file. The "
+         "full text of every Rule still ships beside `AGENT.md` (in `laws/"
+         "universal.md`) — the agent reads it on demand when a rule's application is "
+         "unclear. Lean trims Section 1 by roughly 40%.\n\n"
+         "### Why it exists\n\n"
+         "Context is scarce and metered (Rule XV). The law set is the single largest "
+         "always-loaded block in the harness. Full keeps every word of guidance in "
+         "front of the agent at all times; lean reclaims that budget — and the tokens "
+         "you pay for it — for the actual task, keeping the rules themselves present "
+         "but moving their elaboration one read away.\n\n"
+         "### Pros & cons\n\n"
+         "**Full** — *pro:* maximum guidance density; the rationale behind every Rule "
+         "is always in context with zero indirection, which a smaller model leans on. "
+         "*con:* the largest per-turn token cost; more of the window spent on laws.\n\n"
+         "**Lean** — *pro:* ~40% smaller instruction block, so lower token cost every "
+         "turn and more room for the task — valuable on long sessions, large repos, "
+         "or cost-sensitive runs. *con:* the reasoning isn't eagerly in context; for a "
+         "nuanced edge case the agent must read the full law file (one extra fetch), "
+         "and a weaker model may apply a rule less precisely without its rationale in "
+         "front of it.\n\n"
+         "Lean is **safe**: it still ships the complete law text and explicitly points "
+         "the agent there before acting on secrets, deletion, git history, scope, or "
+         "untrusted content. It's an optimization, not a rules cut.\n\n"
+         "### Which to choose\n\n"
+         "- Keep **full** if token cost is a non-issue, you want the rationale always "
+         "present, or you run a smaller/cheaper model.\n"
+         "- Switch to **lean** to economize context and cost, trusting the agent to "
+         "pull the full law when it needs the *why*.\n\n"
+         "### How to set it\n\n"
+         "It's set-and-forget — stored in the `.geneseed-footprint` marker and "
+         "preserved across every rebuild. Changing it re-emits the install.\n\n"
+         "- **Settings** — the **Footprint** toggle flips the current install "
+         "(full ⇄ lean) and rebuilds it in place.\n"
+         "- **Harnesses tab** — a per-harness dropdown sets it for any one install "
+         "independently, then **Apply**.\n"
+         "- **Setup / re-theme wizard** (TUI) — asks for footprint alongside voice "
+         "and mode.\n"
+         "- **CLI** — `build.py --footprint lean` (with any `--emit`).\n\n"
+         "Works identically across every host — OpenCode, Claude Code, and Bob.\n\n"
+         "---\n\n"
+         "**Related:** [Rules (Laws)](#/laws) · [Voice vs structure](#/docs/themes)"},
         {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
          "harness": "opencode",
          "link": {"hash": "#/docs/plugin-context",
@@ -702,6 +756,7 @@ class WebState:
         # Detect the install mode once, so the Build action rebuilds the deployed
         # harness in place (e.g. opencode-global) rather than a bare source render.
         self.emit = harness._installed_defaults().get("emit") or "opencode-global"
+        self.footprint = harness._footprint_of_dir(self.target)   # 'full' when no marker
         self._inv = None
         self._doctor = None
 
@@ -746,6 +801,7 @@ class WebState:
         self.target = Path(target)
         self.theme = harness._theme_of_dir(self.target) or "neutral"
         self.emit = self._detect_emit()
+        self.footprint = harness._footprint_of_dir(self.target)
         self._inv = None
         self._doctor = None
 
@@ -757,6 +813,7 @@ class WebState:
         self._doctor = None
         self.theme = harness._theme_of_dir(self.target) or self.theme
         self.emit = self._detect_emit() or self.emit
+        self.footprint = harness._footprint_of_dir(self.target)
 
 
 def _deployed(state: WebState) -> bool:

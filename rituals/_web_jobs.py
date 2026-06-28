@@ -140,17 +140,18 @@ class JobManager:
 
 
 def action_commands(action: str, theme: str = "neutral",
-                    emit: str = "opencode-global") -> "list[list] | None":
+                    emit: str = "opencode-global",
+                    footprint: str = "full") -> "list[list] | None":
     """Action name -> list of subprocess argv (each a separate step; stop on failure).
 
-    `build` renders the DEPLOYED install in its detected theme + emit mode (so a
-    rebuild from an imperial opencode-global install stays imperial and lands in
-    the global config dir) — not a bare, neutral source render. `update` and
+    `build` renders the DEPLOYED install in its detected theme + emit mode + footprint
+    (so a rebuild from an imperial, lean opencode-global install stays imperial and lean
+    in the global config dir) — not a bare, neutral source render. `update` and
     `export` self-resolve the deployed theme downstream, so they take no args."""
     py = sys.executable
     h = str(ROOT / "rituals" / "harness.py")
     b = str(ROOT / "build.py")
-    build_argv = harness._setup_build_args(theme, emit)
+    build_argv = harness._setup_build_args(theme, emit, footprint=footprint)
     return {
         "doctor": [[py, h, "doctor"]],
         "build": [[py, b, *build_argv]],

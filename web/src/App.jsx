@@ -173,6 +173,7 @@ export default function App() {
             {route.view === 'graph' && <Graph />}
             {route.view === 'settings' && (
               <Settings
+                overview={overview}
                 onAction={runAction}
                 flavour={flavour}
                 onFlavour={setFlavour}

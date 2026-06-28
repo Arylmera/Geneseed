@@ -87,6 +87,12 @@ def main() -> None:
                          "(~/.claude) — CLAUDE.md, agents, skills, settings.json hooks. "
                          "bob: per-repo AGENTS.md + .bob/ for IBM Bob (agents, skills, "
                          "settings.json). bob-global: render into ~/.bob ($BOB_CONFIG_DIR)")
+    ap.add_argument("--footprint", choices=["lean", "full"], default="full",
+                    help="instruction-set footprint. full (default): every law's full text "
+                         "is inlined into AGENT.md §1. lean: §1 carries terse rule lines + a "
+                         "pointer to the standalone laws/universal.md (smaller context, lower "
+                         "token cost per turn); the full law text always ships alongside, read "
+                         "on demand. Applies to every host (opencode/claude/bob) and scope.")
     ap.add_argument("--root", default=None,
                     help="project root the agent/OpenCode run from — where opencode.json "
                          "and .opencode/ are placed (default: same as --out). Set this when "
@@ -97,19 +103,19 @@ def main() -> None:
     out = resolve_out(args.out)
     root = resolve_out(args.root) if args.root else out
     if args.emit == "opencode":
-        emit_opencode(args.theme, out, root)
+        emit_opencode(args.theme, out, root, args.footprint)
     elif args.emit == "opencode-global":
-        emit_opencode_global(args.theme, out)
+        emit_opencode_global(args.theme, out, footprint=args.footprint)
     elif args.emit == "claude":
-        emit_claude(args.theme, out, root)
+        emit_claude(args.theme, out, root, args.footprint)
     elif args.emit == "claude-global":
-        emit_claude_global(args.theme, out)
+        emit_claude_global(args.theme, out, footprint=args.footprint)
     elif args.emit == "bob":
-        emit_bob(args.theme, out, root)
+        emit_bob(args.theme, out, root, args.footprint)
     elif args.emit == "bob-global":
-        emit_bob_global(args.theme, out)
+        emit_bob_global(args.theme, out, footprint=args.footprint)
     else:
-        build(args.theme, out)
+        build(args.theme, out, args.footprint)
 
     # Persist the emit mode + theme (host state) so a later bare `./upgrade.sh` keeps
     # deploying the same way and the setup wizard can detect the install. A global emit
@@ -126,6 +132,10 @@ def main() -> None:
     try:
         marker_dir.mkdir(parents=True, exist_ok=True)
         (marker_dir / ".geneseed-emit").write_text(args.emit + "\n", encoding="utf-8")
+        # Footprint marker, written for EVERY emit here (unlike theme, which build() drops
+        # for non-globals): claude/bob project installs never call build(), so this is
+        # their only footprint record. Read by harness._footprint_of_dir (default 'full').
+        (marker_dir / ".geneseed-footprint").write_text(args.footprint + "\n", encoding="utf-8")
     except OSError:
         pass
     # build() already drops a .geneseed-theme marker in `out`; the global emits render

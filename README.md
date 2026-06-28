@@ -168,6 +168,17 @@ Fourteen themes ship — each a single JSON file in `themes/` carrying voice tok
 
 Pick with `--theme NAME` or via the TUI wizard. The theme is remembered in a `.geneseed-theme` marker, so later upgrades preserve it. `doctor` checks every theme defines the same keys, so flavour drift is impossible.
 
+### 🪶 Footprint (lean vs full)
+
+A second per-install dial, **footprint**, sets how much of the Rules `AGENT.md` carries *inline* every turn — a token-cost knob, not a change to which Rules apply (every Rule is always in force).
+
+| Footprint | Section 1 of `AGENT.md` | Trade-off |
+| --- | --- | --- |
+| **full** *(default)* | every Rule's complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
+| **lean** | each Rule's heading + the rule line, then a pointer to the full law file | ~40% smaller; rationale is one on-demand read away |
+
+Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Use **full** when token cost is a non-issue or you run a smaller model; use **lean** to reclaim context on long sessions, large repos, or cost-sensitive runs. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob).
+
 ---
 
 ## 🗂 Layout

@@ -890,7 +890,8 @@ def _write_ponytail_command(command_dir: Path) -> Path:
     return dest
 
 
-def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
+def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
+                  footprint: str = "full") -> None:
     """Render the standard bundle, then add an OpenCode-native layer derived from
     the same source: capability agents become subagents, skills become native
     skills, and an opencode.json wires AGENT.md as a rule file.
@@ -903,7 +904,7 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None) -> None:
     root. The project manifest `context.json` is loaded by the context plugin, never
     listed in `instructions`."""
     root = root or out
-    build(theme_name, out)
+    build(theme_name, out, footprint)
     # OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
     # plain names (the portable build keeps them). The bundle's flat specs still exist
     # beside it — this is a deliberate de-link, not a fix for a broken target.
