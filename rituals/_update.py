@@ -12,9 +12,15 @@ Windows, macOS, and Linux with no external tools.
 `sync-self.sh` wrappers now just delegate to `python rituals/harness.py upgrade|sync-self`,
 so this module is the single source of truth for the update logic on every platform.
 
-Prefers the system `curl` for network I/O (its Happy-Eyeballs IPv4 fallback dodges the
-urllib stalls some networks trigger) and drops to stdlib urllib when curl is absent, so it
-still runs dependency-free. Behaviour mirrors the scripts it replaces:
+Prefers a shallow `git clone` for the source fetch when `git` is on PATH — it reaches
+github.com over the git smart-HTTP protocol, which corporate proxies that block the
+codeload.github.com archive zips usually still allow — and falls back to the archive
+download below when git is absent or the clone fails (force the old path with
+GENESEED_SRC=zip).
+
+Prefers the system `curl` for the archive download (its Happy-Eyeballs IPv4 fallback dodges
+the urllib stalls some networks trigger) and drops to stdlib urllib when curl is absent, so
+it still runs dependency-free. Behaviour mirrors the scripts it replaces:
   - SHA-pinned archive download (content-addressed, never a mid-publish partial) with a
     ref/tag fallback, retried with exponential backoff.
   - `doctor --all` gate on the downloaded source BEFORE anything local is touched, with
@@ -27,6 +33,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -50,6 +57,15 @@ SYNC = ["build.py", "rituals", "src", "themes", "adapters", "web",
 SCRIPTS = ["upgrade.sh", "sync-self.sh", "geneseed", "bootstrap", "geneseed.cmd", "geneseed.ps1"]
 
 ATTEMPTS = 4
+
+# Windows spawns a visible console for every child console process started from a
+# console-less parent (the web daemon runs `upgrade` in a subprocess). CREATE_NO_WINDOW
+# suppresses it while still allowing piped output; on POSIX it is an empty dict. Mirrors
+# harness.NO_WINDOW, redefined here so this module stays importable standalone (self-heal).
+_NO_WINDOW: dict = (
+    {"creationflags": subprocess.CREATE_NO_WINDOW}
+    if sys.platform == "win32" else {}
+)
 
 
 class _UpgradeError(Exception):
@@ -294,10 +310,59 @@ def _download(url: str, dest: Path, log=None) -> bool:
     return _urllib_download(url, dest, log)
 
 
+def _git_clone_source(ref: str, dest: Path, log=None) -> Path | None:
+    """Clone the published source with `git` — the PREFERRED transport when git is on PATH.
+    Corporate proxies routinely block the codeload.github.com archive zips
+    (`/archive/<sha>.zip`) the download path relies on, while still allowing plain
+    git-over-HTTPS to github.com, so a shallow clone gets through where _download cannot.
+    Returns the cloned `geneseed-clone` dir, or None — git absent, GENESEED_SRC=zip forces
+    the old path, `ref` is a bare commit SHA (`--branch` takes only a branch/tag), or the
+    clone failed — in which case the caller drops to the archive-zip download.
+
+    On any failure the partial clone is removed, so it cannot be mistaken for a valid
+    `geneseed-*` source by the zip path's extract scan that runs into the same `dest`."""
+    if os.environ.get("GENESEED_SRC", "").strip().lower() == "zip":
+        return None
+    exe = shutil.which("git")
+    if not exe:
+        return None
+    target = dest / "geneseed-clone"
+    if target.exists():
+        shutil.rmtree(target, ignore_errors=True)
+    url = f"https://github.com/{REPO}.git"
+    cmd = [exe, "clone", "--depth", "1", "--single-branch", "--branch", ref,
+           url, str(target)]
+    if log is not None:
+        log(f"[geneseed] cloning {REPO}@{ref} (git, shallow) ...")
+    try:
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              text=True, timeout=300, **_NO_WINDOW)
+    except Exception as e:  # noqa: BLE001 — any spawn/timeout failure -> zip fallback
+        if log is not None:
+            log(f"[geneseed]   x git clone: {_exc_reason(e)}")
+        shutil.rmtree(target, ignore_errors=True)
+        return None
+    if proc.returncode == 0 and (target / "build.py").is_file():
+        if log is not None:
+            log(f"[geneseed]   cloned -> {target.name}")
+        return target
+    if log is not None:
+        out = (proc.stdout or "").strip().splitlines()
+        reason = out[-1].strip() if out else f"exit {proc.returncode}"
+        log(f"[geneseed]   x git clone failed: {reason} - falling back to archive zip")
+    shutil.rmtree(target, ignore_errors=True)
+    return None
+
+
 def _fetch_source(ref: str, dest: Path, log=None) -> Path | None:
-    """Download + extract `ref` into `dest`; return the extracted `geneseed-*` dir.
-    SHA-pinned with a heads/tags fallback (mirrors fetch_source in upgrade.sh). Logs each
-    sub-step (resolve / source / live bytes / extract) so the progress UI is never silent."""
+    """Obtain `ref` as a source tree in `dest`; return the extracted `geneseed-*` dir.
+    Prefers a shallow `git clone` (reaches github.com through proxies that block the
+    codeload archive zips), falling back to the SHA-pinned archive download — with a
+    heads/tags fallback (mirrors fetch_source in upgrade.sh) — when git is absent or the
+    clone fails. Logs each sub-step so the progress UI is never silent."""
+    cloned = _git_clone_source(ref, dest, log)
+    if cloned is not None:
+        return cloned
     sha = _resolve_sha(ref, log)
     zip_path = dest / "src.zip"
     sources = []

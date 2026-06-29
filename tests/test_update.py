@@ -222,6 +222,80 @@ class LocalZipTests(unittest.TestCase):
         self.assertEqual(_update.main(["upgrade", "--zip"]), 2)
 
 
+class GitCloneSourceTests(unittest.TestCase):
+    """The preferred transport: a shallow `git clone` that reaches github.com through
+    proxies that block the codeload archive zips, with a clean fall-through to the zip
+    download when git is absent, opted out, or the clone fails."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self._saved_src = os.environ.pop("GENESEED_SRC", None)
+        self._saved_which = _update.shutil.which
+        self._saved_run = _update.subprocess.run
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+        _update.shutil.which = self._saved_which
+        _update.subprocess.run = self._saved_run
+        if self._saved_src is not None:
+            os.environ["GENESEED_SRC"] = self._saved_src
+        else:
+            os.environ.pop("GENESEED_SRC", None)
+
+    def test_env_opt_out_skips_git(self):
+        os.environ["GENESEED_SRC"] = "zip"
+        _update.shutil.which = lambda _n: (_ for _ in ()).throw(
+            AssertionError("git must not be probed when GENESEED_SRC=zip"))
+        self.assertIsNone(_update._git_clone_source("main", self.tmp))
+
+    def test_returns_none_when_git_absent(self):
+        _update.shutil.which = lambda _n: None
+        self.assertIsNone(_update._git_clone_source("main", self.tmp))
+
+    def test_success_returns_clone_dir(self):
+        _update.shutil.which = lambda _n: "git"
+
+        def fake_run(cmd, **kw):
+            target = Path(cmd[-1])
+            target.mkdir(parents=True, exist_ok=True)
+            (target / "build.py").write_text("print('hi')", encoding="utf-8")
+            return _update.subprocess.CompletedProcess(cmd, 0, "Cloning ...", "")
+
+        _update.subprocess.run = fake_run
+        root = _update._git_clone_source("main", self.tmp)
+        self.assertIsNotNone(root)
+        self.assertEqual(root.name, "geneseed-clone")
+        self.assertTrue((root / "build.py").is_file())
+
+    def test_failed_clone_cleans_partial_tree(self):
+        # A partial clone (no build.py) must be removed so the zip path's geneseed-*
+        # scan into the same dest cannot mistake it for a valid source.
+        _update.shutil.which = lambda _n: "git"
+
+        def fake_run(cmd, **kw):
+            Path(cmd[-1]).mkdir(parents=True, exist_ok=True)  # partial, no build.py
+            return _update.subprocess.CompletedProcess(cmd, 128, "fatal: unable to access", "")
+
+        _update.subprocess.run = fake_run
+        self.assertIsNone(_update._git_clone_source("main", self.tmp))
+        self.assertFalse((self.tmp / "geneseed-clone").exists())
+
+    def test_fetch_source_prefers_clone(self):
+        sentinel = self.tmp / "geneseed-clone"
+        sentinel.mkdir()
+        saved_clone = _update._git_clone_source
+        saved_sha = _update._resolve_sha
+        _update._git_clone_source = lambda ref, dest, log=None: sentinel
+        # _resolve_sha would hit the network; the clone short-circuit must avoid it.
+        _update._resolve_sha = lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("must not reach the archive download when the clone succeeds"))
+        try:
+            self.assertEqual(_update._fetch_source("main", self.tmp), sentinel)
+        finally:
+            _update._git_clone_source = saved_clone
+            _update._resolve_sha = saved_sha
+
+
 class DoctorSignatureTests(unittest.TestCase):
     def test_extracts_and_sorts_problem_bullets(self):
         out = "header\n  - zeta problem\nnoise\n- alpha problem\n  - alpha problem\n"
