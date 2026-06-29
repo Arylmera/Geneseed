@@ -1,82 +1,32 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('../api/index.js', () => ({
-  api: {
-    setup: () =>
-      Promise.resolve({
-        deployed: true,
-        target: 'C:/cfg',
-        emit: 'opencode-global',
-        theme: 'neutral',
-        accent: 'cyan',
-        version_verdict: 'up to date',
-        installed_fp: 'abc1234',
-        source_fp: 'abc1234',
-        root: 'C:/geneseed',
-        memory_dir: 'C:/cfg/memory',
-        facts: 2,
-        python: '3.12.1',
-      }),
-    themes: () =>
-      Promise.resolve({
-        themes: [
-          { name: 'neutral', blurb: '' },
-          { name: 'imperial', blurb: '' },
-        ],
-        emits: [{ name: 'opencode-global', desc: '' }],
-        current: { theme: 'neutral', emit: 'opencode-global' },
-      }),
-    mcp: vi.fn(() =>
-      Promise.resolve({
-        targets: [
-          {
-            label: 'global config',
-            path: 'C:/cfg/opencode.json',
-            exists: true,
-            commented: false,
-            servers: [
-              {
-                name: 'markitdown',
-                label: 'MarkItDown',
-                desc: 'docs',
-                preset: true,
-                state: 'enabled',
-              },
-            ],
-          },
-        ],
-        default: 0,
-      }),
-    ),
-    installs: vi.fn(() =>
-      Promise.resolve({
-        installs: [
-          {
-            id: 'opencode:global config',
-            host: 'opencode',
-            scope: 'global config',
-            path: 'C:/cfg',
-            state: 'active',
-          },
-        ],
-      }),
-    ),
-    installToggle: vi.fn(() => Promise.resolve({ ok: true })),
-  },
-}))
+// Settings is prop-driven now: ServerControl only touches the api on a click, so an
+// empty stub keeps the import side-effect-free.
+vi.mock('../api/index.js', () => ({ api: {} }))
 
 import Settings from '../pages/Settings/index.jsx'
 
 describe('Settings', () => {
-  it('renders the install snapshot and maintenance actions', async () => {
+  it('renders maintenance, the offline package, and server control', () => {
     render(<Settings onAction={() => {}} />)
-    await waitFor(() => expect(screen.getByText('up to date')).toBeTruthy())
-    expect(screen.getAllByText(/opencode-global/).length).toBeGreaterThan(0)
-    expect(screen.getByText('C:/geneseed')).toBeTruthy() // source root
-    // Build/update moved to the Harnesses tab + Dashboard; Settings keeps maintenance.
+    // Per-install detail and build/update moved to the Harnesses tab + Dashboard;
+    // Settings keeps machine maintenance, the offline package, and server control.
     expect(screen.getByText('Add to PATH')).toBeTruthy()
+    expect(screen.getByText('Remove from PATH')).toBeTruthy()
+    expect(screen.getByText('Uninstall')).toBeTruthy()
     expect(screen.getByText('Download offline package')).toBeTruthy()
+    expect(screen.getByText('Stop server')).toBeTruthy()
+  })
+
+  it('shows the footprint dial for the current install', () => {
+    render(
+      <Settings
+        onAction={() => {}}
+        overview={{ install: { host: 'opencode', scope: 'global' }, footprint: 'full' }}
+      />,
+    )
+    expect(screen.getByText('Harness footprint')).toBeTruthy()
   })
 })

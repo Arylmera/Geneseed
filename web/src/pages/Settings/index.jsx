@@ -151,9 +151,12 @@ export default function Settings({
           </div>
           <p className="sub mb-16">
             How much of the Rules <code>AGENT.md</code> carries inline each turn, for the current
-            install (<code>{install.host} · {install.scope}</code>). A token-cost dial — every Rule
-            stays in force either way. Changing it rebuilds the install in place.{' '}
-            <a href="#/docs/footprint">Learn more →</a>
+            install (
+            <code>
+              {install.host} · {install.scope}
+            </code>
+            ). A token-cost dial — every Rule stays in force either way. Changing it rebuilds the
+            install in place. <a href="#/docs/footprint">Learn more →</a>
           </p>
           <div className="dir-layout">
             <span className="tick" id="footprint-label">

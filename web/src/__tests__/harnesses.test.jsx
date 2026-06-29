@@ -93,6 +93,7 @@ describe('Harnesses', () => {
       scope: 'global',
       path: 'C:/.claude',
       theme: 'imperial',
+      footprint: 'full',
     })
   })
 
@@ -112,7 +113,7 @@ describe('Harnesses', () => {
     expect(onAction).toHaveBeenCalledWith('install', expect.objectContaining({ theme: 'neutral' }))
   })
 
-  it('re-themes an active install via the voice picker', async () => {
+  it('re-themes an active install via the voice picker (the Apply button)', async () => {
     const onAction = vi.fn()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.mocked(api.installs).mockResolvedValueOnce({
@@ -129,8 +130,8 @@ describe('Harnesses', () => {
     })
     render(<Harnesses onAction={onAction} themes={[{ name: 'neutral' }, { name: 'imperial' }]} />)
     const select = await screen.findByLabelText('voice for opencode · global')
-    fireEvent.change(select, { target: { value: 'imperial' } }) // Re-theme enables on change
-    fireEvent.click(screen.getByRole('button', { name: 'Re-theme' }))
+    fireEvent.change(select, { target: { value: 'imperial' } }) // Apply enables once the voice differs
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
     expect(onAction).toHaveBeenCalledWith(
       'install',
       expect.objectContaining({ host: 'opencode', theme: 'imperial' }),

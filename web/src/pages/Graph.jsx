@@ -283,7 +283,7 @@ function matrixView({ M, c, hover, types, setHover, openNode }) {
 // ---- VIEW: ARC ----
 // All nodes on one axis, grouped by type then by degree. Long arcs reach across
 // the harness; the fan landing on the laws shows them as the shared backbone.
-function arcView({ M, c, hover, setHover, openNode }) {
+function arcView({ M, c, setHover, openNode }) {
   const order = []
   ;[M.agents, M.skills, M.laws].forEach((g) =>
     g

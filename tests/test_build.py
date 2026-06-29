@@ -74,6 +74,41 @@ class RenderAllTests(unittest.TestCase):
         self.assertIn("Sealed Secrets", agent)
 
 
+class FootprintTests(unittest.TestCase):
+    """The lean/full instruction-set footprint: AGENT.md §1 either inlines every law's
+    full text (full) or condenses each law to its title + first sentence (lean), while
+    the complete laws/universal.md always ships in the bundle. Every law binds either
+    way — footprint governs how much AGENT.md inlines, not which laws apply."""
+
+    # A mid-law sentence present ONLY in Law I's full body — dropped once lean keeps
+    # just the opening sentence. The discriminator between the two footprints.
+    FULL_ONLY = "or a secret manager"
+    ESSENCE = "No key, password, token, or secret"
+
+    def _agent(self, footprint):
+        _t, items = build.render_all("neutral", footprint)
+        return next(t for r, t, _ in items if r == "AGENT.md")
+
+    def test_full_inlines_complete_law_text(self):
+        self.assertIn(self.FULL_ONLY, self._agent("full"))
+
+    def test_lean_keeps_essence_but_drops_the_rest(self):
+        agent = self._agent("lean")
+        self.assertIn(self.ESSENCE, agent)          # first sentence kept
+        self.assertNotIn(self.FULL_ONLY, agent)     # the rest of the body trimmed
+
+    def test_lean_build_still_ships_the_full_law_file(self):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp, "lean")
+            self.assertIn(self.ESSENCE, (tmp / "AGENT.md").read_text(encoding="utf-8"))
+            # universal.md keeps the complete, binding text regardless of footprint.
+            self.assertIn(self.FULL_ONLY,
+                          (tmp / "laws" / "universal.md").read_text(encoding="utf-8"))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 class BuildRoundTripTests(unittest.TestCase):
     def test_build_writes_expected_tree(self):
         tmp = Path(tempfile.mkdtemp())
