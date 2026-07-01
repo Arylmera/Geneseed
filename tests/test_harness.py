@@ -219,6 +219,37 @@ class CountTableGateTests(unittest.TestCase):
             readme, web.replace("3 repeatable workflows", "9 repeatable workflows"), counts, stems)
         self.assertTrue(any("repeatable workflows" in x for x in p), p)
 
+    def test_gate_flags_law_missing_from_class(self):
+        """A law numeral parsed from universal.md but absent from LAW_CLASS must be
+        flagged — the gate that would have caught the Law XXXV 'craft' fallback."""
+        tmp = Path(tempfile.mkdtemp())
+        orig = build.SRC
+        try:
+            for sub in ("agents", "skills", "laws"):
+                (tmp / sub).mkdir()
+            # XL is not a key in LAW_CLASS, so it must trip the completeness gate.
+            (tmp / "laws" / "universal.md").write_text(
+                "### {{LAW}} I — a\n### {{LAW}} XL — z\n", encoding="utf-8")
+            shutil.copy(build.SRC / "AGENT.md.tmpl", tmp / "AGENT.md.tmpl")
+            build.SRC = tmp
+            problems = harness._count_table_problems()
+        finally:
+            build.SRC = orig
+            shutil.rmtree(tmp, ignore_errors=True)
+        self.assertTrue(
+            any("XL" in p and "LAW_CLASS" in p for p in problems), problems)
+
+    def test_gate_flags_unknown_law_class_value(self):
+        """A LAW_CLASS value outside the known six-class set must be flagged."""
+        from _harness_tui import LAW_CLASS
+        orig = LAW_CLASS.get("I")
+        LAW_CLASS["I"] = "bogus"
+        try:
+            problems = harness._count_table_problems()
+        finally:
+            LAW_CLASS["I"] = orig
+        self.assertTrue(any("bogus" in p for p in problems), problems)
+
 
 class ThemeDetectionTests(unittest.TestCase):
     AVAIL = ["cyberpunk", "gamer", "imperial", "military", "neutral",

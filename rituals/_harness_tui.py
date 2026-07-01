@@ -272,6 +272,13 @@ LAW_CLASS: dict[str, str] = {
     "XXXV": "verify",
 }
 
+# The six governance classes a law may carry — the web Laws filter chips read
+# exactly this set. LAW_CLASS values must be drawn from it; doctor rejects any
+# value outside it (see _count_table_problems in _harness_build.py).
+LAW_CLASSES: tuple[str, ...] = (
+    "security", "process", "verify", "craft", "context", "comms",
+)
+
 # Each skill's category. Six classes mirroring the Laws taxonomy so the web
 # Skills ledger can filter by intent (design, build, review, ship, understand,
 # learn). Keyed by skill file stem — same source of truth across TUI and web.

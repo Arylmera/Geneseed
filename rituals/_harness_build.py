@@ -384,13 +384,27 @@ def _count_table_problems() -> list[str]:
     for stale in sorted(set(SKILL_CLASS) - skill_files):
         problems.append(f"[authoring] SKILL_CLASS lists '{stale}' but no skills/{stale}.md exists")
 
-    # README capability badges must match the real counts.
+    # Every law must carry a governance class in LAW_CLASS (drives the web Laws
+    # ledger's filter chips), and that class must be one of the known six. Same
+    # anti-drift guard as SKILL_CLASS above: without it a new law silently falls
+    # back to "craft" in the TUI/web while doctor and the suite stay green — the
+    # gap that let Law XXXV ship mis-classified until caught by eye.
+    from _harness_tui import LAW_CLASS, LAW_CLASSES
     laws_md = build.SRC / "laws" / "universal.md"
+    law_nums = re.findall(r"(?m)^### \{\{LAW\}\} ([IVXLCDM]+)\b",
+                          laws_md.read_text(encoding="utf-8")) if laws_md.is_file() else []
+    for num in law_nums:
+        if num not in LAW_CLASS:
+            problems.append(f"[authoring] laws/universal.md rule {num} has no class in LAW_CLASS (_harness_tui.py)")
+    for num, klass in sorted(LAW_CLASS.items()):
+        if klass not in LAW_CLASSES:
+            problems.append(f"[authoring] LAW_CLASS['{num}'] = '{klass}' is not a known class {list(LAW_CLASSES)}")
+
+    # README capability badges must match the real counts.
     counts = {
         "agents": len(_src_stems("agents")),
         "skills": len(_src_stems("skills")),
-        "laws": len(re.findall(r"(?m)^### \{\{LAW\}\} ", laws_md.read_text(encoding="utf-8")))
-        if laws_md.is_file() else 0,
+        "laws": len(law_nums),
         "themes": len(build.theme_files()),
     }
     try:
