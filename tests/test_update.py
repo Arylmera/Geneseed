@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "rituals"))
@@ -320,6 +321,58 @@ class RedactCredsTests(unittest.TestCase):
     def test_handles_empty(self):
         self.assertEqual(_update._redact_url_creds(""), "")
         self.assertEqual(_update._redact_url_creds(None), "")
+
+
+class ParseOriginTests(unittest.TestCase):
+    def _slug(self, url):
+        return _update._parse_origin(url).github_slug
+
+    def test_https_with_dotgit(self):
+        od = _update._parse_origin("https://github.com/Own/Repo.git")
+        self.assertEqual(od.url, "https://github.com/Own/Repo")
+        self.assertEqual(od.github_slug, "Own/Repo")
+
+    def test_https_bare(self):
+        self.assertEqual(self._slug("https://github.com/Own/Repo"), "Own/Repo")
+
+    def test_scp_form(self):
+        od = _update._parse_origin("git@github.com:Own/Repo.git")
+        self.assertEqual(od.url, "https://github.com/Own/Repo")
+        self.assertEqual(od.github_slug, "Own/Repo")
+
+    def test_ssh_scheme(self):
+        self.assertEqual(self._slug("ssh://git@github.com/Own/Repo.git"), "Own/Repo")
+
+    def test_ghe_has_no_slug_but_browser_url(self):
+        od = _update._parse_origin("https://ghe.corp.com/team/Repo.git")
+        self.assertIsNone(od.github_slug)
+        self.assertEqual(od.url, "https://ghe.corp.com/team/Repo")
+
+    def test_gitlab_nested_subgroup(self):
+        od = _update._parse_origin("https://gitlab.corp.com/team/sub/Repo.git")
+        self.assertIsNone(od.github_slug)
+        self.assertEqual(od.url, "https://gitlab.corp.com/team/sub/Repo")
+
+    def test_azure_git_path(self):
+        od = _update._parse_origin("https://dev.azure.com/org/proj/_git/Repo")
+        self.assertIsNone(od.github_slug)
+        self.assertEqual(od.url, "https://dev.azure.com/org/proj/_git/Repo")
+
+    def test_embedded_creds_stripped_from_url_kept_in_slug(self):
+        od = _update._parse_origin("https://user:tok@github.com/Own/Repo.git")
+        self.assertEqual(od.url, "https://github.com/Own/Repo")
+        self.assertEqual(od.github_slug, "Own/Repo")
+
+
+class OriginDisplayTests(unittest.TestCase):
+    def test_no_origin_falls_back_to_default(self):
+        with mock.patch.object(_update, "_git", return_value=(128, "", "no origin")):
+            self.assertEqual(_update._origin_display(), _update.DEFAULT_ORIGIN)
+
+    def test_reads_origin(self):
+        with mock.patch.object(_update, "_git",
+                               return_value=(0, "https://github.com/Own/Repo.git", "")):
+            self.assertEqual(_update._origin_display().github_slug, "Own/Repo")
 
 
 if __name__ == "__main__":

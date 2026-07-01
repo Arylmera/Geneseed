@@ -40,7 +40,9 @@ import tempfile
 import time
 import urllib.request
 import zipfile
+from collections import namedtuple
 from pathlib import Path
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -76,6 +78,66 @@ _NO_WINDOW: dict = (
     {"creationflags": subprocess.CREATE_NO_WINDOW}
     if sys.platform == "win32" else {}
 )
+
+OriginDisplay = namedtuple("OriginDisplay", ["url", "github_slug"])
+DEFAULT_ORIGIN = OriginDisplay("https://github.com/Arylmera/Geneseed", "Arylmera/Geneseed")
+
+
+def _git(*args, timeout: int = 10, network: bool = False):
+    """Run `git -C ROOT <args>` per the shared contract: which-guarded, no-window,
+    stripped + credential-redacted output, never raises. Returns (rc, out, err);
+    rc is None when git is absent or the spawn failed. THE monkeypatch seam for tests."""
+    exe = shutil.which("git")
+    if not exe:
+        return (None, "", "")
+    cmd = [exe, "-C", str(ROOT)]
+    env = None
+    if network:
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        cmd += ["-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=15"]
+    cmd += [str(a) for a in args]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True,
+                           timeout=timeout, env=env, **_NO_WINDOW)
+    except Exception:                       # spawn/timeout/OS error -> treated as failure
+        return (None, "", "")
+    return (p.returncode,
+            _redact_url_creds((p.stdout or "").strip()),
+            _redact_url_creds((p.stderr or "").strip()))
+
+
+def _parse_origin(origin: str) -> OriginDisplay:
+    """(browser url, github_slug) from a git remote URL of any scheme. Userinfo and
+    port dropped from the url; slug set only for a two-segment github.com path."""
+    o = (origin or "").strip()
+    host = path = ""
+    if "://" not in o and "@" in o and ":" in o.split("@", 1)[1]:
+        hostpart, path = o.split("@", 1)[1].split(":", 1)      # scp-form git@host:owner/repo
+        host = hostpart
+    else:
+        u = urlsplit(o)
+        host, path = (u.hostname or ""), u.path
+    host = host.lower()
+    path = path.strip("/")
+    if path.lower().endswith(".git"):
+        path = path[:-4]
+    if not (host and path):
+        return DEFAULT_ORIGIN
+    url = f"https://{host}/{path}"
+    slug = None
+    if host == "github.com":
+        segs = [s for s in path.split("/") if s]
+        if len(segs) == 2:
+            slug = "/".join(segs)
+    return OriginDisplay(url, slug)
+
+
+def _origin_display() -> OriginDisplay:
+    """The install's origin as a display record, or DEFAULT_ORIGIN when absent."""
+    rc, out, _ = _git("remote", "get-url", "origin")
+    if rc != 0 or not out:
+        return DEFAULT_ORIGIN
+    return _parse_origin(out)
 
 
 class _UpgradeError(Exception):
