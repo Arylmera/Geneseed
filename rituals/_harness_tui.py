@@ -269,6 +269,7 @@ LAW_CLASS: dict[str, str] = {
     "XXXII": "craft",
     "XXXIII": "craft",
     "XXXIV": "verify",
+    "XXXV": "verify",
 }
 
 # Each skill's category. Six classes mirroring the Laws taxonomy so the web
