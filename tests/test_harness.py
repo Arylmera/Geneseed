@@ -1360,9 +1360,9 @@ class UpdateStepSelfHealTests(unittest.TestCase):
         self.assertFalse(harness._harness_supports(hp, "bogus-zzz"))
 
     def test_step_uses_harness_when_supported(self):
-        cmd = harness._update_step_cmd(ROOT, "upgrade", "main")
+        cmd = harness._update_step_cmd(ROOT, "upgrade")
         self.assertTrue(cmd[1].endswith("harness.py"))
-        self.assertEqual(cmd[2:], ["upgrade", "main"])
+        self.assertEqual(cmd[2:], ["upgrade"])
 
     def test_step_falls_back_to_update_when_stale(self):
         tmp = Path(tempfile.mkdtemp())
@@ -1372,9 +1372,9 @@ class UpdateStepSelfHealTests(unittest.TestCase):
         # a harness.py too old to know any self-update subcommand (exit 2 like argparse)
         (rituals / "harness.py").write_text("import sys\nsys.exit(2)\n", encoding="utf-8")
         (rituals / "_update.py").write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
-        cmd = harness._update_step_cmd(tmp, "upgrade", "main")
+        cmd = harness._update_step_cmd(tmp, "upgrade")
         self.assertTrue(cmd[1].endswith("_update.py"))
-        self.assertEqual(cmd[2:], ["upgrade", "main"])
+        self.assertEqual(cmd[2:], ["upgrade"])
 
 
 class ImprovementsExportTests(unittest.TestCase):
