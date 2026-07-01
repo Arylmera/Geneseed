@@ -1,32 +1,19 @@
 #!/usr/bin/env python3
-"""Cross-platform self-update for Geneseed — a stdlib port of upgrade.sh + sync-self.sh.
+"""Cross-platform self-update for Geneseed — `git pull` the install's own origin,
+validate, then rebuild.
 
-The bash scripts depend on `curl`, `unzip`, `find`, `tee`, `grep`, `sort`, `cmp`,
-`chmod`, and bash itself — none of which are present on a native Windows shell. This
-module re-implements the same two flows using only the Python standard library
-(`urllib.request` to download, `zipfile` to extract, `shutil`/`tempfile` for the
-filesystem work), so `geneseed upgrade` / `update` / `bootstrap` work identically on
-Windows, macOS, and Linux with no external tools.
+`upgrade()` runs a two-phase preflight (Phase A, local: is this a git checkout, detached
+HEAD, dirty tree, missing upstream; Phase B, network: `git fetch` + ahead/behind), then
+fast-forwards the working tree to its upstream (`git merge --ff-only`), doctor-gates the
+result (`doctor --all --no-bundle`, rolling back with `git reset --hard` on failure), and
+re-renders the bundle. The update source is whatever the install was cloned from (its
+`.git` origin) — no hardcoded repo, host-agnostic. `sync_self()` and the `update`
+subcommand are aliases of `upgrade()`; theme + emit-mode precedence is preserved
+(explicit arg > markers > config > default).
 
-`harness.py` calls `upgrade()` / `sync_self()` here directly; the `upgrade.sh` and
-`sync-self.sh` wrappers now just delegate to `python rituals/harness.py upgrade|sync-self`,
-so this module is the single source of truth for the update logic on every platform.
-
-Prefers a shallow `git clone` for the source fetch when `git` is on PATH — it reaches
-github.com over the git smart-HTTP protocol, which corporate proxies that block the
-codeload.github.com archive zips usually still allow — and falls back to the archive
-download below when git is absent or the clone fails (force the old path with
-GENESEED_SRC=zip).
-
-Prefers the system `curl` for the archive download (its Happy-Eyeballs IPv4 fallback dodges
-the urllib stalls some networks trigger) and drops to stdlib urllib when curl is absent, so
-it still runs dependency-free. Behaviour mirrors the scripts it replaces:
-  - SHA-pinned archive download (content-addressed, never a mid-publish partial) with a
-    ref/tag fallback, retried with exponential backoff.
-  - `doctor --all` gate on the downloaded source BEFORE anything local is touched, with
-    an early abort when the SAME problems repeat (a real source defect, not CDN lag).
-  - copy -> rm -> mv staging so a kill mid-swap never leaves a factory file missing.
-  - theme + emit-mode precedence preserved (explicit arg > markers > config > default).
+`harness.py` calls `upgrade()` / `sync_self()` here directly. This module NEVER pushes — it
+only reads from the remote (fetch + merge --ff-only). Every git call goes through the `_git`
+seam, which is which-guarded, credential-scrubbed, and never raises.
 """
 from __future__ import annotations
 
@@ -37,7 +24,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 from collections import namedtuple
 from pathlib import Path
 from urllib.parse import urlsplit
