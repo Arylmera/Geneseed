@@ -306,5 +306,21 @@ class DoctorSignatureTests(unittest.TestCase):
         self.assertEqual(_update._doctor_signature("all clean\n"), "")
 
 
+class RedactCredsTests(unittest.TestCase):
+    def test_strips_userinfo_from_https(self):
+        self.assertEqual(
+            _update._redact_url_creds("clone https://user:tok@github.com/o/r.git failed"),
+            "clone https://github.com/o/r.git failed")
+
+    def test_leaves_plain_url_untouched(self):
+        self.assertEqual(
+            _update._redact_url_creds("https://github.com/o/r.git"),
+            "https://github.com/o/r.git")
+
+    def test_handles_empty(self):
+        self.assertEqual(_update._redact_url_creds(""), "")
+        self.assertEqual(_update._redact_url_creds(None), "")
+
+
 if __name__ == "__main__":
     unittest.main()

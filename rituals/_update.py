@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -57,6 +58,15 @@ SYNC = ["build.py", "rituals", "src", "themes", "adapters", "web",
 SCRIPTS = ["upgrade.sh", "sync-self.sh", "geneseed", "bootstrap", "geneseed.cmd", "geneseed.ps1"]
 
 ATTEMPTS = 4
+
+_CREDS_RE = re.compile(r"(://)[^/@\s]+@")
+
+
+def _redact_url_creds(text: str) -> str:
+    """Strip a `user[:token]@` userinfo from any URL in `text` so a tokened
+    remote never reaches a log line or an HTTP response."""
+    return _CREDS_RE.sub(r"\1", text or "")
+
 
 # Windows spawns a visible console for every child console process started from a
 # console-less parent (the web daemon runs `upgrade` in a subprocess). CREATE_NO_WINDOW
