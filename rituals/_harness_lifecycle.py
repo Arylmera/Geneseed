@@ -296,7 +296,7 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
         sys.stderr.write(f"[upgrade] ⚠️  could not export local edits ({e}) — "
                          f"run `geneseed diff --out FILE` before upgrading to keep them.\n")
     import _update
-    return _update.upgrade(args.ref, args.theme, zip_arg=getattr(args, "zip", None))
+    return _update.upgrade(args.ref, args.theme)
 
 
 def cmd_sync_self(args: argparse.Namespace) -> int:

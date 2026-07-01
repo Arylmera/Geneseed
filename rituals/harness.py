@@ -217,13 +217,10 @@ def build_argparser() -> argparse.ArgumentParser:
     bs.add_argument("--no-setup", action="store_true", help="update only; skip the setup wizard")
     bs.set_defaults(fn=cmd_bootstrap)
 
-    up = sub.add_parser("upgrade", help="self-upgrade from the published source, then rebuild "
-                                        "the bundle (cross-platform; replaces upgrade.sh)")
-    up.add_argument("ref", nargs="?", default=None, help="branch or tag (default: main)")
+    up = sub.add_parser("upgrade", help="self-update: git pull the install's origin (ff-only), "
+                                        "validate, then rebuild the bundle")
+    up.add_argument("ref", nargs="?", default=None, help=argparse.SUPPRESS)  # ignored; git follows the current branch
     up.add_argument("theme", nargs="?", default=None, help="optional: force a theme (neutral|imperial|…)")
-    up.add_argument("--zip", default=None, metavar="FILE",
-                    help="offline package (zip of the source tree) to upgrade from "
-                         "instead of downloading — for machines without GitHub access")
     up.set_defaults(fn=cmd_upgrade)
 
     ss = sub.add_parser("sync-self", help="refresh the orchestration layer — launchers + update "
