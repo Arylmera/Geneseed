@@ -340,3 +340,20 @@ stale the moment it is written. Where {{LAW}} III makes you verify a value befor
 citing it, this governs what to record in the first place: not the volatile value,
 but the means to derive it — the probe, the query, the live computation. Record
 how to check, and check at the hour of need.
+
+### {{LAW}} XXXV — {{LEX_XXXV}}
+Code you author is not done until its behaviour is covered by a test you wrote
+and the affected tests run green. When you add or change behaviour that can be
+expressed as a test, write that test — new behaviour ships with the test that
+pins it, a bug fix with the test that reproduces it first (the tdd {{SKILL}}
+drives this). After each change, run the tests the change could affect — not the
+whole suite each time ({{LAW}} XV), the ones whose behaviour you touched — and
+read the output before moving on; a change left unrun is a regression you have
+not yet noticed. Verify against the project's real runner and show the result as
+evidence ({{LAW}} III); assert on observable behaviour, deterministically
+({{LAW}} XXVII). Where the project has no suite or the change is genuinely
+untestable — a doc, a constant, a config — say so rather than invent a test;
+where a real test is out of scope, name the gap and stop rather than ship
+untested behaviour in silence ({{LAW}} II, {{LAW}} XXIV). Tests written after the
+code still guard the next change. The code you cannot re-verify on demand is the
+code you do not actually control.

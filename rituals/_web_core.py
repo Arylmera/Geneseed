@@ -127,7 +127,7 @@ DOC_GROUPS = [
             "Once installed, the agent doesn't change *how* you talk to "
             "your tool — it changes what the tool already knows when you do.\n\n"
             "### What loaded automatically\n\n"
-            "- **`AGENT.md`** — 34 universal Rules the agent obeys.\n"
+            "- **`AGENT.md`** — 35 universal Rules the agent obeys.\n"
             "- **Your repo's docs** — `README.md`, `CONTRIBUTING.md`, "
             "anything under `docs/` the harness discovers.\n"
             "- **Your machine's wiki** (if you set one up) — eager entries "
@@ -178,7 +178,7 @@ DOC_GROUPS = [
          "`build`."},
         {"id": "rules", "title": "Rules (Laws)", "kind": "concept",
          "link": {"hash": "#/laws", "label": "Browse the ledger →"},
-         "body": "34 universal laws the agent obeys — secrets handling, "
+         "body": "35 universal laws the agent obeys — secrets handling, "
          "scope discipline, verify-before-assert, surface-failures, context "
          "economy, load-the-docs, tool-discovery, non-interactive-shell, and "
          "more. Each law is a "
@@ -197,8 +197,8 @@ DOC_GROUPS = [
          "request."},
         {"id": "skills", "title": "Skills", "kind": "concept",
          "link": {"hash": "#/section/skills", "label": "Browse the catalog →"},
-         "body": "25 repeatable workflows the agent can invoke by name — "
-         "[[brainstorm]], [[clarify]], [[plan]], [[tdd]], [[debug]], "
+         "body": "26 repeatable workflows the agent can invoke by name — "
+         "[[brainstorm]], [[clarify]], [[plan]], [[tdd]], [[develop]], [[debug]], "
          "[[refactor]], [[geneseed-code-review]], [[fresh-eyes]], [[review-response]], "
          "[[commit]], [[ship]], [[release]], [[migrate]], [[git-archaeology]], "
          "[[git-rescue]], [[repo-map]], [[document-project]], [[ingest]], "
