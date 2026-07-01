@@ -193,6 +193,10 @@ export default function Settings({
           install. Your memory store is always kept. Each runs live in the console.
         </p>
         <div className="row wrap gap-10">
+          <button className="btn ghost" onClick={() => onAction('update')}>
+            <Icon name="download" />
+            Update (git pull + rebuild)
+          </button>
           <button className="btn ghost" onClick={() => onAction('link')}>
             <Icon name="external" />
             Add to PATH
@@ -215,21 +219,6 @@ export default function Settings({
             Uninstall
           </button>
         </div>
-      </div>
-
-      {/* Offline package card */}
-      <div className="card pad-lg mb-16">
-        <div className="card-head">
-          <h3>Offline package</h3>
-        </div>
-        <p className="sub mb-16">
-          For air-gapped machines: download a zip of this source tree, carry it over, then{' '}
-          <code>geneseed upgrade --zip &lt;file&gt;</code>. Same validation, no network.
-        </p>
-        <a className="btn ghost" href="/api/offline-zip" download>
-          <Icon name="download" />
-          Download offline package
-        </a>
       </div>
 
       {/* Server card */}

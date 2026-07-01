@@ -34,21 +34,25 @@ export default function About({ page }) {
       <div className="row wrap gap-10" style={{ marginTop: 18 }}>
         <a className="btn ghost" href={page.repo} target="_blank" rel="noreferrer">
           <Icon name="external" />
-          GitHub repo
+          {page.repo_is_github ? 'GitHub repo' : 'Source repo'}
         </a>
-        <a className="btn ghost" href={`${page.repo}/issues`} target="_blank" rel="noreferrer">
-          <Icon name="external" />
-          File an issue
-        </a>
-        <a
-          className="btn ghost"
-          href={`${page.repo}/blob/main/LICENSE`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <Icon name="external" />
-          License
-        </a>
+        {page.repo_is_github && (
+          <>
+            <a className="btn ghost" href={`${page.repo}/issues`} target="_blank" rel="noreferrer">
+              <Icon name="external" />
+              File an issue
+            </a>
+            <a
+              className="btn ghost"
+              href={`${page.repo}/blob/main/LICENSE`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Icon name="external" />
+              License
+            </a>
+          </>
+        )}
       </div>
     </div>
   )

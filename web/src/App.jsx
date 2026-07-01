@@ -47,7 +47,8 @@ export default function App() {
   const [booting, setBooting] = useState(true)
   const appRef = useRef(null)
 
-  const onError = (e) => setToast({ kind: 'err', msg: e.message })
+  const onError = (e) =>
+    setToast({ kind: e?.body?.kind || 'err', msg: e?.body?.message || e.message })
   const { overview, themes, reload } = useOverview(onError)
   const [dataRev, setDataRev] = useState(0)
   // Soft refresh after a mutation: refetch the overview (dashboard accent + counts) and

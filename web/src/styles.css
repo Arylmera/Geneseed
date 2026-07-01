@@ -772,6 +772,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-md);
   box-shadow: var(--shadow-pop); padding: 14px 16px; font-size: 13px; }
 .toast.err { border-color: color-mix(in srgb, var(--bad) 45%, var(--line-2)); }
+.toast.info { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2)); }
 
 /* cancel a running job from the console */
 .run-cancel { margin-left: 8px; }

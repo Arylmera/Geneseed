@@ -1,10 +1,28 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon.jsx'
+import { api } from '../api/index.js'
 
-const REPO_URL = 'https://github.com/Arylmera/Geneseed'
+// The repo the install actually updates from (its git origin). Falls back to the canonical
+// upstream when the About payload can't be fetched. The github-shaped deep links (/issues,
+// /blob/main/LICENSE) only resolve on github.com, so they are gated on repo_is_github.
+const FALLBACK_REPO = 'https://github.com/Arylmera/Geneseed'
 const CREATOR_URL = 'https://github.com/Arylmera'
 
 export default function About() {
+  const [repo, setRepo] = useState(FALLBACK_REPO)
+  const [isGithub, setIsGithub] = useState(true)
+  useEffect(() => {
+    api
+      .docsPage('about')
+      .then((p) => {
+        if (p?.repo) {
+          setRepo(p.repo)
+          setIsGithub(!!p.repo_is_github)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   return (
     <div className="narrow">
       <div className="head-row mb-18">
@@ -25,23 +43,27 @@ export default function About() {
           disciplined AI coding agent. One canonical source, many voices, MIT-licensed.
         </p>
         <div className="row wrap gap-10">
-          <a className="btn ghost" href={REPO_URL} target="_blank" rel="noreferrer">
+          <a className="btn ghost" href={repo} target="_blank" rel="noreferrer">
             <Icon name="github" />
-            Source on GitHub
+            {isGithub ? 'Source on GitHub' : 'Source repo'}
           </a>
-          <a className="btn ghost" href={REPO_URL + '/issues'} target="_blank" rel="noreferrer">
-            <Icon name="external" />
-            Issues
-          </a>
-          <a
-            className="btn ghost"
-            href={REPO_URL + '/blob/main/LICENSE'}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Icon name="external" />
-            MIT License
-          </a>
+          {isGithub && (
+            <>
+              <a className="btn ghost" href={repo + '/issues'} target="_blank" rel="noreferrer">
+                <Icon name="external" />
+                Issues
+              </a>
+              <a
+                className="btn ghost"
+                href={repo + '/blob/main/LICENSE'}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Icon name="external" />
+                MIT License
+              </a>
+            </>
+          )}
         </div>
       </div>
 

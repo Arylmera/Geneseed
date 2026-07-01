@@ -11,8 +11,9 @@ const TOKEN = typeof window !== 'undefined' ? window.__GENESEED_TOKEN__ : ''
 // on it (e.g. 409 "already running").
 async function fail(r) {
   const body = await r.json().catch(() => ({}))
-  const err = new Error(body.error || r.statusText)
+  const err = new Error(body.error || body.message || r.statusText)
   err.status = r.status
+  err.body = body
   return err
 }
 
