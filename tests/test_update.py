@@ -219,9 +219,6 @@ class LocalZipTests(unittest.TestCase):
                                       lambda _m: None)
         self.assertEqual(cm.exception.code, "E-ZIP")
 
-    def test_main_rejects_zip_without_path(self):
-        self.assertEqual(_update.main(["upgrade", "--zip"]), 2)
-
 
 class GitCloneSourceTests(unittest.TestCase):
     """The preferred transport: a shallow `git clone` that reaches github.com through
@@ -545,6 +542,21 @@ class UpgradeFlowTests(unittest.TestCase):
              self._patch_rebuild() as rb:
             self.assertEqual(_update.upgrade(), 1)
         rb.assert_not_called()
+
+
+class AliasTests(unittest.TestCase):
+    def test_sync_self_calls_upgrade(self):
+        with mock.patch.object(_update, "upgrade", return_value=0) as up:
+            self.assertEqual(_update.sync_self(), 0)
+        up.assert_called_once()
+
+    def test_main_update_calls_upgrade(self):
+        with mock.patch.object(_update, "upgrade", return_value=0) as up:
+            self.assertEqual(_update.main(["update"]), 0)
+        up.assert_called_once()
+
+    def test_main_rejects_unknown(self):
+        self.assertEqual(_update.main(["frobnicate"]), 2)
 
 
 if __name__ == "__main__":

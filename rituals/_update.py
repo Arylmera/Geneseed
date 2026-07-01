@@ -836,56 +836,10 @@ def _fetch_and_validate(ref: str, tmp: Path, log: _Log) -> Path:
 
 
 def sync_self(ref: str | None = None) -> int:
-    """Port of sync-self.sh: refresh the orchestration scripts (the launchers + update
-    scripts) that `upgrade` deliberately does not touch. Safe to overwrite the bash/PS
-    launchers mid-run — this is a Python process, it does not re-read them by byte offset."""
-    here = ROOT
-    ref = ref or "main"
-    log = print
-    log(f"[geneseed] fetching orchestration scripts from {REPO}@{ref} ...")
-    tmp = Path(tempfile.mkdtemp(prefix="geneseed-sync-"))
-    try:
-        new_root = None
-        delay = 2
-        for i in range(1, ATTEMPTS + 1):
-            for stale in tmp.glob("geneseed-*"):
-                shutil.rmtree(stale, ignore_errors=True)
-            (tmp / "src.zip").unlink(missing_ok=True)
-            new_root = _fetch_source(ref, tmp, log)
-            if new_root is not None:
-                break
-            sys.stderr.write(f"[geneseed]   download attempt {i} failed — retrying ...\n")
-            if i < ATTEMPTS:
-                time.sleep(delay)
-                delay *= 2
-        if new_root is None:
-            sys.stderr.write(f"[geneseed] download failed for ref '{ref}' after retries\n")
-            return 1
-
-        changed = 0
-        for name in SCRIPTS:
-            src = new_root / name
-            if not src.is_file():
-                continue
-            dest = here / name
-            if dest.is_file() and src.read_bytes() == dest.read_bytes():
-                continue
-            shutil.copy2(src, dest)
-            if not sys.platform.startswith("win") and not name.lower().endswith((".cmd", ".ps1")):
-                # Restore the executable bit Unix needs on the launcher/scripts. (NTFS has
-                # no exec bit; .cmd/.ps1 are run by their interpreter, not chmod-gated.)
-                mode = dest.stat().st_mode
-                dest.chmod(mode | 0o111)
-            print(f"[geneseed]   updated {name}")
-            changed += 1
-
-        if changed == 0:
-            print(f"[geneseed] orchestration scripts already up to date ({ref}).")
-        else:
-            print(f"[geneseed] refreshed {changed} script(s). Now run: geneseed upgrade")
-        return 0
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+    """A single `git pull` now refreshes the launchers AND the factory together, so
+    sync-self is an alias of upgrade (kept for the stable subcommand contract). `ref`
+    is accepted for back-compat but ignored (git follows the current branch)."""
+    return upgrade()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -910,27 +864,12 @@ def main(argv: list[str] | None = None) -> int:
                 pass
     argv = list(sys.argv[1:] if argv is None else argv)
     cmd = argv[0] if argv else ""
-    rest = [a for a in argv[1:] if a not in ("-h", "--help")]
-    zip_arg = None
-    if "--zip" in rest:                     # offline package: --zip <file>
-        i = rest.index("--zip")
-        zip_arg = rest[i + 1] if i + 1 < len(rest) else None
-        rest = rest[:i] + rest[i + 2:]
-        if not zip_arg:
-            sys.stderr.write("geneseed self-heal: --zip needs a file path\n")
-            return 2
-    if cmd == "upgrade":
-        return upgrade(rest[0] if len(rest) > 0 else None,
-                       rest[1] if len(rest) > 1 else None,
-                       zip_arg=zip_arg)
-    if cmd in ("sync-self", "sync_self"):
-        return sync_self(rest[0] if rest else None)
-    if cmd == "update":  # orchestration first, THEN the factory — mirrors `geneseed update`
-        ref = rest[0] if rest else None
-        rc = sync_self(ref)
-        return rc if rc else upgrade(ref)
+    # A single `git pull` refreshes launchers + factory, so upgrade/update/sync-self are
+    # all the same operation now. A stray positional ref/theme is accepted and ignored.
+    if cmd in ("upgrade", "update", "sync-self", "sync_self"):
+        return upgrade()
     sys.stderr.write("geneseed self-heal: usage: python rituals/_update.py "
-                     "{upgrade|sync-self|update} [ref] [theme]\n")
+                     "{upgrade|sync-self|update}\n")
     return 2
 
 
