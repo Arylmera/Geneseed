@@ -91,30 +91,3 @@ def api_graph(state: WebState) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
-OFFLINE_ZIP_SKIP = {".git", "node_modules", "__pycache__", ".superpowers"}
-
-
-def offline_zip_bytes() -> "tuple[bytes, str]":
-    """(zip bytes, download name) of the source tree — the sneakernet package a
-    proxied/offline machine consumes with `geneseed upgrade --zip <file>`.
-    `git archive` (tracked files only) when git is available; otherwise a
-    zipfile walk skipping VCS/build litter. The geneseed-offline/ prefix matches
-    what the consume side expects (a geneseed-* wrapper dir, like GitHub zips)."""
-    name = f"geneseed-offline-{time.strftime('%Y%m%d')}.zip"
-    try:
-        p = subprocess.run(
-            ["git", "archive", "--format=zip", "--prefix=geneseed-offline/", "HEAD"],
-            cwd=str(ROOT), capture_output=True, timeout=60, **harness.NO_WINDOW)
-        if p.returncode == 0 and p.stdout:
-            return p.stdout, name
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in sorted(ROOT.rglob("*")):
-            rel = f.relative_to(ROOT)
-            if f.is_file() and not (set(rel.parts) & OFFLINE_ZIP_SKIP):
-                zf.write(f, f"geneseed-offline/{rel.as_posix()}")
-    return buf.getvalue(), name
-
-

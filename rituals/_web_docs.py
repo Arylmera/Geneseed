@@ -272,7 +272,11 @@ def _glossary(state: WebState) -> dict:
 
 
 def _about(state: WebState) -> dict:
-    """About-page payload: version line, deployed install summary, links."""
+    """About-page payload: version line, deployed install summary, links. `repo` reflects
+    the install's own git origin (where updates come from), with `repo_is_github` gating the
+    github-shaped deep links in the UI."""
+    import _update  # lazy: avoids pulling build + its sys.path side effect at web-import time
+    od = _update._origin_display()
     sd = harness._status_data()
     return {
         "version": sd.get("version") or {},
@@ -282,7 +286,8 @@ def _about(state: WebState) -> dict:
         "target": str(state.target),
         "root": str(ROOT),
         "python": sys.version.split()[0],
-        "repo": "https://github.com/Arylmera/Geneseed",
+        "repo": od.url,
+        "repo_is_github": bool(od.github_slug),
         "license": "MIT",
     }
 

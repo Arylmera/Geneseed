@@ -5,6 +5,7 @@ Run from the Geneseed root:  python -m unittest discover -s tests
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "rituals"))
@@ -231,11 +232,11 @@ class ActionCommandsTests(unittest.TestCase):
         self.assertIn("--emit", argv)
         self.assertIn("opencode-global", argv)
 
-    def test_update_runs_sync_then_upgrade(self):
+    def test_update_runs_single_upgrade(self):
         cmds = web.action_commands("update")
-        self.assertEqual(len(cmds), 2)
-        self.assertIn("sync-self", cmds[0])
-        self.assertIn("upgrade", cmds[1])
+        self.assertEqual(len(cmds), 1)
+        self.assertIn("upgrade", cmds[0])
+        self.assertNotIn("sync-self", " ".join(str(c) for c in cmds[0]))
 
     def test_unknown_action_is_none(self):
         self.assertIsNone(web.action_commands("bogus"))
@@ -887,20 +888,6 @@ class GraphTests(unittest.TestCase):
             self.assertTrue(any(e["target"] in {n["id"] for n in g["nodes"]
                                                 if n["type"] == "law"} for e in g["edges"]),
                             f"theme {theme} found no law edges")
-
-
-class OfflineZipTests(unittest.TestCase):
-    def test_offline_zip_holds_the_source_tree(self):
-        import io
-        import zipfile
-        data, name = web.offline_zip_bytes()
-        self.assertRegex(name, r"^geneseed-offline-\d{8}\.zip$")
-        with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            names = zf.namelist()
-        self.assertIn("geneseed-offline/build.py", names)
-        self.assertIn("geneseed-offline/rituals/web.py", names)
-        self.assertTrue(any(n.startswith("geneseed-offline/themes/") for n in names))
-        self.assertFalse(any("/.git/" in n or "node_modules" in n for n in names))
 
 
 class SetupTests(unittest.TestCase):
@@ -1569,6 +1556,25 @@ class TestInstallRemove(unittest.TestCase):
                 os.environ.pop("XDG_CONFIG_HOME", None)
             else:
                 os.environ["XDG_CONFIG_HOME"] = saved_xdg
+
+
+class AboutOriginTests(unittest.TestCase):
+    def test_repo_reflects_non_github_origin(self):
+        import _update
+        import _web_docs
+        od = _update.OriginDisplay("https://gitlab.corp/team/gs", None)
+        with mock.patch.object(_update, "_origin_display", return_value=od):
+            payload = _web_docs._about(web.WebState(theme="neutral"))
+        self.assertEqual(payload["repo"], "https://gitlab.corp/team/gs")
+        self.assertFalse(payload["repo_is_github"])
+
+    def test_repo_is_github_flag_for_github_origin(self):
+        import _update
+        import _web_docs
+        od = _update.OriginDisplay("https://github.com/Own/Repo", "Own/Repo")
+        with mock.patch.object(_update, "_origin_display", return_value=od):
+            payload = _web_docs._about(web.WebState(theme="neutral"))
+        self.assertTrue(payload["repo_is_github"])
 
 
 if __name__ == "__main__":

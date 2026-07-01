@@ -66,11 +66,6 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     return self._send_json(api_mcp(state))
                 if path == "/api/installs":
                     return self._send_json(api_installs(state))
-                if path == "/api/offline-zip":
-                    data, name = offline_zip_bytes()
-                    return self._send_bytes(
-                        data, "application/zip",
-                        extra={"Content-Disposition": f'attachment; filename="{name}"'})
                 if path == "/api/diff":
                     return self._send_json(api_diff(state))
                 if path == "/api/docs":
@@ -190,6 +185,20 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     if "error" in plan:
                         return self._send_json(plan, 400)
                     jid = jm.start("deploy", plan["cmd"], on_done=state.refresh)
+                    if jid is None:
+                        return self._send_json({"error": "busy"}, 409)
+                    return self._send_json({"job_id": jid}, 202)
+                # Update = git pull the install's origin + rebuild. Gate on a local-only
+                # preflight FIRST so a dirty tree / non-checkout returns a friendly 422 the
+                # UI renders as an info popup, instead of spawning a job that just fails.
+                if action == "update":
+                    import _update
+                    pre = _update._preflight()
+                    if not pre.ok:
+                        return self._send_json(
+                            {"precondition": pre.code, "kind": pre.kind,
+                             "message": pre.message}, 422)
+                    jid = jm.start("update", *action_commands("update"), on_done=state.refresh)
                     if jid is None:
                         return self._send_json({"error": "busy"}, 409)
                     return self._send_json({"job_id": jid}, 202)

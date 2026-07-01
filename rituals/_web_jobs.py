@@ -159,7 +159,7 @@ def action_commands(action: str, theme: str = "neutral",
         # per-install resolution lives in the rebuild-all subcommand, so the web layer
         # threads no theme/emit — one job, best-effort across all installs.
         "build-all": [[py, h, "rebuild-all"]],
-        "update": [[py, h, "sync-self"], [py, h, "upgrade"]],
+        "update": [[py, h, "upgrade"]],
         "export": [[py, h, "diff", "--out"]],
         # Local-machine maintenance, surfaced in the web Settings. uninstall keeps
         # memory (never deleted) and runs non-interactively with --yes.
