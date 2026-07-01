@@ -54,6 +54,7 @@ const LAW_META = {
   32: ['craft', 'Edit the authoritative source layer, not the rendered output.'],
   33: ['craft', 'Finish a delete or rename — reconcile every reference, no danglers.'],
   34: ['verify', 'Record how to derive a volatile fact, not its stale value.'],
+  35: ['verify', 'Cover new or changed behaviour with a test; run the affected tests green.'],
 }
 
 // Tiny inline formatter: render `code` spans and *emphasis* in plain rule text.
