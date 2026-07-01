@@ -425,5 +425,49 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(p.ok); self.assertEqual(p.code, "ready")
 
 
+class MeasureUpstreamTests(unittest.TestCase):
+    def _run(self, seam):
+        with mock.patch.object(_update, "_git", side_effect=seam):
+            return _update._measure_upstream()
+
+    def test_fetch_failure(self):
+        code, behind, _ = self._run(lambda *a, **k: (128, "", "could not resolve host"))
+        self.assertEqual(code, "fetch_failed")
+
+    def test_up_to_date(self):
+        def seam(*a, **k):
+            if a[0] == "fetch": return (0, "", "")
+            if a[0] == "rev-list": return (0, "0", "")
+            return (0, "", "")
+        self.assertEqual(self._run(seam)[0], "uptodate")
+
+    def test_behind_is_ready(self):
+        def seam(*a, **k):
+            if a[0] == "fetch": return (0, "", "")
+            if a[0] == "rev-list" and a[2] == "@{u}..HEAD": return (0, "0", "")   # ahead
+            if a[0] == "rev-list" and a[2] == "HEAD..@{u}": return (0, "3", "")   # behind
+            return (0, "", "")
+        code, behind, _ = self._run(seam)
+        self.assertEqual(code, "ready"); self.assertEqual(behind, 3)
+
+    def test_diverged_with_common_ancestor(self):
+        def seam(*a, **k):
+            if a[0] == "fetch": return (0, "", "")
+            if a[0] == "rev-list" and a[2] == "@{u}..HEAD": return (0, "2", "")
+            if a[0] == "rev-list" and a[2] == "HEAD..@{u}": return (0, "1", "")
+            if a[0] == "merge-base": return (0, "abc123", "")
+            return (0, "", "")
+        self.assertEqual(self._run(seam)[0], "diverged")
+
+    def test_unrelated_history(self):
+        def seam(*a, **k):
+            if a[0] == "fetch": return (0, "", "")
+            if a[0] == "rev-list" and a[2] == "@{u}..HEAD": return (0, "1", "")
+            if a[0] == "rev-list" and a[2] == "HEAD..@{u}": return (0, "1", "")
+            if a[0] == "merge-base": return (1, "", "")
+            return (0, "", "")
+        self.assertEqual(self._run(seam)[0], "unrelated")
+
+
 if __name__ == "__main__":
     unittest.main()

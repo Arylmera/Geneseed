@@ -179,6 +179,35 @@ def _preflight() -> "Preflight":
     return _pre("ready")
 
 
+def _fetch_timeout() -> int:
+    try:
+        return max(30, int(os.environ.get("GENESEED_NET_TIMEOUT", "120")))
+    except ValueError:
+        return 120
+
+
+def _count(s: str) -> int:
+    s = (s or "").strip()
+    return int(s) if s.isdigit() else 0
+
+
+def _measure_upstream():
+    """Phase B — fetch, then classify. Returns (code, behind, err) where
+    code ∈ {ready, fetch_failed, unrelated, diverged, uptodate}."""
+    rc, _, err = _git("fetch", "--quiet", timeout=_fetch_timeout(), network=True)
+    if rc != 0:
+        return ("fetch_failed", 0, err)
+    _, ahead, _ = _git("rev-list", "--count", "@{u}..HEAD")
+    _, behind, _ = _git("rev-list", "--count", "HEAD..@{u}")
+    ahead, behind = _count(ahead), _count(behind)
+    if ahead > 0:
+        mrc, _, _ = _git("merge-base", "HEAD", "@{u}")
+        return (("diverged" if mrc == 0 else "unrelated"), 0, "")
+    if behind == 0:
+        return ("uptodate", 0, "")
+    return ("ready", behind, "")
+
+
 class _UpgradeError(Exception):
     """A tagged, fatal upgrade failure (mirrors the bash `die` codes)."""
 
