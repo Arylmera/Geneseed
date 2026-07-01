@@ -713,14 +713,40 @@ def _local_zip_source(zip_arg: str, tmp: Path, log: _Log) -> Path:
     return cand
 
 
+def _rebuild_bundle(here, out, theme, emit, root_dir, log) -> int:
+    """Render the bundle from the (already-updated) source and bounce a running web
+    daemon. Returns the build subprocess returncode (0 = ok)."""
+    build_args = ["--out", str(out)]
+    if theme:
+        build_args += ["--theme", theme]
+    if emit == "opencode":
+        build_args += ["--emit", "opencode", "--root", str(root_dir)]
+    elif emit == "opencode-global":
+        build_args += ["--emit", "opencode-global"]
+    log(f"[geneseed] rebuilding bundle -> {out} (theme: {theme or 'config default'}, emit: {emit}) ...")
+    import subprocess
+    proc = subprocess.run([sys.executable, str(here / "build.py"), *build_args], cwd=str(here))
+    if proc.returncode != 0:
+        return proc.returncode
+    # If a web daemon is running, bounce it so the new rituals/* source and the freshly
+    # rebuilt web/dist take effect — otherwise the open PWA keeps hitting the old code.
+    try:
+        sys.path.insert(0, str(here / "rituals"))
+        import web as _web  # noqa: E402
+        _web.restart_daemon(theme=theme, open_browser=False, only_if_running=True)
+    except Exception as e:  # noqa: BLE001  — never fail an upgrade on this
+        log(f"[geneseed] ⚠️  could not refresh the web daemon ({e}) — `geneseed web restart` manually if it was running.")
+    return 0
+
+
 def upgrade(ref: str | None = None, theme_arg: str | None = None,
             zip_arg: str | None = None) -> int:
-    """Port of upgrade.sh: download the published source (or, with `zip_arg`, use a
-    local offline package instead of the network), refresh the factory files in
-    this folder, and re-render the bundle. Returns a process exit code (0 = ok)."""
+    """Update from the install's own git origin (fast-forward only), doctor-gate, and
+    rebuild the bundle. `ref`/`zip_arg` are accepted for back-compat but IGNORED (git
+    follows the current branch; the offline path was removed). Returns a process exit
+    code: 0 ok/up-to-date, 3 info precondition, 1 error."""
     log = _Log()
     here = ROOT
-    ref = ref or "main"
     out = Path(os.environ.get("GENESEED_OUT") or (here.parent / "Harness"))
     root_dir = Path(os.environ.get("GENESEED_ROOT") or out.parent)
     cfg = _opencode_config_dir()
@@ -730,71 +756,44 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None,
         sys.stderr.write(
             f"[geneseed] ⚠️  {cfg} already holds a global Geneseed install (.geneseed-manifest.json),\n"
             f"[geneseed] ⚠️  but this run emits the plain bundle only — it will NOT refresh that global config.\n"
-            f"[geneseed] ⚠️  Did you mean:  GENESEED_EMIT=opencode-global geneseed upgrade {ref}\n")
+            f"[geneseed] ⚠️  Did you mean:  GENESEED_EMIT=opencode-global geneseed upgrade\n")
 
-    tmp = Path(tempfile.mkdtemp(prefix="geneseed-"))
-    try:
-        try:
-            new_root = _local_zip_source(zip_arg, tmp, log) if zip_arg \
-                else _fetch_and_validate(ref, tmp, log)
-        except _UpgradeError as e:
-            for line in DOCTOR_LEGEND:
-                log(line)
-            log(f"[geneseed][{e.code}] ✗ {e.msg}")
-            if log.path is not None:
-                log(f"[geneseed] ── full install log: {log.path}")
-            return 1
+    # Capture the LOCAL theme before the pull overwrites harness.config.json.
+    config_theme = _config_theme(here)
 
-        config_theme = _config_theme(here)
+    pre = _preflight()
+    if not pre.ok:
+        log(f"[geneseed] {pre.message}")
+        return 3 if pre.kind == "info" else 1
 
-        log(f"[geneseed] refreshing factory files in {here} ...")
-        for item in SYNC:
-            if _refresh_item(new_root, here, item):
-                log(f"[geneseed]   refreshed {item}")
+    code, behind, err = _measure_upstream()
+    if code == "fetch_failed":
+        log(f"[geneseed] could not reach the remote: {err}")
+        return 1
+    if code == "unrelated":
+        log("[geneseed] Upstream history was rewritten; back up local work, then re-clone "
+            "or `git reset --hard @{u}`.")
+        return 3
+    if code == "diverged":
+        log("[geneseed] Your branch has local commits and can't fast-forward — push/rebase "
+            "or reset first.")
+        return 3
+    if code == "ready":
+        ok, fcode, msg = _pull_and_validate(log)
+        if not ok:
+            log(f"[geneseed] {msg}")
+            return 3 if fcode == "collision" else 1
+    else:  # uptodate
+        log("[geneseed] already up to date.")
 
-        theme = theme_arg or _marker_theme(cfg, out) or config_theme
-        if not theme:
-            sys.stderr.write(
-                f"[geneseed] ⚠️  no theme found — no marker at {out}/.geneseed-theme, no local config theme.\n"
-                f"[geneseed] ⚠️  falling back to the upstream default. Pin it explicitly to avoid a silent downgrade:\n"
-                f"[geneseed] ⚠️      geneseed upgrade {ref} imperial\n")
-
-        build_args = ["--out", str(out)]
-        if theme:
-            build_args += ["--theme", theme]
-        if emit == "opencode":
-            build_args += ["--emit", "opencode", "--root", str(root_dir)]
-        elif emit == "opencode-global":
-            build_args += ["--emit", "opencode-global"]
-
-        _migrate_stray_bundle(here, out, log)
-
-        log(f"[geneseed] rebuilding bundle -> {out} (theme: {theme or 'config default'}, emit: {emit}) ...")
-        import subprocess
-        proc = subprocess.run([sys.executable, str(here / "build.py"), *build_args],
-                              cwd=str(here))
-        if proc.returncode != 0:
-            log(f"[geneseed][E-BUILD] ✗ the bundle build FAILED (theme: {theme or 'default'}, emit: {emit}).")
-            if log.path is not None:
-                log(f"[geneseed] ── full install log: {log.path}")
-            return 1
-
-        # If a web daemon is running, bounce it so the new rituals/* source and
-        # the freshly rebuilt web/dist take effect — otherwise the open PWA keeps
-        # hitting the old code and unknown new API routes fall back to index.html
-        # (yielding the cryptic "string did not match the expected pattern" JSON
-        # parse error in the browser).
-        try:
-            sys.path.insert(0, str(here / "rituals"))
-            import web as _web  # noqa: E402
-            _web.restart_daemon(theme=theme, open_browser=False, only_if_running=True)
-        except Exception as e:  # noqa: BLE001  — never fail an upgrade on this
-            log(f"[geneseed] ⚠️  could not refresh the web daemon ({e}) — `geneseed web restart` manually if it was running.")
-
-        log("[geneseed] ✓ upgrade complete." + (f" (full log: {log.path})" if log.path else ""))
-        return 0
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+    theme = theme_arg or _marker_theme(cfg, out) or config_theme
+    _migrate_stray_bundle(here, out, log)
+    rc = _rebuild_bundle(here, out, theme, emit, root_dir, log)
+    if rc != 0:
+        log(f"[geneseed][E-BUILD] ✗ the bundle build FAILED (theme: {theme or 'default'}, emit: {emit}).")
+        return 1
+    log("[geneseed] ✓ upgrade complete." + (f" (full log: {log.path})" if log.path else ""))
+    return 0
 
 
 def _fetch_and_validate(ref: str, tmp: Path, log: _Log) -> Path:

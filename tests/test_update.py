@@ -507,5 +507,45 @@ class PullAndValidateTests(unittest.TestCase):
         self.assertFalse(ok); self.assertEqual(code, "collision")
 
 
+class UpgradeFlowTests(unittest.TestCase):
+    def _patch_rebuild(self):
+        return mock.patch.object(_update, "_rebuild_bundle", return_value=0, create=True)
+
+    def test_precondition_info_returns_3_no_rebuild(self):
+        pf = _update.Preflight(False, "dirty", "info", "msg")
+        with mock.patch.object(_update, "_preflight", return_value=pf), \
+             self._patch_rebuild() as rb:
+            self.assertEqual(_update.upgrade(), 3)
+        rb.assert_not_called()
+
+    def test_up_to_date_still_rebuilds_returns_0(self):
+        pf = _update.Preflight(True, "ready", "info", "")
+        with mock.patch.object(_update, "_preflight", return_value=pf), \
+             mock.patch.object(_update, "_measure_upstream", return_value=("uptodate", 0, "")), \
+             mock.patch.object(_update, "_migrate_stray_bundle", create=True), \
+             self._patch_rebuild() as rb:
+            self.assertEqual(_update.upgrade(), 0)
+        rb.assert_called_once()
+
+    def test_ready_pulls_then_rebuilds(self):
+        pf = _update.Preflight(True, "ready", "info", "")
+        with mock.patch.object(_update, "_preflight", return_value=pf), \
+             mock.patch.object(_update, "_measure_upstream", return_value=("ready", 2, "")), \
+             mock.patch.object(_update, "_pull_and_validate", return_value=(True, "ready", "")) as pv, \
+             mock.patch.object(_update, "_migrate_stray_bundle", create=True), \
+             self._patch_rebuild() as rb:
+            self.assertEqual(_update.upgrade(), 0)
+        pv.assert_called_once(); rb.assert_called_once()
+
+    def test_doctor_fail_returns_1_no_rebuild(self):
+        pf = _update.Preflight(True, "ready", "info", "")
+        with mock.patch.object(_update, "_preflight", return_value=pf), \
+             mock.patch.object(_update, "_measure_upstream", return_value=("ready", 2, "")), \
+             mock.patch.object(_update, "_pull_and_validate", return_value=(False, "doctor_fail", "x")), \
+             self._patch_rebuild() as rb:
+            self.assertEqual(_update.upgrade(), 1)
+        rb.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
