@@ -469,5 +469,43 @@ class MeasureUpstreamTests(unittest.TestCase):
         self.assertEqual(self._run(seam)[0], "unrelated")
 
 
+class PullAndValidateTests(unittest.TestCase):
+    def test_ff_success_then_doctor_pass(self):
+        calls = []
+        def seam(*a, **k):
+            calls.append(a)
+            if a[0] == "rev-parse" and a[1] == "HEAD": return (0, "oldsha", "")
+            if a[0] == "merge": return (0, "", "")
+            return (0, "", "")
+        with mock.patch.object(_update, "_git", side_effect=seam), \
+             mock.patch.object(_update, "_run_doctor", return_value=(True, "ok")):
+            ok, code, _ = _update._pull_and_validate(lambda *_: None)
+        self.assertTrue(ok)
+        self.assertNotIn(("reset", "--hard", "oldsha"),
+                         [c[:3] for c in calls])  # no rollback on success
+
+    def test_doctor_fail_rolls_back(self):
+        resets = []
+        def seam(*a, **k):
+            if a[0] == "rev-parse" and a[1] == "HEAD": return (0, "oldsha", "")
+            if a[0] == "merge": return (0, "", "")
+            if a[0] == "reset": resets.append(a); return (0, "", "")
+            return (0, "", "")
+        with mock.patch.object(_update, "_git", side_effect=seam), \
+             mock.patch.object(_update, "_run_doctor", return_value=(False, "bad")):
+            ok, code, _ = _update._pull_and_validate(lambda *_: None)
+        self.assertFalse(ok); self.assertEqual(code, "doctor_fail")
+        self.assertEqual(resets[0][:3], ("reset", "--hard", "oldsha"))
+
+    def test_ff_collision_returns_collision(self):
+        def seam(*a, **k):
+            if a[0] == "rev-parse" and a[1] == "HEAD": return (0, "oldsha", "")
+            if a[0] == "merge": return (1, "", "untracked working tree files would be overwritten")
+            return (0, "", "")
+        with mock.patch.object(_update, "_git", side_effect=seam):
+            ok, code, _ = _update._pull_and_validate(lambda *_: None)
+        self.assertFalse(ok); self.assertEqual(code, "collision")
+
+
 if __name__ == "__main__":
     unittest.main()

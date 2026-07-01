@@ -208,6 +208,29 @@ def _measure_upstream():
     return ("ready", behind, "")
 
 
+def _pull_and_validate(log) -> tuple[bool, str, str]:
+    """Fast-forward to @{u}, then doctor-gate with exact rollback. Assumes preflight
+    ok and _measure_upstream == ('ready', behind>0). Returns (ok, code, message)."""
+    rc, old, _ = _git("rev-parse", "HEAD")
+    if rc != 0 or not old:
+        return (False, "not_git", "could not read HEAD")
+    rc, _, err = _git("merge", "--ff-only", "@{u}", timeout=60)
+    if rc != 0:
+        return (False, "collision",
+                "Update blocked — a new upstream file collides with a local untracked "
+                "file. Move or remove it, then update.\n" + err)
+    passed, output = _run_doctor(ROOT)
+    log(output.rstrip("\n"))
+    if not passed:
+        _git("reset", "--hard", old, timeout=60)
+        for line in DOCTOR_LEGEND:
+            log(line)
+        return (False, "doctor_fail",
+                "the pulled source FAILS validation — rolled back to the previous commit. "
+                "Fix the problems listed above.")
+    return (True, "ready", "")
+
+
 class _UpgradeError(Exception):
     """A tagged, fatal upgrade failure (mirrors the bash `die` codes)."""
 
@@ -547,13 +570,18 @@ def _doctor_signature(output: str) -> str:
 
 
 def _run_doctor(cand: Path) -> tuple[bool, str]:
-    """Validate a downloaded source with its OWN `doctor --all` (so the gate checks the
-    source about to be applied). Returns (passed, combined_output)."""
-    import subprocess
-    proc = subprocess.run(
-        [sys.executable, str(cand / "rituals" / "harness.py"), "doctor", "--all"],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    return proc.returncode == 0, proc.stdout or ""
+    """Validate a source tree with its OWN `doctor --all --no-bundle` (the bundle is
+    rebuilt right after, so its drift is expected). Fail-closed: any nonzero exit,
+    timeout, or spawn error is a failure."""
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(cand / "rituals" / "harness.py"),
+             "doctor", "--all", "--no-bundle"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            timeout=300, **_NO_WINDOW)
+    except Exception as e:                          # noqa: BLE001 — crash/timeout => fail
+        return (False, f"[geneseed] doctor gate could not run: {e}")
+    return (proc.returncode == 0, proc.stdout or "")
 
 
 def _opencode_config_dir() -> Path:
