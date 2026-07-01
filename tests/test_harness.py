@@ -176,6 +176,49 @@ class CountTableGateTests(unittest.TestCase):
         self.assertTrue(any("badge" in p for p in problems), problems)
         self.assertTrue(any("AGENT.md links" in p or "omits" in p for p in problems), problems)
 
+    def test_prose_mirror_gate_catches_drift(self):
+        """The prose count mirrors (README table + web onboarding) are unit-tested in
+        isolation: clean on matching inputs, and flagging every drift class the badge
+        regex is blind to — a wrong prose count, a dropped skill name, a stale web
+        law count, and a self-inconsistent 'N repeatable workflows' subset."""
+        counts = {"laws": 35, "agents": 16, "skills": 3}
+        stems = {"alpha", "beta", "gamma"}
+        readme = (
+            "| **🛡️ Rules** (`laws/`) | 35 universal laws the agent obeys — … |\n"
+            "| **🤖 Agents** (16) | capability specialists: … |\n"
+            "| **🛠 Skills** (3) | repeatable workflows: alpha · **beta** · gamma |\n"
+        )
+        web = (
+            "- **`AGENT.md`** — 35 universal Rules the agent obeys.\n"
+            "16 capability specialists — reviewer, tester …\n"
+            "35 universal laws the agent obeys — secrets handling …\n"
+            "3 repeatable workflows the agent can invoke by name — "
+            "[[alpha]], [[beta]], [[gamma]]. A skill is a markdown "
+            "playbook under `src/skills/`.\n"
+        )
+        self.assertEqual(harness._prose_mirror_problems(readme, web, counts, stems), [])
+
+        # README law-count prose drifts.
+        p = harness._prose_mirror_problems(
+            readme.replace("35 universal laws", "34 universal laws"), web, counts, stems)
+        self.assertTrue(any("universal laws" in x for x in p), p)
+        # README Skills (N) count drifts.
+        p = harness._prose_mirror_problems(
+            readme.replace("Skills** (3)", "Skills** (9)"), web, counts, stems)
+        self.assertTrue(any("Skills (9)" in x for x in p), p)
+        # README skills list drops a name — invisible to the count, caught here.
+        p = harness._prose_mirror_problems(
+            readme.replace("alpha · **beta** · gamma", "alpha · **beta**"), web, counts, stems)
+        self.assertTrue(any("omits 'gamma'" in x for x in p), p)
+        # web law count drifts.
+        p = harness._prose_mirror_problems(
+            readme, web.replace("35 universal Rules", "34 universal Rules"), counts, stems)
+        self.assertTrue(any("universal laws/Rules" in x for x in p), p)
+        # web "N repeatable workflows" no longer matches its own wikilink list.
+        p = harness._prose_mirror_problems(
+            readme, web.replace("3 repeatable workflows", "9 repeatable workflows"), counts, stems)
+        self.assertTrue(any("repeatable workflows" in x for x in p), p)
+
 
 class ThemeDetectionTests(unittest.TestCase):
     AVAIL = ["cyberpunk", "gamer", "imperial", "military", "neutral",

@@ -298,12 +298,64 @@ def _src_stems(folder: str) -> set:
     return {p.stem for p in d.glob("*.md") if not p.name.startswith("_")} if d.is_dir() else set()
 
 
+def _prose_mirror_problems(readme: str, web: str, counts: dict[str, int],
+                           skill_stems: set[str]) -> list[str]:
+    """Keep the *human-readable* count mirrors honest — the ones the badge regex never
+    sees. The README "What you get" table and the web onboarding copy each restate the
+    law / agent / skill counts in prose, and the README enumerates the skills by name.
+    Nothing renders these, so they drift silently (they already had). Assert every such
+    mirror against the derived src/ counts. Pure over its inputs, so a test can feed it
+    crafted drift without touching the tree."""
+    problems: list[str] = []
+    laws, agents, skills = counts["laws"], counts["agents"], counts["skills"]
+
+    # README prose: "N universal laws".
+    for n in re.findall(r"(\d+) universal laws", readme):
+        if int(n) != laws:
+            problems.append(f"[authoring] README prose says '{n} universal laws' but src has {laws}")
+    # README "What you get" table rows: **🤖 Agents** (N) and **🛠 Skills** (N).
+    for label, want in (("Agents", agents), ("Skills", skills)):
+        m = re.search(rf"{label}\*\*\s*\((\d+)\)", readme)
+        if m and int(m.group(1)) != want:
+            problems.append(f"[authoring] README '{label} ({m.group(1)})' but src has {want}")
+    # The README Skills row must enumerate EXACTLY the source skills — a dropped name is
+    # invisible to the (N) count alone, which is the off-by-one this gate now forbids.
+    row = next((ln for ln in readme.splitlines() if "🛠" in ln and "Skills" in ln), "")
+    if "workflows:" in row:
+        listed = {re.sub(r"[^a-z0-9-]", "", seg) for seg in row.split("workflows:", 1)[1].split("·")}
+        listed.discard("")
+        for missing in sorted(skill_stems - listed):
+            problems.append(f"[authoring] README skills list omits '{missing}'")
+        for orphan in sorted(listed - skill_stems):
+            problems.append(f"[authoring] README skills list names '{orphan}' but no skills/{orphan}.md exists")
+
+    # _web_core onboarding prose: law count ("N universal laws"/"N universal Rules") and
+    # agent count ("N capability specialists").
+    for n in re.findall(r"(\d+) universal (?:laws|Rules)", web):
+        if int(n) != laws:
+            problems.append(f"[authoring] _web_core prose says '{n} universal laws/Rules' but src has {laws}")
+    for n in re.findall(r"(\d+) capability specialists", web):
+        if int(n) != agents:
+            problems.append(f"[authoring] _web_core prose says '{n} capability specialists' but src has {agents}")
+    # _web_core skills page states "N repeatable workflows … — [[a]], [[b]], …". N is a
+    # curated-subset size (not the total), so gate it against the wikilinks it introduces.
+    m = re.search(r"(\d+) repeatable workflows the agent can invoke by name(.*?)playbook under", web, re.S)
+    if m:
+        listed_n = len(re.findall(r"\[\[[^\]]+\]\]", m.group(2)))
+        if int(m.group(1)) != listed_n:
+            problems.append(f"[authoring] _web_core says '{m.group(1)} repeatable workflows' "
+                            f"but its wikilink list has {listed_n}")
+    return problems
+
+
 def _count_table_problems() -> list[str]:
     """Keep the hand-authored AGENT.md capability tables and the README count badges
     honest against src/: the agent/skill tables must list EXACTLY the spec files (no
     dead row, no orphaned spec), and each `agents`/`skills`/`laws`/`themes` badge must
-    equal the real count. This is the authoring-time guarantee that lets those tables
-    and badges stay hand-written without silently drifting from the source tree."""
+    equal the real count. The prose count mirrors (README "What you get" table + web
+    onboarding copy) are folded in via `_prose_mirror_problems`. This is the authoring-
+    time guarantee that lets those tables, badges, and prose stay hand-written without
+    silently drifting from the source tree."""
     problems: list[str] = []
     tmpl = build.SRC / "AGENT.md.tmpl"
     try:
@@ -349,6 +401,14 @@ def _count_table_problems() -> list[str]:
         m = re.search(rf"badge/{key}-(\d+)", readme)
         if m and int(m.group(1)) != n:
             problems.append(f"[authoring] README {key} badge says {m.group(1)} but src has {n}")
+
+    # Beyond the badges, the same counts are mirrored in hand-written prose (README table
+    # + web onboarding). Those had no gate and had drifted; assert them too.
+    try:
+        web = (ROOT / "rituals" / "_web_core.py").read_text(encoding="utf-8")
+    except OSError:
+        web = ""
+    problems += _prose_mirror_problems(readme, web, counts, skill_files)
     return problems
 
 
