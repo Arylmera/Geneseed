@@ -8,6 +8,17 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **Self-update is now `git pull`**: `geneseed upgrade`/`update`/`sync-self` fast-forward
+  the install's own git origin (host-agnostic — wherever it was cloned from), doctor-gate
+  the result (rolling back on failure), then rebuild — replacing the bespoke curl/urllib
+  archive-zip download stack. A dirty tree or non-git checkout is reported (CLI message + a
+  web info popup) instead of failing mid-run.
+
+### Removed
+- The offline `geneseed upgrade --zip <file>` path and the web "Offline package" download
+  (`/api/offline-zip`) — use `git pull` directly.
+
 ### Added
 - **Project bypasses global harness**: when a repo carries its own Geneseed
   install, the same host's GLOBAL harness no longer double-loads there. For

@@ -728,12 +728,12 @@ This is a usage note, not an emitted feature — the harness writes nothing for 
 ./geneseed upgrade main imperial   # force a theme
 ```
 
-It downloads the published source, validates it (a blocking `doctor` pass), then
-re-renders in place — leaving host state (memory, `context.json`, markers) untouched.
-Theme and emit mode are remembered between runs. Or do it all in one:
-`./geneseed update` chains sync-self + upgrade, and `./geneseed bootstrap` then
-continues into the setup wizard. (To refresh only the launcher and upgrade scripts:
-`./geneseed sync-self`.)
+It git-pulls the install's own origin (fast-forward only), validates it (a blocking
+`doctor` pass, rolling back on failure), then re-renders in place — leaving host state
+(memory, `context.json`, markers) untouched. Theme and emit mode are remembered between
+runs. `./geneseed update` and `./geneseed sync-self` are aliases of `upgrade` (one pull
+refreshes launchers and factory together), and `./geneseed bootstrap` continues into the
+setup wizard. A dirty tree or a non-git checkout is reported, not force-updated.
 
 **Reviewing local edits** — if the deployed harness was tweaked in place (you, or the
 agent's own self-improvement loops) and you want to see what diverged from source:

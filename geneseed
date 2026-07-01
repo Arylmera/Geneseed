@@ -86,9 +86,8 @@ PY
       exec "$PY" "$HERE/rituals/_update.py" "$@"
     fi
     # Both the factory AND _update.py predate the self-heal — give the exact manual cure.
-    echo "geneseed: rituals/_update.py is also too old to self-heal - refresh the factory by hand, then retry:" >&2
-    echo "  curl -fsSL https://github.com/Arylmera/Geneseed/archive/refs/heads/main.zip -o /tmp/gs.zip \\" >&2
-    echo "    && unzip -oq /tmp/gs.zip -d /tmp && cp -R /tmp/Geneseed-main/rituals/. \"$HERE/rituals/\" && ./geneseed $cmd" >&2
+    echo "geneseed: rituals/_update.py is also too old to self-heal - refresh it by hand, then retry:" >&2
+    echo "  cd \"$HERE\" && git pull --ff-only && ./geneseed $cmd" >&2
     exit 2
     ;;
   home|menu|tui|web|setup|build|doctor|diff|context|learn|prompt|version|status|uninstall|link|unlink)

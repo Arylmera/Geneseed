@@ -57,9 +57,8 @@ PY
 then
   "$PY" "$HERE/rituals/_update.py" update ${ref:+"$ref"} || exit $?
 else
-  echo "geneseed: rituals/_update.py is also too old to self-heal - refresh the factory by hand, then retry:" >&2
-  echo "  curl -fsSL https://github.com/Arylmera/Geneseed/archive/refs/heads/main.zip -o /tmp/gs.zip \\" >&2
-  echo "    && unzip -oq /tmp/gs.zip -d /tmp && cp -R /tmp/Geneseed-main/rituals/. \"$HERE/rituals/\" && ./geneseed bootstrap" >&2
+  echo "geneseed: rituals/_update.py is also too old to self-heal - refresh it by hand, then retry:" >&2
+  echo "  cd \"$HERE\" && git pull --ff-only && ./geneseed bootstrap" >&2
   exit 2
 fi
 
