@@ -375,5 +375,55 @@ class OriginDisplayTests(unittest.TestCase):
             self.assertEqual(_update._origin_display().github_slug, "Own/Repo")
 
 
+class PreflightTests(unittest.TestCase):
+    def _run(self, seam):
+        with mock.patch.object(_update, "_git", side_effect=seam):
+            return _update._preflight()
+
+    def test_no_git(self):
+        # first _git call returns rc=None (git absent)
+        p = self._run(lambda *a, **k: (None, "", ""))
+        self.assertFalse(p.ok); self.assertEqual(p.code, "no_git_exe"); self.assertEqual(p.kind, "info")
+
+    def test_not_a_repo(self):
+        p = self._run(lambda *a, **k: (128, "", "not a work tree"))
+        self.assertEqual(p.code, "not_git")
+
+    def test_detached_head(self):
+        def seam(*a, **k):
+            if a[0] == "rev-parse" and a[1] == "--is-inside-work-tree": return (0, "true", "")
+            if a[0] == "symbolic-ref": return (1, "", "")          # detached
+            return (0, "", "")
+        self.assertEqual(self._run(seam).code, "detached")
+
+    def test_no_upstream(self):
+        def seam(*a, **k):
+            if a[0] == "rev-parse" and a[1] == "--is-inside-work-tree": return (0, "true", "")
+            if a[0] == "symbolic-ref": return (0, "refs/heads/main", "")
+            if a[0] == "rev-parse" and "@{u}" in a: return (128, "", "no upstream")
+            return (0, "", "")
+        self.assertEqual(self._run(seam).code, "no_upstream")
+
+    def test_dirty_tracked_change(self):
+        def seam(*a, **k):
+            if a[0] == "rev-parse" and a[1] == "--is-inside-work-tree": return (0, "true", "")
+            if a[0] == "symbolic-ref": return (0, "refs/heads/main", "")
+            if a[0] == "rev-parse" and "@{u}" in a: return (0, "origin/main", "")
+            if "status" in a: return (0, " M rituals/build.py", "")
+            return (0, "", "")
+        p = self._run(seam)
+        self.assertFalse(p.ok); self.assertEqual(p.code, "dirty")
+
+    def test_ready_when_clean(self):
+        def seam(*a, **k):
+            if a[0] == "rev-parse" and a[1] == "--is-inside-work-tree": return (0, "true", "")
+            if a[0] == "symbolic-ref": return (0, "refs/heads/main", "")
+            if a[0] == "rev-parse" and "@{u}" in a: return (0, "origin/main", "")
+            if "status" in a: return (0, "", "")                  # clean (untracked ignored by flags)
+            return (0, "", "")
+        p = self._run(seam)
+        self.assertTrue(p.ok); self.assertEqual(p.code, "ready")
+
+
 if __name__ == "__main__":
     unittest.main()

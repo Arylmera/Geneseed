@@ -140,6 +140,45 @@ def _origin_display() -> OriginDisplay:
     return _parse_origin(out)
 
 
+Preflight = namedtuple("Preflight", ["ok", "code", "kind", "message"])
+
+_PRE_MSG = {
+    "no_git_exe": ("info", "git is not installed or not on PATH — install git to enable updates."),
+    "not_git":    ("info", "This Geneseed install isn't a git checkout — re-clone it with git to enable updates."),
+    "detached":   ("info", "HEAD is detached (a tag/commit is checked out). Run `git checkout <branch>` to re-enable updates."),
+    "no_upstream": ("info", "Your branch has no upstream — set one with `git branch --set-upstream-to`."),
+    "dirty":      ("info", "You have local changes in the Geneseed folder. Commit or stash them, then update."),
+    "ready":      ("info", ""),
+}
+
+
+def _pre(code: str) -> "Preflight":
+    kind, msg = _PRE_MSG[code]
+    return Preflight(code == "ready", code, kind, msg)
+
+
+def _preflight() -> "Preflight":
+    """Phase A — local only, no network. Never raises."""
+    rc, out, _ = _git("rev-parse", "--is-inside-work-tree")
+    if rc is None:
+        return _pre("no_git_exe")
+    if rc != 0 or out != "true":
+        return _pre("not_git")
+    rc, out, _ = _git("symbolic-ref", "-q", "HEAD")
+    if rc != 0 or not out:
+        return _pre("detached")
+    rc, _, _ = _git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+    if rc != 0:
+        return _pre("no_upstream")
+    rc, out, _ = _git("-c", "core.fileMode=false", "-c", "core.autocrlf=false",
+                      "status", "--porcelain", "--untracked-files=no")
+    if rc != 0:
+        return _pre("not_git")
+    if out:
+        return _pre("dirty")
+    return _pre("ready")
+
+
 class _UpgradeError(Exception):
     """A tagged, fatal upgrade failure (mirrors the bash `die` codes)."""
 
