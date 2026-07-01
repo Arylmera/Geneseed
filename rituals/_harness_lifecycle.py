@@ -136,16 +136,16 @@ def _harness_supports(hp: str, sub: str) -> bool:
         return False
 
 
-def _update_step_cmd(here: Path, sub: str, ref: str) -> list:
+def _update_step_cmd(here: Path, sub: str) -> list:
     """The command for one update step, self-healing a STALE factory. Prefer the in-tree
     `harness.py <sub>`; but when harness.py predates it — the partial-update skew that breaks
-    step 2/2 with argparse 'invalid choice' — drop to `rituals/_update.py <sub>`, the exact
-    same code path (and the same fallback the launchers use). So an update started from a
-    stale factory now REPAIRS itself in-process instead of dead-ending."""
+    with argparse 'invalid choice' — drop to `rituals/_update.py <sub>`, the exact same code
+    path (and the same fallback the launchers use). So an update started from a stale factory
+    now REPAIRS itself in-process instead of dead-ending."""
     hp = str(here / "rituals" / "harness.py")
     if _harness_supports(hp, sub):
-        return [sys.executable, hp, sub, ref]
-    return [sys.executable, str(here / "rituals" / "_update.py"), sub, ref]
+        return [sys.executable, hp, sub]
+    return [sys.executable, str(here / "rituals" / "_update.py"), sub]
 
 
 def _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading="updating") -> int:
@@ -217,8 +217,10 @@ def _run_steps(stdscr, curses, pal, steps, heading="working") -> list:
         status[i] = "running"
         _bootstrap_draw(stdscr, curses, pal, steps, status, log, heading)
         rc = _run_logged(stdscr, curses, pal, steps, status, log, cmd, heading)
-        status[i] = "done" if rc == 0 else "failed"
-        if rc != 0:
+        # Exit 3 is an info precondition (dirty tree / no upstream / already up to date) —
+        # nothing to do, not a failure.
+        status[i] = "done" if rc in (0, 3) else "failed"
+        if rc not in (0, 3):
             # The pane scrolls and curses tears down on exit — capture WHY to the install
             # log and surface the diagnosis (incl. the stale-factory cure) in the pane.
             for ln in _diagnose_failed_step(i + 1, len(steps), title, cmd, rc, "\n".join(log)):
@@ -231,11 +233,8 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
     import curses
     pal = _tui_palette(curses)
     curses.curs_set(0)
-    if ref is None:
-        ref = _text_input(stdscr, curses, "Update from which upstream ref?", "main") or "main"
-        curses.curs_set(0)
-    steps = [("Refresh orchestration scripts", _update_step_cmd(here, "sync-self", ref)),
-             ("Update factory & rebuild bundle", _update_step_cmd(here, "upgrade", ref))]
+    # One `git pull` refreshes launchers + factory together, then rebuilds — a single step.
+    steps = [("Update & rebuild", _update_step_cmd(here, "upgrade"))]
     status = _run_steps(stdscr, curses, pal, steps, heading="updating")
     failed = any(s == "failed" for s in status)
     msg = ("a step FAILED — press any key to continue to setup" if failed
@@ -249,19 +248,18 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
 
 
 def _bootstrap_plain(here, ref) -> None:
-    """Non-curses fallback: run the update steps with plain output (never fatal).
-    Cross-platform — invokes the harness's own Python `sync-self`/`upgrade` subcommands
-    (no bash), so this works identically on native Windows. On a step failure it reports
-    the exit code and (for the stale-factory skew) the exact self-heal command — the old
-    code ignored the return codes, so a broken step 2/2 left no verdict at all."""
-    r = ref or "main"
-    steps = [("Refresh orchestration scripts", _update_step_cmd(here, "sync-self", r)),
-             ("Update factory & rebuild bundle", _update_step_cmd(here, "upgrade", r))]
+    """Non-curses fallback: run the update (git pull + rebuild) with plain output (never
+    fatal). Cross-platform — invokes the harness's own Python `upgrade` subcommand (no bash),
+    so this works identically on native Windows. Exit 3 (an info precondition like a dirty
+    tree or already-up-to-date) is reported as skipped, not failed; a real failure reports the
+    exit code and (for the stale-factory skew) the exact self-heal command."""
+    # One `git pull` refreshes launchers + factory together, then rebuilds — a single step.
+    steps = [("Update & rebuild", _update_step_cmd(here, "upgrade"))]
     failed = False
     for i, (title, cmd) in enumerate(steps):
         print(f"[geneseed] step {i + 1}/{len(steps)}: {title} ...")
         rc = run(cmd).returncode
-        if rc != 0:
+        if rc not in (0, 3):
             failed = True
             # The live run inherited stdout, so its output was not captured. Re-probe the
             # subcommand (captured) to confirm the stale-factory signature for the diagnosis.
