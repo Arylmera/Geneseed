@@ -6,8 +6,8 @@ import { LAYOUTS, defaultLayoutFor } from '../../hooks/useLayout.js'
 import ServerControl from './ServerControl.jsx'
 
 // The settings page: the console direction picker, machine maintenance
-// (PATH/uninstall), the offline package, and server control. Per-install detail and
-// building/updating live in the Harnesses tab and the Dashboard.
+// (PATH/uninstall, git-pull update), and server control. Per-install detail and
+// building live in the Harnesses tab and the Dashboard.
 export default function Settings({
   overview,
   onAction,
@@ -36,9 +36,9 @@ export default function Settings({
         <div>
           <h1 className="h">Settings</h1>
           <p className="sub">
-            Console direction, harness footprint, machine maintenance, an offline package, and
-            server control. See per-install detail in the Harnesses tab; build and update from there
-            and the Dashboard.
+            Console direction, harness footprint, machine maintenance (incl. git-pull update),
+            and server control. See per-install detail in the Harnesses tab; build from there and
+            the Dashboard.
           </p>
         </div>
       </div>

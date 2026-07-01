@@ -5,10 +5,10 @@
 #     ./sync-self.sh            # track main
 #     ./sync-self.sh v1.0.0     # pin to a tag
 #
-# Refreshes the ORCHESTRATION layer that `upgrade` does not (the launchers + the update
-# scripts themselves). The logic now lives in rituals/_update.py (stdlib only — urllib +
-# zipfile, no curl/unzip), so it runs identically on Windows, macOS, and Linux. On
-# Windows, call it directly:  python rituals\harness.py sync-self [ref]  (or geneseed.cmd).
+# `sync-self` is now an alias of `upgrade`: one `git pull --ff-only` refreshes the launchers
+# AND the factory together. The logic lives in rituals/_update.py (git pull + rebuild — no
+# downloads), so it runs identically on Windows, macOS, and Linux. On Windows, call it
+# directly:  python rituals\harness.py sync-self  (or geneseed.cmd).
 #
 # `exec` replaces this bash process before _update.py overwrites this file, so the
 # in-flight self-update is safe (Python reads the new scripts, not this running shell).

@@ -8,9 +8,9 @@
 #     GENESEED_EMIT=opencode ./upgrade.sh           # per-repo .opencode/ layer
 #     GENESEED_EMIT=opencode-global ./upgrade.sh main imperial   # OpenCode global config dir
 #
-# The upgrade logic now lives in rituals/_update.py (stdlib only — urllib + zipfile, no
-# curl/unzip), so the SAME flow runs on Windows, macOS, and Linux. On Windows, call it
-# directly:  python rituals\harness.py upgrade [ref] [theme]  (or use geneseed.cmd).
+# The upgrade logic now lives in rituals/_update.py (a `git pull --ff-only` of the install's
+# own origin + rebuild — no downloads), so the SAME flow runs on Windows, macOS, and Linux.
+# On Windows, call it directly:  python rituals\harness.py upgrade  (or use geneseed.cmd).
 # This shell wrapper simply delegates there, so Unix muscle memory still works.
 #
 # Honoured env vars (read by _update.py): GENESEED_OUT, GENESEED_ROOT, GENESEED_EMIT,

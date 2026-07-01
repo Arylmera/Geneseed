@@ -9,14 +9,14 @@ vi.mock('../api/index.js', () => ({ api: {} }))
 import Settings from '../pages/Settings/index.jsx'
 
 describe('Settings', () => {
-  it('renders maintenance, the offline package, and server control', () => {
+  it('renders maintenance, the update button, and server control', () => {
     render(<Settings onAction={() => {}} />)
-    // Per-install detail and build/update moved to the Harnesses tab + Dashboard;
-    // Settings keeps machine maintenance, the offline package, and server control.
+    // Per-install detail and build moved to the Harnesses tab + Dashboard; Settings keeps
+    // machine maintenance (incl. the git-pull Update) and server control.
     expect(screen.getByText('Add to PATH')).toBeTruthy()
     expect(screen.getByText('Remove from PATH')).toBeTruthy()
     expect(screen.getByText('Uninstall')).toBeTruthy()
-    expect(screen.getByText('Download offline package')).toBeTruthy()
+    expect(screen.getByText('Update (git pull + rebuild)')).toBeTruthy()
     expect(screen.getByText('Stop server')).toBeTruthy()
   })
 
