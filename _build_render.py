@@ -381,10 +381,20 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
     assert_source_complete(items, context=f"theme '{theme_name}'")
     out.mkdir(parents=True, exist_ok=True)
 
+    # Wipe the owned dirs ONLY inside an established Geneseed bundle (marker
+    # present). A first render into an arbitrary repo (`--out .`) must never
+    # delete a pre-existing agents/ or skills/ dir the USER owns.
+    is_bundle = ((out / ".geneseed-theme").is_file()
+                 or (out / ".geneseed-version").is_file())
     for src_dir in OWNED_SRC_DIRS:
         managed = out / theme.get(SRC_DIR_TOKENS[src_dir], src_dir)
-        if managed.is_dir():
+        if not managed.is_dir():
+            continue
+        if is_bundle:
             shutil.rmtree(managed)
+        else:
+            print(f"[geneseed] ⚠️  {managed} already exists and {out} is not a "
+                  f"Geneseed bundle — keeping it; rendered files merge into it.")
 
     nb_dirname = theme.get(SRC_DIR_TOKENS["notebook"], "notebook")
     for out_rel, text, src in items:

@@ -177,7 +177,8 @@ def build_argparser() -> argparse.ArgumentParser:
     st.set_defaults(fn=cmd_status)
 
     un = sub.add_parser("uninstall",
-                        help="remove a global Geneseed install (manifest-tracked); keeps memory unless --purge-memory")
+                        help="remove a global Geneseed install (manifest-tracked); memory is "
+                             "never deleted (--archive-memory moves it aside)")
     un.add_argument("--target", default=None,
                     help="config dir to uninstall from (default: the OpenCode global config dir)")
     un.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
@@ -212,7 +213,7 @@ def build_argparser() -> argparse.ArgumentParser:
     bs = sub.add_parser("bootstrap", help="update everything (sync + upgrade) with a "
                                           "progress UI, then run setup")
     bs.add_argument("ref", nargs="?", default=None,
-                    help="upstream ref (default: main; asked interactively if omitted)")
+                    help="accepted for back-compat; ignored (git follows the current branch)")
     bs.add_argument("extra", nargs="*", help=argparse.SUPPRESS)  # tolerate a legacy [theme] arg
     bs.add_argument("--no-setup", action="store_true", help="update only; skip the setup wizard")
     bs.set_defaults(fn=cmd_bootstrap)
@@ -261,7 +262,19 @@ def main() -> int:
                 pass
     ap = build_argparser()
     args = ap.parse_args()
-    return args.fn(args)
+    try:
+        return args.fn(args)
+    except KeyboardInterrupt:
+        # Ctrl-C at any prompt/step is a cancel, not a crash — no traceback.
+        print("\n[geneseed] cancelled.", file=sys.stderr)
+        return 130
+    except BrokenPipeError:
+        # `geneseed status | head` closes our stdout early; exit quietly. os._exit
+        # avoids the interpreter's own flush-on-exit re-raising into a traceback.
+        try:
+            sys.stderr.close()
+        finally:
+            os._exit(0)
 
 
 if __name__ == "__main__":

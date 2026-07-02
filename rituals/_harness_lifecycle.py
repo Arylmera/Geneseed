@@ -130,9 +130,10 @@ def _harness_supports(hp: str, sub: str) -> bool:
     the same probe the launchers use to detect a stale factory."""
     try:
         pr = subprocess.run([sys.executable, hp, sub, "--help"],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            timeout=30, **NO_WINDOW)
         return pr.returncode == 0
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -229,7 +230,8 @@ def _run_steps(stdscr, curses, pal, steps, heading="working") -> list:
     return status
 
 
-def _bootstrap_progress(stdscr, here, ref) -> None:
+def _bootstrap_progress(stdscr, here, ref) -> bool:
+    """Returns True when a step FAILED (curses.wrapper passes it through)."""
     import curses
     pal = _tui_palette(curses)
     curses.curs_set(0)
@@ -245,14 +247,16 @@ def _bootstrap_progress(stdscr, here, ref) -> None:
         stdscr.getch()          # pause so the error is readable
     else:
         curses.napms(700)       # brief beat, then continue automatically
+    return failed
 
 
-def _bootstrap_plain(here, ref) -> None:
+def _bootstrap_plain(here, ref) -> bool:
     """Non-curses fallback: run the update (git pull + rebuild) with plain output (never
     fatal). Cross-platform — invokes the harness's own Python `upgrade` subcommand (no bash),
     so this works identically on native Windows. Exit 3 (an info precondition like a dirty
     tree or already-up-to-date) is reported as skipped, not failed; a real failure reports the
-    exit code and (for the stale-factory skew) the exact self-heal command."""
+    exit code and (for the stale-factory skew) the exact self-heal command. Returns True
+    when a step FAILED, so scripted callers get a real exit code."""
     # One `git pull` refreshes launchers + factory together, then rebuilds — a single step.
     steps = [("Update & rebuild", _update_step_cmd(here, "upgrade"))]
     failed = False
@@ -276,6 +280,7 @@ def _bootstrap_plain(here, ref) -> None:
                 print(ln)
     if not failed:
         print("[geneseed] ✓ update complete.")
+    return failed
 
 
 def cmd_upgrade(args: argparse.Namespace) -> int:
@@ -294,7 +299,14 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
         sys.stderr.write(f"[upgrade] ⚠️  could not export local edits ({e}) — "
                          f"run `geneseed diff --out FILE` before upgrading to keep them.\n")
     import _update
-    return _update.upgrade(args.ref, args.theme)
+    ref, theme = args.ref, args.theme
+    # Back-compat: the legacy hidden [ref] positional eats the FIRST arg, so
+    # `geneseed upgrade imperial` lands in ref (which _update ignores) and the
+    # theme silently drops. ref is dead — reinterpret it as the theme when it
+    # names one.
+    if theme is None and ref and (ROOT / "themes" / f"{ref}.json").is_file():
+        ref, theme = None, ref
+    return _update.upgrade(ref, theme)
 
 
 def cmd_sync_self(args: argparse.Namespace) -> int:
@@ -316,6 +328,7 @@ def _win_bin_dir() -> Path:
 def _win_user_path(action: str, directory: str) -> bool:
     """Add/remove `directory` from the persistent USER Path via PowerShell (operates on
     the user scope only, so it never truncates the system PATH). Returns success."""
+    directory = directory.replace("'", "''")   # PS single-quote escape (O'Brien)
     if action == "add":
         ps = (f"$d='{directory}';"
               "$p=[Environment]::GetEnvironmentVariable('Path','User');"
@@ -341,11 +354,18 @@ def cmd_link(args: argparse.Namespace) -> int:
     here = ROOT
     if sys.platform.startswith("win"):
         bindir = _win_bin_dir()
-        bindir.mkdir(parents=True, exist_ok=True)
         shim = bindir / "geneseed.cmd"
-        shim.write_text(
-            "@echo off\r\n"
-            f'python "{here / "rituals" / "harness.py"}" %*\r\n', encoding="utf-8")
+        try:
+            bindir.mkdir(parents=True, exist_ok=True)
+            # The running interpreter, not bare `python` — which may be missing
+            # from PATH or resolve to the Microsoft Store alias stub.
+            shim.write_text(
+                "@echo off\r\n"
+                f'"{sys.executable}" "{here / "rituals" / "harness.py"}" %*\r\n',
+                encoding="utf-8")
+        except OSError as e:
+            print(f"geneseed: could not write {shim} ({e})", file=sys.stderr)
+            return 1
         print(f"geneseed: wrote shim {shim}")
         on_path = str(bindir).lower() in (os.environ.get("PATH") or "").lower()
         if on_path or _win_user_path("add", str(bindir)):
@@ -362,9 +382,9 @@ def cmd_link(args: argparse.Namespace) -> int:
             target_dir = local
         except OSError:
             target_dir = Path("/usr/local/bin")
-    target_dir.mkdir(parents=True, exist_ok=True)
     dest = target_dir / "geneseed"
     try:
+        target_dir.mkdir(parents=True, exist_ok=True)
         if dest.is_symlink() or dest.exists():
             dest.unlink()
         dest.symlink_to(here / "geneseed")
@@ -389,9 +409,12 @@ def cmd_unlink(args: argparse.Namespace) -> int:
         shim = bindir / "geneseed.cmd"
         removed = False
         if shim.exists():
-            shim.unlink()
-            removed = True
-            print(f"geneseed: removed {shim}")
+            try:
+                shim.unlink()
+                removed = True
+                print(f"geneseed: removed {shim}")
+            except OSError as e:
+                print(f"geneseed: could not remove {shim} ({e})", file=sys.stderr)
         if _win_user_path("remove", str(bindir)):
             print(f"geneseed: removed '{bindir}' from your user PATH (open a new terminal).")
         if not removed:
@@ -434,6 +457,7 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     where supported, then hand off to a FRESH setup process so the wizard runs the
     just-updated code. `--no-setup` stops after the update."""
     here = Path(__file__).resolve().parent.parent
+    failed = False
     if sys.stdin.isatty():
         try:
             import curses
@@ -442,12 +466,12 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
                 locale.setlocale(locale.LC_ALL, "")
             except locale.Error:
                 pass
-            curses.wrapper(_bootstrap_progress, here, args.ref)
+            failed = bool(curses.wrapper(_bootstrap_progress, here, args.ref))
         except Exception as e:
             sys.stderr.write(f"[bootstrap] progress UI unavailable ({e}); running plainly.\n")
-            _bootstrap_plain(here, args.ref)
+            failed = _bootstrap_plain(here, args.ref)
     else:
-        _bootstrap_plain(here, args.ref)
+        failed = _bootstrap_plain(here, args.ref)
     # Before the re-exec replaces this process: surface any improvements file the
     # upgrade step exported (its own notice scrolled by inside the progress screen).
     _flush_export_notes()
@@ -455,4 +479,6 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
         # Re-exec the freshly-updated harness so setup uses the new code (this running
         # process still holds the pre-update modules in memory).
         _reexec([sys.executable, str(Path(__file__).resolve()), "setup"])
+    # Scripted `bootstrap --no-setup` must not exit 0 over a failed update.
+    return 1 if failed else 0
     return 0

@@ -439,7 +439,10 @@ def _read_jsonc(text: str) -> "tuple[object, bool]":
     try:
         return json.loads(stripped), had_comments
     except (json.JSONDecodeError, ValueError):
-        return {}, had_comments
+        # None = UNPARSEABLE, distinct from a legitimately empty {} — writers
+        # must refuse to rewrite such a file (it would destroy the user's
+        # config over a single typo); readers treat it like "no data".
+        return None, had_comments
 
 
 def _warn_commented_jsonc(target: Path, agent_path: str, include_permission: bool,
@@ -466,14 +469,20 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
     `permission` policy only when absent). An already-satisfied config is left
     completely untouched. A commented `.jsonc` that still needs a change is NOT
     rewritten (that would strip the comments); the user is warned with the exact entry
-    to add. A malformed `.json` is replaced with a clean default, as before. Returns the
-    resolved target path (the file we wrote, warned about, or found already wired)."""
+    to add. A malformed config is likewise never rewritten — one typo must not cost the
+    user their whole file. Returns the resolved target path (the file we wrote, warned
+    about, or found already wired)."""
     target = _opencode_target(path)
     config: dict = {"$schema": _OPENCODE_SCHEMA, "instructions": []}
     had_comments = False
     if target.exists():
         try:
             loaded, had_comments = _read_jsonc(target.read_text(encoding="utf-8"))
+            if loaded is None:
+                print(f"[geneseed] {target.name} is not valid JSON — NOT rewriting it "
+                      f"(fix the syntax, then re-run). Add {json.dumps(agent_path)} to "
+                      f'its "instructions" once repaired.', file=sys.stderr)
+                return target
             if isinstance(loaded, dict):
                 config = loaded
         except OSError:
@@ -553,6 +562,11 @@ def _merge_claude_settings(path: Path, scope: str = "global") -> "tuple[Path, li
     if path.exists():
         try:
             loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
+            if loaded is None:
+                print(f"[geneseed] {path.name} is not valid JSON — NOT rewriting it "
+                      f"(fix the syntax, then re-run). Hooks were not wired.",
+                      file=sys.stderr)
+                return path, []
             if isinstance(loaded, dict):
                 config = loaded
         except OSError:
@@ -626,6 +640,11 @@ def _wire_claude_excludes(path: Path, excludes: list) -> list:
     if path.exists():
         try:
             loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
+            if loaded is None:
+                print(f"[geneseed] {path.name} is not valid JSON — NOT rewriting it "
+                      f"(fix the syntax, then re-run). Excludes were not wired.",
+                      file=sys.stderr)
+                return []
             if isinstance(loaded, dict):
                 config = loaded
         except OSError:
@@ -920,19 +939,23 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
     saved_themes = _snapshot_user_themes(root / ".opencode" / "themes")
     if (root / ".opencode").is_dir():
         shutil.rmtree(root / ".opencode")
-    theme, items = render_all(theme_name)
-
-    ensure_agent_overrides_stub(out)
-    overrides = _load_agent_overrides(out)
-
     oc = root / ".opencode"
-    n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills", overrides)
-    primary = _write_primary_agent(oc / "agents", overrides)
-    commands = _write_command_layer(items, oc / "command")
-    commands.append(_write_ponytail_command(oc / "command"))   # always-on /ponytail switch
-    _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
-    _write_color_themes(oc / "themes")   # curated full-palette colour themes (solid + transparent)
-    _restore_user_themes(oc / "themes", saved_themes)   # user themes survive the wipe (spec §8.2)
+    try:
+        theme, items = render_all(theme_name)
+
+        ensure_agent_overrides_stub(out)
+        overrides = _load_agent_overrides(out)
+
+        n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills", overrides)
+        primary = _write_primary_agent(oc / "agents", overrides)
+        commands = _write_command_layer(items, oc / "command")
+        commands.append(_write_ponytail_command(oc / "command"))   # always-on /ponytail switch
+        _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
+        _write_color_themes(oc / "themes")   # curated full-palette colour themes (solid + transparent)
+    finally:
+        # The snapshot is the ONLY copy of the user's themes once the wipe above
+        # ran — restore it even when the emit crashes midway (spec §8.2).
+        _restore_user_themes(oc / "themes", saved_themes)   # user themes survive the wipe
 
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
