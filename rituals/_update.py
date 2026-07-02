@@ -185,11 +185,18 @@ def _pull_and_validate(log) -> tuple[bool, str, str]:
     rc, old, _ = _git("rev-parse", "HEAD")
     if rc != 0 or not old:
         return (False, "not_git", "could not read HEAD")
+    log("[geneseed] fast-forwarding to upstream ...")
     rc, _, err = _git("merge", "--ff-only", "@{u}", timeout=60)
     if rc != 0:
         return (False, "collision",
                 "Update blocked — a new upstream file collides with a local untracked "
                 "file. Move or remove it, then update.\n" + err)
+    rc, pulled, _ = _git("log", "--oneline", "--no-decorate", "-20", f"{old}..HEAD")
+    if rc == 0 and pulled:
+        log("[geneseed] pulled:")
+        for line in pulled.splitlines():
+            log(f"  {line}")
+    log("[geneseed] validating the pulled source (doctor — can take a minute) ...")
     passed, output = _run_doctor(ROOT)
     log(output.rstrip("\n"))
     if not passed:
@@ -224,7 +231,9 @@ class _Log:
                 self.path = None  # type: ignore[assignment]
 
     def __call__(self, msg: str) -> None:
-        print(msg)
+        # flush=True so progress lines reach a piped consumer (the web console
+        # streams this process's stdout) immediately, not on buffer boundaries.
+        print(msg, flush=True)
         if self.path is not None:
             try:
                 with self.path.open("a", encoding="utf-8") as fh:
@@ -368,14 +377,22 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None,
     # Capture the LOCAL theme before the pull overwrites harness.config.json.
     config_theme = _config_theme(here)
 
+    origin = _origin_display()
+    _, branch, _ = _git("rev-parse", "--abbrev-ref", "HEAD")
+    log(f"[geneseed] update source: {origin.url}"
+        + (f" (branch: {branch})" if branch else ""))
+
+    log("[geneseed] preflight: checking the local checkout ...")
     pre = _preflight()
     if not pre.ok:
         log(f"[geneseed] {pre.message}")
         return 3 if pre.kind == "info" else 1
 
+    log(f"[geneseed] fetching from origin (timeout: {_fetch_timeout()}s) ...")
     code, behind, err = _measure_upstream()
     if code == "fetch_failed":
-        log(f"[geneseed] could not reach the remote: {err}")
+        log(f"[geneseed] ✗ could not reach the remote: "
+            f"{err or 'git fetch failed or timed out without output — check network access and credentials.'}")
         return 1
     if code == "unrelated":
         log("[geneseed] Upstream history was rewritten; back up local work, then re-clone "
@@ -386,6 +403,7 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None,
             "or reset first.")
         return 3
     if code == "ready":
+        log(f"[geneseed] {behind} new commit(s) upstream — updating ...")
         ok, fcode, msg = _pull_and_validate(log)
         if not ok:
             log(f"[geneseed] {msg}")

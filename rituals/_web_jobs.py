@@ -74,14 +74,18 @@ class JobManager:
     def _run(self, jid: str, cmds, on_done=None):
         rc = 0
         try:
-            for cmd in cmds:
+            for i, cmd in enumerate(cmds):
                 self._append(jid, f"$ {' '.join(str(c) for c in cmd)}\n")
                 # Stream combined stdout/stderr line-by-line so the web console
                 # fills live (terminal-style) instead of dumping at the end.
+                # PYTHONUNBUFFERED reaches the child AND its own python children
+                # (harness.py -> build.py / doctor), otherwise their stdout is
+                # block-buffered into the pipe and the console looks stuck.
                 p = subprocess.Popen(
                     cmd, cwd=str(ROOT), stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, text=True,
                     encoding="utf-8", errors="replace", bufsize=1,
+                    env={**os.environ, "PYTHONUNBUFFERED": "1"},
                     **harness.NO_WINDOW)
                 with self._lock:
                     self._procs[jid] = p   # reachable for cancel()
@@ -92,6 +96,12 @@ class JobManager:
                     self._procs.pop(jid, None)
                 rc = p.returncode
                 if rc != 0:
+                    left = len(cmds) - i - 1
+                    self._append(
+                        jid,
+                        f"\n[web] ✗ command exited with code {rc}"
+                        + (f" — skipping the {left} remaining step(s).\n" if left
+                           else ".\n"))
                     break
         except Exception as e:  # noqa: BLE001
             self._append(jid, f"\n[web] job crashed: {e}")
