@@ -377,12 +377,45 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         s = json.loads(_read(cfg / "settings.json"))
         self.assertNotIn("claudeMdExcludes", s)
 
-    def test_bob_project_excludes_its_own_global_preamble(self):
+    def test_bob_project_writes_rules_preamble_and_no_exclude(self):
+        # Bob's bypass is the rules file, NOT claudeMdExcludes (Claude-only key, unknown
+        # Bob semantics): the project ships .bob/rules/geneseed.md — always injected, and
+        # shadowing the same-named global rule — and settings.json carries no exclude.
         repo = (self.tmp / "bobrepo").resolve(); repo.mkdir()
         build.emit_bob("neutral", repo)
         s = self._settings(repo, ".bob")
-        want = str((build._bob_config_dir() / "AGENTS.md").resolve())
-        self.assertIn(want, s.get("claudeMdExcludes", []))
+        self.assertNotIn("claudeMdExcludes", s)
+        rules = repo / ".bob" / "rules" / "geneseed.md"
+        self.assertTrue(rules.is_file())
+        # same preamble as the root AGENTS.md block (minus the managed-block markers).
+        self.assertIn(_read(rules)[:200], _read(repo / "AGENTS.md"))
+        man = json.loads(_read(repo / ".bob" / build.GLOBAL_MANIFEST))
+        self.assertIn("rules/geneseed.md", man["owned"])
+
+    def test_bob_global_writes_rules_preamble(self):
+        # A global ~/.bob/AGENTS.md is not auto-loaded by Bob; rules/geneseed.md is the
+        # channel that actually injects (skills already load natively from ~/.bob/skills).
+        cfg = self.tmp / "dotbob"
+        build.emit_bob_global("neutral", cfg=cfg)
+        self.assertTrue((cfg / "rules" / "geneseed.md").is_file())
+        self.assertNotIn("claudeMdExcludes", json.loads(_read(cfg / "settings.json")))
+
+    def test_bob_reemit_self_heals_old_exclude(self):
+        # Older emits wrote the global AGENTS.md into claudeMdExcludes; a re-emit must
+        # strip it (and drop it from the manifest) rather than carry it forward.
+        repo = (self.tmp / "bobrepo2").resolve(); repo.mkdir()
+        build.emit_bob("neutral", repo)
+        stale = str((build._bob_config_dir() / "AGENTS.md").resolve())
+        sp = repo / ".bob" / "settings.json"
+        s = json.loads(_read(sp)); s["claudeMdExcludes"] = [stale]
+        sp.write_text(json.dumps(s, indent=2) + "\n", encoding="utf-8")
+        mp = repo / ".bob" / build.GLOBAL_MANIFEST
+        man = json.loads(_read(mp)); man["managed"]["settings_excludes"] = [stale]
+        mp.write_text(json.dumps(man, indent=2) + "\n", encoding="utf-8")
+        build.emit_bob("neutral", repo)
+        self.assertNotIn("claudeMdExcludes", self._settings(repo, ".bob"))
+        man = json.loads(_read(mp))
+        self.assertNotIn("settings_excludes", man["managed"])
 
     def test_stack_global_env_suppresses_the_exclude(self):
         repo = (self.tmp / "repo2").resolve(); repo.mkdir()
