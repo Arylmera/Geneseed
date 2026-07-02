@@ -185,7 +185,9 @@ def cmd_diff(args: argparse.Namespace) -> int:
         print(f"  - {f['rel']}   (in source, not deployed — re-emit to add)")
     if args.out:
         if files:
-            path = _write_improvements(target, theme, files, args.out)
+            # bare `--out` parses as True (nargs="?" const) → default timestamped path
+            out_path = None if args.out is True else args.out
+            path = _write_improvements(target, theme, files, out_path)
             print(f"[diff] improvements file written: {path}")
         else:
             print("[diff] no differences — nothing written.")

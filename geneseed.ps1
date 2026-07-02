@@ -7,6 +7,7 @@
 #   .\geneseed.ps1 setup                 guided install wizard
 #   .\geneseed.ps1 build [args]          render the bundle
 #   .\geneseed.ps1 upgrade [ref] [theme] self-upgrade from the published source
+#   .\geneseed.ps1 update  [ref] [theme] same as upgrade (alias)
 #   .\geneseed.ps1 sync-self [ref]       refresh the launchers + update scripts
 #   .\geneseed.ps1 link | unlink         put `geneseed` on PATH / remove it
 #   .\geneseed.ps1 tui|doctor|diff|context|learn|prompt|version|status|uninstall [args]
@@ -14,10 +15,20 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $harness = Join-Path $here 'rituals/harness.py'
 $update  = Join-Path $here 'rituals/_update.py'
-# Prefer the Windows `py` launcher, fall back to python / python3 on PATH.
-$py = if (Get-Command py -ErrorAction SilentlyContinue) { 'py' }
-      elseif (Get-Command python -ErrorAction SilentlyContinue) { 'python' }
-      else { 'python3' }
+# Pick the first interpreter that actually RUNS (mirrors the bash launcher):
+# existence alone is not enough — the Microsoft Store alias stub for python.exe
+# sits on PATH but only prints an install hint and exits non-zero. $env:PYTHON
+# overrides everything, same contract as the bash front door.
+$py = $env:PYTHON
+if (-not $py) {
+  foreach ($c in 'py', 'python', 'python3') {
+    if (Get-Command $c -ErrorAction SilentlyContinue) {
+      & $c -c 'pass' *> $null
+      if ($LASTEXITCODE -eq 0) { $py = $c; break }
+    }
+  }
+  if (-not $py) { $py = 'python' }
+}
 if ($args.Count -eq 0) {
   & $py $harness home
   exit $LASTEXITCODE
@@ -25,7 +36,7 @@ if ($args.Count -eq 0) {
 # Self-update commands must survive a STALE factory: if harness.py predates the subcommand
 # (a partial update left a new launcher over an old rituals/), probe it and, on a miss,
 # self-heal via rituals/_update.py directly. See the bash `geneseed` for the full rationale.
-if (@('upgrade','sync-self') -contains $args[0]) {
+if (@('upgrade','update','sync-self') -contains $args[0]) {
   $cmd = $args[0]
   & $py $harness $cmd --help *> $null
   if ($LASTEXITCODE -eq 0) { & $py $harness @args; exit $LASTEXITCODE }
