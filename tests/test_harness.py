@@ -196,7 +196,13 @@ class CountTableGateTests(unittest.TestCase):
             "[[alpha]], [[beta]], [[gamma]]. A skill is a markdown "
             "playbook under `src/skills/`.\n"
         )
-        self.assertEqual(harness._prose_mirror_problems(readme, web, counts, stems), [])
+        shipped = "| **Laws / Agents / Skills** | 35 laws, 16 agents, 3 skills, … |\n"
+        self.assertEqual(harness._prose_mirror_problems(readme, web, counts, stems, shipped), [])
+
+        # SHIPPED.md capability row drifts (any of the three counts).
+        p = harness._prose_mirror_problems(
+            readme, web, counts, stems, shipped.replace("35 laws", "34 laws"))
+        self.assertTrue(any("SHIPPED.md says '34 laws'" in x for x in p), p)
 
         # README law-count prose drifts.
         p = harness._prose_mirror_problems(
