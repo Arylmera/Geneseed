@@ -21,9 +21,12 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from collections import namedtuple
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -162,10 +165,82 @@ def _count(s: str) -> int:
     return int(s) if s.isdigit() else 0
 
 
-def _measure_upstream():
-    """Phase B — fetch, then classify. Returns (code, behind, err) where
-    code ∈ {ready, fetch_failed, unrelated, diverged, uptodate}."""
-    rc, _, err = _git("fetch", "--quiet", timeout=_fetch_timeout(), network=True)
+def _kill_tree(p: subprocess.Popen) -> None:
+    """Kill a fetch AND its helpers (git-remote-https). Killing only `git` leaves
+    the helper holding the output pipe, which is how a timed-out fetch used to
+    hang the updater forever."""
+    try:
+        if sys.platform != "win32":
+            os.killpg(p.pid, signal.SIGKILL)
+        else:
+            p.kill()
+    except OSError:
+        pass
+
+
+def _fetch_streaming(log=None):
+    """`git fetch --progress` with live output, a heartbeat, and a HARD deadline.
+
+    Streams git's own progress lines (Counting/Compressing/Receiving objects) to
+    `log` as they arrive, logs a "still fetching" heartbeat every 15s when git is
+    silent, and kills the whole process group at _fetch_timeout(). Returns
+    (rc, tail) — rc None on spawn failure or timeout, tail = last output lines
+    for the error message. THE monkeypatch seam for tests (network only here)."""
+    exe = shutil.which("git")
+    if not exe:
+        return (None, "git is not installed or not on PATH")
+    timeout = _fetch_timeout()
+    cmd = [exe, "-C", str(ROOT),
+           "-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=15",
+           "fetch", "--progress"]
+    kw: dict = dict(_NO_WINDOW)
+    if sys.platform != "win32":
+        kw["start_new_session"] = True          # own process group => killable tree
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, encoding="utf-8", errors="replace", bufsize=1,
+                             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, **kw)
+    except Exception as e:                      # noqa: BLE001 — same contract as _git
+        return (None, str(e))
+    lines: list[str] = []
+
+    def _reader():
+        # Text mode treats git's \r progress repaints as line breaks; the same
+        # counter arrives hundreds of times, so only log when the phase changes.
+        last = ""
+        for raw in p.stdout:
+            line = _redact_url_creds(raw.strip())
+            if not line:
+                continue
+            lines.append(line)
+            phase = line.split(":", 1)[0]
+            if log and phase != last:
+                log(f"[geneseed]   {line}")
+                last = phase
+
+    t = threading.Thread(target=_reader, daemon=True)
+    t.start()
+    start = time.monotonic()
+    next_beat = 15.0
+    while p.poll() is None:
+        elapsed = time.monotonic() - start
+        if elapsed >= timeout:
+            _kill_tree(p)
+            if log:
+                log(f"[geneseed] ✗ fetch produced nothing for {timeout}s — killed it.")
+            return (None, "\n".join(lines[-5:]))
+        if log and elapsed >= next_beat:
+            log(f"[geneseed]   ... still fetching ({int(elapsed)}s elapsed)")
+            next_beat += 15.0
+        time.sleep(0.25)
+    t.join(timeout=5)
+    return (p.returncode, "\n".join(lines[-5:]))
+
+
+def _measure_upstream(log=None):
+    """Phase B — fetch (streamed), then classify. Returns (code, behind, err)
+    where code ∈ {ready, fetch_failed, unrelated, diverged, uptodate}."""
+    rc, err = _fetch_streaming(log)
     if rc != 0:
         return ("fetch_failed", 0, err)
     _, ahead, _ = _git("rev-list", "--count", "@{u}..HEAD")
@@ -388,11 +463,15 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None,
         log(f"[geneseed] {pre.message}")
         return 3 if pre.kind == "info" else 1
 
-    log(f"[geneseed] fetching from origin (timeout: {_fetch_timeout()}s) ...")
-    code, behind, err = _measure_upstream()
+    log(f"[geneseed] fetching from origin (git: {shutil.which('git') or 'git'}, "
+        f"timeout: {_fetch_timeout()}s) ...")
+    code, behind, err = _measure_upstream(log)
     if code == "fetch_failed":
         log(f"[geneseed] ✗ could not reach the remote: "
-            f"{err or 'git fetch failed or timed out without output — check network access and credentials.'}")
+            f"{err or 'git fetch hung without any output.'}")
+        log("[geneseed]   If `git pull` works in your terminal but not here, this "
+            "daemon likely lacks your shell's environment (VPN/proxy vars, SSO or "
+            "Kerberos credentials). Restart it from that terminal: `geneseed web restart`.")
         return 1
     if code == "unrelated":
         log("[geneseed] Upstream history was rewritten; back up local work, then re-clone "
