@@ -225,23 +225,6 @@ def _collect_setup_lines() -> "dict | None":
     return {"theme": theme, "emit": emit, "out": out, "root": root, "footprint": footprint}
 
 
-def _collect_setup() -> "dict | None":
-    """Gather the install selection — a colored curses form where the terminal
-    supports it, else the line prompts. Returns the confirmed selection or None."""
-    if sys.stdin.isatty():
-        try:
-            import curses
-            import locale
-            try:
-                locale.setlocale(locale.LC_ALL, "")
-            except locale.Error:
-                pass
-            return curses.wrapper(_setup_tui)
-        except Exception:
-            pass  # any curses failure → fall back to the line wizard
-    return _collect_setup_lines()
-
-
 def _java_major_ok(version_output: str, minimum: int = 21) -> bool:
     """True if a `java -version` stderr names a major >= minimum. Handles modern
     '21.0.2' (-> 21) and legacy '1.8.0' (-> 1, never >= 21)."""

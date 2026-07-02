@@ -7,6 +7,15 @@ from __future__ import annotations
 from _build_core import *  # noqa: F401,F403  shared stdlib + constants
 
 
+def _write_manifest_atomic(path: Path, data: dict) -> None:
+    """Manifest writes are temp + os.replace (mirrors _install_registry._save): a
+    torn manifest would make the next emit treat every owned file as the user's
+    own — never updated, never pruned, never uninstalled."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def _opencode_config_dir() -> Path:
     """OpenCode's global config dir. Precedence: $OPENCODE_CONFIG_DIR (relocates the
     whole dir — use it to keep the harness in a git-tracked folder) > $XDG_CONFIG_HOME
@@ -254,11 +263,11 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
         print("[geneseed] WARN: could not remove stale owned file(s): "
               + ", ".join(prune_failed), file=sys.stderr)
 
-    manifest_path.write_text(
-        json.dumps({"_comment": "Files owned by Geneseed's --emit opencode-global. "
-                                "Do not edit; removed on re-emit. The memory and notebook "
-                                "stores are NOT listed — they are never deleted.", "owned": sorted(owned)},
-                   indent=2) + "\n", encoding="utf-8")
+    _write_manifest_atomic(manifest_path, {
+        "_comment": "Files owned by Geneseed's --emit opencode-global. "
+                    "Do not edit; removed on re-emit. The memory and notebook "
+                    "stores are NOT listed — they are never deleted.",
+        "owned": sorted(owned)})
 
     extras = (["primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
     extra = (" + " + ", ".join(extras)) if extras else ""
@@ -406,13 +415,12 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
         print("[geneseed] WARN: could not remove stale owned file(s): "
               + ", ".join(prune_failed), file=sys.stderr)
 
-    manifest_path.write_text(
-        json.dumps({"_comment": "Files owned by Geneseed's Claude emit. Do not edit; removed on "
-                                "re-emit. The memory and notebook stores are NOT listed — never "
-                                "deleted. `managed` records the CLAUDE.md block + settings.json "
-                                "hooks so uninstall removes exactly those.",
-                    "owned": sorted(owned), "managed": managed}, indent=2) + "\n",
-        encoding="utf-8")
+    _write_manifest_atomic(manifest_path, {
+        "_comment": "Files owned by Geneseed's Claude emit. Do not edit; removed on "
+                    "re-emit. The memory and notebook stores are NOT listed — never "
+                    "deleted. `managed` records the CLAUDE.md block + settings.json "
+                    "hooks so uninstall removes exactly those.",
+        "owned": sorted(owned), "managed": managed})
     return n_agents, n_skills, len(managed.get("settings_hooks", [])), mem_status, nb_status, managed
 
 

@@ -66,7 +66,13 @@ sys.modules[__name__].__class__ = _BuildFacade
 def main() -> None:
     default_theme = "neutral"
     if CONFIG.exists():
-        default_theme = json.loads(CONFIG.read_text(encoding="utf-8")).get("theme", "neutral")
+        # A truncated/corrupt config must not brick the CLI — fall back to neutral.
+        try:
+            data = json.loads(CONFIG.read_text(encoding="utf-8"))
+            default_theme = data.get("theme", "neutral") if isinstance(data, dict) else "neutral"
+        except (OSError, json.JSONDecodeError):
+            print(f"[geneseed] WARN: {CONFIG.name} is unreadable — using theme 'neutral'.",
+                  file=sys.stderr)
 
     ap = argparse.ArgumentParser(description="Render the Geneseed harness for a theme.")
     ap.add_argument("--theme", default=default_theme, help="theme name (neutral, imperial, ...)")

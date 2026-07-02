@@ -13,6 +13,20 @@ sys.path.insert(0, str(ROOT))
 import web  # noqa: E402
 
 
+class LocalHostGuardTests(unittest.TestCase):
+    """The DNS-rebinding guard: only loopback Host headers reach the API."""
+
+    def test_loopback_hosts_pass(self):
+        for h in ("127.0.0.1", "127.0.0.1:4747", "localhost", "LOCALHOST:80",
+                  "[::1]:4747", "[::1]"):
+            self.assertTrue(web._local_host(h), h)
+
+    def test_foreign_hosts_rejected(self):
+        for h in ("evil.com", "evil.com:4747", "127.0.0.1.evil.com",
+                  "localhost.evil.com", "", None):
+            self.assertFalse(web._local_host(h), repr(h))
+
+
 class CatalogTests(unittest.TestCase):
     def setUp(self):
         self.state = web.WebState(theme="neutral")

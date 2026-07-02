@@ -167,15 +167,19 @@ def _count(s: str) -> int:
 
 def _kill_tree(p: subprocess.Popen) -> None:
     """Kill a fetch AND its helpers (git-remote-https). Killing only `git` leaves
-    the helper holding the output pipe, which is how a timed-out fetch used to
-    hang the updater forever."""
+    the helper holding the output pipe (and .git lock files on Windows), which is
+    how a timed-out fetch used to hang the updater forever."""
     try:
         if sys.platform != "win32":
             os.killpg(p.pid, signal.SIGKILL)
         else:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)],
+                           capture_output=True, timeout=15, **_NO_WINDOW)
+    except (OSError, subprocess.SubprocessError):
+        try:
             p.kill()
-    except OSError:
-        pass
+        except OSError:
+            pass
 
 
 def _fetch_streaming(log=None):
@@ -226,6 +230,10 @@ def _fetch_streaming(log=None):
         elapsed = time.monotonic() - start
         if elapsed >= timeout:
             _kill_tree(p)
+            try:
+                p.wait(timeout=5)     # reap — the daemon is long-lived
+            except (OSError, subprocess.TimeoutExpired):
+                pass
             if log:
                 log(f"[geneseed] ✗ fetch produced nothing for {timeout}s — killed it.")
             return (None, "\n".join(lines[-5:]))
@@ -497,7 +505,12 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None,
         log("[geneseed] already up to date.")
 
     theme = theme_arg or _marker_theme(cfg, out) or config_theme
-    _migrate_stray_bundle(here, out, log)
+    # Best-effort rescue, never a gate: a locked file in the stray bundle must
+    # not abort the upgrade AFTER the pull has already been applied.
+    try:
+        _migrate_stray_bundle(here, out, log)
+    except OSError as e:
+        log(f"[geneseed] ⚠️  could not migrate the old in-folder bundle ({e}) — continuing.")
     rc = _rebuild_bundle(here, out, theme, emit, root_dir, log)
     if rc != 0:
         log(f"[geneseed][E-BUILD] ✗ the bundle build FAILED (theme: {theme or 'default'}, emit: {emit}).")

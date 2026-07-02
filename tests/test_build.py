@@ -396,9 +396,11 @@ class OpencodeJsoncTests(unittest.TestCase):
         self.assertEqual(build._read_jsonc("[1,2,]")[0], [1, 2])
         self.assertEqual(build._read_jsonc('{"a":1,}')[0], {"a": 1})
 
-    def test_read_jsonc_malformed_returns_empty(self):
+    def test_read_jsonc_malformed_returns_none(self):
+        # None (unparseable) is distinct from {} (legitimately empty): writers
+        # refuse to rewrite a malformed file instead of clobbering it.
         data, had = build._read_jsonc("{not json at all")
-        self.assertEqual(data, {})
+        self.assertIsNone(data)
         self.assertFalse(had)
 
     def test_target_prefers_existing_jsonc(self):
