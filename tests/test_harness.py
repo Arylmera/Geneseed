@@ -272,6 +272,17 @@ class ThemeDetectionTests(unittest.TestCase):
         finally:
             shutil.rmtree(d, ignore_errors=True)
 
+    def test_falls_back_to_bob_rules_sigil(self):
+        # A global Bob install writes no AGENTS.md; without its marker the theme is
+        # still recognised from the preamble in rules/geneseed.md.
+        d = Path(tempfile.mkdtemp())
+        try:
+            build.emit_bob_global("imperial", cfg=d)
+            (d / ".geneseed-theme").unlink(missing_ok=True)   # force the sigil path
+            self.assertEqual(harness._theme_of_dir(d), "imperial")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
     def test_none_when_undetectable(self):
         d = Path(tempfile.mkdtemp())
         try:

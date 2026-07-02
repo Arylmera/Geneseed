@@ -57,6 +57,20 @@ GLOBAL_MANIFEST = ".geneseed-manifest.json"
 # global one (see _emit_claude_core).
 _PREAMBLE_CONFIG_DIR = {"CLAUDE.md": _claude_config_dir}
 
+# The workspace rules stub a PROJECT Bob emit ships as .bob/rules/geneseed.md. Its only
+# job is to exist under the same name as the global ~/.bob/rules/geneseed.md so Bob's
+# native rule precedence shadows the global copy (project-bypasses-global) — the actual
+# preamble is the repo-root AGENTS.md, which Bob auto-loads. Kept deliberately tiny: Bob
+# injects every workspace rule each turn, so a full second preamble copy here would
+# double the install's fixed per-turn token cost.
+_BOB_RULES_STUB = """\
+<!-- geneseed: workspace shadow stub -->
+This project's Geneseed instructions are the repo-root `AGENTS.md`, which Bob
+auto-loads. This file exists only to shadow the same-named global Geneseed rules
+file (`~/.bob/rules/geneseed.md`) so the global preamble does not stack on top of
+the project's own. Follow the root `AGENTS.md`.
+"""
+
 
 def _global_memory(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
     """Ensure the global memory store exists at <cfg>/memory. If it already holds
@@ -318,30 +332,41 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     # CLAUDE.md — Claude auto-loads it by location; merge as a delimited block so any
     # user prose around it survives. `whole` (Geneseed created the file) sticks across
     # re-emits so uninstall knows whether to delete the file or just excise the block.
+    # Exception — Bob GLOBAL: Bob never auto-loads a global ~/.bob/AGENTS.md (its
+    # always-injected channel is rules/geneseed.md, below), so a global copy is pure
+    # disk weight; none is written, and a re-emit self-heals the one an older install
+    # carries (excise the managed block, or delete the file when Geneseed created it).
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
-    if agent_text is not None:
+    is_bob = claude_md.name == "AGENTS.md"
+    if agent_text is not None and not (is_bob and scope == "global"):
         status = _managed_block_write(claude_md, _strip_capability_links(agent_text))
         prior_whole = bool((old_managed.get("claude_md") or {}).get("whole"))
         managed["claude_md"] = {
             "rel": os.path.relpath(claude_md, cfg).replace(os.sep, "/"),
             "whole": (status == "created") or prior_whole,
         }
+    elif is_bob and scope == "global" and old_managed.get("claude_md"):
+        old_cm = old_managed["claude_md"] if isinstance(old_managed["claude_md"], dict) else {}
+        victim = (cfg / (old_cm.get("rel") or claude_md.name)).resolve()
+        _managed_block_remove(victim, whole=bool(old_cm.get("whole")))
 
     # IBM Bob's only documented always-injected channel is the rules folder (project
     # .bob/rules/*.md, global ~/.bob/rules/*.md — bob.ibm.com/docs/ide/configuration/rules).
-    # A global ~/.bob/AGENTS.md is NOT auto-loaded, which left global Bob installs with
-    # working skills (~/.bob/skills is native) but no preamble/theme. So a Bob emit ALSO
-    # ships the preamble as rules/geneseed.md. Same filename at both scopes on purpose:
-    # workspace rules override global ones, which is Bob's native project-bypasses-global
-    # — a project install MUST carry the file to shadow the global copy, even though its
-    # root AGENTS.md already auto-loads (the one-preamble redundancy is the price of the
-    # shadowing; without it the global voice would stack on top of the project's).
-    # Owned (not a managed block): the file is wholly Geneseed's, so a re-emit rewrites it
+    # A global ~/.bob/AGENTS.md is NOT auto-loaded, so at GLOBAL scope rules/geneseed.md
+    # IS the preamble — the sole carrier of the harness voice (~/.bob/skills already
+    # loads natively). At PROJECT scope the repo-root AGENTS.md auto-loads the preamble,
+    # so the workspace file is the slim _BOB_RULES_STUB: same filename at both scopes on
+    # purpose — workspace rules override global ones, Bob's native
+    # project-bypasses-global — and the stub only has to exist to shadow the global copy
+    # (without it the global voice would stack on top of the project's). Owned (not a
+    # managed block): the file is wholly Geneseed's, so a re-emit rewrites it in place —
+    # older installs that shipped a full second preamble copy here heal on upgrade —
     # and uninstall/deactivate remove it via the manifest like any other owned file.
-    if claude_md.name == "AGENTS.md" and agent_text is not None:
+    if is_bob and agent_text is not None:
         rules_md = cfg / "rules" / "geneseed.md"
         rules_md.parent.mkdir(parents=True, exist_ok=True)
-        rules_md.write_text(_strip_capability_links(agent_text), encoding="utf-8")
+        rules_md.write_text(_BOB_RULES_STUB if scope == "project"
+                            else _strip_capability_links(agent_text), encoding="utf-8")
         owned.append("rules/geneseed.md")
 
     ensure_agent_overrides_stub(cfg)
@@ -464,8 +489,10 @@ def emit_claude(theme_name: str, out: Path, root: Path | None = None,
 # `mcpServers`. So both Bob emits REUSE the Claude engine, only swapping the marker dir
 # (.bob) and the instructions filename (AGENTS.md). Two verified Bob-isms the engine
 # handles: (1) only a PROJECT-ROOT AGENTS.md is auto-loaded — a global ~/.bob/AGENTS.md
-# is not — so every Bob emit also ships the preamble as rules/geneseed.md, Bob's
-# documented always-injected channel at both scopes; (2) claudeMdExcludes is Claude-only,
+# is not — so the preamble rides rules/geneseed.md, Bob's documented always-injected
+# channel: the full preamble at global scope (no AGENTS.md is written there), a slim
+# shadow stub at project scope (the root AGENTS.md carries the preamble; a full second
+# copy would double the per-turn token cost); (2) claudeMdExcludes is Claude-only,
 # so Bob never gets one (the workspace rules file overriding the global one IS the
 # project-bypasses-global). Still best-effort: the agent frontmatter + settings.json hook
 # merge use the Claude dialect (hooks are unverified for Bob and inert if unsupported);
@@ -474,31 +501,33 @@ def emit_bob_global(theme_name: str, out: Path | None = None, cfg: Path | None =
                     footprint: str = "full") -> None:
     """Render the harness into Bob's GLOBAL config dir (~/.bob). rules/geneseed.md carries
     the instructions (Bob's always-injected channel — a global AGENTS.md is not auto-
-    loaded; one is still written for tooling that reads it); agents/skills/settings.json
-    mirror the Claude global emit. `cfg` overrides the target (tests/doctor)."""
+    loaded, so none is written; a re-emit removes one left by an older install);
+    agents/skills/settings.json mirror the Claude global emit. `cfg` overrides the
+    target (tests/doctor)."""
     cfg = cfg or _bob_config_dir()
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
         theme_name, cfg, cfg / "AGENTS.md", "global", out, footprint)
     print(f"[geneseed] bob-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
-          f"AGENTS.md + rules/geneseed.md (Bob injects the rules file; a global AGENTS.md "
-          f"is not auto-loaded), {n_hooks} hook group(s), settings.json, {mem_status}, {nb_status}.")
+          f"rules/geneseed.md (Bob's always-injected channel; a global AGENTS.md is not "
+          f"auto-loaded, so none is written), {n_hooks} hook group(s), settings.json, "
+          f"{mem_status}, {nb_status}.")
 
 
 def emit_bob(theme_name: str, out: Path, root: Path | None = None,
              footprint: str = "full") -> None:
-    """Per-repo Bob install: AGENTS.md at the repo root (auto-loaded by Bob) + a project
-    `.bob/` layer (agents, skills, rules/geneseed.md, settings.json). The rules copy
-    guarantees injection and, sharing its filename with the global one, overrides it —
-    Bob's native project-bypasses-global. Reuses the Claude engine's manifest +
-    claim-on-create, so a user's own `.bob/` files are never clobbered. `out`/`root`
-    mirror emit_claude."""
+    """Per-repo Bob install: AGENTS.md at the repo root (auto-loaded by Bob, carries the
+    preamble) + a project `.bob/` layer (agents, skills, rules/geneseed.md, settings.json).
+    The rules file is a slim stub whose filename shadows the global rules copy — Bob's
+    native project-bypasses-global — without re-paying the preamble's per-turn token
+    cost. Reuses the Claude engine's manifest + claim-on-create, so a user's own `.bob/`
+    files are never clobbered. `out`/`root` mirror emit_claude."""
     root = root or out
     cfg = root / ".bob"
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
         theme_name, cfg, root / "AGENTS.md", "project", out, footprint)
     print(f"[geneseed] bob (folder) -> {root}: AGENTS.md + .bob/ "
-          f"({n_agents} subagents, {n_skills} skills, rules/geneseed.md, {n_hooks} hook "
-          f"group(s), settings.json), {mem_status}, {nb_status}.")
+          f"({n_agents} subagents, {n_skills} skills, rules/geneseed.md shadow stub, "
+          f"{n_hooks} hook group(s), settings.json), {mem_status}, {nb_status}.")
 
 
 # The host registry — the single source of truth shared by build dispatch and the

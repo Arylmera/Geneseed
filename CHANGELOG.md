@@ -21,6 +21,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   workspace `rules/geneseed.md` shadows the same-named global rule.
 
 ### Changed
+- **Bob installs stopped double-paying the preamble**: a per-repo Bob install's
+  `.bob/rules/geneseed.md` is now a slim shadow stub instead of a full second copy
+  of the preamble — the repo-root `AGENTS.md` (auto-loaded) carries the
+  instructions, and the stub's only job is to shadow the same-named global rules
+  file (Bob injects every workspace rule each turn, so the full copy doubled the
+  install's fixed per-turn token cost). The global Bob emit no longer writes
+  `~/.bob/AGENTS.md` at all — Bob never auto-loads a global one; `rules/geneseed.md`
+  is the sole carrier — and a re-emit removes the stale copy an older install left
+  behind. Existing installs heal on the next rebuild/upgrade.
 - **Self-update is now `git pull`**: `geneseed upgrade`/`update`/`sync-self` fast-forward
   the install's own git origin (host-agnostic — wherever it was cloned from), doctor-gate
   the result (rolling back on failure), then rebuild — replacing the bespoke curl/urllib

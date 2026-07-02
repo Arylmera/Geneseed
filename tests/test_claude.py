@@ -377,28 +377,73 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         s = json.loads(_read(cfg / "settings.json"))
         self.assertNotIn("claudeMdExcludes", s)
 
-    def test_bob_project_writes_rules_preamble_and_no_exclude(self):
+    def test_bob_project_writes_rules_stub_and_no_exclude(self):
         # Bob's bypass is the rules file, NOT claudeMdExcludes (Claude-only key, unknown
         # Bob semantics): the project ships .bob/rules/geneseed.md — always injected, and
         # shadowing the same-named global rule — and settings.json carries no exclude.
+        # The rules file is a slim STUB (the root AGENTS.md already auto-loads the
+        # preamble; a full second copy would double the per-turn token cost).
         repo = (self.tmp / "bobrepo").resolve(); repo.mkdir()
         build.emit_bob("neutral", repo)
         s = self._settings(repo, ".bob")
         self.assertNotIn("claudeMdExcludes", s)
         rules = repo / ".bob" / "rules" / "geneseed.md"
         self.assertTrue(rules.is_file())
-        # same preamble as the root AGENTS.md block (minus the managed-block markers).
-        self.assertIn(_read(rules)[:200], _read(repo / "AGENTS.md"))
+        stub = _read(rules)
+        self.assertEqual(stub, build._BOB_RULES_STUB)
+        self.assertLess(len(stub), 1000, "the stub is injected every turn — keep it slim")
+        self.assertIn("AGENTS.md", stub)
+        # the preamble itself lives in the root AGENTS.md managed block.
+        agents_md = _read(repo / "AGENTS.md")
+        self.assertIn("<!-- BEGIN GENESEED -->", agents_md)
+        self.assertGreater(len(agents_md), len(stub))
         man = json.loads(_read(repo / ".bob" / build.GLOBAL_MANIFEST))
         self.assertIn("rules/geneseed.md", man["owned"])
 
-    def test_bob_global_writes_rules_preamble(self):
-        # A global ~/.bob/AGENTS.md is not auto-loaded by Bob; rules/geneseed.md is the
-        # channel that actually injects (skills already load natively from ~/.bob/skills).
+    def test_bob_global_writes_rules_preamble_and_no_agents_md(self):
+        # A global ~/.bob/AGENTS.md is not auto-loaded by Bob, so none is written;
+        # rules/geneseed.md is the channel that actually injects and carries the FULL
+        # preamble (skills already load natively from ~/.bob/skills).
         cfg = self.tmp / "dotbob"
         build.emit_bob_global("neutral", cfg=cfg)
-        self.assertTrue((cfg / "rules" / "geneseed.md").is_file())
+        rules = cfg / "rules" / "geneseed.md"
+        self.assertTrue(rules.is_file())
+        self.assertNotEqual(_read(rules), build._BOB_RULES_STUB)
+        self.assertGreater(len(_read(rules)), 5000, "global rules file carries the preamble")
+        self.assertFalse((cfg / "AGENTS.md").exists())
+        # and the manifest records no claude_md block, but still reads as Claude-style
+        # (cmd_uninstall must pick the Claude reversal for ~/.bob).
+        man = json.loads(_read(cfg / build.GLOBAL_MANIFEST))
+        self.assertNotIn("claude_md", man["managed"])
+        self.assertTrue(harness._manifest_is_claude(cfg))
         self.assertNotIn("claudeMdExcludes", json.loads(_read(cfg / "settings.json")))
+
+    def test_bob_global_reemit_removes_stale_agents_md(self):
+        # Older Bob-global emits wrote AGENTS.md as a managed block; a re-emit must
+        # self-heal — delete a Geneseed-created file (whole), excise the block from a
+        # user-prose one — instead of leaving a stale preamble copy behind.
+        cfg = self.tmp / "dotbob2"
+        build.emit_bob_global("neutral", cfg=cfg)
+        stale = cfg / "AGENTS.md"
+        stale.write_text("<!-- BEGIN GENESEED -->\nold preamble\n<!-- END GENESEED -->\n",
+                         encoding="utf-8")
+        mp = cfg / build.GLOBAL_MANIFEST
+        man = json.loads(_read(mp))
+        man["managed"]["claude_md"] = {"rel": "AGENTS.md", "whole": True}
+        mp.write_text(json.dumps(man, indent=2) + "\n", encoding="utf-8")
+        build.emit_bob_global("neutral", cfg=cfg)
+        self.assertFalse(stale.exists())
+        self.assertNotIn("claude_md", json.loads(_read(mp))["managed"])
+        # user prose around the block survives the excise path (whole=False).
+        stale.write_text("my own notes\n<!-- BEGIN GENESEED -->\nold\n<!-- END GENESEED -->\n",
+                         encoding="utf-8")
+        man = json.loads(_read(mp))
+        man["managed"]["claude_md"] = {"rel": "AGENTS.md", "whole": False}
+        mp.write_text(json.dumps(man, indent=2) + "\n", encoding="utf-8")
+        build.emit_bob_global("neutral", cfg=cfg)
+        self.assertTrue(stale.exists())
+        self.assertIn("my own notes", _read(stale))
+        self.assertNotIn("BEGIN GENESEED", _read(stale))
 
     def test_bob_reemit_self_heals_old_exclude(self):
         # Older emits wrote the global AGENTS.md into claudeMdExcludes; a re-emit must
