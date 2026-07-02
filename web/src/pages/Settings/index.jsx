@@ -36,9 +36,9 @@ export default function Settings({
         <div>
           <h1 className="h">Settings</h1>
           <p className="sub">
-            Console direction, harness footprint, machine maintenance (incl. git-pull update),
-            and server control. See per-install detail in the Harnesses tab; build from there and
-            the Dashboard.
+            Console direction, harness footprint, machine maintenance (incl. git-pull update), and
+            server control. See per-install detail in the Harnesses tab; build from there and the
+            Dashboard.
           </p>
         </div>
       </div>
