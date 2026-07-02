@@ -7,6 +7,7 @@ upgrade.sh / sync-self.sh is exercised without hitting GitHub. Run from the Gene
 """
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -226,24 +227,32 @@ class PreflightTests(unittest.TestCase):
 
 
 class MeasureUpstreamTests(unittest.TestCase):
-    def _run(self, seam):
-        with mock.patch.object(_update, "_git", side_effect=seam):
+    def _run(self, seam, fetch=(0, "")):
+        # The network fetch goes through its own streaming seam now; everything
+        # else (rev-list, merge-base) still rides _git.
+        with mock.patch.object(_update, "_fetch_streaming", return_value=fetch), \
+             mock.patch.object(_update, "_git", side_effect=seam):
             return _update._measure_upstream()
 
     def test_fetch_failure(self):
-        code, behind, _ = self._run(lambda *a, **k: (128, "", "could not resolve host"))
+        code, behind, err = self._run(lambda *a, **k: (0, "", ""),
+                                      fetch=(128, "could not resolve host"))
+        self.assertEqual(code, "fetch_failed")
+        self.assertEqual(err, "could not resolve host")
+
+    def test_fetch_timeout_is_failure(self):
+        # rc None (spawn failure / hard timeout) must classify as fetch_failed.
+        code, _, _ = self._run(lambda *a, **k: (0, "", ""), fetch=(None, ""))
         self.assertEqual(code, "fetch_failed")
 
     def test_up_to_date(self):
         def seam(*a, **k):
-            if a[0] == "fetch": return (0, "", "")
             if a[0] == "rev-list": return (0, "0", "")
             return (0, "", "")
         self.assertEqual(self._run(seam)[0], "uptodate")
 
     def test_behind_is_ready(self):
         def seam(*a, **k):
-            if a[0] == "fetch": return (0, "", "")
             if a[0] == "rev-list" and a[2] == "@{u}..HEAD": return (0, "0", "")   # ahead
             if a[0] == "rev-list" and a[2] == "HEAD..@{u}": return (0, "3", "")   # behind
             return (0, "", "")
@@ -252,7 +261,6 @@ class MeasureUpstreamTests(unittest.TestCase):
 
     def test_diverged_with_common_ancestor(self):
         def seam(*a, **k):
-            if a[0] == "fetch": return (0, "", "")
             if a[0] == "rev-list" and a[2] == "@{u}..HEAD": return (0, "2", "")
             if a[0] == "rev-list" and a[2] == "HEAD..@{u}": return (0, "1", "")
             if a[0] == "merge-base": return (0, "abc123", "")
@@ -261,12 +269,51 @@ class MeasureUpstreamTests(unittest.TestCase):
 
     def test_unrelated_history(self):
         def seam(*a, **k):
-            if a[0] == "fetch": return (0, "", "")
             if a[0] == "rev-list" and a[2] == "@{u}..HEAD": return (0, "1", "")
             if a[0] == "rev-list" and a[2] == "HEAD..@{u}": return (0, "1", "")
             if a[0] == "merge-base": return (1, "", "")
             return (0, "", "")
         self.assertEqual(self._run(seam)[0], "unrelated")
+
+
+class FetchStreamingTests(unittest.TestCase):
+    def _popen_stub(self, script):
+        """A real subprocess running `script` stands in for git fetch."""
+        real_popen = subprocess.Popen
+        def fake_which(_name):
+            return sys.executable
+        def fake_popen(cmd, **kw):
+            return real_popen([sys.executable, "-c", script], **{
+                k: v for k, v in kw.items() if k != "env"})
+        return fake_which, fake_popen
+
+    def test_streams_progress_and_returns_rc(self):
+        which, popen = self._popen_stub(
+            "import sys; print('Receiving objects: 100% (3/3), done.'); sys.exit(0)")
+        logged = []
+        with mock.patch.object(_update.shutil, "which", which), \
+             mock.patch.object(_update.subprocess, "Popen", popen):
+            rc, tail = _update._fetch_streaming(logged.append)
+        self.assertEqual(rc, 0)
+        self.assertIn("Receiving objects", tail)
+        self.assertTrue(any("Receiving objects" in m for m in logged))
+
+    def test_timeout_kills_and_returns_none(self):
+        which, popen = self._popen_stub("import time; time.sleep(60)")
+        logged = []
+        with mock.patch.object(_update.shutil, "which", which), \
+             mock.patch.object(_update.subprocess, "Popen", popen), \
+             mock.patch.object(_update, "_fetch_timeout", return_value=1), \
+             mock.patch.object(_update.time, "sleep", lambda s: None):
+            rc, _ = _update._fetch_streaming(logged.append)
+        self.assertIsNone(rc)
+        self.assertTrue(any("killed it" in m for m in logged))
+
+    def test_no_git_exe(self):
+        with mock.patch.object(_update.shutil, "which", lambda _n: None):
+            rc, err = _update._fetch_streaming()
+        self.assertIsNone(rc)
+        self.assertIn("git is not installed", err)
 
 
 class PullAndValidateTests(unittest.TestCase):
