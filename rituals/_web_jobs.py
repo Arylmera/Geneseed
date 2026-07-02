@@ -81,11 +81,16 @@ class JobManager:
                 # PYTHONUNBUFFERED reaches the child AND its own python children
                 # (harness.py -> build.py / doctor), otherwise their stdout is
                 # block-buffered into the pipe and the console looks stuck.
+                # GENESEED_WEB_JOB tells `upgrade` it runs INSIDE this daemon, so
+                # it must not bounce the daemon mid-job (that killed the job's
+                # tracking and left the console on 'running' forever) — the
+                # server restarts itself after the job is saved as finished.
                 p = subprocess.Popen(
                     cmd, cwd=str(ROOT), stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, text=True,
                     encoding="utf-8", errors="replace", bufsize=1,
-                    env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                    env={**os.environ, "PYTHONUNBUFFERED": "1",
+                         "GENESEED_WEB_JOB": "1"},
                     **harness.NO_WINDOW)
                 with self._lock:
                     self._procs[jid] = p   # reachable for cancel()
