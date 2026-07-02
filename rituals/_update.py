@@ -421,6 +421,12 @@ def _rebuild_bundle(here, out, theme, emit, root_dir, log) -> int:
         return proc.returncode
     # If a web daemon is running, bounce it so the new rituals/* source and the freshly
     # rebuilt web/dist take effect — otherwise the open PWA keeps hitting the old code.
+    # EXCEPT when this upgrade IS a web-daemon job: restarting the daemon here kills
+    # the process tracking this very job (console stuck on 'running' forever); in that
+    # case the server restarts itself once the job is recorded as finished.
+    if os.environ.get("GENESEED_WEB_JOB"):
+        log("[geneseed] web daemon will restart itself after this job to load the new code.")
+        return 0
     try:
         sys.path.insert(0, str(here / "rituals"))
         import web as _web  # noqa: E402

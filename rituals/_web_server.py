@@ -198,7 +198,14 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                         return self._send_json(
                             {"precondition": pre.code, "kind": pre.kind,
                              "message": pre.message}, 422)
-                    jid = jm.start("update", *action_commands("update"), on_done=state.refresh)
+                    # The upgrade child skips its own daemon bounce when spawned by
+                    # us (GENESEED_WEB_JOB) — so restart HERE, after the job is
+                    # saved as finished, to pick up the new rituals/* + web/dist.
+                    def _after_update():
+                        state.refresh()
+                        request_restart(state.theme)
+                    jid = jm.start("update", *action_commands("update"),
+                                   on_done=_after_update)
                     if jid is None:
                         return self._send_json({"error": "busy"}, 409)
                     return self._send_json({"job_id": jid}, 202)
