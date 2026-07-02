@@ -108,6 +108,22 @@ class CatalogTests(unittest.TestCase):
             row = web.api_catalog(state, "notebook")["items"][0]
             self.assertEqual(row["source"], item["source"])
 
+    def test_item_blocks_traversal_outside_catalog_dirs(self):
+        # GET /api/item needs no token, so a separator, '..', or a drive colon in
+        # the name segment was an arbitrary-file read (config joined
+        # state.target / name raw; memory/notebook resolved '..' through the
+        # appended '.md'). Every flat-name type must 404, never resolve.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "notebook").mkdir()
+            (root / "secret.txt").write_text("s3cret", encoding="utf-8")
+            state = web.WebState(theme="neutral", target=root)
+            for type_ in ("notebook", "memory", "config"):
+                for name in ("../secret.txt", "..\\secret.txt", "C:evil", "a/b", ".."):
+                    with self.assertRaises(web.NotFound):
+                        web.api_item(state, type_, name)
+
 
 class SpecDescTests(unittest.TestCase):
     # Purpose derivation for deployed specs: blockquote first, then frontmatter
@@ -211,18 +227,33 @@ class JobManagerTests(unittest.TestCase):
         jm.wait(jid, timeout=20)
         self.assertFalse(jm.cancel(jid))
 
-    def test_on_done_fires_after_completion(self):
+    def test_on_done_fires_after_completion_with_exit_code(self):
+        # on_done receives the job's exit code so callers can react to failure
+        # (the update action only bounces the daemon when rc == 0).
         jm = web.JobManager()
         seen = []
         jid = jm.start("noop", [sys.executable, "-c", "print('x')"],
-                       on_done=lambda: seen.append(True))
+                       on_done=lambda rc: seen.append(rc))
         jm.wait(jid, timeout=20)
         import time
         for _ in range(100):           # on_done runs just after status flips
             if seen:
                 break
             time.sleep(0.05)
-        self.assertEqual(seen, [True])
+        self.assertEqual(seen, [0])
+
+    def test_on_done_gets_nonzero_exit_code_on_failure(self):
+        jm = web.JobManager()
+        seen = []
+        jid = jm.start("boom", [sys.executable, "-c", "raise SystemExit(3)"],
+                       on_done=lambda rc: seen.append(rc))
+        jm.wait(jid, timeout=20)
+        import time
+        for _ in range(100):
+            if seen:
+                break
+            time.sleep(0.05)
+        self.assertEqual(seen, [3])
 
     def test_failure_captured(self):
         jm = web.JobManager()

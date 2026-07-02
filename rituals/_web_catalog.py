@@ -118,6 +118,14 @@ def api_wiki_item(state: WebState, name: str) -> dict:
     raise NotFound(name)
 
 
+def _flat_name(name: str) -> None:
+    """Catalog names are flat basenames. A separator, '..', or a drive colon in the
+    URL segment is someone steering the join outside the catalog dir (GET needs no
+    token, so this was an arbitrary-file read) — 404, never resolve."""
+    if (not name or "/" in name or "\\" in name or ".." in name or ":" in name):
+        raise NotFound(name)
+
+
 def _config_items(state: WebState) -> list[dict]:
     out = []
     for fname in ("context.json", "wiki.jsonc"):
@@ -197,6 +205,7 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
                 "desc": "", "body": e["body"], "links": [],
                 "klass": e.get("klass", "craft")}
     if type_ in ("memory", "notebook"):
+        _flat_name(name)
         d = _notebook_dir(state) if type_ == "notebook" \
             else _memory_dir(state)
         p = (d / f"{name}.md") if d else None
@@ -209,6 +218,7 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
     if type_ == "wiki":
         return api_wiki_item(state, name)
     if type_ == "config":
+        _flat_name(name)
         p = state.target / name
         if not p.is_file():
             raise NotFound(name)

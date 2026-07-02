@@ -478,13 +478,14 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
     if target.exists():
         try:
             loaded, had_comments = _read_jsonc(target.read_text(encoding="utf-8"))
-            if loaded is None:
-                print(f"[geneseed] {target.name} is not valid JSON — NOT rewriting it "
-                      f"(fix the syntax, then re-run). Add {json.dumps(agent_path)} to "
+            # non-dict covers valid-but-wrong JSON (an array, a string): overwriting
+            # it with the default config would silently destroy the user's file.
+            if loaded is None or not isinstance(loaded, dict):
+                print(f"[geneseed] {target.name} is not a JSON object — NOT rewriting it "
+                      f"(fix the file, then re-run). Add {json.dumps(agent_path)} to "
                       f'its "instructions" once repaired.', file=sys.stderr)
                 return target
-            if isinstance(loaded, dict):
-                config = loaded
+            config = loaded
         except OSError:
             pass
     config.setdefault("$schema", _OPENCODE_SCHEMA)
@@ -542,7 +543,10 @@ def _claude_hook_groups(cfg: Path) -> dict:
             {"matcher": "resume", "hooks": [{"type": "command", "command": context}]},
         ],
         "Stop": [
-            {"hooks": [{"type": "command", "command": f"{py} {h} learn {mem} || true"}]},
+            # `|| exit 0` (not `|| true`): hooks run under cmd.exe on native Windows,
+            # where `true` is not a command — the swallow-failures intent would invert
+            # into a 9009 error. `exit 0` works in both cmd.exe and POSIX sh.
+            {"hooks": [{"type": "command", "command": f"{py} {h} learn {mem} || exit 0"}]},
         ],
     }
 

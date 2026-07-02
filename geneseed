@@ -90,7 +90,7 @@ PY
     echo "  cd \"$HERE\" && git pull --ff-only && ./geneseed $cmd" >&2
     exit 2
     ;;
-  home|menu|tui|web|setup|build|doctor|diff|context|learn|prompt|version|status|uninstall|link|unlink)
+  home|menu|tui|web|setup|build|rebuild-all|theme|doctor|diff|context|learn|prompt|version|status|uninstall|link|unlink|git-gate)
     # Cross-platform Python CLI (single source of truth). link/unlink also live there
     # (cmd_link/cmd_unlink) — they need a current harness but are not self-update paths,
     # so a stale factory there is a normal error, not a bootstrap paradox.

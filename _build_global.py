@@ -531,7 +531,7 @@ def emit_bob(theme_name: str, out: Path, root: Path | None = None,
 
 
 # The host registry — the single source of truth shared by build dispatch and the
-# install-detection/activation layer (rituals/_harness_mcp.py). Bounded to the two
+# install-detection/activation layer (rituals/_harness_mcp.py). Bounded to the three
 # hosts that exist (YAGNI): each row is the data those layers need to stop hardcoding
 # ".opencode"/"AGENT.md"/"opencode.json". wire/unwire are NOT here — their signatures
 # differ per host (opencode.json `instructions` splice vs settings.json hook merge), so

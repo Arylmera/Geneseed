@@ -482,9 +482,9 @@ def assert_source_complete(items, *, context: str = "") -> None:
     """Refuse to emit when AGENT.md references specs that src/ doesn't provide — BEFORE
     any destructive write. A clear failure that leaves the existing install intact beats
     a half-generated bundle full of dead links (and a global re-emit that deletes the
-    good copies). This is the gate `upgrade.sh` runs on the download, brought into the
-    build itself so direct `build.py`, `harness build`, and the `setup` wizard are
-    guarded too — not just the upgrade path."""
+    good copies). This is the gate the upgrade path runs on the pulled source, brought
+    into the build itself so direct `build.py`, `harness build`, and the `setup` wizard
+    are guarded too — not just the upgrade path."""
     missing = _missing_referenced_specs(items)
     if not missing:
         return

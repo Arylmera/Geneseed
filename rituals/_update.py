@@ -71,8 +71,11 @@ def _git(*args, timeout: int = 10, network: bool = False):
         cmd += ["-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=15"]
     cmd += [str(a) for a in args]
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=timeout, env=env, **_NO_WINDOW)
+        # encoding pinned: git talks UTF-8; text=True would decode with the console
+        # code page (cp1252 on corporate Windows) and a stray byte would turn a
+        # perfectly good git call into rc=None ("git is not installed").
+        p = subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                           errors="replace", timeout=timeout, env=env, **_NO_WINDOW)
     except Exception:                       # spawn/timeout/OS error -> treated as failure
         return (None, "", "")
     return (p.returncode,
@@ -328,9 +331,9 @@ class _Log:
 DOCTOR_LEGEND = [
     "[geneseed] doctor problem legend — what the lines above mean / how to fix:",
     "  • 'dead link'          → a skill/agent body links a sibling as <dir>/<name>.md; use the BARE <name>.md (source bug)",
-    "  • 'unresolved token'   → a {{TOKEN}} is missing from a theme; add it to ALL 8 theme JSONs",
+    "  • 'unresolved token'   → a {{TOKEN}} is missing from a theme; add it to ALL theme JSONs",
     "  • 'incomplete source'  → AGENT.md lists a skill whose file isn't in this snapshot (usually a mid-publish cache — retry)",
-    "  • 'stale' / 'missing'  → the rendered Harness/ is out of sync (rebuild locally; harmless on a fresh download)",
+    "  • 'stale' / 'missing'  → the rendered Harness/ is out of sync (rebuild locally; harmless on a fresh clone)",
     "  • 'parity'             → the themes disagree on which tokens exist",
     "  • 'escapes the bundle' → an absolute or ../ path leaked into a rendered file",
 ]
@@ -341,11 +344,15 @@ def _run_doctor(cand: Path) -> tuple[bool, str]:
     rebuilt right after, so its drift is expected). Fail-closed: any nonzero exit,
     timeout, or spawn error is a failure."""
     try:
+        # encoding pinned: the doctor child reconfigures ITS stdout to UTF-8, so
+        # text=True (console code page, cp1252 on corporate Windows) can raise
+        # UnicodeDecodeError on a ✓/⚠️ glyph — which lands in the except below and
+        # rolls back a perfectly good update as "doctor gate could not run".
         proc = subprocess.run(
             [sys.executable, str(cand / "rituals" / "harness.py"),
              "doctor", "--all", "--no-bundle"],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-            timeout=300, **_NO_WINDOW)
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            encoding="utf-8", errors="replace", timeout=300, **_NO_WINDOW)
     except Exception as e:                          # noqa: BLE001 — crash/timeout => fail
         return (False, f"[geneseed] doctor gate could not run: {e}")
     return (proc.returncode == 0, proc.stdout or "")
@@ -444,24 +451,34 @@ def _rebuild_bundle(here, out, theme, emit, root_dir, log) -> int:
     return 0
 
 
+def _rebuild_installs(here: Path, log: _Log) -> int:
+    """Refresh every registered ACTIVE install (opencode/claude/bob, global and
+    project scope) via `harness.py rebuild-all`. The emit-marker rebuild only covers
+    THIS checkout's own bundle — without this pass a claude-global or bob install
+    keeps serving the OLD render after every upgrade, silently."""
+    log("[geneseed] refreshing every active install (rebuild-all) ...")
+    proc = subprocess.run(
+        [sys.executable, str(here / "rituals" / "harness.py"), "rebuild-all"],
+        cwd=str(here), **_NO_WINDOW)
+    return proc.returncode
+
+
 def upgrade(ref: str | None = None, theme_arg: str | None = None,
             zip_arg: str | None = None) -> int:
     """Update from the install's own git origin (fast-forward only), doctor-gate, and
-    rebuild the bundle. `ref`/`zip_arg` are accepted for back-compat but IGNORED (git
-    follows the current branch; the offline path was removed). Returns a process exit
-    code: 0 ok/up-to-date, 3 info precondition, 1 error."""
+    rebuild the bundle plus every registered install. `ref`/`zip_arg` are accepted for
+    back-compat but IGNORED (git follows the current branch; the offline path was
+    removed). Returns a process exit code: 0 ok/up-to-date, 3 info precondition,
+    1 error."""
     log = _Log()
+    if ref:
+        log(f"[geneseed] ⚠️  ref '{ref}' is IGNORED — updates follow the checkout's "
+            "current branch (tag/branch pinning was removed with the zip path).")
     here = ROOT
     out = Path(os.environ.get("GENESEED_OUT") or (here.parent / "Harness"))
     root_dir = Path(os.environ.get("GENESEED_ROOT") or out.parent)
     cfg = _opencode_config_dir()
     emit = _resolve_emit(cfg, out)
-
-    if emit == "files" and (cfg / ".geneseed-manifest.json").is_file():
-        sys.stderr.write(
-            f"[geneseed] ⚠️  {cfg} already holds a global Geneseed install (.geneseed-manifest.json),\n"
-            f"[geneseed] ⚠️  but this run emits the plain bundle only — it will NOT refresh that global config.\n"
-            f"[geneseed] ⚠️  Did you mean:  GENESEED_EMIT=opencode-global geneseed upgrade\n")
 
     # Capture the LOCAL theme before the pull overwrites harness.config.json.
     config_theme = _config_theme(here)
@@ -514,6 +531,11 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None,
     rc = _rebuild_bundle(here, out, theme, emit, root_dir, log)
     if rc != 0:
         log(f"[geneseed][E-BUILD] ✗ the bundle build FAILED (theme: {theme or 'default'}, emit: {emit}).")
+        return 1
+    rc = _rebuild_installs(here, log)
+    if rc != 0:
+        log("[geneseed][E-BUILD] ✗ one or more installs failed to rebuild — "
+            "run `geneseed rebuild-all` to retry (details above).")
         return 1
     log("[geneseed] ✓ upgrade complete." + (f" (full log: {log.path})" if log.path else ""))
     return 0

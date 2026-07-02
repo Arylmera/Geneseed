@@ -158,7 +158,7 @@ class JobManager:
             self._save_history()
             if on_done:
                 try:
-                    on_done()
+                    on_done(rc)   # callbacks take the exit code (0 = every step ok)
                 except Exception:  # noqa: BLE001 — refresh must never kill the job thread
                     pass
 
