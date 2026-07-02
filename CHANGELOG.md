@@ -8,6 +8,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Bob installs now actually load the preamble/theme**: IBM Bob's only
+  always-injected instruction channel is the rules folder — a global
+  `~/.bob/AGENTS.md` is never auto-loaded (only a project-root one is), which left
+  Bob installs with working skills but no harness voice. Both Bob emits now also
+  ship the preamble as `rules/geneseed.md` (project `.bob/rules/`, global
+  `~/.bob/rules/`). The Claude-only `claudeMdExcludes` key is no longer written for
+  Bob (its Bob semantics are undocumented and a filename-keyed match would suppress
+  the project's own `AGENTS.md`); a re-emit strips one left by an older install.
+  Project-bypasses-global on Bob now rides on its native rule precedence: the
+  workspace `rules/geneseed.md` shadows the same-named global rule.
+
 ### Changed
 - **Self-update is now `git pull`**: `geneseed upgrade`/`update`/`sync-self` fast-forward
   the install's own git origin (host-agnostic — wherever it was cloned from), doctor-gate
