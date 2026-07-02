@@ -53,7 +53,7 @@ _LIBRARY_SECTIONS_RAW = [
 # would otherwise crowd the main menu's install block.
 _SETTINGS_ACTIONS_RAW = [
     ("mcp", "MCP servers", "Wire the MarkItDown, GitLab & Filesystem presets (and your own) into OpenCode."),
-    ("update", "Update only (download + rebuild)", "Download the latest scripts + factory from upstream and rebuild — no setup wizard."),
+    ("update", "Update only (pull + rebuild)", "Pull the latest source from the install's git origin and rebuild — no setup wizard."),
     ("build", "Rebuild bundle", "Re-render the harness from src."),
     ("setup", "Change install mode", "Re-run the setup wizard from your LOCAL source — no upstream download."),
     ("link", "Run from anywhere", "Put `geneseed` on your PATH so it runs from any directory."),

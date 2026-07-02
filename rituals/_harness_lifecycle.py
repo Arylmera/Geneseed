@@ -284,8 +284,8 @@ def _bootstrap_plain(here, ref) -> bool:
 
 
 def cmd_upgrade(args: argparse.Namespace) -> int:
-    """Self-upgrade from the published source, then rebuild the bundle. Cross-platform
-    (stdlib download + extract) — replaces upgrade.sh; the wrapper now delegates here.
+    """Self-upgrade from the install's own git origin, then rebuild the bundle.
+    Cross-platform (git pull + rebuild) — the shell wrappers all delegate here.
     Before anything is refreshed, any drift in the deployed global harness (the
     self-improvement loops edit it in place) is exported to an improvements file —
     the rebuild overwrites those edits, and the export must compare against the
