@@ -787,10 +787,13 @@ def _claude_read_manifest(cfg: Path) -> dict:
 
 
 def _manifest_is_claude(cfg: Path) -> bool:
-    """True when the manifest at `cfg` was written by a Claude emit (it records a
-    `managed.claude_md`). Lets cmd_uninstall pick the right reversal without a flag."""
+    """True when the manifest at `cfg` was written by the Claude-style engine (it
+    records a `managed` map — claude_md block and/or settings hooks; the OpenCode emit
+    writes none). Keyed on the map, not on `claude_md`: a Bob GLOBAL emit ships no
+    AGENTS.md and so records no claude_md, but still needs the Claude-style reversal.
+    Lets cmd_uninstall pick the right reversal without a flag."""
     mg = _claude_read_manifest(cfg).get("managed")
-    return isinstance(mg, dict) and "claude_md" in mg
+    return isinstance(mg, dict)
 
 
 def _claude_state(root: Path, scope: str = "global", host: str = "claude") -> str:

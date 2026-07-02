@@ -122,10 +122,13 @@ def _theme_of_dir(d: Path) -> "str | None":
                 return name
     except OSError:
         pass
-    # Sigil fallback: AGENT.md (OpenCode), CLAUDE.md (Claude), AGENTS.md (Bob) — each
-    # host's managed instructions block carries the theme sigil. Per-repo Claude/Bob
-    # installs write no .geneseed-theme marker, so this is their ONLY detection path.
+    # Sigil fallback: AGENT.md (OpenCode), CLAUDE.md (Claude), rules/geneseed.md
+    # (global Bob — its emit writes no AGENTS.md; the rules file carries the preamble
+    # and thus the sigil), AGENTS.md (older Bob installs) — each host's instructions
+    # carrier holds the theme sigil. Per-repo Claude/Bob installs write no
+    # .geneseed-theme marker, so this is their ONLY detection path.
     return (_theme_from_agent(d / "AGENT.md") or _theme_from_agent(d / "CLAUDE.md")
+            or _theme_from_agent(d / "rules" / "geneseed.md")
             or _theme_from_agent(d / "AGENTS.md"))
 
 
@@ -189,7 +192,7 @@ EMIT_OPTIONS = [
     ("claude-global", "Claude Code global config dir (~/.claude) — CLAUDE.md, agents, skills, hooks."),
     ("opencode", "Per-repo .opencode/ layer committed into one repository."),
     ("claude", "Per-repo CLAUDE.md + .claude/ committed into one repository."),
-    ("bob-global", "IBM Bob global config dir (~/.bob) — AGENTS.md, agents, skills, settings.json."),
+    ("bob-global", "IBM Bob global config dir (~/.bob) — rules/geneseed.md, agents, skills, settings.json."),
     ("bob", "Per-repo AGENTS.md + .bob/ for IBM Bob, committed into one repository."),
     ("files", "Plain bundle for any AGENT.md tool."),
 ]
