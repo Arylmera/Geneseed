@@ -44,6 +44,9 @@
 ## Output contract
 - The exact shape of what this {{AGENT}} returns to the caller (e.g. a list of
   findings with file:line, a verdict, a summary of changes made).
+- Include an honest-failure line: what this {{AGENT}} returns when the contract
+  cannot be fulfilled (nothing found, no data, inputs missing) — reporting the
+  gap, never inventing content to fill it.
 
 ## Self-improvement
 

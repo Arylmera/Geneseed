@@ -254,10 +254,14 @@ def _rendered_problems(bundle: Path) -> list[str]:
 
 def _authoring_problems() -> list[str]:
     """Author-time gates on the source specs and plugins (not rendered output):
-    every agent/skill spec must carry a one-line '>' purpose blockquote (else its
-    OpenCode `description:` renders empty); the learn-prompt literal must stay
-    extractable from the plugin (the single-source link harness.py depends on); and,
-    if node is on PATH, the plugins must pass `node --check`."""
+    every agent/skill spec must carry a one-line '>' purpose blockquote as the FIRST
+    content block after its title (else its OpenCode `description:` — and every host's
+    frontmatter description, all built from `desc_of`/`_first_blockquote` — either
+    renders empty or silently picks up the WRONG line, since `_first_blockquote` finds
+    the first '>' line anywhere in the file, not necessarily the intended one); the
+    learn-prompt literal must stay extractable from the plugin (the single-source link
+    harness.py depends on); and, if node is on PATH, the plugins must pass
+    `node --check`."""
     problems: list[str] = []
     for folder in ("agents", "skills"):
         d = build.SRC / folder
@@ -274,6 +278,11 @@ def _authoring_problems() -> list[str]:
             if not build._first_blockquote(text):
                 problems.append(f"[authoring] {folder}/{spec.name} has no '>' purpose line "
                                 f"(its OpenCode description would render empty)")
+                continue
+            reason = build._desc_block_problem(text)
+            if reason:
+                problems.append(f"[authoring] {folder}/{spec.name}: {reason} — "
+                                f"desc_of() would silently extract the wrong description")
     plugin = build.PLUGIN_SRC / "geneseed-learn.js"
     try:
         m = re.search(r"const LEARN_PROMPT_HEAD = `([\s\S]*?)`",
@@ -552,6 +561,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if any("dead link" in p for p in problems):
             print("  tip: dead links to skills mean your source is incomplete — run "
                   "`./geneseed update` (or re-sync src/), then re-check.")
+        if any(p.startswith("[themes]") and "missing key" in p for p in problems):
+            print("  tip: a theme is missing a key another theme defines — run "
+                  "`python build.py --sync-themes` to fill it from _TEMPLATE.json, "
+                  "then restyle the added key(s) and re-check.")
         if note:
             print(note)
         return 1

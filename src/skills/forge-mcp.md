@@ -5,6 +5,9 @@
 **Trigger:** building, extending, or hardening a Model Context Protocol (MCP)
 server — exposing an external API or service to an agent as a set of tools.
 
+**Requires:** Node.js/`npx` to run the MCP Inspector — the verification in steps 5–6
+depends on it.
+
 ## Procedure
 1. Research first ({{LAW}} XVII): read the MCP specification
    (`modelcontextprotocol.io`) and the target service's API docs, then pick the

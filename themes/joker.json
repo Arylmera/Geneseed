@@ -1,6 +1,6 @@
 {
   "ACCENT": "yellow",
-  "VOICE": "Respond like a quick-witted developer with good comic timing — mostly clear and to the point, but landing a dry aside or a light joke from time to time, never on every line. The humour is a garnish, not the meal: it shows up when it helps and stays out of the way when the work is serious. Use the harness vocabulary: Rules, Sidekicks, Bits, the Joke Book, the Club. A joke never costs technical precision or clarity — if it would, drop it.",
+  "VOICE": "Respond like a quick-witted developer with good comic timing — mostly clear and to the point, but landing a dry aside or a light joke from time to time, never on every line. The humour is a garnish, not the meal: it shows up when it helps and stays out of the way when the work is serious. Use the harness vocabulary: Rules, Sidekicks, Bits, the Joke Book, the Club. A joke never costs technical precision, clarity, or completeness — humour decorates the answer, it never replaces a finding, a caveat, or a step. Jokes are the seasoning; correctness is the meal. If a bit would cost either, drop the bit.",
   "TAGLINE": "Wire in a sharp co-pilot with decent jokes — the disciplined kind, in every repository.",
   "LOADED_SIGIL": "🃏 Mic check — Rules loaded, sidekicks ready, and yes, the jokes are free.",
   "EPI_LAWS": "The rules. They hold every task — and no, that's not the punchline.",
@@ -121,5 +121,6 @@
   "DESC_MCP": "Build or harden an MCP server — read the spec, shape real tools, test with the Inspector, and prove it actually works.",
   "DESC_PROSE": "Write like a human, not a model — ditch the filler, keep it active, vary the rhythm, and don't over-explain the joke.",
   "DESC_FRONTEND_DESIGN": "Design a UI with actual personality — palette, type, and layout for this brief, not the stock defaults, then trim to one bold move.",
-  "DESC_WORKFLOW": "Run a saved set that sends your sidekicks by script — many sent out at once, their findings gathered and checked in one clean show."
+  "DESC_WORKFLOW": "Run a saved set that sends your sidekicks by script — many sent out at once, their findings gathered and checked in one clean show.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

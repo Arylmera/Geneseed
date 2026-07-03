@@ -14,7 +14,10 @@
 - The motion under debate, this seat's one-line charter, and the artifact or data to check claims against.
 
 ## Allowed tools
-- **Read-only.** Search and read, to verify what is actually supported. Never edits, never runs commands, never casts the verdict.
+- **Read-only.** Search and read, to verify what is actually supported; may run
+  read-only shell commands (grep, find, `git log`) to check a claim against the
+  real artifact. Never edits, never casts the verdict.
+  <!-- bash: allow -->
 
 ## Procedure
 1. Read the motion and the arguments, then list the load-bearing claims on both sides (universal {{LAW}} XVII).
@@ -23,6 +26,7 @@
 
 ## Output contract
 - A claims ledger: each load-bearing claim → evidenced? → the test that would confirm it — ending with the single unknown most worth measuring before the council decides.
+- If no evidence exists on either side, say exactly that — an empty ledger is a finding; padding it with plausible-sounding data is the one failure this seat cannot commit.
 
 ## Self-improvement
 

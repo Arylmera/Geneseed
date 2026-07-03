@@ -52,7 +52,7 @@ These are destructive or scope-changing and must be initiated by the user:
 - `geneseed build` — re-renders the bundle from `src/` (only meaningful inside the Geneseed source repo anyway).
 - `geneseed upgrade` / `bootstrap` / `update` / `sync-self` — pull-and-rebuild from the published source; overwrites the deployed bundle. Local edits are auto-exported to an `improvements/` markdown beside the install before being overwritten, but still: user decision.
 - `geneseed link` / `unlink` — modifies PATH symlinks.
-- `geneseed uninstall` — removes the global install.
+- `geneseed uninstall` — removes a global or per-repo (project-scoped) install.
 
 If the user asks for any of these, run them as requested. Do not run them as a side effect of a more general request.
 

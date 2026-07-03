@@ -45,7 +45,9 @@ install ends on the theme's own **banner and benediction**.
 interactive **main menu**: *Browse*, *Review local edits*, *Refresh / set up*,
 *Update only*, *Update & set up*, *Rebuild bundle*, *Memory*, *Status*, and
 *Settings* — a submenu for MCP servers (toggle the MarkItDown, GitLab, and
-Filesystem presets into your OpenCode config), the PATH install, and uninstall.
+Filesystem presets into your OpenCode config), the PATH install, and uninstall (global
+or per-repo — `harness uninstall --target <repo>` from the CLI, or bare `--target` runs
+against whichever project install the cwd sits in).
 **`./geneseed bootstrap`** jumps straight to update-then-setup; **`./geneseed setup`**
 straight to the wizard. Prefer to do it by hand? Pick a path below.
 
@@ -166,6 +168,16 @@ Choose any of the 14 themes in `themes/` — `neutral` (plain), `imperial` (Warh
 `.geneseed-theme` marker, so later upgrades keep it. Adding your own is one JSON file
 of voice tokens; `doctor` checks every theme defines the same keys.
 
+Adding a new voice token to `themes/_TEMPLATE.json` means all 14 theme files need it
+too, or the parity check fails. `python build.py --sync-themes` does the mechanical
+part: it copies any key the template has but a theme is missing into that theme
+(filled with the template's placeholder text), in template order, and prints exactly
+which keys were added so you can restyle them in that theme's voice. It never deletes
+a key a theme has that the template doesn't — those are only reported. The edit is
+surgical (only the inserted lines change; nothing is reformatted), and the exit code
+doubles as a CI drift check: non-zero when it had to change files, `0` when every
+theme was already in sync.
+
 ### Footprint (lean vs full)
 
 **Footprint** sets how much of the Rules `AGENT.md` carries *inline* on every turn — a
@@ -199,6 +211,27 @@ Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** 
 the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It is
 remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
 host (OpenCode, Claude Code, Bob).
+
+### Dry-run a build (`--validate-only`)
+
+```
+python build.py --validate-only --theme imperial --emit opencode --out /path/to/repo/Harness
+```
+
+Renders and emits the requested `--theme`/`--emit`/`--out`/`--root`/`--footprint`
+combination into a throwaway sandbox — nothing under the real `--out`/`--root` is
+written, no marker files, no settings merge, no install-registry record — then runs
+every doctor-grade check against it (unresolved tokens, dead/non-hermetic links, theme
+parity, authoring gates, AGENT.md table parity). Prints a per-layer file count of what
+would have been written (`-v`/`--verbose` for the full path list) and exits non-zero on
+any problem, `0` when clean. Useful in CI, or before pointing a real deploy at a repo you
+don't want to touch yet.
+
+Known limitation: `--emit claude` and `--emit bob` currently report a set of dead
+skill-link problems that are real but pre-existing — CLAUDE.md/AGENTS.md link each
+skill as `skills/<name>.md` while the native layer ships `skills/<name>/SKILL.md`. The
+validation is correct to flag them; the emit-side fix is tracked separately. Until it
+lands, expect a non-zero exit for those two targets even on a clean source tree.
 
 ### Project context (usually nothing)
 

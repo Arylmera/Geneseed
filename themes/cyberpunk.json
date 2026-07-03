@@ -121,5 +121,6 @@
   "DESC_MCP": "Build or harden an MCP server — jack into the spec, forge task-shaped tools, test on the Inspector, and prove it with evals.",
   "DESC_PROSE": "Write prose with a human pulse, not synthetic filler — strip the boilerplate, stay active, vary the cadence, trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with edge — palette, type, and layout forged for this brief, not the stock defaults; plan, critique, and keep one bold move.",
-  "DESC_WORKFLOW": "Jack in a saved routine that drives your daemons on rails — parallel forks, staged pipelines, and verification, all in one deterministic run."
+  "DESC_WORKFLOW": "Jack in a saved routine that drives your daemons on rails — parallel forks, staged pipelines, and verification, all in one deterministic run.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

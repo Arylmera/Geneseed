@@ -121,5 +121,6 @@
   "DESC_MCP": "Build or harden an MCP server — read the spec, shape tools to real tasks, test with the Inspector, prove it with evals. It'll need maintaining, of course.",
   "DESC_PROSE": "Write prose that doesn't reek of a model — cut the filler, stay active, vary the rhythm, trust the reader. Not that anyone reads it.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — palette, type, and layout for this brief, not the templated defaults, then cut to one bold move. Someone has to.",
-  "DESC_WORKFLOW": "Run a saved script that marshals your subroutines by rote — many loosed at once, their findings gathered and checked in one joyless, flawless pass."
+  "DESC_WORKFLOW": "Run a saved script that marshals your subroutines by rote — many loosed at once, their findings gathered and checked in one joyless, flawless pass.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

@@ -9,6 +9,16 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Fixed
+- **Renamed DIR_* dirs in the portable bundle no longer orphan**: the bundle's
+  owned dirs (`laws`/`agents`/`skills`, in their themed form) are wiped and
+  rebuilt each run, but the wipe was keyed only to the CURRENT theme's dir name —
+  if a theme ever renamed one of them between two builds into the same target,
+  the old dir was never targeted and lingered forever. A new local marker
+  (`.geneseed-srcdirs.json`) now remembers which dir name was actually used last
+  time, so a rename is also pruned. (Shipped themes don't currently vary DIR_*, so
+  this is future-proofing rather than an active drift; the global/Claude/Bob
+  scopes' equivalent case — a lean-footprint standalone laws dir surviving a
+  switch back to full — is already covered by the owned-file manifest.)
 - **Bob installs now actually load the preamble/theme**: IBM Bob's only
   always-injected instruction channel is the rules folder — a global
   `~/.bob/AGENTS.md` is never auto-loaded (only a project-root one is), which left
@@ -41,6 +51,51 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   (`/api/offline-zip`) — use `git pull` directly.
 
 ### Added
+- **Downgrade warning + stale-overrides notice**: re-emitting over an existing
+  install now compares the deployed release (stamped in `.geneseed-version`
+  alongside the fingerprint) against the source tree's `harness.config.json`
+  version and prints a loud, warn-only notice when the deployed build is newer
+  ("did you forget git pull?") — never blocks, since a deliberate downgrade must
+  stay possible. `agent-overrides.json` is now stamped with `_version` at
+  creation; the file itself is never rewritten on re-emit, but if it carries real
+  overrides and its `_version` no longer matches the source, a one-line notice
+  points you at reviewing them against the updated agent specs.
+- **`build.py --validate-only`**: a dry run — full render, all doctor validations,
+  and a sandboxed emit of the requested target, written to a temp dir and
+  discarded. Exits non-zero on any problem, writes nothing real. (Note: `--emit
+  claude|bob` currently reports known pre-existing dead skill-link problems;
+  that fix is tracked separately.)
+- **`build.py --sync-themes`**: fills any key `themes/_TEMPLATE.json` has but a
+  theme JSON is missing — surgical line insertion in template order (no file
+  churn), never removes extras, and exits 1 when it changed files so CI can use
+  it as a check. The doctor's parity failure now points at it.
+- **`AGENT_COLORS` theme key**: the OpenCode agent→colour-slot map moved from a
+  hardcoded table in the emitter into `themes/_TEMPLATE.json` (and all shipped
+  themes), so a theme can restyle agent UI grouping. Unknown slot values warn
+  and fall back to `secondary`; themes missing the key fall back to the old
+  built-in map.
+- **Ask-tier bash for research agents**: `explorer` and `empiricist` now carry
+  the same marker `historian` already had — OpenCode emits `bash: ask` (instead
+  of deny) and Claude Code leaves Bash to its own permission prompts, so
+  read-only searches (grep, git log) no longer dead-end. Every other read-only
+  agent keeps the blanket deny.
+- **`.opencode/` re-emits stopped wiping user files**: the project OpenCode emit
+  now tracks what it owns in `.opencode/.geneseed-manifest.json` and prunes only
+  stale owned files (write-before-delete), skipping user-authored files with a
+  warning — the same claim-on-create model the Claude path always had. The first
+  re-emit over a pre-manifest install treats existing files as yours and says so.
+- **`harness uninstall` hardening**: a global uninstall now prints an inventory of
+  any surviving PROJECT installs elsewhere (each is self-contained — its hooks call
+  the shared checkout by absolute path, not the global config dir being removed —
+  so nothing is touched, just listed with the exact `--target` to remove it too); a
+  project uninstall now checks whether another host (Claude/OpenCode/Bob) also has
+  an install at the same repo root and says so. A settings.json left with a
+  leftover/locked owned file (Windows-plausible) no longer silently drops its
+  `.geneseed-emit` marker — the marker is kept and the run is reported INCOMPLETE
+  so the install can be found and retried. After every settings.json merge/unwire
+  (emit, deactivate, uninstall), a new integrity check (`_settings_integrity_check`)
+  verifies the manifest's claimed hooks/excludes actually match the file and warns
+  (never auto-fixes) on drift or an unrecorded Geneseed-pattern hook left behind.
 - **Project bypasses global harness**: when a repo carries its own Geneseed
   install, the same host's GLOBAL harness no longer double-loads there. For
   Claude/Bob a project emit writes the global preamble into `claudeMdExcludes`

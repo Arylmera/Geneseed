@@ -1,8 +1,11 @@
+<!-- Authoring note: this file is deliberately 4-6x the size of its peers — it is the only documentation the agent has for the external `herdr` CLI surface (no man page, no --help in context), so it carries the full command reference inline. Do not split it. -->
 # {{SKILL}}: herdr
 
 > {{DESC_HERDR}}
 
 **Trigger:** you are running inside a herdr-managed pane (`HERDR_ENV=1`) and a task would benefit from another pane — splitting off a server, watching a long-running build, spawning a sibling agent, or reading what a neighbour is doing. If `HERDR_ENV` is unset or not `1`, you are not inside herdr — stop and do not try to control panes from outside.
+
+**Requires:** `HERDR_ENV=1` in the environment and the `herdr` binary on `PATH`.
 
 ## What herdr gives you
 

@@ -5,6 +5,9 @@
 **Trigger:** building a new UI or reshaping an existing one, and it should carry a
 deliberate point of view rather than read as a templated default.
 
+**Requires:** a way to render and screenshot the result (a browser or the host's
+preview tool) — the second-pass critique in step 6 cannot run without one.
+
 ## Procedure
 1. Ground it first: name the concrete subject, the audience, and the single job
    this page does. Draw distinctive choices from the subject's own world — its

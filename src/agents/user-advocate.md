@@ -23,6 +23,7 @@
 
 ## Output contract
 - The consumer's verdict: who is affected, the experience win or harm, the friction it introduces, and the one thing they would actually ask for. Grounded in the real surface, not assumed.
+- If the actual consumer cannot be identified from the inputs, say so rather than argue for an invented one — a fictional user's verdict is noise dressed as advocacy.
 
 ## Self-improvement
 

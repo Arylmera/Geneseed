@@ -27,6 +27,8 @@
 ## Output contract
 - A list of findings, each as `file:line — problem — suggested fix`, ordered
   correctness-first. End with a one-line verdict: ship / fix-then-ship / block.
+- If a check was impossible — no diff, no task statement, a suite that will not
+  run — name it instead of issuing a verdict on partial evidence.
 
 ## Self-improvement
 

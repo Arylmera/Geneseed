@@ -227,7 +227,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     overrides = _load_agent_overrides(cfg)
     n_agents, n_skills, written = _write_native_layer(
         items, cfg / "agents", cfg / "skills", overrides,
-        host="opencode", old_owned=old_owned, cfg=cfg)
+        host="opencode", old_owned=old_owned, cfg=cfg, theme=theme)
     owned += [p.relative_to(cfg).as_posix() for p in written]
     primary = _write_primary_agent(cfg / "agents", overrides)
     if primary:
@@ -509,7 +509,11 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
                     "re-emit. The memory and notebook stores are NOT listed — never "
                     "deleted. `managed` records the CLAUDE.md block + settings.json "
                     "hooks so uninstall removes exactly those.",
-        "owned": sorted(owned), "managed": managed})
+        "owned": sorted(owned), "managed": managed, "scope": scope})
+    # Verify the merge actually stuck (a commented file, a mid-flight external edit, or
+    # a bug in the merge itself would otherwise go unnoticed until the hooks silently
+    # don't fire) — loud warning only, never fatal to the emit.
+    _settings_integrity_check(settings_path, managed, expect="present")
     return n_agents, n_skills, len(managed.get("settings_hooks", [])), mem_status, nb_status, managed
 
 
@@ -561,14 +565,68 @@ def emit_claude(theme_name: str, out: Path, root: Path | None = None,
 # project-bypasses-global). Still best-effort: the agent frontmatter + settings.json hook
 # merge use the Claude dialect (hooks are unverified for Bob and inert if unsupported);
 # MCP wiring lives in rituals/_harness_mcp (settings.json key `mcpServers`).
+
+
+def _bob_project_survivors() -> "list[Path]":
+    """Registered per-repo Bob PROJECT installs still on record — read straight from
+    `_install_registry` (pure stdlib, no import cycle with build.py — see its own
+    docstring) rather than `rituals/_harness_mcp._registered_targets`, which this
+    build-side module must never import (build.py is imported BY harness.py; a
+    back-import would be circular). Each candidate root's own `.geneseed-emit` marker
+    is read directly and compared to the literal `"bob"` emit name (the project Bob
+    emit) — the one-entry equivalent of `_EMIT_HOST_SCOPE["bob"] == ("bob", "project")`
+    without duplicating that whole table here. Dead/stale registry rows are pruned by
+    `roots()` itself; unreadable markers are skipped, never raised."""
+    try:
+        import _install_registry
+    except Exception:
+        return []
+    out: "list[Path]" = []
+    for root in _install_registry.roots():
+        try:
+            marker = (root / ".geneseed-emit").read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if marker == "bob":
+            out.append(root)
+    return out
+
+
+def _warn_bob_global_over_project(cfg: Path) -> None:
+    """A GLOBAL Bob emit writes the full preamble into `<cfg>/rules/geneseed.md`. If a
+    PROJECT Bob install already exists elsewhere (its own `.bob/rules/geneseed.md` is
+    the slim shadow stub, but Bob auto-loads BOTH the workspace rules folder and the
+    global one whenever it runs inside that project — the stub only shadows a
+    same-named global rule when Bob's precedence is honoured; nothing here can verify
+    that at emit time), warn so the operator knows two preambles may now be in play for
+    that repo and can remove the one they don't want. Purely informational — never
+    auto-removes anything, mirrors `_print_surviving_project_inventory`'s uninstall-side
+    warning but fires at EMIT time instead, before the double-load ever happens."""
+    survivors = _bob_project_survivors()
+    if not survivors:
+        return
+    print(f"[geneseed] WARN: {len(survivors)} project Bob install(s) already exist — "
+          f"emitting GLOBAL now means BOTH may auto-load together in those repos "
+          f"(doubled context) unless Bob's workspace rules truly shadow the global "
+          f"one there. Review and remove what you don't want:", file=sys.stderr)
+    for root in survivors:
+        print(f'  - {root}  ->  harness uninstall --target "{root}"', file=sys.stderr)
+
+
 def emit_bob_global(theme_name: str, out: Path | None = None, cfg: Path | None = None,
                     footprint: str = "full") -> None:
     """Render the harness into Bob's GLOBAL config dir (~/.bob). rules/geneseed.md carries
     the instructions (Bob's always-injected channel — a global AGENTS.md is not auto-
     loaded, so none is written; a re-emit removes one left by an older install);
     agents/skills/settings.json mirror the Claude global emit. `cfg` overrides the
-    target (tests/doctor)."""
+    target (tests/doctor). Before writing, warns (non-blocking) if any project-scoped
+    Bob install is already registered elsewhere — see `_warn_bob_global_over_project`.
+    The reverse direction (a PROJECT emit while a global install exists) needs no
+    matching check: the project's own `rules/geneseed.md` shadow stub is written
+    specifically so the workspace copy always wins over the global one by filename,
+    regardless of which was emitted first — see `_BOB_RULES_STUB`."""
     cfg = cfg or _bob_config_dir()
+    _warn_bob_global_over_project(cfg)
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
         theme_name, cfg, cfg / "AGENTS.md", "global", out, footprint)
     print(f"[geneseed] bob-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "

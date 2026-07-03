@@ -356,10 +356,14 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   Re-emit to apply. (A future TUI screen will edit this map.) Unlisted keys are omitted,
   so the agent inherits OpenCode's defaults.
 - **Agent colours.** Each capability agent is emitted with a `color:` set to an OpenCode
-  *named theme slot* — architect=`primary`, reviewer=`warning`, tester=`success`,
-  docs=`info`, security=`error`, explorer=`accent`, council seats=`secondary` — so the
-  agent switcher and subagent output are colour-coded, and the colour tracks whatever
-  OpenCode theme you run (portable, never a raw hex). Cosmetic.
+  *named theme slot*, sourced from the active harness theme's `AGENT_COLORS` map
+  (`themes/_TEMPLATE.json`; the shipped default — architect=`primary`, reviewer=`warning`,
+  tester=`success`, docs=`info`, security=`error`, explorer=`accent`, everything else
+  (council seats)=`secondary` — is the same in every shipped theme, but a theme is free
+  to restyle its own grouping). An unrecognised slot value falls back to `secondary` with
+  a build-time warning, so a bad restyle never reaches an invalid `color:` in emitted
+  frontmatter. The agent switcher and subagent output are colour-coded this way, and the
+  colour tracks whatever OpenCode theme you run (portable, never a raw hex). Cosmetic.
 - **Branded theme** (`/theme geneseed-<theme>`). The emit writes a complete OpenCode
   theme at `.opencode/themes/geneseed-<theme>.json` (global: `<cfg>/themes/`), tinted by
   the harness theme's accent using terminal-native ANSI colours (always valid, no host

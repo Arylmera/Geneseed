@@ -27,6 +27,8 @@
 ## Output contract
 - The test files written/changed, the command to run them, and the actual run
   output (pass/fail counts). For diagnosis: root cause + recommended fix location.
+- If the suite cannot be run or the expected behaviour is unspecified, report
+  that blocker instead of delivering tests that were never seen to fail.
 
 ## Self-improvement
 

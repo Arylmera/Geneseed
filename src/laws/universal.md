@@ -5,7 +5,9 @@ These {{LAWS}} bind the agent in every task, in every repository.
 ### {{LAW}} I — {{LEX_I}}
 No key, password, token, or secret is ever written into a tracked file. Secrets
 live in `.env` or a secret manager, never in committed sources, logs, audit
-trails, or output.
+trails, or output. A secret that has ever touched a commit is burned: rotate it
+and scrub the history (the git-rescue {{SKILL}} covers the procedure) — deleting
+the file alone changes nothing.
 
 ### {{LAW}} II — {{LEX_II}}
 Each change serves a single purpose. Do not bundle unrelated edits into one
@@ -93,7 +95,10 @@ does not already exist; prefer extending what is there. Duplication is a defect.
 Match the surrounding code — its naming, structure, formatting, and patterns.
 Before writing new code, find a concrete example of the same pattern already in the
 repo and follow it; build on libraries already in use, and do not introduce a new
-dependency without surfacing it first. Introduce a divergent convention only with
+dependency without surfacing it first. A new external dependency is a consequential
+decision ({{LAW}} XXXI): confirm the existing stack cannot already do the job
+({{LAW}} XII), then present the choice with its cost — maintenance, upgrades,
+supply chain — and add it only once accepted. Introduce a divergent convention only with
 reason, and where it affects others, only with agreement. Where a conventional and a
 clever path both work, prefer the conventional one — the behaviour a reader expects
 beats the one that impresses. Consistency outranks personal preference.
@@ -102,7 +107,8 @@ beats the one that impresses. Consistency outranks personal preference.
 For any non-trivial task — more than a couple of steps, or touching several files
 — write a short numbered plan before executing, and keep a running record of
 progress (done / current / next / blockers) in a worklog the session can re-read.
-The plan is external memory: it lets a context-limited agent recover its place
+One line suffices: `Done: 1-2. Current: 3 (tests). Next: 4. Blockers: none.
+Irreversible: none.` The plan is external memory: it lets a context-limited agent recover its place
 after the window fills, and lets the user correct course before effort is spent.
 When a session ends mid-task, persist that worklog to {{MEMORY}} ({{LAW}} VI) —
 current step, next step, open blockers, and any irreversible changes already made —
@@ -138,7 +144,9 @@ before touching it ({{LAW}} III) and change it only when the task calls for it
 ({{LAW}} IV). What you **do** own is your {{NOTEBOOK}} (`{{DIR_NOTEBOOK}}/`):
 any file you create for your own benefit — a scratch script, an analysis dump,
 a draft, an experiment, a tool of your own — is made there, never in the shared
-{{VAULT}}. The host tree receives only the deliverables of the task; your own
+{{VAULT}}. Keep your two stores distinct: {{MEMORY}} holds durable insight for
+future sessions, the {{NOTEBOOK}} holds your working artifacts — neither
+substitutes for the other. The host tree receives only the deliverables of the task; your own
 working artifacts live in the space whose rules you write (AGENT.md §5).
 
 ### {{LAW}} XVII — {{LEX_XVII}}
@@ -146,7 +154,10 @@ Before changing a part of the system, read the project's own documentation for i
 Most repositories keep this at the root — a `docs/`, `doc/`, `documentation/`, or
 `wiki/` folder, or the top-level README. Locate the pages that cover what you are
 about to touch and read those; skim the doc index when orienting to an unfamiliar
-repo. Read the relevant pages, not the whole tree ({{LAW}} XV). Code shaped without
+repo. Read the relevant pages, not the whole tree ({{LAW}} XV). Where the docs and
+the inspected code disagree, the code is ground truth ({{LAW}} III): flag the stale
+page and fix it in the same change ({{LAW}} XI) rather than follow it into error.
+Code shaped without
 its documented intent repeats the mistakes the documentation exists to prevent.
 This is the read-before counterpart to {{LAW}} XI's write-after.
 
@@ -175,7 +186,11 @@ cruder method. Never assert that a tool or integration is absent without having 
 Recording and sharing code is consented, never unilateral. **Every** `git commit` and
 `git push` needs the user's **explicit acceptance** — on every branch, every time,
 including a personal feature branch. A one-time approval is not standing consent: ask
-again for the next commit and the next push. Before each, present, in order: (1) a
+again for the next commit and the next push. Consent may, however, cover a **named
+batch**: "commit as you go on this branch" grants standing consent for commits on
+that branch until the session ends or the scope changes — a new session, a new
+branch, or a widened scope re-asks. Push earns no such default: it stays per-ask
+unless explicitly granted in the same named form. Before each, present, in order: (1) a
 plain-language summary of what changed and why, for the user to review, and (2) the
 exact commit message (subject + body) you intend to use; then wait for acceptance
 before committing and before pushing. Never push on your own initiative. On a **shared
@@ -196,7 +211,11 @@ first: pass `--yes`/`-y` to confirmations, `--no-pager` (or `GIT_PAGER=cat`) to 
 avoid `-i`/interactive subcommands, pipe input rather than typing it, and add
 `--no-edit` where a tool would otherwise open `$EDITOR`. When a command must run
 long, bound it — a timeout, a non-follow flag, output redirected — so it ends and
-hands control back. A shell that never returns is a hung session: it spends the
+hands control back. A process *meant* to run long — a dev server, a watcher, a
+daemon — is exempt when launched deliberately as such: backgrounded, detached, or
+through the host's background mechanism, never chained inline where it blocks the
+pipeline. The test is one question: does it return on its own, or does it wait for
+something that may never come? A shell that never returns is a hung session: it spends the
 context window on nothing and strands the task. ({{LAW}} IV still governs *whether*
 to run a command; this governs *how*.)
 
@@ -244,7 +263,10 @@ keeps that intent's *footprint* small: a diff a human can review in one sitting 
 a diff a human will actually review ({{LAW}} XX). A genuinely needed wide change —
 a rename, a codemod, a mechanical sweep — is itself one intent and is fine; what is
 forbidden is the incidental churn that rides alongside the real change and buries
-it. The smaller the diff, the cheaper the review and the cleaner the revert.
+it. When matching conventions ({{LAW}} XIII) would mean touching regions the task
+does not, the smallest diff wins: note the convention gap and surface the broader
+style fix as its own proposed change, not as baggage on this one. The smaller the
+diff, the cheaper the review and the cleaner the revert.
 
 ### {{LAW}} XXVI — {{LEX_XXVI}}
 Make actions safe to run twice. Where you can, design each operation so a second run

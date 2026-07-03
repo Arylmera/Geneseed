@@ -119,6 +119,118 @@ class ClaudeEmitTests(unittest.TestCase):
             self.assertIn(line, gi)
 
 
+class SettingsIntegrityCheckTests(unittest.TestCase):
+    """build._settings_integrity_check verifies a settings.json actually matches what
+    the manifest claims — after emit (expect='present') and after unwire
+    (expect='absent') — and flags unrecorded Geneseed-pattern hooks. It must never
+    raise, and a clean emit/unwire must report zero problems."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.cfg = self.tmp / "dotclaude"
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_clean_emit_passes_integrity_check(self):
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        managed = man["managed"]
+        settings = json.loads(_read(self.cfg / "settings.json"))
+        problems = build._settings_integrity_check(
+            self.cfg / "settings.json", managed, expect="present")
+        self.assertEqual(problems, [])
+        # sanity: the settings really do carry the recorded groups (not a vacuous pass)
+        self.assertTrue(settings.get("hooks"))
+
+    def test_hand_mangled_settings_flags_missing_group(self):
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        managed = man["managed"]
+        # Hand-mangle: delete a recorded hook group the manifest still claims.
+        settings_path = self.cfg / "settings.json"
+        s = json.loads(_read(settings_path))
+        del s["hooks"]["Stop"]
+        settings_path.write_text(json.dumps(s), encoding="utf-8")
+
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            problems = build._settings_integrity_check(settings_path, managed, expect="present")
+        self.assertTrue(problems, "hand-deleted group was not flagged")
+        self.assertTrue(any("Stop" in p for p in problems))
+        self.assertIn("WARN", buf.getvalue())
+
+    def test_uninstall_unwired_settings_passes_absent_check(self):
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        managed = man["managed"]
+        harness._claude_uninstall(self.cfg, archive_memory=False)
+        # Uninstall deletes the manifest but the settings.json (a user file) remains;
+        # its hooks/excludes must all be gone per the ORIGINAL managed claims.
+        problems = build._settings_integrity_check(
+            self.cfg / "settings.json", managed, expect="absent")
+        self.assertEqual(problems, [])
+
+    def test_unrecorded_geneseed_pattern_hook_warns_but_is_not_removed(self):
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        managed = man["managed"]
+        settings_path = self.cfg / "settings.json"
+        s = json.loads(_read(settings_path))
+        # An orphan Geneseed-shaped entry the manifest never claimed (e.g. a leftover
+        # from a moved checkout) under an event the manifest doesn't track.
+        s.setdefault("hooks", {})["Notification"] = [
+            {"hooks": [{"type": "command", "command": 'python "C:/old/harness.py" learn'}]}]
+        settings_path.write_text(json.dumps(s), encoding="utf-8")
+
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            problems = build._settings_integrity_check(settings_path, managed, expect="present")
+        self.assertTrue(any("NOT recorded" in p for p in problems))
+        # never auto-deleted
+        s2 = json.loads(_read(settings_path))
+        self.assertIn("Notification", s2.get("hooks", {}))
+
+    def test_missing_settings_file_after_present_expectation_is_flagged(self):
+        managed = {"settings_hooks": [{"event": "Stop", "group": {"hooks": []}}]}
+        missing = self.cfg / "settings.json"   # cfg dir doesn't even exist
+        problems = build._settings_integrity_check(missing, managed, expect="present")
+        self.assertTrue(problems)
+
+    def test_missing_settings_file_after_absent_expectation_is_clean(self):
+        managed = {"settings_hooks": [{"event": "Stop", "group": {"hooks": []}}]}
+        missing = self.cfg / "settings.json"
+        problems = build._settings_integrity_check(missing, managed, expect="absent")
+        self.assertEqual(problems, [])
+
+    def test_commented_settings_file_is_still_checked_after_unwire(self):
+        # _unwire_claude_settings refuses to rewrite a commented file (silently), so
+        # hooks linger after an uninstall — the checker must flag them, not ALSO go
+        # silent on had_comments (the exact case the call sites claim to guard).
+        import contextlib, io
+        self.cfg.mkdir(parents=True)
+        sp = self.cfg / "settings.json"
+        group = {"hooks": [{"type": "command",
+                            "command": 'python "x/rituals/harness.py" learn'}]}
+        sp.write_text("// my precious comments\n"
+                      + json.dumps({"hooks": {"Stop": [group]}}, indent=2),
+                      encoding="utf-8")
+        managed = {"settings_hooks": [{"event": "Stop", "group": group}]}
+        # the unwire bails on the comments (and now says so via its return) ...
+        self.assertFalse(build._unwire_claude_settings(sp, managed["settings_hooks"]))
+        # ... and the checker still reports the lingering group instead of going silent.
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            problems = build._settings_integrity_check(sp, managed, expect="absent")
+        self.assertTrue(any("still present" in p for p in problems), problems)
+        self.assertIn("WARN", buf.getvalue())
+        # read-only: the user's commented file was not rewritten by the check.
+        self.assertIn("my precious comments", sp.read_text(encoding="utf-8"))
+
+
 class ClaudeSafetyTests(unittest.TestCase):
     """A pre-existing, user-owned ~/.claude is never clobbered, and uninstall removes
     only Geneseed-owned files — leaving every user file + their settings intact."""

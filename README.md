@@ -131,7 +131,7 @@ Full reference — every view, the launch/daemon/PWA surface, the security model
 
 ### ⌨️ TUI — `geneseed`
 
-Same actions, no browser. Bare `geneseed` opens the **main menu** — browse, review local edits, refresh/set up, update, rebuild, memory, status, and Settings (MCP servers, run-from-anywhere, uninstall). `geneseed setup` jumps straight to the install wizard; `geneseed tui` opens the browse panel directly. The whole thing is a stdlib-only, dependency-free full-screen UI that also degrades to plain text prompts on older consoles — see [Setup](#-2--setup) above for the wizard walkthrough.
+Same actions, no browser. Bare `geneseed` opens the **main menu** — browse, review local edits, refresh/set up, update, rebuild, memory, status, and Settings (MCP servers, run-from-anywhere, uninstall — global **or** per-repo). `geneseed setup` jumps straight to the install wizard; `geneseed tui` opens the browse panel directly. The whole thing is a stdlib-only, dependency-free full-screen UI that also degrades to plain text prompts on older consoles — see [Setup](#-2--setup) above for the wizard walkthrough.
 
 ---
 
@@ -166,7 +166,7 @@ Fourteen themes ship — each a single JSON file in `themes/` carrying voice tok
 | 🏟️ **sports** | play-by-play commentary |
 | 🏍 **biker** · 🎤 **commentator** · 🃏 **joker** · 🤖 **marvin** · 😤 **mean** · 🏎 **verstappen** | community-added voices for fun |
 
-Pick with `--theme NAME` or via the TUI wizard. The theme is remembered in a `.geneseed-theme` marker, so later upgrades preserve it. `doctor` checks every theme defines the same keys, so flavour drift is impossible.
+Pick with `--theme NAME` or via the TUI wizard. The theme is remembered in a `.geneseed-theme` marker, so later upgrades preserve it. `doctor` checks every theme defines the same keys, so flavour drift is impossible. Adding a new voice token to `themes/_TEMPLATE.json`? Run `python build.py --sync-themes` to fill it into every theme (template's placeholder value, reported for restyling) before `doctor` is expected to pass again.
 
 ### 🪶 Footprint (lean vs full)
 
@@ -180,6 +180,8 @@ A second per-install dial, **footprint**, sets how much of the Rules `AGENT.md` 
 Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Use **full** when token cost is a non-issue or you run a smaller model; use **lean** to reclaim context on long sessions, large repos, or cost-sensitive runs. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob).
 
 Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates each Rule's *reasoning* to on-demand (and adds the standalone laws file to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer — which is why it stays the default.
+
+Want to check a build before it touches anything real? `python build.py --validate-only --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build---validate-only).
 
 ---
 

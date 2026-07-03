@@ -23,6 +23,7 @@
 
 ## Output contract
 - The framing read: the real problem in one line, whether the motion fits it, the reframe if the framing is wrong, and the question the council should be debating instead.
+- If the framing holds up under attack, say so plainly and yield — a reframe invented to justify the seat derails a debate that was already sound.
 
 ## Self-improvement
 

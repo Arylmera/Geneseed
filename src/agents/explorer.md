@@ -17,7 +17,9 @@
 - The question to answer and where to look (paths, keywords, scope).
 
 ## Allowed tools
-- **Read-only**: search and read. Never edits.
+- **Read-only**: search and read; may run read-only shell commands (grep, find,
+  `git log`) to locate or cross-reference. Never edits.
+  <!-- bash: allow -->
 
 ## Procedure
 1. Search to locate the relevant files before reading them (universal {{LAW}} XV).
@@ -27,6 +29,8 @@
 ## Output contract
 - A concise answer: the conclusion, the key `file:line` references that support
   it, and any open questions. Never the full contents of what was read.
+- If the search comes up empty, report what was searched and where, and answer
+  not-found — a confident wrong location costs more than an honest blank.
 
 ## Self-improvement
 

@@ -6,6 +6,9 @@
 not in this repository or your own knowledge — facts to gather and verify from the
 open web.
 
+**Requires:** a host web-search or web-fetch capability ({{LAW}} XIX) — without one,
+stop and report it ({{LAW}} VII); never substitute recall for verified research.
+
 ## Procedure
 1. State the question and what a complete answer must contain. Break a broad question
    into specific sub-questions.
