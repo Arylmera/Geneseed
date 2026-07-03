@@ -9,6 +9,16 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Fixed
+- **Renamed DIR_* dirs in the portable bundle no longer orphan**: the bundle's
+  owned dirs (`laws`/`agents`/`skills`, in their themed form) are wiped and
+  rebuilt each run, but the wipe was keyed only to the CURRENT theme's dir name —
+  if a theme ever renamed one of them between two builds into the same target,
+  the old dir was never targeted and lingered forever. A new local marker
+  (`.geneseed-srcdirs.json`) now remembers which dir name was actually used last
+  time, so a rename is also pruned. (Shipped themes don't currently vary DIR_*, so
+  this is future-proofing rather than an active drift; the global/Claude/Bob
+  scopes' equivalent case — a lean-footprint standalone laws dir surviving a
+  switch back to full — is already covered by the owned-file manifest.)
 - **Bob installs now actually load the preamble/theme**: IBM Bob's only
   always-injected instruction channel is the rules folder — a global
   `~/.bob/AGENTS.md` is never auto-loaded (only a project-root one is), which left

@@ -216,6 +216,121 @@ class BuildRoundTripTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class SrcDirRenameOrphanTests(unittest.TestCase):
+    """Task 9: a DIR_* rename between two builds into the SAME `out` must not orphan
+    the old themed dir. Shipped themes never actually vary DIR_* today (STRUCTURE
+    always wins over a theme's own value — see effective_theme), so this simulates
+    the rename the way a future themed DIR_* would produce: by patching the module-
+    level STRUCTURE dict build() actually resolves against, between two build() calls
+    into the same target."""
+
+    def _rename_dir_token(self, token: str, new_name: str):
+        old = dict(build.STRUCTURE)
+        build.STRUCTURE[token] = new_name
+        self.addCleanup(lambda: (build.STRUCTURE.clear(), build.STRUCTURE.update(old)))
+
+    def test_dir_laws_rename_prunes_the_old_dir(self):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp)
+            self.assertTrue((tmp / "laws").is_dir())
+            self._rename_dir_token("DIR_LAWS", "ordinances")
+            build.build("neutral", tmp)
+            self.assertFalse((tmp / "laws").exists(),
+                              "old DIR_LAWS dir must be pruned, not orphaned")
+            self.assertTrue((tmp / "ordinances" / "universal.md").is_file())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_dir_agents_and_dir_skills_rename_prunes_old_dirs(self):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp)
+            self._rename_dir_token("DIR_AGENTS", "specialists")
+            self._rename_dir_token("DIR_SKILLS", "rites")
+            build.build("neutral", tmp)
+            self.assertFalse((tmp / "agents").exists())
+            self.assertFalse((tmp / "skills").exists())
+            self.assertTrue((tmp / "specialists").is_dir())
+            self.assertTrue((tmp / "rites").is_dir())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_rename_round_trips_back_without_leftovers(self):
+        """Renaming out and back must leave exactly the original dir — no trace of
+        the intermediate themed name survives a second flip."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp)
+            self._rename_dir_token("DIR_LAWS", "ordinances")
+            build.build("neutral", tmp)
+            self.assertTrue((tmp / "ordinances").is_dir())
+            # Flip back to the original name.
+            build.STRUCTURE["DIR_LAWS"] = "laws"
+            build.build("neutral", tmp)
+            self.assertTrue((tmp / "laws").is_dir())
+            self.assertFalse((tmp / "ordinances").exists())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_first_build_into_non_bundle_dir_never_wipes_user_content(self):
+        """The prior-dirs marker must only ever prune inside an established bundle
+        (is_bundle) — a first render into an arbitrary repo must not touch a
+        pre-existing user dir just because a stale marker happens to be lying
+        around from an unrelated source."""
+        import contextlib, io
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            (tmp / "laws").mkdir()
+            (tmp / "laws" / "mine.md").write_text("user content", encoding="utf-8")
+            # build() prints a non-ASCII merge warning on this exact path (pre-existing,
+            # unrelated to Task 9) — redirect so the test doesn't depend on console codepage.
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.build("neutral", tmp)   # tmp has no .geneseed-theme/-version yet
+            self.assertTrue((tmp / "laws" / "mine.md").is_file())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class FootprintOrphanRegressionTests(unittest.TestCase):
+    """Task 9: full -> lean -> full footprint switches must not leave the standalone
+    lean-mode laws dir behind. This is already fixed by Task 3's owned-file manifest
+    for the global/claude/bob scopes (`_ship_lean_laws`'s files are tracked in
+    `owned` and pruned by the existing old_owned - owned diff) — kept here as
+    regression coverage, not a new fix."""
+
+    def test_global_scope_lean_to_full_prunes_standalone_laws_dir(self):
+        import contextlib, io
+        cfg = Path(tempfile.mkdtemp()) / "cfg"
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_opencode_global("neutral", out=Path(tempfile.mkdtemp()) / "b",
+                                           cfg=cfg, footprint="lean")
+            self.assertTrue((cfg / "laws" / "universal.md").is_file())
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_opencode_global("neutral", out=Path(tempfile.mkdtemp()) / "b",
+                                           cfg=cfg, footprint="full")
+            self.assertFalse((cfg / "laws").exists(),
+                              "lean-mode standalone laws/ must be pruned on full switch")
+        finally:
+            shutil.rmtree(cfg.parent, ignore_errors=True)
+
+    def test_claude_global_scope_lean_to_full_prunes_standalone_laws_dir(self):
+        import contextlib, io
+        cfg = Path(tempfile.mkdtemp()) / "cfg"
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_claude_global("neutral", out=Path(tempfile.mkdtemp()) / "b",
+                                         cfg=cfg, footprint="lean")
+            self.assertTrue((cfg / "laws" / "universal.md").is_file())
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_claude_global("neutral", out=Path(tempfile.mkdtemp()) / "b",
+                                         cfg=cfg, footprint="full")
+            self.assertFalse((cfg / "laws").exists())
+        finally:
+            shutil.rmtree(cfg.parent, ignore_errors=True)
+
+
 class CircularIncludeTests(unittest.TestCase):
     """INCLUDE resolution must catch a cycle and emit a visible marker rather than
     recursing until Python raises RecursionError."""

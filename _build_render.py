@@ -355,6 +355,7 @@ agent-overrides.json
 .geneseed-theme
 .geneseed-emit
 .geneseed-footprint
+.geneseed-srcdirs.json
 
 # memory/ keeps its own .gitignore so learned facts stay on this machine.
 # notebook/ keeps its own .gitignore so the agent's own files stay on this machine.
@@ -514,6 +515,35 @@ def read_version(path: Path) -> "str | None":
     return txt.split()[0] if txt else None
 
 
+# Task 9: the portable bundle (build()) has no per-file manifest — it wipes and
+# regenerates OWNED_SRC_DIRS wholesale each run, keyed by the CURRENT theme's DIR_*
+# resolution. That is not enough on its own: if a theme's DIR_* value ever changes
+# between two builds into the SAME `out` (a theme edit, or switching themes), the
+# OLD themed dir name is never targeted by the new run's wipe and is orphaned. This
+# tiny marker remembers which dir name was actually used for each OWNED_SRC_DIRS
+# entry last time, so build() can also wipe THAT one when it no longer matches.
+# (DIR_* is theme-independent in practice today — STRUCTURE always wins over a
+# theme's own value, see effective_theme — but the marker costs nothing and closes
+# the gap the moment that changes, or for a future theme that does vary it.)
+SRC_DIRS_MARKER = ".geneseed-srcdirs.json"
+
+
+def _read_prior_src_dirs(out: Path) -> dict:
+    try:
+        data = json.loads((out / SRC_DIRS_MARKER).read_text(encoding="utf-8"))
+    except OSError:
+        return {}
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_src_dirs_marker(out: Path, resolved: dict) -> None:
+    tmp = out / (SRC_DIRS_MARKER + ".tmp")
+    tmp.write_text(json.dumps(resolved, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, out / SRC_DIRS_MARKER)
+
+
 def build(theme_name: str, out: Path, footprint: str = "full") -> None:
     """Render the bundle into `out`.
 
@@ -524,11 +554,13 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
 
     Before rendering, the dirs the build fully owns (`OWNED_SRC_DIRS` — laws,
     agents, skills, in their themed form) are wiped, so a renamed or removed source
-    file never leaves a stale copy behind. Everything else in `out` is preserved:
-    the surrounding application code, the agent's runtime `memory/` (MEMORY.md +
-    fact files, refreshed in place) and `notebook/` (the agent's sovereign
-    space — seeded once, never re-emitted; only its `.gitignore` is re-asserted),
-    and `context.json` — written once, beside
+    file never leaves a stale copy behind. A renamed DIR_* dir from a PRIOR build
+    (recorded in `.geneseed-srcdirs.json`) is wiped too, even though the current
+    theme no longer produces that name — see the marker's module comment (Task 9).
+    Everything else in `out` is preserved: the surrounding application code, the
+    agent's runtime `memory/` (MEMORY.md + fact files, refreshed in place) and
+    `notebook/` (the agent's sovereign space — seeded once, never re-emitted; only
+    its `.gitignore` is re-asserted), and `context.json` — written once, beside
     AGENT.md, and never touched again. The build therefore cleans its own footprint
     without ever destroying the user's repository or data."""
     theme, items = render_all(theme_name, footprint)
@@ -540,8 +572,20 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
     # delete a pre-existing agents/ or skills/ dir the USER owns.
     is_bundle = ((out / ".geneseed-theme").is_file()
                  or (out / ".geneseed-version").is_file())
+    prior_src_dirs = _read_prior_src_dirs(out) if is_bundle else {}
+    resolved_src_dirs = {}
     for src_dir in OWNED_SRC_DIRS:
-        managed = out / theme.get(SRC_DIR_TOKENS[src_dir], src_dir)
+        dirname = theme.get(SRC_DIR_TOKENS[src_dir], src_dir)
+        resolved_src_dirs[src_dir] = dirname
+        managed = out / dirname
+        # A prior build recorded a DIFFERENT resolved name for this same
+        # OWNED_SRC_DIRS entry (a DIR_* rename) — that old dir is no longer
+        # produced by anything and would otherwise be orphaned; wipe it too.
+        prior_name = prior_src_dirs.get(src_dir)
+        if is_bundle and prior_name and prior_name != dirname:
+            stale = out / prior_name
+            if stale.is_dir():
+                shutil.rmtree(stale)
         if not managed.is_dir():
             continue
         if is_bundle:
@@ -570,6 +614,7 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
 
     (out / ".geneseed-theme").write_text(theme_name + "\n", encoding="utf-8")
     write_version(out)
+    _write_src_dirs_marker(out, resolved_src_dirs)
     ensure_context_stub(out)
     ensure_wiki_stub(out)
     ensure_bundle_gitignore(out)
