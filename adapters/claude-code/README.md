@@ -8,8 +8,11 @@ self-discipline.
 
 ## Install
 
-Merge [`settings.json`](settings.json) into your repo's `.claude/settings.json`
-(or your user settings). It:
+Merge [`settings.json`](settings.json) into your repo's `.claude/settings.json`.
+(Not your *user* settings: the hook commands are repo-relative — `python
+rituals/harness.py …` — so at user scope they would fire and fail in every
+repo that doesn't vendor the harness. A generated global install wires
+absolute-path hooks instead — `geneseed setup` does that for you.) It:
 
 - on **PreToolUse** (matcher `Bash`), runs `harness git-gate` — a tool-boundary
   backstop for Rule XX (*consent before every commit and push*). The hook inspects the

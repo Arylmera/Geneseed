@@ -163,9 +163,10 @@ def build_argparser() -> argparse.ArgumentParser:
     df.add_argument("--theme", default=None, help="theme the deployment used "
                     "(default: auto-detected from the deployed marker/sigil)")
     df.add_argument("--full", action="store_true", help="show unified diffs, not just the file-level summary")
-    df.add_argument("--out", default=None, metavar="FILE",
+    df.add_argument("--out", nargs="?", const=True, default=None, metavar="FILE",
                     help="also write the drift as a markdown improvements file — the "
-                         "artifact to hand to an agent to back-port edits into src/")
+                         "artifact to hand to an agent to back-port edits into src/ "
+                         "(bare --out picks a timestamped file under improvements/)")
     df.set_defaults(fn=cmd_diff)
 
     ve = sub.add_parser("version", help="show installed vs current-source fingerprint and whether they match")
@@ -219,14 +220,15 @@ def build_argparser() -> argparse.ArgumentParser:
     bs.set_defaults(fn=cmd_bootstrap)
 
     up = sub.add_parser("upgrade", help="self-update: git pull the install's origin (ff-only), "
-                                        "validate, then rebuild the bundle")
+                                        "validate, then rebuild the bundle + every install",
+                        aliases=["update"])
     up.add_argument("ref", nargs="?", default=None, help=argparse.SUPPRESS)  # ignored; git follows the current branch
     up.add_argument("theme", nargs="?", default=None, help="optional: force a theme (neutral|imperial|…)")
     up.set_defaults(fn=cmd_upgrade)
 
     ss = sub.add_parser("sync-self", help="refresh the orchestration layer — launchers + update "
                                           "scripts (cross-platform; replaces sync-self.sh)")
-    ss.add_argument("ref", nargs="?", default=None, help="branch or tag (default: main)")
+    ss.add_argument("ref", nargs="?", default=None, help=argparse.SUPPRESS)  # ignored; git follows the current branch
     ss.set_defaults(fn=cmd_sync_self)
 
     wb = sub.add_parser("web", help="serve the deployed harness as a local web UI "

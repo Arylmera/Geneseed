@@ -88,7 +88,7 @@ suites) on Linux and Windows.
 - One neutral `src/` rendered by a stdlib-only generator (`build.py`) into 14
   themed, tool-agnostic bundles; structure stays theme-independent.
 - 20 universal laws, 16 capability agents (6 execution + a 10-seat debate council),
-  33 skills, the one-fact-per-file memory convention, and the agent's sovereign
+  30 skills, the one-fact-per-file memory convention, and the agent's sovereign
   notebook.
 
 ### Tooling

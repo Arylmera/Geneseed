@@ -64,6 +64,16 @@ sys.modules[__name__].__class__ = _BuildFacade
 
 
 def main() -> None:
+    # Same UTF-8 reconfigure as harness.py/_update.py: build.py is also spawned with
+    # PIPED stdout (web jobs, upgrade), where Windows defaults to cp1252 — a ⚠️/✗ in a
+    # merge warning or E-INCOMPLETE refusal would crash print() with UnicodeEncodeError
+    # and eat the diagnostic exactly when it matters.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except (ValueError, OSError):
+                pass
     default_theme = "neutral"
     if CONFIG.exists():
         # A truncated/corrupt config must not brick the CLI — fall back to neutral.

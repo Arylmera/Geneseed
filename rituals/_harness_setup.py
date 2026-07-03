@@ -216,7 +216,10 @@ def _collect_setup_lines() -> "dict | None":
     footprint = _ask_choice("Footprint", [(k, d) for k, d in FOOTPRINT_OPTIONS],
                             inst["footprint"] or "full")
     out = root = None
-    if emit == "opencode":
+    # Every PROJECT emit needs the repo root — claude/bob included: without --out
+    # their CLAUDE.md/.claude land in build.py's default ./Harness, where the host
+    # never loads them.
+    if emit in ("opencode", "claude", "bob"):
         root = _ask("Repo root to install into", ".")
         out = root
     elif emit == "files":

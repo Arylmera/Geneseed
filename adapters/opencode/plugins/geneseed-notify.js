@@ -30,7 +30,10 @@ import { spawn } from "node:child_process"
 
 const MODE = (process.env.GENESEED_NOTIFY || "on").toLowerCase()
 const OFF = ["off", "0", "false", "no"].includes(MODE)
-const MIN_MS = Math.max(0, Number(process.env.GENESEED_NOTIFY_MIN_SECONDS ?? 30)) * 1000
+// NaN-safe: Math.max(0, NaN) is NaN, and `elapsed >= NaN` is always false — garbage
+// in the env var would silently disable every notification.
+const _minRaw = Number(process.env.GENESEED_NOTIFY_MIN_SECONDS ?? 30)
+const MIN_MS = Math.max(0, Number.isFinite(_minRaw) ? _minRaw : 30) * 1000
 const TITLE = process.env.GENESEED_NOTIFY_TITLE || "Geneseed"
 const DEBUG = !!process.env.GENESEED_DEBUG
 function log(msg) { if (DEBUG) console.error(`[geneseed-notify] ${msg}`) }

@@ -101,12 +101,22 @@ class ClaudeEmitTests(unittest.TestCase):
         repo.mkdir()
         build.emit_claude("neutral", repo)
         self.assertTrue((repo / "CLAUDE.md").is_file())
-        self.assertTrue((repo / ".claude" / "settings.json").is_file())
+        # Machine-absolute hooks land in the PERSONAL settings.local.json, never the
+        # team-shared settings.json (which is not even created).
+        self.assertTrue((repo / ".claude" / "settings.local.json").is_file())
+        self.assertFalse((repo / ".claude" / "settings.json").exists())
         self.assertTrue((repo / ".claude" / build.GLOBAL_MANIFEST).is_file())
         # learn hook points at the project's own memory store (absolute).
-        s = json.loads(_read(repo / ".claude" / "settings.json"))
+        s = json.loads(_read(repo / ".claude" / "settings.local.json"))
         learn = [c for c in _hook_cmds(s) if "learn" in c]
         self.assertTrue(learn and str((repo / ".claude" / "memory")) in learn[0])
+        # store pointers in the root CLAUDE.md carry the marker-dir prefix — bare
+        # `memory/` would point at a nonexistent repo-root store (split-brain memory).
+        self.assertIn(".claude/memory", _read(repo / "CLAUDE.md"))
+        # hygiene: the personal/never-commit files are gitignored.
+        gi = _read(repo / ".claude" / ".gitignore")
+        for line in ("settings.local.json", "wiki.jsonc", "agent-overrides.json"):
+            self.assertIn(line, gi)
 
 
 class ClaudeSafetyTests(unittest.TestCase):
@@ -143,7 +153,7 @@ class ClaudeSafetyTests(unittest.TestCase):
         cm = _read(self.cfg / "CLAUDE.md")
         self.assertIn("keep this", cm)
         self.assertIn("<!-- BEGIN GENESEED -->", cm)
-        self.assertFalse(man["managed"]["claude_md"]["whole"])
+        self.assertFalse(man["managed"]["claude_md"].get("whole"))
         # user settings key + their own hook survive; geneseed hooks added
         s = json.loads(_read(self.cfg / "settings.json"))
         self.assertEqual(s["model"], "opus")
@@ -172,6 +182,29 @@ class ClaudeSafetyTests(unittest.TestCase):
         # Geneseed's own agents are gone; markers gone.
         self.assertFalse((self.cfg / "agents" / "reviewer.md").exists())
         self.assertFalse((self.cfg / build.GLOBAL_MANIFEST).exists())
+
+    def test_uninstall_keeps_prose_added_after_creation(self):
+        # Geneseed CREATES CLAUDE.md in an empty dir; the user then adds their own
+        # prose. The old sticky `whole` flag deleted the whole file at uninstall —
+        # eating that prose. Teardown must excise the block and keep the rest.
+        cfg = (self.tmp / "fresh").resolve()
+        cfg.mkdir()
+        build.emit_claude_global("neutral", cfg=cfg)
+        cm = cfg / "CLAUDE.md"
+        cm.write_text(_read(cm) + "\nMY LATER NOTES\n", encoding="utf-8")
+        harness._uninstall_global(cfg, archive_memory=False, host="claude")
+        self.assertTrue(cm.is_file(), "user prose deleted with the file")
+        self.assertIn("MY LATER NOTES", _read(cm))
+        self.assertNotIn("<!-- BEGIN GENESEED -->", _read(cm))
+
+    def test_uninstall_removes_pristine_created_claude_md(self):
+        # No user prose ever added: excision leaves the file empty → it is removed
+        # (same end state the whole-file delete used to produce, minus the risk).
+        cfg = (self.tmp / "pristine").resolve()
+        cfg.mkdir()
+        build.emit_claude_global("neutral", cfg=cfg)
+        harness._uninstall_global(cfg, archive_memory=False, host="claude")
+        self.assertFalse((cfg / "CLAUDE.md").exists())
 
 
 class ClaudeActivationTests(unittest.TestCase):
@@ -225,6 +258,55 @@ class ClaudeActivationTests(unittest.TestCase):
         self.assertFalse((self.cfg / ".geneseed-disabled").exists(), "stale stash not discarded")
         self.assertTrue((self.cfg / "agents" / "reviewer.md").is_file())
         self.assertEqual(harness._install_state(self.cfg, "claude", "global"), "active")
+
+    def test_bob_global_reactivate_discards_stash_after_reemit(self):
+        # Bob GLOBAL writes no managed AGENTS.md block (rules/geneseed.md is the
+        # preamble carrier), so the relive guard must key on THAT — without it the
+        # restore collides with every freshly re-emitted file and the install is
+        # stuck "disabled" until the stash is hand-deleted.
+        bobcfg = (self.tmp / "dotbob").resolve()
+        bobcfg.mkdir()
+        build.emit_bob_global("neutral", cfg=bobcfg)
+        self.assertEqual(harness._install_state(bobcfg, "bob", "global"), "active")
+        harness._install_deactivate(bobcfg, "bob", "global")
+        self.assertEqual(harness._install_state(bobcfg, "bob", "global"), "disabled")
+        build.emit_bob_global("neutral", cfg=bobcfg)   # re-created while disabled
+        res = harness._install_reactivate(bobcfg, "bob", "global")
+        self.assertTrue(res["ok"], res)
+        self.assertIn("discarded", res.get("note", ""))
+        self.assertFalse((bobcfg / ".geneseed-disabled").exists(), "stale stash not discarded")
+        self.assertTrue((bobcfg / "rules" / "geneseed.md").is_file())
+        self.assertEqual(harness._install_state(bobcfg, "bob", "global"), "active")
+
+    def test_reemit_prunes_stale_managed_hook_group(self):
+        # A recorded managed group that is no longer canonical (old interpreter path,
+        # or the pre-`|| exit 0` hook form) must be PRUNED on re-emit, not left to
+        # stack beside the new group — a duplicated Stop hook runs `learn` twice.
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        claims = man["managed"]["settings_hooks"]
+        stop = next(r for r in claims if r["event"] == "Stop")
+        stale = {"event": "Stop",
+                 "group": json.loads(json.dumps(stop["group"]))}
+        stale["group"]["hooks"][0]["command"] = \
+            stale["group"]["hooks"][0]["command"].replace("|| exit 0", "|| true")
+        # Simulate the old install: stale form in the file AND in the manifest claims.
+        s = json.loads(_read(self.cfg / "settings.json"))
+        s["hooks"]["Stop"] = [stale["group"]]
+        (self.cfg / "settings.json").write_text(json.dumps(s), encoding="utf-8")
+        man["managed"]["settings_hooks"] = \
+            [r for r in claims if r["event"] != "Stop"] + [stale]
+        (self.cfg / build.GLOBAL_MANIFEST).write_text(json.dumps(man), encoding="utf-8")
+
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        s = json.loads(_read(self.cfg / "settings.json"))
+        stops = s["hooks"]["Stop"]
+        self.assertEqual(len(stops), 1, f"stale Stop group not pruned: {stops}")
+        self.assertIn("|| exit 0", stops[0]["hooks"][0]["command"])
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        recorded = [r["group"]["hooks"][0]["command"]
+                    for r in man["managed"]["settings_hooks"] if r["event"] == "Stop"]
+        self.assertEqual(len(recorded), 1, recorded)
+        self.assertIn("|| exit 0", recorded[0])
 
     def test_deactivate_leaves_no_empty_skill_folders(self):
         # tdd is a real Geneseed skill, emitted at skills/tdd/SKILL.md.
@@ -353,15 +435,19 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
                 os.environ[k] = v
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def _settings(self, repo, marker=".claude"):
-        return json.loads(_read(repo / marker / "settings.json"))
+    def _settings(self, repo, marker=".claude", fname=None):
+        # Claude project installs write the personal settings.local.json; bob (no
+        # documented local variant) keeps settings.json.
+        fname = fname or ("settings.json" if marker == ".bob" else "settings.local.json")
+        return json.loads(_read(repo / marker / fname))
 
     def test_project_emit_writes_exclude_and_scoped_hook(self):
         repo = (self.tmp / "repo").resolve(); repo.mkdir()
         build.emit_claude("neutral", repo)
         s = self._settings(repo)
         # claudeMdExcludes suppresses the GLOBAL ~/.claude/CLAUDE.md, and only that.
-        want = str((build._claude_config_dir() / "CLAUDE.md").resolve())
+        # Posix spelling: the entries are glob patterns, where a backslash escapes.
+        want = (build._claude_config_dir() / "CLAUDE.md").resolve().as_posix()
         self.assertIn(want, s.get("claudeMdExcludes", []))
         # context hook is scope-aware: --root points at the project's own .claude.
         ctx = [c for c in _hook_cmds(s) if "context" in c]
@@ -475,6 +561,41 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         os.environ["GENESEED_STACK_GLOBAL"] = "1"
         build.emit_claude("neutral", repo)
         self.assertNotIn("claudeMdExcludes", self._settings(repo))
+
+    def test_reemit_migrates_hooks_out_of_shared_settings_json(self):
+        # An older install wired the machine-absolute hooks into the team-shared
+        # settings.json. A re-emit must unwire them THERE (via the recorded claims)
+        # and wire settings.local.json instead — otherwise every teammate keeps
+        # inheriting hooks that point at this machine's python forever.
+        repo = (self.tmp / "repo3").resolve(); repo.mkdir()
+        build.emit_claude("neutral", repo)
+        cfg = repo / ".claude"
+        # Rewind to the old layout: hooks live in settings.json, manifest says so.
+        (cfg / "settings.json").write_text(_read(cfg / "settings.local.json"),
+                                           encoding="utf-8")
+        (cfg / "settings.local.json").unlink()
+        man = json.loads(_read(cfg / build.GLOBAL_MANIFEST))
+        man["managed"]["settings_file"] = "settings.json"
+        (cfg / build.GLOBAL_MANIFEST).write_text(json.dumps(man), encoding="utf-8")
+
+        build.emit_claude("neutral", repo)
+        s_shared = json.loads(_read(cfg / "settings.json"))
+        self.assertFalse(any("harness.py" in c for c in _hook_cmds(s_shared)),
+                         "hooks left in the team-shared settings.json")
+        s_local = self._settings(repo)
+        self.assertTrue(any("harness.py" in c for c in _hook_cmds(s_local)))
+        man = json.loads(_read(cfg / build.GLOBAL_MANIFEST))
+        self.assertEqual(man["managed"].get("settings_file"), "settings.local.json")
+
+    def test_bob_global_rules_pointers_climb_to_stores(self):
+        # ~/.bob's preamble carrier is rules/geneseed.md, one level BELOW the stores:
+        # its pointers must climb (../memory), or `memory/`/`laws/` resolve under
+        # rules/ where nothing exists.
+        cfg = (self.tmp / "dotbob2").resolve(); cfg.mkdir()
+        build.emit_bob_global("neutral", cfg=cfg)
+        rules = _read(cfg / "rules" / "geneseed.md")
+        self.assertIn("../memory", rules)
+        self.assertNotIn("(memory/", rules)
 
     def _mk_install(self, parent, marker=".claude"):
         d = (parent / marker)

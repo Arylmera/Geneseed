@@ -10,7 +10,8 @@ def api_overview(state: WebState) -> dict:
     inv = state.inventory
     diff = None
     if _deployed(state):
-        _t, _th, files = harness._diff_collect(target=state.target, theme=state.theme)
+        _t, _th, files = harness._diff_collect(target=state.target, theme=state.theme,
+                                               emit=state.emit)
         if files is not None:
             diff = {
                 "edited": sum(1 for f in files if f["status"] == "edited"),

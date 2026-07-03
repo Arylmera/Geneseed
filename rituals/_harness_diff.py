@@ -27,10 +27,13 @@ def _owned_set(d: Path) -> set:
         return set()
 
 
-def _diff_collect(target=None, theme=None):
+def _diff_collect(target=None, theme=None, emit=None):
     """Compute the deployed-vs-source diff. Returns (target, theme, files) where files
     is a sorted list of {rel, status (edited|added|missing), diff (unified lines)} —
-    or None when there is no deployed global install at target."""
+    or None when there is no deployed global install at target. `emit` overrides the
+    marker read: for a claude/bob PROJECT install the marker sits at the repo root
+    while `target` is the data dir (<repo>/.claude), so the caller that knows the
+    resolved emit must pass it or the expected render falls back to OpenCode."""
     target = Path(target).expanduser() if target else build._opencode_config_dir()
     if not (target / build.GLOBAL_MANIFEST).exists():
         return target, theme, None
@@ -47,10 +50,11 @@ def _diff_collect(target=None, theme=None):
     # `.geneseed-emit` marker), so a Claude/Bob install isn't diffed against an
     # OpenCode-dialect tree — which would flag every agent + AGENT.md/opencode.json as
     # drift. Fall back to OpenCode for an unknown/missing marker.
-    try:
-        emit = (target / ".geneseed-emit").read_text(encoding="utf-8").strip()
-    except OSError:
-        emit = ""
+    if not emit:
+        try:
+            emit = (target / ".geneseed-emit").read_text(encoding="utf-8").strip()
+        except OSError:
+            emit = ""
     host = _EMIT_HOST_SCOPE.get(emit, ("opencode", "global"))[0]
     emitter = build.HOSTS.get(host, build.HOSTS["opencode"])["emit_global"]
     files = []
@@ -185,7 +189,9 @@ def cmd_diff(args: argparse.Namespace) -> int:
         print(f"  - {f['rel']}   (in source, not deployed — re-emit to add)")
     if args.out:
         if files:
-            path = _write_improvements(target, theme, files, args.out)
+            # bare `--out` parses as True (nargs="?" const) → default timestamped path
+            out_path = None if args.out is True else args.out
+            path = _write_improvements(target, theme, files, out_path)
             print(f"[diff] improvements file written: {path}")
         else:
             print("[diff] no differences — nothing written.")

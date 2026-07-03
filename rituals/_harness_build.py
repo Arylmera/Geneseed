@@ -36,8 +36,13 @@ def cmd_rebuild_all(args: argparse.Namespace) -> int:
     failures = []
     for host, scope, root in targets:
         em = root / ".geneseed-emit"
-        emit = (em.read_text(encoding="utf-8").strip() if em.is_file() else None) \
-            or _DEFAULT_EMIT.get((host, scope), "opencode-global")
+        marker = em.read_text(encoding="utf-8").strip() if em.is_file() else ""
+        # ONE marker file per root, last deploy wins — in a dual-host repo
+        # (.opencode + .claude in the same cwd) the other host's row would silently
+        # rebuild with the WRONG emit. Trust the marker only for its own host.
+        if marker and _EMIT_HOST_SCOPE.get(marker, ("", ""))[0] != host:
+            marker = ""
+        emit = marker or _DEFAULT_EMIT.get((host, scope), "opencode-global")
         theme = _theme_of_dir(root) or _default_theme()
         footprint = _footprint_of_dir(root)   # preserve lean/full — a rebuild must not flip it
         out = None if scope == "global" else str(root)
@@ -299,7 +304,7 @@ def _src_stems(folder: str) -> set:
 
 
 def _prose_mirror_problems(readme: str, web: str, counts: dict[str, int],
-                           skill_stems: set[str]) -> list[str]:
+                           skill_stems: set[str], shipped: str = "") -> list[str]:
     """Keep the *human-readable* count mirrors honest — the ones the badge regex never
     sees. The README "What you get" table and the web onboarding copy each restate the
     law / agent / skill counts in prose, and the README enumerates the skills by name.
@@ -345,6 +350,16 @@ def _prose_mirror_problems(readme: str, web: str, counts: dict[str, int],
         if int(m.group(1)) != listed_n:
             problems.append(f"[authoring] _web_core says '{m.group(1)} repeatable workflows' "
                             f"but its wikilink list has {listed_n}")
+
+    # SHIPPED.md capability row: "N laws, N agents, N skills" sits under the explicit
+    # promise "Every row below is present in the tree today" — it had drifted 1 law /
+    # 6 skills behind src/ with no gate to notice.
+    m = re.search(r"(\d+) laws, (\d+) agents, (\d+) skills", shipped)
+    if m:
+        for got, want, label in ((m.group(1), laws, "laws"), (m.group(2), agents, "agents"),
+                                 (m.group(3), skills, "skills")):
+            if int(got) != want:
+                problems.append(f"[authoring] SHIPPED.md says '{got} {label}' but src has {want}")
     return problems
 
 
@@ -422,7 +437,11 @@ def _count_table_problems() -> list[str]:
         web = (ROOT / "rituals" / "_web_core.py").read_text(encoding="utf-8")
     except OSError:
         web = ""
-    problems += _prose_mirror_problems(readme, web, counts, skill_files)
+    try:
+        shipped = (ROOT / "SHIPPED.md").read_text(encoding="utf-8")
+    except OSError:
+        shipped = ""
+    problems += _prose_mirror_problems(readme, web, counts, skill_files, shipped)
     return problems
 
 
@@ -515,7 +534,7 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Validate the build. With --theme, checks that one theme. With no theme it
     scopes to the INSTALLED theme (so a one-theme install is not buried under the
-    same issue repeated across all eight); pass --all for the full maintainer sweep
+    same issue repeated across every theme); pass --all for the full maintainer sweep
     of every theme. The cross-theme parity check runs in every mode."""
     all_themes = getattr(args, "all", False)
     themes, problems = _doctor_collect(theme=args.theme, all_themes=all_themes,

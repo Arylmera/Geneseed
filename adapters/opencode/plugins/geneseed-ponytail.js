@@ -78,8 +78,14 @@ function ponytailInstructions(mode) {
 // --- state (flag file beside the OpenCode config) ----------------------------
 
 function statePath() {
-  const cfg = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config")
-  return path.join(cfg, "opencode", ".geneseed-ponytail")
+  // Same precedence as build._opencode_config_dir() and activity's configBase()
+  // ($OPENCODE_CONFIG_DIR > $XDG_CONFIG_HOME/opencode > ~/.config/opencode) — an
+  // XDG-only check diverges whenever $OPENCODE_CONFIG_DIR is set, so the /ponytail
+  // toggle would land in a different dir than the console reads.
+  const cfg =
+    process.env.OPENCODE_CONFIG_DIR ||
+    path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "opencode")
+  return path.join(cfg, ".geneseed-ponytail")
 }
 
 function readMode() {

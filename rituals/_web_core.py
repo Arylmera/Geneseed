@@ -766,6 +766,12 @@ class WebState:
 
     def __init__(self, theme: str | None = None, target: Path | None = None):
         self.target = Path(target) if target else build._opencode_config_dir()
+        # The INSTALL ROOT (== build --out). For globals it IS the data dir, but a
+        # claude/bob PROJECT install keeps its data under <repo>/.claude|.bob while
+        # the .geneseed-emit/theme/footprint markers land at <repo>/ — reading them
+        # from the data dir mis-detects the install as opencode/neutral, and a
+        # Diff/Restore would then overwrite it with the wrong dialect.
+        self.root = self.target
         self.theme = theme or harness._theme_of_dir(self.target) or "neutral"
         # Detect the install mode once, so the Build action rebuilds the deployed
         # harness in place (e.g. opencode-global) rather than a bare source render.
@@ -796,38 +802,45 @@ class WebState:
                         "checked_at": time.strftime("%Y-%m-%d %H:%M")}
 
     def _detect_emit(self) -> str:
-        """The emit mode of the CURRENT target, read from its own `.geneseed-emit`
-        marker — so refresh() and a re-pointed view keep the right mode instead of
+        """The emit mode of the CURRENT install, read from its `.geneseed-emit`
+        marker — the ROOT first (where every emit writes it), then the data dir —
+        so refresh() and a re-pointed view keep the right mode instead of
         always falling back to the OpenCode default."""
-        try:
-            em = self.target / ".geneseed-emit"
-            if em.is_file():
-                v = em.read_text(encoding="utf-8").strip()
-                if v:
-                    return v
-        except OSError:
-            pass
-        return "claude-global" if (self.target / "CLAUDE.md").exists() else "opencode-global"
+        for d in (self.root, self.target):
+            try:
+                em = d / ".geneseed-emit"
+                if em.is_file():
+                    v = em.read_text(encoding="utf-8").strip()
+                    if v:
+                        return v
+            except OSError:
+                pass
+        return "claude-global" if (self.root / "CLAUDE.md").exists() else "opencode-global"
 
-    def select_view(self, target: Path):
+    def select_view(self, target: Path, root: "Path | None" = None):
         """Re-point the whole console at a different detected install's data dir — every
-        card (inventory, memory, notebook, diff) then reads from `target`."""
+        card (inventory, memory, notebook, diff) then reads from `target`. `root` is the
+        install root the markers/sigils live at (defaults to `target`; differs only for
+        claude/bob PROJECT installs, where data sits under <repo>/.claude|.bob)."""
         self.target = Path(target)
-        self.theme = harness._theme_of_dir(self.target) or "neutral"
+        self.root = Path(root) if root else self.target
+        self.theme = (harness._theme_of_dir(self.root)
+                      or harness._theme_of_dir(self.target) or "neutral")
         self.emit = self._detect_emit()
-        self.footprint = harness._footprint_of_dir(self.target)
+        self.footprint = harness._footprint_of_dir(self.root)
         self._inv = None
         self._doctor = None
 
     def refresh(self):
         """Drop caches and re-detect the deployed theme/emit — a finished Build may
         have re-themed the install, and the gallery's 'current' must follow it. Reads
-        from the CURRENT target's markers, so a selected (non-default) view is kept."""
+        from the CURRENT install's markers, so a selected (non-default) view is kept."""
         self._inv = None
         self._doctor = None
-        self.theme = harness._theme_of_dir(self.target) or self.theme
+        self.theme = (harness._theme_of_dir(self.root)
+                      or harness._theme_of_dir(self.target) or self.theme)
         self.emit = self._detect_emit() or self.emit
-        self.footprint = harness._footprint_of_dir(self.target)
+        self.footprint = harness._footprint_of_dir(self.root)
 
 
 def _deployed(state: WebState) -> bool:

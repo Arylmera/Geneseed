@@ -64,9 +64,11 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                 if path.startswith("/api/catalog/"):
                     return self._send_json(api_catalog(state, path.rsplit("/", 1)[1]))
                 if path.startswith("/api/item/"):
-                    _, _, _, type_, name = path.split("/", 4)
+                    parts = path.split("/", 4)          # /api/item/<type>/<name>
+                    if len(parts) < 5 or not parts[4]:  # missing name → 404, not a 500
+                        raise NotFound(path)
                     return self._send_json(
-                        api_item(state, type_, urllib.parse.unquote(name)))
+                        api_item(state, parts[3], urllib.parse.unquote(parts[4])))
                 if path == "/api/themes":
                     return self._send_json(api_themes(state))
                 if path == "/api/setup":
@@ -198,7 +200,7 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                         return self._send_json({"error": f"not found: {e}"}, 404)
                     if "error" in plan:
                         return self._send_json(plan, 409)
-                    jid = jm.start("install", plan["cmd"], on_done=state.refresh)
+                    jid = jm.start("install", plan["cmd"], on_done=lambda rc: state.refresh())
                     if jid is None:
                         return self._send_json({"error": "busy"}, 409)
                     return self._send_json({"job_id": jid}, 202)
@@ -209,7 +211,7 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     plan = api_deploy_cmd(state, body)
                     if "error" in plan:
                         return self._send_json(plan, 400)
-                    jid = jm.start("deploy", plan["cmd"], on_done=state.refresh)
+                    jid = jm.start("deploy", plan["cmd"], on_done=lambda rc: state.refresh())
                     if jid is None:
                         return self._send_json({"error": "busy"}, 409)
                     return self._send_json({"job_id": jid}, 202)
@@ -226,9 +228,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     # The upgrade child skips its own daemon bounce when spawned by
                     # us (GENESEED_WEB_JOB) — so restart HERE, after the job is
                     # saved as finished, to pick up the new rituals/* + web/dist.
-                    def _after_update():
+                    def _after_update(rc):
                         state.refresh()
-                        request_restart(state.theme)
+                        # A FAILED update changed nothing worth reloading — bouncing
+                        # the daemon would only disconnect the PWA for no reason.
+                        if rc == 0:
+                            request_restart(state.theme)
                     jid = jm.start("update", *action_commands("update"),
                                    on_done=_after_update)
                     if jid is None:
@@ -248,7 +253,7 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     return self._send_json({"error": f"unknown action {action}"}, 404)
                 # Refresh when the job FINISHES — a Build may re-theme the
                 # install, and the re-detect must read the new marker.
-                jid = jm.start(action, *cmds, on_done=state.refresh)
+                jid = jm.start(action, *cmds, on_done=lambda rc: state.refresh())
                 if jid is None:
                     return self._send_json({"error": "busy"}, 409)
                 return self._send_json({"job_id": jid}, 202)

@@ -44,7 +44,10 @@ const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 const MAX_NOTES_CHARS = 16000          // cap the prompt; keep the most recent tail
 const MIN_NOTES_CHARS = 200            // below this, the session is too trivial to mine
 const MEMORY_DIR_NAMES = ["memory", "anamnesis"]   // neutral + imperial
-const DEBOUNCE_MS = Number(process.env.GENESEED_LEARN_DEBOUNCE_MS || 60000)
+// NaN-safe: garbage in the env var would make setTimeout fire immediately (NaN
+// delay → 0), distilling after EVERY turn instead of at session end.
+const _debounceRaw = Number(process.env.GENESEED_LEARN_DEBOUNCE_MS || 60000)
+const DEBOUNCE_MS = Number.isFinite(_debounceRaw) && _debounceRaw >= 0 ? _debounceRaw : 60000
 
 // SINGLE SOURCE of the distil instructions: rituals/harness.py extracts this exact
 // LEARN_PROMPT_HEAD template literal at runtime, so there is nothing to keep in sync.
@@ -251,7 +254,12 @@ export const GeneseedLearn = async ({ client }) => {
       // Distil in a throwaway session with the session's own model, then drop it.
       const session = await client.session.create({ body: { title: "geneseed-learn (auto)" } })
       const newId = session?.id ?? session?.data?.id
-      if (newId) ours.add(newId)
+      if (!newId) {
+        // Prompting with {id: undefined} would 404 silently on every idle.
+        console.error("[geneseed-learn] session.create returned no id — skipping this distil.")
+        return
+      }
+      ours.add(newId)
       let output = ""
       try {
         const reply = await client.session.prompt({
@@ -278,12 +286,22 @@ export const GeneseedLearn = async ({ client }) => {
 
   return {
     event: async ({ event }) => {
-      if (!event || event.type !== "session.idle") return
+      if (!event) return
       const sid =
         event.properties?.sessionID ??
         event.payload?.sessionID ??
         event.properties?.info?.id ??
         event.payload?.info?.id
+      // A deleted session must not distil later from a stale timer (and its entry
+      // must not leak in the maps for the life of the process).
+      if (event.type === "session.deleted") {
+        const t = timers.get(sid)
+        if (t) clearTimeout(t)
+        timers.delete(sid)
+        ours.delete(sid)
+        return
+      }
+      if (event.type !== "session.idle") return
       if (!sid || ours.has(sid)) return
       // session.idle fires after every turn — debounce so we distil once, at the real
       // end of the session (see header note). Each idle re-arms the timer.

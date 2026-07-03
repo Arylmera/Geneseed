@@ -81,10 +81,13 @@ test("pipeline has no barrier between stages (fast item finishes first)", async 
   assert.deepEqual(done, ["fast", "slow"]) // fast cleared all 3 stages before slow's stage 1
 })
 
-test("parallel item cap is enforced", async () => {
+test("parallel and pipeline item caps are each enforced", async () => {
   const client = mockClient({ reply: () => "ok" })
   const rt = createRuntime({ client })
-  await assert.rejects(() => rt.pipeline(new Array(4097).fill(0), (x) => x), /item cap/)
+  // Anchored regexes: /item cap/ alone would let one function's cap silently
+  // regress while the other's still matches.
+  await assert.rejects(() => rt.parallel(new Array(4097).fill(() => 0)), /parallel\(\) item cap/)
+  await assert.rejects(() => rt.pipeline(new Array(4097).fill(0), (x) => x), /pipeline\(\) item cap/)
 })
 
 test("budget exhaustion throws on the next agent call", async () => {
@@ -104,9 +107,11 @@ test("agent returns null when the child session cannot be created", async () => 
   } }
   const rt = createRuntime({ client })
   assert.equal(await rt.agent("p1"), null)
-  // Unguarded interpolation of that null reads as the literal string "null".
-  const research = await rt.agent("p2")
-  assert.ok(`Ground it in: ${research}`.includes("null"))
+  // A later call returns null too — no retry state leaks between calls. (Saved
+  // workflows must guard that null before interpolating a phase result into the
+  // next prompt, or it reads as the literal string "null" — see
+  // research-plan-implement.js.)
+  assert.equal(await rt.agent("p2"), null)
 })
 
 test("extractJson pulls JSON from a fenced reply", () => {
