@@ -17,7 +17,9 @@
 - The question to answer and where to look (paths, keywords, scope).
 
 ## Allowed tools
-- **Read-only**: search and read. Never edits.
+- **Read-only**: search and read; may run read-only shell commands (grep, find,
+  `git log`) to locate or cross-reference. Never edits.
+  <!-- bash: allow -->
 
 ## Procedure
 1. Search to locate the relevant files before reading them (universal {{LAW}} XV).

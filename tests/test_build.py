@@ -400,15 +400,18 @@ class NativeLayerTests(unittest.TestCase):
             build._write_native_layer(items, d / "agents", d / "skills")
             reviewer = (d / "agents" / "reviewer.md").read_text(encoding="utf-8")
             explorer = (d / "agents" / "explorer.md").read_text(encoding="utf-8")
+            architect = (d / "agents" / "architect.md").read_text(encoding="utf-8")
             tester = (d / "agents" / "tester.md").read_text(encoding="utf-8")
             # read-only agents get a permission block denying edit + webfetch
             self.assertIn("permission:", reviewer)
             self.assertIn("edit: deny", reviewer)
             self.assertIn("webfetch: deny", reviewer)
-            # reviewer runs tests -> bash gated to ask; explorer -> bash denied
+            # reviewer/explorer opt in to read-only bash (<!-- bash: allow -->) -> ask;
+            # architect (no opt-in) -> bash denied outright
             self.assertIn('"*": ask', reviewer)
-            self.assertIn("bash: deny", explorer)
-            self.assertNotIn('"*": ask', explorer)
+            self.assertIn('"*": ask', explorer)
+            self.assertIn("bash: deny", architect)
+            self.assertNotIn('"*": ask', architect)
             # tester edits test files -> not read-only -> no permission block
             self.assertNotIn("permission:", tester)
         finally:
