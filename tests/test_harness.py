@@ -596,6 +596,9 @@ class ProjectUninstallResolveTests(unittest.TestCase):
         repo.mkdir()
         with contextlib.redirect_stdout(io.StringIO()):
             build.emit_opencode("neutral", out=repo, root=repo)
+        # An OpenCode project install carries no manifest — the deploy's own emit
+        # marker (build.py always writes it) is what qualifies the root.
+        (repo / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
         os.chdir(repo)
         hit = harness._uninstall_resolve(None)
         self.assertEqual(hit, ("opencode", "project", repo.resolve()))
@@ -606,6 +609,36 @@ class ProjectUninstallResolveTests(unittest.TestCase):
         os.chdir(self.tmp)   # an empty dir carries no project marker
         hit = harness._uninstall_resolve(None)
         self.assertEqual(hit, ("opencode", "global", build._opencode_config_dir()))
+
+    def test_plain_non_geneseed_claude_dir_does_not_hijack_default(self):
+        # A repo with someone's OWN .claude/ (no Geneseed manifest, no emit marker) is
+        # NOT a Geneseed project install: bare `uninstall` must keep the legacy global
+        # default, and an explicit --target at the repo must find nothing.
+        repo = self.tmp / "repo"
+        (repo / ".claude").mkdir(parents=True)
+        (repo / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+        os.chdir(repo)
+        hit = harness._uninstall_resolve(None)
+        self.assertEqual(hit, ("opencode", "global", build._opencode_config_dir()))
+        self.assertIsNone(harness._uninstall_resolve(str(repo)))
+        self.assertIsNone(harness._uninstall_resolve(str(repo / ".claude")))
+
+    def test_global_config_dir_target_is_classified_global_not_project(self):
+        # `--target <global cfg dir>` must resolve global even though the dir is NAMED
+        # like a project marker (~/.claude, ~/.bob) — never `<host>:project` rooted at
+        # its parent. Exercised via $BOB_CONFIG_DIR so no real home dir is touched.
+        saved = os.environ.get("BOB_CONFIG_DIR")
+        gdir = self.tmp / ".bob"
+        gdir.mkdir()
+        os.environ["BOB_CONFIG_DIR"] = str(gdir)
+        try:
+            hit = harness._uninstall_resolve(str(gdir))
+            self.assertEqual(hit, ("bob", "global", gdir.resolve()))
+        finally:
+            if saved is None:
+                os.environ.pop("BOB_CONFIG_DIR", None)
+            else:
+                os.environ["BOB_CONFIG_DIR"] = saved
 
     def test_unknown_target_returns_none(self):
         empty = self.tmp / "nothing-here"
@@ -666,6 +699,9 @@ class ProjectUninstallCliTests(unittest.TestCase):
         repo.mkdir()
         with contextlib.redirect_stdout(io.StringIO()):
             build.emit_opencode("neutral", out=repo, root=repo)
+        # build.py writes this marker on every real deploy; the resolver requires it
+        # for an OpenCode project install (which carries no manifest).
+        (repo / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
         self.assertIn("AGENT.md",
                       json.loads((repo / "opencode.json").read_text(encoding="utf-8"))["instructions"])
 

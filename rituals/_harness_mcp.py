@@ -371,16 +371,19 @@ def _uninstall_resolve(target_arg: "str | None") -> "tuple[str, str, Path] | Non
     """Resolve (host, scope, root) for `harness uninstall`, honouring the same --target
     convention `diff`/`version` use (a path to the install's own dir) while ALSO covering
     project scope. Precedence, most-specific first:
-      1. --target given and it IS a project marker dir itself (…/.claude, …/.opencode,
+      1. --target given and it IS a host's global config dir (checked before the
+         marker-name case — ~/.claude is NAMED like a project marker, but it is the
+         global install, never `claude:project` rooted at $HOME).
+      2. --target given and it IS a project marker dir itself (…/.claude, …/.opencode,
          …/.bob) — the pre-existing single-target convention — root is its parent.
-      2. --target given and it (as a root) carries a project marker for some host.
-      3. --target given and it matches (or, once resolved, equals) a host's global
-         config dir.
+      3. --target given and it (as a root) carries a Geneseed project install.
       4. --target given but unrecognised — None (caller reports the error).
-      5. No --target: the cwd is checked for a project marker (opencode, then claude,
-         then bob — build.HOSTS order); falling back to the OpenCode global config dir,
-         which is today's default with no --target at all.
-    Returns None when nothing Geneseed-shaped is found at the resolved location."""
+      5. No --target: the cwd is checked for a Geneseed project install (opencode,
+         then claude, then bob — build.HOSTS order); falling back to the OpenCode
+         global config dir, which is today's default with no --target at all.
+    A dir counts as a project install only when `_project_qualifies` says so — a bare
+    non-Geneseed `.claude/` (very common) must never hijack the resolve away from the
+    global default, let alone get "uninstalled"."""
     def _global_hit(p: Path) -> "tuple[str, str, Path] | None":
         for host, spec in build.HOSTS.items():
             try:
@@ -390,21 +393,46 @@ def _uninstall_resolve(target_arg: "str | None") -> "tuple[str, str, Path] | Non
                 continue
         return None
 
+    def _project_qualifies(root: Path, host: str) -> bool:
+        """True when `root` carries a REAL Geneseed project install for `host`: the
+        marker dir exists, is not the host's global config dir seen from its parent
+        (the `_install_targets._add` aliasing guard), and shows Geneseed's own tracks —
+        the manifest (claude/bob always write one into the marker dir) or the deploy's
+        root `.geneseed-emit` naming this host's project emit (the OpenCode project
+        emit writes no manifest, so the emit marker is its signal)."""
+        spec = build.HOSTS[host]
+        cfg = root / spec["project_marker"]
+        if not cfg.is_dir():
+            return False
+        try:
+            if cfg.resolve() == spec["config_dir"]().resolve():
+                return False
+        except Exception:
+            pass
+        if (cfg / build.GLOBAL_MANIFEST).is_file():
+            return True
+        try:
+            emit = (root / ".geneseed-emit").read_text(encoding="utf-8").strip()
+        except OSError:
+            return False
+        return _EMIT_HOST_SCOPE.get(emit) == (host, "project")
+
     def _project_hit(root: Path) -> "tuple[str, str, Path] | None":
-        for host, spec in build.HOSTS.items():
-            if (root / spec["project_marker"]).is_dir():
+        for host in build.HOSTS:
+            if _project_qualifies(root, host):
                 return (host, "project", root)
         return None
 
     if target_arg:
         p = Path(target_arg).expanduser().resolve()
-        for host, spec in build.HOSTS.items():
-            if p.name == spec["project_marker"] and p.is_dir():
-                return (host, "project", p.parent)
-        hit = _project_hit(p) or _global_hit(p)
+        hit = _global_hit(p)
         if hit:
             return hit
-        return None
+        for host, spec in build.HOSTS.items():
+            if p.name == spec["project_marker"] and p.is_dir() \
+                    and _project_qualifies(p.parent, host):
+                return (host, "project", p.parent)
+        return _project_hit(p)
     hit = _project_hit(Path.cwd())
     if hit:
         return hit
@@ -416,10 +444,11 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     project-scoped (.opencode/.claude/.bob in a repo) — via its manifest: owned files,
     hooks/excludes unwired from the settings file, the CLAUDE.md/AGENTS.md managed block
     (or the opencode.json instructions entry), and the markers. The memory AND notebook
-    stores are NEVER deleted — kept in place by default, or the memory store moved aside
-    to a sibling `archived-memory/<timestamp>/` with --archive-memory. `--target` takes
-    either a repo (project scope) or a host's global config dir; omitted, it checks the
-    cwd for a project install before falling back to the OpenCode global config dir."""
+    stores are NEVER deleted — kept in place by default, or BOTH moved aside to sibling
+    `archived-memory/` / `archived-notebook/` timestamp dirs with --archive-memory.
+    `--target` takes either a repo (project scope) or a host's global config dir;
+    omitted, it checks the cwd for a project install before falling back to the
+    OpenCode global config dir."""
     hit = _uninstall_resolve(args.target)
     if hit is None:
         target_desc = Path(args.target).expanduser().resolve() if args.target \
@@ -440,7 +469,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
             f"(no {build.GLOBAL_MANIFEST}{where}).\n")
         return 1
     data = _install_data_dir(root, host, scope)
-    has_memory = (data / "memory").is_dir()
+    stores = [n for n in ("memory", "notebook") if (data / n).is_dir()]
     print(f"[uninstall] target: {root} ({host}:{scope})")
     if host in ("claude", "bob"):
         print("[uninstall] removes: agents/, skills/, markers, the "
@@ -453,9 +482,10 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         print("[uninstall] removes: AGENT.md, .opencode/, laws/, agents/, skills/, and the "
               "opencode.json instructions entry.")
     print("[uninstall] memory/ and notebook/ are kept in place (never deleted here)"
-          + (" — memory can be archived with --archive-memory." if has_memory else "."))
-    if has_memory and args.archive_memory:
-        print("[uninstall] memory: will be ARCHIVED to archived-memory/ (never deleted)")
+          + (" — --archive-memory sets both aside." if stores else "."))
+    if stores and args.archive_memory:
+        print(f"[uninstall] {' + '.join(stores)}: will be ARCHIVED to a sibling "
+              "archived-<name>/<timestamp>/ (never deleted)")
     if not args.yes:
         if not sys.stdin.isatty():
             sys.stderr.write("[uninstall] refusing to proceed without --yes (non-interactive).\n")
@@ -468,11 +498,11 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     if not s.get("ok", True):
         sys.stderr.write(f"[uninstall] failed: {s.get('error', 'unknown error')}\n")
         return 1
-    archived = (s.get("archived") or [None])[0] if s.get("archived") else None
-    mem = f"archived -> {archived}" if archived else "kept in place"
+    archived = s.get("archived") or []
+    mem = f"archived -> {', '.join(archived)}" if archived else "kept in place"
     cfgfile = "opencode.json" if host == "opencode" else "settings.json"
     print(f"[uninstall] done — removed {s['removed']} file(s); {cfgfile} updated where "
-          f"needed; memory {mem}. Start a new session to apply.")
+          f"needed; memory/notebook {mem}. Start a new session to apply.")
     return 0
 
 

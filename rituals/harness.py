@@ -25,8 +25,9 @@ Dependency-free. Subcommands:
                                    markers); --target takes a repo or a config dir, else
                                    the cwd is checked before falling back to the OpenCode
                                    global config dir. memory/notebook are never deleted —
-                                   kept in place, or --archive-memory moves memory to
-                                   archived-memory/; --yes to skip the confirm prompt
+                                   kept in place, or --archive-memory moves both to
+                                   archived-memory/ + archived-notebook/; --yes to skip
+                                   the confirm prompt
     harness setup                  interactive, dependency-free install wizard (all OSes)
     harness tui                    full-screen control panel (any VT-capable console)
     harness web                    local web UI over the deployed harness — browse
@@ -182,16 +183,17 @@ def build_argparser() -> argparse.ArgumentParser:
 
     un = sub.add_parser("uninstall",
                         help="remove a global or project-scoped Geneseed install "
-                             "(manifest-tracked); memory is never deleted "
-                             "(--archive-memory moves it aside)")
+                             "(manifest-tracked); memory/notebook are never deleted "
+                             "(--archive-memory moves them aside)")
     un.add_argument("--target", default=None,
                     help="repo (project scope) or config dir (global scope) to uninstall "
                          "from; default: the cwd if it holds a project install, else the "
                          "OpenCode global config dir")
     un.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     un.add_argument("--archive-memory", action="store_true",
-                    help="move the memory store aside to archived-memory/<timestamp>/ "
-                         "(never deleted; default keeps it in place)")
+                    help="move the memory and notebook stores aside to sibling "
+                         "archived-memory/ + archived-notebook/ <timestamp> dirs "
+                         "(never deleted; default keeps them in place)")
     un.set_defaults(fn=cmd_uninstall)
 
     le = sub.add_parser("learn", help="distil notes/transcript into memory entries")
