@@ -166,7 +166,7 @@ Fourteen themes ship — each a single JSON file in `themes/` carrying voice tok
 | 🏟️ **sports** | play-by-play commentary |
 | 🏍 **biker** · 🎤 **commentator** · 🃏 **joker** · 🤖 **marvin** · 😤 **mean** · 🏎 **verstappen** | community-added voices for fun |
 
-Pick with `--theme NAME` or via the TUI wizard. The theme is remembered in a `.geneseed-theme` marker, so later upgrades preserve it. `doctor` checks every theme defines the same keys, so flavour drift is impossible.
+Pick with `--theme NAME` or via the TUI wizard. The theme is remembered in a `.geneseed-theme` marker, so later upgrades preserve it. `doctor` checks every theme defines the same keys, so flavour drift is impossible. Adding a new voice token to `themes/_TEMPLATE.json`? Run `python build.py --sync-themes` to fill it into every theme (template's placeholder value, reported for restyling) before `doctor` is expected to pass again.
 
 ### 🪶 Footprint (lean vs full)
 

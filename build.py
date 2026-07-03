@@ -114,7 +114,17 @@ def main() -> None:
                          "and .opencode/ are placed (default: same as --out). Set this when "
                          "the bundle lives in a subfolder, e.g. --out myrepo/Harness "
                          "--root myrepo; instruction paths are prefixed accordingly")
+    ap.add_argument("--sync-themes", action="store_true",
+                    help="maintainer tool: add any key `themes/_TEMPLATE.json` defines "
+                         "but a theme JSON is missing (filled with the template's "
+                         "placeholder value), print what to restyle, then exit — no "
+                         "bundle is rendered. Never removes a theme's extra keys; those "
+                         "are reported only.")
     args = ap.parse_args()
+
+    if args.sync_themes:
+        sync_themes()
+        return
 
     out = resolve_out(args.out)
     root = resolve_out(args.root) if args.root else out

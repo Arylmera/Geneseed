@@ -31,6 +31,61 @@ def load_theme(name: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def sync_themes() -> int:
+    """Fill every shipped theme with the keys `_TEMPLATE.json` defines but the theme is
+    missing — the assist for the parity gate (`_theme_parity_problems`) a maintainer
+    hits after adding a new VOICE token. Each missing key is added with the template's
+    own (placeholder) value and reported so the maintainer knows exactly what to
+    restyle; keys a theme has that the template doesn't are reported too, but never
+    removed automatically (a maintainer call, not a build-time one).
+
+    New keys are inserted in TEMPLATE ORDER — matching the convention every shipped
+    theme already follows (see themes/neutral.json) — so the parity gate and git diffs
+    stay stable instead of reordering the whole file on every sync. Existing keys keep
+    their current position and value; only missing keys move/appear.
+
+    Returns the number of themes actually modified (0 == already in sync)."""
+    tmpl_path = THEMES / "_TEMPLATE.json"
+    try:
+        tmpl = json.loads(tmpl_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"[sync-themes] {tmpl_path.name} unreadable: {e}")
+        return 0
+    tmpl_keys = list(tmpl.keys())
+    changed = 0
+    for p in theme_files():
+        try:
+            theme = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"[sync-themes] {p.name}: unreadable ({e}) — skipped")
+            continue
+        missing = [k for k in tmpl_keys if k not in theme]
+        extra = sorted(set(theme) - set(tmpl))
+        if not missing:
+            if extra:
+                print(f"[sync-themes] {p.name}: in sync (extra key(s) not in template, "
+                      f"not removed: {', '.join(extra)})")
+            continue
+        # Rebuild in template order so every added key lands where the template has
+        # it; keys the theme already had keep their value, just reordered to match.
+        merged = {k: theme.get(k, tmpl[k]) for k in tmpl_keys}
+        # Preserve any theme-only keys (not in the template) at the end, unchanged —
+        # they are reported as `extra`, never dropped by a sync.
+        for k in theme:
+            if k not in merged:
+                merged[k] = theme[k]
+        p.write_text(json.dumps(merged, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+        changed += 1
+        print(f"[sync-themes] {p.name}: added {len(missing)} key(s) from the template — "
+              f"RESTYLE these in this theme's voice: {', '.join(missing)}")
+        if extra:
+            print(f"[sync-themes] {p.name}: extra key(s) not in template, not removed: "
+                  f"{', '.join(extra)}")
+    if not changed:
+        print("[sync-themes] all themes already carry every template key.")
+    return changed
+
+
 def substitute(text: str, theme: dict) -> str:
     def repl(m: re.Match) -> str:
         key = m.group(1)

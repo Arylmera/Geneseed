@@ -532,5 +532,107 @@ class OpencodeJsonMergeFailureTests(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class SyncThemesTests(unittest.TestCase):
+    """build.sync_themes(): the maintainer assist for the theme-parity gate. Redirects
+    build.THEMES to a temp dir per test (mirrors test_harness.ThemeParityTests) so the
+    real themes/ tree is never touched."""
+
+    def _with_temp_themes(self, files: dict):
+        tmp = Path(tempfile.mkdtemp())
+        orig = build.THEMES
+        try:
+            for name, text in files.items():
+                (tmp / name).write_text(text, encoding="utf-8")
+            build.THEMES = tmp
+            import contextlib
+            import io
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                changed = build.sync_themes()
+            after = {p.name: json.loads(p.read_text(encoding="utf-8"))
+                     for p in tmp.glob("*.json")}
+            return changed, out.getvalue(), after
+        finally:
+            build.THEMES = orig
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_fills_missing_key_from_template(self):
+        tmpl = {"A": "<a>", "B": "<b>", "C": "<c>"}
+        theme = {"A": "hello", "C": "world"}   # missing B
+        changed, report, after = self._with_temp_themes({
+            "_TEMPLATE.json": json.dumps(tmpl),
+            "mytheme.json": json.dumps(theme),
+        })
+        self.assertEqual(changed, 1)
+        self.assertEqual(after["mytheme.json"], {"A": "hello", "B": "<b>", "C": "world"})
+        # Template order preserved.
+        self.assertEqual(list(after["mytheme.json"].keys()), ["A", "B", "C"])
+        self.assertIn("mytheme.json", report)
+        self.assertIn("added 1 key", report)
+        self.assertIn("B", report)
+        self.assertIn("RESTYLE", report)
+
+    def test_reports_extra_key_without_removing_it(self):
+        tmpl = {"A": "<a>"}
+        theme = {"A": "hello", "ZZZ": "keep-me"}   # ZZZ not in template
+        changed, report, after = self._with_temp_themes({
+            "_TEMPLATE.json": json.dumps(tmpl),
+            "mytheme.json": json.dumps(theme),
+        })
+        # No missing key, so the file is untouched, but the extra key is reported.
+        self.assertEqual(changed, 0)
+        self.assertEqual(after["mytheme.json"], theme)
+        self.assertIn("ZZZ", report)
+        self.assertIn("not removed", report)
+
+    def test_extra_key_reported_and_kept_when_also_syncing_a_missing_one(self):
+        tmpl = {"A": "<a>", "B": "<b>"}
+        theme = {"A": "hello", "ZZZ": "keep-me"}   # missing B, plus an extra key
+        changed, report, after = self._with_temp_themes({
+            "_TEMPLATE.json": json.dumps(tmpl),
+            "mytheme.json": json.dumps(theme),
+        })
+        self.assertEqual(changed, 1)
+        self.assertEqual(after["mytheme.json"]["B"], "<b>")
+        self.assertEqual(after["mytheme.json"]["ZZZ"], "keep-me")   # preserved, not dropped
+        self.assertIn("not removed", report)
+        self.assertIn("ZZZ", report)
+
+    def test_already_in_sync_reports_nothing_changed(self):
+        tmpl = {"A": "<a>"}
+        changed, report, _after = self._with_temp_themes({
+            "_TEMPLATE.json": json.dumps(tmpl),
+            "mytheme.json": json.dumps({"A": "hello"}),
+        })
+        self.assertEqual(changed, 0)
+        self.assertIn("already carry every template key", report)
+
+    def test_sync_makes_shipped_themes_parity_clean(self):
+        """A theme with a genuinely missing key, once synced, must stop tripping the
+        real parity gate (integration check between Task 5 and the Task-5-adjacent
+        parity gate the task doc points at)."""
+        good = json.loads((build.THEMES / "neutral.json").read_text(encoding="utf-8"))
+        broken = dict(good)
+        broken.pop("VOICE")
+        tmp = Path(tempfile.mkdtemp())
+        orig_themes = build.THEMES
+        try:
+            (tmp / "_TEMPLATE.json").write_text(
+                json.dumps(json.loads((orig_themes / "_TEMPLATE.json").read_text(encoding="utf-8"))),
+                encoding="utf-8")
+            (tmp / "neutral.json").write_text(json.dumps(good), encoding="utf-8")
+            (tmp / "broken.json").write_text(json.dumps(broken), encoding="utf-8")
+            build.THEMES = tmp
+            import contextlib
+            import io
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.sync_themes()
+            after = json.loads((tmp / "broken.json").read_text(encoding="utf-8"))
+            self.assertIn("VOICE", after)
+        finally:
+            build.THEMES = orig_themes
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

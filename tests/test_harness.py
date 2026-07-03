@@ -358,6 +358,46 @@ class GlobalEmitDoctorTests(unittest.TestCase):
                 self.assertEqual(harness._global_emit_problems(theme), [])
 
 
+class DoctorSyncThemesHintTests(unittest.TestCase):
+    """cmd_doctor must point a maintainer at `build.py --sync-themes` the moment the
+    parity gate reports a missing key — the whole point of Task 5's assist is that
+    doctor's failure message tells you the fix, not just the symptom. _doctor_collect
+    is mocked so this only exercises cmd_doctor's own hint-printing, not a real build."""
+
+    def _run_doctor(self, problems):
+        import argparse
+        import contextlib
+        import io
+        from unittest import mock
+
+        import _harness_build   # cmd_doctor's own module — where its global lookup
+                                 # of _doctor_collect actually resolves (harness.py is
+                                 # a thin facade over it and does not mirror patches)
+        args = argparse.Namespace(theme=None, all=False, bundle=None, no_bundle=True)
+        out = io.StringIO()
+        with mock.patch.object(_harness_build, "_doctor_collect",
+                               return_value=(["neutral"], problems)), \
+             contextlib.redirect_stdout(out):
+            rc = harness.cmd_doctor(args)
+        return rc, out.getvalue()
+
+    def test_parity_failure_prints_sync_themes_hint(self):
+        rc, report = self._run_doctor(
+            ["[themes] 'imperial' missing key {DESC_NEW} (defined in another theme)"])
+        self.assertEqual(rc, 1)
+        self.assertIn("--sync-themes", report)
+
+    def test_unrelated_failure_has_no_sync_themes_hint(self):
+        rc, report = self._run_doctor(["[authoring] skills/foo.md has no '>' purpose line"])
+        self.assertEqual(rc, 1)
+        self.assertNotIn("--sync-themes", report)
+
+    def test_clean_run_has_no_hint(self):
+        rc, report = self._run_doctor([])
+        self.assertEqual(rc, 0)
+        self.assertNotIn("--sync-themes", report)
+
+
 class SkillBodyDelinkTests(unittest.TestCase):
     REL_MD = re.compile(r"\]\((?!https?://)[^)\s]*\.md")
 

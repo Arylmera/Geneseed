@@ -168,6 +168,13 @@ Choose any of the 14 themes in `themes/` — `neutral` (plain), `imperial` (Warh
 `.geneseed-theme` marker, so later upgrades keep it. Adding your own is one JSON file
 of voice tokens; `doctor` checks every theme defines the same keys.
 
+Adding a new voice token to `themes/_TEMPLATE.json` means all 14 theme files need it
+too, or the parity check fails. `python build.py --sync-themes` does the mechanical
+part: it copies any key the template has but a theme is missing into that theme
+(filled with the template's placeholder text), in template order, and prints exactly
+which keys were added so you can restyle them in that theme's voice. It never deletes
+a key a theme has that the template doesn't — those are only reported.
+
 ### Footprint (lean vs full)
 
 **Footprint** sets how much of the Rules `AGENT.md` carries *inline* on every turn — a

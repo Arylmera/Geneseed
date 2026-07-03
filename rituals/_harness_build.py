@@ -552,6 +552,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if any("dead link" in p for p in problems):
             print("  tip: dead links to skills mean your source is incomplete — run "
                   "`./geneseed update` (or re-sync src/), then re-check.")
+        if any(p.startswith("[themes]") and "missing key" in p for p in problems):
+            print("  tip: a theme is missing a key another theme defines — run "
+                  "`python build.py --sync-themes` to fill it from _TEMPLATE.json, "
+                  "then restyle the added key(s) and re-check.")
         if note:
             print(note)
         return 1
