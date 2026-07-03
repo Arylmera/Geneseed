@@ -31,6 +31,65 @@ def load_theme(name: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _insert_theme_keys(raw: str, theme: dict, tmpl: dict, tmpl_keys: list,
+                       missing: list) -> str | None:
+    """Insert ONLY the missing keys into the theme's existing TEXT, each as one new
+    line at its template-order position — never re-serialising the untouched lines.
+    A full `json.dumps` round-trip cannot reproduce the shipped files byte-for-byte
+    (they mix raw Unicode with legacy \\uXXXX escapes), so re-dumping made a one-key
+    sync rewrite ~170 lines per theme; textual insertion keeps the diff to the
+    inserted line (plus at most a comma on its predecessor).
+
+    Assumes the shipped convention: `{` on its own first line, one `  "KEY": value`
+    entry per line. Returns None when the file doesn't follow it, or when the result
+    fails the reparse safety check — the caller then falls back to a full re-dump."""
+    lines = raw.splitlines()
+    if not lines or lines[0].strip() != "{":
+        return None
+
+    def line_of(key: str) -> int | None:
+        prefix = f'  "{key}":'
+        for i, ln in enumerate(lines):
+            if ln.startswith(prefix):
+                return i
+        return None
+
+    # Every existing key must be locatable as its own line, or the format assumption
+    # is wrong and inserting would corrupt the file.
+    if any(line_of(k) is None for k in theme):
+        return None
+    for k in missing:   # template order, so an earlier insert can anchor a later one
+        entry = f'  "{k}": {json.dumps(tmpl[k], ensure_ascii=False)}'
+        pred = None
+        for pk in reversed(tmpl_keys[:tmpl_keys.index(k)]):
+            li = line_of(pk)
+            if li is not None:
+                pred = li
+                break
+        if pred is None:
+            # No earlier template key exists in this theme: insert right after `{`.
+            follows = any(ln.lstrip().startswith('"') for ln in lines[1:])
+            lines.insert(1, entry + ("," if follows else ""))
+        elif lines[pred].rstrip().endswith(","):
+            lines.insert(pred + 1, entry + ",")
+        else:
+            # Predecessor was the last entry: it gains the comma, the new line is last.
+            lines[pred] += ","
+            lines.insert(pred + 1, entry)
+    new_text = "\n".join(lines) + "\n"
+    # Safety net: the surgically-edited text must parse back to exactly the merge we
+    # meant (theme + missing template keys). Anything else — a multi-line value we
+    # didn't anticipate, a stray edit — and the caller uses the re-dump fallback.
+    try:
+        reparsed = json.loads(new_text)
+    except json.JSONDecodeError:
+        return None
+    want = dict(theme)
+    for k in missing:
+        want[k] = tmpl[k]
+    return new_text if reparsed == want else None
+
+
 def sync_themes() -> int:
     """Fill every shipped theme with the keys `_TEMPLATE.json` defines but the theme is
     missing — the assist for the parity gate (`_theme_parity_problems`) a maintainer
@@ -40,11 +99,13 @@ def sync_themes() -> int:
     removed automatically (a maintainer call, not a build-time one).
 
     New keys are inserted in TEMPLATE ORDER — matching the convention every shipped
-    theme already follows (see themes/neutral.json) — so the parity gate and git diffs
-    stay stable instead of reordering the whole file on every sync. Existing keys keep
-    their current position and value; only missing keys move/appear.
+    theme already follows (see themes/neutral.json) — via minimal textual insertion
+    (`_insert_theme_keys`): untouched lines stay byte-identical, so a one-key sync is
+    a one-line diff per theme, and a no-op run rewrites nothing at all.
 
-    Returns the number of themes actually modified (0 == already in sync)."""
+    Returns the number of themes actually modified (0 == already in sync). The CLI
+    maps that to the exit code (non-zero when files changed), so CI can run
+    `build.py --sync-themes` as a check."""
     tmpl_path = THEMES / "_TEMPLATE.json"
     try:
         tmpl = json.loads(tmpl_path.read_text(encoding="utf-8"))
@@ -55,7 +116,8 @@ def sync_themes() -> int:
     changed = 0
     for p in theme_files():
         try:
-            theme = json.loads(p.read_text(encoding="utf-8"))
+            raw = p.read_text(encoding="utf-8")
+            theme = json.loads(raw)
         except (OSError, json.JSONDecodeError) as e:
             print(f"[sync-themes] {p.name}: unreadable ({e}) — skipped")
             continue
@@ -66,15 +128,16 @@ def sync_themes() -> int:
                 print(f"[sync-themes] {p.name}: in sync (extra key(s) not in template, "
                       f"not removed: {', '.join(extra)})")
             continue
-        # Rebuild in template order so every added key lands where the template has
-        # it; keys the theme already had keep their value, just reordered to match.
-        merged = {k: theme.get(k, tmpl[k]) for k in tmpl_keys}
-        # Preserve any theme-only keys (not in the template) at the end, unchanged —
-        # they are reported as `extra`, never dropped by a sync.
-        for k in theme:
-            if k not in merged:
-                merged[k] = theme[k]
-        p.write_text(json.dumps(merged, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+        new_text = _insert_theme_keys(raw, theme, tmpl, tmpl_keys, missing)
+        if new_text is None:
+            # Unconventional formatting: fall back to a full re-dump — template order,
+            # theme-only extras preserved at the end, real Unicode kept as-is.
+            merged = {k: theme.get(k, tmpl[k]) for k in tmpl_keys}
+            for k in theme:
+                if k not in merged:
+                    merged[k] = theme[k]
+            new_text = json.dumps(merged, indent=2, ensure_ascii=False) + "\n"
+        p.write_text(new_text, encoding="utf-8")
         changed += 1
         print(f"[sync-themes] {p.name}: added {len(missing)} key(s) from the template — "
               f"RESTYLE these in this theme's voice: {', '.join(missing)}")

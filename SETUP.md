@@ -173,7 +173,10 @@ too, or the parity check fails. `python build.py --sync-themes` does the mechani
 part: it copies any key the template has but a theme is missing into that theme
 (filled with the template's placeholder text), in template order, and prints exactly
 which keys were added so you can restyle them in that theme's voice. It never deletes
-a key a theme has that the template doesn't — those are only reported.
+a key a theme has that the template doesn't — those are only reported. The edit is
+surgical (only the inserted lines change; nothing is reformatted), and the exit code
+doubles as a CI drift check: non-zero when it had to change files, `0` when every
+theme was already in sync.
 
 ### Footprint (lean vs full)
 
@@ -223,6 +226,12 @@ parity, authoring gates, AGENT.md table parity). Prints a per-layer file count o
 would have been written (`-v`/`--verbose` for the full path list) and exits non-zero on
 any problem, `0` when clean. Useful in CI, or before pointing a real deploy at a repo you
 don't want to touch yet.
+
+Known limitation: `--emit claude` and `--emit bob` currently report a set of dead
+skill-link problems that are real but pre-existing — CLAUDE.md/AGENTS.md link each
+skill as `skills/<name>.md` while the native layer ships `skills/<name>/SKILL.md`. The
+validation is correct to flag them; the emit-side fix is tracked separately. Until it
+lands, expect a non-zero exit for those two targets even on a clean source tree.
 
 ### Project context (usually nothing)
 

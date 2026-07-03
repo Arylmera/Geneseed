@@ -141,6 +141,9 @@ def _validate_sandbox_problems(sandbox: Path) -> list[str]:
 
 
 def _within(child: Path, parent: Path) -> bool:
+    """Deliberate duplicate of rituals/_harness_core.py's `_within` — build.py cannot
+    import the harness tree (see the module docstring's import-direction constraint),
+    and four lines of pure Path logic don't justify a shared module across it."""
     try:
         child.relative_to(parent)
         return True
@@ -157,26 +160,35 @@ def _validate_only(args: argparse.Namespace) -> int:
     problems: list[str] = []
     with tempfile.TemporaryDirectory(prefix="geneseed-validate-") as tmp_s:
         tmp = Path(tmp_s)
-        sandbox = tmp / "out"
-        root = tmp / "root" if args.root else sandbox
+        # With a distinct --root, the per-repo emits split their output: the bundle
+        # under `out`, the NATIVE layer (.opencode/ / .claude/ / .bob/, opencode.json)
+        # under `root`. Mirror the documented usage (`--out myrepo/Harness --root
+        # myrepo`) by nesting the sandbox bundle INSIDE the sandbox root, and scan the
+        # root — which then covers both layers; scanning only the bundle silently
+        # skipped the native layer entirely on a --root run.
+        if args.root:
+            root = tmp / "root"
+            sandbox = root / "bundle"
+        else:
+            root = sandbox = tmp / "out"
         cfg = tmp / "cfg"
         emit = args.emit
         try:
             if emit == "opencode":
                 emit_opencode(args.theme, sandbox, root, args.footprint)
-                scan_dirs = [sandbox]
+                scan_dirs = [root]
             elif emit == "opencode-global":
                 emit_opencode_global(args.theme, out=sandbox, cfg=cfg, footprint=args.footprint)
                 scan_dirs = [cfg]
             elif emit == "claude":
                 emit_claude(args.theme, sandbox, root, args.footprint)
-                scan_dirs = [sandbox]
+                scan_dirs = [root]
             elif emit == "claude-global":
                 emit_claude_global(args.theme, out=sandbox, cfg=cfg, footprint=args.footprint)
                 scan_dirs = [cfg]
             elif emit == "bob":
                 emit_bob(args.theme, sandbox, root, args.footprint)
-                scan_dirs = [sandbox]
+                scan_dirs = [root]
             elif emit == "bob-global":
                 emit_bob_global(args.theme, out=sandbox, cfg=cfg, footprint=args.footprint)
                 scan_dirs = [cfg]
@@ -293,7 +305,8 @@ def main() -> None:
                          "but a theme JSON is missing (filled with the template's "
                          "placeholder value), print what to restyle, then exit — no "
                          "bundle is rendered. Never removes a theme's extra keys; those "
-                         "are reported only.")
+                         "are reported only. Exits non-zero when it changed files "
+                         "(usable as a CI drift check), 0 when already in sync.")
     ap.add_argument("--validate-only", action="store_true",
                     help="dry run: render + emit the requested --theme/--emit/--out/"
                          "--root/--footprint into a throwaway sandbox — nothing under "
@@ -309,8 +322,10 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.sync_themes:
-        sync_themes()
-        return
+        # Non-zero when files were CHANGED (0 == already in sync), so CI can run
+        # `build.py --sync-themes` as a drift check: a red run means keys were
+        # filled and now need restyling + committing.
+        sys.exit(1 if sync_themes() else 0)
 
     if args.validate_only:
         sys.exit(_validate_only(args))

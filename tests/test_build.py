@@ -609,6 +609,83 @@ class SyncThemesTests(unittest.TestCase):
         self.assertEqual(changed, 0)
         self.assertIn("already carry every template key", report)
 
+    def test_one_key_sync_is_a_minimal_textual_diff(self):
+        """A one-key sync against a conventionally-formatted (indent-2) theme must be
+        a surgical insertion: untouched lines stay byte-identical — raw Unicode stays
+        raw, legacy \\uXXXX escapes stay escaped — with only the new line added and at
+        most a comma on its predecessor. This is the churn guarantee: re-dumping the
+        whole file rewrote ~170 lines per theme for a single added key."""
+        tmp = Path(tempfile.mkdtemp())
+        orig = build.THEMES
+        try:
+            (tmp / "_TEMPLATE.json").write_text(
+                '{\n  "A": "<a>",\n  "B": "<b>",\n  "C": "<c>"\n}\n', encoding="utf-8")
+            # Raw em dash AND a legacy é escape — a json.dumps round-trip cannot
+            # preserve both, so byte-identity here proves the edit is textual.
+            before = '{\n  "A": "hello — caf\\u00e9",\n  "C": "world"\n}\n'
+            (tmp / "mytheme.json").write_text(before, encoding="utf-8")
+            build.THEMES = tmp
+            import contextlib
+            import io
+            with contextlib.redirect_stdout(io.StringIO()):
+                changed = build.sync_themes()
+            after = (tmp / "mytheme.json").read_text(encoding="utf-8")
+        finally:
+            build.THEMES = orig
+            shutil.rmtree(tmp, ignore_errors=True)
+        self.assertEqual(changed, 1)
+        self.assertEqual(
+            after,
+            '{\n  "A": "hello — caf\\u00e9",\n  "B": "<b>",\n  "C": "world"\n}\n')
+
+    def test_noop_leaves_file_bytes_untouched(self):
+        """An in-sync theme must not be rewritten AT ALL — same bytes, even when the
+        formatting could not survive a dumps round-trip (mixed raw/escaped Unicode)."""
+        tmp = Path(tempfile.mkdtemp())
+        orig = build.THEMES
+        try:
+            (tmp / "_TEMPLATE.json").write_text('{\n  "A": "<a>"\n}\n', encoding="utf-8")
+            before = '{\n  "A": "caf\\u00e9 — raw"\n}\n'
+            (tmp / "mytheme.json").write_text(before, encoding="utf-8")
+            build.THEMES = tmp
+            import contextlib
+            import io
+            with contextlib.redirect_stdout(io.StringIO()):
+                changed = build.sync_themes()
+            after = (tmp / "mytheme.json").read_text(encoding="utf-8")
+        finally:
+            build.THEMES = orig
+            shutil.rmtree(tmp, ignore_errors=True)
+        self.assertEqual(changed, 0)
+        self.assertEqual(after, before)
+
+    def test_cli_exits_nonzero_when_changed_zero_when_in_sync(self):
+        """`build.py --sync-themes` maps the changed count to the exit code so CI can
+        use it as a drift check: 1 when files were filled, 0 on a no-op."""
+        import contextlib
+        import io
+        from unittest import mock
+
+        tmp = Path(tempfile.mkdtemp())
+        orig = build.THEMES
+        try:
+            (tmp / "_TEMPLATE.json").write_text('{\n  "A": "<a>",\n  "B": "<b>"\n}\n',
+                                                encoding="utf-8")
+            (tmp / "mytheme.json").write_text('{\n  "A": "hello"\n}\n', encoding="utf-8")
+            build.THEMES = tmp
+            argv = ["build.py", "--sync-themes"]
+            with mock.patch.object(sys, "argv", argv), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as ctx:
+                    build.main()
+                self.assertEqual(ctx.exception.code, 1)   # changed a file -> red
+                with self.assertRaises(SystemExit) as ctx:
+                    build.main()                           # second run: already in sync
+                self.assertEqual(ctx.exception.code, 0)
+        finally:
+            build.THEMES = orig
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_sync_makes_shipped_themes_parity_clean(self):
         """A theme with a genuinely missing key, once synced, must stop tripping the
         real parity gate (integration check between Task 5 and the Task-5-adjacent
@@ -774,6 +851,57 @@ class ValidateOnlyTests(unittest.TestCase):
         self.assertEqual(rc, 0, report)
         self.assertIn("[doctor]", report)
         self.assertIn("ok", report)
+
+    def test_root_split_counts_and_scans_the_native_layer(self):
+        """With a distinct --root, the per-repo opencode emit splits its output: the
+        bundle under out, the native layer (.opencode/, opencode.json) under root. The
+        sandbox count/scan must cover BOTH dirs — before the fix, the native layer was
+        neither counted nor validated (86 vs 191 files)."""
+        import contextlib
+        import io
+        import re as _re
+
+        # Ground truth: a real split emit (bundle nested inside root, mirroring the
+        # documented `--out myrepo/Harness --root myrepo` usage), counted directly.
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            root_dir = tmp / "root"
+            out_dir = root_dir / "bundle"
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_opencode("neutral", out_dir, root_dir, "full")
+            expected = sum(1 for p in root_dir.rglob("*") if p.is_file())
+            n_native = sum(1 for p in root_dir.rglob("*") if p.is_file()
+                           and not str(p).startswith(str(out_dir)))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        self.assertGreater(n_native, 0)   # the split emit really writes outside the bundle
+
+        args = argparse.Namespace(theme="neutral", emit="opencode", out="ignored-out",
+                                  root="ignored-root", footprint="full", verbose=False)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            build._validate_only(args)
+        m = _re.search(r"would write (\d+) file", buf.getvalue())
+        self.assertIsNotNone(m, buf.getvalue())
+        self.assertEqual(int(m.group(1)), expected)
+
+    def test_validate_is_vendored_handles_nested_host_layouts(self):
+        """_validate_is_vendored must exempt vendored skill folders wherever the
+        `skills` segment sits: flat bundle root (files/opencode-global) AND the
+        one-level-deeper per-repo native layers (.opencode/.claude/.bob)."""
+        vendored = build.VENDORED_SKILL_DIRS[0]   # e.g. 'react-view-transitions'
+        for rel, want in [
+            (Path(f"skills/{vendored}/README.md"), True),
+            (Path(f".opencode/skills/{vendored}/SKILL.md"), True),
+            (Path(f".claude/skills/{vendored}/SKILL.md"), True),
+            (Path(f".bob/skills/{vendored}/nested/deep.md"), True),
+            (Path("skills/commit.md"), False),                    # flat skill, not vendored
+            (Path(".claude/skills/council/SKILL.md"), False),     # native, not vendored
+            (Path(f"{vendored}/loose.md"), False),                # vendored name w/o skills/
+            (Path(f"docs/{vendored}/note.md"), False),
+        ]:
+            with self.subTest(rel=str(rel)):
+                self.assertIs(build._validate_is_vendored(rel), want)
 
 
 if __name__ == "__main__":
