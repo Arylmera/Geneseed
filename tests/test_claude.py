@@ -226,6 +226,55 @@ class ClaudeActivationTests(unittest.TestCase):
         self.assertTrue((self.cfg / "agents" / "reviewer.md").is_file())
         self.assertEqual(harness._install_state(self.cfg, "claude", "global"), "active")
 
+    def test_bob_global_reactivate_discards_stash_after_reemit(self):
+        # Bob GLOBAL writes no managed AGENTS.md block (rules/geneseed.md is the
+        # preamble carrier), so the relive guard must key on THAT — without it the
+        # restore collides with every freshly re-emitted file and the install is
+        # stuck "disabled" until the stash is hand-deleted.
+        bobcfg = (self.tmp / "dotbob").resolve()
+        bobcfg.mkdir()
+        build.emit_bob_global("neutral", cfg=bobcfg)
+        self.assertEqual(harness._install_state(bobcfg, "bob", "global"), "active")
+        harness._install_deactivate(bobcfg, "bob", "global")
+        self.assertEqual(harness._install_state(bobcfg, "bob", "global"), "disabled")
+        build.emit_bob_global("neutral", cfg=bobcfg)   # re-created while disabled
+        res = harness._install_reactivate(bobcfg, "bob", "global")
+        self.assertTrue(res["ok"], res)
+        self.assertIn("discarded", res.get("note", ""))
+        self.assertFalse((bobcfg / ".geneseed-disabled").exists(), "stale stash not discarded")
+        self.assertTrue((bobcfg / "rules" / "geneseed.md").is_file())
+        self.assertEqual(harness._install_state(bobcfg, "bob", "global"), "active")
+
+    def test_reemit_prunes_stale_managed_hook_group(self):
+        # A recorded managed group that is no longer canonical (old interpreter path,
+        # or the pre-`|| exit 0` hook form) must be PRUNED on re-emit, not left to
+        # stack beside the new group — a duplicated Stop hook runs `learn` twice.
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        claims = man["managed"]["settings_hooks"]
+        stop = next(r for r in claims if r["event"] == "Stop")
+        stale = {"event": "Stop",
+                 "group": json.loads(json.dumps(stop["group"]))}
+        stale["group"]["hooks"][0]["command"] = \
+            stale["group"]["hooks"][0]["command"].replace("|| exit 0", "|| true")
+        # Simulate the old install: stale form in the file AND in the manifest claims.
+        s = json.loads(_read(self.cfg / "settings.json"))
+        s["hooks"]["Stop"] = [stale["group"]]
+        (self.cfg / "settings.json").write_text(json.dumps(s), encoding="utf-8")
+        man["managed"]["settings_hooks"] = \
+            [r for r in claims if r["event"] != "Stop"] + [stale]
+        (self.cfg / build.GLOBAL_MANIFEST).write_text(json.dumps(man), encoding="utf-8")
+
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        s = json.loads(_read(self.cfg / "settings.json"))
+        stops = s["hooks"]["Stop"]
+        self.assertEqual(len(stops), 1, f"stale Stop group not pruned: {stops}")
+        self.assertIn("|| exit 0", stops[0]["hooks"][0]["command"])
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        recorded = [r["group"]["hooks"][0]["command"]
+                    for r in man["managed"]["settings_hooks"] if r["event"] == "Stop"]
+        self.assertEqual(len(recorded), 1, recorded)
+        self.assertIn("|| exit 0", recorded[0])
+
     def test_deactivate_leaves_no_empty_skill_folders(self):
         # tdd is a real Geneseed skill, emitted at skills/tdd/SKILL.md.
         self.assertTrue((self.cfg / "skills" / "tdd" / "SKILL.md").is_file())
@@ -361,7 +410,8 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         build.emit_claude("neutral", repo)
         s = self._settings(repo)
         # claudeMdExcludes suppresses the GLOBAL ~/.claude/CLAUDE.md, and only that.
-        want = str((build._claude_config_dir() / "CLAUDE.md").resolve())
+        # Posix spelling: the entries are glob patterns, where a backslash escapes.
+        want = (build._claude_config_dir() / "CLAUDE.md").resolve().as_posix()
         self.assertIn(want, s.get("claudeMdExcludes", []))
         # context hook is scope-aware: --root points at the project's own .claude.
         ctx = [c for c in _hook_cmds(s) if "context" in c]

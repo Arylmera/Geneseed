@@ -384,12 +384,12 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     write_version(cfg)
     owned.append(VERSION_MARKER)
 
-    _settings, added_hooks = _merge_claude_settings(cfg / "settings.json", scope)
-    prior_hooks = old_managed.get("settings_hooks")
-    prior_hooks = prior_hooks if isinstance(prior_hooks, list) else []
-    # Dedup so the manifest can't grow unbounded if a user edits a managed hook and a
-    # re-emit re-adds the canonical group (already recorded in prior_hooks).
-    managed["settings_hooks"] = prior_hooks + [a for a in added_hooks if a not in prior_hooks]
+    # The merge prunes recorded groups that are no longer canonical (interpreter or
+    # checkout moved, hook form changed) and returns the complete current claim set —
+    # store it as-is; unioning with prior would resurrect the stale claims.
+    _settings, managed_hooks = _merge_claude_settings(
+        cfg / "settings.json", scope, prior_hooks=old_managed.get("settings_hooks"))
+    managed["settings_hooks"] = managed_hooks
 
     # Project-bypasses-global (Claude only): a PROJECT install suppresses the GLOBAL
     # ~/.claude/CLAUDE.md while cwd is this repo, via Claude's native claudeMdExcludes.
@@ -403,13 +403,18 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     prior_excl = prior_excl if isinstance(prior_excl, list) else []
     cfgdir = _PREAMBLE_CONFIG_DIR.get(claude_md.name)
     if scope == "project" and agent_text is not None and cfgdir:
-        want_excl = [str((cfgdir() / claude_md.name).resolve())]
+        # as_posix: claudeMdExcludes entries are glob patterns, where a backslash is
+        # an escape — the Windows-native spelling risks never matching.
+        want_excl = [(cfgdir() / claude_md.name).resolve().as_posix()]
         if os.environ.get("GENESEED_STACK_GLOBAL"):
             _unwire_claude_excludes(cfg / "settings.json", want_excl)
             managed["settings_excludes"] = []
         else:
             added_excl = _wire_claude_excludes(cfg / "settings.json", want_excl)
-            managed["settings_excludes"] = sorted(set(prior_excl) | set(added_excl) | set(want_excl))
+            # Claim only what Geneseed itself wired (prior + newly added) — folding
+            # `want_excl` in unconditionally would claim a user's own pre-existing
+            # exclude and uninstall would then strip it.
+            managed["settings_excludes"] = sorted(set(prior_excl) | set(added_excl))
     elif prior_excl and claude_md.name == "AGENTS.md":
         # Self-heal older Bob installs: earlier versions wrote the global AGENTS.md into
         # claudeMdExcludes here. The key is Claude-only and its Bob semantics are unknown

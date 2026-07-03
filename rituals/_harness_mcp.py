@@ -173,7 +173,10 @@ def _mcp_load(path: Path, host: str = "opencode") -> dict:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return {}
-    if host == "claude":
+    if host in ("claude", "bob"):
+        # Both hosts keep MCP in a strict-JSON settings file — comment-tolerant
+        # parsing here would let the display list servers from a file the strict
+        # toggle writer then refuses (mangling risk the writer guards against).
         try:
             data = json.loads(text)
         except ValueError:                 # JSONDecodeError ⊂ ValueError
@@ -352,7 +355,8 @@ def _uninstall_global(target: Path, archive_memory: bool, host: str = "opencode"
         except OSError:
             pass
     unmerged = _unmerge_opencode_json(target / "opencode.json", (target / "AGENT.md").as_posix())
-    for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit", build.VERSION_MARKER):
+    for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit",
+              ".geneseed-footprint", build.VERSION_MARKER):
         try:
             (target / m).unlink()
         except OSError:
@@ -855,6 +859,27 @@ def _claude_deactivate(root: Path, scope: str = "global", host: str = "claude") 
     return {"ok": True, "kind": host, "moved": len(done)}
 
 
+def _remerge_claude_hooks(cfg: Path) -> None:
+    """Re-merge the canonical hooks into settings.json, threading the manifest's
+    recorded claims through so stale groups are pruned, and write the resulting
+    claim set back — otherwise groups re-added after an interpreter/checkout move
+    are never recorded and end up orphaned at uninstall."""
+    data = _claude_read_manifest(cfg)
+    managed = data.get("managed")
+    managed = managed if isinstance(managed, dict) else {}
+    _, claims = build._merge_claude_settings(
+        cfg / "settings.json", prior_hooks=managed.get("settings_hooks"))
+    if claims != managed.get("settings_hooks") and data:
+        managed["settings_hooks"] = claims
+        data["managed"] = managed
+        tmp = cfg / (build.GLOBAL_MANIFEST + ".tmp")
+        try:
+            tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            os.replace(tmp, cfg / build.GLOBAL_MANIFEST)
+        except OSError:
+            pass
+
+
 def _claude_reactivate(root: Path, scope: str = "global", host: str = "claude") -> dict:
     cfg = _claude_cfg(root, scope, host)
     if _claude_state(root, scope, host) != "disabled":
@@ -864,9 +889,17 @@ def _claude_reactivate(root: Path, scope: str = "global", host: str = "claude") 
     # Re-emit-while-disabled guard (mirrors _install_reactivate's _install_relive): if
     # the harness was rebuilt live while disabled, the CLAUDE.md block is back and the
     # manifest is fresh — discard the stale stash rather than collide with the new files.
-    relive_managed = _claude_read_manifest(cfg).get("managed") or {}
-    if build._managed_block_read(_claude_md_path(cfg, relive_managed)) is not None:
-        build._merge_claude_settings(cfg / "settings.json")   # ensure hooks are present
+    relive_manifest = _claude_read_manifest(cfg)
+    relive_managed = relive_manifest.get("managed") or {}
+    relive = build._managed_block_read(_claude_md_path(cfg, relive_managed)) is not None
+    # Bob GLOBAL writes no managed AGENTS.md block — its preamble carrier is the owned
+    # rules/geneseed.md, so a live copy of THAT is the relive signal here. Without this
+    # branch the guard never fires for bob-global: every stashed file collides with the
+    # fresh emit and the install is stuck "disabled" until the stash is hand-deleted.
+    if not relive and not relive_managed.get("claude_md"):
+        relive = bool(relive_manifest) and (cfg / "rules" / "geneseed.md").is_file()
+    if relive:
+        _remerge_claude_hooks(cfg)   # ensure hooks are present (and claims exact)
         _clean_host_stash(cfg, host)
         return {"ok": True, "note": "install was re-created while disabled; "
                 "discarded the stashed snapshot"}
@@ -888,7 +921,7 @@ def _claude_reactivate(root: Path, scope: str = "global", host: str = "claude") 
     if leftovers:
         return {"ok": False, "failed": leftovers, "moved": moved}
     # Re-wire: re-merge the hooks (idempotent) and re-insert the CLAUDE.md block.
-    build._merge_claude_settings(cfg / "settings.json")
+    _remerge_claude_hooks(cfg)
     managed = _claude_read_manifest(cfg).get("managed") or {}
     build._wire_claude_excludes(cfg / "settings.json", managed.get("settings_excludes", []))
     if block_file.exists():
@@ -924,7 +957,8 @@ def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:
     build._unwire_claude_excludes(cfg / "settings.json", managed.get("settings_excludes", []))
     build._managed_block_remove(_claude_md_path(cfg, managed),
                                 whole=bool((managed.get("claude_md") or {}).get("whole")))
-    for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit", build.VERSION_MARKER):
+    for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit",
+              ".geneseed-footprint", build.VERSION_MARKER):
         try:
             (cfg / m).unlink()
         except OSError:

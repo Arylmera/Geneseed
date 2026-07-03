@@ -190,7 +190,7 @@ def _claude_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[str
     if ov.get("model"):
         fm.append(f"model: {ov['model']}")
     if _is_readonly(text):
-        denied = ["Write", "Edit", "WebFetch"]
+        denied = ["Write", "Edit", "NotebookEdit", "WebFetch"]
         if "<!-- bash: allow -->" not in text:
             denied.append("Bash")
         fm.append("disallowedTools: " + ", ".join(denied))
@@ -551,16 +551,22 @@ def _claude_hook_groups(cfg: Path) -> dict:
     }
 
 
-def _merge_claude_settings(path: Path, scope: str = "global") -> "tuple[Path, list]":
+def _merge_claude_settings(path: Path, scope: str = "global",
+                           prior_hooks: "list | None" = None) -> "tuple[Path, list]":
     """Surgically merge Geneseed's Claude hooks into the user's settings.json,
     preserving every other key AND the user's own hook entries. The install root is
-    `path.parent` (so `learn` is pointed at <root>/memory). Returns (target, added)
-    where `added` is the list of {event, group} entries actually written — recorded in
-    the manifest so unwire/uninstall removes EXACTLY those and nothing else. Idempotent
-    (a group already present is not re-added). A settings.json carrying comments is
-    never rewritten — the user is warned and nothing changes (mirrors the commented
-    `.jsonc` refusal for opencode.json). `scope` is accepted for caller symmetry; the
-    generated hooks are absolute either way."""
+    `path.parent` (so `learn` is pointed at <root>/memory). `prior_hooks` is the
+    manifest's previously-recorded managed groups: any of them still in the file but
+    no longer canonical (an old interpreter/checkout path after a move, or the
+    pre-`|| exit 0` hook form) is PRUNED — without this a re-emit stacks the new
+    group beside the stale one, so `learn` runs twice per Stop and a dead python
+    path errors on every call. Returns (target, managed) where `managed` is the
+    complete current claim set (surviving prior groups + newly added), recorded in
+    the manifest so unwire/uninstall removes EXACTLY those and nothing else.
+    Idempotent (a group already present is not re-added; a user's own identical
+    group is never claimed). A settings.json carrying comments is never rewritten —
+    the user is warned and the prior claims are kept unchanged."""
+    prior = [r for r in (prior_hooks or []) if isinstance(r, dict)]
     config: dict = {}
     had_comments = False
     if path.exists():
@@ -570,7 +576,7 @@ def _merge_claude_settings(path: Path, scope: str = "global") -> "tuple[Path, li
                 print(f"[geneseed] {path.name} is not valid JSON — NOT rewriting it "
                       f"(fix the syntax, then re-run). Hooks were not wired.",
                       file=sys.stderr)
-                return path, []
+                return path, prior
             if isinstance(loaded, dict):
                 config = loaded
         except OSError:
@@ -578,8 +584,21 @@ def _merge_claude_settings(path: Path, scope: str = "global") -> "tuple[Path, li
     hooks = config.get("hooks")
     if not isinstance(hooks, dict):
         hooks = {}
+    canonical = _claude_hook_groups(path.parent)
+    canon_flat = [{"event": e, "group": g} for e, gs in canonical.items() for g in gs]
+    pruned = False
+    for rec in prior:
+        if rec in canon_flat:
+            continue
+        event, group = rec.get("event"), rec.get("group")
+        arr = hooks.get(event)
+        if isinstance(arr, list) and group in arr:
+            arr.remove(group)
+            pruned = True
+            if not arr:
+                hooks.pop(event, None)
     added: list = []
-    for event, new_groups in _claude_hook_groups(path.parent).items():
+    for event, new_groups in canonical.items():
         arr = hooks.get(event)
         if not isinstance(arr, list):
             arr = []
@@ -589,17 +608,22 @@ def _merge_claude_settings(path: Path, scope: str = "global") -> "tuple[Path, li
             arr.append(g)
             added.append({"event": event, "group": g})
         hooks[event] = arr
-    if not added:
-        return path, []   # already wired (or nothing to add) — leave the file untouched
+    survivors = [r for r in prior if r in canon_flat]
+    managed_now = survivors + [a for a in added if a not in survivors]
+    if not added and not pruned:
+        return path, managed_now   # already wired — leave the file untouched
     if had_comments:
         print(f"[geneseed] {path.name} has comments — not rewriting it (your edits are "
               f"kept). Add Geneseed's hooks by hand from adapters/claude-code/settings.json.",
               file=sys.stderr)
-        return path, []
-    config["hooks"] = hooks
+        return path, prior
+    if hooks:
+        config["hooks"] = hooks
+    else:
+        config.pop("hooks", None)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-    return path, added
+    return path, managed_now
 
 
 def _unwire_claude_settings(path: Path, added: list) -> None:
