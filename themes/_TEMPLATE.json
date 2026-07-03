@@ -1,6 +1,6 @@
 {
   "ACCENT": "<one ANSI color name for the OpenCode brand: cyan|magenta|green|yellow|blue|red|white>",
-  "VOICE": "<one sentence telling the agent how to speak in this theme — tone and vocabulary only, not structure>",
+  "VOICE": "<one sentence telling the agent how to speak in this theme — tone and vocabulary only, not structure. An aggressive or comedic persona MUST end with a self-consistent line, written in the persona's own voice, establishing that the tone never compromises correctness or completeness — every finding, caveat, and step is still delivered in full>",
   "TAGLINE": "<one-line tagline shown under the AGENT.md title, in this theme's voice>",
   "LOADED_SIGIL": "<the readiness line the agent must emit before its first reply — keep it short and unmistakable>",
   "EPI_LAWS": "<epigraph above the Laws section, themed>",

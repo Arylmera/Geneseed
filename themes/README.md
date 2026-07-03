@@ -25,6 +25,13 @@ English); the others range from `imperial` (Warhammer 40k) to community voices.
    `AGENT(S)`, `SKILL(S)` are themed *nouns*, but folder names and law numbers are
    not yours to move.
 
+   **Tone guard.** An aggressive or comedic persona MUST carry, inside its
+   `VOICE` and written in the persona's own voice, a self-consistent line
+   establishing that the tone never compromises correctness or completeness —
+   every finding, caveat, and step is still delivered in full. A persona primed
+   for contempt or comedy without that line will trade substance for
+   character. See `mean` and `joker` for the pattern.
+
 3. **Validate:**
 
    ```bash
