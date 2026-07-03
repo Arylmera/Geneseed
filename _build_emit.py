@@ -137,30 +137,6 @@ def color_theme_files() -> list[Path]:
     return sorted(p for p in COLOR_THEMES.glob("*.json") if not p.name.startswith("_"))
 
 
-def _snapshot_user_themes(themes_dir: Path) -> dict[str, bytes]:
-    """Capture EVERY theme file (name->bytes) before the full `.opencode` wipe. After the
-    emit re-creates the shipped themes, _restore_user_themes rewrites only the ones that
-    were NOT regenerated — i.e. the user's own themes — so a rebuild never erases them,
-    whether or not they carry the `geneseed-` prefix (spec §8.2). Ownership is thus the
-    set of files this emit writes, not the filename prefix.
-    # ponytail: a shipped theme whose source palette was deleted would be resurrected here
-    # rather than dropped. Only bites a maintainer editing themes/opencode/, who rebuilds
-    # and sees it — switch to a manifest/emit-set diff if that ever matters."""
-    if not themes_dir.is_dir():
-        return {}
-    return {p.name: p.read_bytes() for p in themes_dir.glob("*.json")}
-
-
-def _restore_user_themes(themes_dir: Path, saved: dict[str, bytes]) -> None:
-    """Re-write captured themes the new emit did NOT regenerate — that leaves exactly the
-    user's own themes, since every shipped theme was just recreated and so already exists."""
-    themes_dir.mkdir(parents=True, exist_ok=True)
-    for name, data in saved.items():
-        dest = themes_dir / name
-        if not dest.exists():
-            dest.write_bytes(data)
-
-
 def _write_color_themes(themes_dir: Path) -> list[Path]:
     """Emit every curated colour theme in both flavours: geneseed-<name>-solid.json and
     geneseed-<name>-transparent.json (select with `/theme geneseed-<name>-solid`). Returns
@@ -1085,38 +1061,90 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
     if agent_md.is_file():
         agent_md.write_text(_strip_capability_links(agent_md.read_text(encoding="utf-8")),
                             encoding="utf-8")
-    # `.opencode/` is fully owned by this layer — wipe so a removed agent/skill
-    # leaves no stale file behind. (Plural dir names are canonical in OpenCode;
-    # singular is back-compat only.) The one carve-out: user-authored themes under
-    # .opencode/themes/ are snapshot and restored (any theme the emit doesn't itself
-    # regenerate), so a rebuild never erases them (spec §8.2).
-    saved_themes = _snapshot_user_themes(root / ".opencode" / "themes")
-    if (root / ".opencode").is_dir():
-        shutil.rmtree(root / ".opencode")
+    # `.opencode/` used to be fully wiped and rebuilt every re-emit — simple, but it
+    # destroyed ANY user-authored file under it (a hand-added agent, plugin, command),
+    # not just the one carve-out (themes) the old code knew to snapshot-and-restore.
+    # Now it follows the same manifest + write-before-delete model as the Claude/Bob
+    # emits (`_emit_claude_core` in _build_global.py): read what THIS layer owned last
+    # time, write the complete new set, then prune only files still in the old owned
+    # set but not the new one. A pre-existing file NOT in the old manifest is the
+    # user's (claim-on-create, via _write_native_layer's old_owned/cfg) — left alone,
+    # warned about, never pruned. (Plural dir names are canonical in OpenCode; singular
+    # is back-compat only.) `agent-overrides.json` lives beside `.opencode/` in `out`,
+    # never inside it, so it was never touched by the wipe and needs no manifest entry.
+    #
+    # Migration nuance: an install from the wipe-and-rebuild era has NO manifest yet.
+    # `old_owned` then reads as [] (manifest missing == "owned nothing before"), so
+    # `_write_native_layer`'s claim-on-create sees every ALREADY-EXISTING agent/skill
+    # file as user-authored on this FIRST post-upgrade re-emit — including one that is
+    # actually still a current Geneseed spec — and skips it with a warning instead of
+    # refreshing it. Nothing is deleted (the prune set old_owned - owned is empty), and
+    # the manifest this run writes bootstraps tracking for everything actually written
+    # (a freshly-created theme/plugin/command IS captured from this very run). A
+    # pre-existing file that got skipped this once stays permanently unclaimed unless
+    # the user removes it and lets a later re-emit recreate it — the exact same
+    # characteristic the Claude/Bob engine's own migration already has (same
+    # claim-on-create machinery), not a new limitation introduced here.
     oc = root / ".opencode"
-    try:
-        theme, items = render_all(theme_name)
+    manifest_path = oc / GLOBAL_MANIFEST
+    old_owned: list[str] = []
+    if manifest_path.exists():
+        try:
+            old_owned = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", []) or []
+        except (json.JSONDecodeError, OSError):
+            old_owned = []
 
-        ensure_agent_overrides_stub(out)
-        overrides = _load_agent_overrides(out)
+    owned: list[str] = []
+    theme, items = render_all(theme_name)
 
-        n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills", overrides)
-        primary = _write_primary_agent(oc / "agents", overrides)
-        commands = _write_command_layer(items, oc / "command")
-        commands.append(_write_ponytail_command(oc / "command"))   # always-on /ponytail switch
-        _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
-        _write_color_themes(oc / "themes")   # curated full-palette colour themes (solid + transparent)
-    finally:
-        # The snapshot is the ONLY copy of the user's themes once the wipe above
-        # ran — restore it even when the emit crashes midway (spec §8.2).
-        _restore_user_themes(oc / "themes", saved_themes)   # user themes survive the wipe
+    ensure_agent_overrides_stub(out)
+    overrides = _load_agent_overrides(out)
+
+    n_agents, n_skills, written = _write_native_layer(
+        items, oc / "agents", oc / "skills", overrides,
+        host="opencode", old_owned=old_owned, cfg=oc)
+    owned += [p.relative_to(oc).as_posix() for p in written]
+    primary = _write_primary_agent(oc / "agents", overrides)
+    if primary:
+        owned.append(primary.relative_to(oc).as_posix())
+    commands = _write_command_layer(items, oc / "command")
+    commands.append(_write_ponytail_command(oc / "command"))   # always-on /ponytail switch
+    owned += [p.relative_to(oc).as_posix() for p in commands]
+    theme_file = _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
+    owned.append(theme_file.relative_to(oc).as_posix())
+    for p in _write_color_themes(oc / "themes"):   # curated full-palette colour themes (solid + transparent)
+        owned.append(p.relative_to(oc).as_posix())
+
+    n_plugins = _copy_plugins(oc / "plugins", owned)
+    n_workflows = _copy_workflows(oc / "workflows", owned)
+
+    # Write-before-delete: only now that the whole current set is on disk do we remove
+    # what this layer owned before but no longer produces (a removed agent/skill, a
+    # disabled primary/command, a theme dropped from the palette). A live file is never
+    # momentarily absent partway through the emit.
+    prune_failed = []
+    for relp in sorted(set(old_owned) - set(owned)):
+        victim = oc / relp
+        try:
+            if victim.is_file():
+                victim.unlink()
+                if victim.parent != oc and not any(victim.parent.iterdir()):
+                    victim.parent.rmdir()
+        except OSError as e:
+            prune_failed.append(f"{relp} ({e})")
+    if prune_failed:
+        print("[geneseed] WARN: could not remove stale owned file(s): "
+              + ", ".join(prune_failed), file=sys.stderr)
+
+    _write_manifest_atomic(manifest_path, {
+        "_comment": "Files owned by Geneseed's per-repo OpenCode emit (--emit opencode). "
+                    "Do not edit; removed on re-emit. A pre-existing file not in this "
+                    "list is yours and is never touched.",
+        "owned": sorted(owned)})
 
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
     cfg_name = _merge_opencode_json(root / "opencode.json", agent_path).name
-
-    n_plugins = _copy_plugins(oc / "plugins")
-    n_workflows = _copy_workflows(oc / "workflows")
 
     extras = ([f"primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
     extra = (" + " + ", ".join(extras)) if extras else ""

@@ -98,13 +98,103 @@ class OpencodePerRepoTests(_Tmp):
         agent_md = (out / "AGENT.md").read_text(encoding="utf-8")
         self.assertEqual(build.CAPABILITY_LINK_RE.findall(agent_md), [])
 
-    def test_reemit_wipes_opencode_dir(self):
+    def test_manifest_tracks_owned_files(self):
         out = self.d / "bundle"
         _quiet(build.emit_opencode, "neutral", out, self.d)
-        stale = self.d / ".opencode" / "agents" / "ghost.md"
-        stale.write_text("stale", encoding="utf-8")
+        manifest = self.d / ".opencode" / build.GLOBAL_MANIFEST
+        self.assertTrue(manifest.is_file())
+        owned = set(json.loads(manifest.read_text(encoding="utf-8"))["owned"])
+        self.assertIn("agents/reviewer.md", owned)
+        self.assertIn("skills/commit/SKILL.md", owned)
+
+    def test_reemit_prunes_stale_owned_file(self):
+        """A file this layer owned on a previous run but no longer produces (a removed
+        agent, a stale manifest entry) is pruned on re-emit — write-before-delete."""
+        out = self.d / "bundle"
         _quiet(build.emit_opencode, "neutral", out, self.d)
-        self.assertFalse(stale.exists(), ".opencode/ is owned and must be wiped on re-emit")
+        ghost = self.d / ".opencode" / "agents" / "ghost.md"
+        ghost.write_text("from an older harness", encoding="utf-8")
+        manifest = self.d / ".opencode" / build.GLOBAL_MANIFEST
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        data["owned"] = sorted(set(data["owned"]) | {"agents/ghost.md"})
+        manifest.write_text(json.dumps(data), encoding="utf-8")
+
+        _quiet(build.emit_opencode, "neutral", out, self.d)
+        self.assertFalse(ghost.exists(), "a stale owned file was not pruned on re-emit")
+        new_owned = set(json.loads(manifest.read_text(encoding="utf-8"))["owned"])
+        self.assertNotIn("agents/ghost.md", new_owned)
+        self.assertIn("agents/reviewer.md", new_owned)   # real specs survive
+
+    def test_user_authored_file_survives_reemit_with_warning(self):
+        """A pre-existing file under `.opencode/` that was never in the manifest is the
+        user's own (a hand-added agent) — claim-on-create leaves it untouched and warns,
+        instead of the old full-wipe silently destroying it."""
+        out = self.d / "bundle"
+        _quiet(build.emit_opencode, "neutral", out, self.d)
+        mine = self.d / ".opencode" / "agents" / "reviewer.md"   # collides with a real spec name
+        mine.write_text("my own hand-authored reviewer agent", encoding="utf-8")
+        manifest = self.d / ".opencode" / build.GLOBAL_MANIFEST
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        data["owned"] = sorted(set(data["owned"]) - {"agents/reviewer.md"})   # simulate: never ours
+        manifest.write_text(json.dumps(data), encoding="utf-8")
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(buf):
+            build.emit_opencode("neutral", out, self.d)
+        self.assertEqual(mine.read_text(encoding="utf-8"), "my own hand-authored reviewer agent",
+                         "a user-authored file must survive a re-emit untouched")
+        self.assertIn("kept your existing", buf.getvalue())
+        new_owned = set(json.loads(manifest.read_text(encoding="utf-8"))["owned"])
+        self.assertNotIn("agents/reviewer.md", new_owned, "never claimed into the manifest")
+
+    def test_theme_change_prunes_old_theme_files(self):
+        """Re-emitting under a different theme name removes the old geneseed-<theme>.json
+        (it's no longer in the owned set) while the color themes (theme-independent) and
+        a genuine user theme both survive."""
+        out = self.d / "bundle"
+        _quiet(build.emit_opencode, "neutral", out, self.d)
+        themes = self.d / ".opencode" / "themes"
+        old_theme = themes / "geneseed-neutral.json"
+        self.assertTrue(old_theme.is_file())
+        _quiet(build.emit_opencode, "imperial", out, self.d)
+        self.assertFalse(old_theme.exists(), "the old theme's own file must be pruned")
+        self.assertTrue((themes / "geneseed-imperial.json").is_file())
+        self.assertTrue((themes / "geneseed-catppuccin-solid.json").is_file())
+
+    def test_legacy_manifestless_install_preserves_unknown_files(self):
+        """Migration: an install from the wipe-and-rebuild era has no manifest. The
+        first re-emit over it must NOT wipe `.opencode/` — with old_owned reading as
+        empty, claim-on-create treats EVERY already-existing file (a genuinely
+        hand-added one, but also every still-current Geneseed spec, since the emit has
+        no record of having written them before) as the user's, conservatively skipping
+        it rather than refreshing it. Nothing is deleted either way, and a manifest is
+        bootstrapped from what THIS run actually wrote — so freshly-created files (a
+        theme, a plugin, anything not already on disk pre-migration) are tracked and
+        pruned normally from here on. This mirrors the pre-existing Claude/Bob engine's
+        own migration behaviour (same claim-on-create machinery), not a new limitation."""
+        out = self.d / "bundle"
+        _quiet(build.emit_opencode, "neutral", out, self.d)
+        manifest = self.d / ".opencode" / build.GLOBAL_MANIFEST
+        manifest.unlink()   # simulate a pre-manifest legacy install
+        unknown = self.d / ".opencode" / "agents" / "my-legacy-agent.md"
+        unknown.write_text("hand-added long ago", encoding="utf-8")
+        reviewer = self.d / ".opencode" / "agents" / "reviewer.md"
+        original_reviewer = reviewer.read_text(encoding="utf-8")
+
+        _quiet(build.emit_opencode, "neutral", out, self.d)
+        self.assertTrue(unknown.is_file(), "an unrecognised file must survive the first "
+                        "post-upgrade re-emit, not be wiped")
+        # The pre-existing spec file is untouched too (conservative claim-on-create) —
+        # not deleted, not required to be re-claimed on this very first pass.
+        self.assertEqual(reviewer.read_text(encoding="utf-8"), original_reviewer)
+        self.assertTrue(manifest.is_file(), "the manifest is bootstrapped on this re-emit")
+        owned = set(json.loads(manifest.read_text(encoding="utf-8"))["owned"])
+        # Files that already existed pre-migration (both the genuine hand-added one and
+        # every already-current spec) are never claimed on this pass — but a freshly
+        # produced file (nothing on disk to collide with) IS tracked from run one.
+        self.assertNotIn("agents/reviewer.md", owned)
+        self.assertNotIn("agents/my-legacy-agent.md", owned)
+        self.assertIn("themes/geneseed-neutral.json", owned)
 
     def test_color_themes_emit_both_flavours(self):
         out = self.d / "bundle"
@@ -126,8 +216,11 @@ class OpencodePerRepoTests(_Tmp):
         out = self.d / "bundle"
         _quiet(build.emit_opencode, "neutral", out, self.d)
         themes = self.d / ".opencode" / "themes"
-        # A user theme is any file the emit does NOT regenerate (spec §8.2) — preserved
-        # whether or not it carries the geneseed- prefix (CLI now brands them geneseed-).
+        # A user theme is any file that is never in the owned manifest (claim-on-create)
+        # — preserved whether or not it carries the geneseed- prefix (CLI now brands
+        # them geneseed-). Formerly done via a snapshot/restore special-case (spec §8.2);
+        # now it falls straight out of the general manifest-diff prune, since nothing
+        # unrecognised is ever written to the manifest in the first place.
         plain = themes / "mybrand.json"
         branded = themes / "geneseed-mybrand.json"
         plain.write_text('{"theme":{"primary":"#abcabc"}}', encoding="utf-8")

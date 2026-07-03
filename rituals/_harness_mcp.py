@@ -1210,17 +1210,72 @@ def _archive_store(store: Path) -> Path:
 
 
 def _opencode_project_uninstall(root: Path) -> dict:
-    """Reverse a per-repo OpenCode emit at `root` (which carries no manifest): delete the
-    fully-owned layers — `.opencode/` plus the bundle dirs the build WIPES every run
-    (laws/agents/skills; folder names are always neutral, never themed) and AGENT.md — and
-    drop the opencode.json `instructions` entry. memory/ + notebook/ and the user-owned
-    stubs (context.json, wiki.jsonc, .gitignore) are left for the caller / kept as data.
-    # ponytail: the deploy itself clobbers laws/agents/skills (build() rmtrees them each
-    # run), so removing them here is the exact inverse — not a guess at user files. If a
-    # repo ever needs them preserved through an uninstall, give the project emit a manifest."""
+    """Reverse a per-repo OpenCode emit at `root`. The portable bundle dirs alongside
+    `.opencode/` (laws/agents/skills; folder names are always neutral, never themed) are
+    fully owned by the plain `build()` step regardless of the OpenCode manifest — it
+    WIPES and rewrites them every run — so those are always deleted whole, same as
+    before. `.opencode/` itself prefers its ownership manifest when present (every emit
+    since the write-before-delete rework writes one): unlink exactly the files it lists,
+    pruning emptied dirs, so a user-authored file under `.opencode/` (a hand-added
+    agent/plugin/command) survives. Falls back to deleting `.opencode/` whole only for a
+    manifest-less install from before this rework (or one whose manifest was lost).
+    Either way AGENT.md is removed and the opencode.json `instructions` entry dropped;
+    memory/ + notebook/ and the user-owned stubs (context.json, wiki.jsonc, .gitignore)
+    are left for the caller / kept as data."""
     entry = _install_agent_entry(root, "project")   # read the wire BEFORE deleting AGENT.md
     removed = 0
-    for d in (".opencode", "laws", "agents", "skills"):
+    failed: "list[str]" = []
+    oc = root / ".opencode"
+    manifest_path = oc / build.GLOBAL_MANIFEST
+    if manifest_path.is_file():
+        try:
+            owned = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", []) or []
+        except (json.JSONDecodeError, OSError):
+            owned = []
+        for rel in owned:
+            victim = oc / rel
+            try:
+                if victim.is_file():
+                    victim.unlink()
+                    removed += 1
+                    d = victim.parent
+                    while d != oc and d.is_dir() and not any(d.iterdir()):
+                        d.rmdir()
+                        d = d.parent
+            except OSError as e:
+                failed.append(f".opencode/{rel} ({e})")
+        if failed:
+            # A locked/permission-blocked file survives the uninstall while the
+            # manifest would otherwise be deleted — name the leftovers so the user can
+            # finish the job by hand instead of believing the dir is clean.
+            sys.stderr.write("[uninstall] WARN: could not remove "
+                             f"{len(failed)} owned file(s): {', '.join(failed)}\n")
+        # Survivors-gate (mirrors _uninstall_global/_claude_uninstall): a locked owned
+        # file must not take the manifest down with it — `_project_qualifies` keys off
+        # its presence, so deleting it while a file survives would make the install
+        # unfindable/unretriable. Only tidy the manifest + dir once everything unlinked.
+        if not failed:
+            try:
+                manifest_path.unlink()
+            except OSError:
+                pass
+            if oc.is_dir() and not any(oc.iterdir()):
+                try:
+                    oc.rmdir()
+                except OSError:
+                    pass
+        else:
+            # Same survivors-gate message as _uninstall_global/_claude_uninstall — the
+            # manifest is this install's only qualifying signal (_project_qualifies
+            # keys on it), so deleting it while owned files survive would strand the
+            # leftovers unretriably.
+            sys.stderr.write("[uninstall] WARN: the manifest and markers were KEPT so "
+                             "`harness uninstall` can be retried once the file(s) are "
+                             "unlocked/removable.\n")
+    elif oc.is_dir():
+        shutil.rmtree(oc, ignore_errors=True)
+        removed += 1
+    for d in ("laws", "agents", "skills"):
         p = root / d
         if p.is_dir():
             shutil.rmtree(p, ignore_errors=True)
@@ -1232,7 +1287,10 @@ def _opencode_project_uninstall(root: Path) -> dict:
         except OSError:
             pass
     unmerged = _unmerge_opencode_json(root / "opencode.json", entry)
-    return {"removed": removed, "unmerged": unmerged, "archived": None}
+    result = {"removed": removed, "unmerged": unmerged, "archived": None}
+    if failed:
+        result["failed"] = failed
+    return result
 
 
 def _owned_dirs_for(root: Path, host: str, scope: str, data: Path) -> "list[Path]":

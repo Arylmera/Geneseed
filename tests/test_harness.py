@@ -650,8 +650,9 @@ class ProjectUninstallCliTests(unittest.TestCase):
     """`cmd_uninstall` itself, now that it drives project-scoped installs too (it
     previously only supported the global manifest-tracked case and told per-repo users
     to `rm -rf` by hand). Exercises the full CLI path: resolve -> summary -> confirm ->
-    `_install_uninstall` -> printed result — for Claude (manifest + CLAUDE.md block +
-    hooks) and OpenCode (manifest-less) project installs."""
+    `_install_uninstall` -> printed result — for Claude and OpenCode project installs,
+    both manifest-tracked (`.opencode/.geneseed-manifest.json` since the write-before-
+    delete rework in _build_emit.emit_opencode)."""
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
@@ -714,6 +715,34 @@ class ProjectUninstallCliTests(unittest.TestCase):
         self.assertTrue((repo / "memory").is_dir())          # memory kept
         instr = json.loads((repo / "opencode.json").read_text(encoding="utf-8")).get("instructions", [])
         self.assertNotIn("AGENT.md", instr)
+
+    def test_opencode_project_uninstall_via_manifest_keeps_user_file(self):
+        """`_opencode_project_uninstall` prefers the `.opencode/` manifest when present:
+        it removes exactly the files Geneseed owns and leaves a hand-authored file (one
+        never in the manifest) behind, instead of the old whole-tree rmtree that ate
+        everything under `.opencode/` indiscriminately."""
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        (repo / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
+        manifest_path = repo / ".opencode" / build.GLOBAL_MANIFEST
+        self.assertTrue(manifest_path.is_file(), "emit_opencode must write an ownership manifest")
+        mine = repo / ".opencode" / "agents" / "my-own-agent.md"
+        mine.write_text("hand authored, not Geneseed's", encoding="utf-8")
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = harness.cmd_uninstall(self._args(str(repo)))
+        self.assertEqual(rc, 0)
+
+        # Everything Geneseed owned is gone…
+        self.assertFalse((repo / ".opencode" / "agents" / "reviewer.md").exists())
+        self.assertFalse(manifest_path.exists())
+        self.assertFalse((repo / "AGENT.md").exists())
+        # …but the user's own file survived the uninstall.
+        self.assertTrue(mine.is_file())
+        self.assertEqual(mine.read_text(encoding="utf-8"), "hand authored, not Geneseed's")
 
     def test_project_uninstall_deregisters_from_registry(self):
         import contextlib, io, os
@@ -1933,8 +1962,7 @@ class HookIntegrityCheckerTests(unittest.TestCase):
 
 class RetryGapUninstallTests(unittest.TestCase):
     """Requirement 4: a locked/undeletable owned file must not silently lose the
-    `.geneseed-emit` marker — that would make the install unfindable/unretriable
-    (an OpenCode project install in particular carries no manifest)."""
+    `.geneseed-emit` marker — that would make the install unfindable/unretriable."""
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
@@ -1943,6 +1971,11 @@ class RetryGapUninstallTests(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_leftover_owned_dir_keeps_marker_and_warns(self):
+        # emit_opencode now writes a `.opencode/.geneseed-manifest.json` (the
+        # write-before-delete rework), so `_opencode_project_uninstall` removes owned
+        # files by per-file unlink rather than an rmtree of the whole dir — simulate a
+        # locked file the same way the Claude/Bob reversal tests do (Path.unlink raises
+        # for one specific owned file), not by faking out shutil.rmtree.
         import contextlib, io
         repo = self.tmp / "repo"
         repo.mkdir()
@@ -1950,29 +1983,28 @@ class RetryGapUninstallTests(unittest.TestCase):
             build.emit_opencode("neutral", out=repo, root=repo)
         (repo / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
 
-        # Simulate a locked file: monkeypatch shutil.rmtree used by the reversal so
-        # the `.opencode` dir survives (as `ignore_errors=True` would leave it if a
-        # file inside were actually locked).
-        orig_rmtree = shutil.rmtree
-        def fake_rmtree(path, *a, **kw):
-            if Path(path).name == ".opencode":
-                return   # pretend a locked file blocked the removal — dir survives
-            return orig_rmtree(path, *a, **kw)
-        harness.shutil.rmtree = fake_rmtree
+        orig_unlink = Path.unlink
+        def fake_unlink(p, *a, **kw):
+            if p.name == "reviewer.md" and p.parent.name == "agents" \
+                    and p.parent.parent.name == ".opencode":
+                raise OSError("locked by another process")
+            return orig_unlink(p, *a, **kw)
+        Path.unlink = fake_unlink
         try:
             buf = io.StringIO()
             with contextlib.redirect_stderr(buf):
                 summary = harness._install_uninstall(repo, "opencode", "project", "keep")
         finally:
-            harness.shutil.rmtree = orig_rmtree
+            Path.unlink = orig_unlink
 
         self.assertIn("incomplete", summary)
         self.assertTrue((repo / ".geneseed-emit").is_file())   # marker KEPT
         self.assertTrue((repo / ".opencode").is_dir())          # survivor still there
-        self.assertIn("retry", buf.getvalue().lower())
+        self.assertTrue((repo / ".opencode" / build.GLOBAL_MANIFEST).is_file())  # manifest KEPT
+        self.assertIn("retried", buf.getvalue().lower())
 
         # …and the retry the WARN promises actually completes the teardown once the
-        # obstacle is gone (rmtree restored above): nothing left, marker dropped.
+        # obstacle is gone (unlink restored above): nothing left, marker dropped.
         with contextlib.redirect_stdout(io.StringIO()), \
                 contextlib.redirect_stderr(io.StringIO()):
             summary2 = harness._install_uninstall(repo, "opencode", "project", "keep")
