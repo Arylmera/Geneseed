@@ -844,31 +844,41 @@ def _claude_deactivate(root: Path, scope: str = "global", host: str = "claude") 
             return {"ok": False, "failed": [f"{rel} ({e})"], "rolled_back": len(done)}
     # Unwire the settings.json hooks (exact recorded groups only) — the user's own
     # keys/hooks are untouched.
-    build._unwire_claude_settings(cfg / "settings.json", managed.get("settings_hooks", []))
-    build._unwire_claude_excludes(cfg / "settings.json", managed.get("settings_excludes", []))
+    build._unwire_claude_settings(_settings_file(cfg, managed), managed.get("settings_hooks", []))
+    build._unwire_claude_excludes(_settings_file(cfg, managed), managed.get("settings_excludes", []))
     # Excise the CLAUDE.md block, stashing its content for an exact restore.
     cm = _claude_md_path(cfg, managed)
     block = build._managed_block_read(cm)
     stash.mkdir(parents=True, exist_ok=True)   # presence == disabled, even if nothing moved
     if block is not None:
         (stash / "_claude_md_block.txt").write_text(block, encoding="utf-8")
-        build._managed_block_remove(cm, whole=bool((managed.get("claude_md") or {}).get("whole")))
+        # Always excise (never whole-file delete): prose the user added around the
+        # block must survive a disable — the file goes only if nothing else remains.
+        build._managed_block_remove(cm)
     # Prune the dirs each moved file emptied — climbs so skills/<name>/ husks go too.
     for rel in done:
         _prune_empty_ancestors((cfg / rel).parent, cfg)
     return {"ok": True, "kind": host, "moved": len(done)}
 
 
+def _settings_file(cfg: Path, managed: dict) -> Path:
+    """The settings file this install's hooks were wired into, per the manifest —
+    settings.local.json for a Claude PROJECT install (personal, untracked),
+    settings.json everywhere else. Every lifecycle path must target the file the
+    emit actually wrote, or hooks linger in one file while claims chase another."""
+    return cfg / ((managed or {}).get("settings_file") or "settings.json")
+
+
 def _remerge_claude_hooks(cfg: Path) -> None:
-    """Re-merge the canonical hooks into settings.json, threading the manifest's
-    recorded claims through so stale groups are pruned, and write the resulting
-    claim set back — otherwise groups re-added after an interpreter/checkout move
-    are never recorded and end up orphaned at uninstall."""
+    """Re-merge the canonical hooks into the install's settings file, threading the
+    manifest's recorded claims through so stale groups are pruned, and write the
+    resulting claim set back — otherwise groups re-added after an interpreter/
+    checkout move are never recorded and end up orphaned at uninstall."""
     data = _claude_read_manifest(cfg)
     managed = data.get("managed")
     managed = managed if isinstance(managed, dict) else {}
     _, claims = build._merge_claude_settings(
-        cfg / "settings.json", prior_hooks=managed.get("settings_hooks"))
+        _settings_file(cfg, managed), prior_hooks=managed.get("settings_hooks"))
     if claims != managed.get("settings_hooks") and data:
         managed["settings_hooks"] = claims
         data["managed"] = managed
@@ -923,7 +933,7 @@ def _claude_reactivate(root: Path, scope: str = "global", host: str = "claude") 
     # Re-wire: re-merge the hooks (idempotent) and re-insert the CLAUDE.md block.
     _remerge_claude_hooks(cfg)
     managed = _claude_read_manifest(cfg).get("managed") or {}
-    build._wire_claude_excludes(cfg / "settings.json", managed.get("settings_excludes", []))
+    build._wire_claude_excludes(_settings_file(cfg, managed), managed.get("settings_excludes", []))
     if block_file.exists():
         build._managed_block_write(_claude_md_path(cfg, managed),
                                    block_file.read_text(encoding="utf-8"))
@@ -953,10 +963,12 @@ def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:
         sys.stderr.write("[uninstall] WARN: could not remove "
                          f"{len(failed)} owned file(s): {', '.join(failed)}\n")
     hooks = managed.get("settings_hooks", [])
-    build._unwire_claude_settings(cfg / "settings.json", hooks)
-    build._unwire_claude_excludes(cfg / "settings.json", managed.get("settings_excludes", []))
-    build._managed_block_remove(_claude_md_path(cfg, managed),
-                                whole=bool((managed.get("claude_md") or {}).get("whole")))
+    build._unwire_claude_settings(_settings_file(cfg, managed), hooks)
+    build._unwire_claude_excludes(_settings_file(cfg, managed), managed.get("settings_excludes", []))
+    # Always excise (never whole-file delete): even when Geneseed created CLAUDE.md,
+    # the user may have added prose since — uninstall keeps it, deleting the file
+    # only when the excision leaves it empty.
+    build._managed_block_remove(_claude_md_path(cfg, managed))
     for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit",
               ".geneseed-footprint", build.VERSION_MARKER):
         try:

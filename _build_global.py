@@ -314,6 +314,25 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     assert_source_complete(items, context=f"claude-{scope}")
     cfg.mkdir(parents=True, exist_ok=True)
 
+    def _prefixed_agent_text(prefix: str) -> "str | None":
+        """The instructions text re-rendered with every store dir prefixed. The
+        carrier file can sit at a different level than the stores (repo-root
+        CLAUDE.md vs <repo>/.claude/*, or ~/.bob/rules/geneseed.md vs ~/.bob/*):
+        bare `memory/`/`skills/` pointers there send the agent to nonexistent
+        dirs — it then creates a parallel memory store while the Stop hook writes
+        the real one (split-brain). Re-rendering with prefixed DIR_* tokens fixes
+        every pointer at once; laws_prefix is left empty because the prefixed
+        DIR_LAWS already carries it into the lean pointer."""
+        src_tmpl = next((s for r, _t, s in items if r == "AGENT.md"), None)
+        if src_tmpl is None:
+            return None
+        if not prefix:
+            return next((t for r, t, _s in items if r == "AGENT.md"), None)
+        ptheme = dict(theme)
+        for tok in ("DIR_LAWS", "DIR_AGENTS", "DIR_SKILLS", "DIR_MEMORY", "DIR_NOTEBOOK"):
+            ptheme[tok] = prefix + ptheme.get(tok, tok.split("_", 1)[1].lower())
+        return render_file(src_tmpl, ptheme, footprint)
+
     manifest_path = cfg / GLOBAL_MANIFEST
     old_owned: list[str] = []
     old_managed: dict = {}
@@ -339,16 +358,21 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
     is_bob = claude_md.name == "AGENTS.md"
     if agent_text is not None and not (is_bob and scope == "global"):
-        status = _managed_block_write(claude_md, _strip_capability_links(agent_text))
-        prior_whole = bool((old_managed.get("claude_md") or {}).get("whole"))
+        # Project scope: the carrier sits at the repo root, the stores under <cfg> —
+        # render its store pointers with the marker-dir prefix (.claude//.bob/).
+        _managed_block_write(claude_md, _strip_capability_links(
+            _prefixed_agent_text(laws_prefix) or agent_text))
+        # No sticky "whole" flag: teardown always excises the block and deletes the
+        # file only when nothing else remains — a whole-file delete would eat prose
+        # the user added AFTER Geneseed created the file. (Old manifests may still
+        # carry the key; every remove site now ignores it.)
         managed["claude_md"] = {
             "rel": os.path.relpath(claude_md, cfg).replace(os.sep, "/"),
-            "whole": (status == "created") or prior_whole,
         }
     elif is_bob and scope == "global" and old_managed.get("claude_md"):
         old_cm = old_managed["claude_md"] if isinstance(old_managed["claude_md"], dict) else {}
         victim = (cfg / (old_cm.get("rel") or claude_md.name)).resolve()
-        _managed_block_remove(victim, whole=bool(old_cm.get("whole")))
+        _managed_block_remove(victim)
 
     # IBM Bob's only documented always-injected channel is the rules folder (project
     # .bob/rules/*.md, global ~/.bob/rules/*.md — bob.ibm.com/docs/ide/configuration/rules).
@@ -365,8 +389,13 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     if is_bob and agent_text is not None:
         rules_md = cfg / "rules" / "geneseed.md"
         rules_md.parent.mkdir(parents=True, exist_ok=True)
+        # Global: the preamble lives one level DOWN (rules/geneseed.md) from the
+        # stores at ~/.bob — its pointers need a ../ prefix or `laws/`/`memory/`
+        # resolve under rules/ where nothing exists.
         rules_md.write_text(_BOB_RULES_STUB if scope == "project"
-                            else _strip_capability_links(agent_text), encoding="utf-8")
+                            else _strip_capability_links(
+                                _prefixed_agent_text("../") or agent_text),
+                            encoding="utf-8")
         owned.append("rules/geneseed.md")
 
     ensure_agent_overrides_stub(cfg)
@@ -381,14 +410,44 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     ensure_notebook_index(cfg / "notebook")
     ensure_wiki_stub(cfg)
 
+    # Project hygiene: keep the personal/self-documented-never-commit files out of
+    # the team's git. Claim-on-create — an existing (possibly user-authored)
+    # .gitignore is never rewritten, but one we created stays owned across re-emits.
+    if scope == "project":
+        gi = cfg / ".gitignore"
+        gi_lines = ([] if is_bob else ["settings.local.json"]) \
+            + ["wiki.jsonc", "agent-overrides.json"]
+        if not gi.exists():
+            gi.write_text("\n".join(gi_lines) + "\n", encoding="utf-8")
+            owned.append(".gitignore")
+        elif ".gitignore" in old_owned:
+            owned.append(".gitignore")
+
     write_version(cfg)
     owned.append(VERSION_MARKER)
 
+    # Hooks embed machine-absolute paths (interpreter + checkout). At PROJECT scope
+    # for Claude they go into settings.local.json — the personal, untracked settings
+    # file — never the team-shared settings.json, which would hand every teammate
+    # failing hooks pointing at this machine's python. (Bob documents no local
+    # variant, so it keeps settings.json.) Recorded in the manifest so every
+    # lifecycle path unwires the file that was actually written.
+    settings_name = "settings.local.json" if (scope == "project" and not is_bob) \
+        else "settings.json"
+    settings_path = cfg / settings_name
+    managed["settings_file"] = settings_name
+    # Migration: an older install wired hooks/excludes into a different file —
+    # unwire the recorded claims there, or they linger (and run) forever.
+    old_sf = old_managed.get("settings_file") or "settings.json"
+    if old_sf != settings_name:
+        _unwire_claude_settings(cfg / old_sf, old_managed.get("settings_hooks") or [])
+        _unwire_claude_excludes(cfg / old_sf, old_managed.get("settings_excludes") or [])
     # The merge prunes recorded groups that are no longer canonical (interpreter or
     # checkout moved, hook form changed) and returns the complete current claim set —
     # store it as-is; unioning with prior would resurrect the stale claims.
     _settings, managed_hooks = _merge_claude_settings(
-        cfg / "settings.json", scope, prior_hooks=old_managed.get("settings_hooks"))
+        settings_path, scope, prior_hooks=(old_managed.get("settings_hooks")
+                                           if old_sf == settings_name else None))
     managed["settings_hooks"] = managed_hooks
 
     # Project-bypasses-global (Claude only): a PROJECT install suppresses the GLOBAL
@@ -407,10 +466,10 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
         # an escape — the Windows-native spelling risks never matching.
         want_excl = [(cfgdir() / claude_md.name).resolve().as_posix()]
         if os.environ.get("GENESEED_STACK_GLOBAL"):
-            _unwire_claude_excludes(cfg / "settings.json", want_excl)
+            _unwire_claude_excludes(settings_path, want_excl)
             managed["settings_excludes"] = []
         else:
-            added_excl = _wire_claude_excludes(cfg / "settings.json", want_excl)
+            added_excl = _wire_claude_excludes(settings_path, want_excl)
             # Claim only what Geneseed itself wired (prior + newly added) — folding
             # `want_excl` in unconditionally would claim a user's own pre-existing
             # exclude and uninstall would then strip it.
@@ -420,7 +479,7 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
         # claudeMdExcludes here. The key is Claude-only and its Bob semantics are unknown
         # (a filename-keyed match would suppress the project's own AGENTS.md), so a
         # re-emit removes it instead of carrying it forward.
-        _unwire_claude_excludes(cfg / "settings.json", prior_excl)
+        _unwire_claude_excludes(settings_path, prior_excl)
     elif prior_excl:
         managed["settings_excludes"] = prior_excl
 
