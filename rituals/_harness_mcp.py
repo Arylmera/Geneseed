@@ -380,11 +380,12 @@ def _project_qualifies(root: Path, host: str) -> bool:
     """True when `root` carries a REAL Geneseed project install for `host`: the
     marker dir exists, is not the host's global config dir seen from its parent
     (the `_install_targets._add` aliasing guard), and shows Geneseed's own tracks —
-    the manifest (claude/bob always write one into the marker dir) or the deploy's
-    root `.geneseed-emit` naming this host's project emit (the OpenCode project
-    emit writes no manifest, so the emit marker is its signal). Module-level (not
-    nested in `_uninstall_resolve`) so `cmd_uninstall`'s multi-host check can also
-    call it directly, on the same terms the resolver uses."""
+    the manifest (claude/bob/opencode project emits all write one into the marker
+    dir as of the manifest-diff prune migration) or the deploy's root
+    `.geneseed-emit` naming this host's project emit (a fallback for a pre-manifest
+    legacy install). Module-level (not nested in `_uninstall_resolve`) so
+    `cmd_uninstall`'s multi-host check can also call it directly, on the same terms
+    the resolver uses."""
     spec = build.HOSTS[host]
     cfg = root / spec["project_marker"]
     if not cfg.is_dir():
@@ -580,8 +581,8 @@ def _emit_host_scope_of(root: Path) -> "tuple[str, str] | None":
     """Read `root`'s own `.geneseed-emit` marker and resolve it to (host, scope) via
     `_EMIT_HOST_SCOPE`, or None if the marker is absent/unreadable/unrecognised.
     Shared by `_registered_targets` (every registered root) and `_project_qualifies`
-    (the OpenCode project case, which writes no manifest) — both used to inline this
-    read+lookup themselves."""
+    (its legacy pre-manifest fallback) — both used to inline this read+lookup
+    themselves."""
     try:
         emit = (root / ".geneseed-emit").read_text(encoding="utf-8").strip()
     except OSError:

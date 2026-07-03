@@ -468,5 +468,69 @@ class OpencodeJsoncTests(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class OpencodeJsonMergeFailureTests(unittest.TestCase):
+    """The opencode.json merge is best-effort but must never be SILENT about it: a read
+    or write failure (permissions, a locked file) must print a loud `[geneseed] WARN`
+    naming the path and reason, and must never crash the emit or silently overwrite a
+    file it couldn't even read. Simulated with unittest.mock (chmod-based permission
+    denial isn't reliable cross-platform, notably on Windows)."""
+
+    def test_read_failure_warns_and_does_not_overwrite(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        d = Path(tempfile.mkdtemp())
+        try:
+            cfg = d / "opencode.json"
+            original = '{"instructions": ["keep-me.md"]}'
+            cfg.write_text(original, encoding="utf-8")
+            real_read_text = Path.read_text
+
+            def _boom(self, *a, **kw):
+                if self == cfg:
+                    raise OSError("Permission denied")
+                return real_read_text(self, *a, **kw)
+
+            err = io.StringIO()
+            with mock.patch.object(Path, "read_text", _boom), \
+                 contextlib.redirect_stderr(err):
+                build._merge_opencode_json(cfg, "AGENT.md")
+            self.assertIn("WARN", err.getvalue())
+            self.assertIn(str(cfg), err.getvalue())
+            self.assertIn("Permission denied", err.getvalue())
+            # Never overwritten — the original content survives byte-for-byte.
+            self.assertEqual(cfg.read_text(encoding="utf-8"), original)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_write_failure_warns_and_does_not_crash(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        d = Path(tempfile.mkdtemp())
+        try:
+            cfg = d / "opencode.json"
+            real_write_text = Path.write_text
+
+            def _boom(self, *a, **kw):
+                if self == cfg:
+                    raise OSError("Permission denied")
+                return real_write_text(self, *a, **kw)
+
+            err = io.StringIO()
+            with mock.patch.object(Path, "write_text", _boom), \
+                 contextlib.redirect_stderr(err):
+                result = build._merge_opencode_json(cfg, "AGENT.md")  # must not raise
+            self.assertEqual(result, cfg)
+            self.assertIn("WARN", err.getvalue())
+            self.assertIn(str(cfg), err.getvalue())
+            self.assertIn("Permission denied", err.getvalue())
+            self.assertIn("AGENT.md", err.getvalue())  # manual-wiring instructions shown
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

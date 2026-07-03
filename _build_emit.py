@@ -218,7 +218,8 @@ def desc_of(text: str) -> str:
 
 def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=None,
                         host: str = "opencode", old_owned=None,
-                        cfg: Path | None = None) -> tuple[int, int, list[Path]]:
+                        cfg: Path | None = None,
+                        manifest_existed: bool = True) -> tuple[int, int, list[Path]]:
     """Render capability agents and skills into host-native files.
 
     - Agents -> `<agents_dir>/<name>.md`. `host` selects the frontmatter dialect:
@@ -235,6 +236,11 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
     so a re-emit never clobbers a same-named user agent/skill and uninstall never
     deletes it. With `old_owned`/`cfg` omitted (the per-repo and portable bundle emits,
     which write into a dir they fully own) every file is written unconditionally.
+    `manifest_existed=False` (only ever passed when the caller found no prior manifest
+    on disk at all, i.e. a legacy manifest-less install) prints ONE header line before
+    the first skip, so the wall of "kept your existing ..." lines isn't presented with
+    no context — the reader learns up front why files it never touched are suddenly
+    being called "yours".
 
     Keys off the SOURCE folder name (always neutral) so a theme can rename the
     rendered bundle dirs without moving the host's fixed `agents/`/`skills/`.
@@ -243,8 +249,10 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
     old_set = set(old_owned) if old_owned is not None else None
     n_agents = n_skills = 0
     written: list[Path] = []
+    header_printed = False
 
     def _claim(dest: Path) -> bool:
+        nonlocal header_printed
         # True -> ok to (over)write; False -> a pre-existing file we never owned, so it
         # is the user's: leave it, warn, and keep it out of the manifest.
         if old_set is None or cfg is None or not dest.exists():
@@ -252,6 +260,10 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
         rel = dest.relative_to(cfg).as_posix()
         if rel in old_set:
             return True
+        if not manifest_existed and not header_printed:
+            print("[geneseed] first emit over a pre-manifest install — existing files "
+                  "are treated as yours", file=sys.stderr)
+            header_printed = True
         print(f"[geneseed] kept your existing {rel} — skipped Geneseed's copy to avoid "
               f"clobbering it", file=sys.stderr)
         return False
@@ -446,24 +458,33 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
     completely untouched. A commented `.jsonc` that still needs a change is NOT
     rewritten (that would strip the comments); the user is warned with the exact entry
     to add. A malformed config is likewise never rewritten — one typo must not cost the
-    user their whole file. Returns the resolved target path (the file we wrote, warned
-    about, or found already wired)."""
+    user their whole file. Best-effort but LOUD: a read failure (permissions, a locked
+    file) aborts the merge with a `[geneseed] WARN` naming the path and the reason —
+    never silently falls through to treat an unreadable file as empty, which would
+    otherwise overwrite it with a fresh default config and lose the user's actual
+    settings. A write failure is caught the same way — printed, never left to crash the
+    whole emit (other targets/hosts in the same run may still complete). Returns the
+    resolved target path (the file we wrote, warned about, or found already wired)."""
     target = _opencode_target(path)
     config: dict = {"$schema": _OPENCODE_SCHEMA, "instructions": []}
     had_comments = False
     if target.exists():
         try:
-            loaded, had_comments = _read_jsonc(target.read_text(encoding="utf-8"))
-            # non-dict covers valid-but-wrong JSON (an array, a string): overwriting
-            # it with the default config would silently destroy the user's file.
-            if loaded is None or not isinstance(loaded, dict):
-                print(f"[geneseed] {target.name} is not a JSON object — NOT rewriting it "
-                      f"(fix the file, then re-run). Add {json.dumps(agent_path)} to "
-                      f'its "instructions" once repaired.', file=sys.stderr)
-                return target
-            config = loaded
-        except OSError:
-            pass
+            raw = target.read_text(encoding="utf-8")
+        except OSError as e:
+            print(f"[geneseed] WARN: could not read {target} ({e}) — NOT touching it. "
+                  f'Add {json.dumps(agent_path)} to its "instructions" array by hand '
+                  f"once it's readable again.", file=sys.stderr)
+            return target
+        loaded, had_comments = _read_jsonc(raw)
+        # non-dict covers valid-but-wrong JSON (an array, a string): overwriting
+        # it with the default config would silently destroy the user's file.
+        if loaded is None or not isinstance(loaded, dict):
+            print(f"[geneseed] {target.name} is not a JSON object — NOT rewriting it "
+                  f"(fix the file, then re-run). Add {json.dumps(agent_path)} to "
+                  f'its "instructions" once repaired.', file=sys.stderr)
+            return target
+        config = loaded
     config.setdefault("$schema", _OPENCODE_SCHEMA)
     instr = config.get("instructions")
     if not isinstance(instr, list):
@@ -483,7 +504,12 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
     if target.suffix == ".jsonc" and had_comments:
         _warn_commented_jsonc(target, agent_path, add_perm, add_lsp)
         return target
-    target.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    try:
+        target.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    except OSError as e:
+        print(f"[geneseed] WARN: could not write {target} ({e}) — the harness will NOT "
+              f'auto-load until this is fixed. Add {json.dumps(agent_path)} to its '
+              f'"instructions" array by hand.', file=sys.stderr)
     return target
 
 
@@ -1087,8 +1113,9 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
     # claim-on-create machinery), not a new limitation introduced here.
     oc = root / ".opencode"
     manifest_path = oc / GLOBAL_MANIFEST
+    manifest_existed = manifest_path.exists()
     old_owned: list[str] = []
-    if manifest_path.exists():
+    if manifest_existed:
         try:
             old_owned = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", []) or []
         except (json.JSONDecodeError, OSError):
@@ -1102,7 +1129,7 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
 
     n_agents, n_skills, written = _write_native_layer(
         items, oc / "agents", oc / "skills", overrides,
-        host="opencode", old_owned=old_owned, cfg=oc)
+        host="opencode", old_owned=old_owned, cfg=oc, manifest_existed=manifest_existed)
     owned += [p.relative_to(oc).as_posix() for p in written]
     primary = _write_primary_agent(oc / "agents", overrides)
     if primary:
@@ -1140,7 +1167,7 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
         "_comment": "Files owned by Geneseed's per-repo OpenCode emit (--emit opencode). "
                     "Do not edit; removed on re-emit. A pre-existing file not in this "
                     "list is yours and is never touched.",
-        "owned": sorted(owned)})
+        "owned": sorted(owned), "scope": "project"})
 
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"

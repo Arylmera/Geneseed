@@ -27,15 +27,37 @@ def _owned_set(d: Path) -> set:
         return set()
 
 
+def _manifest_scope(d: Path) -> str:
+    """The `scope` a manifest at `d` declares: "project" or "global". Older manifests
+    (every install predating this key) carry no `scope` at all — they are always a
+    GLOBAL install (a legacy claude/bob project manifest also lacks it, but `diff`'s
+    only legacy project callers already pass `--target <repo>/.claude` knowing that,
+    and were never diff-able correctly before this key existed either), so a missing
+    key defaults to "global" for backward compatibility. Unreadable/malformed
+    manifests default the same way — `_diff_collect`'s existence check already
+    handles "no manifest at all"."""
+    try:
+        data = json.loads((d / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))
+        return data.get("scope") or "global"
+    except (json.JSONDecodeError, OSError):
+        return "global"
+
+
 def _diff_collect(target=None, theme=None, emit=None):
     """Compute the deployed-vs-source diff. Returns (target, theme, files) where files
     is a sorted list of {rel, status (edited|added|missing), diff (unified lines)} —
-    or None when there is no deployed global install at target. `emit` overrides the
-    marker read: for a claude/bob PROJECT install the marker sits at the repo root
-    while `target` is the data dir (<repo>/.claude), so the caller that knows the
-    resolved emit must pass it or the expected render falls back to OpenCode."""
+    or None when there is no deployed global install at target, OR the manifest at
+    target is PROJECT-scoped (a project install is compared against its own repo-root
+    carrier + `.opencode`/`.claude`/`.bob` layer, not the global-config-dir shape this
+    diff renders as 'expected' — comparing the two would report spurious drift on
+    every row). `emit` overrides the marker read: for a claude/bob PROJECT install the
+    marker sits at the repo root while `target` is the data dir (<repo>/.claude), so
+    the caller that knows the resolved emit must pass it or the expected render falls
+    back to OpenCode."""
     target = Path(target).expanduser() if target else build._opencode_config_dir()
     if not (target / build.GLOBAL_MANIFEST).exists():
+        return target, theme, None
+    if _manifest_scope(target) == "project":
         return target, theme, None
     if not theme:
         # Render the 'expected' copy in the theme the deployment ACTUALLY uses, so
@@ -171,9 +193,17 @@ def cmd_diff(args: argparse.Namespace) -> int:
     interactively, file-by-file.)"""
     target, theme, files = _diff_collect(args.target, args.theme)
     if files is None:
-        sys.stderr.write(
-            f"[diff] no global Geneseed install at {target} (no {build.GLOBAL_MANIFEST}). "
-            f"Pass --target, or run `--emit opencode-global` first.\n")
+        if (target / build.GLOBAL_MANIFEST).exists() and _manifest_scope(target) == "project":
+            sys.stderr.write(
+                f"[diff] {target} is a PROJECT install — diff only compares GLOBAL "
+                f"installs against a fresh render (a project layer is diffed against "
+                f"its own repo, which this command does not do). Pass --target at a "
+                f"global config dir (opencode-global/claude-global/bob-global), or omit "
+                f"--target to use the default.\n")
+        else:
+            sys.stderr.write(
+                f"[diff] no global Geneseed install at {target} (no {build.GLOBAL_MANIFEST}). "
+                f"Pass --target, or run `--emit opencode-global` first.\n")
         return 1
     edited = [f for f in files if f["status"] == "edited"]
     added = [f for f in files if f["status"] == "added"]

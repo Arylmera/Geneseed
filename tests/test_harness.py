@@ -1850,6 +1850,225 @@ class SurvivingProjectInventoryTests(unittest.TestCase):
         self.assertNotIn("project install(s) remain", buf.getvalue())
 
 
+class BobDoubleInjectionWarningTests(unittest.TestCase):
+    """A PROJECT Bob install writes the full preamble into the repo-root AGENTS.md; a
+    GLOBAL Bob install writes it into ~/.bob/rules/geneseed.md. If both exist for the
+    same repo without the project one being uninstalled, Bob may auto-load both. A
+    GLOBAL Bob emit must warn (non-blocking, never auto-remove) when the install
+    registry still lists a project-scoped Bob install elsewhere."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.saved_xdg = os.environ.get("XDG_CONFIG_HOME")
+        os.environ["XDG_CONFIG_HOME"] = str(self.tmp / "xdg")
+
+    def tearDown(self):
+        if self.saved_xdg is None:
+            os.environ.pop("XDG_CONFIG_HOME", None)
+        else:
+            os.environ["XDG_CONFIG_HOME"] = self.saved_xdg
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_global_emit_warns_when_project_bob_install_survives(self):
+        import contextlib, io
+        import _install_registry
+
+        proj = self.tmp / "proj"
+        proj.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_bob("neutral", out=proj, root=proj)
+        (proj / ".geneseed-emit").write_text("bob\n", encoding="utf-8")
+        _install_registry.record(proj)
+
+        gcfg = self.tmp / "gcfg"
+        buf, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+            build.emit_bob_global("neutral", out=self.tmp / "b", cfg=gcfg)
+        warned = err.getvalue()
+        self.assertIn(str(proj.resolve()), warned)
+        self.assertIn(f'--target "{proj.resolve()}"', warned)
+        self.assertIn("uninstall", warned)
+        # Non-blocking: the global emit still fully completed.
+        self.assertTrue((gcfg / "rules" / "geneseed.md").is_file())
+
+    def test_global_emit_silent_with_no_project_survivors(self):
+        import contextlib, io
+        gcfg = self.tmp / "gcfg"
+        buf, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+            build.emit_bob_global("neutral", out=self.tmp / "b", cfg=gcfg)
+        self.assertEqual(err.getvalue(), "")
+
+    def test_global_emit_ignores_non_bob_project_installs(self):
+        # A registered claude/opencode project install must not trip the Bob-specific
+        # warning — only a `bob` project emit marker qualifies.
+        import contextlib, io
+        import _install_registry
+
+        proj = self.tmp / "proj"
+        proj.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=proj, root=proj)
+        (proj / ".geneseed-emit").write_text("claude\n", encoding="utf-8")
+        _install_registry.record(proj)
+
+        gcfg = self.tmp / "gcfg"
+        buf, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+            build.emit_bob_global("neutral", out=self.tmp / "b", cfg=gcfg)
+        self.assertEqual(err.getvalue(), "")
+
+
+class ProjectManifestDiffRefusalTests(unittest.TestCase):
+    """`harness diff` compares a deployed install against a fresh render of the GLOBAL
+    config-dir shape. A PROJECT install's manifest (repo-root carrier + .opencode/
+    .claude/.bob layer) is a different shape entirely — diffing it against the global
+    render would report spurious drift on nearly every row. Since the manifest-diff
+    prune migration, an OpenCode PROJECT install also carries a manifest (previously
+    only claude/bob project installs did), so `--target <repo>/.opencode` newly needs
+    the same refusal claude/bob project targets always silently needed too."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _args(self, target, theme=None, full=False, out=None):
+        import argparse
+        return argparse.Namespace(target=target, theme=theme, full=full, out=out)
+
+    def test_opencode_project_manifest_carries_scope(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        data = json.loads((repo / ".opencode" / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))
+        self.assertEqual(data.get("scope"), "project")
+
+    def test_claude_project_manifest_carries_scope(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        data = json.loads((repo / ".claude" / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))
+        self.assertEqual(data.get("scope"), "project")
+
+    def test_global_manifest_has_no_scope_key_backward_compat(self):
+        import contextlib, io
+        gcfg = self.tmp / "gcfg"
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode_global("neutral", out=self.tmp / "b", cfg=gcfg)
+        data = json.loads((gcfg / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))
+        self.assertNotIn("scope", data)  # backward compat: missing key == global
+        self.assertEqual(harness._manifest_scope(gcfg), "global")
+
+    def test_diff_collect_refuses_project_scope(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        target, theme, files = harness._diff_collect(target=str(repo / ".opencode"))
+        self.assertIsNone(files)
+
+    def test_cmd_diff_refuses_project_target_with_clear_message(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = harness.cmd_diff(self._args(str(repo / ".opencode")))
+        self.assertEqual(rc, 1)
+        msg = err.getvalue()
+        self.assertIn("PROJECT install", msg)
+        self.assertNotIn("no global Geneseed install", msg)  # distinct from the generic refusal
+
+    def test_cmd_diff_still_refuses_missing_install_generically(self):
+        import contextlib, io
+        empty = self.tmp / "nothing-here"
+        empty.mkdir()
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = harness.cmd_diff(self._args(str(empty)))
+        self.assertEqual(rc, 1)
+        self.assertIn("no global Geneseed install", err.getvalue())
+
+    def test_diff_still_works_for_a_global_install(self):
+        import contextlib, io
+        gcfg = self.tmp / "gcfg"
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode_global("neutral", out=self.tmp / "b", cfg=gcfg)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = harness.cmd_diff(self._args(str(gcfg)))
+        self.assertEqual(rc, 0)
+        self.assertIn("[diff] deployed", buf.getvalue())
+
+
+class MigrationHeaderTests(unittest.TestCase):
+    """Requirement 3: when `emit_opencode` bootstraps a manifest over a manifest-less
+    legacy install (an install from before the manifest-diff prune migration), the
+    claim-on-create machinery treats every already-existing agent/skill file as the
+    user's own and skips it — printing one 'kept your existing ...' line per file. That
+    wall of lines must be preceded by ONE header explaining why, not appear out of
+    nowhere."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_header_printed_once_before_legacy_skip_lines(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        # First emit — normal, gets a manifest.
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        # Simulate a pre-manifest legacy install: delete the manifest but keep the
+        # already-written agent/skill files on disk (exactly what an install from
+        # before the migration looks like).
+        (repo / ".opencode" / build.GLOBAL_MANIFEST).unlink()
+
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        out = err.getvalue()
+        self.assertEqual(
+            out.count("first emit over a pre-manifest install"), 1,
+            out)
+        self.assertIn("kept your existing", out)
+        # Header must appear before the first per-file line.
+        self.assertLess(out.index("first emit over a pre-manifest install"),
+                        out.index("kept your existing"))
+
+    def test_no_header_on_ordinary_reemit(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            build.emit_opencode("neutral", out=repo, root=repo)  # manifest already exists
+        self.assertNotIn("first emit over a pre-manifest install", err.getvalue())
+
+    def test_no_header_on_fresh_install_with_nothing_to_skip(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            build.emit_opencode("neutral", out=repo, root=repo)  # no manifest, nothing pre-existing
+        self.assertNotIn("first emit over a pre-manifest install", err.getvalue())
+
+
 class HookIntegrityCheckerTests(unittest.TestCase):
     """Requirement 2: after any settings merge/unwire, verify the manifest's claimed
     hook groups actually match what's in the settings file — loud warning, never an
