@@ -23,6 +23,7 @@
 
 ## Output contract
 - A long-term verdict: the structural benefits and risks, the debt this incurs or retires, how reversible it is, and a one-line keep-it-healthy recommendation with the trade-off it accepts.
+- If the change is too small or too reversible to carry long-term stakes, say so and stand down — inflating stakes to justify the seat is its own kind of debt.
 
 ## Self-improvement
 

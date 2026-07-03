@@ -24,6 +24,7 @@
 
 ## Output contract
 - A feasibility read: a rough effort/complexity estimate, the cheapest viable path, what to cut, and a one-line lean — worth it / not worth it / worth it only if — with the assumption that lean rests on.
+- If the artifact gives too little to size against, return cannot-estimate with what is missing — a confident number pulled from the air is dearer than no number.
 
 ## Self-improvement
 

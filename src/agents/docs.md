@@ -29,6 +29,9 @@
   confirmation that any code examples were run as written, and an explicit list of
   any surfaces left un-updated (so the caller can close the gap rather than assume
   none exists).
+- If the behaviour cannot be pinned down or an example cannot be made to run,
+  report that gap instead of documenting intent — wrong docs cost more than
+  missing ones.
 
 ## Self-improvement
 

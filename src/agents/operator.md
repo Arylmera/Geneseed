@@ -24,6 +24,7 @@
 
 ## Output contract
 - An operability read: how it fails in production, what it needs to run safely (metrics, alerts, rollback), the on-call burden it adds, and a ship / hold-for-guardrails lean with the reason.
+- If the runtime picture is missing — no deploy story, no load profile to read — report that the operability call cannot be made rather than pre-morteming an imagined system.
 
 ## Self-improvement
 

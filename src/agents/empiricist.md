@@ -23,6 +23,7 @@
 
 ## Output contract
 - A claims ledger: each load-bearing claim → evidenced? → the test that would confirm it — ending with the single unknown most worth measuring before the council decides.
+- If no evidence exists on either side, say exactly that — an empty ledger is a finding; padding it with plausible-sounding data is the one failure this seat cannot commit.
 
 ## Self-improvement
 

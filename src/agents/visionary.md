@@ -23,6 +23,7 @@
 
 ## Output contract
 - The bold case: the transformative upside in a line, what the motion could become if pushed, the capability it would unlock, and the single bet it depends on. No timid hedging.
+- If the motion genuinely has no bigger version — the ambitious form is just the same thing, larger — say so; a forced 10× pitch is timidity wearing a costume.
 
 ## Self-improvement
 

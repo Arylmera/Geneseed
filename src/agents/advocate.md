@@ -23,6 +23,7 @@
 
 ## Output contract
 - A tight brief: the position in one line, the 2–4 load-bearing arguments for it, the key supporting evidence (`file:line` or facts), and the one objection it must beat. No hedging, no filler.
+- If the motion has fewer than two defensible upsides, report that the case cannot honestly be made — an invented argument loses the council more than a conceded seat.
 
 ## Self-improvement
 

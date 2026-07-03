@@ -26,6 +26,7 @@
 
 ## Output contract
 - The precedent: what was tried before, how it went and why, and the lesson for this decision — cited to `file:line` or commits where found, with a note if circumstances have changed.
+- If no close precedent exists, say so — a distant analogy presented as precedent is worse than none.
 
 ## Self-improvement
 
