@@ -1753,5 +1753,329 @@ class WebSubcommandTests(unittest.TestCase):
         self.assertIsNone(captured.get("theme"))
 
 
+class SurvivingProjectInventoryTests(unittest.TestCase):
+    """Requirement 1: a GLOBAL uninstall never touches a project install (project hooks
+    call the shared Geneseed checkout by absolute path, not the global config dir being
+    removed) — but the operator should still be told what else is out there. Exercises
+    `cmd_uninstall`'s post-global-uninstall inventory print end to end."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.saved_xdg = os.environ.get("XDG_CONFIG_HOME")
+        self.saved_oc = os.environ.get("OPENCODE_CONFIG_DIR")
+        os.environ["XDG_CONFIG_HOME"] = str(self.tmp / "xdg")
+        # _uninstall_resolve's _global_hit only recognises a --target that IS the
+        # host's own config_dir() — so the fixture's "global install" must actually
+        # live where build._opencode_config_dir() looks, not just wherever the emit
+        # was told to write.
+        os.environ["OPENCODE_CONFIG_DIR"] = str(self.tmp / "gcfg")
+
+    def tearDown(self):
+        for var, saved in (("XDG_CONFIG_HOME", self.saved_xdg),
+                          ("OPENCODE_CONFIG_DIR", self.saved_oc)):
+            if saved is None:
+                os.environ.pop(var, None)
+            else:
+                os.environ[var] = saved
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _args(self, target, yes=True, archive_memory=False):
+        import argparse
+        return argparse.Namespace(target=target, yes=yes, archive_memory=archive_memory)
+
+    def test_global_uninstall_prints_surviving_project_inventory(self):
+        import contextlib, io
+        import _install_registry
+
+        # A registered PROJECT install elsewhere on the machine…
+        proj = self.tmp / "proj"
+        proj.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=proj, root=proj)
+        (proj / ".geneseed-emit").write_text("claude\n", encoding="utf-8")
+        _install_registry.record(proj)
+
+        # …and a GLOBAL install being removed, at the env-redirected config dir.
+        gcfg = self.tmp / "gcfg"
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode_global("neutral", out=self.tmp / "b", cfg=gcfg)
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = harness.cmd_uninstall(self._args(str(gcfg)))
+        self.assertEqual(rc, 0)
+        out = buf.getvalue()
+        self.assertIn(str(proj.resolve()), out)
+        self.assertIn("claude:project", out)
+        self.assertIn(f'--target "{proj.resolve()}"', out)
+
+    def test_no_survivors_prints_no_inventory(self):
+        import contextlib, io
+        gcfg = self.tmp / "gcfg"
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode_global("neutral", out=self.tmp / "b", cfg=gcfg)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = harness.cmd_uninstall(self._args(str(gcfg)))
+        self.assertEqual(rc, 0)
+        self.assertNotIn("project install(s) remain", buf.getvalue())
+
+
+class HookIntegrityCheckerTests(unittest.TestCase):
+    """Requirement 2: after any settings merge/unwire, verify the manifest's claimed
+    hook groups actually match what's in the settings file — loud warning, never an
+    auto-fix. `build._settings_integrity_check` is the shared checker (repo-side
+    `_build_emit.py`, reached from the shipped `rituals/_harness_mcp.py` runtime via
+    `import build` — the same pattern every other emit/unwire helper already uses);
+    these test it directly plus its wiring into a real emit/unwire."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_clean_emit_has_no_integrity_warnings(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        man = json.loads((repo / ".claude" / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))
+        managed = man["managed"]
+        settings_path = repo / ".claude" / managed["settings_file"]
+        warnings = build._settings_integrity_check(settings_path, managed, expect="present")
+        self.assertEqual(warnings, [])
+
+    def test_hand_stripped_hook_group_flagged_missing(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        man = json.loads((repo / ".claude" / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))
+        managed = man["managed"]
+        settings_path = repo / ".claude" / managed["settings_file"]
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        # Hand-mangle: strip the PreToolUse (git-gate) group the manifest claims.
+        del settings["hooks"]["PreToolUse"]
+        settings_path.write_text(json.dumps(settings), encoding="utf-8")
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            warnings = build._settings_integrity_check(settings_path, managed, expect="present")
+        self.assertTrue(any("missing" in w and "PreToolUse" in w for w in warnings), warnings)
+        self.assertIn("WARN", buf.getvalue())
+
+    def test_orphaned_geneseed_entry_not_in_manifest_flagged(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        man = json.loads((repo / ".claude" / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))
+        managed = man["managed"]
+        settings_path = repo / ".claude" / managed["settings_file"]
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        # Inject an extra Geneseed-shaped hook group the manifest does NOT claim.
+        settings["hooks"]["PostToolUse"] = [{
+            "matcher": "Bash",
+            "hooks": [{"type": "command",
+                      "command": '"python" "somewhere/rituals/harness.py" learn'}],
+        }]
+        settings_path.write_text(json.dumps(settings), encoding="utf-8")
+        warnings = build._settings_integrity_check(settings_path, managed, expect="present")
+        self.assertTrue(any("NOT recorded" in w for w in warnings), warnings)
+
+    def test_non_geneseed_user_hook_never_flagged_as_orphan(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            settings_path = d / "settings.json"
+            settings_path.write_text(json.dumps({"hooks": {"PostToolUse": [
+                {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo hi"}]},
+            ]}}), encoding="utf-8")
+            warnings = build._settings_integrity_check(settings_path, {}, expect="present")
+            self.assertEqual(warnings, [])
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_orphan_survives_uninstall_unwire_and_is_flagged_afterward(self):
+        # An orphan Geneseed-shaped entry the manifest never claimed should survive an
+        # uninstall's unwire (which only removes recorded groups) and be flagged by an
+        # expect='absent' check run afterward — the pattern _claude_uninstall follows.
+        import contextlib, io
+        sys.path.insert(0, str(ROOT / "rituals"))
+        import harness  # noqa: E402  (local import: keep this test self-contained)
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        cfg = repo / ".claude"
+        man = json.loads((cfg / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))
+        managed = man["managed"]
+        settings_path = cfg / managed["settings_file"]
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        settings["hooks"]["PostToolUse"] = [{
+            "hooks": [{"type": "command", "command": '"python" "x/rituals/harness.py" learn'}],
+        }]
+        settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            harness._claude_uninstall(cfg, archive_memory=False)
+
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            warnings = build._settings_integrity_check(settings_path, managed, expect="absent")
+        self.assertTrue(any("NOT recorded" in w for w in warnings), warnings)
+        # never auto-removed
+        survivor = json.loads(settings_path.read_text(encoding="utf-8"))
+        self.assertIn("PostToolUse", survivor.get("hooks", {}))
+
+
+class RetryGapUninstallTests(unittest.TestCase):
+    """Requirement 4: a locked/undeletable owned file must not silently lose the
+    `.geneseed-emit` marker — that would make the install unfindable/unretriable
+    (an OpenCode project install in particular carries no manifest)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_leftover_owned_dir_keeps_marker_and_warns(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        (repo / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
+
+        # Simulate a locked file: monkeypatch shutil.rmtree used by the reversal so
+        # the `.opencode` dir survives (as `ignore_errors=True` would leave it if a
+        # file inside were actually locked).
+        orig_rmtree = shutil.rmtree
+        def fake_rmtree(path, *a, **kw):
+            if Path(path).name == ".opencode":
+                return   # pretend a locked file blocked the removal — dir survives
+            return orig_rmtree(path, *a, **kw)
+        harness.shutil.rmtree = fake_rmtree
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stderr(buf):
+                summary = harness._install_uninstall(repo, "opencode", "project", "keep")
+        finally:
+            harness.shutil.rmtree = orig_rmtree
+
+        self.assertIn("incomplete", summary)
+        self.assertTrue((repo / ".geneseed-emit").is_file())   # marker KEPT
+        self.assertTrue((repo / ".opencode").is_dir())          # survivor still there
+        self.assertIn("retry", buf.getvalue().lower())
+
+    def test_clean_uninstall_removes_marker_normally(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        (repo / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            summary = harness._install_uninstall(repo, "opencode", "project", "keep")
+        self.assertNotIn("incomplete", summary)
+        self.assertFalse((repo / ".geneseed-emit").exists())
+
+
+class MultiHostProjectHitTests(unittest.TestCase):
+    """Requirement 3: two hosts installed at the same project root — removing one
+    should tell the operator the other is still there and how to remove it too."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _args(self, target, yes=True, archive_memory=False):
+        import argparse
+        return argparse.Namespace(target=target, yes=yes, archive_memory=archive_memory)
+
+    def test_uninstalling_one_host_reports_the_other(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+            build.emit_bob("neutral", out=repo, root=repo)
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = harness.cmd_uninstall(self._args(str(repo)))
+        self.assertEqual(rc, 0)
+        out = buf.getvalue()
+        self.assertIn("also found bob:project here", out)
+
+    def test_single_host_reports_nothing_extra(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = harness.cmd_uninstall(self._args(str(repo)))
+        self.assertEqual(rc, 0)
+        self.assertNotIn("also found", buf.getvalue())
+
+
+class SharedHelperTests(unittest.TestCase):
+    """Requirements 5 + 6: dead-code removal in cmd_uninstall's error branch, and the
+    extracted `_emit_host_scope_of` helper used by both call sites."""
+
+    def test_emit_host_scope_of_reads_marker(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            (d / ".geneseed-emit").write_text("bob-global\n", encoding="utf-8")
+            self.assertEqual(harness._emit_host_scope_of(d), ("bob", "global"))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_emit_host_scope_of_none_when_marker_absent(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            self.assertIsNone(harness._emit_host_scope_of(d))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_project_qualifies_uses_shared_helper_for_opencode(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        try:
+            repo = d / "repo"
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_opencode("neutral", out=repo, root=repo)
+            (repo / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
+            self.assertTrue(harness._project_qualifies(repo, "opencode"))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_unrecognised_target_error_message_uses_target_not_opencode_default(self):
+        # cmd_uninstall's error branch, now simplified: reaching it always means
+        # args.target was given (the None path never returns None), so the message
+        # must describe the GIVEN target, never silently fall back to the OpenCode
+        # global default path.
+        import contextlib, io
+        empty = Path(tempfile.mkdtemp()) / "nothing"
+        empty.mkdir(parents=True)
+        try:
+            import argparse
+            buf = io.StringIO()
+            with contextlib.redirect_stderr(buf):
+                rc = harness.cmd_uninstall(
+                    argparse.Namespace(target=str(empty), yes=True, archive_memory=False))
+            self.assertEqual(rc, 1)
+            self.assertIn(str(empty.resolve()), buf.getvalue())
+        finally:
+            shutil.rmtree(empty.parent, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

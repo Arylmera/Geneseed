@@ -720,6 +720,126 @@ def _unwire_claude_excludes(path: Path, excludes: list) -> None:
     path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
 
 
+# ---- Settings integrity check -----------------------------------------------------
+# Emit/unwire above are surgical (never rewrite a commented file, never touch a user's
+# own keys), which means their success is NOT self-evident from "no exception was
+# raised" — a `had_comments` bail-out silently leaves the file exactly as it was, an
+# on-disk edit made between emit and this check would be invisible, and neither path
+# re-reads the file to confirm the write actually stuck. This is the one shared checker
+# BOTH directions (post-emit "is it wired", post-unwire "is it gone") and both call
+# sites (the repo's `_build_*` generator AND the shipped `rituals/_harness_mcp.py`
+# runtime, via `import build` — see build.py's submodule merge) can use without
+# duplicating the JSONC read or the Geneseed-pattern sniff. Never raises: a mismatch is
+# reported, not fatal — an uninstall/emit must finish even when the settings file
+# turned out to be in a state the check didn't expect.
+_GENESEED_HOOK_SNIFF = "harness.py"   # every Geneseed hook command embeds this
+
+
+def _settings_hook_groups(loaded: dict) -> "list[tuple[str, dict]]":
+    """Flatten a loaded settings.json's `hooks` block to (event, group) pairs, mirroring
+    the shape `_merge_claude_settings` records in the manifest (`{"event", "group"}`)."""
+    hooks = loaded.get("hooks")
+    if not isinstance(hooks, dict):
+        return []
+    out: "list[tuple[str, dict]]" = []
+    for event, groups in hooks.items():
+        if isinstance(groups, list):
+            out.extend((event, g) for g in groups if isinstance(g, dict))
+    return out
+
+
+def _settings_integrity_check(path: Path, managed: dict, expect: str = "present") -> "list[str]":
+    """Verify the settings file at `path` actually matches what the manifest's `managed`
+    map claims was wired (expect='present', call after emit) or unwired
+    (expect='absent', call after uninstall/deactivate). Returns a list of human-readable
+    problem strings (empty == clean) and ALSO prints them as loud `[geneseed] WARN:`
+    lines to stderr — callers don't need to re-format, just decide whether to act on a
+    non-empty return. Never raises: a missing/unparseable/commented file is reported as
+    a finding (or silently skipped for 'absent' — a deleted file trivially satisfies
+    "nothing left wired"), never an exception into the emit/uninstall path it guards.
+
+    Two independent checks:
+      1. Every recorded `settings_hooks` group and `settings_excludes` entry is
+         actually present (expect='present') or actually gone (expect='absent').
+      2. Geneseed-PATTERN hook commands (containing 'harness.py') that are NOT in the
+         recorded claim set — flagged as a warning only, since they may be entries a
+         user wrote themselves or an older install's claims this run didn't inherit;
+         never auto-deleted."""
+    problems: "list[str]" = []
+    managed = managed if isinstance(managed, dict) else {}
+    if not path.exists():
+        if expect == "present":
+            problems.append(f"{path}: file does not exist, but hooks/excludes were "
+                             "supposed to be wired into it")
+        # expect == 'absent': no file at all trivially satisfies "unwired".
+        for p in problems:
+            print(f"[geneseed] WARN: {p}", file=sys.stderr)
+        return problems
+    try:
+        loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
+    except OSError as e:
+        problems.append(f"{path}: could not read the file ({e})")
+        for p in problems:
+            print(f"[geneseed] WARN: {p}", file=sys.stderr)
+        return problems
+    if had_comments:
+        # A commented file is never rewritten by emit/unwire (the user is warned at
+        # wire-time instead) — nothing to verify here, and flagging it again would be
+        # noise for a state the operator already knows about.
+        return problems
+    if not isinstance(loaded, dict):
+        problems.append(f"{path}: not a JSON object — cannot verify hooks/excludes")
+        for p in problems:
+            print(f"[geneseed] WARN: {p}", file=sys.stderr)
+        return problems
+
+    present_groups = _settings_hook_groups(loaded)
+    recorded_hooks = [r for r in (managed.get("settings_hooks") or []) if isinstance(r, dict)]
+    # Plain `==` here (not the json.dumps(sort_keys=True) key the orphan scan below
+    # uses) is deliberate, not an oversight: both sides are freshly `json.loads`-ed
+    # dicts with no float/NaN content, so dict equality is already order-independent
+    # and this is the simpler check. The orphan scan needs the dumped-string form
+    # because it builds a set for O(1) membership, which a dict (unhashable) can't do.
+    for rec in recorded_hooks:
+        event, group = rec.get("event"), rec.get("group")
+        hit = (event, group) in present_groups
+        if expect == "present" and not hit:
+            problems.append(f"{path}: recorded hook group missing — event={event!r} "
+                             f"group={json.dumps(group)}")
+        elif expect == "absent" and hit:
+            problems.append(f"{path}: recorded hook group still present after unwire — "
+                             f"event={event!r} group={json.dumps(group)}")
+
+    excl_cur = loaded.get("claudeMdExcludes")
+    excl_cur = excl_cur if isinstance(excl_cur, list) else []
+    for entry in (managed.get("settings_excludes") or []):
+        hit = entry in excl_cur
+        if expect == "present" and not hit:
+            problems.append(f"{path}: recorded claudeMdExcludes entry missing: {entry!r}")
+        elif expect == "absent" and hit:
+            problems.append(f"{path}: recorded claudeMdExcludes entry still present "
+                             f"after unwire: {entry!r}")
+
+    # Geneseed-PATTERN entries present but not in the recorded claim set — warn only,
+    # never auto-delete (may be user-authored, or a claim this run legitimately didn't
+    # inherit, e.g. a stale group already pruned by _merge_claude_settings elsewhere).
+    recorded_set = {(r.get("event"), json.dumps(r.get("group"), sort_keys=True))
+                    for r in recorded_hooks}
+    for event, group in present_groups:
+        key = (event, json.dumps(group, sort_keys=True))
+        if key in recorded_set:
+            continue
+        cmds = [h.get("command", "") for h in (group.get("hooks") or []) if isinstance(h, dict)]
+        if any(_GENESEED_HOOK_SNIFF in c for c in cmds):
+            problems.append(f"{path}: Geneseed-pattern hook present but NOT recorded in "
+                             f"the manifest (event={event!r}) — possibly user-authored; "
+                             "left alone")
+
+    for p in problems:
+        print(f"[geneseed] WARN: {p}", file=sys.stderr)
+    return problems
+
+
 _BLOCK_BEGIN = "<!-- BEGIN {id} -->"
 _BLOCK_END = "<!-- END {id} -->"
 

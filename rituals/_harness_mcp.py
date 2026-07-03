@@ -367,6 +367,29 @@ def _uninstall_global(target: Path, archive_memory: bool, host: str = "opencode"
     return {"removed": removed, "unmerged": unmerged, "archived": archived}
 
 
+def _project_qualifies(root: Path, host: str) -> bool:
+    """True when `root` carries a REAL Geneseed project install for `host`: the
+    marker dir exists, is not the host's global config dir seen from its parent
+    (the `_install_targets._add` aliasing guard), and shows Geneseed's own tracks —
+    the manifest (claude/bob always write one into the marker dir) or the deploy's
+    root `.geneseed-emit` naming this host's project emit (the OpenCode project
+    emit writes no manifest, so the emit marker is its signal). Module-level (not
+    nested in `_uninstall_resolve`) so `cmd_uninstall`'s multi-host check can also
+    call it directly, on the same terms the resolver uses."""
+    spec = build.HOSTS[host]
+    cfg = root / spec["project_marker"]
+    if not cfg.is_dir():
+        return False
+    try:
+        if cfg.resolve() == spec["config_dir"]().resolve():
+            return False
+    except Exception:
+        pass
+    if (cfg / build.GLOBAL_MANIFEST).is_file():
+        return True
+    return _emit_host_scope_of(root) == (host, "project")
+
+
 def _uninstall_resolve(target_arg: "str | None") -> "tuple[str, str, Path] | None":
     """Resolve (host, scope, root) for `harness uninstall`, honouring the same --target
     convention `diff`/`version` use (a path to the install's own dir) while ALSO covering
@@ -392,30 +415,6 @@ def _uninstall_resolve(target_arg: "str | None") -> "tuple[str, str, Path] | Non
             except Exception:
                 continue
         return None
-
-    def _project_qualifies(root: Path, host: str) -> bool:
-        """True when `root` carries a REAL Geneseed project install for `host`: the
-        marker dir exists, is not the host's global config dir seen from its parent
-        (the `_install_targets._add` aliasing guard), and shows Geneseed's own tracks —
-        the manifest (claude/bob always write one into the marker dir) or the deploy's
-        root `.geneseed-emit` naming this host's project emit (the OpenCode project
-        emit writes no manifest, so the emit marker is its signal)."""
-        spec = build.HOSTS[host]
-        cfg = root / spec["project_marker"]
-        if not cfg.is_dir():
-            return False
-        try:
-            if cfg.resolve() == spec["config_dir"]().resolve():
-                return False
-        except Exception:
-            pass
-        if (cfg / build.GLOBAL_MANIFEST).is_file():
-            return True
-        try:
-            emit = (root / ".geneseed-emit").read_text(encoding="utf-8").strip()
-        except OSError:
-            return False
-        return _EMIT_HOST_SCOPE.get(emit) == (host, "project")
 
     def _project_hit(root: Path) -> "tuple[str, str, Path] | None":
         for host in build.HOSTS:
@@ -451,8 +450,9 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     OpenCode global config dir."""
     hit = _uninstall_resolve(args.target)
     if hit is None:
-        target_desc = Path(args.target).expanduser().resolve() if args.target \
-            else build._opencode_config_dir()
+        # _uninstall_resolve(None) never returns None (it falls back to the OpenCode
+        # global default) — reaching here means args.target was given but unrecognised.
+        target_desc = Path(args.target).expanduser().resolve()
         sys.stderr.write(
             f"[uninstall] no Geneseed install detected at {target_desc}.\n"
             f"[uninstall] pass --target <repo> for a project install (.opencode/.claude/"
@@ -501,9 +501,50 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     archived = s.get("archived") or []
     mem = f"archived -> {', '.join(archived)}" if archived else "kept in place"
     cfgfile = "opencode.json" if host == "opencode" else "settings.json"
-    print(f"[uninstall] done — removed {s['removed']} file(s); {cfgfile} updated where "
-          f"needed; memory/notebook {mem}. Start a new session to apply.")
+    if s.get("incomplete"):
+        print(f"[uninstall] INCOMPLETE — removed {s['removed']} file(s), but "
+              f"{len(s['incomplete'])} item(s) survived (see the WARN above); "
+              f"the install marker was kept — retry `harness uninstall` once they're "
+              f"removable. {cfgfile} updated where needed; memory/notebook {mem}.")
+    else:
+        print(f"[uninstall] done — removed {s['removed']} file(s); {cfgfile} updated where "
+              f"needed; memory/notebook {mem}. Start a new session to apply.")
+    if scope == "global":
+        _print_surviving_project_inventory(root)
+    elif scope == "project":
+        _print_other_host_hits(root, host)
     return 0
+
+
+def _print_other_host_hits(root: Path, removed_host: str) -> None:
+    """After a PROJECT uninstall at `root`, tell the operator when ANOTHER host's
+    Geneseed project install ALSO qualifies at the same root (a repo can carry
+    `.opencode/`, `.claude/` and `.bob/` side by side — `harness uninstall` only
+    ever removes the one it resolved to). One message per additional host found,
+    so a repeat `harness uninstall` (same cwd/--target) knows there's more to do."""
+    for other in build.HOSTS:
+        if other != removed_host and _project_qualifies(root, other):
+            print(f"[uninstall] also found {other}:project here — run `harness "
+                  f"uninstall` again to remove it.")
+
+
+def _print_surviving_project_inventory(removed_root: Path) -> None:
+    """After a GLOBAL uninstall, tell the operator which per-repo project installs are
+    still on record — purely informational, never a cascade. A global uninstall only
+    ever touches the GLOBAL config dir (`target`/`root` above): it never deletes the
+    Geneseed checkout itself, and a project install's hook commands invoke that shared
+    checkout by absolute path (see `_build_emit._claude_hook_groups`), not anything
+    under the global config dir — so a project install keeps working, untouched, no
+    matter what a global uninstall does. Silent when none remain, so a single-install
+    machine sees no extra noise."""
+    survivors = _surviving_project_installs(removed_root)
+    if not survivors:
+        return
+    print(f"[uninstall] {len(survivors)} project install(s) remain — the global removal "
+          "does not affect them (each is self-contained):")
+    for host, scope, root in survivors:
+        print(f"  - {root} ({host}:{scope}) — remove with: "
+              f"harness uninstall --target \"{root}\" --yes")
 
 
 # ---- Install activation (deactivate / reactivate, non-destructive) ----------
@@ -526,6 +567,19 @@ _EMIT_HOST_SCOPE = {
 }
 
 
+def _emit_host_scope_of(root: Path) -> "tuple[str, str] | None":
+    """Read `root`'s own `.geneseed-emit` marker and resolve it to (host, scope) via
+    `_EMIT_HOST_SCOPE`, or None if the marker is absent/unreadable/unrecognised.
+    Shared by `_registered_targets` (every registered root) and `_project_qualifies`
+    (the OpenCode project case, which writes no manifest) — both used to inline this
+    read+lookup themselves."""
+    try:
+        emit = (root / ".geneseed-emit").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return _EMIT_HOST_SCOPE.get(emit)
+
+
 def _registered_targets() -> "list[tuple[str, str, Path]]":
     """(host, scope, root) for every folder a harness was deployed into, recovered from
     the persistent registry — the installs `_install_targets` can't rediscover because
@@ -539,13 +593,33 @@ def _registered_targets() -> "list[tuple[str, str, Path]]":
         return []
     out: "list[tuple[str, str, Path]]" = []
     for root in roots:
-        try:
-            emit = (root / ".geneseed-emit").read_text(encoding="utf-8").strip()
-        except OSError:
-            continue
-        hs = _EMIT_HOST_SCOPE.get(emit)
+        hs = _emit_host_scope_of(root)
         if hs:
             out.append((hs[0], hs[1], root))
+    return out
+
+
+def _surviving_project_installs(removed_root: Path) -> "list[tuple[str, str, Path]]":
+    """PROJECT installs still on record after a GLOBAL uninstall at `removed_root` —
+    so the operator is told exactly what else is out there, since a global uninstall
+    never cascades into per-repo installs (each project install is fully self-contained:
+    its own settings.json/settings.local.json hooks call the shared repo checkout by
+    absolute path, never the global config dir, and its own memory/notebook/manifest
+    live entirely under its own root). Drawn from the persistent registry
+    (`_registered_targets`), which is the only place a project install outside the cwd
+    can be rediscovered from. The just-removed root itself is excluded (relevant when
+    a global install was ALSO registered, e.g. a stale legacy entry)."""
+    rroot = removed_root.resolve()
+    out: "list[tuple[str, str, Path]]" = []
+    for host, scope, root in _registered_targets():
+        if scope != "project":
+            continue
+        try:
+            if root.resolve() == rroot:
+                continue
+        except OSError:
+            pass
+        out.append((host, scope, root))
     return out
 
 
@@ -942,6 +1016,9 @@ def _claude_deactivate(root: Path, scope: str = "global", host: str = "claude") 
     # keys/hooks are untouched.
     build._unwire_claude_settings(_settings_file(cfg, managed), managed.get("settings_hooks", []))
     build._unwire_claude_excludes(_settings_file(cfg, managed), managed.get("settings_excludes", []))
+    # Same integrity check the uninstall path runs — a deactivate that silently failed
+    # to unwire would otherwise leave hooks firing in a repo the user believes is off.
+    build._settings_integrity_check(_settings_file(cfg, managed), managed, expect="absent")
     # Excise the CLAUDE.md block, stashing its content for an exact restore.
     cm = _claude_md_path(cfg, managed)
     block = build._managed_block_read(cm)
@@ -1061,6 +1138,10 @@ def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:
     hooks = managed.get("settings_hooks", [])
     build._unwire_claude_settings(_settings_file(cfg, managed), hooks)
     build._unwire_claude_excludes(_settings_file(cfg, managed), managed.get("settings_excludes", []))
+    # Verify the unwire actually stuck — a commented settings file (never rewritten) or
+    # a bug in the unwire would otherwise leave Geneseed's hooks silently firing in a
+    # supposedly-uninstalled repo. Loud warning only, never fatal to the uninstall.
+    build._settings_integrity_check(_settings_file(cfg, managed), managed, expect="absent")
     # Always excise (never whole-file delete): even when Geneseed created CLAUDE.md,
     # the user may have added prose since — uninstall keeps it, deleting the file
     # only when the excision leaves it empty.
@@ -1131,6 +1212,24 @@ def _opencode_project_uninstall(root: Path) -> dict:
     return {"removed": removed, "unmerged": unmerged, "archived": None}
 
 
+def _owned_dirs_for(root: Path, host: str, scope: str, data: Path) -> "list[Path]":
+    """The dirs `_install_uninstall` expects its per-host reversal to have emptied —
+    used ONLY to verify the rmtree actually landed (see `_install_uninstall` step 3):
+    `agents`/`skills` (every host owns these), plus `.opencode`/`laws` for an OpenCode
+    PROJECT install (`_opencode_project_uninstall`'s own extra rmtree targets) and
+    `plugins` for an OpenCode GLOBAL install (`_uninstall_global`'s extra rmdir
+    target). Existence, not emptiness, is the retry signal: `_uninstall_global` /
+    `_claude_uninstall` only rmdir an emptied dir, so a survivor here means either a
+    locked file inside it or the rmdir itself failing — either way, retry-worthy."""
+    dirs = [data / "agents", data / "skills"]
+    if host == "opencode":
+        if scope == "project":
+            dirs += [root / ".opencode", root / "laws"]
+        else:
+            dirs.append(data / "plugins")
+    return dirs
+
+
 def _install_uninstall(root: Path, host: str = "opencode", scope: str = "global",
                        memory: str = "keep") -> dict:
     """Permanently REMOVE the install at `root` — owned files, config wiring, markers —
@@ -1163,9 +1262,24 @@ def _install_uninstall(root: Path, host: str = "opencode", scope: str = "global"
             archived.append(str(_archive_store(store)))
         elif memory == "delete":
             shutil.rmtree(store, ignore_errors=True)
-    # 3. Clear the ROOT registry markers so the registry self-prunes this row. Done for
-    #    every scope: harmless where the reversal already removed them, essential for a
-    #    project install (its markers live at the repo root, not under cfg).
+    # 3. Clear the ROOT registry markers so the registry self-prunes this row — but ONLY
+    #    once the owned dirs the reversal above was supposed to empty are actually gone.
+    #    `ignore_errors=True` rmtrees upstream (a locked file on Windows is the plausible
+    #    case) can leave a dir behind while reporting success; dropping the marker anyway
+    #    would make this install unfindable/unretriable (an OpenCode project install in
+    #    particular carries no manifest — `.geneseed-emit` is its ONLY qualifying signal,
+    #    see `_project_qualifies`). Keep the marker and tell the user to retry instead.
+    survivors = [str(d) for d in _owned_dirs_for(root, host, scope, data) if d.exists()]
+    if survivors:
+        sys.stderr.write(
+            "[uninstall] WARN: could not fully remove the install — still present: "
+            f"{', '.join(survivors)}. The install marker was KEPT so you can retry "
+            "`harness uninstall` once the file(s) are unlocked/removable.\n")
+        out = {"ok": True, "removed": summary.get("removed", 0), "memory": memory,
+               "incomplete": survivors}
+        if archived:
+            out["archived"] = archived
+        return out
     for m in (".geneseed-emit", ".geneseed-theme", build.VERSION_MARKER):
         try:
             (root / m).unlink()

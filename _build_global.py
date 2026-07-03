@@ -510,6 +510,10 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
                     "deleted. `managed` records the CLAUDE.md block + settings.json "
                     "hooks so uninstall removes exactly those.",
         "owned": sorted(owned), "managed": managed})
+    # Verify the merge actually stuck (a commented file, a mid-flight external edit, or
+    # a bug in the merge itself would otherwise go unnoticed until the hooks silently
+    # don't fire) — loud warning only, never fatal to the emit.
+    _settings_integrity_check(settings_path, managed, expect="present")
     return n_agents, n_skills, len(managed.get("settings_hooks", [])), mem_status, nb_status, managed
 
 

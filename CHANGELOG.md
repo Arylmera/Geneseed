@@ -41,6 +41,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   (`/api/offline-zip`) — use `git pull` directly.
 
 ### Added
+- **`harness uninstall` hardening**: a global uninstall now prints an inventory of
+  any surviving PROJECT installs elsewhere (each is self-contained — its hooks call
+  the shared checkout by absolute path, not the global config dir being removed —
+  so nothing is touched, just listed with the exact `--target` to remove it too); a
+  project uninstall now checks whether another host (Claude/OpenCode/Bob) also has
+  an install at the same repo root and says so. A settings.json left with a
+  leftover/locked owned file (Windows-plausible) no longer silently drops its
+  `.geneseed-emit` marker — the marker is kept and the run is reported INCOMPLETE
+  so the install can be found and retried. After every settings.json merge/unwire
+  (emit, deactivate, uninstall), a new integrity check (`_settings_integrity_check`)
+  verifies the manifest's claimed hooks/excludes actually match the file and warns
+  (never auto-fixes) on drift or an unrecorded Geneseed-pattern hook left behind.
 - **Project bypasses global harness**: when a repo carries its own Geneseed
   install, the same host's GLOBAL harness no longer double-loads there. For
   Claude/Bob a project emit writes the global preamble into `claudeMdExcludes`
