@@ -742,6 +742,39 @@ class ProjectUninstallResolveTests(unittest.TestCase):
         hit = harness._uninstall_resolve(None)
         self.assertEqual(hit, ("opencode", "project", repo.resolve()))
 
+    @unittest.skipUnless(sys.platform == "win32", "8.3 short paths are a Windows-only concept")
+    def test_resolves_project_from_short_form_8dot3_cwd(self):
+        """Windows CI runners can have a %TEMP% that resolves through an 8.3 short
+        name (e.g. `C:\\Users\\RUNNER~1\\...` for `C:\\Users\\runneradmin\\...`).
+        `_uninstall_resolve`'s no-`--target` cwd fallback used to return `Path.cwd()`
+        verbatim, so chdir-ing into the short-form path returned a root that compared
+        UNEQUAL to `repo.resolve()` even though it's the same directory — the exact
+        failure seen in CI. Reproduce deterministically via GetShortPathNameW rather
+        than depending on the ambient %TEMP% form."""
+        import contextlib
+        import ctypes
+        import io
+
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        (repo / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
+
+        buf = ctypes.create_unicode_buffer(260)
+        n = ctypes.windll.kernel32.GetShortPathNameW(str(repo), buf, len(buf))
+        if not n:
+            self.skipTest("GetShortPathNameW failed — short names may be disabled on this volume")
+        short_repo = buf.value
+        # Sanity: the short form must actually differ from the long form, otherwise
+        # this test would pass trivially without exercising the bug.
+        if short_repo == str(repo):
+            self.skipTest("no distinct 8.3 short name available for this path")
+
+        os.chdir(short_repo)
+        hit = harness._uninstall_resolve(None)
+        self.assertEqual(hit, ("opencode", "project", repo.resolve()))
+
     def test_no_target_falls_back_to_opencode_global_default(self):
         # Unchanged legacy default: no --target, no project marker in cwd -> the
         # OpenCode global config dir, exactly as before this task.

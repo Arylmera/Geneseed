@@ -1124,6 +1124,38 @@ class ValidateOnlyTests(unittest.TestCase):
         self.assertIsNotNone(m, buf.getvalue())
         self.assertEqual(int(m.group(1)), expected)
 
+    @unittest.skipUnless(sys.platform == "win32", "8.3 short paths are a Windows-only concept")
+    def test_hermeticity_scan_survives_short_form_8dot3_sandbox_root(self):
+        """Windows CI runners can hand back a TemporaryDirectory whose path resolves
+        through an 8.3 short name (e.g. `C:\\Users\\RUNNER~1\\...`), while
+        _validate_sandbox_problems resolves each link's TARGET via `.resolve()` (long
+        form). Comparing an unresolved short-form sandbox root against a resolved
+        long-form target in `_within` made relative_to fail for EVERY relative link,
+        not just genuinely escaping ones — this is what surfaced in CI as spurious
+        'non-hermetic link ... escapes the bundle' reports for links that plainly sit
+        inside the same directory (e.g. skills/workflow.md -> council.md). Reproduce
+        deterministically via GetShortPathNameW and assert a same-dir link is clean."""
+        import ctypes
+
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            buf = ctypes.create_unicode_buffer(260)
+            n = ctypes.windll.kernel32.GetShortPathNameW(str(tmp), buf, len(buf))
+            if not n:
+                self.skipTest("GetShortPathNameW failed — short names may be disabled on this volume")
+            short_tmp = Path(buf.value)
+            if str(short_tmp) == str(tmp):
+                self.skipTest("no distinct 8.3 short name available for this path")
+
+            (tmp / "workflow.md").write_text(
+                "see [council](council.md)\n", encoding="utf-8")
+            (tmp / "council.md").write_text("# council\n", encoding="utf-8")
+
+            problems = build._validate_sandbox_problems(short_tmp)
+            self.assertEqual(problems, [], problems)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_validate_is_vendored_handles_nested_host_layouts(self):
         """_validate_is_vendored must exempt vendored skill folders wherever the
         `skills` segment sits: flat bundle root (files/opencode-global) AND the

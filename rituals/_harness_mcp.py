@@ -442,7 +442,13 @@ def _uninstall_resolve(target_arg: "str | None") -> "tuple[str, str, Path] | Non
                     and _project_qualifies(p.parent, host):
                 return (host, "project", p.parent)
         return _project_hit(p)
-    hit = _project_hit(Path.cwd())
+    # .resolve() so the cwd fallback matches every other branch here (target_arg is
+    # always resolved) and the persistent registry (_install_registry.record/roots()
+    # always store/compare resolved paths) — otherwise a short-form (8.3) cwd, as
+    # Windows CI runners hand back for %TEMP%-rooted dirs, would return a root that
+    # looks different from the long-form path callers/tests compare it against even
+    # though it's the identical directory.
+    hit = _project_hit(Path.cwd().resolve())
     if hit:
         return hit
     return ("opencode", "global", build._opencode_config_dir())

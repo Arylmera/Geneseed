@@ -113,7 +113,14 @@ def _validate_is_vendored(rel: Path) -> bool:
 def _validate_sandbox_problems(sandbox: Path) -> list[str]:
     """Unresolved-token / dead-link / non-hermetic-link scan over an already-rendered
     sandbox tree — the target-specific half of doctor's `_check_build`, reimplemented
-    locally (see the constant block above) since build.py cannot import harness."""
+    locally (see the constant block above) since build.py cannot import harness.
+
+    .resolve() mirrors _harness_build._check_build's own `out = out.resolve()`: link
+    TARGETS below are resolved via `(md.parent / raw).resolve()`, so `sandbox` must be
+    resolved too or `_within` compares an unresolved root (possibly an 8.3 short form
+    like Windows CI's `RUNNER~1`) against a resolved long-form target and fails
+    `relative_to` for every relative link, not just genuinely escaping ones."""
+    sandbox = sandbox.resolve()
     problems: list[str] = []
     for md in sandbox.rglob("*.md"):
         rel = md.relative_to(sandbox)
@@ -159,7 +166,15 @@ def _validate_only(args: argparse.Namespace) -> int:
     past this call, and no marker/manifest/registry write ever happens for real."""
     problems: list[str] = []
     with tempfile.TemporaryDirectory(prefix="geneseed-validate-") as tmp_s:
-        tmp = Path(tmp_s)
+        # .resolve() mirrors _harness_build._check_build's `out = out.resolve()`: on
+        # Windows, TemporaryDirectory can hand back an 8.3 short-form path (e.g. CI
+        # runners whose %TEMP% resolves to `RUNNER~1`), while _validate_sandbox_problems
+        # below resolves each link TARGET via `(md.parent / raw).resolve()`. Comparing
+        # an unresolved short-form sandbox root against a resolved long-form target in
+        # `_within` fails `relative_to` for every relative link, not just genuinely
+        # escaping ones — resolving here keeps both sides of that comparison in the
+        # same (long) form.
+        tmp = Path(tmp_s).resolve()
         # With a distinct --root, the per-repo emits split their output: the bundle
         # under `out`, the NATIVE layer (.opencode/ / .claude/ / .bob/, opencode.json)
         # under `root`. Mirror the documented usage (`--out myrepo/Harness --root
