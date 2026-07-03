@@ -558,6 +558,202 @@ class UninstallTests(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class ProjectUninstallResolveTests(unittest.TestCase):
+    """`_uninstall_resolve` is the new bit of surface Task 1 adds: it turns a bare
+    `--target` (or the cwd) into (host, scope, root) for BOTH global and project
+    installs, so `cmd_uninstall` no longer special-cases global only."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.saved_cwd = os.getcwd()
+
+    def tearDown(self):
+        os.chdir(self.saved_cwd)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_resolves_project_from_explicit_repo_target(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        hit = harness._uninstall_resolve(str(repo))
+        self.assertEqual(hit, ("claude", "project", repo.resolve()))
+
+    def test_resolves_project_from_explicit_cfg_dir_target(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        # The pre-existing single-target convention: point straight at .claude/ itself.
+        hit = harness._uninstall_resolve(str(repo / ".claude"))
+        self.assertEqual(hit, ("claude", "project", repo.resolve()))
+
+    def test_resolves_project_from_cwd_when_no_target(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        os.chdir(repo)
+        hit = harness._uninstall_resolve(None)
+        self.assertEqual(hit, ("opencode", "project", repo.resolve()))
+
+    def test_no_target_falls_back_to_opencode_global_default(self):
+        # Unchanged legacy default: no --target, no project marker in cwd -> the
+        # OpenCode global config dir, exactly as before this task.
+        os.chdir(self.tmp)   # an empty dir carries no project marker
+        hit = harness._uninstall_resolve(None)
+        self.assertEqual(hit, ("opencode", "global", build._opencode_config_dir()))
+
+    def test_unknown_target_returns_none(self):
+        empty = self.tmp / "nothing-here"
+        empty.mkdir()
+        self.assertIsNone(harness._uninstall_resolve(str(empty)))
+
+
+class ProjectUninstallCliTests(unittest.TestCase):
+    """`cmd_uninstall` itself, now that it drives project-scoped installs too (it
+    previously only supported the global manifest-tracked case and told per-repo users
+    to `rm -rf` by hand). Exercises the full CLI path: resolve -> summary -> confirm ->
+    `_install_uninstall` -> printed result — for Claude (manifest + CLAUDE.md block +
+    hooks) and OpenCode (manifest-less) project installs."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _args(self, target, yes=True, archive_memory=False):
+        import argparse
+        return argparse.Namespace(target=target, yes=yes, archive_memory=archive_memory)
+
+    def test_claude_project_uninstall_removes_owned_unwires_hooks_keeps_memory(self):
+        import contextlib, io, argparse
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        cfg = repo / ".claude"
+        # User prose around the managed CLAUDE.md block must survive the uninstall.
+        original = (repo / "CLAUDE.md").read_text(encoding="utf-8")
+        (repo / "CLAUDE.md").write_text(
+            "# my own project notes\n\n" + original + "\nmy own trailing note\n",
+            encoding="utf-8")
+        settings = json.loads((cfg / "settings.local.json").read_text(encoding="utf-8"))
+        self.assertTrue(settings.get("hooks"))   # sanity: hooks really were wired
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = harness.cmd_uninstall(self._args(str(repo)))
+        self.assertEqual(rc, 0)
+
+        self.assertFalse((cfg / "skills").exists())
+        self.assertFalse((cfg / "agents").exists())
+        self.assertFalse((cfg / build.GLOBAL_MANIFEST).exists())
+        self.assertTrue((cfg / "memory").is_dir())           # memory kept
+        self.assertTrue((repo / "CLAUDE.md").exists())        # user prose kept the file alive
+        remaining = (repo / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn("my own project notes", remaining)
+        self.assertIn("my own trailing note", remaining)
+        settings2 = json.loads((cfg / "settings.local.json").read_text(encoding="utf-8"))
+        self.assertEqual(settings2.get("hooks", {}), {})     # Geneseed's hook groups unwired
+
+    def test_opencode_project_uninstall_removes_files_and_instructions_entry(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", out=repo, root=repo)
+        self.assertIn("AGENT.md",
+                      json.loads((repo / "opencode.json").read_text(encoding="utf-8"))["instructions"])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = harness.cmd_uninstall(self._args(str(repo)))
+        self.assertEqual(rc, 0)
+
+        self.assertFalse((repo / ".opencode").exists())
+        self.assertFalse((repo / "AGENT.md").exists())
+        self.assertTrue((repo / "memory").is_dir())          # memory kept
+        instr = json.loads((repo / "opencode.json").read_text(encoding="utf-8")).get("instructions", [])
+        self.assertNotIn("AGENT.md", instr)
+
+    def test_project_uninstall_deregisters_from_registry(self):
+        import contextlib, io, os
+        import _install_registry
+        saved_xdg = os.environ.get("XDG_CONFIG_HOME")
+        xdg = self.tmp / "xdg"
+        xdg.mkdir()
+        os.environ["XDG_CONFIG_HOME"] = str(xdg)
+        try:
+            repo = self.tmp / "repo"
+            repo.mkdir()
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_claude("neutral", out=repo, root=repo)
+            (repo / ".geneseed-emit").write_text("claude\n", encoding="utf-8")
+            _install_registry.record(repo)
+            self.assertIn(repo.resolve(), [r.resolve() for r in _install_registry.roots()])
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = harness.cmd_uninstall(self._args(str(repo)))
+            self.assertEqual(rc, 0)
+            self.assertEqual(_install_registry.roots(), [])
+        finally:
+            if saved_xdg is None:
+                os.environ.pop("XDG_CONFIG_HOME", None)
+            else:
+                os.environ["XDG_CONFIG_HOME"] = saved_xdg
+
+    def test_archive_memory_flag_archives_project_memory(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        cfg = repo / ".claude"
+        (cfg / "memory" / "learned.md").write_text("a fact", encoding="utf-8")
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = harness.cmd_uninstall(self._args(str(repo), archive_memory=True))
+        self.assertEqual(rc, 0)
+        self.assertFalse((cfg / "memory").exists())
+        archived = list((cfg / "archived-memory").glob("*/learned.md"))
+        self.assertEqual(len(archived), 1)
+        self.assertEqual(archived[0].read_text(encoding="utf-8"), "a fact")
+
+    def test_no_install_at_target_errors_without_raising(self):
+        empty = self.tmp / "empty"
+        empty.mkdir()
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            rc = harness.cmd_uninstall(self._args(str(empty)))
+        self.assertEqual(rc, 1)
+        self.assertIn("no Geneseed install detected", buf.getvalue())
+
+    def test_uninstall_without_yes_refuses_when_noninteractive(self):
+        import contextlib, io
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+        buf = io.StringIO()
+        # Force the non-interactive branch regardless of the test runner's own stdin,
+        # mirroring exactly what cmd_uninstall checks (sys.stdin.isatty()).
+        old_isatty = sys.stdin.isatty
+        sys.stdin.isatty = lambda: False
+        try:
+            with contextlib.redirect_stderr(buf), contextlib.redirect_stdout(io.StringIO()):
+                rc = harness.cmd_uninstall(self._args(str(repo), yes=False))
+        finally:
+            sys.stdin.isatty = old_isatty
+        self.assertEqual(rc, 1)
+        self.assertIn("refusing to proceed without --yes", buf.getvalue())
+        # Nothing was touched — refusing must not partially uninstall.
+        self.assertTrue((repo / ".claude" / build.GLOBAL_MANIFEST).exists())
+
+
 class ArchiveMemoryTests(unittest.TestCase):
     def test_moves_into_timestamped_sibling(self):
         base = Path(tempfile.mkdtemp())

@@ -367,33 +367,95 @@ def _uninstall_global(target: Path, archive_memory: bool, host: str = "opencode"
     return {"removed": removed, "unmerged": unmerged, "archived": archived}
 
 
+def _uninstall_resolve(target_arg: "str | None") -> "tuple[str, str, Path] | None":
+    """Resolve (host, scope, root) for `harness uninstall`, honouring the same --target
+    convention `diff`/`version` use (a path to the install's own dir) while ALSO covering
+    project scope. Precedence, most-specific first:
+      1. --target given and it IS a project marker dir itself (…/.claude, …/.opencode,
+         …/.bob) — the pre-existing single-target convention — root is its parent.
+      2. --target given and it (as a root) carries a project marker for some host.
+      3. --target given and it matches (or, once resolved, equals) a host's global
+         config dir.
+      4. --target given but unrecognised — None (caller reports the error).
+      5. No --target: the cwd is checked for a project marker (opencode, then claude,
+         then bob — build.HOSTS order); falling back to the OpenCode global config dir,
+         which is today's default with no --target at all.
+    Returns None when nothing Geneseed-shaped is found at the resolved location."""
+    def _global_hit(p: Path) -> "tuple[str, str, Path] | None":
+        for host, spec in build.HOSTS.items():
+            try:
+                if p == spec["config_dir"]().resolve():
+                    return (host, "global", p)
+            except Exception:
+                continue
+        return None
+
+    def _project_hit(root: Path) -> "tuple[str, str, Path] | None":
+        for host, spec in build.HOSTS.items():
+            if (root / spec["project_marker"]).is_dir():
+                return (host, "project", root)
+        return None
+
+    if target_arg:
+        p = Path(target_arg).expanduser().resolve()
+        for host, spec in build.HOSTS.items():
+            if p.name == spec["project_marker"] and p.is_dir():
+                return (host, "project", p.parent)
+        hit = _project_hit(p) or _global_hit(p)
+        if hit:
+            return hit
+        return None
+    hit = _project_hit(Path.cwd())
+    if hit:
+        return hit
+    return ("opencode", "global", build._opencode_config_dir())
+
+
 def cmd_uninstall(args: argparse.Namespace) -> int:
-    """Remove a global Geneseed install (the manifest-tracked opencode-global one):
-    its owned files, the opencode.json instructions entry, and the markers. The
-    memory store is NEVER deleted — kept in place by default, or moved aside to a
-    sibling `archived-memory/<timestamp>/` with --archive-memory. Per-repo `.opencode/`
-    installs have no manifest — remove those manually (`rm -rf .opencode`, drop
-    AGENT.md from opencode.json)."""
-    target = Path(args.target).expanduser().resolve() if args.target else build._opencode_config_dir()
-    if not (target / build.GLOBAL_MANIFEST).exists():
+    """Remove a Geneseed install — global (opencode-global/claude-global/bob-global) or
+    project-scoped (.opencode/.claude/.bob in a repo) — via its manifest: owned files,
+    hooks/excludes unwired from the settings file, the CLAUDE.md/AGENTS.md managed block
+    (or the opencode.json instructions entry), and the markers. The memory AND notebook
+    stores are NEVER deleted — kept in place by default, or the memory store moved aside
+    to a sibling `archived-memory/<timestamp>/` with --archive-memory. `--target` takes
+    either a repo (project scope) or a host's global config dir; omitted, it checks the
+    cwd for a project install before falling back to the OpenCode global config dir."""
+    hit = _uninstall_resolve(args.target)
+    if hit is None:
+        target_desc = Path(args.target).expanduser().resolve() if args.target \
+            else build._opencode_config_dir()
         sys.stderr.write(
-            f"[uninstall] no global Geneseed install at {target} (no {build.GLOBAL_MANIFEST}).\n"
-            f"[uninstall] per-repo installs: rm -rf .opencode and drop AGENT.md from "
-            f"opencode.json's instructions.\n")
+            f"[uninstall] no Geneseed install detected at {target_desc}.\n"
+            f"[uninstall] pass --target <repo> for a project install (.opencode/.claude/"
+            f".bob) or --target <config dir> for a global one.\n")
         return 1
-    host = "claude" if _manifest_is_claude(target) else "opencode"
-    has_memory = (target / "memory").is_dir()
-    print(f"[uninstall] target: {target} ({host})")
-    if host == "claude":
-        print("[uninstall] removes: agents/, skills/, markers, the CLAUDE.md block, and "
-              "Geneseed's settings.json hooks (your own keys/hooks are kept).")
-    else:
+    host, scope, root = hit
+    if _install_state(root, host, scope) == "absent":
+        if scope == "project" and host != "opencode":
+            where = f" under {build.HOSTS[host]['project_marker']}/"
+        else:
+            where = ""
+        sys.stderr.write(
+            f"[uninstall] no {host}:{scope} Geneseed install at {root} "
+            f"(no {build.GLOBAL_MANIFEST}{where}).\n")
+        return 1
+    data = _install_data_dir(root, host, scope)
+    has_memory = (data / "memory").is_dir()
+    print(f"[uninstall] target: {root} ({host}:{scope})")
+    if host in ("claude", "bob"):
+        print("[uninstall] removes: agents/, skills/, markers, the "
+              f"{build.HOSTS[host]['agent_file']} managed block, and Geneseed's "
+              "settings.json hooks/excludes (your own keys/hooks are kept).")
+    elif scope == "global":
         print("[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the "
               "opencode.json instructions entry.")
-    if has_memory:
-        print("[uninstall] memory: " + ("will be ARCHIVED to archived-memory/ (never deleted)"
-                                         if args.archive_memory
-                                         else "KEPT in place — pass --archive-memory to set it aside"))
+    else:
+        print("[uninstall] removes: AGENT.md, .opencode/, laws/, agents/, skills/, and the "
+              "opencode.json instructions entry.")
+    print("[uninstall] memory/ and notebook/ are kept in place (never deleted here)"
+          + (" — memory can be archived with --archive-memory." if has_memory else "."))
+    if has_memory and args.archive_memory:
+        print("[uninstall] memory: will be ARCHIVED to archived-memory/ (never deleted)")
     if not args.yes:
         if not sys.stdin.isatty():
             sys.stderr.write("[uninstall] refusing to proceed without --yes (non-interactive).\n")
@@ -401,12 +463,16 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         if not _confirm("Proceed with uninstall?", False):
             print("[uninstall] cancelled — nothing removed.")
             return 0
-    s = _uninstall_global(target, args.archive_memory, host)
-    mem = f"archived -> {s['archived']}" if s["archived"] else "kept in place"
-    cfgfile = "settings.json" if host == "claude" else "opencode.json"
-    print(f"[uninstall] done — removed {s['removed']} file(s); {cfgfile} "
-          f"{'updated' if s['unmerged'] else 'unchanged'}; memory {mem}. "
-          f"Start a new session to apply.")
+    memory = "archive" if args.archive_memory else "keep"
+    s = _install_uninstall(root, host, scope, memory)
+    if not s.get("ok", True):
+        sys.stderr.write(f"[uninstall] failed: {s.get('error', 'unknown error')}\n")
+        return 1
+    archived = (s.get("archived") or [None])[0] if s.get("archived") else None
+    mem = f"archived -> {archived}" if archived else "kept in place"
+    cfgfile = "opencode.json" if host == "opencode" else "settings.json"
+    print(f"[uninstall] done — removed {s['removed']} file(s); {cfgfile} updated where "
+          f"needed; memory {mem}. Start a new session to apply.")
     return 0
 
 

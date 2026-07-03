@@ -20,10 +20,13 @@ Dependency-free. Subcommands:
                                    deployed install's, and whether they match
     harness status                 print the install dashboard as text (theme, mode,
                                    counts, memory, version) — headless, any OS
-    harness uninstall [--target DIR] remove a global install via its manifest (owned
-                                   files + opencode.json entry + markers); memory is
-                                   never deleted — kept in place, or --archive-memory
-                                   moves it to archived-memory/; --yes to skip prompt
+    harness uninstall [--target DIR] remove a global OR project-scoped install via its
+                                   manifest (owned files + hooks/instructions entry +
+                                   markers); --target takes a repo or a config dir, else
+                                   the cwd is checked before falling back to the OpenCode
+                                   global config dir. memory/notebook are never deleted —
+                                   kept in place, or --archive-memory moves memory to
+                                   archived-memory/; --yes to skip the confirm prompt
     harness setup                  interactive, dependency-free install wizard (all OSes)
     harness tui                    full-screen control panel (any VT-capable console)
     harness web                    local web UI over the deployed harness — browse
@@ -178,10 +181,13 @@ def build_argparser() -> argparse.ArgumentParser:
     st.set_defaults(fn=cmd_status)
 
     un = sub.add_parser("uninstall",
-                        help="remove a global Geneseed install (manifest-tracked); memory is "
-                             "never deleted (--archive-memory moves it aside)")
+                        help="remove a global or project-scoped Geneseed install "
+                             "(manifest-tracked); memory is never deleted "
+                             "(--archive-memory moves it aside)")
     un.add_argument("--target", default=None,
-                    help="config dir to uninstall from (default: the OpenCode global config dir)")
+                    help="repo (project scope) or config dir (global scope) to uninstall "
+                         "from; default: the cwd if it holds a project install, else the "
+                         "OpenCode global config dir")
     un.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     un.add_argument("--archive-memory", action="store_true",
                     help="move the memory store aside to archived-memory/<timestamp>/ "

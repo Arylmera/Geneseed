@@ -131,7 +131,7 @@ Full reference — every view, the launch/daemon/PWA surface, the security model
 
 ### ⌨️ TUI — `geneseed`
 
-Same actions, no browser. Bare `geneseed` opens the **main menu** — browse, review local edits, refresh/set up, update, rebuild, memory, status, and Settings (MCP servers, run-from-anywhere, uninstall). `geneseed setup` jumps straight to the install wizard; `geneseed tui` opens the browse panel directly. The whole thing is a stdlib-only, dependency-free full-screen UI that also degrades to plain text prompts on older consoles — see [Setup](#-2--setup) above for the wizard walkthrough.
+Same actions, no browser. Bare `geneseed` opens the **main menu** — browse, review local edits, refresh/set up, update, rebuild, memory, status, and Settings (MCP servers, run-from-anywhere, uninstall — global **or** per-repo). `geneseed setup` jumps straight to the install wizard; `geneseed tui` opens the browse panel directly. The whole thing is a stdlib-only, dependency-free full-screen UI that also degrades to plain text prompts on older consoles — see [Setup](#-2--setup) above for the wizard walkthrough.
 
 ---
 

@@ -45,7 +45,9 @@ install ends on the theme's own **banner and benediction**.
 interactive **main menu**: *Browse*, *Review local edits*, *Refresh / set up*,
 *Update only*, *Update & set up*, *Rebuild bundle*, *Memory*, *Status*, and
 *Settings* — a submenu for MCP servers (toggle the MarkItDown, GitLab, and
-Filesystem presets into your OpenCode config), the PATH install, and uninstall.
+Filesystem presets into your OpenCode config), the PATH install, and uninstall (global
+or per-repo — `harness uninstall --target <repo>` from the CLI, or bare `--target` runs
+against whichever project install the cwd sits in).
 **`./geneseed bootstrap`** jumps straight to update-then-setup; **`./geneseed setup`**
 straight to the wizard. Prefer to do it by hand? Pick a path below.
 
