@@ -1157,6 +1157,30 @@ class AuthoringGateTests(unittest.TestCase):
         # tree; node --check is best-effort (skipped when node is absent).
         self.assertEqual(harness._authoring_problems(), [])
 
+    def test_gate_flags_first_block_not_a_blockquote(self):
+        """A skill/agent spec whose first content block (after the title) is prose,
+        not a '>' blockquote, must fail doctor even though a later '>' line would let
+        the OLD (pre-Task-6) check pass — that drift is exactly what let desc_of()
+        silently extract the wrong description."""
+        tmp = Path(tempfile.mkdtemp())
+        orig = build.SRC
+        try:
+            for sub in ("agents", "skills", "laws"):
+                (tmp / sub).mkdir()
+            (tmp / "agents" / "reviewer.md").write_text("> ok\n", encoding="utf-8")
+            (tmp / "skills" / "commit.md").write_text(
+                "# {{SKILL}}: commit\n\nSome prose that is NOT the description.\n\n"
+                "> {{DESC_COMMIT}}\n", encoding="utf-8")
+            (tmp / "laws" / "universal.md").write_text("### {{LAW}} I — x\n", encoding="utf-8")
+            build.SRC = tmp
+            problems = harness._authoring_problems()
+        finally:
+            build.SRC = orig
+            shutil.rmtree(tmp, ignore_errors=True)
+        self.assertTrue(
+            any("skills/commit.md" in p and "not a '>' blockquote" in p for p in problems),
+            problems)
+
 
 class MemoryFactsTests(unittest.TestCase):
     def test_lists_facts_skips_index_and_readme(self):

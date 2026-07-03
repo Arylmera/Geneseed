@@ -508,6 +508,39 @@ def _first_blockquote(text: str) -> str:
     return ""
 
 
+_HTML_COMMENT_RE = re.compile(r"<!--[\s\S]*?-->")
+
+
+def _desc_block_problem(text: str) -> str:
+    """Guard against `_first_blockquote` (and its `desc_of` alias, which every
+    OpenCode/Claude/Bob frontmatter `description:` is built from) silently grabbing
+    the WRONG line. `_first_blockquote` returns the first `>`-line anywhere in the
+    file — if a spec's actual first content block is plain prose (not a blockquote)
+    and a `>` line only shows up later (in a code sample, a nested callout, a stray
+    quote), the description becomes that unrelated line with no error anywhere.
+
+    Every real agent/skill spec (after its authoring `<!-- -->` comment is stripped)
+    opens with an H1 title line, then its one-line purpose as a `>` blockquote — see
+    src/agents/_template.md and src/skills/_template.md. This validates exactly that
+    shape: the first non-blank line is the title, and the very next non-blank line is
+    the blockquote (non-empty after its `>` marker is stripped). Returns "" when the
+    shape holds, else a one-line reason naming what was found instead."""
+    stripped = _HTML_COMMENT_RE.sub("", text)
+    nonblank = [ln for ln in stripped.splitlines() if ln.strip()]
+    if not nonblank:
+        return "file is empty (after stripping authoring comments)"
+    if not nonblank[0].lstrip().startswith("#"):
+        return f"first content line is not a title ('# ...'): {nonblank[0].strip()!r}"
+    if len(nonblank) < 2:
+        return "has a title but no purpose blockquote after it"
+    second = nonblank[1].strip()
+    if not second.startswith(">"):
+        return f"first block after the title is not a '>' blockquote: {second!r}"
+    if not second.lstrip(">").strip():
+        return "purpose blockquote is empty"
+    return ""
+
+
 def _is_readonly(text: str) -> bool:
     return "Read-only" in text
 

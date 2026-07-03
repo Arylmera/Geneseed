@@ -634,5 +634,56 @@ class SyncThemesTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class DescBlockTests(unittest.TestCase):
+    """build._desc_block_problem: the first-block-is-a-blockquote shape check that
+    protects desc_of()/_first_blockquote() from silently picking up the wrong line."""
+
+    def test_clean_shape_is_no_problem(self):
+        text = "# {{SKILL}}: foo\n\n> One-line purpose.\n\n## Procedure\n1. Step.\n"
+        self.assertEqual(build._desc_block_problem(text), "")
+
+    def test_html_comment_before_title_is_stripped_first(self):
+        text = "<!--\n  authoring notes\n-->\n# {{SKILL}}: foo\n\n> Purpose.\n"
+        self.assertEqual(build._desc_block_problem(text), "")
+
+    def test_prose_before_blockquote_is_flagged(self):
+        # The first block after the title is plain prose, not a blockquote — a later
+        # '>' line would still satisfy _first_blockquote's naive scan and silently
+        # become the description.
+        text = ("# {{SKILL}}: foo\n\nSome introductory prose that is NOT the "
+                "description.\n\n> {{DESC_FOO}}\n")
+        problem = build._desc_block_problem(text)
+        self.assertNotEqual(problem, "")
+        self.assertIn("not a '>' blockquote", problem)
+
+    def test_missing_title_is_flagged(self):
+        text = "> Purpose without a title above it.\n"
+        problem = build._desc_block_problem(text)
+        self.assertIn("not a title", problem)
+
+    def test_title_with_nothing_after_is_flagged(self):
+        text = "# {{SKILL}}: foo\n"
+        problem = build._desc_block_problem(text)
+        self.assertIn("no purpose blockquote", problem)
+
+    def test_empty_blockquote_is_flagged(self):
+        text = "# {{SKILL}}: foo\n\n>\n"
+        problem = build._desc_block_problem(text)
+        self.assertIn("empty", problem)
+
+    def test_empty_file_is_flagged(self):
+        self.assertIn("empty", build._desc_block_problem(""))
+
+    def test_real_specs_all_pass(self):
+        for folder in ("agents", "skills"):
+            d = build.SRC / folder
+            for spec in sorted(d.glob("*.md")):
+                if spec.name.startswith("_"):
+                    continue
+                with self.subTest(spec=str(spec)):
+                    text = spec.read_text(encoding="utf-8")
+                    self.assertEqual(build._desc_block_problem(text), "")
+
+
 if __name__ == "__main__":
     unittest.main()
