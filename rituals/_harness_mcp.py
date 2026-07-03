@@ -1146,12 +1146,23 @@ def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:
     # the user may have added prose since — uninstall keeps it, deleting the file
     # only when the excision leaves it empty.
     build._managed_block_remove(_claude_md_path(cfg, managed))
-    for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit",
-              ".geneseed-footprint", build.VERSION_MARKER):
-        try:
-            (cfg / m).unlink()
-        except OSError:
-            pass
+    if failed:
+        # A locked/undeletable owned file (Windows-plausible) must NOT take the
+        # manifest and markers down with it: the manifest is this install's only
+        # qualifying signal (`_claude_state` keys on it), so deleting it would report
+        # the install 'absent' and the retry the WARN above promises would bounce off
+        # cmd_uninstall's gate — stranding the leftovers forever. Keep them; a retry
+        # re-runs this reversal (idempotent) and drops them once every owned file goes.
+        sys.stderr.write("[uninstall] WARN: the manifest and markers were KEPT so "
+                         "`harness uninstall` can be retried once the file(s) are "
+                         "unlocked/removable.\n")
+    else:
+        for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit",
+                  ".geneseed-footprint", build.VERSION_MARKER):
+            try:
+                (cfg / m).unlink()
+            except OSError:
+                pass
     archived = None
     if archive_memory and (cfg / "memory").is_dir():
         archived = _archive_memory(cfg / "memory")

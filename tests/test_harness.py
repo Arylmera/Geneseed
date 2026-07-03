@@ -1971,6 +1971,70 @@ class RetryGapUninstallTests(unittest.TestCase):
         self.assertTrue((repo / ".opencode").is_dir())          # survivor still there
         self.assertIn("retry", buf.getvalue().lower())
 
+        # …and the retry the WARN promises actually completes the teardown once the
+        # obstacle is gone (rmtree restored above): nothing left, marker dropped.
+        with contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            summary2 = harness._install_uninstall(repo, "opencode", "project", "keep")
+        self.assertNotIn("incomplete", summary2)
+        self.assertFalse((repo / ".opencode").exists())
+        self.assertFalse((repo / ".geneseed-emit").exists())
+
+    def test_claude_partial_uninstall_keeps_manifest_and_retry_completes(self):
+        # The claude/bob reversal must mirror the OpenCode survivors-gate: a locked
+        # owned file must not take the MANIFEST down with it (`_claude_state` keys on
+        # the manifest, so deleting it reports 'absent' and the promised retry would
+        # bounce off cmd_uninstall's gate, stranding agents/, markers, and the
+        # registry row forever).
+        import argparse, contextlib, io
+        import _install_registry
+        saved_xdg = os.environ.get("XDG_CONFIG_HOME")
+        os.environ["XDG_CONFIG_HOME"] = str(self.tmp / "xdg")
+        try:
+            repo = self.tmp / "repo"
+            repo.mkdir()
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_claude("neutral", out=repo, root=repo)
+            (repo / ".geneseed-emit").write_text("claude\n", encoding="utf-8")
+            _install_registry.record(repo)
+            cfg = repo / ".claude"
+            args = argparse.Namespace(target=str(repo), yes=True, archive_memory=False)
+
+            # Simulate a Windows file lock: one owned file refuses to unlink.
+            orig_unlink = Path.unlink
+            def fake_unlink(p, *a, **kw):
+                if p.name == "reviewer.md":
+                    raise OSError("locked by another process")
+                return orig_unlink(p, *a, **kw)
+            Path.unlink = fake_unlink
+            try:
+                out, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    rc = harness.cmd_uninstall(args)
+            finally:
+                Path.unlink = orig_unlink
+
+            self.assertEqual(rc, 0)
+            self.assertIn("INCOMPLETE", out.getvalue())
+            self.assertIn("KEPT", err.getvalue())
+            self.assertTrue((cfg / build.GLOBAL_MANIFEST).is_file())  # manifest KEPT
+            self.assertTrue((repo / ".geneseed-emit").is_file())      # root marker KEPT
+
+            # Obstacle removed -> the promised retry completes the whole teardown.
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                rc2 = harness.cmd_uninstall(args)
+            self.assertEqual(rc2, 0)
+            self.assertFalse((cfg / build.GLOBAL_MANIFEST).exists())
+            self.assertFalse((cfg / "agents").exists())
+            self.assertFalse((repo / ".geneseed-emit").exists())
+            self.assertEqual(_install_registry.roots(), [])           # row self-pruned
+        finally:
+            if saved_xdg is None:
+                os.environ.pop("XDG_CONFIG_HOME", None)
+            else:
+                os.environ["XDG_CONFIG_HOME"] = saved_xdg
+
     def test_clean_uninstall_removes_marker_normally(self):
         import contextlib, io
         repo = self.tmp / "repo"
