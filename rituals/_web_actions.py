@@ -92,7 +92,8 @@ def api_setup(state: WebState) -> dict:
 
 
 def api_diff(state: WebState) -> dict:
-    target, theme, files = harness._diff_collect(target=state.target, theme=state.theme)
+    target, theme, files = harness._diff_collect(target=state.target, theme=state.theme,
+                                                 emit=state.emit)
     return {
         "deployed": files is not None,
         "target": str(target),
@@ -263,7 +264,9 @@ def api_select_view(state: WebState, body: dict) -> dict:
     if hit is None:
         raise NotFound("unknown install (host, path)")
     host, scope, root = hit
-    state.select_view(_view_cfg(host, scope, root))
+    # Thread the install ROOT through: markers/sigils live there, not in the data
+    # dir — without it a claude/bob project view mis-detects as opencode/neutral.
+    state.select_view(_view_cfg(host, scope, root), root=root)
     return {"ok": True, "target": str(state.target), "theme": state.theme, "emit": state.emit}
 
 
@@ -335,7 +338,8 @@ def api_deploy_cmd(state: WebState, body: dict) -> dict:
     # 'project' emit there would mislabel as the global row (dedup collision). Send the
     # user to the existing global row instead.
     cfgdirs = set()
-    for cfgfn in (build._opencode_config_dir, build._claude_config_dir):
+    for cfgfn in (build._opencode_config_dir, build._claude_config_dir,
+                  build._bob_config_dir):
         try:
             cfgdirs.add(cfgfn().resolve())
         except Exception:

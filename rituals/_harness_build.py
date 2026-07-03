@@ -36,8 +36,13 @@ def cmd_rebuild_all(args: argparse.Namespace) -> int:
     failures = []
     for host, scope, root in targets:
         em = root / ".geneseed-emit"
-        emit = (em.read_text(encoding="utf-8").strip() if em.is_file() else None) \
-            or _DEFAULT_EMIT.get((host, scope), "opencode-global")
+        marker = em.read_text(encoding="utf-8").strip() if em.is_file() else ""
+        # ONE marker file per root, last deploy wins — in a dual-host repo
+        # (.opencode + .claude in the same cwd) the other host's row would silently
+        # rebuild with the WRONG emit. Trust the marker only for its own host.
+        if marker and _EMIT_HOST_SCOPE.get(marker, ("", ""))[0] != host:
+            marker = ""
+        emit = marker or _DEFAULT_EMIT.get((host, scope), "opencode-global")
         theme = _theme_of_dir(root) or _default_theme()
         footprint = _footprint_of_dir(root)   # preserve lean/full — a rebuild must not flip it
         out = None if scope == "global" else str(root)
