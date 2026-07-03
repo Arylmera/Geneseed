@@ -227,12 +227,6 @@ would have been written (`-v`/`--verbose` for the full path list) and exits non-
 any problem, `0` when clean. Useful in CI, or before pointing a real deploy at a repo you
 don't want to touch yet.
 
-Known limitation: `--emit claude` and `--emit bob` currently report a set of dead
-skill-link problems that are real but pre-existing — CLAUDE.md/AGENTS.md link each
-skill as `skills/<name>.md` while the native layer ships `skills/<name>/SKILL.md`. The
-validation is correct to flag them; the emit-side fix is tracked separately. Until it
-lands, expect a non-zero exit for those two targets even on a clean source tree.
-
 ### Project context (usually nothing)
 
 On OpenCode the context plugin auto-discovers a repo's docs every session:

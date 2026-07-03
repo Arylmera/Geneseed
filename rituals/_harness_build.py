@@ -81,8 +81,14 @@ def _link_problems(md: Path, text: str, out: Path, rel: Path) -> list[str]:
     return problems
 
 
-def _check_build(theme_name: str, out: Path) -> list[str]:
-    """Scan one rendered bundle for unresolved tokens, dead links, and escapes."""
+def _check_build(theme_name: str, out: Path, is_vendored=build.is_vendored_path) -> list[str]:
+    """Scan one rendered bundle for unresolved tokens, dead links, and escapes.
+
+    `is_vendored` defaults to `build.is_vendored_path` (assumes a `files`/opencode-
+    global bundle-relative path, `skills/<name>/...`). Per-repo native layers
+    (`.claude/skills/<name>/...`, `.bob/skills/<name>/...`) nest one level deeper, so
+    callers scanning those pass `build._validate_is_vendored` instead — see
+    `_claude_bob_emit_problems`."""
     out = out.resolve()
     problems: list[str] = []
     for md in out.rglob("*.md"):
@@ -91,7 +97,7 @@ def _check_build(theme_name: str, out: Path) -> list[str]:
         # cross-links reference the upstream project's own (partly un-vendored) files and
         # they carry their own license, so they are exempt from Geneseed's hermeticity /
         # dead-link invariant. (See build.VENDORED_SKILL_DIRS for the vendored set.)
-        if build.is_vendored_path(rel):
+        if is_vendored(rel):
             continue
         text = md.read_text(encoding="utf-8")
         for tok in set(TOKEN_RE.findall(text)):
@@ -485,6 +491,35 @@ def _global_emit_problems(theme_name: str) -> list[str]:
         return _check_build(f"{theme_name} global", cfg)
 
 
+def _claude_bob_emit_problems(theme_name: str) -> list[str]:
+    """Validate the claude/bob PER-REPO emits — never checked before (only the `files`
+    build and opencode-global were), which is exactly why the CLAUDE.md/AGENTS.md
+    skill-table dead links (`.claude/skills/<name>.md`) shipped unnoticed: the emits
+    that render CLAUDE.md/AGENTS.md straight into a repo were outside doctor's sweep.
+    Renders both `emit_claude` and `emit_bob` into throwaway sandboxes (mirroring
+    `build.py --validate-only`'s own scan, but called in-process — NOT by shelling to
+    `--validate-only`, which itself shells BACK into `doctor --no-bundle` and would
+    recurse) and scans each with `_check_build`, using `build._validate_is_vendored`
+    (tolerant of a `skills` segment at any depth) instead of the bundle-relative
+    `build.is_vendored_path` — the native per-repo layer nests skills one level
+    deeper than a `files`/opencode-global bundle (`.claude/skills/<name>/...` /
+    `.bob/skills/<name>/...`, vs `skills/<name>/...`)."""
+    problems: list[str] = []
+    for label, emit_fn in (("claude", build.emit_claude), ("bob", build.emit_bob)):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "root"
+            sandbox = root / "bundle"
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's log
+                    emit_fn(theme_name, sandbox, root)
+            except SystemExit:
+                problems.append(f"[{theme_name} {label}] build failed")
+                continue
+            problems += _check_build(f"{theme_name} {label}", root,
+                                     is_vendored=build._validate_is_vendored)
+    return problems
+
+
 def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
                     on_progress=None, groups=None):
     """Run every doctor check; return (themes, sorted_unique_problems). on_progress
@@ -527,6 +562,8 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
                              _check_build(theme_name, out))
             problems += _ran("global", f"Global install ({theme_name})",
                              _global_emit_problems(theme_name))
+            problems += _ran("claude_bob", f"Claude/Bob per-repo emit ({theme_name})",
+                             _claude_bob_emit_problems(theme_name))
     if on_progress:
         on_progress(len(themes), total, "parity · authoring · bundle")
     problems += _ran("parity", "Theme parity", _theme_parity_problems())

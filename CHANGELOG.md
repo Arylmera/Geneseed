@@ -9,6 +9,19 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Fixed
+- **Claude/Bob emits no longer ship dead skill-table links**: CLAUDE.md/AGENTS.md's
+  per-row skill/agent links (e.g. `.claude/skills/council.md`) were dead — the
+  native layer writes each skill as a folder (`.claude/skills/council/SKILL.md`).
+  `_strip_capability_links` already ran on this path, but `CAPABILITY_LINK_RE`
+  only matched a BARE `agents/`/`skills/` prefix; the claude/bob project-scope
+  render re-prefixes those tokens (`.claude/`, `.bob/`, `../`), which slid straight
+  past the regex. It now tolerates an optional relative-path prefix (never
+  `http(s)://` or a leading `/`), so the existing strip catches every prefixed form
+  too — same fix benefits the OpenCode emits' own prefixed edge cases. `doctor`
+  gained a matching check (`_claude_bob_emit_problems`): it previously validated
+  the `files` build and the opencode-global emit but never the claude/bob per-repo
+  emits, which is why this shipped unnoticed; `--validate-only --emit claude`/`bob`
+  are clean again, and the stale SETUP.md "known limitation" note is removed.
 - **Renamed DIR_* dirs in the portable bundle no longer orphan**: the bundle's
   owned dirs (`laws`/`agents`/`skills`, in their themed form) are wiped and
   rebuilt each run, but the wipe was keyed only to the CURRENT theme's dir name —
