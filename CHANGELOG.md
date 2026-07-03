@@ -60,6 +60,30 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   creation; the file itself is never rewritten on re-emit, but if it carries real
   overrides and its `_version` no longer matches the source, a one-line notice
   points you at reviewing them against the updated agent specs.
+- **`build.py --validate-only`**: a dry run — full render, all doctor validations,
+  and a sandboxed emit of the requested target, written to a temp dir and
+  discarded. Exits non-zero on any problem, writes nothing real. (Note: `--emit
+  claude|bob` currently reports known pre-existing dead skill-link problems;
+  that fix is tracked separately.)
+- **`build.py --sync-themes`**: fills any key `themes/_TEMPLATE.json` has but a
+  theme JSON is missing — surgical line insertion in template order (no file
+  churn), never removes extras, and exits 1 when it changed files so CI can use
+  it as a check. The doctor's parity failure now points at it.
+- **`AGENT_COLORS` theme key**: the OpenCode agent→colour-slot map moved from a
+  hardcoded table in the emitter into `themes/_TEMPLATE.json` (and all shipped
+  themes), so a theme can restyle agent UI grouping. Unknown slot values warn
+  and fall back to `secondary`; themes missing the key fall back to the old
+  built-in map.
+- **Ask-tier bash for research agents**: `explorer` and `empiricist` now carry
+  the same marker `historian` already had — OpenCode emits `bash: ask` (instead
+  of deny) and Claude Code leaves Bash to its own permission prompts, so
+  read-only searches (grep, git log) no longer dead-end. Every other read-only
+  agent keeps the blanket deny.
+- **`.opencode/` re-emits stopped wiping user files**: the project OpenCode emit
+  now tracks what it owns in `.opencode/.geneseed-manifest.json` and prunes only
+  stale owned files (write-before-delete), skipping user-authored files with a
+  warning — the same claim-on-create model the Claude path always had. The first
+  re-emit over a pre-manifest install treats existing files as yours and says so.
 - **`harness uninstall` hardening**: a global uninstall now prints an inventory of
   any surviving PROJECT installs elsewhere (each is self-contained — its hooks call
   the shared checkout by absolute path, not the global config dir being removed —
