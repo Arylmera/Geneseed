@@ -121,5 +121,6 @@
   "DESC_MCP": "Build or harden a Model Context Protocol server — research the spec, design task-shaped tools, test with the Inspector, and prove it with evaluations.",
   "DESC_PROSE": "Write prose for a human that doesn't read like a model — cut filler, use active voice, vary rhythm, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — choose palette, type, and layout for this brief, not the templated defaults, then critique and cut to one bold move.",
-  "DESC_WORKFLOW": "Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass."
+  "DESC_WORKFLOW": "Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

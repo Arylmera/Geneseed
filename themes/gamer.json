@@ -121,5 +121,6 @@
   "DESC_MCP": "Build or harden an MCP server — read the spec, design task-shaped tools, test with the Inspector, and prove it with evals.",
   "DESC_PROSE": "Write like a player, not a bot — cut the filler, keep it active, mix up the rhythm, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a real identity — palette, type, and layout picked for this brief, not the default skin, then cut it down to one bold move.",
-  "DESC_WORKFLOW": "Run a saved combo that scripts your party — fan out, chain the stages, and verify the clear, all in one deterministic rotation."
+  "DESC_WORKFLOW": "Run a saved combo that scripts your party — fan out, chain the stages, and verify the clear, all in one deterministic rotation.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

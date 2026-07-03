@@ -121,5 +121,6 @@
   "DESC_MCP": "Conjure or fortify an MCP server — study the grimoire, shape tools to real workings, test with the Inspector, and prove it with trials.",
   "DESC_PROSE": "Pen prose for mortal eyes, not machine-cant — banish the filler, speak plainly, vary the cadence, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with intent — palette, type, and layout woven for this brief, not the common defaults; plan, scrutinise, and keep one bold flourish.",
-  "DESC_WORKFLOW": "Invoke a saved ritual that binds your familiars by inscribed rite — many sent at once, their auguries gathered and proven in one deterministic casting."
+  "DESC_WORKFLOW": "Invoke a saved ritual that binds your familiars by inscribed rite — many sent at once, their auguries gathered and proven in one deterministic casting.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

@@ -36,10 +36,52 @@ def _strip_skill_body_links(body: str) -> str:
 # (primary/secondary/accent/success/warning/error/info) — NOT raw colour names — so the
 # colour tracks whatever theme the host has active and stays portable. Council seats and
 # any unlisted agent fall to 'secondary'. Cosmetic only (the agent switcher / subagent UI).
+#
+# The canonical mapping now lives in themes/_TEMPLATE.json's AGENT_COLORS key (propagated
+# to every shipped theme by `build.py --sync-themes`), so a theme can restyle its own
+# agent-color grouping. This module-level dict is ONLY the fallback used when a theme
+# is somehow missing the key (defensive — the parity gate guarantees every shipped theme
+# carries it, but a hand-authored or third-party theme file might not).
 AGENT_COLORS = {
     "architect": "primary", "reviewer": "warning", "tester": "success",
     "docs": "info", "security": "error", "explorer": "accent",
+    "_default": "secondary",
 }
+
+# OpenCode's accepted NAMED theme slots for an agent `color:` — mirrors the slot set
+# _theme_json/_SLOT_ROLE fill for a full OpenCode theme. Any AGENT_COLORS value outside
+# this set is invalid frontmatter and must never be emitted as-is.
+_VALID_AGENT_COLOR_SLOTS = {"primary", "secondary", "accent", "success", "warning", "error", "info"}
+
+
+def _agent_color_map(theme: dict | None) -> dict:
+    """The effective agent-color map: the theme's own AGENT_COLORS when present and a
+    dict, else the module fallback above. Every value is validated against OpenCode's
+    named slot set — an unknown value warns and falls back to 'secondary' rather than
+    ever reaching an emitted file."""
+    raw = None
+    if isinstance(theme, dict):
+        raw = theme.get("AGENT_COLORS")
+    if not isinstance(raw, dict):
+        raw = AGENT_COLORS
+    cleaned = {}
+    for k, v in raw.items():
+        if v in _VALID_AGENT_COLOR_SLOTS:
+            cleaned[k] = v
+        else:
+            print(f"[geneseed] WARN: AGENT_COLORS[{k!r}] = {v!r} is not a valid OpenCode "
+                  f"theme slot ({', '.join(sorted(_VALID_AGENT_COLOR_SLOTS))}) — falling "
+                  f"back to 'secondary'", file=sys.stderr)
+            cleaned[k] = "secondary"
+    cleaned.setdefault("_default", "secondary")
+    return cleaned
+
+
+def _agent_color(stem: str, theme: dict | None) -> str:
+    """The display colour for agent `stem` under the effective theme, via
+    `_agent_color_map` (validated, always a valid OpenCode slot)."""
+    colors = _agent_color_map(theme)
+    return colors.get(stem, colors["_default"])
 
 # ANSI colour-name -> integer (0-7), the universally-rendered terminal colours. Used to
 # tint an emitted OpenCode theme from a Geneseed theme's single ACCENT token.
@@ -173,7 +215,8 @@ def _claude_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[str
     return fm
 
 
-def _opencode_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[str]:
+def _opencode_agent_frontmatter(stem: str, text: str, overrides: dict,
+                                theme: dict | None = None) -> list[str]:
     """OpenCode subagent frontmatter: description, mode: subagent, a NAMED theme-slot
     colour, optional per-agent overrides, and (for read-only agents) the permission
     deny-tree. Factored out of _write_native_layer so the Claude dialect is a sibling."""
@@ -181,8 +224,10 @@ def _opencode_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[s
     # Per-agent display colour — one of OpenCode's NAMED theme slots (never a raw
     # hex/ANSI name), so it follows whatever theme the host has active and stays
     # portable. Capability roles get distinct semantic slots; everything else (the
-    # council seats) shares 'secondary'. Cosmetic only.
-    fm.append(f"color: {AGENT_COLORS.get(stem, 'secondary')}")
+    # council seats) shares 'secondary'. Cosmetic only. Sourced from the effective
+    # theme's AGENT_COLORS (themes/_TEMPLATE.json), so a theme can restyle its own
+    # agent-color grouping; see _agent_color_map for the fallback + validation.
+    fm.append(f"color: {_agent_color(stem, theme)}")
     # Per-agent overrides (O2): emit model/temperature/variant/steps ONLY when
     # configured; with no override the line is omitted so the agent inherits the
     # host's current model as-is. Empty agent-overrides.json => zero change.
@@ -219,7 +264,8 @@ def desc_of(text: str) -> str:
 def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=None,
                         host: str = "opencode", old_owned=None,
                         cfg: Path | None = None,
-                        manifest_existed: bool = True) -> tuple[int, int, list[Path]]:
+                        manifest_existed: bool = True,
+                        theme: dict | None = None) -> tuple[int, int, list[Path]]:
     """Render capability agents and skills into host-native files.
 
     - Agents -> `<agents_dir>/<name>.md`. `host` selects the frontmatter dialect:
@@ -244,6 +290,14 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
 
     Keys off the SOURCE folder name (always neutral) so a theme can rename the
     rendered bundle dirs without moving the host's fixed `agents/`/`skills/`.
+
+    `theme` is the effective theme dict (from `render_all`/`effective_theme`) — passed
+    through to the OpenCode frontmatter builder so each agent's display `color:` comes
+    from the theme's own AGENT_COLORS (see `_agent_color_map`). Omitted (None) falls
+    back to the module-level AGENT_COLORS default; only ever relevant for a caller
+    that hasn't threaded a theme through (there is none left in-tree, but this keeps
+    the function safely callable standalone, e.g. from a test).
+
     Returns (n_agents, n_skills, written_paths)."""
     overrides = overrides or {}
     old_set = set(old_owned) if old_owned is not None else None
@@ -311,7 +365,7 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
         body = text.lstrip("\n")
         if folder == "agents":
             fm = (_claude_agent_frontmatter(stem, text, overrides) if host == "claude"
-                  else _opencode_agent_frontmatter(stem, text, overrides))
+                  else _opencode_agent_frontmatter(stem, text, overrides, theme))
             dest = agents_dir / f"{stem}.md"
             kind = "agent"
         elif folder == "skills":
@@ -1156,7 +1210,8 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
 
     n_agents, n_skills, written = _write_native_layer(
         items, oc / "agents", oc / "skills", overrides,
-        host="opencode", old_owned=old_owned, cfg=oc, manifest_existed=manifest_existed)
+        host="opencode", old_owned=old_owned, cfg=oc, manifest_existed=manifest_existed,
+        theme=theme)
     owned += [p.relative_to(oc).as_posix() for p in written]
     primary = _write_primary_agent(oc / "agents", overrides)
     if primary:

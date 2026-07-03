@@ -227,7 +227,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     overrides = _load_agent_overrides(cfg)
     n_agents, n_skills, written = _write_native_layer(
         items, cfg / "agents", cfg / "skills", overrides,
-        host="opencode", old_owned=old_owned, cfg=cfg)
+        host="opencode", old_owned=old_owned, cfg=cfg, theme=theme)
     owned += [p.relative_to(cfg).as_posix() for p in written]
     primary = _write_primary_agent(cfg / "agents", overrides)
     if primary:

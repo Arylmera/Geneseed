@@ -121,5 +121,10 @@
   "DESC_MCP": "<one-line description: build or harden an MCP server — research the spec, design task-shaped tools, test with the Inspector, prove it with evals>",
   "DESC_PROSE": "<one-line description: write prose for a human that doesn't read like a model — cut filler, active voice, vary rhythm, trust the reader>",
   "DESC_FRONTEND_DESIGN": "<one-line description: design a UI with intent — palette/type/layout chosen for the brief, not templated defaults; plan tokens, critique against the brief, keep one bold move>",
-  "DESC_WORKFLOW": "<one-line description: run a saved, code-driven workflow that orchestrates subagents deterministically>"
+  "DESC_WORKFLOW": "<one-line description: run a saved, code-driven workflow that orchestrates subagents deterministically>",
+  "AGENT_COLORS": {
+    "architect": "primary", "reviewer": "warning", "tester": "success",
+    "docs": "info", "security": "error", "explorer": "accent",
+    "_default": "secondary"
+  }
 }

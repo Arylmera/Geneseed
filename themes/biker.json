@@ -121,5 +121,6 @@
   "DESC_MCP": "Build or fix up an MCP server — read the spec, shape tools around real jobs, test with the Inspector, and prove it works.",
   "DESC_PROSE": "Write like a human, not a bot — strip the filler, keep it plain, mix up the rhythm, and trust whoever's reading.",
   "DESC_FRONTEND_DESIGN": "Design a UI with real attitude — pick palette, type, and layout for this job, not the stock defaults, then trim it down to one bold move.",
-  "DESC_WORKFLOW": "Run a saved route that sends your riders by script — many rolled out at once, their findings gathered and checked in one clean run."
+  "DESC_WORKFLOW": "Run a saved route that sends your riders by script — many rolled out at once, their findings gathered and checked in one clean run.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }
