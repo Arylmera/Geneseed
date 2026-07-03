@@ -283,13 +283,45 @@ class SrcDirRenameOrphanTests(unittest.TestCase):
         try:
             (tmp / "laws").mkdir()
             (tmp / "laws" / "mine.md").write_text("user content", encoding="utf-8")
-            # build() prints a non-ASCII merge warning on this exact path (pre-existing,
-            # unrelated to Task 9) — redirect so the test doesn't depend on console codepage.
+            # build() prints a merge warning on this exact path — redirect to keep
+            # the test output clean.
             with contextlib.redirect_stdout(io.StringIO()):
                 build.build("neutral", tmp)   # tmp has no .geneseed-theme/-version yet
             self.assertTrue((tmp / "laws" / "mine.md").is_file())
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_suspicious_marker_values_are_never_rmtreed(self):
+        """The marker is a plain editable file — "..", an absolute path, a nested
+        "a/b", or a non-string must never reach rmtree. Each is skipped with a
+        WARN naming the marker file, the build completes, and nothing the value
+        pointed at is deleted."""
+        import contextlib, io
+        outer = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, outer, ignore_errors=True)
+        bundle = outer / "bundle"
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.build("neutral", bundle)
+        # Targets a malicious/corrupt value could otherwise reach:
+        (outer / "sentinel.txt").write_text("parent content", encoding="utf-8")
+        victim = outer / "victim"                      # absolute-path escape target
+        (victim / "sub").mkdir(parents=True)
+        (victim / "sub" / "keep.md").write_text("x", encoding="utf-8")
+        nested = bundle / "a" / "b"                    # multi-segment reach-in target
+        nested.mkdir(parents=True)
+        (nested / "keep.md").write_text("x", encoding="utf-8")
+        for bad in ("..", str(victim), "a/b", ["laws"], 123):
+            (bundle / build.SRC_DIRS_MARKER).write_text(
+                json.dumps({"laws": bad}), encoding="utf-8")
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), \
+                 contextlib.redirect_stderr(err):
+                build.build("neutral", bundle)         # must not raise, must warn
+            self.assertIn("WARN", err.getvalue(), f"value {bad!r} must warn")
+            self.assertIn(build.SRC_DIRS_MARKER, err.getvalue())
+        self.assertTrue((outer / "sentinel.txt").is_file())      # ".." blocked
+        self.assertTrue((victim / "sub" / "keep.md").is_file())  # absolute blocked
+        self.assertTrue((nested / "keep.md").is_file())          # "a/b" blocked
 
 
 class FootprintOrphanRegressionTests(unittest.TestCase):

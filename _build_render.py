@@ -486,7 +486,10 @@ def _warn_if_downgrade(out: Path) -> None:
     current = source_release_version()
     newer = version_is_newer(deployed, current)
     if newer:
-        print(f"[geneseed] ⚠️  installing older Geneseed {current} over newer "
+        # ASCII-only prefix: build.py is often run with an unconfigured cp1252
+        # Windows console, where a warning-sign emoji would raise UnicodeEncodeError
+        # and eat the warning exactly when it matters.
+        print(f"[geneseed] WARN: installing older Geneseed {current} over newer "
               f"{deployed} at {out} — did you forget git pull?")
 
 
@@ -557,6 +560,9 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
     file never leaves a stale copy behind. A renamed DIR_* dir from a PRIOR build
     (recorded in `.geneseed-srcdirs.json`) is wiped too, even though the current
     theme no longer produces that name — see the marker's module comment (Task 9).
+    Accepted edge: a user dir that merely SHARES a previously-recorded themed name
+    is deleted only because the build itself recorded that name — nothing outside
+    what a prior build wrote down (and shape-checked) is ever pruned.
     Everything else in `out` is preserved: the surrounding application code, the
     agent's runtime `memory/` (MEMORY.md + fact files, refreshed in place) and
     `notebook/` (the agent's sovereign space — seeded once, never re-emitted; only
@@ -581,17 +587,35 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
         # A prior build recorded a DIFFERENT resolved name for this same
         # OWNED_SRC_DIRS entry (a DIR_* rename) — that old dir is no longer
         # produced by anything and would otherwise be orphaned; wipe it too.
+        # NEVER rmtree an unvalidated marker value: the marker is a plain file a
+        # user (or another tool) can edit — ".." would delete the bundle's PARENT,
+        # an absolute path replaces `out` entirely under Path.__truediv__, and
+        # "a/b" reaches into nested content. Only a plain single-segment dir name
+        # resolving directly under `out` is ever deleted; anything else is skipped
+        # with a loud WARN naming the marker, never guessed at.
         prior_name = prior_src_dirs.get(src_dir)
         if is_bundle and prior_name and prior_name != dirname:
-            stale = out / prior_name
-            if stale.is_dir():
-                shutil.rmtree(stale)
+            if (isinstance(prior_name, str)
+                    and prior_name not in (".", "..")
+                    and not Path(prior_name).is_absolute()
+                    and Path(prior_name).name == prior_name
+                    and (out / prior_name).resolve().parent == out.resolve()):
+                stale = out / prior_name
+                if stale.is_dir():
+                    shutil.rmtree(stale)
+            else:
+                print(f"[geneseed] WARN: ignoring suspicious prior dir name "
+                      f"{ascii(prior_name)} recorded in {SRC_DIRS_MARKER} - "
+                      f"not pruned.", file=sys.stderr)
         if not managed.is_dir():
             continue
         if is_bundle:
             shutil.rmtree(managed)
         else:
-            print(f"[geneseed] ⚠️  {managed} already exists and {out} is not a "
+            # WARN, not the old warning-sign emoji: this print crashed with
+            # UnicodeEncodeError on a cp1252 Windows console (U+26A0 is unencodable
+            # there) — the warning must survive the consoles most likely to need it.
+            print(f"[geneseed] WARN: {managed} already exists and {out} is not a "
                   f"Geneseed bundle — keeping it; rendered files merge into it.")
 
     nb_dirname = theme.get(SRC_DIR_TOKENS["notebook"], "notebook")
