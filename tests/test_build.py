@@ -2,8 +2,10 @@
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import argparse
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -683,6 +685,95 @@ class DescBlockTests(unittest.TestCase):
                 with self.subTest(spec=str(spec)):
                     text = spec.read_text(encoding="utf-8")
                     self.assertEqual(build._desc_block_problem(text), "")
+
+
+class ValidateOnlyTests(unittest.TestCase):
+    """build.py --validate-only: render + emit into a throwaway sandbox, run doctor-
+    grade checks, write nothing real. Driven as a real subprocess (mirrors how
+    build.py is normally invoked) so the exit code and "nothing written" guarantee are
+    checked exactly as a user would see them, not just at the Python-API level."""
+
+    def _run(self, *extra_args):
+        return subprocess.run(
+            [sys.executable, str(ROOT / "build.py"), "--validate-only", *extra_args],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=120)
+
+    def test_clean_theme_exits_zero_and_writes_nothing(self):
+        target = Path(tempfile.mkdtemp()) / "Harness"
+        try:
+            self.assertFalse(target.exists())
+            r = self._run("--theme", "neutral", "--emit", "files", "--out", str(target))
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("would write", r.stdout)
+            self.assertIn("ok", r.stdout)
+            # The whole point: --out was never created.
+            self.assertFalse(target.exists(), "--validate-only must not write --out")
+        finally:
+            shutil.rmtree(target.parent, ignore_errors=True)
+
+    def test_does_not_touch_an_existing_out_dir(self):
+        """Even when --out already exists (a real prior bundle), --validate-only must
+        leave its mtime/contents untouched — not just "absent stays absent"."""
+        target = Path(tempfile.mkdtemp()) / "Harness"
+        try:
+            build.build("neutral", target)
+            marker = target / "AGENT.md"
+            before_mtime = marker.stat().st_mtime_ns
+            before_text = marker.read_text(encoding="utf-8")
+            r = self._run("--theme", "imperial", "--emit", "files", "--out", str(target))
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertEqual(marker.stat().st_mtime_ns, before_mtime)
+            self.assertEqual(marker.read_text(encoding="utf-8"), before_text)
+        finally:
+            shutil.rmtree(target.parent, ignore_errors=True)
+
+    def test_unknown_theme_exits_nonzero(self):
+        r = self._run("--theme", "not-a-real-theme", "--emit", "files")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("unknown theme", r.stdout + r.stderr)
+
+    def test_verbose_lists_paths_quiet_mode_lists_counts_only(self):
+        quiet = self._run("--theme", "neutral", "--emit", "files")
+        verbose = self._run("--theme", "neutral", "--emit", "files", "-v")
+        self.assertEqual(quiet.returncode, 0, quiet.stdout + quiet.stderr)
+        self.assertEqual(verbose.returncode, 0, verbose.stdout + verbose.stderr)
+        self.assertNotIn("would write:", quiet.stdout)   # per-file line prefix
+        self.assertIn("would write:", verbose.stdout)
+        self.assertIn("AGENT.md", verbose.stdout)
+
+    def test_induced_target_scan_failure_exits_nonzero(self):
+        """A dead/non-hermetic link or unresolved token in the SANDBOXED render output
+        must fail --validate-only via its own target-scan (_validate_sandbox_problems),
+        independent of the doctor subprocess. Exercised in-process against
+        build._validate_sandbox_problems directly — the unit under test that
+        --validate-only's target-specific half relies on."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            (tmp / "AGENT.md").write_text(
+                "unresolved {{NOT_A_REAL_TOKEN}} and a [dead link](missing/file.md)\n",
+                encoding="utf-8")
+            problems = build._validate_sandbox_problems(tmp)
+            self.assertTrue(any("unresolved token" in p for p in problems), problems)
+            self.assertTrue(any("dead link" in p for p in problems), problems)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_validate_only_calls_doctor_and_relays_its_verdict(self):
+        """--validate-only's source-tree half is a `harness.py doctor` subprocess (see
+        build._validate_only) — confirm it actually runs and its ok/problem verdict
+        line is relayed into --validate-only's own output, proving the two are wired
+        together rather than the doctor call being silently swallowed."""
+        args = argparse.Namespace(theme="neutral", emit="files", out="Harness", root=None,
+                                  footprint="full", verbose=False)
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = build._validate_only(args)
+        report = out.getvalue()
+        self.assertEqual(rc, 0, report)
+        self.assertIn("[doctor]", report)
+        self.assertIn("ok", report)
 
 
 if __name__ == "__main__":

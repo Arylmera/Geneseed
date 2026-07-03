@@ -209,6 +209,21 @@ the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wiza
 remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
 host (OpenCode, Claude Code, Bob).
 
+### Dry-run a build (`--validate-only`)
+
+```
+python build.py --validate-only --theme imperial --emit opencode --out /path/to/repo/Harness
+```
+
+Renders and emits the requested `--theme`/`--emit`/`--out`/`--root`/`--footprint`
+combination into a throwaway sandbox — nothing under the real `--out`/`--root` is
+written, no marker files, no settings merge, no install-registry record — then runs
+every doctor-grade check against it (unresolved tokens, dead/non-hermetic links, theme
+parity, authoring gates, AGENT.md table parity). Prints a per-layer file count of what
+would have been written (`-v`/`--verbose` for the full path list) and exits non-zero on
+any problem, `0` when clean. Useful in CI, or before pointing a real deploy at a repo you
+don't want to touch yet.
+
 ### Project context (usually nothing)
 
 On OpenCode the context plugin auto-discovers a repo's docs every session:
