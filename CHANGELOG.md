@@ -41,6 +41,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   (`/api/offline-zip`) — use `git pull` directly.
 
 ### Added
+- **Downgrade warning + stale-overrides notice**: re-emitting over an existing
+  install now compares the deployed release (stamped in `.geneseed-version`
+  alongside the fingerprint) against the source tree's `harness.config.json`
+  version and prints a loud, warn-only notice when the deployed build is newer
+  ("did you forget git pull?") — never blocks, since a deliberate downgrade must
+  stay possible. `agent-overrides.json` is now stamped with `_version` at
+  creation; the file itself is never rewritten on re-emit, but if it carries real
+  overrides and its `_version` no longer matches the source, a one-line notice
+  points you at reviewing them against the updated agent specs.
 - **`harness uninstall` hardening**: a global uninstall now prints an inventory of
   any surviving PROJECT installs elsewhere (each is self-contained — its hooks call
   the shared checkout by absolute path, not the global config dir being removed —

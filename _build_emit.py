@@ -980,12 +980,39 @@ def _load_agent_overrides(base: Path) -> dict:
 
 
 def ensure_agent_overrides_stub(base: Path) -> None:
-    """Drop an empty agent-overrides.json once (never overwrite) — the host's editable,
-    git-ignored model-routing map. Empty by default => no behaviour change."""
+    """Drop an agent-overrides.json once (never overwrite) — the host's editable,
+    git-ignored model-routing map. Empty by default => no behaviour change. Stamped
+    with `_version`: the source release label (harness.config.json) at creation
+    time, so a later re-emit can tell the user their overrides predate an upgrade
+    (see `_warn_if_overrides_stale`) without ever touching their file."""
     dest = base / "agent-overrides.json"
-    if not dest.exists():
-        dest.write_text(json.dumps(AGENT_OVERRIDES_STUB, indent=2, ensure_ascii=False) + "\n",
-                        encoding="utf-8")
+    if dest.exists():
+        _warn_if_overrides_stale(dest)
+        return
+    stub = dict(AGENT_OVERRIDES_STUB)
+    stub["_version"] = source_release_version()
+    dest.write_text(json.dumps(stub, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _warn_if_overrides_stale(dest: Path) -> None:
+    """One-line notice (never a rewrite) when an EXISTING agent-overrides.json's
+    `_version` doesn't match the current source release AND the file actually
+    carries overrides beyond the stub defaults (`agents` non-empty) — an empty
+    override map is never worth flagging, drift or not. Tolerates a missing
+    `_version` (legacy file, predates this stamp) by naming it "unknown version"."""
+    try:
+        data = json.loads(dest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(data, dict) or not data.get("agents"):
+        return
+    stamped = data.get("_version")
+    current = source_release_version()
+    if stamped != current:
+        print(f"[geneseed] agent-overrides.json was written for Geneseed "
+              f"{stamped if isinstance(stamped, str) and stamped else 'unknown version'}, "
+              f"current is {current} — review your overrides against the updated "
+              f"agent specs")
 
 
 def _write_primary_agent(agents_dir: Path, overrides: dict) -> "Path | None":

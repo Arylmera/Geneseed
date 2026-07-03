@@ -362,6 +362,95 @@ class OpencodeExtrasTests(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class AgentOverridesVersionTests(unittest.TestCase):
+    """Task 8.2: agent-overrides.json is stamped with `_version` at creation, never
+    rewritten on re-emit, and a drift notice fires only when the file actually
+    carries overrides beyond the empty stub."""
+
+    def test_stub_stamped_with_current_version_on_creation(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            build.ensure_agent_overrides_stub(d)
+            data = json.loads((d / "agent-overrides.json").read_text(encoding="utf-8"))
+            self.assertEqual(data["_version"], build.source_release_version())
+            self.assertEqual(data["agents"], {})
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_reemit_never_rewrites_existing_file(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            dest = d / "agent-overrides.json"
+            custom = '{"_version": "0.1.0", "agents": {"reviewer": {"model": "x/y"}}}'
+            dest.write_text(custom, encoding="utf-8")
+            build.ensure_agent_overrides_stub(d)   # must be a no-op on the user's file
+            self.assertEqual(dest.read_text(encoding="utf-8"), custom)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_notice_fires_on_version_drift_with_real_overrides(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        try:
+            dest = d / "agent-overrides.json"
+            dest.write_text(json.dumps({
+                "_version": "0.0.1",
+                "agents": {"reviewer": {"model": "x/y"}},
+            }), encoding="utf-8")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                build.ensure_agent_overrides_stub(d)
+            out = buf.getvalue()
+            self.assertIn("agent-overrides.json was written for Geneseed 0.0.1", out)
+            self.assertIn(build.source_release_version(), out)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_no_notice_when_version_matches(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        try:
+            dest = d / "agent-overrides.json"
+            dest.write_text(json.dumps({
+                "_version": build.source_release_version(),
+                "agents": {"reviewer": {"model": "x/y"}},
+            }), encoding="utf-8")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                build.ensure_agent_overrides_stub(d)
+            self.assertEqual(buf.getvalue(), "")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_no_notice_when_overrides_empty_even_if_version_drifted(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        try:
+            dest = d / "agent-overrides.json"
+            dest.write_text(json.dumps({"_version": "0.0.1", "agents": {}}), encoding="utf-8")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                build.ensure_agent_overrides_stub(d)
+            self.assertEqual(buf.getvalue(), "")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_missing_version_reported_as_unknown(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        try:
+            dest = d / "agent-overrides.json"
+            dest.write_text(json.dumps({
+                "agents": {"reviewer": {"model": "x/y"}},   # legacy file: no _version key
+            }), encoding="utf-8")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                build.ensure_agent_overrides_stub(d)
+            self.assertIn("unknown version", buf.getvalue())
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 class OpencodeJsoncTests(unittest.TestCase):
     """`.jsonc`-aware config writes: OpenCode reads/writes opencode.jsonc in preference
     to opencode.json, so Geneseed operates on a present .jsonc — but never rewrites one

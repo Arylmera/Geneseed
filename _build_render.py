@@ -459,12 +459,48 @@ def source_fingerprint() -> str:
     return h.hexdigest()[:12]
 
 
+def read_release_version(path: Path) -> "str | None":
+    """The human-readable release label (harness.config.json's `version` at the time
+    of that build) recorded in a deployed harness's .geneseed-version — the
+    `[release X]` bracket write_version appends — or None if absent/unreadable/from
+    a build predating this stamp (legacy marker, fingerprint-only)."""
+    try:
+        txt = (path / VERSION_MARKER).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    m = re.search(r"\[release ([^\]]+)\]", txt)
+    return m.group(1) if m else None
+
+
+def _warn_if_downgrade(out: Path) -> None:
+    """Loud, warn-only notice when re-emitting over an install whose recorded
+    release version is NEWER than the source tree's — the classic "forgot to git
+    pull" trap. Never blocks: the self-update flow is `git pull` + rebuild, but a
+    deliberate downgrade (checking out an older tag, testing a past release) must
+    stay possible. Silent no-op when either side's version doesn't parse (tuple
+    compare — see version_is_newer) or there's nothing deployed yet to compare."""
+    deployed = read_release_version(out)
+    if deployed is None:
+        return
+    current = source_release_version()
+    newer = version_is_newer(deployed, current)
+    if newer:
+        print(f"[geneseed] ⚠️  installing older Geneseed {current} over newer "
+              f"{deployed} at {out} — did you forget git pull?")
+
+
 def write_version(out: Path) -> str:
-    """Stamp <out>/.geneseed-version with the source fingerprint + build date, so a
-    deployed harness records which source produced it. Returns the fingerprint."""
+    """Stamp <out>/.geneseed-version with the source fingerprint + build date + the
+    current release label, so a deployed harness records which source produced it.
+    Before overwriting, warns (never blocks) if the install's PREVIOUS recorded
+    release is newer than the source tree's — see `_warn_if_downgrade`. Returns the
+    fingerprint."""
+    _warn_if_downgrade(out)
     fp = source_fingerprint()
+    release = source_release_version()
     (out / VERSION_MARKER).write_text(
-        f"{fp} (built {datetime.date.today().isoformat()})\n", encoding="utf-8")
+        f"{fp} (built {datetime.date.today().isoformat()}) [release {release}]\n",
+        encoding="utf-8")
     return fp
 
 

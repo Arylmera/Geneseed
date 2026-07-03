@@ -486,6 +486,105 @@ class VersionTests(unittest.TestCase):
         self.assertIn("up to date", harness._version_verdict("abc", "abc"))
         self.assertIn("differs", harness._version_verdict("old", "new"))
 
+    def test_version_tuple_compare(self):
+        self.assertTrue(build.version_is_newer("1.2.0", "1.1.9"))
+        self.assertFalse(build.version_is_newer("1.1.0", "1.2.0"))
+        self.assertFalse(build.version_is_newer("1.2.0", "1.2.0"))    # equal -> not newer
+        self.assertTrue(build.version_is_newer("1.10.0", "1.9.0"))    # numeric, not lexical
+        self.assertTrue(build.version_is_newer("1.2", "1.1.9"))       # short tuple zero-padded
+        self.assertFalse(build.version_is_newer("1.2.0", "1.2"))      # 1.2 == 1.2.0
+
+    def test_version_tuple_compare_unparseable_is_none(self):
+        self.assertIsNone(build.version_is_newer("1.2.0-rc1", "1.1.0"))
+        self.assertIsNone(build.version_is_newer("1.1.0", "not-a-version"))
+        self.assertIsNone(build.version_is_newer("abc", "def"))
+
+    def test_release_version_read_from_config(self):
+        self.assertEqual(build.source_release_version(),
+                          json.loads(build.CONFIG.read_text(encoding="utf-8"))["version"])
+
+    def test_write_version_stamps_release_bracket(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            build.write_version(d)
+            text = (d / build.VERSION_MARKER).read_text(encoding="utf-8")
+            self.assertIn(f"[release {build.source_release_version()}]", text)
+            self.assertEqual(build.read_release_version(d), build.source_release_version())
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_read_release_version_absent_or_legacy_marker_is_none(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            self.assertIsNone(build.read_release_version(d))   # no marker at all
+            # legacy marker predates the [release X] stamp
+            (d / build.VERSION_MARKER).write_text("abc123 (built 2026-01-01)\n",
+                                                   encoding="utf-8")
+            self.assertIsNone(build.read_release_version(d))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_downgrade_warning_fires_only_when_deployed_is_newer(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        try:
+            current = build.source_release_version()
+            # Deployed a NEWER release than current source -> warn.
+            (d / build.VERSION_MARKER).write_text(
+                "abc123 (built 2026-01-01) [release 999.0.0]\n", encoding="utf-8")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                build.write_version(d)
+            out = buf.getvalue()
+            self.assertIn("older Geneseed", out)
+            self.assertIn(current, out)
+            self.assertIn("999.0.0", out)
+            self.assertIn("did you forget git pull", out)
+
+            # Re-stamp now records the current release; a second write (equal
+            # versions) must NOT warn.
+            buf2 = io.StringIO()
+            with contextlib.redirect_stdout(buf2):
+                build.write_version(d)
+            self.assertNotIn("older Geneseed", buf2.getvalue())
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_no_downgrade_warning_when_deployed_is_older_or_unparseable(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        try:
+            (d / build.VERSION_MARKER).write_text(
+                "abc123 (built 2026-01-01) [release 0.0.1]\n", encoding="utf-8")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                build.write_version(d)
+            self.assertNotIn("older Geneseed", buf.getvalue())
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+        d2 = Path(tempfile.mkdtemp())
+        try:
+            (d2 / build.VERSION_MARKER).write_text(
+                "abc123 (built 2026-01-01) [release rc-weird]\n", encoding="utf-8")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                build.write_version(d2)   # unparseable -> silently skipped
+            self.assertNotIn("older Geneseed", buf.getvalue())
+        finally:
+            shutil.rmtree(d2, ignore_errors=True)
+
+    def test_no_downgrade_warning_on_first_write_no_prior_marker(self):
+        import contextlib, io
+        d = Path(tempfile.mkdtemp())
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                build.write_version(d)
+            self.assertNotIn("older Geneseed", buf.getvalue())
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
 
 class StatusDataTests(unittest.TestCase):
     def test_reports_counts_version_and_keys(self):
