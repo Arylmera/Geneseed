@@ -626,21 +626,24 @@ def _merge_claude_settings(path: Path, scope: str = "global",
     return path, managed_now
 
 
-def _unwire_claude_settings(path: Path, added: list) -> None:
+def _unwire_claude_settings(path: Path, added: list) -> bool:
     """Reverse _merge_claude_settings: remove exactly the recorded hook groups, leaving
     the user's own keys and hooks intact. An emptied event key is dropped; an emptied
-    `hooks` block is dropped. A commented settings.json is never rewritten."""
+    `hooks` block is dropped. A commented settings.json is never rewritten. Returns
+    True when the file was actually rewritten (the unwire landed), False when it
+    bailed — so callers (uninstall) can report reality instead of assuming success;
+    `_settings_integrity_check(expect='absent')` names the lingering groups."""
     if not path.exists() or not added:
-        return
+        return False
     try:
         loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
     except OSError:
-        return
+        return False
     if had_comments or not isinstance(loaded, dict):
-        return
+        return False
     hooks = loaded.get("hooks")
     if not isinstance(hooks, dict):
-        return
+        return False
     for rec in added:
         event, group = rec.get("event"), rec.get("group")
         arr = hooks.get(event)
@@ -651,6 +654,7 @@ def _unwire_claude_settings(path: Path, added: list) -> None:
     if not hooks:
         loaded.pop("hooks", None)
     path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
+    return True
 
 
 def _wire_claude_excludes(path: Path, excludes: list) -> list:
@@ -754,9 +758,12 @@ def _settings_integrity_check(path: Path, managed: dict, expect: str = "present"
     (expect='absent', call after uninstall/deactivate). Returns a list of human-readable
     problem strings (empty == clean) and ALSO prints them as loud `[geneseed] WARN:`
     lines to stderr — callers don't need to re-format, just decide whether to act on a
-    non-empty return. Never raises: a missing/unparseable/commented file is reported as
-    a finding (or silently skipped for 'absent' — a deleted file trivially satisfies
-    "nothing left wired"), never an exception into the emit/uninstall path it guards.
+    non-empty return. Never raises: a missing file is a finding for 'present' (and
+    trivially clean for 'absent' — a deleted file satisfies "nothing left wired"), an
+    unparseable one is always a finding, and a COMMENTED file IS still checked —
+    `_read_jsonc` parses straight through the comments and this checker never writes,
+    so the one settings state emit/unwire refuse to touch is exactly the one that
+    must not escape verification (a bailed unwire leaves hooks firing there).
 
     Two independent checks:
       1. Every recorded `settings_hooks` group and `settings_excludes` entry is
@@ -782,11 +789,10 @@ def _settings_integrity_check(path: Path, managed: dict, expect: str = "present"
         for p in problems:
             print(f"[geneseed] WARN: {p}", file=sys.stderr)
         return problems
-    if had_comments:
-        # A commented file is never rewritten by emit/unwire (the user is warned at
-        # wire-time instead) — nothing to verify here, and flagging it again would be
-        # noise for a state the operator already knows about.
-        return problems
+    # `had_comments` is deliberately NOT a bail-out: emit/unwire refuse to rewrite a
+    # commented file (silently, on the unwire side), which is exactly how hooks can
+    # linger after an uninstall — and this checker only reads, so comments cost nothing.
+    del had_comments
     if not isinstance(loaded, dict):
         problems.append(f"{path}: not a JSON object — cannot verify hooks/excludes")
         for p in problems:

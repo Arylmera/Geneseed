@@ -206,6 +206,30 @@ class SettingsIntegrityCheckTests(unittest.TestCase):
         problems = build._settings_integrity_check(missing, managed, expect="absent")
         self.assertEqual(problems, [])
 
+    def test_commented_settings_file_is_still_checked_after_unwire(self):
+        # _unwire_claude_settings refuses to rewrite a commented file (silently), so
+        # hooks linger after an uninstall — the checker must flag them, not ALSO go
+        # silent on had_comments (the exact case the call sites claim to guard).
+        import contextlib, io
+        self.cfg.mkdir(parents=True)
+        sp = self.cfg / "settings.json"
+        group = {"hooks": [{"type": "command",
+                            "command": 'python "x/rituals/harness.py" learn'}]}
+        sp.write_text("// my precious comments\n"
+                      + json.dumps({"hooks": {"Stop": [group]}}, indent=2),
+                      encoding="utf-8")
+        managed = {"settings_hooks": [{"event": "Stop", "group": group}]}
+        # the unwire bails on the comments (and now says so via its return) ...
+        self.assertFalse(build._unwire_claude_settings(sp, managed["settings_hooks"]))
+        # ... and the checker still reports the lingering group instead of going silent.
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            problems = build._settings_integrity_check(sp, managed, expect="absent")
+        self.assertTrue(any("still present" in p for p in problems), problems)
+        self.assertIn("WARN", buf.getvalue())
+        # read-only: the user's commented file was not rewritten by the check.
+        self.assertIn("my precious comments", sp.read_text(encoding="utf-8"))
+
 
 class ClaudeSafetyTests(unittest.TestCase):
     """A pre-existing, user-owned ~/.claude is never clobbered, and uninstall removes

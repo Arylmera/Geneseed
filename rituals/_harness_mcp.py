@@ -355,16 +355,25 @@ def _uninstall_global(target: Path, archive_memory: bool, host: str = "opencode"
         except OSError:
             pass
     unmerged = _unmerge_opencode_json(target / "opencode.json", (target / "AGENT.md").as_posix())
-    for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit",
-              ".geneseed-footprint", build.VERSION_MARKER):
-        try:
-            (target / m).unlink()
-        except OSError:
-            pass
+    if failed:
+        # Same survivors-gate as _claude_uninstall: the manifest is this install's only
+        # qualifying signal (_install_kind keys on it), so deleting it while owned files
+        # survive would report 'absent' and strand the leftovers unretriably.
+        sys.stderr.write("[uninstall] WARN: the manifest and markers were KEPT so "
+                         "`harness uninstall` can be retried once the file(s) are "
+                         "unlocked/removable.\n")
+    else:
+        for m in (build.GLOBAL_MANIFEST, ".geneseed-theme", ".geneseed-emit",
+                  ".geneseed-footprint", build.VERSION_MARKER):
+            try:
+                (target / m).unlink()
+            except OSError:
+                pass
     archived = None
     if archive_memory and (target / "memory").is_dir():
         archived = _archive_memory(target / "memory")
-    return {"removed": removed, "unmerged": unmerged, "archived": archived}
+    return {"removed": removed, "unmerged": unmerged, "archived": archived,
+            "failed": failed}
 
 
 def _project_qualifies(root: Path, host: str) -> bool:
@@ -1136,7 +1145,7 @@ def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:
         sys.stderr.write("[uninstall] WARN: could not remove "
                          f"{len(failed)} owned file(s): {', '.join(failed)}\n")
     hooks = managed.get("settings_hooks", [])
-    build._unwire_claude_settings(_settings_file(cfg, managed), hooks)
+    unwired = build._unwire_claude_settings(_settings_file(cfg, managed), hooks)
     build._unwire_claude_excludes(_settings_file(cfg, managed), managed.get("settings_excludes", []))
     # Verify the unwire actually stuck — a commented settings file (never rewritten) or
     # a bug in the unwire would otherwise leave Geneseed's hooks silently firing in a
@@ -1166,7 +1175,10 @@ def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:
     archived = None
     if archive_memory and (cfg / "memory").is_dir():
         archived = _archive_memory(cfg / "memory")
-    return {"removed": removed, "unmerged": bool(hooks), "archived": archived}
+    # unmerged reflects REALITY: hooks were recorded AND the unwire actually rewrote
+    # the file (it bails on a commented/unparseable settings file, returning False).
+    return {"removed": removed, "unmerged": bool(hooks) and unwired,
+            "archived": archived, "failed": failed}
 
 
 # ---- Folder-install removal (the destructive sibling of deactivate) ----------
@@ -1280,14 +1292,24 @@ def _install_uninstall(root: Path, host: str = "opencode", scope: str = "global"
     #    would make this install unfindable/unretriable (an OpenCode project install in
     #    particular carries no manifest — `.geneseed-emit` is its ONLY qualifying signal,
     #    see `_project_qualifies`). Keep the marker and tell the user to retry instead.
+    #    The dir sweep alone is not enough: `_owned_dirs_for` only watches agents/skills
+    #    (+ .opencode/laws/plugins), so a locked owned file OUTSIDE those (Bob's
+    #    rules/geneseed.md) would slip the gate while the per-host reversal kept its
+    #    manifest — deleting the ROOT markers here would then contradict that "KEPT"
+    #    promise and self-prune the registry row for a still-half-alive install. The
+    #    reversal's own `failed` list closes that hole.
+    failed = summary.get("failed") or []
     survivors = [str(d) for d in _owned_dirs_for(root, host, scope, data) if d.exists()]
-    if survivors:
-        sys.stderr.write(
-            "[uninstall] WARN: could not fully remove the install — still present: "
-            f"{', '.join(survivors)}. The install marker was KEPT so you can retry "
-            "`harness uninstall` once the file(s) are unlocked/removable.\n")
+    if survivors or failed:
+        if survivors and not failed:
+            # With `failed` set, the per-host reversal already warned (file list +
+            # "markers KEPT") — don't stack a third overlapping WARN on top.
+            sys.stderr.write(
+                "[uninstall] WARN: could not fully remove the install — still present: "
+                f"{', '.join(survivors)}. The install marker was KEPT so you can retry "
+                "`harness uninstall` once the file(s) are unlocked/removable.\n")
         out = {"ok": True, "removed": summary.get("removed", 0), "memory": memory,
-               "incomplete": survivors}
+               "incomplete": survivors + [f for f in failed if f not in survivors]}
         if archived:
             out["archived"] = archived
         return out

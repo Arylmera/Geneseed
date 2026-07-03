@@ -2035,6 +2035,63 @@ class RetryGapUninstallTests(unittest.TestCase):
             else:
                 os.environ["XDG_CONFIG_HOME"] = saved_xdg
 
+    def test_locked_file_outside_agents_skills_keeps_markers_and_registry_row(self):
+        # `_owned_dirs_for` only watches agents/skills, so a locked owned file OUTSIDE
+        # them (Bob's rules/geneseed.md) used to slip the survivors gate: step 3 deleted
+        # the ROOT markers _claude_uninstall had just promised were KEPT, the registry
+        # pruned the row while the install was still half-alive, and cmd_uninstall
+        # printed "done" with no incomplete flag. The reversal's `failed` list now
+        # closes the hole — and the promised retry completes the teardown.
+        import argparse, contextlib, io
+        import _install_registry
+        saved_xdg = os.environ.get("XDG_CONFIG_HOME")
+        os.environ["XDG_CONFIG_HOME"] = str(self.tmp / "xdg")
+        try:
+            repo = self.tmp / "repo"
+            repo.mkdir()
+            with contextlib.redirect_stdout(io.StringIO()):
+                build.emit_bob("neutral", out=repo, root=repo)
+            (repo / ".geneseed-emit").write_text("bob\n", encoding="utf-8")
+            _install_registry.record(repo)
+            cfg = repo / ".bob"
+            args = argparse.Namespace(target=str(repo), yes=True, archive_memory=False)
+
+            orig_unlink = Path.unlink
+            def fake_unlink(p, *a, **kw):
+                if p.name == "geneseed.md" and p.parent.name == "rules":
+                    raise OSError("locked by another process")
+                return orig_unlink(p, *a, **kw)
+            Path.unlink = fake_unlink
+            try:
+                out, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    rc = harness.cmd_uninstall(args)
+            finally:
+                Path.unlink = orig_unlink
+
+            self.assertEqual(rc, 0)
+            self.assertIn("INCOMPLETE", out.getvalue())              # no false "done"
+            self.assertTrue((cfg / build.GLOBAL_MANIFEST).is_file()) # manifest KEPT
+            self.assertTrue((repo / ".geneseed-emit").is_file())     # root marker KEPT
+            self.assertEqual([r.resolve() for r in _install_registry.roots()],
+                             [repo.resolve()])                        # row NOT pruned
+            # the reversal already warned twice — step 3 must not stack a third WARN.
+            self.assertNotIn("could not fully remove", err.getvalue())
+
+            # Obstacle removed -> the promised retry completes the whole teardown.
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                rc2 = harness.cmd_uninstall(args)
+            self.assertEqual(rc2, 0)
+            self.assertFalse((cfg / build.GLOBAL_MANIFEST).exists())
+            self.assertFalse((repo / ".geneseed-emit").exists())
+            self.assertEqual(_install_registry.roots(), [])
+        finally:
+            if saved_xdg is None:
+                os.environ.pop("XDG_CONFIG_HOME", None)
+            else:
+                os.environ["XDG_CONFIG_HOME"] = saved_xdg
+
     def test_clean_uninstall_removes_marker_normally(self):
         import contextlib, io
         repo = self.tmp / "repo"
