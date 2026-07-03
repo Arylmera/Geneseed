@@ -25,9 +25,14 @@ VERSION_MARKER = ".geneseed-version"
 
 TOKEN_RE = re.compile(r"\{\{([A-Z_]+)\}\}")
 INCLUDE_RE = re.compile(r"^[ \t]*<!--[ \t]*INCLUDE:[ \t]*(?P<path>[^ \t]+)[ \t]*-->[ \t]*$", re.M)
-# A per-row agent/skill table link, e.g. `[reviewer](agents/reviewer.md)`. The folder
+# A per-row agent/skill table link, e.g. `[reviewer](agents/reviewer.md)` — including the
+# claude/bob project-scope form re-rendered with a prefixed DIR_AGENTS/DIR_SKILLS token,
+# e.g. `[reviewer](.claude/agents/reviewer.md)` or `[clarify](.bob/skills/clarify.md)`, and
+# Bob global's `../` prefix. The optional prefix is any run of relative path segments (never
+# `http(s)://` or a leading `/`, so external and absolute links are never touched). The folder
 # pointers `](agents/)` / `](skills/)` (no `.md`) and `](memory/…)` never match.
-CAPABILITY_LINK_RE = re.compile(r"\[([^\]]+)\]\((?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
+CAPABILITY_LINK_RE = re.compile(
+    r"\[([^\]]+)\]\((?:(?!https?://|/)[A-Za-z0-9_.-]+/)*(?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
 
 TEXT_SUFFIXES = {".md", ".tmpl", ".json", ".txt", ".yml", ".yaml"}
 

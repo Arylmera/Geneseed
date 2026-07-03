@@ -2645,5 +2645,31 @@ class SharedHelperTests(unittest.TestCase):
             shutil.rmtree(empty.parent, ignore_errors=True)
 
 
+class ClaudeBobDoctorCoverageTests(unittest.TestCase):
+    """doctor's `_claude_bob_emit_problems` — the check added because doctor's sweep
+    (`_doctor_collect`) never validated the claude/bob PER-REPO emit output; only the
+    `files` build and opencode-global were checked. That blind spot is exactly why
+    the CLAUDE.md/AGENTS.md dead skill-table links shipped unnoticed."""
+
+    def test_clean_source_tree_is_clean(self):
+        problems = harness._claude_bob_emit_problems("neutral")
+        self.assertEqual(problems, [])
+
+    def test_catches_a_seeded_dead_link(self):
+        """Reintroduce the exact regression (CAPABILITY_LINK_RE missing the claude/bob
+        prefixed link form) via monkeypatch — no source-tree seeding needed, since the
+        dead link is a property of the RENDER, not a file on disk — and confirm the
+        new doctor check flags it."""
+        saved = build.CAPABILITY_LINK_RE
+        build.CAPABILITY_LINK_RE = re.compile(
+            r"\[([^\]]+)\]\((?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
+        try:
+            problems = harness._claude_bob_emit_problems("neutral")
+        finally:
+            build.CAPABILITY_LINK_RE = saved
+        self.assertTrue(any("dead link" in p and "skills/" in p for p in problems),
+                        f"expected a seeded dead skill link, got: {problems[:5]}")
+
+
 if __name__ == "__main__":
     unittest.main()
