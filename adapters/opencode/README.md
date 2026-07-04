@@ -241,7 +241,7 @@ the script, not the model, drives the control flow.
   `workflows/` dir (`.opencode/workflows/` per-repo, `<config>/workflows/` global;
   override with `GENESEED_WORKFLOWS_DIR`). No model-authored scripts are eval'd.
 - **Call shape:** `workflow({ name, args })` — call with no name to list what is
-  available. Shipped: `council`, `review`, `research-plan-implement`.
+  available. Shipped: `council`, `review`, `research-plan-implement`, `dispatch`.
 - **Runtime API** ([`workflows/_runtime.js`](workflows/_runtime.js)): scripts get
   `agent()`, `parallel()`, `pipeline()`, `phase()`, `log()`, `budget`, `args`.
   Child work runs as real OpenCode sessions (created, prompted, then deleted);

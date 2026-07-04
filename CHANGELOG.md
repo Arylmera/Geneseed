@@ -8,6 +8,25 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Per-agent memory** — each capability agent now keeps durable lessons in
+  `memory/agents/<name>.md`. Every agent spec reads its own file first at dispatch
+  (step 0 of its procedure); the write-back is mechanical and lands on **all three
+  hosts equally**: the OpenCode `geneseed-learn` plugin distils a finished subagent
+  session into one per-agent lesson, and the claude/bob emits gain a `SubagentStop`
+  hook that routes to the same Python path (`learn` reads the payload's
+  `hook_event_name`). Unresolvable subagent name → silent no-op, never a wrong write.
+- **`learn --consolidate`** — rebuilds `MEMORY.md` from the fact files on disk:
+  re-indexes orphaned facts, prunes dead index lines, and reports duplicate
+  descriptions for the user to merge (never auto-merged).
+- **`dispatch` workflow** — a saved OpenCode workflow that decomposes a multi-domain
+  goal, routes each subtask to its owning capability agent, and converges the
+  results. Where a host has no `workflow` tool, the same shape runs model-driven via
+  the parallel-agents skill. The **handoff envelope** (subtask goal, inputs, output
+  contract; no commit/push — Law XX stays with the caller; gaps reported, never
+  invented) is now written into `AGENT.md` for every emit, the OpenCode orchestrator,
+  the parallel-agents skill, and the agent template.
+
 ### Fixed
 - **Claude/Bob emits no longer ship dead skill-table links**: CLAUDE.md/AGENTS.md's
   per-row skill/agent links (e.g. `.claude/skills/council.md`) were dead — the
