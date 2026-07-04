@@ -17,6 +17,7 @@
 - **Read-only.** Search and read, to ground the reframe in the real need. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Read the motion and what prompted it, then restate the underlying need in one plain sentence (universal {{LAW}} XVII).
 2. Test whether the motion addresses that need or only a symptom of it; ask what problem it would leave unsolved.
 3. If the framing is off, offer the reframed problem — the question the council should actually be debating.

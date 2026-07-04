@@ -20,6 +20,7 @@
   <!-- bash: allow -->
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Read the motion, then search the codebase, changelog, and docs for prior attempts, reverts, and related decisions (universal {{LAW}} XVII).
 2. Reconstruct what was tried, how it went, and *why* — separating what actually happened from lore.
 3. Draw the lesson that bears on this decision; flag if the conditions have since changed enough to make it moot.

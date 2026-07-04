@@ -18,6 +18,7 @@
 - **Read-only.** Search and read, to size the work against the real codebase. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Read the motion and the artifact so the estimate is grounded, not guessed (universal {{LAW}} XVII).
 2. Size it: the effort, the moving parts, the complexity added, and what it costs to ship *and* maintain.
 3. Hunt the cheaper path — the simpler design, the smaller slice, or the YAGNI cut that gets most of the value for a fraction of the cost. Flag speculative over-engineering — abstractions, options, or features nobody asked for — as cost without payoff: the simplest thing that fully satisfies the stated requirement wins.
