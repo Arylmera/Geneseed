@@ -212,7 +212,8 @@ Geneseed/
 ├── rituals/web.py        local web UI server (stdlib HTTP) behind `geneseed web`
 ├── web/                  Vite + React UI source; the committed web/dist/ build is what ships
 ├── tests/                stdlib unit tests + a Node workflow-runtime test
-├── docs/specs/           dated implementation specs — design rationale + history
+├── docs/                 guides (web-ui, wiki, …); specs/, reviews/, superpowers/ are
+│                         local working docs — git-ignored, never distributed
 ├── adapters/             per-tool glue (opencode/, claude-code/)
 └── .github/workflows/    CI: doctor + tests
 ```
@@ -257,7 +258,6 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 | **[adapters/claude-code/](adapters/claude-code/README.md)** | The Claude Code hook adapter |
 | **[src/memory/README.md](src/memory/README.md)** | The memory convention |
 | **[src/notebook/README.md](src/notebook/README.md)** | The agent's own freeform-space convention |
-| **[docs/specs/](docs/specs/)** | Dated implementation specs — the rationale and history behind each feature |
 
 ## 🤝 Contributing
 

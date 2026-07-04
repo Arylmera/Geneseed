@@ -8,6 +8,14 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **`docs/specs/`, `docs/reviews/`, and `docs/superpowers/` are local working docs
+  now**: untracked from git and added to `.gitignore`. They are per-machine work
+  artifacts (dated specs are drafted, executed, then dropped — the existing
+  lifecycle); the repo's prose (README, DESIGN, SHIPPED) no longer links them as
+  distributed folders, and SHIPPED.md states its spec links are historical
+  pointers into that local record.
+
 ### Fixed
 - **Claude/Bob emits no longer ship dead skill-table links**: CLAUDE.md/AGENTS.md's
   per-row skill/agent links (e.g. `.claude/skills/council.md`) were dead — the
