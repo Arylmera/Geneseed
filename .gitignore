@@ -21,5 +21,11 @@ web/node_modules/
 # Stray vite cache when a build is invoked from the repo root instead of web/
 /node_modules/
 
+# Local working docs — dated specs, reviews, and superpowers plans are per-machine
+# work artifacts (drafted, executed, then dropped), never distributed with the repo.
+docs/specs/
+docs/reviews/
+docs/superpowers/
+
 # macOS Finder metadata
 .DS_Store
