@@ -132,7 +132,7 @@ are skipped and any error is swallowed, so it never blocks or disturbs a session
 
 ### Install
 
-All five plugins (learn, context, guard, workflow, notify) install together in
+All seven plugins (activity, context, guard, learn, notify, ponytail, workflow) install together in
 one step — the shared recipe lives in
 **[Plugin setup](../../docs/opencode-plugin-setup.md)** (global `cp …/plugins/*.js`
 + `GENESEED_HARNESS`, or `build.py --emit opencode` / `opencode-global`).
@@ -468,7 +468,7 @@ isolation, not just separate sessions.
 
 It is **not vendored** and **not installed by the harness** — treat it like the
 MarkItDown MCP server: a reference pointer you opt into, not a dependency. It does
-not follow Geneseed's plugin convention (the four vendored plugins are single-file,
+not follow Geneseed's plugin convention (the vendored plugins are single-file,
 zero-dependency `.js` copied by `cp …/plugins/*.js`; this one is multi-file
 TypeScript with npm deps — `jsonc-parser`, `zod` — and Bun-only APIs like
 `bun:sqlite`/`Bun.spawn`), so it can't ride the `build --emit opencode` install or

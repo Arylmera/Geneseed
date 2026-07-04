@@ -3,8 +3,11 @@ rem Geneseed — native Windows front door (cmd.exe). Mirrors the bash `geneseed
 rem launcher but needs no bash: it routes every subcommand to the cross-platform
 rem Python CLI (rituals\harness.py).
 rem
-rem   geneseed                       open the interactive main menu
+rem   geneseed                       open the web console (interactive + GUI), else the TUI menu
+rem   geneseed menu                  force the interactive TUI menu
+rem   geneseed web [start|stop|status]  local browser UI — foreground or daemon
 rem   geneseed setup                 guided, dependency-free install wizard
+rem   geneseed bootstrap [ref] [theme]  update everything, then run setup
 rem   geneseed build [args]          render the bundle
 rem   geneseed doctor [args]         validate (themes, parity, authoring, drift)
 rem   geneseed upgrade [ref] [theme] self-upgrade from the published source

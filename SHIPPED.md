@@ -4,16 +4,18 @@
 
 **A registry of the harness's capabilities and the dated spec behind each.**
 
-[← README](README.md) · [Design](DESIGN.md) · [Specs archive](docs/specs/)
+[← README](README.md) · [Design](DESIGN.md)
 
 </div>
 
 ---
 
 This page answers "what is actually in the harness, and where is its rationale?"
-The dated files in [`docs/specs/`](docs/specs/) are the *design record* — the problem
-and the decisions behind each feature; this is the *index* over them, marking what has
-landed in the source tree.
+The dated `docs/specs/*` files were the *design record* — the problem and the
+decisions behind each feature; this is the *index* over them, marking what has
+landed in the source tree. Specs are working documents: they live git-ignored on
+the authoring machine and are dropped once shipped, so the spec links below are
+historical pointers, not files distributed with the repo.
 
 > **On version numbers.** [`harness.config.json`](harness.config.json)'s `version` is a
 > human-readable label only. The canonical identity of an installed harness is the
@@ -57,7 +59,8 @@ they record direction, and their individual items landed across the capabilities
 
 ## Exploratory archive
 
-[`docs/superpowers/`](docs/superpowers/) holds early implementation *plans* for the web
-console (and the "Cultivar" re-skin) written in a checkbox-driven planning format. The
-work they describe has since shipped (see the **Web console** row above); they are kept
-as history, not as live specs. See [`docs/superpowers/README.md`](docs/superpowers/README.md).
+`docs/superpowers/` held early implementation *plans* for the web console (and the
+"Cultivar" re-skin) written in a checkbox-driven planning format. The work they
+describe has since shipped (see the **Web console** row above); like the specs, that
+folder is now a local working area — git-ignored, kept as history on the authoring
+machine only.
