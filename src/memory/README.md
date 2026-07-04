@@ -50,3 +50,28 @@ The fact, stated plainly. For `feedback` and `project`, follow with
   `- [Title](file.md) — one-line hook`.
 - Verify a recalled memory still matches reality before acting on it
   (universal {{LAW}} III).
+
+## Per-{{AGENT}} memory (`agents/` subdirectory)
+
+Beyond the shared store above, each capability {{AGENT}} may hold its own durable
+lessons in `agents/<agent-name>.md` — one bullet per lesson, newest last:
+
+```markdown
+# reviewer — lessons
+- 2026-07-04: this repo's tests double as docs; cite them in findings.
+```
+
+Read and write follow one rule each:
+
+- **Read** — a dispatched {{AGENT}} reads its own file first, if it exists (its
+  spec says so). This is the {{AGENT}}'s memory across dispatches.
+- **Write** — mechanical, never by the {{AGENT}} itself (most run read-only). When
+  a subagent run ends, the learn step distils at most one lesson into the owning
+  {{AGENT}}'s file. A caller may also fold a returned `spec-feedback:` line in by
+  hand.
+
+Same bar as {{LAW}} VI: capture only how this {{AGENT}} should work *next time* —
+a boundary that proved wrong, an input it always needs — never task residue. Files
+are capped (oldest bullets drop) so they never grow unbounded. The `agents/`
+subdirectory name is literal (not themed), because the write code addresses it
+directly; the files are keyed by the {{AGENT}}'s own name.
