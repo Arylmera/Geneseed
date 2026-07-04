@@ -3,8 +3,11 @@
 # launcher but needs no bash: it routes every subcommand to the cross-platform Python
 # CLI (rituals\harness.py). Usage matches geneseed.cmd / the bash launcher.
 #
-#   .\geneseed.ps1                       open the interactive main menu
+#   .\geneseed.ps1                       open the web console (interactive + GUI), else the TUI menu
+#   .\geneseed.ps1 menu                  force the interactive TUI menu
+#   .\geneseed.ps1 web [start|stop|status]  local browser UI — foreground or daemon
 #   .\geneseed.ps1 setup                 guided install wizard
+#   .\geneseed.ps1 bootstrap [ref] [theme]  update everything, then run setup
 #   .\geneseed.ps1 build [args]          render the bundle
 #   .\geneseed.ps1 upgrade [ref] [theme] self-upgrade from the published source
 #   .\geneseed.ps1 update  [ref] [theme] same as upgrade (alias)

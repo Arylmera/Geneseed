@@ -197,13 +197,16 @@ DOC_GROUPS = [
          "request."},
         {"id": "skills", "title": "Skills", "kind": "concept",
          "link": {"hash": "#/section/skills", "label": "Browse the catalog →"},
-         "body": "26 repeatable workflows the agent can invoke by name — "
+         "body": "39 repeatable workflows the agent can invoke by name — "
          "[[brainstorm]], [[clarify]], [[plan]], [[tdd]], [[develop]], [[debug]], "
-         "[[refactor]], [[geneseed-code-review]], [[fresh-eyes]], [[review-response]], "
-         "[[commit]], [[ship]], [[release]], [[migrate]], [[git-archaeology]], "
-         "[[git-rescue]], [[repo-map]], [[document-project]], [[ingest]], "
-         "[[research]], [[handoff]], [[roast-me]], [[council]], "
-         "[[parallel-agents]], [[workflow]], [[wiki]]. A skill is a markdown "
+         "[[refactor]], [[ponytail]], [[geneseed-code-review]], [[fresh-eyes]], "
+         "[[review-response]], [[commit]], [[ship]], [[release]], [[migrate]], "
+         "[[git-archaeology]], [[git-rescue]], [[repo-map]], [[document-project]], "
+         "[[ingest]], [[prose]], [[research]], [[learning-path]], [[gap-detector]], "
+         "[[feynman]], [[crash-course]], [[drill]], [[decode]], [[handoff]], "
+         "[[roast-me]], [[council]], [[parallel-agents]], [[workflow]], [[wiki]], "
+         "[[forge-mcp]], [[frontend-design]], [[geneseed]], [[opencode-theme]], "
+         "[[herdr]]. A skill is a markdown "
          "playbook under `src/skills/`; the agent reads it before acting."},
         {"id": "memory", "title": "Memory convention", "kind": "markdown",
          "source": "src/memory/README.md"},
