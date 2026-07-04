@@ -28,6 +28,9 @@
 
 ## Inputs
 - What the caller must provide (files, diff, scope, acceptance criteria).
+- Dispatches arrive as an envelope: goal, inputs, output contract, inherited
+  constraints (never commit/push; report gaps instead of inventing). When an
+  envelope arrives incomplete, hold the caller to it via `spec-feedback:`.
 
 ## Allowed tools
 - Read-only vs write. List the operations this {{AGENT}} may perform.
