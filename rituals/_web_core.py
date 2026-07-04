@@ -730,6 +730,8 @@ DOC_GROUPS = [
         {"id": "adapters-claude-code", "title": "Claude Code adapter",
          "kind": "markdown", "harness": "claude",
          "source": "adapters/claude-code/README.md"},
+        {"id": "token-footprint", "title": "Token footprint",
+         "kind": "markdown", "source": "docs/token-footprint.md"},
         {"id": "about", "title": "About — version, license, links",
          "kind": "about"},
     ]},
