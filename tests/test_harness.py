@@ -2715,5 +2715,46 @@ class PerAgentMemoryTests(unittest.TestCase):
         self.assertEqual(harness.AGENT_LESSON_PROMPT, m.group(1))
 
 
+class ConsolidateMemoryTests(unittest.TestCase):
+    """`learn --consolidate` rebuilds MEMORY.md from the fact files on disk:
+    re-indexes orphans, prunes dead lines, reports duplicate descriptions."""
+
+    def _mem(self):
+        return Path(tempfile.mkdtemp())
+
+    def test_reindexes_orphans_and_prunes_dead_lines(self):
+        mem = self._mem()
+        try:
+            (mem / "new-fact.md").write_text(
+                "---\nname: new-fact\ndescription: a new fact\ntype: project\n---\nbody\n",
+                encoding="utf-8")
+            (mem / "MEMORY.md").write_text(
+                "# Memory Index\n- [gone](gone.md) — stale\n", encoding="utf-8")
+            report = harness.consolidate_memory(mem)
+            index = (mem / "MEMORY.md").read_text(encoding="utf-8")
+            self.assertIn("new-fact.md", index)
+            self.assertNotIn("gone.md", index)
+            self.assertIn("a new fact", index)
+            self.assertEqual(report["added"], ["new-fact"])
+            self.assertEqual(report["pruned"], ["gone"])
+        finally:
+            shutil.rmtree(mem, ignore_errors=True)
+
+    def test_skips_index_and_readme_and_reports_duplicates(self):
+        mem = self._mem()
+        try:
+            for slug in ("a", "b"):
+                (mem / f"{slug}.md").write_text(
+                    f"---\nname: {slug}\ndescription: same desc\n---\nx\n",
+                    encoding="utf-8")
+            (mem / "README.md").write_text("not a fact\n", encoding="utf-8")
+            report = harness.consolidate_memory(mem)
+            index = (mem / "MEMORY.md").read_text(encoding="utf-8")
+            self.assertNotIn("README.md", index)
+            self.assertEqual(report["duplicates"], [("a", "b")])
+        finally:
+            shutil.rmtree(mem, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

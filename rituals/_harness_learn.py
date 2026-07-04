@@ -238,7 +238,63 @@ def _write_memories(model_output: str, mem_dir: Path, existing: set[str]) -> lis
     return written
 
 
+def consolidate_memory(mem_dir) -> dict:
+    """Rebuild MEMORY.md from the fact files actually on disk:
+      - every fact file (skip MEMORY.md / README.md) gets exactly one index line;
+      - index lines whose file no longer exists are pruned;
+      - duplicate descriptions are reported (never auto-merged — nuance is the
+        user's to keep).
+    Returns {"added": [...], "pruned": [...], "duplicates": [(a, b), ...]}."""
+    mem_dir = Path(mem_dir)
+    skip = {"memory", "readme"}
+    facts: dict[str, str] = {}
+    for f in sorted(mem_dir.glob("*.md")):
+        if f.stem.lower() in skip:
+            continue
+        try:
+            fm, _ = _frontmatter(f.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        facts[f.stem] = fm.get("description", "").strip()
+    index = mem_dir / "MEMORY.md"
+    old_slugs: set[str] = set()
+    if index.exists():
+        for line in index.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"- \[[^\]]*\]\(([^)]+)\.md\)", line.strip())
+            if m:
+                old_slugs.add(m.group(1))
+    lines = ["# Memory Index", ""]
+    for slug, desc in facts.items():
+        lines.append(f"- [{slug}]({slug}.md)" + (f" — {desc}" if desc else ""))
+    index.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    seen: dict[str, str] = {}
+    dups: list[tuple[str, str]] = []
+    for slug, desc in facts.items():
+        if desc and desc in seen:
+            dups.append((seen[desc], slug))
+        seen.setdefault(desc, slug)
+    return {
+        "added": sorted(set(facts) - old_slugs),
+        "pruned": sorted(old_slugs - set(facts)),
+        "duplicates": dups,
+    }
+
+
 def cmd_learn(args: argparse.Namespace) -> int:
+    if getattr(args, "consolidate", False):
+        mem_dir = _resolve_memory_dir(args.memory)
+        if not mem_dir:
+            sys.stderr.write("[learn] no memory store found — nothing to consolidate.\n")
+            return 0
+        report = consolidate_memory(mem_dir)
+        sys.stderr.write(
+            f"[learn] consolidated {mem_dir}: +{len(report['added'])} indexed, "
+            f"-{len(report['pruned'])} pruned, "
+            f"{len(report['duplicates'])} duplicate description(s)\n")
+        for a, b in report["duplicates"]:
+            sys.stderr.write(f"  duplicate: {a} <-> {b}\n")
+        return 0
+
     raw = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.read()
     notes = _read_notes(raw)
     if not notes.strip():

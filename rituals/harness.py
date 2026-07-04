@@ -203,6 +203,9 @@ def build_argparser() -> argparse.ArgumentParser:
     le.add_argument("--memory", default=None,
                     help="bundle memory dir to dedup against and index into "
                          "(default: $GENESEED_MEMORY, else ./memory or ./Harness/memory)")
+    le.add_argument("--consolidate", action="store_true",
+                    help="rebuild MEMORY.md from the fact files on disk: re-index "
+                         "orphans, prune dead lines, report duplicate descriptions")
     le.set_defaults(fn=cmd_learn)
 
     su = sub.add_parser("setup", help="interactive install wizard (dependency-free, all OSes)")
