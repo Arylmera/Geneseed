@@ -604,6 +604,11 @@ def _claude_hook_groups(cfg: Path) -> dict:
             # into a 9009 error. `exit 0` works in both cmd.exe and POSIX sh.
             {"hooks": [{"type": "command", "command": f"{py} {h} learn {mem} || exit 0"}]},
         ],
+        "SubagentStop": [
+            # Same command as Stop: `learn` reads the payload's hook_event_name and
+            # routes a SubagentStop to the per-agent lesson path (memory/agents/<name>.md).
+            {"hooks": [{"type": "command", "command": f"{py} {h} learn {mem} || exit 0"}]},
+        ],
     }
 
 

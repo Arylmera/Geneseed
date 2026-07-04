@@ -29,6 +29,13 @@
           { "type": "command", "command": "python rituals/harness.py learn || exit 0" }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python rituals/harness.py learn || exit 0" }
+        ]
+      }
     ]
   }
 }

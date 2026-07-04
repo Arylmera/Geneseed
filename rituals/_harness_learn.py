@@ -15,6 +15,81 @@ MEMORY_DIR_NAMES = ("memory", "anamnesis")  # neutral + imperial themed names
 FRONTMATTER_RE = re.compile(r"\s*---\s*\n(?P<fm>.*?)\n---\s*\n?(?P<body>.*)$", re.S)
 FILE_SEP_RE = re.compile(r"(?m)^---FILE---\s*$")
 
+# Per-agent memory (memory/agents/<name>.md): the Python twin of the OpenCode learn
+# plugin's child-session branch, so claude/bob get the same loop via SubagentStop.
+AGENT_NAME_RE = re.compile(r"^[a-z][a-z0-9-]{1,40}$")
+MAX_AGENT_BULLETS = 100  # hard cap, oldest dropped — matches the JS plugin
+# Host payloads name the finished subagent inconsistently; try each. If none resolve,
+# the SubagentStop path skips silently (no regression — like an unresolvable child on
+# OpenCode). VERIFY the real field against a live Claude Code SubagentStop payload.
+_SUBAGENT_NAME_FIELDS = ("agent_name", "agent_type", "subagent_type", "agent", "agent_id")
+
+
+def resolve_agent_name(raw):
+    """A safe agent slug from a raw field value, or None. Twin of the JS regex."""
+    name = raw.strip().lower() if isinstance(raw, str) else None
+    return name if name and AGENT_NAME_RE.match(name) else None
+
+
+def append_agent_lesson(mem_dir, agent: str, lesson: str) -> Path:
+    """Append one dated bullet to memory/agents/<agent>.md, capped at the newest
+    MAX_AGENT_BULLETS. Behaviour-identical to the plugin's appendAgentLesson."""
+    d = Path(mem_dir) / "agents"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / f"{agent}.md"
+    bullets = []
+    if f.exists():
+        bullets = [l for l in f.read_text(encoding="utf-8").splitlines()
+                   if l.startswith("- ")]
+    day = datetime.date.today().isoformat()
+    bullets.append(f"- {day}: {' '.join(lesson.split())}")
+    bullets = bullets[-MAX_AGENT_BULLETS:]
+    f.write_text(f"# {agent} — lessons\n" + "\n".join(bullets) + "\n", encoding="utf-8")
+    return f
+
+
+def _hook_meta(raw: str) -> dict:
+    """The lifecycle-hook payload dict if stdin is one, else {}."""
+    s = raw.strip()
+    if s[:1] == "{":
+        try:
+            return json.loads(s)
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def _learn_agent_lesson(meta: dict, notes: str, args: argparse.Namespace) -> int:
+    """SubagentStop path: distil at most one per-agent lesson into
+    memory/agents/<name>.md. Skips silently when the host does not name the
+    subagent — parity of mechanism, degrading to no-op, never a crash."""
+    agent = None
+    for field in _SUBAGENT_NAME_FIELDS:
+        agent = resolve_agent_name(meta.get(field))
+        if agent:
+            break
+    if not agent:
+        return 0
+    mem_dir = _resolve_memory_dir(args.memory)
+    if not mem_dir:
+        return 0
+    prompt = "\n".join([AGENT_LESSON_PROMPT, "", "NOTES:", notes])
+    llm = os.environ.get("GENESEED_LLM")
+    if not llm:
+        sys.stderr.write("[learn] $GENESEED_LLM unset — printing agent-lesson prompt.\n\n")
+        print(prompt)
+        return 0
+    proc = run(llm.split() + [prompt], capture_output=True, text=True)
+    out = proc.stdout.strip()
+    if out and out.upper() != "NOTHING":
+        lesson = out.splitlines()[0].lstrip("-*").strip()
+        if 10 <= len(lesson) <= 300:  # junk / truncation guard, twin of the JS check
+            f = append_agent_lesson(mem_dir, agent, lesson)
+            sys.stderr.write(f"[learn] agent lesson -> {f}\n")
+    if proc.returncode != 0 and proc.stderr:
+        sys.stderr.write(proc.stderr)
+    return proc.returncode
+
 
 def _content_text(content) -> str:
     """Flatten a message 'content' field (string, or a list of blocks) to text."""
@@ -170,6 +245,12 @@ def cmd_learn(args: argparse.Namespace) -> int:
         sys.stderr.write("[learn] no notes or transcript content — nothing to distil.\n")
         return 0
     notes = notes[-MAX_NOTES_CHARS:]  # keep the tail: most recent, most durable
+
+    # A SubagentStop payload is one subagent dispatch: distil for a single per-agent
+    # lesson, never into the shared store (the OpenCode plugin's child-session twin).
+    meta = _hook_meta(raw)
+    if meta.get("hook_event_name") == "SubagentStop":
+        return _learn_agent_lesson(meta, notes, args)
 
     mem_dir = _resolve_memory_dir(args.memory)
     existing = _existing_slugs(mem_dir) if mem_dir else set()

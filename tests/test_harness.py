@@ -2671,5 +2671,49 @@ class ClaudeBobDoctorCoverageTests(unittest.TestCase):
                         f"expected a seeded dead skill link, got: {problems[:5]}")
 
 
+class PerAgentMemoryTests(unittest.TestCase):
+    """Per-agent lessons (memory/agents/<name>.md) — the Python twin of the
+    OpenCode learn plugin's child-session branch. Behaviour must match."""
+
+    def test_resolve_agent_name_validates(self):
+        self.assertEqual(harness.resolve_agent_name("Reviewer"), "reviewer")
+        self.assertEqual(harness.resolve_agent_name("user-advocate"), "user-advocate")
+        self.assertIsNone(harness.resolve_agent_name("../evil"))
+        self.assertIsNone(harness.resolve_agent_name("has space"))
+        self.assertIsNone(harness.resolve_agent_name(""))
+        self.assertIsNone(harness.resolve_agent_name(None))
+
+    def test_append_agent_lesson_creates_appends_caps(self):
+        mem = Path(tempfile.mkdtemp())
+        try:
+            f = harness.append_agent_lesson(mem, "reviewer", "cite tests in findings")
+            text = f.read_text(encoding="utf-8")
+            self.assertTrue(text.startswith("# reviewer — lessons\n"))
+            self.assertRegex(text, r"- \d{4}-\d{2}-\d{2}: cite tests in findings\n$")
+            for i in range(120):
+                harness.append_agent_lesson(mem, "reviewer", f"lesson {i}")
+            bullets = [l for l in f.read_text(encoding="utf-8").splitlines()
+                       if l.startswith("- ")]
+            self.assertEqual(len(bullets), 100)
+            self.assertIn("lesson 119", bullets[-1])
+        finally:
+            shutil.rmtree(mem, ignore_errors=True)
+
+    def test_append_agent_lesson_collapses_whitespace(self):
+        mem = Path(tempfile.mkdtemp())
+        try:
+            f = harness.append_agent_lesson(mem, "tester", "a  lesson\nwith\tbreaks")
+            self.assertRegex(f.read_text(encoding="utf-8"),
+                             r"- \d{4}-\d{2}-\d{2}: a lesson with breaks\n$")
+        finally:
+            shutil.rmtree(mem, ignore_errors=True)
+
+    def test_agent_lesson_prompt_matches_plugin_literal(self):
+        js = (build.PLUGIN_SRC / "geneseed-learn.js").read_text(encoding="utf-8")
+        m = re.search(r"const AGENT_LESSON_PROMPT = `([\s\S]*?)`", js)
+        self.assertIsNotNone(m, "could not find AGENT_LESSON_PROMPT literal in plugin")
+        self.assertEqual(harness.AGENT_LESSON_PROMPT, m.group(1))
+
+
 if __name__ == "__main__":
     unittest.main()
