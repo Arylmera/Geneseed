@@ -7,7 +7,7 @@
 ## Procedure
 1. Confirm independence: the subtasks must not depend on each other's output or write the same files. If they're sequential or share state, use [plan](plan.md) instead.
 2. Split the work into self-contained units, each with one clear goal and a defined output contract — what it must return.
-3. Dispatch each unit to its own subagent in one batch; prefer the read-only [explorer {{AGENT}}](../{{DIR_AGENTS}}/explorer.md) for investigation so the heavy reading stays out of the main context ({{LAW}} XV). Where no subagent capability exists, run the units sequentially as personas instead, converging the same way.
+3. Dispatch each unit to its own subagent in one batch, each under a handoff envelope: the unit's goal, the inputs it needs, its output contract, and the inherited constraints (no commit/push — {{LAW}} XX stays with you; gaps reported, never invented). Prefer the read-only [explorer {{AGENT}}](../{{DIR_AGENTS}}/explorer.md) for investigation so the heavy reading stays out of the main context ({{LAW}} XV). Where no subagent capability exists, run the units sequentially as personas instead, converging the same way.
 4. Keep the main context lean: collect each subagent's distilled result, not its working transcript.
 5. Converge: reconcile the results, resolve conflicts yourself, and verify the combined outcome.
 

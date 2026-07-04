@@ -18,6 +18,7 @@
 <!-- bash: allow -->
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Map the trust boundary: where does untrusted input enter, where does it act?
 2. Check for the common classes: injection, broken auth/authz, secret exposure,
    unsafe deserialization, path traversal, vulnerable dependencies.

@@ -42,6 +42,13 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   memories, and **writes them into the bundle's `memory/` while updating
   `MEMORY.md`** — deduping against what is already stored. No `< /dev/null` and no
   redirection: the stdin payload is the whole point.
+- on **SubagentStop**, runs the *same* `harness learn` command. `learn` reads the
+  payload's `hook_event_name`, sees a subagent dispatch, and routes it to the
+  per-agent lesson path instead of the shared store: it distils at most one durable
+  lesson and appends it to `memory/agents/<agent-name>.md` (capped, newest kept). If
+  the payload does not name the subagent, the step is a silent no-op — never a
+  crash, never a wrong write. This is the parity twin of the OpenCode learn plugin's
+  child-session branch.
 
   This step is **opt-in on a model CLI**: set `GENESEED_LLM` (e.g. `claude -p`,
   `llm`, `ollama run …`) for `learn` to actually distil. With it unset the hook is

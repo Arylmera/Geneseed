@@ -16,6 +16,7 @@ Saved workflows live in the host's workflows directory — on OpenCode that is `
    - **review** — sweep a change across dimensions, then adversarially verify each finding before reporting (the canonical find→verify pipeline).
    - **research-plan-implement** — three clean phases with fresh-context handoffs between them.
    - **council** — the [council](council.md) debate as deterministic code: seat the stance {{AGENTS}}, gather positions in parallel, synthesise a verdict.
+   - **dispatch** — decompose a multi-domain goal, route each subtask to its owning capability {{AGENT}}, converge the results (the live-orchestrator shape; model-driven fallback: [parallel-agents](parallel-agents.md)).
 3. Run it: `workflow({ name, args })`. Pass the task-specific inputs (target paths, the motion, the question) as `args` — the script reads them.
 4. Read the returned summary. The full structured result and a phase-by-phase trace are written to the run's progress file; point the user at it if they want the detail.
 5. Act on the result yourself — the workflow gathers and verifies, but committing, pushing, or merging stays with you ({{LAW}} XX).

@@ -19,6 +19,7 @@
 <!-- bash: allow -->
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Confirm the change actually does what the task required (read the spec/issue).
 2. Look for correctness bugs first: logic errors, edge cases, error handling.
 3. Then quality: duplication, unclear naming, dead code, oversized units.

@@ -17,6 +17,7 @@
 - **Read-only.** Search and read, to ground the vision in what exists. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Read the motion and the artifact so the ambition builds on reality, not a blank page (universal {{LAW}} XVII).
 2. Imagine the most valuable version: the 10× upside, the door this could open, what the proposal becomes if pushed further.
 3. Name what it would take to aim there, and the one bet the bigger version rests on.

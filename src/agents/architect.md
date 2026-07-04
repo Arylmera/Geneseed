@@ -19,6 +19,7 @@
   (universal {{LAW}} III — establish actual state before designing).
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Establish the current state: data shapes, module boundaries, existing patterns.
 2. Propose 2–3 approaches with trade-offs; recommend one with reasoning.
 3. Break the chosen approach into isolated units, each with one purpose and a

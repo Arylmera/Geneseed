@@ -2671,5 +2671,90 @@ class ClaudeBobDoctorCoverageTests(unittest.TestCase):
                         f"expected a seeded dead skill link, got: {problems[:5]}")
 
 
+class PerAgentMemoryTests(unittest.TestCase):
+    """Per-agent lessons (memory/agents/<name>.md) — the Python twin of the
+    OpenCode learn plugin's child-session branch. Behaviour must match."""
+
+    def test_resolve_agent_name_validates(self):
+        self.assertEqual(harness.resolve_agent_name("Reviewer"), "reviewer")
+        self.assertEqual(harness.resolve_agent_name("user-advocate"), "user-advocate")
+        self.assertIsNone(harness.resolve_agent_name("../evil"))
+        self.assertIsNone(harness.resolve_agent_name("has space"))
+        self.assertIsNone(harness.resolve_agent_name(""))
+        self.assertIsNone(harness.resolve_agent_name(None))
+
+    def test_append_agent_lesson_creates_appends_caps(self):
+        mem = Path(tempfile.mkdtemp())
+        try:
+            f = harness.append_agent_lesson(mem, "reviewer", "cite tests in findings")
+            text = f.read_text(encoding="utf-8")
+            self.assertTrue(text.startswith("# reviewer — lessons\n"))
+            self.assertRegex(text, r"- \d{4}-\d{2}-\d{2}: cite tests in findings\n$")
+            for i in range(120):
+                harness.append_agent_lesson(mem, "reviewer", f"lesson {i}")
+            bullets = [l for l in f.read_text(encoding="utf-8").splitlines()
+                       if l.startswith("- ")]
+            self.assertEqual(len(bullets), 100)
+            self.assertIn("lesson 119", bullets[-1])
+        finally:
+            shutil.rmtree(mem, ignore_errors=True)
+
+    def test_append_agent_lesson_collapses_whitespace(self):
+        mem = Path(tempfile.mkdtemp())
+        try:
+            f = harness.append_agent_lesson(mem, "tester", "a  lesson\nwith\tbreaks")
+            self.assertRegex(f.read_text(encoding="utf-8"),
+                             r"- \d{4}-\d{2}-\d{2}: a lesson with breaks\n$")
+        finally:
+            shutil.rmtree(mem, ignore_errors=True)
+
+    def test_agent_lesson_prompt_matches_plugin_literal(self):
+        js = (build.PLUGIN_SRC / "geneseed-learn.js").read_text(encoding="utf-8")
+        m = re.search(r"const AGENT_LESSON_PROMPT = `([\s\S]*?)`", js)
+        self.assertIsNotNone(m, "could not find AGENT_LESSON_PROMPT literal in plugin")
+        self.assertEqual(harness.AGENT_LESSON_PROMPT, m.group(1))
+
+
+class ConsolidateMemoryTests(unittest.TestCase):
+    """`learn --consolidate` rebuilds MEMORY.md from the fact files on disk:
+    re-indexes orphans, prunes dead lines, reports duplicate descriptions."""
+
+    def _mem(self):
+        return Path(tempfile.mkdtemp())
+
+    def test_reindexes_orphans_and_prunes_dead_lines(self):
+        mem = self._mem()
+        try:
+            (mem / "new-fact.md").write_text(
+                "---\nname: new-fact\ndescription: a new fact\ntype: project\n---\nbody\n",
+                encoding="utf-8")
+            (mem / "MEMORY.md").write_text(
+                "# Memory Index\n- [gone](gone.md) — stale\n", encoding="utf-8")
+            report = harness.consolidate_memory(mem)
+            index = (mem / "MEMORY.md").read_text(encoding="utf-8")
+            self.assertIn("new-fact.md", index)
+            self.assertNotIn("gone.md", index)
+            self.assertIn("a new fact", index)
+            self.assertEqual(report["added"], ["new-fact"])
+            self.assertEqual(report["pruned"], ["gone"])
+        finally:
+            shutil.rmtree(mem, ignore_errors=True)
+
+    def test_skips_index_and_readme_and_reports_duplicates(self):
+        mem = self._mem()
+        try:
+            for slug in ("a", "b"):
+                (mem / f"{slug}.md").write_text(
+                    f"---\nname: {slug}\ndescription: same desc\n---\nx\n",
+                    encoding="utf-8")
+            (mem / "README.md").write_text("not a fact\n", encoding="utf-8")
+            report = harness.consolidate_memory(mem)
+            index = (mem / "MEMORY.md").read_text(encoding="utf-8")
+            self.assertNotIn("README.md", index)
+            self.assertEqual(report["duplicates"], [("a", "b")])
+        finally:
+            shutil.rmtree(mem, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

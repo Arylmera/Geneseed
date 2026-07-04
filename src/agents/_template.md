@@ -28,6 +28,9 @@
 
 ## Inputs
 - What the caller must provide (files, diff, scope, acceptance criteria).
+- Dispatches arrive as an envelope: goal, inputs, output contract, inherited
+  constraints (never commit/push; report gaps instead of inventing). When an
+  envelope arrives incomplete, hold the caller to it via `spec-feedback:`.
 
 ## Allowed tools
 - Read-only vs write. List the operations this {{AGENT}} may perform.
@@ -39,6 +42,8 @@
   write-capable {{AGENT}}'s spec must not contain it, or its emit is locked down.
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists in the harness, read it first —
+   it holds your durable lessons from prior dispatches ({{LAW}} VI).
 1. Step-by-step method this {{AGENT}} follows.
 
 ## Output contract

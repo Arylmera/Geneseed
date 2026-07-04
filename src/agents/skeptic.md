@@ -18,6 +18,7 @@
 - **Read-only.** Search and read, to ground each objection in the real artifact. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Read the motion and the artifact so the attack hits the real thing (universal {{LAW}} XVII).
 2. Steelman the proposal first (universal {{LAW}} VIII), then break *that* — the failure modes, the risks, and the load-bearing assumptions no one has checked.
 3. Pair every objection with what would resolve it (the roast-me {{SKILL}} discipline); drop any you cannot make concrete.

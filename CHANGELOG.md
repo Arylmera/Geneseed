@@ -8,14 +8,6 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-### Changed
-- **`docs/specs/`, `docs/reviews/`, and `docs/superpowers/` are local working docs
-  now**: untracked from git and added to `.gitignore`. They are per-machine work
-  artifacts (dated specs are drafted, executed, then dropped — the existing
-  lifecycle); the repo's prose (README, DESIGN, SHIPPED) no longer links them as
-  distributed folders, and SHIPPED.md states its spec links are historical
-  pointers into that local record.
-
 ### Fixed
 - **Claude/Bob emits no longer ship dead skill-table links**: CLAUDE.md/AGENTS.md's
   per-row skill/agent links (e.g. `.claude/skills/council.md`) were dead — the
@@ -52,6 +44,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   workspace `rules/geneseed.md` shadows the same-named global rule.
 
 ### Changed
+- **`docs/specs/`, `docs/reviews/`, and `docs/superpowers/` are local working docs
+  now**: untracked from git and added to `.gitignore`. They are per-machine work
+  artifacts (dated specs are drafted, executed, then dropped — the existing
+  lifecycle); the repo's prose (README, DESIGN, SHIPPED) no longer links them as
+  distributed folders, and SHIPPED.md states its spec links are historical
+  pointers into that local record.
 - **Bob installs stopped double-paying the preamble**: a per-repo Bob install's
   `.bob/rules/geneseed.md` is now a slim shadow stub instead of a full second copy
   of the preamble — the repo-root `AGENTS.md` (auto-loaded) carries the
@@ -72,6 +70,23 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   (`/api/offline-zip`) — use `git pull` directly.
 
 ### Added
+- **Per-agent memory** — each capability agent now keeps durable lessons in
+  `memory/agents/<name>.md`. Every agent spec reads its own file first at dispatch
+  (step 0 of its procedure); the write-back is mechanical and lands on **all three
+  hosts equally**: the OpenCode `geneseed-learn` plugin distils a finished subagent
+  session into one per-agent lesson, and the claude/bob emits gain a `SubagentStop`
+  hook that routes to the same Python path (`learn` reads the payload's
+  `hook_event_name`). Unresolvable subagent name → silent no-op, never a wrong write.
+- **`learn --consolidate`** — rebuilds `MEMORY.md` from the fact files on disk:
+  re-indexes orphaned facts, prunes dead index lines, and reports duplicate
+  descriptions for the user to merge (never auto-merged).
+- **`dispatch` workflow** — a saved OpenCode workflow that decomposes a multi-domain
+  goal, routes each subtask to its owning capability agent, and converges the
+  results. Where a host has no `workflow` tool, the same shape runs model-driven via
+  the parallel-agents skill. The **handoff envelope** (subtask goal, inputs, output
+  contract; no commit/push — Law XX stays with the caller; gaps reported, never
+  invented) is now written into `AGENT.md` for every emit, the OpenCode orchestrator,
+  the parallel-agents skill, and the agent template.
 - **Downgrade warning + stale-overrides notice**: re-emitting over an existing
   install now compares the deployed release (stamped in `.geneseed-version`
   alongside the fingerprint) against the source tree's `harness.config.json`
