@@ -25,6 +25,16 @@ export default function BootSplash({ ready, onDone }) {
     if (ready && minElapsed) setFading(true)
   }, [ready, minElapsed])
 
+  // Belt and braces: animationend is the normal dismissal, but it never fires
+  // when animations are disabled (prefers-reduced-motion) or the tab is
+  // throttled — which left the splash mounted forever. The timeout outlasts
+  // the .55s fade and guarantees dismissal either way.
+  useEffect(() => {
+    if (!fading) return
+    const t = setTimeout(() => onDone?.(), 700)
+    return () => clearTimeout(t)
+  }, [fading]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleAnimEnd = (e) => {
     if (e.animationName === 'splashOut') onDone?.()
   }
