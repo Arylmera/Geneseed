@@ -259,6 +259,30 @@ Override only when the convention doesn't fit — drop a `.harness/context.json`
 `"extend": true` layers the manifest on top of discovery. Schema:
 [GLOBAL-HARNESS-SPEC.md §3](adapters/opencode/GLOBAL-HARNESS-SPEC.md).
 
+#### 📌 Worked example — a monorepo's `context.json`
+
+The harness stays lean because project knowledge does not go into it — it goes
+into this per-repo manifest, which the context plugin auto-loads at session
+start. A monorepo with docs scattered across packages might write:
+
+```json
+{
+  "extend": true,
+  "context": [
+    { "path": "docs/architecture.md", "load": "eager", "description": "system map" },
+    { "path": "api/README.md", "load": "eager" },
+    { "path": "web/README.md", "load": "eager" }
+  ]
+}
+```
+
+`"extend": true` keeps auto-discovery running (so `README.md`, `AGENT.md`, and
+the rest of the convention still apply) and layers these three eager entries on
+top. Keep the eager list to the few files a new teammate would read first —
+each `eager` entry is injected in full into every session in this repo, so it
+has a permanent token cost; prefer three sharp docs over ten broad ones, and
+reach for `"load": "lazy"` for anything a session should only read on demand.
+
 **Self-orientation extras.** The same injected block also carries two best-effort
 lines so the agent starts oriented: the repo's **runnable commands** (targets from
 `Makefile`, `package.json` scripts — with the right runner per lockfile — `justfile`,

@@ -41,3 +41,6 @@ should print `ok`.
 
 Claude Code and plain-`AGENT.md` installs, per-repo mode, MCP servers, all
 environment knobs, and troubleshooting live in the full **[Setup guide](SETUP.md)**.
+
+Once installed, point the agent at your repo's own docs with a tiny
+`context.json` — see [the worked example](SETUP.md) in the Setup guide.
