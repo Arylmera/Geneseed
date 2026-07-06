@@ -12,7 +12,13 @@ export default function Console({ runs, open, onToggle, onClear, onCancel, busy 
   }, [runs.length, lastLen, open])
 
   return (
-    <div className="console" style={{ height: open ? '42vh' : 42 }}>
+    <div
+      className="console"
+      style={{
+        height: '42vh',
+        transform: open ? 'none' : 'translateY(calc(42vh - 42px))',
+      }}
+    >
       <div className="console-head" onClick={onToggle}>
         <span className="ttl">
           <span className={`live ${busy ? 'on' : ''}`} />
