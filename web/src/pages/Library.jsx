@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { Icon } from '../components/Icon.jsx'
-import { SECTIONS, SECTION_ORDER } from '../lib/sections.js'
+import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Markdown from '../components/Markdown.jsx'
 import ErrorState from '../components/ErrorState.jsx'
@@ -56,7 +56,7 @@ function EmptyDoc({ section, source }) {
 // Selecting a row pushes the matching #/item/.../<name> URL so deep-linking
 // keeps working from the search spotlight and the Graph.
 export default function Library({ overview, section, selected, dataRev }) {
-  const initialSec = section && SECTIONS[section] ? section : SECTION_ORDER[0]
+  const initialSec = section && SECTIONS[section] ? section : LIBRARY_ORDER[0]
   const [sec, setSec] = useState(initialSec)
   const [q, setQ] = useState('')
   const rowsRef = useRef(null)
@@ -142,6 +142,9 @@ export default function Library({ overview, section, selected, dataRev }) {
 
   const openItem = (name) => go(`#/item/${SECTIONS[sec].type}/${encodeURIComponent(name)}`)
   const switchSection = (k) => go(`#/section/${k}`)
+  // Agents has its own top-level tab (#/agents), like Laws and Skills: the page
+  // reuses this master-detail view locked to the agents section, chip-bar hidden.
+  const standalone = sec === 'agents'
 
   const onForget = async () => {
     const name = activeItem?.name
@@ -166,30 +169,33 @@ export default function Library({ overview, section, selected, dataRev }) {
       <div className="head-row mb-16">
         <div>
           <div className="eyebrow">harness content</div>
-          <h1 className="h">Library</h1>
+          <h1 className="h">{standalone ? 'Agents' : 'Library'}</h1>
           <p className="sub">
-            Browse every layer of the deployed harness from one place. Pick a section, then read an
-            entry — the markdown comes straight from the source file.
+            {standalone
+              ? 'The capability specialists deployed in the harness. Pick one to read its charter, straight from the source file.'
+              : 'Browse every layer of the deployed harness from one place. Pick a section, then read an entry — the markdown comes straight from the source file.'}
           </p>
         </div>
       </div>
-      <div className="lib-secbar">
-        {SECTION_ORDER.map((k) => {
-          const meta = SECTIONS[k]
-          const n = counts[k] ?? null
-          return (
-            <button
-              key={k}
-              className={`lib-secchip ${sec === k ? 'on' : ''}`}
-              onClick={() => switchSection(k)}
-            >
-              <Icon name={meta.icon} className="glyph" />
-              <span>{meta.label}</span>
-              {n != null && <span className="lib-secchip-n">{n}</span>}
-            </button>
-          )
-        })}
-      </div>
+      {standalone ? null : (
+        <div className="lib-secbar">
+          {LIBRARY_ORDER.map((k) => {
+            const meta = SECTIONS[k]
+            const n = counts[k] ?? null
+            return (
+              <button
+                key={k}
+                className={`lib-secchip ${sec === k ? 'on' : ''}`}
+                onClick={() => switchSection(k)}
+              >
+                <Icon name={meta.icon} className="glyph" />
+                <span>{meta.label}</span>
+                {n != null && <span className="lib-secchip-n">{n}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {err ? <ErrorState error={err} style={{ margin: '12px 0' }} /> : null}
 

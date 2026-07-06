@@ -145,6 +145,9 @@ export default function App() {
             {route.view === 'activity' && <Activity />}
             {route.view === 'activity-detail' && <ActivityDetail key={route.sid} sid={route.sid} />}
             {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
+            {route.view === 'agents' && (
+              <Library overview={overview} section="agents" dataRev={dataRev} />
+            )}
             {route.view === 'laws' && <Laws />}
             {route.view === 'skills' && <Skills />}
             {route.view === 'section' &&

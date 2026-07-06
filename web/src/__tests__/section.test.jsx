@@ -38,20 +38,24 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 describe('Library chip-bar (replaces Section)', () => {
-  it('shows the active section chip and lists the catalog items', async () => {
+  it('renders agents standalone: no chip-bar, Agents title, catalog listed', async () => {
     render(<Library section="agents" overview={overview({ agents: 2, skills: 5 })} />)
     // wait for the catalog to land (one row per item, plus auto-selected
     // detail header echoing the first item — hence getAllByText for "Reviewer")
     await waitFor(() => expect(screen.getAllByText('Reviewer').length).toBeGreaterThan(0))
     expect(screen.getByText('Tester')).toBeTruthy()
-    // the Agents chip is the on-state in the chip bar
-    const agentsChip = screen
-      .getAllByText('Agents')
-      .find((el) => el.closest('button')?.className.includes('lib-secchip'))
-    expect(agentsChip.closest('button').className).toContain('on')
-    // its count chip reads "2" — the agents value passed in via overview
-    const chipBtn = agentsChip.closest('button')
-    expect(chipBtn.textContent).toContain('2')
+    // agents has its own top-level tab (#/agents) like Laws and Skills, so the
+    // Library chip-bar is hidden and the page is titled after the section
+    expect(document.querySelector('.lib-secbar')).toBeNull()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Agents')
+  })
+
+  it('keeps the chip-bar for library sections, without an Agents chip', async () => {
+    render(<Library section="memory" overview={overview({ agents: 2, memory: 3 })} />)
+    await waitFor(() => expect(document.querySelector('.lib-secbar')).toBeTruthy())
+    const chips = [...document.querySelectorAll('.lib-secchip')].map((b) => b.textContent)
+    expect(chips.some((t) => t.includes('Memory'))).toBe(true)
+    expect(chips.some((t) => t.includes('Agents'))).toBe(false)
   })
 
   it('auto-selects the first item when none is in the URL', async () => {
