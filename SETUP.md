@@ -8,6 +8,9 @@
 
 </div>
 
+> **In a hurry?** The 5-minute recommended path is **[QUICKSTART.md](QUICKSTART.md)**.
+> This page is the full reference: every install path, knob, and troubleshooting step.
+
 ---
 
 You pick a **theme** — the voice and vocabulary the harness wears — and an **install mode**;

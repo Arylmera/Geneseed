@@ -74,19 +74,9 @@ cd Geneseed
 
 The launcher finds Python on its own (the `py` launcher, else `python` on PATH). The full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+ `conhost` — via a stdlib-only ANSI backend; an older console degrades gracefully to the same wizard as plain text prompts. Screens and results are identical to macOS: theme → install mode → confirm → build → health check.
 
-### ⚡ The direct way — one command (OpenCode, global)
-
-The recommended install, done by hand — once into OpenCode's config dir, every repo inherits it, nothing committed into your projects:
-
-```bash
-python build.py --emit opencode-global                 # add --theme imperial if wanted
-# Optional: the learn plugin auto-locates the in-config memory store. Set this only
-# to pin it explicitly (and persist it to your shell rc):
-export GENESEED_HARNESS="$HOME/.config/opencode"
-echo 'export GENESEED_HARNESS="$HOME/.config/opencode"' >> ~/.zshrc
-```
-
-Windows is the same `python build.py` line; the optional pin is `setx GENESEED_HARNESS "$env:USERPROFILE\.config\opencode"`.
+That's the whole fast path — **[QUICKSTART.md](QUICKSTART.md)** walks it in
+5 minutes. Every other route (Claude Code, plain `AGENT.md`, per-repo installs,
+MCP servers, troubleshooting) lives in the full **[Setup guide](SETUP.md)**.
 
 ### ✅ After installing
 
