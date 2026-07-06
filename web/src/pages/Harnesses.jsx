@@ -139,7 +139,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
       title: 'Per-project',
       sub: 'one folder each',
       rows: installs.filter((i) => i.scope !== 'global'),
-      empty: 'No per-project installs yet — use “Deploy to folder…”.',
+      empty: 'No per-project installs yet; use “Deploy to folder…”.',
     },
   ]
 
@@ -165,7 +165,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
       inst.state === 'absent'
         ? `Install Geneseed into ${inst.path} with the “${theme}” voice (${footprint} footprint)? ` +
           `Files are added non-destructively (your own config is left untouched); deactivate or uninstall later.`
-        : `Rebuild this install — voice “${theme}”, ${footprint} footprint? It rebuilds in place — non-destructive.`
+        : `Rebuild this install (voice “${theme}”, ${footprint} footprint)? It rebuilds in place, non-destructive.`
     if (window.confirm(msg))
       onAction?.('install', {
         host: inst.host,
@@ -180,7 +180,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
     if (
       inst.state === 'active' &&
       !window.confirm(
-        'Deactivate this install? Files are moved aside, not deleted — reactivate any time.',
+        'Deactivate this install? Files are moved aside, not deleted; reactivate any time.',
       )
     )
       return
@@ -323,7 +323,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
             <input
               className="inp dp-path"
               type="text"
-              placeholder="/path/to/project — or click Browse…"
+              placeholder="/path/to/project, or click Browse…"
               value={deploy.path}
               onChange={(e) => setDeploy((d) => ({ ...d, path: e.target.value }))}
               onKeyDown={(e) => e.key === 'Enter' && submitDeploy()}
@@ -385,14 +385,14 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
         </div>
       ) : null}
       <p className="sub mb-16">
-        Every Geneseed install on this machine — OpenCode and Claude Code, global and per-repo.
+        Every Geneseed install on this machine: OpenCode and Claude Code, global and per-repo.
         Toggle one off without deleting it (files move aside, reactivate any time). Active rows
         expand to wire their MCP servers. <strong>Rebuild all</strong> re-emits every active install
         in its own voice and mode, as one background job.
       </p>
       <p className="sub mb-16">
         <strong>Per-folder now overrides global.</strong> Inside a folder that has its own harness,
-        the <em>same host’s</em> global harness steps aside — only the folder’s harness loads there
+        the <em>same host’s</em> global harness steps aside; only the folder’s harness loads there
         (the global one still applies everywhere else). Set <code>GENESEED_STACK_GLOBAL=1</code> to
         load both. Existing installs pick this up on their next rebuild.
       </p>

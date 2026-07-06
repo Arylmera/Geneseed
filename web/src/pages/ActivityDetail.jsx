@@ -44,7 +44,7 @@ function StreamRow({ rec }) {
         )}
         {rec.kind === 'thinking' && <span className="dim">thinking: </span>}
         {soft ? <span className="dim">{label}</span> : you ? label : <b>{label}</b>}
-        {rec.error && <span className="dim"> — {rec.error}</span>}
+        {rec.error && <span className="dim">: {rec.error}</span>}
       </div>
       {meta.length > 0 && (
         <span className="dim mono" style={{ flexShrink: 0, fontSize: 12 }}>
