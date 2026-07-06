@@ -2821,16 +2821,16 @@ a.rail-item.active { color: var(--text); }
   animation: glowPulse 1.8s ease-in-out infinite; }
 .boot-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
 .boot-progress { stroke-dasharray: 452; stroke-dashoffset: 452; --end: 0;
-  animation: ringFill 2.2s cubic-bezier(.2,.7,.2,1) .35s forwards; }
+  animation: ringFill .4s cubic-bezier(.2,.7,.2,1) forwards; }
 .boot-sprout { position: absolute; top: 50%; left: 50%;
   width: 58px; height: 58px; transform: translate(-50%,-50%); overflow: visible; }
 .boot-sprout .bs-stem { transform-origin: 12px 21.5px; transform: scaleY(0);
-  animation: stemGrow .6s cubic-bezier(.2,.7,.2,1) .4s forwards; }
+  animation: stemGrow .3s cubic-bezier(.2,.7,.2,1) .1s forwards; }
 .boot-sprout .bs-leaf { transform-origin: 12px 12px; transform: scale(0); }
 .boot-sprout .bs-leaf-main {
-  animation: leafIn .5s cubic-bezier(.34,1.56,.64,1) 1s forwards; }
+  animation: leafIn .2s cubic-bezier(.22,1,.36,1) .25s forwards; }
 .boot-sprout .bs-leaf-back {
-  animation: leafIn .5s cubic-bezier(.34,1.56,.64,1) 1.25s forwards; }
+  animation: leafIn .2s cubic-bezier(.22,1,.36,1) .35s forwards; }
 .boot-status { display: flex; align-items: center;
   font: 500 12px var(--font-mono); color: var(--text-2); }
 .boot-caret { width: 6px; height: 13px; background: var(--accent);
