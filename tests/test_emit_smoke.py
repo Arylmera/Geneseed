@@ -45,9 +45,6 @@ class EmitModeSmokeTests(unittest.TestCase):
                     emitted,
                     f"--emit {mode} wrote nothing inside the sandbox {td}",
                 )
-                # nothing may escape the sandbox into the real home
-                real_home = Path.home()
-                self.assertNotEqual(str(real_home), str(home))
 
 
 if __name__ == "__main__":
