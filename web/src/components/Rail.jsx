@@ -153,6 +153,7 @@ export default function Rail({ route, overview, onOpenVoice }) {
               className={`rail-item ${lit ? 'active' : ''}`}
               href={n.hash}
               aria-current={lit ? 'page' : undefined}
+              title={n.label}
             >
               <Icon name={n.icon} />
               <span>{n.label}</span>

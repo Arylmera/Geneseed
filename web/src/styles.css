@@ -159,6 +159,29 @@ button { font-family: inherit; }
 .voice-meta .vv { font-weight: 600; font-size: 13px; text-transform: capitalize; }
 .voice .chev { margin-left: auto; color: var(--text-3); font-size: 12px; }
 
+/* Narrow viewports: the rail collapses to an icon strip. Overriding --rail-w
+   keeps the grid and the console (left: var(--rail-w)) in sync for free.
+   Labels stay in the accessibility tree via the clip pattern (not display:none);
+   sighted users get the title tooltip the Rail adds on every item. */
+@media (max-width: 960px) {
+  :root { --rail-w: 62px; }
+  .rail { padding: 18px 6px; }
+  .rail-brand { justify-content: center; padding: 6px 0 14px; }
+  .brand-text, .voice-meta, .voice .chev { display: none; }
+  .rail-item span, .rail-item .tag { position: absolute; width: 1px; height: 1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .rail-group { font-size: 0; height: 1px; padding: 0; margin: 10px 10px 8px;
+    background: var(--line-2); }
+  .rail-item { justify-content: center; padding: 10px 0 10px 6px; }
+  .rail-foot { padding: 12px 0 2px; }
+  .rail-foot .voice { justify-content: center; padding: 8px 0; }
+}
+@media (max-width: 720px) {
+  .topbar .prompt { display: none; }
+  .tb-search input { width: 150px; }
+  .tb-search input:focus { width: 170px; }
+}
+
 /* ---- main column ---- */
 .col { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; }
 
