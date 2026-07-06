@@ -38,7 +38,7 @@ function EmptyDoc({ section, source }) {
     <div className="lib-doc-empty">
       <Icon name={SECTIONS[section].icon} className="glyph" />
       <span>
-        This entry is part of the {SECTIONS[section].label.toLowerCase()} convention — see{' '}
+        This entry is part of the {SECTIONS[section].label.toLowerCase()} convention; see{' '}
         <code className="mono">{source}</code>. It has no standalone per-entry document.
       </span>
     </div>
@@ -173,7 +173,7 @@ export default function Library({ overview, section, selected, dataRev }) {
           <p className="sub">
             {standalone
               ? 'The capability specialists deployed in the harness. Pick one to read its charter, straight from the source file.'
-              : 'Browse every layer of the deployed harness from one place. Pick a section, then read an entry — the markdown comes straight from the source file.'}
+              : 'Browse every layer of the deployed harness from one place. Pick a section, then read an entry; the markdown comes straight from the source file.'}
           </p>
         </div>
       </div>
@@ -226,7 +226,7 @@ export default function Library({ overview, section, selected, dataRev }) {
             ))}
             {!ql && items.length > CAP && (
               <div className="lib-more">
-                Showing {CAP} of {items.length} — type to search the rest.
+                Showing {CAP} of {items.length}; type to search the rest.
               </div>
             )}
             {ql && matches.length === 0 && (
@@ -238,7 +238,7 @@ export default function Library({ overview, section, selected, dataRev }) {
             {items.length === 0 && (
               <div className="empty" style={{ padding: 32 }}>
                 <div className="big">Nothing here yet</div>
-                This section is empty — once the harness produces entries they will appear.
+                This section is empty; once the harness produces entries they will appear.
               </div>
             )}
           </div>

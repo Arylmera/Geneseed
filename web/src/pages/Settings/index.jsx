@@ -25,7 +25,7 @@ export default function Settings({
     if (
       window.confirm(
         `Rebuild ${install.host} · ${install.scope} with the “${fp}” footprint? ` +
-          `It rebuilds in place — non-destructive.`,
+          `It rebuilds in place, non-destructive.`,
       )
     )
       onAction?.('install', { ...install, footprint: fp })
@@ -51,7 +51,7 @@ export default function Settings({
             <h3>Console direction</h3>
           </div>
           <p className="sub mb-16">
-            {FLAVOURS.length} takes on the same data. Pick a direction — it applies instantly and
+            {FLAVOURS.length} takes on the same data. Pick a direction; it applies instantly and
             persists across reloads.
           </p>
 
@@ -105,7 +105,7 @@ export default function Settings({
               </div>
               <span className="dir-layout-note sub" role="status" aria-live="polite">
                 {layout === 'auto'
-                  ? `Following the theme — ${
+                  ? `Following the theme: ${
                       LAYOUTS.find((l) => l.id === defaultLayoutFor(flavour))?.short ?? ''
                     }.`
                   : (LAYOUTS.find((l) => l.id === layout)?.tagline ?? '')}
@@ -155,7 +155,7 @@ export default function Settings({
             <code>
               {install.host} · {install.scope}
             </code>
-            ). A token-cost dial — every Rule stays in force either way. Changing it rebuilds the
+            ). A token-cost dial; every Rule stays in force either way. Changing it rebuilds the
             install in place. <a href="#/docs/footprint">Learn more →</a>
           </p>
           <div className="dir-layout">
@@ -176,8 +176,8 @@ export default function Settings({
             </div>
             <span className="dir-layout-note sub" role="status" aria-live="polite">
               {footprint === 'lean'
-                ? 'Lean — terse rule lines + a pointer to the full law file (~40% smaller, lighter context per turn).'
-                : 'Full — every Rule’s complete text and rationale inlined (maximum guidance, largest context).'}
+                ? 'Lean: terse rule lines + a pointer to the full law file (~40% smaller, lighter context per turn).'
+                : 'Full: every Rule’s complete text and rationale inlined (maximum guidance, largest context).'}
             </span>
           </div>
         </div>
