@@ -404,20 +404,22 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .chip .ck { color: var(--text-3); }
 .chip .cv { color: var(--text); }
 
-/* KPI strip */
-.kpi { padding: 18px 20px; position: relative; overflow: hidden; }
-.kpi .klabel { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em;
-  text-transform: uppercase; color: var(--text-3); display: flex; align-items: center; gap: 7px; }
-.kpi .klabel::before { content: ''; width: 16px; height: 2px; background: var(--accent);
-  border-radius: 2px; }
-.kpi .kval { font-family: var(--font-display); font-weight: 500; font-size: 40px;
-  letter-spacing: -.03em; line-height: 1; margin-top: 12px; font-variant-numeric: tabular-nums; }
-.kpi .kval.zero { color: var(--text-3); }
-.kpi .kfoot { margin-top: 8px; font-size: 12.5px; color: var(--text-2); display: flex;
-  align-items: center; gap: 8px; }
+/* KPI readout band — one card, four figures on a shared baseline. The roster
+   counts link to their ledgers; local edits is the actionable one and sits
+   apart on the right with its delta. */
+.kpiband { display: flex; align-items: center; gap: 30px; padding: 16px 22px; flex-wrap: wrap; }
+.kseg { display: flex; align-items: baseline; gap: 9px; background: none; border: 0;
+  padding: 0; cursor: pointer; font: inherit; color: inherit; text-decoration: none; }
+.kseg-n { font-family: var(--font-display); font-weight: 500; font-size: 27px;
+  letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.kseg-n.zero { color: var(--text-3); }
+.kseg-l { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-3); }
+.kseg:hover .kseg-l { color: var(--accent); }
+.kseg-spacer { flex: 1; }
+.kseg.hot .kseg-n { color: var(--good); }
 .delta { font-family: var(--font-mono); font-size: 11.5px; }
 .delta.up { color: var(--good); } .delta.down { color: var(--bad); }
-.spark { position: absolute; right: 16px; bottom: 14px; width: 78px; height: 30px; opacity: .8; }
 
 /* capability genome grid */
 .genome { display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 14px; }
@@ -1711,7 +1713,7 @@ a.rail-item.active { color: var(--text); }
 
 /* All figures: lining/tabular numerals, slashed zero, so columns of digits
    align to the pixel and read like a price tape, not body copy. */
-.fl-sequencer .metric, .fl-sequencer .kpi .kval, .fl-sequencer .gcell .gcount,
+.fl-sequencer .metric, .fl-sequencer .kseg-n, .fl-sequencer .gcell .gcount,
 .fl-sequencer .tbl .num, .fl-sequencer .delta {
   font-variant-numeric: tabular-nums lining-nums slashed-zero;
   font-feature-settings: 'tnum' 1, 'lnum' 1, 'zero' 1; letter-spacing: -.01em; }
@@ -1727,12 +1729,8 @@ a.rail-item.active { color: var(--text); }
   content: ''; position: absolute; inset: 0 0 auto 0; height: 2px;
   background: var(--accent-line); border-radius: var(--r-lg) var(--r-lg) 0 0; }
 
-/* KPI value gets a "tape rule" beneath it — a crisp fine separator that snaps
-   the figure to its footer, the way a reading rules off from its label. */
-.fl-sequencer .kpi .kval { padding-bottom: 10px; margin-bottom: 6px;
-  border-bottom: 1px solid var(--line); }
-.fl-sequencer .kpi .klabel::before { width: 10px; height: 10px; border-radius: 0;
-  background: none; border: 1.5px solid var(--accent); } /* a tick-box marker, not a bar */
+/* KPI figures read like tape numerals; the shared numeric treatment above
+   already covers .kseg-n, so the band needs no extra card chrome here. */
 
 /* Primary button: solid indigo, square-ish 6px, a single inset top highlight —
    a clean physical key, no glow. Ghost/soft excluded. */
@@ -2129,12 +2127,12 @@ a.rail-item.active { color: var(--text); }
 }
 .fl-greenhouse .chip .ck { color: var(--text-3); }
 .fl-greenhouse .chip .cv { color: var(--text); font-weight: 500; }
-.fl-greenhouse .kpi {
+.fl-greenhouse .kpiband {
   border-radius: var(--r-lg);
   background: var(--surface);
   border: 1px solid var(--line);
 }
-.fl-greenhouse .kpi .kval { font-size: 42px; letter-spacing: -.02em; }
+.fl-greenhouse .kseg-n { font-size: 29px; letter-spacing: -.02em; }
 .fl-greenhouse .gcell { border-radius: var(--r-md); }
 .fl-greenhouse .gcell:hover { transform: translateY(-3px); }
 .fl-greenhouse .feed-row { padding: 13px 0; }
@@ -2197,27 +2195,20 @@ a.rail-item.active { color: var(--text); }
 }
 .fl-operator .chip .ck { color: var(--text-3); }
 .fl-operator .chip .cv { color: var(--text); }
-.fl-operator .kpi {
+.fl-operator .kpiband {
   border-radius: 0;
   border: 1px solid var(--line);
   padding: 12px 14px;
 }
-.fl-operator .kpi .klabel {
+.fl-operator .kseg-l {
   font-size: 9px;
   letter-spacing: .14em;
 }
-.fl-operator .kpi .klabel::before { display: none; }
-.fl-operator .kpi .kval {
+.fl-operator .kseg-n {
   font-family: var(--font-mono);
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 500;
   letter-spacing: -.01em;
-  margin-top: 6px;
-}
-.fl-operator .kpi .kfoot {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: .04em;
 }
 .fl-operator .gcell {
   border-radius: 0;
