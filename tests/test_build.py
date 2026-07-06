@@ -753,15 +753,12 @@ class OpencodeJsonMergeFailureTests(unittest.TestCase):
         d = Path(tempfile.mkdtemp())
         try:
             cfg = d / "opencode.json"
-            real_write_text = Path.write_text
 
-            def _boom(self, *a, **kw):
-                if self == cfg:
-                    raise OSError("Permission denied")
-                return real_write_text(self, *a, **kw)
+            def _boom(src, dst):
+                raise OSError("Permission denied")
 
             err = io.StringIO()
-            with mock.patch.object(Path, "write_text", _boom), \
+            with mock.patch.object(build.os, "replace", _boom), \
                  contextlib.redirect_stderr(err):
                 result = build._merge_opencode_json(cfg, "AGENT.md")  # must not raise
             self.assertEqual(result, cfg)

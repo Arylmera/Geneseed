@@ -503,6 +503,20 @@ def _warn_commented_jsonc(target: Path, agent_path: str, include_permission: boo
         print(f"[{prefix}] and, to enable code intelligence, a top-level \"lsp\": true")
 
 
+def _atomic_write_json(path: Path, config: dict) -> None:
+    """Write a user-owned JSON config via sibling temp file + os.replace, so a
+    crash mid-write can never leave the file half-written (same pattern as the
+    manifest write in _build_global.py). Raises OSError on failure — callers
+    already catch and warn without crashing the emit."""
+    tmp = path.with_name(path.name + ".geneseed-tmp")
+    tmp.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    try:
+        os.replace(tmp, path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def _merge_opencode_json(path: Path, agent_path: str) -> Path:
     """Ensure the OpenCode config at `path`'s location has `agent_path` in its
     `instructions` array, preserving every other key the user may have set. Resolves a
@@ -559,7 +573,7 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
         _warn_commented_jsonc(target, agent_path, add_perm, add_lsp)
         return target
     try:
-        target.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        _atomic_write_json(target, config)
     except OSError as e:
         print(f"[geneseed] WARN: could not write {target} ({e}) — the harness will NOT "
               f'auto-load until this is fixed. Add {json.dumps(agent_path)} to its '
@@ -683,7 +697,7 @@ def _merge_claude_settings(path: Path, scope: str = "global",
     else:
         config.pop("hooks", None)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_json(path, config)
     return path, managed_now
 
 
