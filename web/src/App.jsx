@@ -44,7 +44,9 @@ export default function App() {
   const [flavour, setFlavour] = useFlavour()
   const [accentMode, setAccentMode] = useAccentMode()
   const [layout, setLayout] = useLayout()
-  const [booting, setBooting] = useState(true)
+  // The splash plays on the first load of a browser session only; reloads and
+  // route round-trips within the same tab skip straight to the dashboard.
+  const [booting, setBooting] = useState(() => !window.sessionStorage.getItem('gs-booted'))
   const appRef = useRef(null)
 
   const onError = (e) =>
@@ -212,7 +214,15 @@ export default function App() {
         />
       </div>
       {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
-      {booting && <BootSplash ready={!!overview} onDone={() => setBooting(false)} />}
+      {booting && (
+        <BootSplash
+          ready={!!overview}
+          onDone={() => {
+            window.sessionStorage.setItem('gs-booted', '1')
+            setBooting(false)
+          }}
+        />
+      )}
     </div>
   )
 }

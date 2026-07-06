@@ -13,6 +13,17 @@
     "format:check": "prettier --check \"src/**/*.{js,jsx}\""
   },
   "dependencies": {
+    "@fontsource/audiowide": "^5.2.7",
+    "@fontsource/geist-mono": "^5.2.8",
+    "@fontsource/hanken-grotesk": "^5.2.8",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/ibm-plex-serif": "^5.2.7",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/oswald": "^5.2.8",
+    "@fontsource/poppins": "^5.2.7",
+    "@fontsource/space-grotesk": "^5.2.10",
+    "@fontsource/space-mono": "^5.2.9",
     "marked": "^12.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

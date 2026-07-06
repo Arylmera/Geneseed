@@ -7,7 +7,10 @@ import React, { useEffect, useState } from 'react'
 //
 // Accent inherits from `.app`'s `--accent` CSS var, so the user's selected
 // voice/flavour theme tints the ring, sprout and caret automatically.
-const MIN_DISPLAY_MS = 2800
+//
+// This is a daily local tool: the ceremony is capped so it never costs more
+// than half a second, and App skips it entirely on warm same-session loads.
+const MIN_DISPLAY_MS = 550
 
 export default function BootSplash({ ready, onDone }) {
   const [minElapsed, setMinElapsed] = useState(false)
@@ -21,6 +24,16 @@ export default function BootSplash({ ready, onDone }) {
   useEffect(() => {
     if (ready && minElapsed) setFading(true)
   }, [ready, minElapsed])
+
+  // Belt and braces: animationend is the normal dismissal, but it never fires
+  // when animations are disabled (prefers-reduced-motion) or the tab is
+  // throttled — which left the splash mounted forever. The timeout outlasts
+  // the .55s fade and guarantees dismissal either way.
+  useEffect(() => {
+    if (!fading) return
+    const t = setTimeout(() => onDone?.(), 700)
+    return () => clearTimeout(t)
+  }, [fading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAnimEnd = (e) => {
     if (e.animationName === 'splashOut') onDone?.()

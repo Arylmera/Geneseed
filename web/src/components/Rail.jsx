@@ -129,7 +129,7 @@ const NAV = [
 export default function Rail({ route, overview, onOpenVoice }) {
   return (
     <aside className="rail">
-      <div className="rail-brand" onClick={() => go('#/')} title="Dashboard">
+      <button className="rail-brand" onClick={() => go('#/')} title="Dashboard">
         <Sprout />
         <div className="brand-text">
           <span className="brand-name">
@@ -137,7 +137,7 @@ export default function Rail({ route, overview, onOpenVoice }) {
           </span>
           <span className="brand-sub">harness console</span>
         </div>
-      </div>
+      </button>
       {NAV.map((n, i) => {
         if (n.group)
           return (
@@ -153,6 +153,7 @@ export default function Rail({ route, overview, onOpenVoice }) {
               className={`rail-item ${lit ? 'active' : ''}`}
               href={n.hash}
               aria-current={lit ? 'page' : undefined}
+              title={n.label}
             >
               <Icon name={n.icon} />
               <span>{n.label}</span>
@@ -167,14 +168,14 @@ export default function Rail({ route, overview, onOpenVoice }) {
       })}
       <div className="rail-spacer" />
       <div className="rail-foot">
-        <div className="voice" onClick={onOpenVoice} title="Switch deployed voice">
+        <button className="voice" onClick={onOpenVoice} title="Switch deployed voice">
           <span className="voice-orb" />
           <div className="voice-meta">
             <div className="vk">deployed voice</div>
             <div className="vv">{overview?.theme || '—'}</div>
           </div>
           <Icon name="chevron" className="chev glyph" />
-        </div>
+        </button>
       </div>
     </aside>
   )
