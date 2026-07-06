@@ -603,7 +603,7 @@ def _claude_hook_groups(cfg: Path) -> dict:
     mem = f'--memory "{cfg / "memory"}"'
     # --root carries the install's own dir so a GLOBAL hook can stand down when a project
     # install of the same host sits at/above cwd (project-bypasses-global; see cmd_context).
-    context = f'{py} {h} context --root "{cfg}"'
+    context = f'{py} {h} context --root "{cfg}" || exit 0'
     return {
         "PreToolUse": [
             {"matcher": "Bash", "hooks": [{"type": "command", "command": f"{py} {h} git-gate"}]},
@@ -728,7 +728,10 @@ def _unwire_claude_settings(path: Path, added: list) -> bool:
             hooks.pop(event, None)
     if not hooks:
         loaded.pop("hooks", None)
-    path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
+    try:
+        _atomic_write_json(path, loaded)
+    except OSError:
+        return False
     return True
 
 
@@ -770,7 +773,13 @@ def _wire_claude_excludes(path: Path, excludes: list) -> list:
     cur.extend(added)
     config["claudeMdExcludes"] = cur
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    try:
+        _atomic_write_json(path, config)
+    except OSError as e:
+        print(f"[geneseed] WARN: could not write {path} ({e}) — claudeMdExcludes "
+              f"were not wired. Add to its \"claudeMdExcludes\" array by hand: "
+              f"{json.dumps(added)}", file=sys.stderr)
+        return []
     return added
 
 
@@ -796,7 +805,10 @@ def _unwire_claude_excludes(path: Path, excludes: list) -> None:
         loaded["claudeMdExcludes"] = cur
     else:
         loaded.pop("claudeMdExcludes", None)
-    path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
+    try:
+        _atomic_write_json(path, loaded)
+    except OSError:
+        return
 
 
 # ---- Settings integrity check -----------------------------------------------------
