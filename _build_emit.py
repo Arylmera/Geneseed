@@ -770,7 +770,13 @@ def _wire_claude_excludes(path: Path, excludes: list) -> list:
     cur.extend(added)
     config["claudeMdExcludes"] = cur
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    try:
+        _atomic_write_json(path, config)
+    except OSError as e:
+        print(f"[geneseed] WARN: could not write {path} ({e}) — claudeMdExcludes "
+              f"were not wired. Add to its \"claudeMdExcludes\" array by hand: "
+              f"{json.dumps(added)}", file=sys.stderr)
+        return []
     return added
 
 
