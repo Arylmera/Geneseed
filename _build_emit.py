@@ -603,7 +603,7 @@ def _claude_hook_groups(cfg: Path) -> dict:
     mem = f'--memory "{cfg / "memory"}"'
     # --root carries the install's own dir so a GLOBAL hook can stand down when a project
     # install of the same host sits at/above cwd (project-bypasses-global; see cmd_context).
-    context = f'{py} {h} context --root "{cfg}"'
+    context = f'{py} {h} context --root "{cfg}" || exit 0'
     return {
         "PreToolUse": [
             {"matcher": "Bash", "hooks": [{"type": "command", "command": f"{py} {h} git-gate"}]},
