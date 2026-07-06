@@ -134,7 +134,8 @@ button { font-family: inherit; }
   padding: 18px 14px; border-right: 1px solid var(--line);
   background: linear-gradient(180deg, var(--bg-2), var(--bg)); }
 .rail-brand { display: flex; align-items: center; gap: 11px; padding: 6px 10px 16px;
-  cursor: pointer; user-select: none; }
+  cursor: pointer; user-select: none;
+  background: none; border: 0; font: inherit; color: inherit; text-align: left; }
 .sprout { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 0 10px var(--accent-soft)); }
 .rail-brand:hover .sprout { transform: rotate(-7deg); }
 .sprout { transition: transform .25s ease; transform-origin: 50% 88%; }
@@ -190,7 +191,8 @@ button { font-family: inherit; }
 .rail-subitem.active .tag { color: var(--accent); }
 .rail-foot { border-top: 1px solid var(--line); padding: 12px 12px 2px; margin-top: 8px; }
 .rail-foot .voice { display: flex; align-items: center; gap: 9px; cursor: pointer;
-  padding: 8px 10px; border-radius: var(--r-sm); }
+  padding: 8px 10px; border-radius: var(--r-sm);
+  background: none; border: 0; font: inherit; color: inherit; text-align: left; width: 100%; }
 .rail-foot .voice:hover { background: var(--surface); }
 .voice-orb { width: 13px; height: 13px; border-radius: 50%; flex: none;
   background: var(--accent); box-shadow: 0 0 10px var(--accent); }
@@ -305,7 +307,7 @@ svg.glyph { width: 16px; height: 16px; flex: none; }
 .act-card:hover .act-chev { color: var(--text); transform: translateX(2px); }
 .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .card-head h3 { margin: 0; font-family: var(--font-display); font-weight: 600;
-  font-size: 15px; letter-spacing: -.01em; }
+  font-size: 16.5px; letter-spacing: -.01em; }
 .card-head .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
 .tick { font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em;
@@ -816,13 +818,13 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .app.light .atmos::after { opacity: .015; }
 .app.light .rail { background: linear-gradient(180deg, #FBFDFA, #F3F6F2); }
 .app.light .topbar { background: color-mix(in srgb, var(--bg) 82%, transparent); }
-.app.light .card { background: linear-gradient(180deg, #FFFFFF, var(--surface-2)); }
+.app.light .card { background: linear-gradient(180deg, #FBFDFC, var(--surface-2)); }
 .app.light .sprout { filter: none; }
 .app.light .console { background: linear-gradient(180deg, var(--surface), var(--bg-2)); }
 .app.light .kbd { color: var(--text-3); }
 .app.light .diff-line.add { background: color-mix(in srgb, var(--good) 13%, transparent); }
 .app.light .diff-line.del { background: color-mix(in srgb, var(--bad) 13%, transparent); }
-.app.light .sel option { background: #FFFFFF; }
+.app.light .sel option { background: #FBFDFC; }
 
 /* ============================ VOICE READOUT ========================== */
 .voice-readout { display: flex; align-items: center; gap: 10px; margin: 4px 0 16px;
@@ -1048,7 +1050,7 @@ a.rail-item.active { color: var(--text); }
 }
 .law-expand p {
   color: var(--text-2); font-size: 13.5px; line-height: 1.66;
-  margin: 6px 0 0; max-width: 88ch;
+  margin: 6px 0 0; max-width: 75ch;
 }
 .law-expand p code {
   font-family: var(--font-mono); font-size: 12.5px;
@@ -1113,7 +1115,7 @@ a.rail-item.active { color: var(--text); }
    for the inline expand row. No № column here, so pull the indent back to the
    row's own left edge instead of the law-expand's 82px. */
 .skill-expand { padding-left: 18px; }
-.skill-doc { max-width: 92ch; }
+.skill-doc { max-width: 75ch; }
 .skill-doc .markdown { color: var(--text-2); font-size: 13.5px; line-height: 1.62; }
 .skill-doc .markdown > :first-child { margin-top: 4px; }
 .skill-doc .markdown h1, .skill-doc .markdown h2, .skill-doc .markdown h3 {
@@ -1189,7 +1191,7 @@ a.rail-item.active { color: var(--text); }
 .fl-cultivar.light {
   --bg:        #EEF2F1;
   --bg-2:      #E6ECEB;
-  --surface:   #FFFFFF;
+  --surface:   #FBFDFC;
   --surface-2: #F3F6F6;
   --surface-3: #E9EFEE;
   --line:      #DDE5E4;
@@ -1260,7 +1262,7 @@ a.rail-item.active { color: var(--text); }
 .fl-greenhouse.light {
   --bg:        #F4F0E6;
   --bg-2:      #EDE8DA;
-  --surface:   #FFFFFF;
+  --surface:   #FBFDFC;
   --surface-2: #FAF7EE;
   --surface-3: #F0ECDF;
   --line:      #E5DECC;
@@ -1333,7 +1335,7 @@ a.rail-item.active { color: var(--text); }
 .fl-operator.light {
   --bg:        #ECEEF1;
   --bg-2:      #ECEEF1;
-  --surface:   #FFFFFF;
+  --surface:   #FBFDFC;
   --surface-2: #F4F6F8;
   --surface-3: #E9ECF0;
   --line:      #DCE0E5;
@@ -1378,7 +1380,7 @@ a.rail-item.active { color: var(--text); }
   --line:      #33313B;
   --line-2:    #3A3744;
   --line-3:    #45414F;
-  --text:      #FFFFFF;
+  --text:      #F4F8F6;
   --text-2:    #D4D0DC;
   --text-3:    #A8A3B0;
   --good:      #8AB89A;
@@ -1397,7 +1399,7 @@ a.rail-item.active { color: var(--text); }
 .fl-heirloom.light {
   --bg:        #F4F1F7;
   --bg-2:      #ECE8F1;
-  --surface:   #FFFFFF;
+  --surface:   #FBFDFC;
   --surface-2: #F7F4FA;
   --surface-3: #EFEAF4;
   --line:      #E2DCEC;
@@ -1478,7 +1480,7 @@ a.rail-item.active { color: var(--text); }
 .fl-matrix.light {
   --bg:        #E8F1EB;
   --bg-2:      #E8F1EB;
-  --surface:   #FFFFFF;
+  --surface:   #FBFDFC;
   --surface-2: #E9F4ED;
   --surface-3: #DCEAE0;
   --line:      #D0E2D6;
@@ -1643,7 +1645,7 @@ a.rail-item.active { color: var(--text); }
 .fl-perspective.light {
   --bg:        #EEF1F5;
   --bg-2:      #E5E9EF;
-  --surface:   #FFFFFF;
+  --surface:   #FBFDFC;
   --surface-2: #F4F6F9;
   --surface-3: #E9EDF2;
   --line:      #DEE3EA;
@@ -1735,7 +1737,7 @@ a.rail-item.active { color: var(--text); }
 .fl-sequencer.light {
   --bg:        #F6F8FB;
   --bg-2:      #EEF2F8;
-  --surface:   #FFFFFF;
+  --surface:   #FBFDFC;
   --surface-2: #F6F8FC;
   --surface-3: #EEF2F8;
   --line:      #E3E8F0;
@@ -1820,7 +1822,7 @@ a.rail-item.active { color: var(--text); }
 .fl-cobalt.light {
   --bg:        #E9F1F7;
   --bg-2:      #E9F1F7;
-  --surface:   #FFFFFF;
+  --surface:   #FBFDFC;
   --surface-2: #E5EFF6;
   --surface-3: #D7E6F1;
   --line:      #BDD6E6;
@@ -1887,7 +1889,7 @@ a.rail-item.active { color: var(--text); }
 .fl-cosmic.light {
   --bg:        #F4F0FF;
   --bg-2:      #ECE6FB;
-  --surface:   #FFFFFF;
+  --surface:   #FBFDFC;
   --surface-2: #F6F1FF;
   --surface-3: #EDE5FB;
   --line:      #E2D7F5;
@@ -1969,7 +1971,7 @@ a.rail-item.active { color: var(--text); }
 .fl-neon.light {
   --bg:        #F5F5F6;
   --bg-2:      #EFEFF1;
-  --surface:   #FFFFFF;
+  --surface:   #FBFDFC;
   --surface-2: #F4F4F6;
   --surface-3: #ECECEF;
   --line:      #E2E2E6;
@@ -2099,7 +2101,7 @@ a.rail-item.active { color: var(--text); }
 .dir-perspective .dir-thumb-bar:nth-child(3) { background: #2C3845; }
 .dir-perspective .dir-thumb-dot { background: #FF7A59; box-shadow: 0 0 8px #FF7A59; }
 
-.dir-sequencer .dir-thumb { background: #FFFFFF; border-radius: 6px; }
+.dir-sequencer .dir-thumb { background: #FBFDFC; border-radius: 6px; }
 .dir-sequencer .dir-thumb-rail { background: #F6F8FB; border-right: 1px solid #E3E8F0; }
 .dir-sequencer .dir-thumb-bar { background: #4F46E5; }
 .dir-sequencer .dir-thumb-bar:nth-child(2) { background: #D7DCE6; }
@@ -2918,7 +2920,7 @@ a.rail-item.active { color: var(--text); }
 .h-remove .hr-field { display: flex; align-items: center; gap: 6px; }
 .h-remove .hr-field > span { color: var(--text-2); font-size: 12px; white-space: nowrap; }
 .h-remove .hr-acts { display: flex; align-items: center; gap: 8px; }
-.h-remove .btn.hr-go { background: var(--bad); color: #fff; border-color: transparent; }
+.h-remove .btn.hr-go { background: var(--bad); color: #FDF6F5; border-color: transparent; }
 .h-remove .btn.hr-go:hover { filter: brightness(1.08); }
 
 /* Harness-tab section grouping: a Global tbody then a Per-project tbody, each led by an
