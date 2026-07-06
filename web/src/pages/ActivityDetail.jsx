@@ -177,7 +177,7 @@ export default function ActivityDetail({ sid }) {
         </p>
       )}
 
-      <div className="card pad-md" style={{ borderLeft: `3px solid ${st.accent}` }}>
+      <div className="card pad-md">
         <div className="row between wrap gap-12">
           <div style={{ minWidth: 0 }}>
             <h1 className="h" style={{ margin: 0 }}>

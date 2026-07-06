@@ -16,7 +16,7 @@ function SessionCard({ s }) {
   return (
     <div
       className="card pad-md act-card"
-      style={{ borderLeft: `3px solid ${st.accent}`, cursor: 'pointer' }}
+      style={{ cursor: 'pointer' }}
       onClick={open}
       role="link"
       tabIndex={0}
