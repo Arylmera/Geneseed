@@ -46,16 +46,27 @@ const NAV = [
     tag: (o) => o?.counts?.skills ?? null,
   },
   {
+    hash: '#/agents',
+    id: 'agents',
+    label: 'Agents',
+    icon: 'agent',
+    match: (r) =>
+      r.view === 'agents' ||
+      (r.view === 'section' && r.section === 'agents') ||
+      (r.view === 'item' && r.type === 'agent'),
+    tag: (o) => o?.counts?.agents ?? null,
+  },
+  {
     hash: '#/library',
     id: 'library',
     label: 'Library',
     icon: 'library',
-    // Laws and Skills own their item/section routes (matched above); the Library
-    // tab claims every other section/item so its highlight doesn't steal theirs.
+    // Laws, Skills, and Agents own their item/section routes (matched above); the
+    // Library tab claims every other section/item so its highlight doesn't steal theirs.
     match: (r) =>
       r.view === 'library' ||
-      (r.view === 'section' && r.section !== 'laws' && r.section !== 'skills') ||
-      (r.view === 'item' && r.type !== 'law' && r.type !== 'skill'),
+      (r.view === 'section' && !['laws', 'skills', 'agents'].includes(r.section)) ||
+      (r.view === 'item' && !['law', 'skill', 'agent'].includes(r.type)),
   },
   {
     hash: '#/docs',

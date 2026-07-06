@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SECTIONS, SECTION_ORDER, TYPE_TO_SECTION } from '../lib/sections.js'
+import { SECTIONS, SECTION_ORDER, LIBRARY_ORDER, TYPE_TO_SECTION } from '../lib/sections.js'
 
 describe('sections taxonomy', () => {
   it('SECTION_ORDER is the SECTIONS keys minus laws and skills (each has its own tab)', () => {
@@ -15,6 +15,13 @@ describe('sections taxonomy', () => {
     expect(SECTION_ORDER).not.toContain('laws')
     expect(SECTION_ORDER).not.toContain('skills')
     expect(SECTION_ORDER).toHaveLength(5)
+  })
+
+  it('LIBRARY_ORDER additionally drops agents (own tab), keeping the rest in order', () => {
+    // Agents got its own top-level tab (#/agents) like Laws and Skills, so the
+    // Library chip-bar drops it. SECTION_ORDER keeps it for dashboards/search.
+    expect(LIBRARY_ORDER).toEqual(SECTION_ORDER.filter((k) => k !== 'agents'))
+    expect(LIBRARY_ORDER).not.toContain('agents')
   })
 
   it('every section carries a full set of display metadata', () => {

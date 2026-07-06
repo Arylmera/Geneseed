@@ -25,8 +25,19 @@ describe('Rail navigation', () => {
   })
 
   it('keeps Library lit on an item-detail route', () => {
-    render(<Rail route={{ view: 'item', type: 'agent', name: 'advocate' }} overview={overview} />)
+    render(<Rail route={{ view: 'item', type: 'memory', name: 'some-fact' }} overview={overview} />)
     expect(screen.getByText('Library').closest('a').className).toContain('active')
+  })
+
+  it('exposes Agents as its own rail entry and claims agent item routes', () => {
+    render(<Rail route={{ view: 'item', type: 'agent', name: 'advocate' }} overview={overview} />)
+    const agentsLink = screen.getByText('Agents').closest('a')
+    expect(agentsLink.getAttribute('href')).toBe('#/agents')
+    expect(agentsLink.className).toContain('active')
+    // Library must NOT also light up for agent items anymore
+    expect(screen.getByText('Library').closest('a').className).not.toContain('active')
+    // count badge sourced from overview.counts.agents
+    expect(agentsLink.textContent).toContain('16')
   })
 
   it('exposes Laws as its own rail entry between Dashboard and Library', () => {
