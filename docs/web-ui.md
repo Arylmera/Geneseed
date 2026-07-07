@@ -50,7 +50,7 @@ The left rail mirrors the harness's own shape:
 
 | Group | Views |
 | --- | --- |
-| **🧬 Harness** | Dashboard · Library · Graph |
+| **🧬 Harness** | Dashboard · Rules · Library · Graph |
 | **📚 Learn** | Docs · Specs |
 | **🔧 Maintain** | Changes · Doctor |
 | **🎨 Configure** | Themes · Settings |
@@ -69,10 +69,20 @@ streams the output of background jobs and keeps their history across reloads.
   (readiness ring, KPI counts of agents/skills/laws/memory, a genome grid, recent
   activity), **Lineage** (a mini cross-link graph), and **Operator** (a searchable table
   of every deployed capability). Headlines reflect the active theme's voice.
+- **Rules** (`#/rules`) — your own standing rules, read from and written to the
+  `user-rules.md` beside the deployed AGENT.md (the seed-once file no update ever
+  touches). List with scope (user/project) and trial chips, add/edit/retire forms, a
+  **Graduate** action that adopts a trial rule for good, and a budget meter that turns
+  amber as the always-loaded set gets heavy. Every write carries the fingerprint of the
+  content the page last read — if an agent session edited the file meanwhile, the save
+  409s and the page reloads instead of clobbering it.
 - **Library** (`#/library`) — browse the harness content: **Laws · Agents · Skills ·
   Memory · Notebook** (plus Wiki/Config). Drill into a section, then an item, to read its
   rendered markdown body and follow its cross-links. On a memory fact, a **Forget this
-  fact** control deletes it (token-gated; bare-slug guarded server-side).
+  fact** control deletes it (token-gated; bare-slug guarded server-side), and a
+  **Promote to rule** control turns a recurring lesson into a trial rule in
+  `user-rules.md` — provenance recorded, the source fact deleted so it isn't loaded
+  twice — landing you on the Rules page.
 - **Graph** (`#/graph`) — the full cross-link constellation across the whole harness:
   every `[[wikilink]]` between agents/skills plus every `Rule N` mention that lands on a
   real law. Hover to isolate a neighbourhood, scroll to zoom, drag to pan, search to

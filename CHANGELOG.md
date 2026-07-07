@@ -8,6 +8,30 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **User rules — `user-rules.md`**: a seed-once file beside AGENT.md for the user's
+  own standing rules, obeyed with the same force as the laws (they may tighten a
+  law, never repeal one). Same host-state contract as `context.json`: every emit
+  seeds it once, never overwrites it, never records it in an owned manifest — so
+  user governance survives updates, reinstalls, and theme switches; unlike
+  `context.json` it is committable, so project rules can travel with a repo and
+  bind the team. Named `user-rules.md` (not `rules.md`) because the neutral theme
+  renders the laws themselves as "Rules". The context plugin and Claude hook
+  eager-load it in discovery mode. A new **rule skill** drafts and triages rules
+  (rule vs memory vs `context.json` vs already-covered), refuses law conflicts,
+  promotes recurring feedback memories into trial rules with consent, and runs
+  the review flow (graduate / demote / delete). Memory and notebook READMEs now
+  route "share with the team" there instead of the regenerated laws.
+- **Web console Rules page** (`#/rules`, right under Laws in the rail): list your
+  rules with scope and trial chips, add/edit/retire them, graduate a trial rule,
+  and watch a budget meter that turns amber as the always-loaded set grows. A
+  **Promote to rule** control on memory facts turns a recurring lesson into a
+  trial rule with provenance and deletes the source fact. Backed by
+  `GET/POST /api/rules` + `/api/rules/promote` (token-gated); every write carries
+  a content fingerprint and 409s when an agent session edited the file
+  concurrently, and mutations splice one rule's block — the rest of the user's
+  file is never regenerated.
+
 ### Fixed
 - **Claude/Bob emits no longer ship dead skill-table links**: CLAUDE.md/AGENTS.md's
   per-row skill/agent links (e.g. `.claude/skills/council.md`) were dead — the

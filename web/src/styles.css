@@ -2940,3 +2940,70 @@ a.rail-item.active { color: var(--text); }
 .harness-tbl tbody tr.h-group:hover,
 .harness-tbl tbody tr.h-empty-row:hover { background: none; }
 .harness-tbl .h-empty { color: var(--text-3); padding: 6px 0 16px; border: 0; font-size: 13px; }
+
+/* ============================ RULES (user-rules.md) ============================ */
+/* The user's standing rules page. Rows echo .law-row's rhythm (Rules sits right
+   under Laws in the rail) but stay their own classes: this list is editable and
+   chip-driven, not a fixed four-column ledger. */
+.rules-list { overflow: hidden; }
+.rule-row { border-bottom: 1px solid var(--line); }
+.rule-row:last-child { border-bottom: 0; }
+.rule-head {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 13px 18px; border: 0; background: transparent; cursor: pointer;
+  font: inherit; color: var(--text); transition: background .1s;
+}
+.rule-head:hover { background: var(--surface-2); }
+.rule-row.on .rule-head { background: var(--accent-soft); }
+.rule-no {
+  font-family: var(--font-mono); font-size: 13px; color: var(--accent);
+  font-variant-numeric: tabular-nums; min-width: 34px;
+}
+.rule-title {
+  font-family: var(--font-display); font-weight: 600; font-size: 15px;
+  letter-spacing: -.01em; flex: 1;
+}
+.rule-chip {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-3);
+  border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 9px;
+}
+.rule-chip.user { color: var(--accent); border-color: var(--accent-line); }
+.rule-chip.trial { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.rule-chip.trial.overdue { color: var(--bg); background: var(--warn); border-color: var(--warn); }
+.rule-expand {
+  padding: 2px 18px 18px 64px;
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.rule-expand p { color: var(--text-2); font-size: 13.5px; line-height: 1.66; white-space: pre-wrap; }
+.rule-src { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); margin-top: 8px; }
+.rule-notice { color: var(--warn); margin: 0 0 12px; }
+
+/* budget meter — count/token pressure on the always-loaded rule set */
+.rules-meter { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.rules-meter-bar {
+  flex: 0 0 180px; height: 6px; border-radius: 999px;
+  background: var(--surface-3); border: 1px solid var(--line); overflow: hidden;
+}
+.rules-meter-fill { height: 100%; background: var(--accent); transition: width .2s; }
+.rules-meter.warn .rules-meter-fill { background: var(--warn); }
+.rules-meter.over .rules-meter-fill { background: oklch(0.62 0.19 25); }
+.rules-meter-label { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); }
+.rules-meter.warn .rules-meter-label { color: var(--warn); }
+.rules-meter.over .rules-meter-label { color: oklch(0.62 0.19 25); }
+
+/* add/edit form */
+.rule-form { display: flex; flex-direction: column; gap: 10px; }
+.rule-form .lib-filter { width: 100%; }
+.rule-body-input {
+  width: 100%; resize: vertical; background: var(--surface); color: var(--text);
+  border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: 10px 12px;
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6;
+}
+.rule-body-input:focus { outline: none; border-color: var(--accent-line); }
+.rule-trial-label {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.rule-date { width: 150px; }
