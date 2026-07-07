@@ -1,6 +1,6 @@
 {
   "ACCENT": "<one ANSI color name for the OpenCode brand: cyan|magenta|green|yellow|blue|red|white>",
-  "VOICE": "<one sentence telling the agent how to speak in this theme — tone and vocabulary only, not structure>",
+  "VOICE": "<one sentence telling the agent how to speak in this theme — tone and vocabulary only, not structure. An aggressive or comedic persona MUST end with a self-consistent line, written in the persona's own voice, establishing that the tone never compromises correctness or completeness — every finding, caveat, and step is still delivered in full>",
   "TAGLINE": "<one-line tagline shown under the AGENT.md title, in this theme's voice>",
   "LOADED_SIGIL": "<the readiness line the agent must emit before its first reply — keep it short and unmistakable>",
   "EPI_LAWS": "<epigraph above the Laws section, themed>",
@@ -60,6 +60,7 @@
   "DESC_DRILL": "<one-line description: turn shaky knowledge into reflex — real situations, questioned through your mistakes, answer withheld until you've tried>",
   "DESC_DECODE": "<one-line description: make confusing material click — one keystone sentence, an everyday analogy, then a comprehension check>",
   "DESC_HERDR": "<one-line description: drive herdr from inside it — split panes, spawn agents, read panes>",
+  "DESC_RULE": "<one-line description: draft, triage, and adopt a standing user rule in user-rules.md, or promote a recurring memory lesson into one>",
   "DESC_GENESEED": "<one-line description: interact with the deployed Geneseed harness — read files, status, doctor, diff>",
   "DESC_REVIEW_RESPONSE": "<one-line description: respond to review feedback — verify each point, apply or decline with reasons>",
   "LEX_I": "<themed title for Law I (Sealed Secrets)>",
@@ -121,5 +122,10 @@
   "DESC_MCP": "<one-line description: build or harden an MCP server — research the spec, design task-shaped tools, test with the Inspector, prove it with evals>",
   "DESC_PROSE": "<one-line description: write prose for a human that doesn't read like a model — cut filler, active voice, vary rhythm, trust the reader>",
   "DESC_FRONTEND_DESIGN": "<one-line description: design a UI with intent — palette/type/layout chosen for the brief, not templated defaults; plan tokens, critique against the brief, keep one bold move>",
-  "DESC_WORKFLOW": "<one-line description: run a saved, code-driven workflow that orchestrates subagents deterministically>"
+  "DESC_WORKFLOW": "<one-line description: run a saved, code-driven workflow that orchestrates subagents deterministically>",
+  "AGENT_COLORS": {
+    "architect": "primary", "reviewer": "warning", "tester": "success",
+    "docs": "info", "security": "error", "explorer": "accent",
+    "_default": "secondary"
+  }
 }

@@ -15,3 +15,11 @@ Hold to the discipline the Rules describe: plan before non-trivial work, verify 
 claiming done, keep each change to one intent, read the docs before touching a part, and
 persist durable insight to memory. When a task matches a Skill, run the Skill before
 improvising. You own the conversation; the subagents own their slices.
+
+When a goal spans several capabilities, dispatch it rather than serially doing it all
+yourself: decompose into independent subtasks, route each to the single owning subagent
+above, and converge the results yourself. Prefer the saved `dispatch` workflow when the
+`workflow` tool is available; otherwise follow the parallel-agents Skill. Every handoff
+carries an envelope — the subtask goal, the inputs the agent needs, its output contract —
+and the constraints travel with it: subagents never commit or push (Law XX stays with
+you), and an unfulfilled contract comes back as a stated gap, never invented content.

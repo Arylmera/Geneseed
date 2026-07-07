@@ -6,6 +6,17 @@ from __future__ import annotations
 from _web_core import *  # noqa: F401,F403  shared stdlib + primitives
 
 
+def _local_host(host: "str | None") -> bool:
+    """DNS-rebinding guard. The daemon binds 127.0.0.1, but a malicious page can
+    point its own hostname at 127.0.0.1 and become same-origin with us — then read
+    the CSRF token out of index.html and drive the mutating API. A loopback-only
+    Host header is the one thing such a page cannot forge."""
+    h = (host or "").strip().lower()
+    if h.startswith("[::1]"):
+        return True
+    return h.split(":", 1)[0] in ("127.0.0.1", "localhost")
+
+
 def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder: "dict | None" = None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):  # silence default stderr logging
@@ -36,6 +47,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
 
         # ---- GET ---------------------------------------------------------
         def do_GET(self):
+            if not _local_host(self.headers.get("Host")):
+                return self._send_json({"error": "forbidden host"}, 403)
             path = self.path.split("?", 1)[0]
             try:
                 if path == "/api/ping":
@@ -51,9 +64,11 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                 if path.startswith("/api/catalog/"):
                     return self._send_json(api_catalog(state, path.rsplit("/", 1)[1]))
                 if path.startswith("/api/item/"):
-                    _, _, _, type_, name = path.split("/", 4)
+                    parts = path.split("/", 4)          # /api/item/<type>/<name>
+                    if len(parts) < 5 or not parts[4]:  # missing name → 404, not a 500
+                        raise NotFound(path)
                     return self._send_json(
-                        api_item(state, type_, urllib.parse.unquote(name)))
+                        api_item(state, parts[3], urllib.parse.unquote(parts[4])))
                 if path == "/api/themes":
                     return self._send_json(api_themes(state))
                 if path == "/api/setup":
@@ -66,6 +81,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     return self._send_json(api_mcp(state))
                 if path == "/api/installs":
                     return self._send_json(api_installs(state))
+                if path == "/api/rules":
+                    return self._send_json(api_rules(state))
                 if path == "/api/diff":
                     return self._send_json(api_diff(state))
                 if path == "/api/docs":
@@ -102,6 +119,18 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
 
         # ---- POST --------------------------------------------------------
         def do_POST(self):
+            # Same top-level guard as do_GET: an unexpected raise must yield a
+            # JSON 500, not a dropped connection the UI waits on forever.
+            try:
+                return self._post_routes()
+            except NotFound as e:
+                return self._send_json({"error": f"not found: {e}"}, 404)
+            except Exception as e:  # noqa: BLE001
+                return self._send_json({"error": str(e)}, 500)
+
+        def _post_routes(self):
+            if not _local_host(self.headers.get("Host")):
+                return self._send_json({"error": "forbidden host"}, 403)
             path = self.path.split("?", 1)[0]
             if self.headers.get("X-Geneseed-Token") != token:
                 return self._send_json({"error": "forbidden"}, 403)
@@ -150,6 +179,20 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                         api_memory_delete(state, (self._read_json_body().get("name") or "")))
                 except NotFound as e:
                     return self._send_json({"error": f"not found: {e}"}, 404)
+            if path == "/api/rules":
+                # add/update/delete on user-rules.md; ok=False means the client's
+                # fingerprint is stale (a concurrent edit) — 409, never clobber.
+                try:
+                    res = api_rules_mutate(state, self._read_json_body())
+                except NotFound as e:
+                    return self._send_json({"error": f"not found: {e}"}, 404)
+                return self._send_json(res, 200 if res.get("ok") else 409)
+            if path == "/api/rules/promote":
+                try:
+                    res = api_rules_promote(state, self._read_json_body())
+                except NotFound as e:
+                    return self._send_json({"error": f"not found: {e}"}, 404)
+                return self._send_json(res, 200 if res.get("ok") else 409)
             if path.startswith("/api/jobs/") and path.endswith("/cancel"):
                 jid = path.split("/")[3]
                 if jm.cancel(jid):
@@ -173,7 +216,7 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                         return self._send_json({"error": f"not found: {e}"}, 404)
                     if "error" in plan:
                         return self._send_json(plan, 409)
-                    jid = jm.start("install", plan["cmd"], on_done=state.refresh)
+                    jid = jm.start("install", plan["cmd"], on_done=lambda rc: state.refresh())
                     if jid is None:
                         return self._send_json({"error": "busy"}, 409)
                     return self._send_json({"job_id": jid}, 202)
@@ -184,7 +227,7 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     plan = api_deploy_cmd(state, body)
                     if "error" in plan:
                         return self._send_json(plan, 400)
-                    jid = jm.start("deploy", plan["cmd"], on_done=state.refresh)
+                    jid = jm.start("deploy", plan["cmd"], on_done=lambda rc: state.refresh())
                     if jid is None:
                         return self._send_json({"error": "busy"}, 409)
                     return self._send_json({"job_id": jid}, 202)
@@ -198,7 +241,17 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                         return self._send_json(
                             {"precondition": pre.code, "kind": pre.kind,
                              "message": pre.message}, 422)
-                    jid = jm.start("update", *action_commands("update"), on_done=state.refresh)
+                    # The upgrade child skips its own daemon bounce when spawned by
+                    # us (GENESEED_WEB_JOB) — so restart HERE, after the job is
+                    # saved as finished, to pick up the new rituals/* + web/dist.
+                    def _after_update(rc):
+                        state.refresh()
+                        # A FAILED update changed nothing worth reloading — bouncing
+                        # the daemon would only disconnect the PWA for no reason.
+                        if rc == 0:
+                            request_restart(state.theme)
+                    jid = jm.start("update", *action_commands("update"),
+                                   on_done=_after_update)
                     if jid is None:
                         return self._send_json({"error": "busy"}, 409)
                     return self._send_json({"job_id": jid}, 202)
@@ -216,7 +269,7 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     return self._send_json({"error": f"unknown action {action}"}, 404)
                 # Refresh when the job FINISHES — a Build may re-theme the
                 # install, and the re-detect must read the new marker.
-                jid = jm.start(action, *cmds, on_done=state.refresh)
+                jid = jm.start(action, *cmds, on_done=lambda rc: state.refresh())
                 if jid is None:
                     return self._send_json({"error": "busy"}, 409)
                 return self._send_json({"job_id": jid}, 202)
@@ -272,7 +325,11 @@ def read_daemon(target: Path) -> "dict | None":
 def write_daemon(target: Path, data: dict) -> None:
     try:
         target.mkdir(parents=True, exist_ok=True)
-        _state_path(target).write_text(json.dumps(data), encoding="utf-8")
+        p = _state_path(target)
+        p.write_text(json.dumps(data), encoding="utf-8")
+        # The state file carries the API token — keep it owner-only on
+        # multi-user hosts (no-op on Windows, where chmod only maps read-only).
+        os.chmod(p, 0o600)
     except OSError:
         pass
 
@@ -532,6 +589,15 @@ def serve(theme: str | None = None, port: int = 4747, open_browser: bool = True,
     except KeyboardInterrupt:
         print("\n[web] stopped.")
     finally:
+        # Release the LISTEN socket NOW: restart_daemon polls the port to know
+        # when it can re-bind, and without this the socket lives until process
+        # exit — the new daemon hits EADDRINUSE and falls back to a random port
+        # the open PWA never finds.
+        srv.server_close()
         if daemon:
-            clear_daemon(state.target)
+            # Only clear our OWN record — during a restart handoff the new
+            # daemon may have already written its state over ours.
+            st = read_daemon(state.target)
+            if not st or st.get("pid") == os.getpid():
+                clear_daemon(state.target)
     return 0

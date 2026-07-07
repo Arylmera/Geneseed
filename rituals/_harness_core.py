@@ -85,6 +85,25 @@ def _load_learn_prompt_head() -> str:
 LEARN_PROMPT_HEAD = _load_learn_prompt_head()
 
 
+def _load_agent_lesson_prompt() -> str:
+    """Twin of _load_learn_prompt_head for the per-agent lesson prompt. Same single
+    source (the OpenCode plugin's AGENT_LESSON_PROMPT literal), so the Python
+    SubagentStop path and the JS child-session path can never drift."""
+    js = build.PLUGIN_SRC / "geneseed-learn.js"
+    try:
+        m = re.search(r"const AGENT_LESSON_PROMPT = `([\s\S]*?)`",
+                      js.read_text(encoding="utf-8"))
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    return ("Output AT MOST ONE line: a durable lesson about how this agent should "
+            "operate on a future dispatch. Else output exactly: NOTHING.")
+
+
+AGENT_LESSON_PROMPT = _load_agent_lesson_prompt()
+
+
 # Windows spawns a visible console window for every child console process started
 # from a console-less parent (the detached web server). CREATE_NO_WINDOW suppresses
 # that window while still allowing piped stdout/stderr; on POSIX it is an empty dict.
@@ -119,4 +138,5 @@ __all__ = [
     'tempfile', 'Path', 'build', 'ROOT', 'BUILD', 'TOKEN_RE',
     'LINK_RE', 'ABS_LINK_RE', 'FENCE_RE', 'INLINE_CODE_RE', 'COMMENT_RE', 'MAX_NOTES_CHARS',
     'LEARN_PROMPT_HEAD', 'strip_code', '_load_learn_prompt_head', 'run', '_within',
+    'AGENT_LESSON_PROMPT', '_load_agent_lesson_prompt',
 ]

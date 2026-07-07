@@ -60,6 +60,7 @@
   "DESC_DRILL": "Turn shaky knowledge into reflex — dropped into real situations and questioned through your mistakes, the answer withheld until you've tried.",
   "DESC_DECODE": "Make confusing material click — the one keystone sentence first, an everyday analogy, then a comprehension check before moving on.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_RULE": "Draft, triage, and adopt a standing user rule in user-rules.md — route what isn't a rule to memory or context.json, and promote recurring memory lessons with consent.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Respond to review feedback with rigour — verify each point, then apply it or decline it with reasons.",
   "LEX_I": "Sealed Secrets",
@@ -121,5 +122,6 @@
   "DESC_MCP": "Build or harden a Model Context Protocol server — research the spec, design task-shaped tools, test with the Inspector, and prove it with evaluations.",
   "DESC_PROSE": "Write prose for a human that doesn't read like a model — cut filler, use active voice, vary rhythm, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — choose palette, type, and layout for this brief, not the templated defaults, then critique and cut to one bold move.",
-  "DESC_WORKFLOW": "Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass."
+  "DESC_WORKFLOW": "Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

@@ -10,7 +10,8 @@ def api_overview(state: WebState) -> dict:
     inv = state.inventory
     diff = None
     if _deployed(state):
-        _t, _th, files = harness._diff_collect(target=state.target, theme=state.theme)
+        _t, _th, files = harness._diff_collect(target=state.target, theme=state.theme,
+                                               emit=state.emit)
         if files is not None:
             diff = {
                 "edited": sum(1 for f in files if f["status"] == "edited"),
@@ -25,13 +26,14 @@ def api_overview(state: WebState) -> dict:
             agent_md.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
     # Identify which detected install the current view points at, so the dashboard's
     # footprint hero can re-emit exactly it (host/scope/path) and read its footprint
-    # from the install root. Mirrors _web_actions._view_cfg's rule: a project claude/bob
-    # install keeps its data under the marker dir; everything else sits at the root.
+    # from the install root. Mirrors _web_actions._view_cfg's rule: a project
+    # claude/bob/copilot install keeps its data under the marker dir; everything else
+    # sits at the root.
     cur = state.target.resolve()
     install = None
     for host, scope, root in harness._install_targets():
         data = (root / build.HOSTS[host]["project_marker"]
-                if scope == "project" and host in ("claude", "bob") else root)
+                if scope == "project" and host in ("claude", "bob", "copilot") else root)
         try:
             if data.resolve() == cur:
                 install = {"host": host, "scope": scope, "path": str(root),

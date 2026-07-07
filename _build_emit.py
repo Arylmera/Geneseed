@@ -36,10 +36,52 @@ def _strip_skill_body_links(body: str) -> str:
 # (primary/secondary/accent/success/warning/error/info) — NOT raw colour names — so the
 # colour tracks whatever theme the host has active and stays portable. Council seats and
 # any unlisted agent fall to 'secondary'. Cosmetic only (the agent switcher / subagent UI).
+#
+# The canonical mapping now lives in themes/_TEMPLATE.json's AGENT_COLORS key (propagated
+# to every shipped theme by `build.py --sync-themes`), so a theme can restyle its own
+# agent-color grouping. This module-level dict is ONLY the fallback used when a theme
+# is somehow missing the key (defensive — the parity gate guarantees every shipped theme
+# carries it, but a hand-authored or third-party theme file might not).
 AGENT_COLORS = {
     "architect": "primary", "reviewer": "warning", "tester": "success",
     "docs": "info", "security": "error", "explorer": "accent",
+    "_default": "secondary",
 }
+
+# OpenCode's accepted NAMED theme slots for an agent `color:` — mirrors the slot set
+# _theme_json/_SLOT_ROLE fill for a full OpenCode theme. Any AGENT_COLORS value outside
+# this set is invalid frontmatter and must never be emitted as-is.
+_VALID_AGENT_COLOR_SLOTS = {"primary", "secondary", "accent", "success", "warning", "error", "info"}
+
+
+def _agent_color_map(theme: dict | None) -> dict:
+    """The effective agent-color map: the theme's own AGENT_COLORS when present and a
+    dict, else the module fallback above. Every value is validated against OpenCode's
+    named slot set — an unknown value warns and falls back to 'secondary' rather than
+    ever reaching an emitted file."""
+    raw = None
+    if isinstance(theme, dict):
+        raw = theme.get("AGENT_COLORS")
+    if not isinstance(raw, dict):
+        raw = AGENT_COLORS
+    cleaned = {}
+    for k, v in raw.items():
+        if v in _VALID_AGENT_COLOR_SLOTS:
+            cleaned[k] = v
+        else:
+            print(f"[geneseed] WARN: AGENT_COLORS[{k!r}] = {v!r} is not a valid OpenCode "
+                  f"theme slot ({', '.join(sorted(_VALID_AGENT_COLOR_SLOTS))}) — falling "
+                  f"back to 'secondary'", file=sys.stderr)
+            cleaned[k] = "secondary"
+    cleaned.setdefault("_default", "secondary")
+    return cleaned
+
+
+def _agent_color(stem: str, theme: dict | None) -> str:
+    """The display colour for agent `stem` under the effective theme, via
+    `_agent_color_map` (validated, always a valid OpenCode slot)."""
+    colors = _agent_color_map(theme)
+    return colors.get(stem, colors["_default"])
 
 # ANSI colour-name -> integer (0-7), the universally-rendered terminal colours. Used to
 # tint an emitted OpenCode theme from a Geneseed theme's single ACCENT token.
@@ -137,30 +179,6 @@ def color_theme_files() -> list[Path]:
     return sorted(p for p in COLOR_THEMES.glob("*.json") if not p.name.startswith("_"))
 
 
-def _snapshot_user_themes(themes_dir: Path) -> dict[str, bytes]:
-    """Capture EVERY theme file (name->bytes) before the full `.opencode` wipe. After the
-    emit re-creates the shipped themes, _restore_user_themes rewrites only the ones that
-    were NOT regenerated — i.e. the user's own themes — so a rebuild never erases them,
-    whether or not they carry the `geneseed-` prefix (spec §8.2). Ownership is thus the
-    set of files this emit writes, not the filename prefix.
-    # ponytail: a shipped theme whose source palette was deleted would be resurrected here
-    # rather than dropped. Only bites a maintainer editing themes/opencode/, who rebuilds
-    # and sees it — switch to a manifest/emit-set diff if that ever matters."""
-    if not themes_dir.is_dir():
-        return {}
-    return {p.name: p.read_bytes() for p in themes_dir.glob("*.json")}
-
-
-def _restore_user_themes(themes_dir: Path, saved: dict[str, bytes]) -> None:
-    """Re-write captured themes the new emit did NOT regenerate — that leaves exactly the
-    user's own themes, since every shipped theme was just recreated and so already exists."""
-    themes_dir.mkdir(parents=True, exist_ok=True)
-    for name, data in saved.items():
-        dest = themes_dir / name
-        if not dest.exists():
-            dest.write_bytes(data)
-
-
 def _write_color_themes(themes_dir: Path) -> list[Path]:
     """Emit every curated colour theme in both flavours: geneseed-<name>-solid.json and
     geneseed-<name>-transparent.json (select with `/theme geneseed-<name>-solid`). Returns
@@ -190,14 +208,41 @@ def _claude_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[str
     if ov.get("model"):
         fm.append(f"model: {ov['model']}")
     if _is_readonly(text):
-        denied = ["Write", "Edit", "WebFetch"]
+        denied = ["Write", "Edit", "NotebookEdit", "WebFetch"]
         if "<!-- bash: allow -->" not in text:
             denied.append("Bash")
         fm.append("disallowedTools: " + ", ".join(denied))
     return fm
 
 
-def _opencode_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[str]:
+# Sibling-agent links inside an agent spec (`](skeptic.md)` — a bare same-dir
+# filename, never a path). The Copilot dialect renames every agent file to
+# `<name>.agent.md`, so these links must be rewritten with it or they die.
+_SIBLING_AGENT_LINK_RE = re.compile(r"\]\(([A-Za-z0-9_-]+)\.md\)")
+
+
+def _copilot_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[str]:
+    """GitHub Copilot custom-agent frontmatter (repo .github/agents/<name>.agent.md or
+    personal ~/.copilot/agents/). `name` is optional but kept for parity with the other
+    dialects; `description` is the one required key. Copilot's `tools:` is an ALLOWLIST
+    (unset = every tool), so a read-only agent lists the built-in tool ids it may keep —
+    docs.github.com/copilot/reference/custom-agents-configuration — instead of Claude's
+    denylist: `edit`, `web` and (without the `<!-- bash: allow -->` opt-in) `execute`
+    are simply not granted. Only a `model:` override carries over."""
+    fm = [f"name: {stem}", f"description: {json.dumps(desc_of(text))}"]
+    ov = overrides.get(stem) or {}
+    if ov.get("model"):
+        fm.append(f"model: {ov['model']}")
+    if _is_readonly(text):
+        allowed = ["read", "search", "todo", "agent"]
+        if "<!-- bash: allow -->" in text:
+            allowed.append("execute")
+        fm.append("tools: [" + ", ".join(allowed) + "]")
+    return fm
+
+
+def _opencode_agent_frontmatter(stem: str, text: str, overrides: dict,
+                                theme: dict | None = None) -> list[str]:
     """OpenCode subagent frontmatter: description, mode: subagent, a NAMED theme-slot
     colour, optional per-agent overrides, and (for read-only agents) the permission
     deny-tree. Factored out of _write_native_layer so the Claude dialect is a sibling."""
@@ -205,8 +250,10 @@ def _opencode_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[s
     # Per-agent display colour — one of OpenCode's NAMED theme slots (never a raw
     # hex/ANSI name), so it follows whatever theme the host has active and stays
     # portable. Capability roles get distinct semantic slots; everything else (the
-    # council seats) shares 'secondary'. Cosmetic only.
-    fm.append(f"color: {AGENT_COLORS.get(stem, 'secondary')}")
+    # council seats) shares 'secondary'. Cosmetic only. Sourced from the effective
+    # theme's AGENT_COLORS (themes/_TEMPLATE.json), so a theme can restyle its own
+    # agent-color grouping; see _agent_color_map for the fallback + validation.
+    fm.append(f"color: {_agent_color(stem, theme)}")
     # Per-agent overrides (O2): emit model/temperature/variant/steps ONLY when
     # configured; with no override the line is omitted so the agent inherits the
     # host's current model as-is. Empty agent-overrides.json => zero change.
@@ -242,13 +289,16 @@ def desc_of(text: str) -> str:
 
 def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=None,
                         host: str = "opencode", old_owned=None,
-                        cfg: Path | None = None) -> tuple[int, int, list[Path]]:
+                        cfg: Path | None = None,
+                        manifest_existed: bool = True,
+                        theme: dict | None = None) -> tuple[int, int, list[Path]]:
     """Render capability agents and skills into host-native files.
 
     - Agents -> `<agents_dir>/<name>.md`. `host` selects the frontmatter dialect:
-      'opencode' (description, mode: subagent, color, permission deny-tree) or
-      'claude' (name, description, disallowedTools denylist). See the two
-      `_*_agent_frontmatter` builders.
+      'opencode' (description, mode: subagent, color, permission deny-tree),
+      'claude' (name, description, disallowedTools denylist) or 'copilot'
+      (name, description, tools allowlist — and a `.agent.md` filename, Copilot's
+      custom-agent extension). See the three `_*_agent_frontmatter` builders.
     - Skills -> `<skills_dir>/<name>/SKILL.md`. BYTE-IDENTICAL across hosts: name +
       description, body link-stripped. Model-invoked via the `skill` tool, NOT slash
       commands. See adapters/opencode/GLOBAL-HARNESS-SPEC.md §9.1.
@@ -259,16 +309,31 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
     so a re-emit never clobbers a same-named user agent/skill and uninstall never
     deletes it. With `old_owned`/`cfg` omitted (the per-repo and portable bundle emits,
     which write into a dir they fully own) every file is written unconditionally.
+    `manifest_existed=False` (only ever passed when the caller found no prior manifest
+    on disk at all, i.e. a legacy manifest-less install) prints ONE header line before
+    the first skip, so the wall of "kept your existing ..." lines isn't presented with
+    no context — the reader learns up front why files it never touched are suddenly
+    being called "yours".
 
     Keys off the SOURCE folder name (always neutral) so a theme can rename the
     rendered bundle dirs without moving the host's fixed `agents/`/`skills/`.
+
+    `theme` is the effective theme dict (from `render_all`/`effective_theme`) — passed
+    through to the OpenCode frontmatter builder so each agent's display `color:` comes
+    from the theme's own AGENT_COLORS (see `_agent_color_map`). Omitted (None) falls
+    back to the module-level AGENT_COLORS default; only ever relevant for a caller
+    that hasn't threaded a theme through (there is none left in-tree, but this keeps
+    the function safely callable standalone, e.g. from a test).
+
     Returns (n_agents, n_skills, written_paths)."""
     overrides = overrides or {}
     old_set = set(old_owned) if old_owned is not None else None
     n_agents = n_skills = 0
     written: list[Path] = []
+    header_printed = False
 
     def _claim(dest: Path) -> bool:
+        nonlocal header_printed
         # True -> ok to (over)write; False -> a pre-existing file we never owned, so it
         # is the user's: leave it, warn, and keep it out of the manifest.
         if old_set is None or cfg is None or not dest.exists():
@@ -276,6 +341,10 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
         rel = dest.relative_to(cfg).as_posix()
         if rel in old_set:
             return True
+        if not manifest_existed and not header_printed:
+            print("[geneseed] first emit over a pre-manifest install — existing files "
+                  "are treated as yours", file=sys.stderr)
+            header_printed = True
         print(f"[geneseed] kept your existing {rel} — skipped Geneseed's copy to avoid "
               f"clobbering it", file=sys.stderr)
         return False
@@ -322,9 +391,16 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
         stem = fname[:-3]
         body = text.lstrip("\n")
         if folder == "agents":
-            fm = (_claude_agent_frontmatter(stem, text, overrides) if host == "claude"
-                  else _opencode_agent_frontmatter(stem, text, overrides))
-            dest = agents_dir / f"{stem}.md"
+            if host == "claude":
+                fm = _claude_agent_frontmatter(stem, text, overrides)
+                dest = agents_dir / f"{stem}.md"
+            elif host == "copilot":
+                fm = _copilot_agent_frontmatter(stem, text, overrides)
+                dest = agents_dir / f"{stem}.agent.md"
+                body = _SIBLING_AGENT_LINK_RE.sub(r"](\1.agent.md)", body)
+            else:
+                fm = _opencode_agent_frontmatter(stem, text, overrides, theme)
+                dest = agents_dir / f"{stem}.md"
             kind = "agent"
         elif folder == "skills":
             fm = [f"name: {stem}", f"description: {json.dumps(desc_of(text))}"]
@@ -439,7 +515,10 @@ def _read_jsonc(text: str) -> "tuple[object, bool]":
     try:
         return json.loads(stripped), had_comments
     except (json.JSONDecodeError, ValueError):
-        return {}, had_comments
+        # None = UNPARSEABLE, distinct from a legitimately empty {} — writers
+        # must refuse to rewrite such a file (it would destroy the user's
+        # config over a single typo); readers treat it like "no data".
+        return None, had_comments
 
 
 def _warn_commented_jsonc(target: Path, agent_path: str, include_permission: bool,
@@ -458,6 +537,20 @@ def _warn_commented_jsonc(target: Path, agent_path: str, include_permission: boo
         print(f"[{prefix}] and, to enable code intelligence, a top-level \"lsp\": true")
 
 
+def _atomic_write_json(path: Path, config: dict) -> None:
+    """Write a user-owned JSON config via sibling temp file + os.replace, so a
+    crash mid-write can never leave the file half-written (same pattern as the
+    manifest write in _build_global.py). Raises OSError on failure — callers
+    already catch and warn without crashing the emit."""
+    tmp = path.with_name(path.name + ".geneseed-tmp")
+    tmp.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    try:
+        os.replace(tmp, path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def _merge_opencode_json(path: Path, agent_path: str) -> Path:
     """Ensure the OpenCode config at `path`'s location has `agent_path` in its
     `instructions` array, preserving every other key the user may have set. Resolves a
@@ -466,18 +559,34 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
     `permission` policy only when absent). An already-satisfied config is left
     completely untouched. A commented `.jsonc` that still needs a change is NOT
     rewritten (that would strip the comments); the user is warned with the exact entry
-    to add. A malformed `.json` is replaced with a clean default, as before. Returns the
+    to add. A malformed config is likewise never rewritten — one typo must not cost the
+    user their whole file. Best-effort but LOUD: a read failure (permissions, a locked
+    file) aborts the merge with a `[geneseed] WARN` naming the path and the reason —
+    never silently falls through to treat an unreadable file as empty, which would
+    otherwise overwrite it with a fresh default config and lose the user's actual
+    settings. A write failure is caught the same way — printed, never left to crash the
+    whole emit (other targets/hosts in the same run may still complete). Returns the
     resolved target path (the file we wrote, warned about, or found already wired)."""
     target = _opencode_target(path)
     config: dict = {"$schema": _OPENCODE_SCHEMA, "instructions": []}
     had_comments = False
     if target.exists():
         try:
-            loaded, had_comments = _read_jsonc(target.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                config = loaded
-        except OSError:
-            pass
+            raw = target.read_text(encoding="utf-8")
+        except OSError as e:
+            print(f"[geneseed] WARN: could not read {target} ({e}) — NOT touching it. "
+                  f'Add {json.dumps(agent_path)} to its "instructions" array by hand '
+                  f"once it's readable again.", file=sys.stderr)
+            return target
+        loaded, had_comments = _read_jsonc(raw)
+        # non-dict covers valid-but-wrong JSON (an array, a string): overwriting
+        # it with the default config would silently destroy the user's file.
+        if loaded is None or not isinstance(loaded, dict):
+            print(f"[geneseed] {target.name} is not a JSON object — NOT rewriting it "
+                  f"(fix the file, then re-run). Add {json.dumps(agent_path)} to "
+                  f'its "instructions" once repaired.', file=sys.stderr)
+            return target
+        config = loaded
     config.setdefault("$schema", _OPENCODE_SCHEMA)
     instr = config.get("instructions")
     if not isinstance(instr, list):
@@ -497,7 +606,12 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
     if target.suffix == ".jsonc" and had_comments:
         _warn_commented_jsonc(target, agent_path, add_perm, add_lsp)
         return target
-    target.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    try:
+        _atomic_write_json(target, config)
+    except OSError as e:
+        print(f"[geneseed] WARN: could not write {target} ({e}) — the harness will NOT "
+              f'auto-load until this is fixed. Add {json.dumps(agent_path)} to its '
+              f'"instructions" array by hand.', file=sys.stderr)
     return target
 
 
@@ -523,7 +637,7 @@ def _claude_hook_groups(cfg: Path) -> dict:
     mem = f'--memory "{cfg / "memory"}"'
     # --root carries the install's own dir so a GLOBAL hook can stand down when a project
     # install of the same host sits at/above cwd (project-bypasses-global; see cmd_context).
-    context = f'{py} {h} context --root "{cfg}"'
+    context = f'{py} {h} context --root "{cfg}" || exit 0'
     return {
         "PreToolUse": [
             {"matcher": "Bash", "hooks": [{"type": "command", "command": f"{py} {h} git-gate"}]},
@@ -533,26 +647,45 @@ def _claude_hook_groups(cfg: Path) -> dict:
             {"matcher": "resume", "hooks": [{"type": "command", "command": context}]},
         ],
         "Stop": [
-            {"hooks": [{"type": "command", "command": f"{py} {h} learn {mem} || true"}]},
+            # `|| exit 0` (not `|| true`): hooks run under cmd.exe on native Windows,
+            # where `true` is not a command — the swallow-failures intent would invert
+            # into a 9009 error. `exit 0` works in both cmd.exe and POSIX sh.
+            {"hooks": [{"type": "command", "command": f"{py} {h} learn {mem} || exit 0"}]},
+        ],
+        "SubagentStop": [
+            # Same command as Stop: `learn` reads the payload's hook_event_name and
+            # routes a SubagentStop to the per-agent lesson path (memory/agents/<name>.md).
+            {"hooks": [{"type": "command", "command": f"{py} {h} learn {mem} || exit 0"}]},
         ],
     }
 
 
-def _merge_claude_settings(path: Path, scope: str = "global") -> "tuple[Path, list]":
+def _merge_claude_settings(path: Path, scope: str = "global",
+                           prior_hooks: "list | None" = None) -> "tuple[Path, list]":
     """Surgically merge Geneseed's Claude hooks into the user's settings.json,
     preserving every other key AND the user's own hook entries. The install root is
-    `path.parent` (so `learn` is pointed at <root>/memory). Returns (target, added)
-    where `added` is the list of {event, group} entries actually written — recorded in
-    the manifest so unwire/uninstall removes EXACTLY those and nothing else. Idempotent
-    (a group already present is not re-added). A settings.json carrying comments is
-    never rewritten — the user is warned and nothing changes (mirrors the commented
-    `.jsonc` refusal for opencode.json). `scope` is accepted for caller symmetry; the
-    generated hooks are absolute either way."""
+    `path.parent` (so `learn` is pointed at <root>/memory). `prior_hooks` is the
+    manifest's previously-recorded managed groups: any of them still in the file but
+    no longer canonical (an old interpreter/checkout path after a move, or the
+    pre-`|| exit 0` hook form) is PRUNED — without this a re-emit stacks the new
+    group beside the stale one, so `learn` runs twice per Stop and a dead python
+    path errors on every call. Returns (target, managed) where `managed` is the
+    complete current claim set (surviving prior groups + newly added), recorded in
+    the manifest so unwire/uninstall removes EXACTLY those and nothing else.
+    Idempotent (a group already present is not re-added; a user's own identical
+    group is never claimed). A settings.json carrying comments is never rewritten —
+    the user is warned and the prior claims are kept unchanged."""
+    prior = [r for r in (prior_hooks or []) if isinstance(r, dict)]
     config: dict = {}
     had_comments = False
     if path.exists():
         try:
             loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
+            if loaded is None:
+                print(f"[geneseed] {path.name} is not valid JSON — NOT rewriting it "
+                      f"(fix the syntax, then re-run). Hooks were not wired.",
+                      file=sys.stderr)
+                return path, prior
             if isinstance(loaded, dict):
                 config = loaded
         except OSError:
@@ -560,8 +693,21 @@ def _merge_claude_settings(path: Path, scope: str = "global") -> "tuple[Path, li
     hooks = config.get("hooks")
     if not isinstance(hooks, dict):
         hooks = {}
+    canonical = _claude_hook_groups(path.parent)
+    canon_flat = [{"event": e, "group": g} for e, gs in canonical.items() for g in gs]
+    pruned = False
+    for rec in prior:
+        if rec in canon_flat:
+            continue
+        event, group = rec.get("event"), rec.get("group")
+        arr = hooks.get(event)
+        if isinstance(arr, list) and group in arr:
+            arr.remove(group)
+            pruned = True
+            if not arr:
+                hooks.pop(event, None)
     added: list = []
-    for event, new_groups in _claude_hook_groups(path.parent).items():
+    for event, new_groups in canonical.items():
         arr = hooks.get(event)
         if not isinstance(arr, list):
             arr = []
@@ -571,34 +717,42 @@ def _merge_claude_settings(path: Path, scope: str = "global") -> "tuple[Path, li
             arr.append(g)
             added.append({"event": event, "group": g})
         hooks[event] = arr
-    if not added:
-        return path, []   # already wired (or nothing to add) — leave the file untouched
+    survivors = [r for r in prior if r in canon_flat]
+    managed_now = survivors + [a for a in added if a not in survivors]
+    if not added and not pruned:
+        return path, managed_now   # already wired — leave the file untouched
     if had_comments:
         print(f"[geneseed] {path.name} has comments — not rewriting it (your edits are "
               f"kept). Add Geneseed's hooks by hand from adapters/claude-code/settings.json.",
               file=sys.stderr)
-        return path, []
-    config["hooks"] = hooks
+        return path, prior
+    if hooks:
+        config["hooks"] = hooks
+    else:
+        config.pop("hooks", None)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-    return path, added
+    _atomic_write_json(path, config)
+    return path, managed_now
 
 
-def _unwire_claude_settings(path: Path, added: list) -> None:
+def _unwire_claude_settings(path: Path, added: list) -> bool:
     """Reverse _merge_claude_settings: remove exactly the recorded hook groups, leaving
     the user's own keys and hooks intact. An emptied event key is dropped; an emptied
-    `hooks` block is dropped. A commented settings.json is never rewritten."""
+    `hooks` block is dropped. A commented settings.json is never rewritten. Returns
+    True when the file was actually rewritten (the unwire landed), False when it
+    bailed — so callers (uninstall) can report reality instead of assuming success;
+    `_settings_integrity_check(expect='absent')` names the lingering groups."""
     if not path.exists() or not added:
-        return
+        return False
     try:
         loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
     except OSError:
-        return
+        return False
     if had_comments or not isinstance(loaded, dict):
-        return
+        return False
     hooks = loaded.get("hooks")
     if not isinstance(hooks, dict):
-        return
+        return False
     for rec in added:
         event, group = rec.get("event"), rec.get("group")
         arr = hooks.get(event)
@@ -608,7 +762,11 @@ def _unwire_claude_settings(path: Path, added: list) -> None:
             hooks.pop(event, None)
     if not hooks:
         loaded.pop("hooks", None)
-    path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
+    try:
+        _atomic_write_json(path, loaded)
+    except OSError:
+        return False
+    return True
 
 
 def _wire_claude_excludes(path: Path, excludes: list) -> list:
@@ -626,6 +784,11 @@ def _wire_claude_excludes(path: Path, excludes: list) -> list:
     if path.exists():
         try:
             loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
+            if loaded is None:
+                print(f"[geneseed] {path.name} is not valid JSON — NOT rewriting it "
+                      f"(fix the syntax, then re-run). Excludes were not wired.",
+                      file=sys.stderr)
+                return []
             if isinstance(loaded, dict):
                 config = loaded
         except OSError:
@@ -644,7 +807,13 @@ def _wire_claude_excludes(path: Path, excludes: list) -> list:
     cur.extend(added)
     config["claudeMdExcludes"] = cur
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    try:
+        _atomic_write_json(path, config)
+    except OSError as e:
+        print(f"[geneseed] WARN: could not write {path} ({e}) — claudeMdExcludes "
+              f"were not wired. Add to its \"claudeMdExcludes\" array by hand: "
+              f"{json.dumps(added)}", file=sys.stderr)
+        return []
     return added
 
 
@@ -670,7 +839,132 @@ def _unwire_claude_excludes(path: Path, excludes: list) -> None:
         loaded["claudeMdExcludes"] = cur
     else:
         loaded.pop("claudeMdExcludes", None)
-    path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
+    try:
+        _atomic_write_json(path, loaded)
+    except OSError:
+        return
+
+
+# ---- Settings integrity check -----------------------------------------------------
+# Emit/unwire above are surgical (never rewrite a commented file, never touch a user's
+# own keys), which means their success is NOT self-evident from "no exception was
+# raised" — a `had_comments` bail-out silently leaves the file exactly as it was, an
+# on-disk edit made between emit and this check would be invisible, and neither path
+# re-reads the file to confirm the write actually stuck. This is the one shared checker
+# BOTH directions (post-emit "is it wired", post-unwire "is it gone") and both call
+# sites (the repo's `_build_*` generator AND the shipped `rituals/_harness_mcp.py`
+# runtime, via `import build` — see build.py's submodule merge) can use without
+# duplicating the JSONC read or the Geneseed-pattern sniff. Never raises: a mismatch is
+# reported, not fatal — an uninstall/emit must finish even when the settings file
+# turned out to be in a state the check didn't expect.
+_GENESEED_HOOK_SNIFF = "harness.py"   # every Geneseed hook command embeds this
+
+
+def _settings_hook_groups(loaded: dict) -> "list[tuple[str, dict]]":
+    """Flatten a loaded settings.json's `hooks` block to (event, group) pairs, mirroring
+    the shape `_merge_claude_settings` records in the manifest (`{"event", "group"}`)."""
+    hooks = loaded.get("hooks")
+    if not isinstance(hooks, dict):
+        return []
+    out: "list[tuple[str, dict]]" = []
+    for event, groups in hooks.items():
+        if isinstance(groups, list):
+            out.extend((event, g) for g in groups if isinstance(g, dict))
+    return out
+
+
+def _settings_integrity_check(path: Path, managed: dict, expect: str = "present") -> "list[str]":
+    """Verify the settings file at `path` actually matches what the manifest's `managed`
+    map claims was wired (expect='present', call after emit) or unwired
+    (expect='absent', call after uninstall/deactivate). Returns a list of human-readable
+    problem strings (empty == clean) and ALSO prints them as loud `[geneseed] WARN:`
+    lines to stderr — callers don't need to re-format, just decide whether to act on a
+    non-empty return. Never raises: a missing file is a finding for 'present' (and
+    trivially clean for 'absent' — a deleted file satisfies "nothing left wired"), an
+    unparseable one is always a finding, and a COMMENTED file IS still checked —
+    `_read_jsonc` parses straight through the comments and this checker never writes,
+    so the one settings state emit/unwire refuse to touch is exactly the one that
+    must not escape verification (a bailed unwire leaves hooks firing there).
+
+    Two independent checks:
+      1. Every recorded `settings_hooks` group and `settings_excludes` entry is
+         actually present (expect='present') or actually gone (expect='absent').
+      2. Geneseed-PATTERN hook commands (containing 'harness.py') that are NOT in the
+         recorded claim set — flagged as a warning only, since they may be entries a
+         user wrote themselves or an older install's claims this run didn't inherit;
+         never auto-deleted."""
+    problems: "list[str]" = []
+    managed = managed if isinstance(managed, dict) else {}
+    if not path.exists():
+        if expect == "present":
+            problems.append(f"{path}: file does not exist, but hooks/excludes were "
+                             "supposed to be wired into it")
+        # expect == 'absent': no file at all trivially satisfies "unwired".
+        for p in problems:
+            print(f"[geneseed] WARN: {p}", file=sys.stderr)
+        return problems
+    try:
+        loaded, had_comments = _read_jsonc(path.read_text(encoding="utf-8"))
+    except OSError as e:
+        problems.append(f"{path}: could not read the file ({e})")
+        for p in problems:
+            print(f"[geneseed] WARN: {p}", file=sys.stderr)
+        return problems
+    # `had_comments` is deliberately NOT a bail-out: emit/unwire refuse to rewrite a
+    # commented file (silently, on the unwire side), which is exactly how hooks can
+    # linger after an uninstall — and this checker only reads, so comments cost nothing.
+    del had_comments
+    if not isinstance(loaded, dict):
+        problems.append(f"{path}: not a JSON object — cannot verify hooks/excludes")
+        for p in problems:
+            print(f"[geneseed] WARN: {p}", file=sys.stderr)
+        return problems
+
+    present_groups = _settings_hook_groups(loaded)
+    recorded_hooks = [r for r in (managed.get("settings_hooks") or []) if isinstance(r, dict)]
+    # Plain `==` here (not the json.dumps(sort_keys=True) key the orphan scan below
+    # uses) is deliberate, not an oversight: both sides are freshly `json.loads`-ed
+    # dicts with no float/NaN content, so dict equality is already order-independent
+    # and this is the simpler check. The orphan scan needs the dumped-string form
+    # because it builds a set for O(1) membership, which a dict (unhashable) can't do.
+    for rec in recorded_hooks:
+        event, group = rec.get("event"), rec.get("group")
+        hit = (event, group) in present_groups
+        if expect == "present" and not hit:
+            problems.append(f"{path}: recorded hook group missing — event={event!r} "
+                             f"group={json.dumps(group)}")
+        elif expect == "absent" and hit:
+            problems.append(f"{path}: recorded hook group still present after unwire — "
+                             f"event={event!r} group={json.dumps(group)}")
+
+    excl_cur = loaded.get("claudeMdExcludes")
+    excl_cur = excl_cur if isinstance(excl_cur, list) else []
+    for entry in (managed.get("settings_excludes") or []):
+        hit = entry in excl_cur
+        if expect == "present" and not hit:
+            problems.append(f"{path}: recorded claudeMdExcludes entry missing: {entry!r}")
+        elif expect == "absent" and hit:
+            problems.append(f"{path}: recorded claudeMdExcludes entry still present "
+                             f"after unwire: {entry!r}")
+
+    # Geneseed-PATTERN entries present but not in the recorded claim set — warn only,
+    # never auto-delete (may be user-authored, or a claim this run legitimately didn't
+    # inherit, e.g. a stale group already pruned by _merge_claude_settings elsewhere).
+    recorded_set = {(r.get("event"), json.dumps(r.get("group"), sort_keys=True))
+                    for r in recorded_hooks}
+    for event, group in present_groups:
+        key = (event, json.dumps(group, sort_keys=True))
+        if key in recorded_set:
+            continue
+        cmds = [h.get("command", "") for h in (group.get("hooks") or []) if isinstance(h, dict)]
+        if any(_GENESEED_HOOK_SNIFF in c for c in cmds):
+            problems.append(f"{path}: Geneseed-pattern hook present but NOT recorded in "
+                             f"the manifest (event={event!r}) — possibly user-authored; "
+                             "left alone")
+
+    for p in problems:
+        print(f"[geneseed] WARN: {p}", file=sys.stderr)
+    return problems
 
 
 _BLOCK_BEGIN = "<!-- BEGIN {id} -->"
@@ -805,12 +1099,39 @@ def _load_agent_overrides(base: Path) -> dict:
 
 
 def ensure_agent_overrides_stub(base: Path) -> None:
-    """Drop an empty agent-overrides.json once (never overwrite) — the host's editable,
-    git-ignored model-routing map. Empty by default => no behaviour change."""
+    """Drop an agent-overrides.json once (never overwrite) — the host's editable,
+    git-ignored model-routing map. Empty by default => no behaviour change. Stamped
+    with `_version`: the source release label (harness.config.json) at creation
+    time, so a later re-emit can tell the user their overrides predate an upgrade
+    (see `_warn_if_overrides_stale`) without ever touching their file."""
     dest = base / "agent-overrides.json"
-    if not dest.exists():
-        dest.write_text(json.dumps(AGENT_OVERRIDES_STUB, indent=2, ensure_ascii=False) + "\n",
-                        encoding="utf-8")
+    if dest.exists():
+        _warn_if_overrides_stale(dest)
+        return
+    stub = dict(AGENT_OVERRIDES_STUB)
+    stub["_version"] = source_release_version()
+    dest.write_text(json.dumps(stub, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _warn_if_overrides_stale(dest: Path) -> None:
+    """One-line notice (never a rewrite) when an EXISTING agent-overrides.json's
+    `_version` doesn't match the current source release AND the file actually
+    carries overrides beyond the stub defaults (`agents` non-empty) — an empty
+    override map is never worth flagging, drift or not. Tolerates a missing
+    `_version` (legacy file, predates this stamp) by naming it "unknown version"."""
+    try:
+        data = json.loads(dest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(data, dict) or not data.get("agents"):
+        return
+    stamped = data.get("_version")
+    current = source_release_version()
+    if stamped != current:
+        print(f"[geneseed] agent-overrides.json was written for Geneseed "
+              f"{stamped if isinstance(stamped, str) and stamped else 'unknown version'}, "
+              f"current is {current} — review your overrides against the updated "
+              f"agent specs")
 
 
 def _write_primary_agent(agents_dir: Path, overrides: dict) -> "Path | None":
@@ -912,34 +1233,92 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
     if agent_md.is_file():
         agent_md.write_text(_strip_capability_links(agent_md.read_text(encoding="utf-8")),
                             encoding="utf-8")
-    # `.opencode/` is fully owned by this layer — wipe so a removed agent/skill
-    # leaves no stale file behind. (Plural dir names are canonical in OpenCode;
-    # singular is back-compat only.) The one carve-out: user-authored themes under
-    # .opencode/themes/ are snapshot and restored (any theme the emit doesn't itself
-    # regenerate), so a rebuild never erases them (spec §8.2).
-    saved_themes = _snapshot_user_themes(root / ".opencode" / "themes")
-    if (root / ".opencode").is_dir():
-        shutil.rmtree(root / ".opencode")
+    # `.opencode/` used to be fully wiped and rebuilt every re-emit — simple, but it
+    # destroyed ANY user-authored file under it (a hand-added agent, plugin, command),
+    # not just the one carve-out (themes) the old code knew to snapshot-and-restore.
+    # Now it follows the same manifest + write-before-delete model as the Claude/Bob
+    # emits (`_emit_claude_core` in _build_global.py): read what THIS layer owned last
+    # time, write the complete new set, then prune only files still in the old owned
+    # set but not the new one. A pre-existing file NOT in the old manifest is the
+    # user's (claim-on-create, via _write_native_layer's old_owned/cfg) — left alone,
+    # warned about, never pruned. (Plural dir names are canonical in OpenCode; singular
+    # is back-compat only.) `agent-overrides.json` lives beside `.opencode/` in `out`,
+    # never inside it, so it was never touched by the wipe and needs no manifest entry.
+    #
+    # Migration nuance: an install from the wipe-and-rebuild era has NO manifest yet.
+    # `old_owned` then reads as [] (manifest missing == "owned nothing before"), so
+    # `_write_native_layer`'s claim-on-create sees every ALREADY-EXISTING agent/skill
+    # file as user-authored on this FIRST post-upgrade re-emit — including one that is
+    # actually still a current Geneseed spec — and skips it with a warning instead of
+    # refreshing it. Nothing is deleted (the prune set old_owned - owned is empty), and
+    # the manifest this run writes bootstraps tracking for everything actually written
+    # (a freshly-created theme/plugin/command IS captured from this very run). A
+    # pre-existing file that got skipped this once stays permanently unclaimed unless
+    # the user removes it and lets a later re-emit recreate it — the exact same
+    # characteristic the Claude/Bob engine's own migration already has (same
+    # claim-on-create machinery), not a new limitation introduced here.
+    oc = root / ".opencode"
+    manifest_path = oc / GLOBAL_MANIFEST
+    manifest_existed = manifest_path.exists()
+    old_owned: list[str] = []
+    if manifest_existed:
+        try:
+            old_owned = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", []) or []
+        except (json.JSONDecodeError, OSError):
+            old_owned = []
+
+    owned: list[str] = []
     theme, items = render_all(theme_name)
 
     ensure_agent_overrides_stub(out)
     overrides = _load_agent_overrides(out)
 
-    oc = root / ".opencode"
-    n_agents, n_skills, _ = _write_native_layer(items, oc / "agents", oc / "skills", overrides)
+    n_agents, n_skills, written = _write_native_layer(
+        items, oc / "agents", oc / "skills", overrides,
+        host="opencode", old_owned=old_owned, cfg=oc, manifest_existed=manifest_existed,
+        theme=theme)
+    owned += [p.relative_to(oc).as_posix() for p in written]
     primary = _write_primary_agent(oc / "agents", overrides)
+    if primary:
+        owned.append(primary.relative_to(oc).as_posix())
     commands = _write_command_layer(items, oc / "command")
     commands.append(_write_ponytail_command(oc / "command"))   # always-on /ponytail switch
-    _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
-    _write_color_themes(oc / "themes")   # curated full-palette colour themes (solid + transparent)
-    _restore_user_themes(oc / "themes", saved_themes)   # user themes survive the wipe (spec §8.2)
+    owned += [p.relative_to(oc).as_posix() for p in commands]
+    theme_file = _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
+    owned.append(theme_file.relative_to(oc).as_posix())
+    for p in _write_color_themes(oc / "themes"):   # curated full-palette colour themes (solid + transparent)
+        owned.append(p.relative_to(oc).as_posix())
+
+    n_plugins = _copy_plugins(oc / "plugins", owned)
+    n_workflows = _copy_workflows(oc / "workflows", owned)
+
+    # Write-before-delete: only now that the whole current set is on disk do we remove
+    # what this layer owned before but no longer produces (a removed agent/skill, a
+    # disabled primary/command, a theme dropped from the palette). A live file is never
+    # momentarily absent partway through the emit.
+    prune_failed = []
+    for relp in sorted(set(old_owned) - set(owned)):
+        victim = oc / relp
+        try:
+            if victim.is_file():
+                victim.unlink()
+                if victim.parent != oc and not any(victim.parent.iterdir()):
+                    victim.parent.rmdir()
+        except OSError as e:
+            prune_failed.append(f"{relp} ({e})")
+    if prune_failed:
+        print("[geneseed] WARN: could not remove stale owned file(s): "
+              + ", ".join(prune_failed), file=sys.stderr)
+
+    _write_manifest_atomic(manifest_path, {
+        "_comment": "Files owned by Geneseed's per-repo OpenCode emit (--emit opencode). "
+                    "Do not edit; removed on re-emit. A pre-existing file not in this "
+                    "list is yours and is never touched.",
+        "owned": sorted(owned), "scope": "project"})
 
     rel = _rel_under(out, root)
     agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
     cfg_name = _merge_opencode_json(root / "opencode.json", agent_path).name
-
-    n_plugins = _copy_plugins(oc / "plugins")
-    n_workflows = _copy_workflows(oc / "workflows")
 
     extras = ([f"primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
     extra = (" + " + ", ".join(extras)) if extras else ""

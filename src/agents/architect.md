@@ -5,6 +5,8 @@
 ## When to dispatch
 - A task is large, ambiguous, or touches multiple subsystems.
 - There are competing approaches and the trade-off needs to be made explicit.
+- On unfamiliar code, dispatch the [explorer](explorer.md) first and design from
+  its findings — the plan should stand on surveyed ground, not guesswork.
 
 ## When NOT to dispatch
 - Small, obvious changes — just do them.
@@ -17,6 +19,7 @@
   (universal {{LAW}} III — establish actual state before designing).
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Establish the current state: data shapes, module boundaries, existing patterns.
 2. Propose 2–3 approaches with trade-offs; recommend one with reasoning.
 3. Break the chosen approach into isolated units, each with one purpose and a
@@ -26,6 +29,9 @@
 - A plan: the approach chosen and why, the affected files, and an ordered list of
   steps — each written as `N. <file or module> — <the change> — <how to verify it>`,
   so every step is independently checkable. No code — the plan is the deliverable.
+- If the constraints contradict or the current state cannot be established well
+  enough to design from, return the blocking unknowns as step zero instead of
+  planning on guesswork.
 
 ## Self-improvement
 

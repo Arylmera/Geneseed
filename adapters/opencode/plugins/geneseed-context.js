@@ -60,14 +60,21 @@ const MARKER = "<!-- geneseed-context:v2 -->"
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 // ---- tunable budgets (env-overridable) -------------------------------------
-const EAGER_FILE_KB = Number(process.env.GENESEED_EAGER_FILE_KB || 16)
-const EAGER_TOTAL_KB = Number(process.env.GENESEED_EAGER_TOTAL_KB || 48)
+// Garbage in the env var must fall back to the default, not poison the budget as
+// NaN — every `>` comparison against NaN is false, which silently DISABLES the
+// demotion checks and injects oversized docs unbounded on every request.
+const envNum = (name, dflt) => {
+  const n = Number(process.env[name])
+  return Number.isFinite(n) && n > 0 ? n : dflt
+}
+const EAGER_FILE_KB = envNum("GENESEED_EAGER_FILE_KB", 16)
+const EAGER_TOTAL_KB = envNum("GENESEED_EAGER_TOTAL_KB", 48)
 const MAX_FILES_SCANNED = 2000
 const MAX_DEPTH = 6
 // Bounds on lazy-listing cost: read at most this many headings per session, and only
 // the head of each file (enough for an H1) rather than the whole thing — a large
 // docs/ tree must not cost one full-file read per entry on every session start.
-const LAZY_HEADING_LIMIT = Number(process.env.GENESEED_LAZY_HEADINGS || 64)
+const LAZY_HEADING_LIMIT = envNum("GENESEED_LAZY_HEADINGS", 64)
 const HEADING_SLICE_BYTES = 4096
 
 // Quiet by default — OpenCode surfaces a plugin's stderr in the UI (red text). Set
@@ -103,7 +110,7 @@ function log(msg) { if (DEBUG) console.error(`[geneseed-context] ${msg}`) }
 // Root-level files injected in full. Agent-directed rules + canonical entry docs.
 const EAGER_ROOT = new Set([
   "AGENTS.md", "AGENT.md", "CLAUDE.md", ".cursorrules",
-  "README.md", "CONTRIBUTING.md",
+  "README.md", "CONTRIBUTING.md", "user-rules.md",
 ])
 // Doc trees walked recursively; everything found is lazy (listed, not injected).
 const LAZY_DIRS = ["docs", "doc", "documentation", "architecture", "adr", "ADR"]
@@ -733,6 +740,29 @@ export const GeneseedContext = async (ctx) => {
     }
   }
 
+  // Session-scope filter for the INVISIBLE delivery, mirroring injectVisible's
+  // guards: child/subagent sessions inherit the parent's context, and geneseed-*
+  // sessions (learn distils, geneseed-wf:* children) must stay clean — without this
+  // the transform prepends the full context block to every request of every session
+  // in-process. Cached per sid (the transform runs on EVERY request); a transient
+  // session.get failure is NOT cached so the next request re-checks.
+  const sessionSkip = new Map()
+  async function skipSession(sid) {
+    if (!sid) return false
+    const hit = sessionSkip.get(sid)
+    if (hit !== undefined) return hit
+    try {
+      const info = await client.session.get({ path: { id: sid } })
+      const meta = info?.data ?? info
+      const skip = Boolean(meta?.parentID ?? meta?.parentId) ||
+        String(meta?.title ?? "").startsWith("geneseed-")
+      sessionSkip.set(sid, skip)
+      return skip
+    } catch {
+      return false
+    }
+  }
+
   return {
     event: async ({ event }) => {
       if (!event || INJECT_OFF) return
@@ -786,6 +816,7 @@ export const GeneseedContext = async (ctx) => {
       try {
         if (!output || !Array.isArray(output.messages) || !output.messages.length) return
         const sid = output.messages[0]?.info?.sessionID
+        if (await skipSession(sid)) return
         // Already present this request? (idempotent across plugin copies / retries.)
         const present = output.messages.some((m) =>
           (m?.parts ?? []).some((p) => typeof p?.text === "string" && p.text.includes(MARKER)))

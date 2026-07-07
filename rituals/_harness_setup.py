@@ -51,7 +51,8 @@ def _setup_build_args(theme: str, emit: str, out: str | None = None,
     departs from build.py's own default ('full'), so existing call sites and the argv
     stay byte-identical for full installs."""
     argv = ["--theme", theme, "--emit", emit]
-    if emit not in ("opencode-global", "claude-global", "bob-global"):   # globals take no out/root
+    if emit not in ("opencode-global", "claude-global", "bob-global",
+                    "copilot-global"):   # globals take no out/root
         if out:
             argv += ["--out", out]
         if root:
@@ -122,10 +123,15 @@ def _theme_of_dir(d: Path) -> "str | None":
                 return name
     except OSError:
         pass
-    # Sigil fallback: AGENT.md (OpenCode), CLAUDE.md (Claude), AGENTS.md (Bob) — each
-    # host's managed instructions block carries the theme sigil. Per-repo Claude/Bob
-    # installs write no .geneseed-theme marker, so this is their ONLY detection path.
+    # Sigil fallback: AGENT.md (OpenCode), CLAUDE.md (Claude), rules/geneseed.md
+    # (global Bob — its emit writes no AGENTS.md; the rules file carries the preamble
+    # and thus the sigil), copilot-instructions.md (global Copilot),
+    # AGENTS.md (Bob/Copilot project installs) — each host's instructions
+    # carrier holds the theme sigil. Per-repo Claude/Bob/Copilot installs write no
+    # .geneseed-theme marker, so this is their ONLY detection path.
     return (_theme_from_agent(d / "AGENT.md") or _theme_from_agent(d / "CLAUDE.md")
+            or _theme_from_agent(d / "rules" / "geneseed.md")
+            or _theme_from_agent(d / "copilot-instructions.md")
             or _theme_from_agent(d / "AGENTS.md"))
 
 
@@ -189,8 +195,10 @@ EMIT_OPTIONS = [
     ("claude-global", "Claude Code global config dir (~/.claude) — CLAUDE.md, agents, skills, hooks."),
     ("opencode", "Per-repo .opencode/ layer committed into one repository."),
     ("claude", "Per-repo CLAUDE.md + .claude/ committed into one repository."),
-    ("bob-global", "IBM Bob global config dir (~/.bob) — AGENTS.md, agents, skills, settings.json."),
+    ("bob-global", "IBM Bob global config dir (~/.bob) — rules/geneseed.md, agents, skills, settings.json."),
     ("bob", "Per-repo AGENTS.md + .bob/ for IBM Bob, committed into one repository."),
+    ("copilot-global", "GitHub Copilot personal config dir (~/.copilot) — copilot-instructions.md, agents, skills."),
+    ("copilot", "Per-repo AGENTS.md + .github/ for GitHub Copilot, committed into one repository."),
     ("files", "Plain bundle for any AGENT.md tool."),
 ]
 
@@ -213,7 +221,10 @@ def _collect_setup_lines() -> "dict | None":
     footprint = _ask_choice("Footprint", [(k, d) for k, d in FOOTPRINT_OPTIONS],
                             inst["footprint"] or "full")
     out = root = None
-    if emit == "opencode":
+    # Every PROJECT emit needs the repo root — claude/bob/copilot included: without
+    # --out their CLAUDE.md/.claude land in build.py's default ./Harness, where the
+    # host never loads them.
+    if emit in ("opencode", "claude", "bob", "copilot"):
         root = _ask("Repo root to install into", ".")
         out = root
     elif emit == "files":
@@ -223,23 +234,6 @@ def _collect_setup_lines() -> "dict | None":
     if not _confirm("Proceed?", True):
         return None
     return {"theme": theme, "emit": emit, "out": out, "root": root, "footprint": footprint}
-
-
-def _collect_setup() -> "dict | None":
-    """Gather the install selection — a colored curses form where the terminal
-    supports it, else the line prompts. Returns the confirmed selection or None."""
-    if sys.stdin.isatty():
-        try:
-            import curses
-            import locale
-            try:
-                locale.setlocale(locale.LC_ALL, "")
-            except locale.Error:
-                pass
-            return curses.wrapper(_setup_tui)
-        except Exception:
-            pass  # any curses failure → fall back to the line wizard
-    return _collect_setup_lines()
 
 
 def _java_major_ok(version_output: str, minimum: int = 21) -> bool:

@@ -25,6 +25,13 @@ English); the others range from `imperial` (Warhammer 40k) to community voices.
    `AGENT(S)`, `SKILL(S)` are themed *nouns*, but folder names and law numbers are
    not yours to move.
 
+   **Tone guard.** An aggressive or comedic persona MUST carry, inside its
+   `VOICE` and written in the persona's own voice, a self-consistent line
+   establishing that the tone never compromises correctness or completeness —
+   every finding, caveat, and step is still delivered in full. A persona primed
+   for contempt or comedy without that line will trade substance for
+   character. See `mean` and `joker` for the pattern.
+
 3. **Validate:**
 
    ```bash
@@ -49,6 +56,14 @@ English); the others range from `imperial` (Warhammer 40k) to community voices.
   (`LEX_*`), capability descriptions (`DESC_*`), and `ROAST_PERSONA`.
 - **Themed nouns** — `LAW(S)`, `AGENT(S)`, `SKILL(S)`, `MEMORY`, `NOTEBOOK`,
   `VAULT`, `WIKI`. These read in your voice but must stay nouns the prose can use.
+- **Agent colours** — `AGENT_COLORS`, a flat `{agent_name: slot}` object (not a
+  string) mapping each capability agent to an OpenCode *named theme slot*
+  (`primary`/`secondary`/`accent`/`success`/`warning`/`error`/`info`), plus a
+  `_default` used for any agent not listed (the council seats). Only consumed by
+  the OpenCode emit's `color:` frontmatter — restyle the grouping per theme if you
+  want to, or leave the synced default. An unrecognised slot value is rejected at
+  build time and falls back to `secondary`, with a warning, rather than ever
+  reaching emitted frontmatter.
 
 Folder names, file paths, and law *numbers* are **never** themed — they live in
 the `STRUCTURE` map in `build.py`, laid over every render, so tooling never breaks.

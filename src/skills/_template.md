@@ -23,6 +23,10 @@
 
 **Trigger:** the situation or phrase that should make the agent run this {{SKILL}}.
 
+**Requires:** *(optional line — include only for hard prerequisites: an env var, an
+external binary, or a host capability the {{SKILL}} cannot run without. A {{SKILL}}
+that merely uses standard repo tooling — git, the test runner — omits this line.)*
+
 ## Procedure
 1. Ordered, concrete steps. Each step is an action the agent takes.
 2. Note any verification step (run the command, read the output).

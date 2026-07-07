@@ -21,9 +21,12 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from collections import namedtuple
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -68,8 +71,11 @@ def _git(*args, timeout: int = 10, network: bool = False):
         cmd += ["-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=15"]
     cmd += [str(a) for a in args]
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=timeout, env=env, **_NO_WINDOW)
+        # encoding pinned: git talks UTF-8; text=True would decode with the console
+        # code page (cp1252 on corporate Windows) and a stray byte would turn a
+        # perfectly good git call into rc=None ("git is not installed").
+        p = subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                           errors="replace", timeout=timeout, env=env, **_NO_WINDOW)
     except Exception:                       # spawn/timeout/OS error -> treated as failure
         return (None, "", "")
     return (p.returncode,
@@ -162,10 +168,90 @@ def _count(s: str) -> int:
     return int(s) if s.isdigit() else 0
 
 
-def _measure_upstream():
-    """Phase B — fetch, then classify. Returns (code, behind, err) where
-    code ∈ {ready, fetch_failed, unrelated, diverged, uptodate}."""
-    rc, _, err = _git("fetch", "--quiet", timeout=_fetch_timeout(), network=True)
+def _kill_tree(p: subprocess.Popen) -> None:
+    """Kill a fetch AND its helpers (git-remote-https). Killing only `git` leaves
+    the helper holding the output pipe (and .git lock files on Windows), which is
+    how a timed-out fetch used to hang the updater forever."""
+    try:
+        if sys.platform != "win32":
+            os.killpg(p.pid, signal.SIGKILL)
+        else:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)],
+                           capture_output=True, timeout=15, **_NO_WINDOW)
+    except (OSError, subprocess.SubprocessError):
+        try:
+            p.kill()
+        except OSError:
+            pass
+
+
+def _fetch_streaming(log=None):
+    """`git fetch --progress` with live output, a heartbeat, and a HARD deadline.
+
+    Streams git's own progress lines (Counting/Compressing/Receiving objects) to
+    `log` as they arrive, logs a "still fetching" heartbeat every 15s when git is
+    silent, and kills the whole process group at _fetch_timeout(). Returns
+    (rc, tail) — rc None on spawn failure or timeout, tail = last output lines
+    for the error message. THE monkeypatch seam for tests (network only here)."""
+    exe = shutil.which("git")
+    if not exe:
+        return (None, "git is not installed or not on PATH")
+    timeout = _fetch_timeout()
+    cmd = [exe, "-C", str(ROOT),
+           "-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=15",
+           "fetch", "--progress"]
+    kw: dict = dict(_NO_WINDOW)
+    if sys.platform != "win32":
+        kw["start_new_session"] = True          # own process group => killable tree
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, encoding="utf-8", errors="replace", bufsize=1,
+                             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, **kw)
+    except Exception as e:                      # noqa: BLE001 — same contract as _git
+        return (None, str(e))
+    lines: list[str] = []
+
+    def _reader():
+        # Text mode treats git's \r progress repaints as line breaks; the same
+        # counter arrives hundreds of times, so only log when the phase changes.
+        last = ""
+        for raw in p.stdout:
+            line = _redact_url_creds(raw.strip())
+            if not line:
+                continue
+            lines.append(line)
+            phase = line.split(":", 1)[0]
+            if log and phase != last:
+                log(f"[geneseed]   {line}")
+                last = phase
+
+    t = threading.Thread(target=_reader, daemon=True)
+    t.start()
+    start = time.monotonic()
+    next_beat = 15.0
+    while p.poll() is None:
+        elapsed = time.monotonic() - start
+        if elapsed >= timeout:
+            _kill_tree(p)
+            try:
+                p.wait(timeout=5)     # reap — the daemon is long-lived
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            if log:
+                log(f"[geneseed] ✗ fetch produced nothing for {timeout}s — killed it.")
+            return (None, "\n".join(lines[-5:]))
+        if log and elapsed >= next_beat:
+            log(f"[geneseed]   ... still fetching ({int(elapsed)}s elapsed)")
+            next_beat += 15.0
+        time.sleep(0.25)
+    t.join(timeout=5)
+    return (p.returncode, "\n".join(lines[-5:]))
+
+
+def _measure_upstream(log=None):
+    """Phase B — fetch (streamed), then classify. Returns (code, behind, err)
+    where code ∈ {ready, fetch_failed, unrelated, diverged, uptodate}."""
+    rc, err = _fetch_streaming(log)
     if rc != 0:
         return ("fetch_failed", 0, err)
     _, ahead, _ = _git("rev-list", "--count", "@{u}..HEAD")
@@ -185,11 +271,18 @@ def _pull_and_validate(log) -> tuple[bool, str, str]:
     rc, old, _ = _git("rev-parse", "HEAD")
     if rc != 0 or not old:
         return (False, "not_git", "could not read HEAD")
+    log("[geneseed] fast-forwarding to upstream ...")
     rc, _, err = _git("merge", "--ff-only", "@{u}", timeout=60)
     if rc != 0:
         return (False, "collision",
                 "Update blocked — a new upstream file collides with a local untracked "
                 "file. Move or remove it, then update.\n" + err)
+    rc, pulled, _ = _git("log", "--oneline", "--no-decorate", "-20", f"{old}..HEAD")
+    if rc == 0 and pulled:
+        log("[geneseed] pulled:")
+        for line in pulled.splitlines():
+            log(f"  {line}")
+    log("[geneseed] validating the pulled source (doctor — can take a minute) ...")
     passed, output = _run_doctor(ROOT)
     log(output.rstrip("\n"))
     if not passed:
@@ -224,7 +317,9 @@ class _Log:
                 self.path = None  # type: ignore[assignment]
 
     def __call__(self, msg: str) -> None:
-        print(msg)
+        # flush=True so progress lines reach a piped consumer (the web console
+        # streams this process's stdout) immediately, not on buffer boundaries.
+        print(msg, flush=True)
         if self.path is not None:
             try:
                 with self.path.open("a", encoding="utf-8") as fh:
@@ -236,9 +331,9 @@ class _Log:
 DOCTOR_LEGEND = [
     "[geneseed] doctor problem legend — what the lines above mean / how to fix:",
     "  • 'dead link'          → a skill/agent body links a sibling as <dir>/<name>.md; use the BARE <name>.md (source bug)",
-    "  • 'unresolved token'   → a {{TOKEN}} is missing from a theme; add it to ALL 8 theme JSONs",
+    "  • 'unresolved token'   → a {{TOKEN}} is missing from a theme; add it to ALL theme JSONs",
     "  • 'incomplete source'  → AGENT.md lists a skill whose file isn't in this snapshot (usually a mid-publish cache — retry)",
-    "  • 'stale' / 'missing'  → the rendered Harness/ is out of sync (rebuild locally; harmless on a fresh download)",
+    "  • 'stale' / 'missing'  → the rendered Harness/ is out of sync (rebuild locally; harmless on a fresh clone)",
     "  • 'parity'             → the themes disagree on which tokens exist",
     "  • 'escapes the bundle' → an absolute or ../ path leaked into a rendered file",
 ]
@@ -249,11 +344,15 @@ def _run_doctor(cand: Path) -> tuple[bool, str]:
     rebuilt right after, so its drift is expected). Fail-closed: any nonzero exit,
     timeout, or spawn error is a failure."""
     try:
+        # encoding pinned: the doctor child reconfigures ITS stdout to UTF-8, so
+        # text=True (console code page, cp1252 on corporate Windows) can raise
+        # UnicodeDecodeError on a ✓/⚠️ glyph — which lands in the except below and
+        # rolls back a perfectly good update as "doctor gate could not run".
         proc = subprocess.run(
             [sys.executable, str(cand / "rituals" / "harness.py"),
              "doctor", "--all", "--no-bundle"],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-            timeout=300, **_NO_WINDOW)
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            encoding="utf-8", errors="replace", timeout=300, **_NO_WINDOW)
     except Exception as e:                          # noqa: BLE001 — crash/timeout => fail
         return (False, f"[geneseed] doctor gate could not run: {e}")
     return (proc.returncode == 0, proc.stdout or "")
@@ -337,6 +436,12 @@ def _rebuild_bundle(here, out, theme, emit, root_dir, log) -> int:
         return proc.returncode
     # If a web daemon is running, bounce it so the new rituals/* source and the freshly
     # rebuilt web/dist take effect — otherwise the open PWA keeps hitting the old code.
+    # EXCEPT when this upgrade IS a web-daemon job: restarting the daemon here kills
+    # the process tracking this very job (console stuck on 'running' forever); in that
+    # case the server restarts itself once the job is recorded as finished.
+    if os.environ.get("GENESEED_WEB_JOB"):
+        log("[geneseed] web daemon will restart itself after this job to load the new code.")
+        return 0
     try:
         sys.path.insert(0, str(here / "rituals"))
         import web as _web  # noqa: E402
@@ -346,36 +451,58 @@ def _rebuild_bundle(here, out, theme, emit, root_dir, log) -> int:
     return 0
 
 
+def _rebuild_installs(here: Path, log: _Log) -> int:
+    """Refresh every registered ACTIVE install (opencode/claude/bob/copilot, global and
+    project scope) via `harness.py rebuild-all`. The emit-marker rebuild only covers
+    THIS checkout's own bundle — without this pass a claude-global or bob install
+    keeps serving the OLD render after every upgrade, silently."""
+    log("[geneseed] refreshing every active install (rebuild-all) ...")
+    proc = subprocess.run(
+        [sys.executable, str(here / "rituals" / "harness.py"), "rebuild-all"],
+        cwd=str(here), **_NO_WINDOW)
+    return proc.returncode
+
+
 def upgrade(ref: str | None = None, theme_arg: str | None = None,
             zip_arg: str | None = None) -> int:
     """Update from the install's own git origin (fast-forward only), doctor-gate, and
-    rebuild the bundle. `ref`/`zip_arg` are accepted for back-compat but IGNORED (git
-    follows the current branch; the offline path was removed). Returns a process exit
-    code: 0 ok/up-to-date, 3 info precondition, 1 error."""
+    rebuild the bundle plus every registered install. `ref`/`zip_arg` are accepted for
+    back-compat but IGNORED (git follows the current branch; the offline path was
+    removed). Returns a process exit code: 0 ok/up-to-date, 3 info precondition,
+    1 error."""
     log = _Log()
+    if ref:
+        log(f"[geneseed] ⚠️  ref '{ref}' is IGNORED — updates follow the checkout's "
+            "current branch (tag/branch pinning was removed with the zip path).")
     here = ROOT
     out = Path(os.environ.get("GENESEED_OUT") or (here.parent / "Harness"))
     root_dir = Path(os.environ.get("GENESEED_ROOT") or out.parent)
     cfg = _opencode_config_dir()
     emit = _resolve_emit(cfg, out)
 
-    if emit == "files" and (cfg / ".geneseed-manifest.json").is_file():
-        sys.stderr.write(
-            f"[geneseed] ⚠️  {cfg} already holds a global Geneseed install (.geneseed-manifest.json),\n"
-            f"[geneseed] ⚠️  but this run emits the plain bundle only — it will NOT refresh that global config.\n"
-            f"[geneseed] ⚠️  Did you mean:  GENESEED_EMIT=opencode-global geneseed upgrade\n")
-
     # Capture the LOCAL theme before the pull overwrites harness.config.json.
     config_theme = _config_theme(here)
 
+    origin = _origin_display()
+    _, branch, _ = _git("rev-parse", "--abbrev-ref", "HEAD")
+    log(f"[geneseed] update source: {origin.url}"
+        + (f" (branch: {branch})" if branch else ""))
+
+    log("[geneseed] preflight: checking the local checkout ...")
     pre = _preflight()
     if not pre.ok:
         log(f"[geneseed] {pre.message}")
         return 3 if pre.kind == "info" else 1
 
-    code, behind, err = _measure_upstream()
+    log(f"[geneseed] fetching from origin (git: {shutil.which('git') or 'git'}, "
+        f"timeout: {_fetch_timeout()}s) ...")
+    code, behind, err = _measure_upstream(log)
     if code == "fetch_failed":
-        log(f"[geneseed] could not reach the remote: {err}")
+        log(f"[geneseed] ✗ could not reach the remote: "
+            f"{err or 'git fetch hung without any output.'}")
+        log("[geneseed]   If `git pull` works in your terminal but not here, this "
+            "daemon likely lacks your shell's environment (VPN/proxy vars, SSO or "
+            "Kerberos credentials). Restart it from that terminal: `geneseed web restart`.")
         return 1
     if code == "unrelated":
         log("[geneseed] Upstream history was rewritten; back up local work, then re-clone "
@@ -386,6 +513,7 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None,
             "or reset first.")
         return 3
     if code == "ready":
+        log(f"[geneseed] {behind} new commit(s) upstream — updating ...")
         ok, fcode, msg = _pull_and_validate(log)
         if not ok:
             log(f"[geneseed] {msg}")
@@ -394,10 +522,20 @@ def upgrade(ref: str | None = None, theme_arg: str | None = None,
         log("[geneseed] already up to date.")
 
     theme = theme_arg or _marker_theme(cfg, out) or config_theme
-    _migrate_stray_bundle(here, out, log)
+    # Best-effort rescue, never a gate: a locked file in the stray bundle must
+    # not abort the upgrade AFTER the pull has already been applied.
+    try:
+        _migrate_stray_bundle(here, out, log)
+    except OSError as e:
+        log(f"[geneseed] ⚠️  could not migrate the old in-folder bundle ({e}) — continuing.")
     rc = _rebuild_bundle(here, out, theme, emit, root_dir, log)
     if rc != 0:
         log(f"[geneseed][E-BUILD] ✗ the bundle build FAILED (theme: {theme or 'default'}, emit: {emit}).")
+        return 1
+    rc = _rebuild_installs(here, log)
+    if rc != 0:
+        log("[geneseed][E-BUILD] ✗ one or more installs failed to rebuild — "
+            "run `geneseed rebuild-all` to retry (details above).")
         return 1
     log("[geneseed] ✓ upgrade complete." + (f" (full log: {log.path})" if log.path else ""))
     return 0

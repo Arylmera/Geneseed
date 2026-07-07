@@ -13,7 +13,9 @@ const FLAT_VIEWS = new Set([
   'graph',
   'library',
   'laws',
+  'rules',
   'skills',
+  'agents',
   'about',
 ])
 

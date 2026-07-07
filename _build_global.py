@@ -7,6 +7,15 @@ from __future__ import annotations
 from _build_core import *  # noqa: F401,F403  shared stdlib + constants
 
 
+def _write_manifest_atomic(path: Path, data: dict) -> None:
+    """Manifest writes are temp + os.replace (mirrors _install_registry._save): a
+    torn manifest would make the next emit treat every owned file as the user's
+    own — never updated, never pruned, never uninstalled."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def _opencode_config_dir() -> Path:
     """OpenCode's global config dir. Precedence: $OPENCODE_CONFIG_DIR (relocates the
     whole dir — use it to keep the harness in a git-tracked folder) > $XDG_CONFIG_HOME
@@ -37,12 +46,42 @@ def _bob_config_dir() -> Path:
     return (Path.home() / ".bob").resolve()
 
 
+def _copilot_config_dir() -> Path:
+    """GitHub Copilot's personal config dir: ~/.copilot — the CLI auto-loads
+    copilot-instructions.md there and discovers skills/ and agents/ natively
+    (docs.github.com/copilot/how-tos/copilot-cli). $COPILOT_CONFIG_DIR relocates it
+    (Geneseed's knob, mirroring $BOB_CONFIG_DIR — Copilot documents no such env var,
+    but tests/doctor and locked-down setups still need to re-point the target)."""
+    env = os.environ.get("COPILOT_CONFIG_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    return (Path.home() / ".copilot").resolve()
+
+
 GLOBAL_MANIFEST = ".geneseed-manifest.json"
 
-# Project-bypasses-global (Claude-engine hosts only): map a preamble filename to the
-# GLOBAL config dir holding the copy a project install suppresses via claudeMdExcludes.
-# OpenCode gates differently (its cwd-aware context plugin), so it is not here.
-_PREAMBLE_CONFIG_DIR = {"CLAUDE.md": _claude_config_dir, "AGENTS.md": _bob_config_dir}
+# Project-bypasses-global (Claude only): map a preamble filename to the GLOBAL config
+# dir holding the copy a project install suppresses via claudeMdExcludes. OpenCode gates
+# differently (its cwd-aware context plugin). Bob is deliberately NOT here:
+# claudeMdExcludes is a Claude-only settings key with no documented Bob semantics (a
+# filename-keyed match would suppress the project's own AGENTS.md too), so Bob's bypass
+# rides on its rules folder instead — the workspace rules/geneseed.md overrides the
+# global one (see _emit_claude_core).
+_PREAMBLE_CONFIG_DIR = {"CLAUDE.md": _claude_config_dir}
+
+# The workspace rules stub a PROJECT Bob emit ships as .bob/rules/geneseed.md. Its only
+# job is to exist under the same name as the global ~/.bob/rules/geneseed.md so Bob's
+# native rule precedence shadows the global copy (project-bypasses-global) — the actual
+# preamble is the repo-root AGENTS.md, which Bob auto-loads. Kept deliberately tiny: Bob
+# injects every workspace rule each turn, so a full second preamble copy here would
+# double the install's fixed per-turn token cost.
+_BOB_RULES_STUB = """\
+<!-- geneseed: workspace shadow stub -->
+This project's Geneseed instructions are the repo-root `AGENTS.md`, which Bob
+auto-loads. This file exists only to shadow the same-named global Geneseed rules
+file (`~/.bob/rules/geneseed.md`) so the global preamble does not stack on top of
+the project's own. Follow the root `AGENTS.md`.
+"""
 
 
 def _global_memory(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
@@ -200,7 +239,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     overrides = _load_agent_overrides(cfg)
     n_agents, n_skills, written = _write_native_layer(
         items, cfg / "agents", cfg / "skills", overrides,
-        host="opencode", old_owned=old_owned, cfg=cfg)
+        host="opencode", old_owned=old_owned, cfg=cfg, theme=theme)
     owned += [p.relative_to(cfg).as_posix() for p in written]
     primary = _write_primary_agent(cfg / "agents", overrides)
     if primary:
@@ -221,6 +260,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     nb_status = _global_notebook(cfg, theme, items, out)
     ensure_notebook_index(cfg / "notebook")   # guarantee the index on every path (seed/migrate/keep)
     ensure_wiki_stub(cfg)   # machine-level wiki.jsonc — seeded once, user-owned, never in the manifest
+    ensure_rules_stub(cfg)  # user-rules.md — seeded once, user-owned, never in the manifest
 
     write_version(cfg)
     owned.append(VERSION_MARKER)
@@ -250,11 +290,11 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
         print("[geneseed] WARN: could not remove stale owned file(s): "
               + ", ".join(prune_failed), file=sys.stderr)
 
-    manifest_path.write_text(
-        json.dumps({"_comment": "Files owned by Geneseed's --emit opencode-global. "
-                                "Do not edit; removed on re-emit. The memory and notebook "
-                                "stores are NOT listed — they are never deleted.", "owned": sorted(owned)},
-                   indent=2) + "\n", encoding="utf-8")
+    _write_manifest_atomic(manifest_path, {
+        "_comment": "Files owned by Geneseed's --emit opencode-global. "
+                    "Do not edit; removed on re-emit. The memory and notebook "
+                    "stores are NOT listed — they are never deleted.",
+        "owned": sorted(owned)})
 
     extras = (["primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
     extra = (" + " + ", ".join(extras)) if extras else ""
@@ -265,8 +305,10 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
 
 def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
-                      out: Path | None = None, footprint: str = "full") -> tuple:
-    """Shared engine for both Claude emits (global → ~/.claude, folder → <repo>/.claude).
+                      out: Path | None = None, footprint: str = "full",
+                      host: str = "claude") -> tuple:
+    """Shared engine for the Claude-shaped emits (Claude global → ~/.claude, folder →
+    <repo>/.claude; Bob and Copilot ride the same engine — see their emit_* wrappers).
     Mirrors emit_opencode_global's manifest + write-before-delete prune, but for the
     Claude layout: CLAUDE.md as a managed block (auto-loaded by Claude), agents in the
     Claude subagent dialect, byte-identical skills, settings.json hooks merged
@@ -274,7 +316,9 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     plugins/ dir is a managed marketplace, never written). User content is never
     clobbered: agents/skills collide → claim-on-create skip; CLAUDE.md → block merge;
     settings.json → surgical, recorded hook merge. memory/notebook/wiki are host state,
-    never tracked, never deleted. Returns
+    never tracked, never deleted. `host` names the dialect ('claude' | 'bob' |
+    'copilot') — it can no longer be inferred from the carrier filename, since Bob and
+    Copilot both use a repo-root AGENTS.md at project scope. Returns
     (n_agents, n_skills, n_hook_groups, mem_status, nb_status, managed)."""
     # Lean footprint: the standalone laws file lands under <cfg> (e.g. <repo>/.claude),
     # but CLAUDE.md/AGENTS.md sits at claude_md's own dir (the repo root for a project
@@ -286,6 +330,25 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     theme, items = render_all(theme_name, footprint, laws_prefix)
     assert_source_complete(items, context=f"claude-{scope}")
     cfg.mkdir(parents=True, exist_ok=True)
+
+    def _prefixed_agent_text(prefix: str) -> "str | None":
+        """The instructions text re-rendered with every store dir prefixed. The
+        carrier file can sit at a different level than the stores (repo-root
+        CLAUDE.md vs <repo>/.claude/*, or ~/.bob/rules/geneseed.md vs ~/.bob/*):
+        bare `memory/`/`skills/` pointers there send the agent to nonexistent
+        dirs — it then creates a parallel memory store while the Stop hook writes
+        the real one (split-brain). Re-rendering with prefixed DIR_* tokens fixes
+        every pointer at once; laws_prefix is left empty because the prefixed
+        DIR_LAWS already carries it into the lean pointer."""
+        src_tmpl = next((s for r, _t, s in items if r == "AGENT.md"), None)
+        if src_tmpl is None:
+            return None
+        if not prefix:
+            return next((t for r, t, _s in items if r == "AGENT.md"), None)
+        ptheme = dict(theme)
+        for tok in ("DIR_LAWS", "DIR_AGENTS", "DIR_SKILLS", "DIR_MEMORY", "DIR_NOTEBOOK"):
+            ptheme[tok] = prefix + ptheme.get(tok, tok.split("_", 1)[1].lower())
+        return render_file(src_tmpl, ptheme, footprint)
 
     manifest_path = cfg / GLOBAL_MANIFEST
     old_owned: list[str] = []
@@ -305,19 +368,60 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     # CLAUDE.md — Claude auto-loads it by location; merge as a delimited block so any
     # user prose around it survives. `whole` (Geneseed created the file) sticks across
     # re-emits so uninstall knows whether to delete the file or just excise the block.
+    # Exception — Bob GLOBAL: Bob never auto-loads a global ~/.bob/AGENTS.md (its
+    # always-injected channel is rules/geneseed.md, below), so a global copy is pure
+    # disk weight; none is written, and a re-emit self-heals the one an older install
+    # carries (excise the managed block, or delete the file when Geneseed created it).
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
-    if agent_text is not None:
-        status = _managed_block_write(claude_md, _strip_capability_links(agent_text))
-        prior_whole = bool((old_managed.get("claude_md") or {}).get("whole"))
+    is_bob = host == "bob"
+    is_copilot = host == "copilot"
+    if agent_text is not None and not (is_bob and scope == "global"):
+        # Project scope: the carrier sits at the repo root, the stores under <cfg> —
+        # render its store pointers with the marker-dir prefix (.claude//.bob/).
+        _managed_block_write(claude_md, _strip_capability_links(
+            _prefixed_agent_text(laws_prefix) or agent_text))
+        # No sticky "whole" flag: teardown always excises the block and deletes the
+        # file only when nothing else remains — a whole-file delete would eat prose
+        # the user added AFTER Geneseed created the file. (Old manifests may still
+        # carry the key; every remove site now ignores it.)
         managed["claude_md"] = {
             "rel": os.path.relpath(claude_md, cfg).replace(os.sep, "/"),
-            "whole": (status == "created") or prior_whole,
         }
+    elif is_bob and scope == "global" and old_managed.get("claude_md"):
+        old_cm = old_managed["claude_md"] if isinstance(old_managed["claude_md"], dict) else {}
+        victim = (cfg / (old_cm.get("rel") or claude_md.name)).resolve()
+        _managed_block_remove(victim)
+
+    # IBM Bob's only documented always-injected channel is the rules folder (project
+    # .bob/rules/*.md, global ~/.bob/rules/*.md — bob.ibm.com/docs/ide/configuration/rules).
+    # A global ~/.bob/AGENTS.md is NOT auto-loaded, so at GLOBAL scope rules/geneseed.md
+    # IS the preamble — the sole carrier of the harness voice (~/.bob/skills already
+    # loads natively). At PROJECT scope the repo-root AGENTS.md auto-loads the preamble,
+    # so the workspace file is the slim _BOB_RULES_STUB: same filename at both scopes on
+    # purpose — workspace rules override global ones, Bob's native
+    # project-bypasses-global — and the stub only has to exist to shadow the global copy
+    # (without it the global voice would stack on top of the project's). Owned (not a
+    # managed block): the file is wholly Geneseed's, so a re-emit rewrites it in place —
+    # older installs that shipped a full second preamble copy here heal on upgrade —
+    # and uninstall/deactivate remove it via the manifest like any other owned file.
+    if is_bob and agent_text is not None:
+        rules_md = cfg / "rules" / "geneseed.md"
+        rules_md.parent.mkdir(parents=True, exist_ok=True)
+        # Global: the preamble lives one level DOWN (rules/geneseed.md) from the
+        # stores at ~/.bob — its pointers need a ../ prefix or `laws/`/`memory/`
+        # resolve under rules/ where nothing exists.
+        rules_md.write_text(_BOB_RULES_STUB if scope == "project"
+                            else _strip_capability_links(
+                                _prefixed_agent_text("../") or agent_text),
+                            encoding="utf-8")
+        owned.append("rules/geneseed.md")
 
     ensure_agent_overrides_stub(cfg)
+    # Bob's agents/skills use the Claude dialect verbatim; Copilot has its own agent
+    # frontmatter (allowlist tools, .agent.md extension) — skills stay byte-identical.
     n_agents, n_skills, written = _write_native_layer(
         items, cfg / "agents", cfg / "skills", _load_agent_overrides(cfg),
-        host="claude", old_owned=old_owned, cfg=cfg)
+        host=("copilot" if is_copilot else "claude"), old_owned=old_owned, cfg=cfg)
     owned += [p.relative_to(cfg).as_posix() for p in written]
 
     mem_status = _global_memory(cfg, theme, items, out)
@@ -325,38 +429,85 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     nb_status = _global_notebook(cfg, theme, items, out)
     ensure_notebook_index(cfg / "notebook")
     ensure_wiki_stub(cfg)
+    ensure_rules_stub(cfg)
+
+    # Project hygiene: keep the personal/self-documented-never-commit files out of
+    # the team's git. Claim-on-create — an existing (possibly user-authored)
+    # .gitignore is never rewritten, but one we created stays owned across re-emits.
+    if scope == "project":
+        gi = cfg / ".gitignore"
+        gi_lines = (["settings.local.json"] if host == "claude" else []) \
+            + ["wiki.jsonc", "agent-overrides.json"]
+        if not gi.exists():
+            gi.write_text("\n".join(gi_lines) + "\n", encoding="utf-8")
+            owned.append(".gitignore")
+        elif ".gitignore" in old_owned:
+            owned.append(".gitignore")
 
     write_version(cfg)
     owned.append(VERSION_MARKER)
 
-    _settings, added_hooks = _merge_claude_settings(cfg / "settings.json", scope)
-    prior_hooks = old_managed.get("settings_hooks")
-    prior_hooks = prior_hooks if isinstance(prior_hooks, list) else []
-    # Dedup so the manifest can't grow unbounded if a user edits a managed hook and a
-    # re-emit re-adds the canonical group (already recorded in prior_hooks).
-    managed["settings_hooks"] = prior_hooks + [a for a in added_hooks if a not in prior_hooks]
+    # Hooks embed machine-absolute paths (interpreter + checkout). At PROJECT scope
+    # for Claude they go into settings.local.json — the personal, untracked settings
+    # file — never the team-shared settings.json, which would hand every teammate
+    # failing hooks pointing at this machine's python. (Bob documents no local
+    # variant, so it keeps settings.json.) Recorded in the manifest so every
+    # lifecycle path unwires the file that was actually written. Copilot has NO
+    # settings.json and no hook mechanism at all — its per-repo config surface is
+    # .github/, its personal one ~/.copilot, neither of which reads a Claude-shaped
+    # settings file — so the whole settings/hooks/excludes stage is skipped: nothing
+    # is written, and no settings_* keys are recorded for the lifecycle to unwire.
+    if not is_copilot:
+        settings_name = "settings.local.json" if (scope == "project" and not is_bob) \
+            else "settings.json"
+        settings_path = cfg / settings_name
+        managed["settings_file"] = settings_name
+        # Migration: an older install wired hooks/excludes into a different file —
+        # unwire the recorded claims there, or they linger (and run) forever.
+        old_sf = old_managed.get("settings_file") or "settings.json"
+        if old_sf != settings_name:
+            _unwire_claude_settings(cfg / old_sf, old_managed.get("settings_hooks") or [])
+            _unwire_claude_excludes(cfg / old_sf, old_managed.get("settings_excludes") or [])
+        # The merge prunes recorded groups that are no longer canonical (interpreter or
+        # checkout moved, hook form changed) and returns the complete current claim set —
+        # store it as-is; unioning with prior would resurrect the stale claims.
+        _settings, managed_hooks = _merge_claude_settings(
+            settings_path, scope, prior_hooks=(old_managed.get("settings_hooks")
+                                               if old_sf == settings_name else None))
+        managed["settings_hooks"] = managed_hooks
 
-    # Project-bypasses-global: a PROJECT install suppresses the SAME host's GLOBAL preamble
-    # (auto-loaded ~/.claude/CLAUDE.md or ~/.bob/AGENTS.md) while cwd is this repo, via
-    # Claude's native claudeMdExcludes. Written only when this run actually emitted the
-    # project's own preamble (never suppress with no replacement); GENESEED_STACK_GLOBAL=1
-    # opts out (and a re-emit with it set strips a prior exclude). Recorded in the manifest
-    # so deactivate/uninstall remove exactly it. The companion context-hook stand-down
-    # (cmd_context) handles the injected-context half and works even where the exclude does
-    # not (e.g. Bob keys it on the CLAUDE.md filename).
-    prior_excl = old_managed.get("settings_excludes")
-    prior_excl = prior_excl if isinstance(prior_excl, list) else []
-    cfgdir = _PREAMBLE_CONFIG_DIR.get(claude_md.name)
-    if scope == "project" and agent_text is not None and cfgdir:
-        want_excl = [str((cfgdir() / claude_md.name).resolve())]
-        if os.environ.get("GENESEED_STACK_GLOBAL"):
-            _unwire_claude_excludes(cfg / "settings.json", want_excl)
-            managed["settings_excludes"] = []
-        else:
-            added_excl = _wire_claude_excludes(cfg / "settings.json", want_excl)
-            managed["settings_excludes"] = sorted(set(prior_excl) | set(added_excl) | set(want_excl))
-    elif prior_excl:
-        managed["settings_excludes"] = prior_excl
+        # Project-bypasses-global (Claude only): a PROJECT install suppresses the GLOBAL
+        # ~/.claude/CLAUDE.md while cwd is this repo, via Claude's native claudeMdExcludes.
+        # Written only when this run actually emitted the project's own preamble (never
+        # suppress with no replacement); GENESEED_STACK_GLOBAL=1 opts out (and a re-emit with
+        # it set strips a prior exclude). Recorded in the manifest so deactivate/uninstall
+        # remove exactly it. The companion context-hook stand-down (cmd_context) handles the
+        # injected-context half. Bob never gets an exclude (see _PREAMBLE_CONFIG_DIR): its
+        # bypass is the same-named workspace rules file.
+        prior_excl = old_managed.get("settings_excludes")
+        prior_excl = prior_excl if isinstance(prior_excl, list) else []
+        cfgdir = _PREAMBLE_CONFIG_DIR.get(claude_md.name)
+        if scope == "project" and agent_text is not None and cfgdir:
+            # as_posix: claudeMdExcludes entries are glob patterns, where a backslash is
+            # an escape — the Windows-native spelling risks never matching.
+            want_excl = [(cfgdir() / claude_md.name).resolve().as_posix()]
+            if os.environ.get("GENESEED_STACK_GLOBAL"):
+                _unwire_claude_excludes(settings_path, want_excl)
+                managed["settings_excludes"] = []
+            else:
+                added_excl = _wire_claude_excludes(settings_path, want_excl)
+                # Claim only what Geneseed itself wired (prior + newly added) — folding
+                # `want_excl` in unconditionally would claim a user's own pre-existing
+                # exclude and uninstall would then strip it.
+                managed["settings_excludes"] = sorted(set(prior_excl) | set(added_excl))
+        elif prior_excl and is_bob:
+            # Self-heal older Bob installs: earlier versions wrote the global AGENTS.md into
+            # claudeMdExcludes here. The key is Claude-only and its Bob semantics are unknown
+            # (a filename-keyed match would suppress the project's own AGENTS.md), so a
+            # re-emit removes it instead of carrying it forward.
+            _unwire_claude_excludes(settings_path, prior_excl)
+        elif prior_excl:
+            managed["settings_excludes"] = prior_excl
 
     if footprint == "lean":
         _ship_lean_laws(items, theme, cfg, owned)
@@ -379,13 +530,17 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
         print("[geneseed] WARN: could not remove stale owned file(s): "
               + ", ".join(prune_failed), file=sys.stderr)
 
-    manifest_path.write_text(
-        json.dumps({"_comment": "Files owned by Geneseed's Claude emit. Do not edit; removed on "
-                                "re-emit. The memory and notebook stores are NOT listed — never "
-                                "deleted. `managed` records the CLAUDE.md block + settings.json "
-                                "hooks so uninstall removes exactly those.",
-                    "owned": sorted(owned), "managed": managed}, indent=2) + "\n",
-        encoding="utf-8")
+    _write_manifest_atomic(manifest_path, {
+        "_comment": "Files owned by Geneseed's Claude emit. Do not edit; removed on "
+                    "re-emit. The memory and notebook stores are NOT listed — never "
+                    "deleted. `managed` records the CLAUDE.md block + settings.json "
+                    "hooks so uninstall removes exactly those.",
+        "owned": sorted(owned), "managed": managed, "scope": scope})
+    # Verify the merge actually stuck (a commented file, a mid-flight external edit, or
+    # a bug in the merge itself would otherwise go unnoticed until the hooks silently
+    # don't fire) — loud warning only, never fatal to the emit.
+    if not is_copilot:
+        _settings_integrity_check(settings_path, managed, expect="present")
     return n_agents, n_skills, len(managed.get("settings_hooks", [])), mem_status, nb_status, managed
 
 
@@ -425,40 +580,184 @@ def emit_claude(theme_name: str, out: Path, root: Path | None = None,
 
 
 # IBM Bob (bob.ibm.com) is Claude-Code-shaped: a `.bob/` project layer + an AGENTS.md
-# instructions file (auto-loaded), SKILL.md skills, agents, and a settings.json that also
-# carries `mcpServers`. So both Bob emits REUSE the Claude engine, only swapping the
-# marker dir (.bob) and the instructions filename (AGENTS.md). Best-effort: the agent
-# frontmatter + settings.json hook merge use the Claude dialect (unverified for Bob, but
-# Bob is Claude-derived); MCP wiring lives in rituals/_harness_mcp (settings.json key
-# `mcpServers`). If Bob's exact layout differs, only these two wrappers need adjusting.
+# instructions file, SKILL.md skills, agents, and a settings.json that also carries
+# `mcpServers`. So both Bob emits REUSE the Claude engine, only swapping the marker dir
+# (.bob) and the instructions filename (AGENTS.md). Two verified Bob-isms the engine
+# handles: (1) only a PROJECT-ROOT AGENTS.md is auto-loaded — a global ~/.bob/AGENTS.md
+# is not — so the preamble rides rules/geneseed.md, Bob's documented always-injected
+# channel: the full preamble at global scope (no AGENTS.md is written there), a slim
+# shadow stub at project scope (the root AGENTS.md carries the preamble; a full second
+# copy would double the per-turn token cost); (2) claudeMdExcludes is Claude-only,
+# so Bob never gets one (the workspace rules file overriding the global one IS the
+# project-bypasses-global). Still best-effort: the agent frontmatter + settings.json hook
+# merge use the Claude dialect (hooks are unverified for Bob and inert if unsupported);
+# MCP wiring lives in rituals/_harness_mcp (settings.json key `mcpServers`).
+
+
+def _project_survivors(emit_name: str) -> "list[Path]":
+    """Registered per-repo PROJECT installs of `emit_name` still on record — read
+    straight from `_install_registry` (pure stdlib, no import cycle with build.py — see
+    its own docstring) rather than `rituals/_harness_mcp._registered_targets`, which this
+    build-side module must never import (build.py is imported BY harness.py; a
+    back-import would be circular). Each candidate root's own `.geneseed-emit` marker
+    is read directly and compared to the literal project emit name — the one-entry
+    equivalent of `_EMIT_HOST_SCOPE[emit_name] == (emit_name, "project")`
+    without duplicating that whole table here. Dead/stale registry rows are pruned by
+    `roots()` itself; unreadable markers are skipped, never raised."""
+    try:
+        import _install_registry
+    except Exception:
+        return []
+    out: "list[Path]" = []
+    for root in _install_registry.roots():
+        try:
+            marker = (root / ".geneseed-emit").read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if marker == emit_name:
+            out.append(root)
+    return out
+
+
+def _warn_bob_global_over_project(cfg: Path) -> None:
+    """A GLOBAL Bob emit writes the full preamble into `<cfg>/rules/geneseed.md`. If a
+    PROJECT Bob install already exists elsewhere (its own `.bob/rules/geneseed.md` is
+    the slim shadow stub, but Bob auto-loads BOTH the workspace rules folder and the
+    global one whenever it runs inside that project — the stub only shadows a
+    same-named global rule when Bob's precedence is honoured; nothing here can verify
+    that at emit time), warn so the operator knows two preambles may now be in play for
+    that repo and can remove the one they don't want. Purely informational — never
+    auto-removes anything, mirrors `_print_surviving_project_inventory`'s uninstall-side
+    warning but fires at EMIT time instead, before the double-load ever happens."""
+    survivors = _project_survivors("bob")
+    if not survivors:
+        return
+    print(f"[geneseed] WARN: {len(survivors)} project Bob install(s) already exist — "
+          f"emitting GLOBAL now means BOTH may auto-load together in those repos "
+          f"(doubled context) unless Bob's workspace rules truly shadow the global "
+          f"one there. Review and remove what you don't want:", file=sys.stderr)
+    for root in survivors:
+        print(f'  - {root}  ->  harness uninstall --target "{root}"', file=sys.stderr)
+
+
 def emit_bob_global(theme_name: str, out: Path | None = None, cfg: Path | None = None,
                     footprint: str = "full") -> None:
-    """Render the harness into Bob's GLOBAL config dir (~/.bob). AGENTS.md carries the
-    instructions; agents/skills/settings.json mirror the Claude global emit. `cfg`
-    overrides the target (tests/doctor)."""
+    """Render the harness into Bob's GLOBAL config dir (~/.bob). rules/geneseed.md carries
+    the instructions (Bob's always-injected channel — a global AGENTS.md is not auto-
+    loaded, so none is written; a re-emit removes one left by an older install);
+    agents/skills/settings.json mirror the Claude global emit. `cfg` overrides the
+    target (tests/doctor). Before writing, warns (non-blocking) if any project-scoped
+    Bob install is already registered elsewhere — see `_warn_bob_global_over_project`.
+    The reverse direction (a PROJECT emit while a global install exists) needs no
+    matching check: the project's own `rules/geneseed.md` shadow stub is written
+    specifically so the workspace copy always wins over the global one by filename,
+    regardless of which was emitted first — see `_BOB_RULES_STUB`."""
     cfg = cfg or _bob_config_dir()
+    _warn_bob_global_over_project(cfg)
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
-        theme_name, cfg, cfg / "AGENTS.md", "global", out, footprint)
+        theme_name, cfg, cfg / "AGENTS.md", "global", out, footprint, host="bob")
     print(f"[geneseed] bob-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
-          f"AGENTS.md, {n_hooks} hook group(s), settings.json, {mem_status}, {nb_status}.")
+          f"rules/geneseed.md (Bob's always-injected channel; a global AGENTS.md is not "
+          f"auto-loaded, so none is written), {n_hooks} hook group(s), settings.json, "
+          f"{mem_status}, {nb_status}.")
 
 
 def emit_bob(theme_name: str, out: Path, root: Path | None = None,
              footprint: str = "full") -> None:
-    """Per-repo Bob install: AGENTS.md at the repo root + a project `.bob/` layer (agents,
-    skills, settings.json). Reuses the Claude engine's manifest + claim-on-create, so a
-    user's own `.bob/` files are never clobbered. `out`/`root` mirror emit_claude."""
+    """Per-repo Bob install: AGENTS.md at the repo root (auto-loaded by Bob, carries the
+    preamble) + a project `.bob/` layer (agents, skills, rules/geneseed.md, settings.json).
+    The rules file is a slim stub whose filename shadows the global rules copy — Bob's
+    native project-bypasses-global — without re-paying the preamble's per-turn token
+    cost. Reuses the Claude engine's manifest + claim-on-create, so a user's own `.bob/`
+    files are never clobbered. `out`/`root` mirror emit_claude."""
     root = root or out
     cfg = root / ".bob"
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
-        theme_name, cfg, root / "AGENTS.md", "project", out, footprint)
+        theme_name, cfg, root / "AGENTS.md", "project", out, footprint, host="bob")
     print(f"[geneseed] bob (folder) -> {root}: AGENTS.md + .bob/ "
-          f"({n_agents} subagents, {n_skills} skills, {n_hooks} hook group(s), settings.json), "
-          f"{mem_status}, {nb_status}.")
+          f"({n_agents} subagents, {n_skills} skills, rules/geneseed.md shadow stub, "
+          f"{n_hooks} hook group(s), settings.json), {mem_status}, {nb_status}.")
+
+
+# GitHub Copilot is the second Claude-shaped host, and a closer fit than Bob: skills
+# are the same SKILL.md dirs (Copilot's Agent Skills — repo .github/skills/, personal
+# ~/.copilot/skills), custom agents are markdown-with-frontmatter (its own dialect and
+# a `.agent.md` extension — see _build_emit._copilot_agent_frontmatter), the repo-root
+# AGENTS.md is auto-loaded at project scope, and — unlike Bob — a PERSONAL instructions
+# file (~/.copilot/copilot-instructions.md) is auto-loaded by the Copilot CLI, so the
+# global emit has a real carrier and needs no rules-folder workaround. Two verified
+# Copilot-isms the engine handles via `host="copilot"`: (1) there is NO settings.json
+# and no hook mechanism, so the settings/hooks/excludes stage is skipped entirely —
+# the install is docs + skills + agents only, and the memory convention rides on the
+# preamble's instructions instead of a Stop hook; (2) the per-repo layer lives in the
+# SHARED .github/ dir (Copilot's repo config surface), not a tool-private marker dir —
+# safe because the engine's manifest + claim-on-create machinery never touches files
+# it doesn't own. There is no project-bypasses-global exclude mechanism either: the
+# global emit warns (like Bob's) when project installs exist, since both preambles
+# load together. MCP wiring lives in rituals/_harness_mcp (~/.copilot/mcp-config.json).
+
+
+def _warn_copilot_global_over_project(cfg: Path) -> None:
+    """A GLOBAL Copilot emit writes the full preamble into ~/.copilot/
+    copilot-instructions.md, which the Copilot CLI loads in EVERY repo — including
+    repos carrying a PROJECT Copilot install whose root AGENTS.md holds the same
+    preamble. Copilot documents no exclude/shadow mechanism (nothing like Claude's
+    claudeMdExcludes or Bob's same-named workspace rule), so both copies simply stack.
+    Warn so the operator can remove the one they don't want — purely informational,
+    mirrors `_warn_bob_global_over_project`."""
+    survivors = _project_survivors("copilot")
+    if not survivors:
+        return
+    print(f"[geneseed] WARN: {len(survivors)} project Copilot install(s) already exist — "
+          f"emitting GLOBAL now means BOTH preambles load together in those repos "
+          f"(doubled context): Copilot stacks ~/.copilot/copilot-instructions.md on top "
+          f"of a repo's own AGENTS.md. Review and remove what you don't want:",
+          file=sys.stderr)
+    for root in survivors:
+        print(f'  - {root}  ->  harness uninstall --target "{root}"', file=sys.stderr)
+
+
+def emit_copilot_global(theme_name: str, out: Path | None = None, cfg: Path | None = None,
+                        footprint: str = "full") -> None:
+    """Render the harness into Copilot's PERSONAL config dir (~/.copilot).
+    copilot-instructions.md carries the instructions as a managed block (the CLI
+    auto-loads it); agents land as agents/<name>.agent.md in Copilot's custom-agent
+    dialect, skills byte-identical under skills/. No settings.json, hooks or excludes —
+    Copilot has none (see the host note above). `cfg` overrides the target
+    (tests/doctor). Warns (non-blocking) when project-scoped Copilot installs are
+    already registered — the two preambles stack; see
+    `_warn_copilot_global_over_project`."""
+    cfg = cfg or _copilot_config_dir()
+    _warn_copilot_global_over_project(cfg)
+    n_agents, n_skills, _n_hooks, mem_status, nb_status, _ = _emit_claude_core(
+        theme_name, cfg, cfg / "copilot-instructions.md", "global", out, footprint,
+        host="copilot")
+    print(f"[geneseed] copilot-global -> {cfg}: {n_agents} agents (.agent.md), "
+          f"{n_skills} skills, copilot-instructions.md, {mem_status}, {nb_status}. "
+          f"No settings.json/hooks (Copilot has no hook mechanism — memory rides the "
+          f"preamble's instructions); MCP servers go in mcp-config.json.")
+
+
+def emit_copilot(theme_name: str, out: Path, root: Path | None = None,
+                 footprint: str = "full") -> None:
+    """Per-repo Copilot install: AGENTS.md at the repo root (auto-loaded by the Copilot
+    CLI, coding agent and VS Code agent mode; carries the preamble) + a `.github/` layer
+    (agents/<name>.agent.md, skills/, both Copilot-native discovery paths). `.github/`
+    is the repo's SHARED config dir — the manifest + claim-on-create machinery is what
+    makes writing there safe (a user's own workflows/agents/skills are never clobbered,
+    and uninstall removes only manifest-owned files). No settings.json or hooks.
+    `out`/`root` mirror emit_claude."""
+    root = root or out
+    cfg = root / ".github"
+    n_agents, n_skills, _n_hooks, mem_status, nb_status, _ = _emit_claude_core(
+        theme_name, cfg, root / "AGENTS.md", "project", out, footprint, host="copilot")
+    print(f"[geneseed] copilot (folder) -> {root}: AGENTS.md + .github/ "
+          f"({n_agents} agents (.agent.md), {n_skills} skills), {mem_status}, "
+          f"{nb_status}. No settings.json/hooks (Copilot has none).")
 
 
 # The host registry — the single source of truth shared by build dispatch and the
-# install-detection/activation layer (rituals/_harness_mcp.py). Bounded to the two
+# install-detection/activation layer (rituals/_harness_mcp.py). Bounded to the four
 # hosts that exist (YAGNI): each row is the data those layers need to stop hardcoding
 # ".opencode"/"AGENT.md"/"opencode.json". wire/unwire are NOT here — their signatures
 # differ per host (opencode.json `instructions` splice vs settings.json hook merge), so
@@ -485,6 +784,13 @@ HOSTS = {
         "project_marker": ".bob",
         "agent_file": "AGENTS.md",
         "emit_global": emit_bob_global,
+    },
+    "copilot": {
+        "config_dir": _copilot_config_dir,
+        "config_file": "mcp-config.json",
+        "project_marker": ".github",
+        "agent_file": "AGENTS.md",
+        "emit_global": emit_copilot_global,
     },
 }
 

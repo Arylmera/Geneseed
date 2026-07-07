@@ -60,6 +60,7 @@
   "DESC_DRILL": "Grind shaky knowledge into muscle memory — dropped into real fights and quizzed on your misplays, no answer until you've tried.",
   "DESC_DECODE": "Make a confusing wall of text click — the one keystone line first, a plain analogy, then a check before you continue.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_RULE": "Bind a standing house rule into user-rules.md — triage what isn't one, and promote the lesson that keeps respawning.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Take the review feedback like a coach's notes — verify each call, then apply it or push back with reasons.",
   "LEX_I": "No-Leak Run · Sealed Secrets",
@@ -121,5 +122,6 @@
   "DESC_MCP": "Build or harden an MCP server — read the spec, design task-shaped tools, test with the Inspector, and prove it with evals.",
   "DESC_PROSE": "Write like a player, not a bot — cut the filler, keep it active, mix up the rhythm, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a real identity — palette, type, and layout picked for this brief, not the default skin, then cut it down to one bold move.",
-  "DESC_WORKFLOW": "Run a saved combo that scripts your party — fan out, chain the stages, and verify the clear, all in one deterministic rotation."
+  "DESC_WORKFLOW": "Run a saved combo that scripts your party — fan out, chain the stages, and verify the clear, all in one deterministic rotation.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

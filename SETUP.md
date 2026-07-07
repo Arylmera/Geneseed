@@ -8,6 +8,9 @@
 
 </div>
 
+> **In a hurry?** The 5-minute recommended path is **[QUICKSTART.md](QUICKSTART.md)**.
+> This page is the full reference: every install path, knob, and troubleshooting step.
+
 ---
 
 You pick a **theme** — the voice and vocabulary the harness wears — and an **install mode**;
@@ -45,7 +48,9 @@ install ends on the theme's own **banner and benediction**.
 interactive **main menu**: *Browse*, *Review local edits*, *Refresh / set up*,
 *Update only*, *Update & set up*, *Rebuild bundle*, *Memory*, *Status*, and
 *Settings* — a submenu for MCP servers (toggle the MarkItDown, GitLab, and
-Filesystem presets into your OpenCode config), the PATH install, and uninstall.
+Filesystem presets into your OpenCode config), the PATH install, and uninstall (global
+or per-repo — `harness uninstall --target <repo>` from the CLI, or bare `--target` runs
+against whichever project install the cwd sits in).
 **`./geneseed bootstrap`** jumps straight to update-then-setup; **`./geneseed setup`**
 straight to the wizard. Prefer to do it by hand? Pick a path below.
 
@@ -54,6 +59,7 @@ straight to the wizard. Prefer to do it by hand? Pick a path below.
 | [A — OpenCode, global](#path-a--opencode-global-recommended) | **Recommended.** One install, every repo inherits it, nothing committed into projects. |
 | [B — OpenCode, per-repo](#path-b--opencode-per-repo) | You want a committed `.opencode/` layer in one repository. |
 | [C — Claude Code](#path-c--claude-code) | You drive Claude Code and want the lifecycle hooks. |
+| [C′ — GitHub Copilot](#path-c--github-copilot) | You drive the Copilot CLI, coding agent, or VS Code agent mode. |
 | [D — Any `AGENT.md` tool](#path-d--any-agentmd-tool) | Cursor, Aider, or any tool that reads a root instructions file. |
 | [E — No Python on the target](#path-e--no-python-on-the-target) | The machine that *uses* the harness can't run Python. |
 
@@ -129,6 +135,34 @@ It wires:
 
 Detail: [adapters/claude-code/](adapters/claude-code/README.md).
 
+### Path C′ — GitHub Copilot
+
+```
+python build.py --emit copilot-global          # personal: render into ~/.copilot
+python build.py --emit copilot --out . --root . # per-repo: AGENTS.md + .github/, committed
+```
+
+Copilot is Claude-shaped where it counts: skills are the same `SKILL.md` folders
+(Copilot's Agent Skills — `.github/skills/` in a repo, `~/.copilot/skills/`
+personally), agents render in Copilot's own custom-agent dialect
+(`agents/<name>.agent.md`, a `tools:` allowlist instead of Claude's denylist), and
+the preamble rides a file Copilot auto-loads: the repo-root `AGENTS.md` (CLI, coding
+agent, and VS Code agent mode) or the personal `~/.copilot/copilot-instructions.md`
+(CLI). Two differences from the Claude paths:
+
+- **No hooks.** Copilot has no settings.json or hook mechanism, so there is no
+  eager context injection and no `harness learn` Stop-hook — the memory convention
+  still applies, driven by the preamble's instructions alone.
+- **The per-repo layer lives in the shared `.github/`** (Copilot's repo config
+  surface). Safe by construction: the ownership manifest + claim-on-create never
+  touch files Geneseed didn't write — your workflows and same-named agents/skills
+  survive every emit and uninstall.
+
+MCP servers go in `~/.copilot/mcp-config.json` (the Settings/MCP screens know the
+shape). `$COPILOT_CONFIG_DIR` relocates the personal dir, mirroring
+`$BOB_CONFIG_DIR`. Note both carriers stack if you install globally *and* per-repo —
+the global emit warns when that's about to happen.
+
 ### Path D — Any `AGENT.md` tool
 
 ```
@@ -166,6 +200,16 @@ Choose any of the 14 themes in `themes/` — `neutral` (plain), `imperial` (Warh
 `.geneseed-theme` marker, so later upgrades keep it. Adding your own is one JSON file
 of voice tokens; `doctor` checks every theme defines the same keys.
 
+Adding a new voice token to `themes/_TEMPLATE.json` means all 14 theme files need it
+too, or the parity check fails. `python build.py --sync-themes` does the mechanical
+part: it copies any key the template has but a theme is missing into that theme
+(filled with the template's placeholder text), in template order, and prints exactly
+which keys were added so you can restyle them in that theme's voice. It never deletes
+a key a theme has that the template doesn't — those are only reported. The edit is
+surgical (only the inserted lines change; nothing is reformatted), and the exit code
+doubles as a CI drift check: non-zero when it had to change files, `0` when every
+theme was already in sync.
+
 ### Footprint (lean vs full)
 
 **Footprint** sets how much of the Rules `AGENT.md` carries *inline* on every turn — a
@@ -189,7 +233,7 @@ you run a smaller model.
 **Same harness, either way.** Footprint changes neither what the harness *is* nor what it
 can *do*: lean and full emit identical files (same agents, skills, plugins, commands, memory,
 notebook, hooks) and every Rule is present and binding. The only structural difference is
-that a lean install on a global / Claude / Bob target also ships the standalone
+that a lean install on a global / Claude / Bob / Copilot target also ships the standalone
 `laws/universal.md` (project bundles already carry it); the only behavioural difference is
 that each Rule's reasoning loads on demand instead of every turn — which is why full, with
 the rationale always in front of the model, applies a rule's nuance more reliably on subtle
@@ -198,7 +242,22 @@ edge cases (or with a weaker model), and stays the default.
 Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** toggle in
 the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It is
 remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
-host (OpenCode, Claude Code, Bob).
+host (OpenCode, Claude Code, Bob, Copilot).
+
+### Dry-run a build (`--validate-only`)
+
+```
+python build.py --validate-only --theme imperial --emit opencode --out /path/to/repo/Harness
+```
+
+Renders and emits the requested `--theme`/`--emit`/`--out`/`--root`/`--footprint`
+combination into a throwaway sandbox — nothing under the real `--out`/`--root` is
+written, no marker files, no settings merge, no install-registry record — then runs
+every doctor-grade check against it (unresolved tokens, dead/non-hermetic links, theme
+parity, authoring gates, AGENT.md table parity). Prints a per-layer file count of what
+would have been written (`-v`/`--verbose` for the full path list) and exits non-zero on
+any problem, `0` when clean. Useful in CI, or before pointing a real deploy at a repo you
+don't want to touch yet.
 
 ### Project context (usually nothing)
 
@@ -228,6 +287,30 @@ Override only when the convention doesn't fit — drop a `.harness/context.json`
 `path` is absolute, repo-relative, or a glob; `load` is `eager` | `lazy` | `exclude`;
 `"extend": true` layers the manifest on top of discovery. Schema:
 [GLOBAL-HARNESS-SPEC.md §3](adapters/opencode/GLOBAL-HARNESS-SPEC.md).
+
+#### 📌 Worked example — a monorepo's `context.json`
+
+The harness stays lean because project knowledge does not go into it — it goes
+into this per-repo manifest, which the context plugin auto-loads at session
+start. A monorepo with docs scattered across packages might write:
+
+```json
+{
+  "extend": true,
+  "context": [
+    { "path": "docs/architecture.md", "load": "eager", "description": "system map" },
+    { "path": "api/README.md", "load": "eager" },
+    { "path": "web/README.md", "load": "eager" }
+  ]
+}
+```
+
+`"extend": true` keeps auto-discovery running (so `README.md`, `AGENT.md`, and
+the rest of the convention still apply) and layers these three eager entries on
+top. Keep the eager list to the few files a new teammate would read first —
+each `eager` entry is injected in full into every session in this repo, so it
+has a permanent token cost; prefer three sharp docs over ten broad ones, and
+reach for `"load": "lazy"` for anything a session should only read on demand.
 
 **Self-orientation extras.** The same injected block also carries two best-effort
 lines so the agent starts oriented: the repo's **runnable commands** (targets from

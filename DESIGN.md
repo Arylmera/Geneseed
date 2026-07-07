@@ -4,7 +4,7 @@
 
 **The spec behind the harness. Read this before changing structure.**
 
-[← Back to README](README.md) · [Setup guide](SETUP.md) · [Specs archive](docs/specs/)
+[← Back to README](README.md) · [Setup guide](SETUP.md)
 
 </div>
 

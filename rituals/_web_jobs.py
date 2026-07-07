@@ -5,6 +5,25 @@ from __future__ import annotations
 
 from _web_core import *  # noqa: F401,F403  shared stdlib + primitives
 
+import signal  # noqa: E402
+
+
+def _kill_job_tree(p: "subprocess.Popen") -> None:
+    """Terminate a job's WHOLE process tree. Killing only the direct child
+    (harness.py) leaves its own children (build.py, git) holding the stdout
+    pipe — the run thread stays blocked on it and the job wedges 'running'."""
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)],
+                           capture_output=True, timeout=15, **harness.NO_WINDOW)
+        else:
+            os.killpg(p.pid, signal.SIGTERM)
+    except (OSError, subprocess.SubprocessError):
+        try:
+            p.terminate()
+        except OSError:
+            pass
+
 
 class JobManager:
     """Runs one mutating action at a time in a background thread, capturing
@@ -13,7 +32,8 @@ class JobManager:
     HISTORY_MAX, output capped) so the console survives reload and restart."""
 
     HISTORY_MAX = 20
-    OUTPUT_CAP = 20000  # chars of output kept per job in the history file
+    OUTPUT_CAP = 20000     # chars of output kept per job in the history file
+    MEM_CAP = 2_000_000    # chars kept in memory per job while it runs
 
     def __init__(self, history_path: "Path | None" = None):
         self._lock = threading.Lock()
@@ -69,20 +89,38 @@ class JobManager:
 
     def _append(self, jid: str, text: str):
         with self._lock:
-            self._jobs[jid]["output"] += text
+            j = self._jobs[jid]
+            j["output"] += text
+            if len(j["output"]) > self.MEM_CAP:   # a runaway job can't eat the daemon
+                j["output"] = j["output"][-self.MEM_CAP:]
 
     def _run(self, jid: str, cmds, on_done=None):
         rc = 0
+        p = None
         try:
-            for cmd in cmds:
+            for i, cmd in enumerate(cmds):
                 self._append(jid, f"$ {' '.join(str(c) for c in cmd)}\n")
                 # Stream combined stdout/stderr line-by-line so the web console
                 # fills live (terminal-style) instead of dumping at the end.
+                # PYTHONUNBUFFERED reaches the child AND its own python children
+                # (harness.py -> build.py / doctor), otherwise their stdout is
+                # block-buffered into the pipe and the console looks stuck.
+                # GENESEED_WEB_JOB tells `upgrade` it runs INSIDE this daemon, so
+                # it must not bounce the daemon mid-job (that killed the job's
+                # tracking and left the console on 'running' forever) — the
+                # server restarts itself after the job is saved as finished.
+                # start_new_session gives the job its own process GROUP, so
+                # cancel() can kill the whole tree, not just harness.py.
+                kw: dict = dict(harness.NO_WINDOW)
+                if sys.platform != "win32":
+                    kw["start_new_session"] = True
                 p = subprocess.Popen(
                     cmd, cwd=str(ROOT), stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, text=True,
                     encoding="utf-8", errors="replace", bufsize=1,
-                    **harness.NO_WINDOW)
+                    env={**os.environ, "PYTHONUNBUFFERED": "1",
+                         "GENESEED_WEB_JOB": "1"},
+                    **kw)
                 with self._lock:
                     self._procs[jid] = p   # reachable for cancel()
                 for line in p.stdout:
@@ -92,12 +130,27 @@ class JobManager:
                     self._procs.pop(jid, None)
                 rc = p.returncode
                 if rc != 0:
+                    left = len(cmds) - i - 1
+                    self._append(
+                        jid,
+                        f"\n[web] ✗ command exited with code {rc}"
+                        + (f" — skipping the {left} remaining step(s).\n" if left
+                           else ".\n"))
                     break
         except Exception as e:  # noqa: BLE001
             self._append(jid, f"\n[web] job crashed: {e}")
             rc = 1
+            # Don't orphan the child on a crash of OUR side (pipe error etc.):
+            # kill its tree and reap it, or it lingers as a zombie in the daemon.
+            if p is not None and p.poll() is None:
+                _kill_job_tree(p)
+                try:
+                    p.wait(timeout=10)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
         finally:
             with self._lock:
+                self._procs.pop(jid, None)
                 j = self._jobs[jid]
                 j.update(status="done" if rc == 0 else "failed", returncode=rc,
                          duration=round(time.time() - j["started"], 1))
@@ -105,7 +158,7 @@ class JobManager:
             self._save_history()
             if on_done:
                 try:
-                    on_done()
+                    on_done(rc)   # callbacks take the exit code (0 = every step ok)
                 except Exception:  # noqa: BLE001 — refresh must never kill the job thread
                     pass
 
@@ -118,10 +171,7 @@ class JobManager:
             if p is None or not j or j["status"] != "running":
                 return False
         self._append(jid, "\n[web] cancelled by user.\n")
-        try:
-            p.terminate()
-        except OSError:
-            pass
+        _kill_job_tree(p)
         return True
 
     def get(self, jid: str) -> "dict | None":

@@ -61,6 +61,29 @@ class ClaudeEmitTests(unittest.TestCase):
         self.assertFalse(any("cat AGENT.md" in c for c in _hook_cmds(s)))
         self.assertFalse((self.cfg / "plugins").exists())
 
+    def test_no_dead_skill_links_in_managed_block(self):
+        """CLAUDE.md's skill/agent table links are stripped to plain names — Claude
+        Code discovers skills/agents natively, and the native layer writes each skill
+        as a FOLDER (skills/<name>/SKILL.md), so a per-row `skills/<name>.md`-style
+        href is always dead. Regression for the project-scope prefixed form
+        (`.claude/skills/<name>.md`) that CAPABILITY_LINK_RE previously missed because
+        it only matched a BARE `agents/`/`skills/` prefix."""
+        build.emit_claude("neutral", self.tmp / "Harness", self.tmp)
+        cm = _read(self.tmp / "CLAUDE.md")
+        self.assertNotRegex(cm, r"\]\([^)]*(?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
+        # The strip keeps the table's visible name/trigger text, not just deletes rows.
+        self.assertIn("| clarify |", cm)
+        self.assertIn("| council |", cm)
+
+    def test_no_dead_skill_links_in_bob_agents_md(self):
+        """Same regression as CLAUDE.md, for Bob's AGENTS.md — the `.bob/skills/...`
+        prefixed form CAPABILITY_LINK_RE previously missed too."""
+        build.emit_bob("neutral", self.tmp / "Harness", self.tmp)
+        am = _read(self.tmp / "AGENTS.md")
+        self.assertNotRegex(am, r"\]\([^)]*(?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
+        self.assertIn("| clarify |", am)
+        self.assertIn("| council |", am)
+
     def test_skills_byte_identical_to_opencode(self):
         oc = self.tmp / "dotopencode"
         build.emit_claude_global("neutral", cfg=self.cfg)
@@ -101,12 +124,134 @@ class ClaudeEmitTests(unittest.TestCase):
         repo.mkdir()
         build.emit_claude("neutral", repo)
         self.assertTrue((repo / "CLAUDE.md").is_file())
-        self.assertTrue((repo / ".claude" / "settings.json").is_file())
+        # Machine-absolute hooks land in the PERSONAL settings.local.json, never the
+        # team-shared settings.json (which is not even created).
+        self.assertTrue((repo / ".claude" / "settings.local.json").is_file())
+        self.assertFalse((repo / ".claude" / "settings.json").exists())
         self.assertTrue((repo / ".claude" / build.GLOBAL_MANIFEST).is_file())
         # learn hook points at the project's own memory store (absolute).
-        s = json.loads(_read(repo / ".claude" / "settings.json"))
+        s = json.loads(_read(repo / ".claude" / "settings.local.json"))
         learn = [c for c in _hook_cmds(s) if "learn" in c]
         self.assertTrue(learn and str((repo / ".claude" / "memory")) in learn[0])
+        # store pointers in the root CLAUDE.md carry the marker-dir prefix — bare
+        # `memory/` would point at a nonexistent repo-root store (split-brain memory).
+        self.assertIn(".claude/memory", _read(repo / "CLAUDE.md"))
+        # hygiene: the personal/never-commit files are gitignored.
+        gi = _read(repo / ".claude" / ".gitignore")
+        for line in ("settings.local.json", "wiki.jsonc", "agent-overrides.json"):
+            self.assertIn(line, gi)
+
+
+class SettingsIntegrityCheckTests(unittest.TestCase):
+    """build._settings_integrity_check verifies a settings.json actually matches what
+    the manifest claims — after emit (expect='present') and after unwire
+    (expect='absent') — and flags unrecorded Geneseed-pattern hooks. It must never
+    raise, and a clean emit/unwire must report zero problems."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.cfg = self.tmp / "dotclaude"
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_clean_emit_passes_integrity_check(self):
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        managed = man["managed"]
+        settings = json.loads(_read(self.cfg / "settings.json"))
+        problems = build._settings_integrity_check(
+            self.cfg / "settings.json", managed, expect="present")
+        self.assertEqual(problems, [])
+        # sanity: the settings really do carry the recorded groups (not a vacuous pass)
+        self.assertTrue(settings.get("hooks"))
+
+    def test_hand_mangled_settings_flags_missing_group(self):
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        managed = man["managed"]
+        # Hand-mangle: delete a recorded hook group the manifest still claims.
+        settings_path = self.cfg / "settings.json"
+        s = json.loads(_read(settings_path))
+        del s["hooks"]["Stop"]
+        settings_path.write_text(json.dumps(s), encoding="utf-8")
+
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            problems = build._settings_integrity_check(settings_path, managed, expect="present")
+        self.assertTrue(problems, "hand-deleted group was not flagged")
+        self.assertTrue(any("Stop" in p for p in problems))
+        self.assertIn("WARN", buf.getvalue())
+
+    def test_uninstall_unwired_settings_passes_absent_check(self):
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        managed = man["managed"]
+        harness._claude_uninstall(self.cfg, archive_memory=False)
+        # Uninstall deletes the manifest but the settings.json (a user file) remains;
+        # its hooks/excludes must all be gone per the ORIGINAL managed claims.
+        problems = build._settings_integrity_check(
+            self.cfg / "settings.json", managed, expect="absent")
+        self.assertEqual(problems, [])
+
+    def test_unrecorded_geneseed_pattern_hook_warns_but_is_not_removed(self):
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        managed = man["managed"]
+        settings_path = self.cfg / "settings.json"
+        s = json.loads(_read(settings_path))
+        # An orphan Geneseed-shaped entry the manifest never claimed (e.g. a leftover
+        # from a moved checkout) under an event the manifest doesn't track.
+        s.setdefault("hooks", {})["Notification"] = [
+            {"hooks": [{"type": "command", "command": 'python "C:/old/harness.py" learn'}]}]
+        settings_path.write_text(json.dumps(s), encoding="utf-8")
+
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            problems = build._settings_integrity_check(settings_path, managed, expect="present")
+        self.assertTrue(any("NOT recorded" in p for p in problems))
+        # never auto-deleted
+        s2 = json.loads(_read(settings_path))
+        self.assertIn("Notification", s2.get("hooks", {}))
+
+    def test_missing_settings_file_after_present_expectation_is_flagged(self):
+        managed = {"settings_hooks": [{"event": "Stop", "group": {"hooks": []}}]}
+        missing = self.cfg / "settings.json"   # cfg dir doesn't even exist
+        problems = build._settings_integrity_check(missing, managed, expect="present")
+        self.assertTrue(problems)
+
+    def test_missing_settings_file_after_absent_expectation_is_clean(self):
+        managed = {"settings_hooks": [{"event": "Stop", "group": {"hooks": []}}]}
+        missing = self.cfg / "settings.json"
+        problems = build._settings_integrity_check(missing, managed, expect="absent")
+        self.assertEqual(problems, [])
+
+    def test_commented_settings_file_is_still_checked_after_unwire(self):
+        # _unwire_claude_settings refuses to rewrite a commented file (silently), so
+        # hooks linger after an uninstall — the checker must flag them, not ALSO go
+        # silent on had_comments (the exact case the call sites claim to guard).
+        import contextlib, io
+        self.cfg.mkdir(parents=True)
+        sp = self.cfg / "settings.json"
+        group = {"hooks": [{"type": "command",
+                            "command": 'python "x/rituals/harness.py" learn'}]}
+        sp.write_text("// my precious comments\n"
+                      + json.dumps({"hooks": {"Stop": [group]}}, indent=2),
+                      encoding="utf-8")
+        managed = {"settings_hooks": [{"event": "Stop", "group": group}]}
+        # the unwire bails on the comments (and now says so via its return) ...
+        self.assertFalse(build._unwire_claude_settings(sp, managed["settings_hooks"]))
+        # ... and the checker still reports the lingering group instead of going silent.
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            problems = build._settings_integrity_check(sp, managed, expect="absent")
+        self.assertTrue(any("still present" in p for p in problems), problems)
+        self.assertIn("WARN", buf.getvalue())
+        # read-only: the user's commented file was not rewritten by the check.
+        self.assertIn("my precious comments", sp.read_text(encoding="utf-8"))
 
 
 class ClaudeSafetyTests(unittest.TestCase):
@@ -143,7 +288,7 @@ class ClaudeSafetyTests(unittest.TestCase):
         cm = _read(self.cfg / "CLAUDE.md")
         self.assertIn("keep this", cm)
         self.assertIn("<!-- BEGIN GENESEED -->", cm)
-        self.assertFalse(man["managed"]["claude_md"]["whole"])
+        self.assertFalse(man["managed"]["claude_md"].get("whole"))
         # user settings key + their own hook survive; geneseed hooks added
         s = json.loads(_read(self.cfg / "settings.json"))
         self.assertEqual(s["model"], "opus")
@@ -172,6 +317,29 @@ class ClaudeSafetyTests(unittest.TestCase):
         # Geneseed's own agents are gone; markers gone.
         self.assertFalse((self.cfg / "agents" / "reviewer.md").exists())
         self.assertFalse((self.cfg / build.GLOBAL_MANIFEST).exists())
+
+    def test_uninstall_keeps_prose_added_after_creation(self):
+        # Geneseed CREATES CLAUDE.md in an empty dir; the user then adds their own
+        # prose. The old sticky `whole` flag deleted the whole file at uninstall —
+        # eating that prose. Teardown must excise the block and keep the rest.
+        cfg = (self.tmp / "fresh").resolve()
+        cfg.mkdir()
+        build.emit_claude_global("neutral", cfg=cfg)
+        cm = cfg / "CLAUDE.md"
+        cm.write_text(_read(cm) + "\nMY LATER NOTES\n", encoding="utf-8")
+        harness._uninstall_global(cfg, archive_memory=False, host="claude")
+        self.assertTrue(cm.is_file(), "user prose deleted with the file")
+        self.assertIn("MY LATER NOTES", _read(cm))
+        self.assertNotIn("<!-- BEGIN GENESEED -->", _read(cm))
+
+    def test_uninstall_removes_pristine_created_claude_md(self):
+        # No user prose ever added: excision leaves the file empty → it is removed
+        # (same end state the whole-file delete used to produce, minus the risk).
+        cfg = (self.tmp / "pristine").resolve()
+        cfg.mkdir()
+        build.emit_claude_global("neutral", cfg=cfg)
+        harness._uninstall_global(cfg, archive_memory=False, host="claude")
+        self.assertFalse((cfg / "CLAUDE.md").exists())
 
 
 class ClaudeActivationTests(unittest.TestCase):
@@ -225,6 +393,55 @@ class ClaudeActivationTests(unittest.TestCase):
         self.assertFalse((self.cfg / ".geneseed-disabled").exists(), "stale stash not discarded")
         self.assertTrue((self.cfg / "agents" / "reviewer.md").is_file())
         self.assertEqual(harness._install_state(self.cfg, "claude", "global"), "active")
+
+    def test_bob_global_reactivate_discards_stash_after_reemit(self):
+        # Bob GLOBAL writes no managed AGENTS.md block (rules/geneseed.md is the
+        # preamble carrier), so the relive guard must key on THAT — without it the
+        # restore collides with every freshly re-emitted file and the install is
+        # stuck "disabled" until the stash is hand-deleted.
+        bobcfg = (self.tmp / "dotbob").resolve()
+        bobcfg.mkdir()
+        build.emit_bob_global("neutral", cfg=bobcfg)
+        self.assertEqual(harness._install_state(bobcfg, "bob", "global"), "active")
+        harness._install_deactivate(bobcfg, "bob", "global")
+        self.assertEqual(harness._install_state(bobcfg, "bob", "global"), "disabled")
+        build.emit_bob_global("neutral", cfg=bobcfg)   # re-created while disabled
+        res = harness._install_reactivate(bobcfg, "bob", "global")
+        self.assertTrue(res["ok"], res)
+        self.assertIn("discarded", res.get("note", ""))
+        self.assertFalse((bobcfg / ".geneseed-disabled").exists(), "stale stash not discarded")
+        self.assertTrue((bobcfg / "rules" / "geneseed.md").is_file())
+        self.assertEqual(harness._install_state(bobcfg, "bob", "global"), "active")
+
+    def test_reemit_prunes_stale_managed_hook_group(self):
+        # A recorded managed group that is no longer canonical (old interpreter path,
+        # or the pre-`|| exit 0` hook form) must be PRUNED on re-emit, not left to
+        # stack beside the new group — a duplicated Stop hook runs `learn` twice.
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        claims = man["managed"]["settings_hooks"]
+        stop = next(r for r in claims if r["event"] == "Stop")
+        stale = {"event": "Stop",
+                 "group": json.loads(json.dumps(stop["group"]))}
+        stale["group"]["hooks"][0]["command"] = \
+            stale["group"]["hooks"][0]["command"].replace("|| exit 0", "|| true")
+        # Simulate the old install: stale form in the file AND in the manifest claims.
+        s = json.loads(_read(self.cfg / "settings.json"))
+        s["hooks"]["Stop"] = [stale["group"]]
+        (self.cfg / "settings.json").write_text(json.dumps(s), encoding="utf-8")
+        man["managed"]["settings_hooks"] = \
+            [r for r in claims if r["event"] != "Stop"] + [stale]
+        (self.cfg / build.GLOBAL_MANIFEST).write_text(json.dumps(man), encoding="utf-8")
+
+        build.emit_claude_global("neutral", cfg=self.cfg)
+        s = json.loads(_read(self.cfg / "settings.json"))
+        stops = s["hooks"]["Stop"]
+        self.assertEqual(len(stops), 1, f"stale Stop group not pruned: {stops}")
+        self.assertIn("|| exit 0", stops[0]["hooks"][0]["command"])
+        man = json.loads(_read(self.cfg / build.GLOBAL_MANIFEST))
+        recorded = [r["group"]["hooks"][0]["command"]
+                    for r in man["managed"]["settings_hooks"] if r["event"] == "Stop"]
+        self.assertEqual(len(recorded), 1, recorded)
+        self.assertIn("|| exit 0", recorded[0])
 
     def test_deactivate_leaves_no_empty_skill_folders(self):
         # tdd is a real Geneseed skill, emitted at skills/tdd/SKILL.md.
@@ -353,15 +570,19 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
                 os.environ[k] = v
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def _settings(self, repo, marker=".claude"):
-        return json.loads(_read(repo / marker / "settings.json"))
+    def _settings(self, repo, marker=".claude", fname=None):
+        # Claude project installs write the personal settings.local.json; bob (no
+        # documented local variant) keeps settings.json.
+        fname = fname or ("settings.json" if marker == ".bob" else "settings.local.json")
+        return json.loads(_read(repo / marker / fname))
 
     def test_project_emit_writes_exclude_and_scoped_hook(self):
         repo = (self.tmp / "repo").resolve(); repo.mkdir()
         build.emit_claude("neutral", repo)
         s = self._settings(repo)
         # claudeMdExcludes suppresses the GLOBAL ~/.claude/CLAUDE.md, and only that.
-        want = str((build._claude_config_dir() / "CLAUDE.md").resolve())
+        # Posix spelling: the entries are glob patterns, where a backslash escapes.
+        want = (build._claude_config_dir() / "CLAUDE.md").resolve().as_posix()
         self.assertIn(want, s.get("claudeMdExcludes", []))
         # context hook is scope-aware: --root points at the project's own .claude.
         ctx = [c for c in _hook_cmds(s) if "context" in c]
@@ -377,12 +598,90 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         s = json.loads(_read(cfg / "settings.json"))
         self.assertNotIn("claudeMdExcludes", s)
 
-    def test_bob_project_excludes_its_own_global_preamble(self):
+    def test_bob_project_writes_rules_stub_and_no_exclude(self):
+        # Bob's bypass is the rules file, NOT claudeMdExcludes (Claude-only key, unknown
+        # Bob semantics): the project ships .bob/rules/geneseed.md — always injected, and
+        # shadowing the same-named global rule — and settings.json carries no exclude.
+        # The rules file is a slim STUB (the root AGENTS.md already auto-loads the
+        # preamble; a full second copy would double the per-turn token cost).
         repo = (self.tmp / "bobrepo").resolve(); repo.mkdir()
         build.emit_bob("neutral", repo)
         s = self._settings(repo, ".bob")
-        want = str((build._bob_config_dir() / "AGENTS.md").resolve())
-        self.assertIn(want, s.get("claudeMdExcludes", []))
+        self.assertNotIn("claudeMdExcludes", s)
+        rules = repo / ".bob" / "rules" / "geneseed.md"
+        self.assertTrue(rules.is_file())
+        stub = _read(rules)
+        self.assertEqual(stub, build._BOB_RULES_STUB)
+        self.assertLess(len(stub), 1000, "the stub is injected every turn — keep it slim")
+        self.assertIn("AGENTS.md", stub)
+        # the preamble itself lives in the root AGENTS.md managed block.
+        agents_md = _read(repo / "AGENTS.md")
+        self.assertIn("<!-- BEGIN GENESEED -->", agents_md)
+        self.assertGreater(len(agents_md), len(stub))
+        man = json.loads(_read(repo / ".bob" / build.GLOBAL_MANIFEST))
+        self.assertIn("rules/geneseed.md", man["owned"])
+
+    def test_bob_global_writes_rules_preamble_and_no_agents_md(self):
+        # A global ~/.bob/AGENTS.md is not auto-loaded by Bob, so none is written;
+        # rules/geneseed.md is the channel that actually injects and carries the FULL
+        # preamble (skills already load natively from ~/.bob/skills).
+        cfg = self.tmp / "dotbob"
+        build.emit_bob_global("neutral", cfg=cfg)
+        rules = cfg / "rules" / "geneseed.md"
+        self.assertTrue(rules.is_file())
+        self.assertNotEqual(_read(rules), build._BOB_RULES_STUB)
+        self.assertGreater(len(_read(rules)), 5000, "global rules file carries the preamble")
+        self.assertFalse((cfg / "AGENTS.md").exists())
+        # and the manifest records no claude_md block, but still reads as Claude-style
+        # (cmd_uninstall must pick the Claude reversal for ~/.bob).
+        man = json.loads(_read(cfg / build.GLOBAL_MANIFEST))
+        self.assertNotIn("claude_md", man["managed"])
+        self.assertTrue(harness._manifest_is_claude(cfg))
+        self.assertNotIn("claudeMdExcludes", json.loads(_read(cfg / "settings.json")))
+
+    def test_bob_global_reemit_removes_stale_agents_md(self):
+        # Older Bob-global emits wrote AGENTS.md as a managed block; a re-emit must
+        # self-heal — delete a Geneseed-created file (whole), excise the block from a
+        # user-prose one — instead of leaving a stale preamble copy behind.
+        cfg = self.tmp / "dotbob2"
+        build.emit_bob_global("neutral", cfg=cfg)
+        stale = cfg / "AGENTS.md"
+        stale.write_text("<!-- BEGIN GENESEED -->\nold preamble\n<!-- END GENESEED -->\n",
+                         encoding="utf-8")
+        mp = cfg / build.GLOBAL_MANIFEST
+        man = json.loads(_read(mp))
+        man["managed"]["claude_md"] = {"rel": "AGENTS.md", "whole": True}
+        mp.write_text(json.dumps(man, indent=2) + "\n", encoding="utf-8")
+        build.emit_bob_global("neutral", cfg=cfg)
+        self.assertFalse(stale.exists())
+        self.assertNotIn("claude_md", json.loads(_read(mp))["managed"])
+        # user prose around the block survives the excise path (whole=False).
+        stale.write_text("my own notes\n<!-- BEGIN GENESEED -->\nold\n<!-- END GENESEED -->\n",
+                         encoding="utf-8")
+        man = json.loads(_read(mp))
+        man["managed"]["claude_md"] = {"rel": "AGENTS.md", "whole": False}
+        mp.write_text(json.dumps(man, indent=2) + "\n", encoding="utf-8")
+        build.emit_bob_global("neutral", cfg=cfg)
+        self.assertTrue(stale.exists())
+        self.assertIn("my own notes", _read(stale))
+        self.assertNotIn("BEGIN GENESEED", _read(stale))
+
+    def test_bob_reemit_self_heals_old_exclude(self):
+        # Older emits wrote the global AGENTS.md into claudeMdExcludes; a re-emit must
+        # strip it (and drop it from the manifest) rather than carry it forward.
+        repo = (self.tmp / "bobrepo2").resolve(); repo.mkdir()
+        build.emit_bob("neutral", repo)
+        stale = str((build._bob_config_dir() / "AGENTS.md").resolve())
+        sp = repo / ".bob" / "settings.json"
+        s = json.loads(_read(sp)); s["claudeMdExcludes"] = [stale]
+        sp.write_text(json.dumps(s, indent=2) + "\n", encoding="utf-8")
+        mp = repo / ".bob" / build.GLOBAL_MANIFEST
+        man = json.loads(_read(mp)); man["managed"]["settings_excludes"] = [stale]
+        mp.write_text(json.dumps(man, indent=2) + "\n", encoding="utf-8")
+        build.emit_bob("neutral", repo)
+        self.assertNotIn("claudeMdExcludes", self._settings(repo, ".bob"))
+        man = json.loads(_read(mp))
+        self.assertNotIn("settings_excludes", man["managed"])
 
     def test_stack_global_env_suppresses_the_exclude(self):
         repo = (self.tmp / "repo2").resolve(); repo.mkdir()
@@ -397,6 +696,41 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         os.environ["GENESEED_STACK_GLOBAL"] = "1"
         build.emit_claude("neutral", repo)
         self.assertNotIn("claudeMdExcludes", self._settings(repo))
+
+    def test_reemit_migrates_hooks_out_of_shared_settings_json(self):
+        # An older install wired the machine-absolute hooks into the team-shared
+        # settings.json. A re-emit must unwire them THERE (via the recorded claims)
+        # and wire settings.local.json instead — otherwise every teammate keeps
+        # inheriting hooks that point at this machine's python forever.
+        repo = (self.tmp / "repo3").resolve(); repo.mkdir()
+        build.emit_claude("neutral", repo)
+        cfg = repo / ".claude"
+        # Rewind to the old layout: hooks live in settings.json, manifest says so.
+        (cfg / "settings.json").write_text(_read(cfg / "settings.local.json"),
+                                           encoding="utf-8")
+        (cfg / "settings.local.json").unlink()
+        man = json.loads(_read(cfg / build.GLOBAL_MANIFEST))
+        man["managed"]["settings_file"] = "settings.json"
+        (cfg / build.GLOBAL_MANIFEST).write_text(json.dumps(man), encoding="utf-8")
+
+        build.emit_claude("neutral", repo)
+        s_shared = json.loads(_read(cfg / "settings.json"))
+        self.assertFalse(any("harness.py" in c for c in _hook_cmds(s_shared)),
+                         "hooks left in the team-shared settings.json")
+        s_local = self._settings(repo)
+        self.assertTrue(any("harness.py" in c for c in _hook_cmds(s_local)))
+        man = json.loads(_read(cfg / build.GLOBAL_MANIFEST))
+        self.assertEqual(man["managed"].get("settings_file"), "settings.local.json")
+
+    def test_bob_global_rules_pointers_climb_to_stores(self):
+        # ~/.bob's preamble carrier is rules/geneseed.md, one level BELOW the stores:
+        # its pointers must climb (../memory), or `memory/`/`laws/` resolve under
+        # rules/ where nothing exists.
+        cfg = (self.tmp / "dotbob2").resolve(); cfg.mkdir()
+        build.emit_bob_global("neutral", cfg=cfg)
+        rules = _read(cfg / "rules" / "geneseed.md")
+        self.assertIn("../memory", rules)
+        self.assertNotIn("(memory/", rules)
 
     def _mk_install(self, parent, marker=".claude"):
         d = (parent / marker)
@@ -422,6 +756,7 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         # per-host: a project .opencode never silences a global .claude (different marker)
         bobg = self._mk_install(self.tmp / "bobhome", ".bob")
         self.assertFalse(hc._global_hook_standing_down(bobg, repo))
+
 
     def test_cmd_context_stand_down_is_silent_and_opt_out_works(self):
         import io
@@ -449,6 +784,116 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             hc.cmd_context(argparse.Namespace(root=str(gcfg)))
         self.assertIn("PROJECT CONTEXT", buf.getvalue())
+
+
+class CopilotEmitTests(unittest.TestCase):
+    """GitHub Copilot host: AGENTS.md + .github/ project layer, ~/.copilot global layer
+    with copilot-instructions.md, .agent.md agent dialect, NO settings.json/hooks."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_copilot_global_writes_copilot_layout(self):
+        cfg = self.tmp / "dotcopilot"
+        build.emit_copilot_global("neutral", cfg=cfg)
+        # copilot-instructions.md carries the managed block (the CLI auto-loads it) —
+        # unlike Bob, Copilot HAS a personal instructions carrier, so no rules/ workaround.
+        ci = _read(cfg / "copilot-instructions.md")
+        self.assertIn("<!-- BEGIN GENESEED -->", ci)
+        self.assertIn("<!-- END GENESEED -->", ci)
+        self.assertFalse((cfg / "rules").exists())
+        self.assertFalse((cfg / "AGENTS.md").exists())
+        # Agents use the Copilot custom-agent dialect: .agent.md extension,
+        # name/description, tools ALLOWLIST — never Claude's disallowedTools denylist.
+        reviewer = _read(cfg / "agents" / "reviewer.agent.md")
+        self.assertIn("name: reviewer", reviewer)
+        self.assertNotIn("disallowedTools", reviewer)
+        self.assertNotIn("mode: subagent", reviewer)
+        self.assertFalse((cfg / "agents" / "reviewer.md").exists())
+        # A read-only agent lists Copilot's built-in tool ids it may keep.
+        explorer = _read(cfg / "agents" / "explorer.agent.md")
+        self.assertRegex(explorer, r"tools: \[read, search, todo, agent")
+        # NO settings.json and no hooks — Copilot has no hook mechanism; the manifest
+        # records no settings claims for the lifecycle to unwire.
+        self.assertFalse((cfg / "settings.json").exists())
+        self.assertFalse((cfg / "settings.local.json").exists())
+        man = json.loads(_read(cfg / build.GLOBAL_MANIFEST))
+        self.assertIn("claude_md", man["managed"])
+        self.assertNotIn("settings_file", man["managed"])
+        self.assertNotIn("settings_hooks", man["managed"])
+        # …but still reads as Claude-style, so uninstall picks the manifest reversal.
+        self.assertTrue(harness._manifest_is_claude(cfg))
+
+    def test_copilot_skills_byte_identical_to_opencode(self):
+        cfg, oc = self.tmp / "dotcopilot", self.tmp / "dotopencode"
+        build.emit_copilot_global("neutral", cfg=cfg)
+        build.emit_opencode_global("neutral", cfg=oc)
+        a, b = cfg / "skills" / "tdd" / "SKILL.md", oc / "skills" / "tdd" / "SKILL.md"
+        self.assertTrue(a.is_file() and b.is_file())
+        self.assertEqual(_read(a), _read(b))
+
+    def test_copilot_project_layout_under_dot_github(self):
+        repo = (self.tmp / "repo").resolve(); repo.mkdir()
+        build.emit_copilot("neutral", repo)
+        # Root AGENTS.md carries the preamble, pointers prefixed into .github/.
+        am = _read(repo / "AGENTS.md")
+        self.assertIn("<!-- BEGIN GENESEED -->", am)
+        self.assertIn(".github/memory", am)
+        # Native layer in the SHARED .github dir; agents in the .agent.md dialect.
+        self.assertTrue((repo / ".github" / "agents" / "reviewer.agent.md").is_file())
+        self.assertTrue((repo / ".github" / "skills" / "tdd" / "SKILL.md").is_file())
+        self.assertFalse((repo / ".github" / "settings.json").exists())
+        self.assertFalse((repo / ".github" / "settings.local.json").exists())
+        self.assertFalse((repo / ".github" / "rules").exists())
+        # .gitignore keeps the personal files out of the team's git — and never lists
+        # settings.local.json (a Claude-only file Copilot never writes).
+        gi = _read(repo / ".github" / ".gitignore")
+        self.assertIn("wiki.jsonc", gi)
+        self.assertNotIn("settings.local.json", gi)
+        man = json.loads(_read(repo / ".github" / build.GLOBAL_MANIFEST))
+        self.assertEqual(man["scope"], "project")
+
+    def test_copilot_project_never_clobbers_user_github_files(self):
+        # .github is the repo's own shared config surface — a user's workflows and
+        # same-named agents/skills must survive an emit untouched.
+        repo = (self.tmp / "repo2").resolve(); repo.mkdir()
+        wf = repo / ".github" / "workflows" / "ci.yml"
+        wf.parent.mkdir(parents=True)
+        wf.write_text("name: ci\n", encoding="utf-8")
+        own = repo / ".github" / "agents" / "reviewer.agent.md"
+        own.parent.mkdir(parents=True)
+        own.write_text("mine\n", encoding="utf-8")
+        build.emit_copilot("neutral", repo)
+        self.assertEqual(_read(wf), "name: ci\n")
+        self.assertEqual(_read(own), "mine\n", "claim-on-create clobbered a user agent")
+        man = json.loads(_read(repo / ".github" / build.GLOBAL_MANIFEST))
+        self.assertNotIn("agents/reviewer.agent.md", man["owned"])
+        # and an uninstall removes only Geneseed's files — the user's survive.
+        res = harness._install_uninstall(repo, "copilot", "project", "keep")
+        self.assertTrue(res["ok"])
+        self.assertEqual(_read(wf), "name: ci\n")
+        self.assertEqual(_read(own), "mine\n")
+
+    def test_no_dead_skill_links_in_copilot_agents_md(self):
+        """Same regression as CLAUDE.md/Bob's AGENTS.md — the `.github/skills/...`
+        prefixed link form must be stripped to plain names."""
+        build.emit_copilot("neutral", self.tmp / "Harness", self.tmp)
+        am = _read(self.tmp / "AGENTS.md")
+        self.assertNotRegex(am, r"\]\([^)]*(?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
+        self.assertIn("| clarify |", am)
+        self.assertIn("| council |", am)
+
+    def test_copilot_reemit_is_idempotent(self):
+        cfg = self.tmp / "dotcopilot2"
+        build.emit_copilot_global("neutral", cfg=cfg)
+        ci_before = _read(cfg / "copilot-instructions.md")
+        build.emit_copilot_global("neutral", cfg=cfg)
+        self.assertEqual(_read(cfg / "copilot-instructions.md"), ci_before)
+        self.assertEqual(ci_before.count("<!-- BEGIN GENESEED -->"), 1)
 
 
 if __name__ == "__main__":

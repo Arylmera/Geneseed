@@ -12,7 +12,7 @@
       {
         "matcher": "startup|clear",
         "hooks": [
-          { "type": "command", "command": "cat AGENT.md" },
+          { "type": "command", "command": "python -c \"import sys;sys.stdout.write(open('AGENT.md',encoding='utf-8').read())\"" },
           { "type": "command", "command": "python rituals/harness.py context" }
         ]
       },
@@ -26,7 +26,14 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "python rituals/harness.py learn || true" }
+          { "type": "command", "command": "python rituals/harness.py learn || exit 0" }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python rituals/harness.py learn || exit 0" }
         ]
       }
     ]

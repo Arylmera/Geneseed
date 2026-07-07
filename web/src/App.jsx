@@ -20,6 +20,7 @@ import Activity from './pages/Activity.jsx'
 import ActivityDetail from './pages/ActivityDetail.jsx'
 import Library from './pages/Library.jsx'
 import Laws from './pages/Laws.jsx'
+import Rules from './pages/Rules.jsx'
 import Skills from './pages/Skills.jsx'
 import Diff from './pages/Diff.jsx'
 import Doctor from './pages/Doctor.jsx'
@@ -44,7 +45,9 @@ export default function App() {
   const [flavour, setFlavour] = useFlavour()
   const [accentMode, setAccentMode] = useAccentMode()
   const [layout, setLayout] = useLayout()
-  const [booting, setBooting] = useState(true)
+  // The splash plays on the first load of a browser session only; reloads and
+  // route round-trips within the same tab skip straight to the dashboard.
+  const [booting, setBooting] = useState(() => !window.sessionStorage.getItem('gs-booted'))
   const appRef = useRef(null)
 
   const onError = (e) =>
@@ -145,7 +148,11 @@ export default function App() {
             {route.view === 'activity' && <Activity />}
             {route.view === 'activity-detail' && <ActivityDetail key={route.sid} sid={route.sid} />}
             {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
+            {route.view === 'agents' && (
+              <Library overview={overview} section="agents" dataRev={dataRev} />
+            )}
             {route.view === 'laws' && <Laws />}
+            {route.view === 'rules' && <Rules />}
             {route.view === 'skills' && <Skills />}
             {route.view === 'section' &&
               (route.section === 'laws' ? (
@@ -209,7 +216,15 @@ export default function App() {
         />
       </div>
       {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
-      {booting && <BootSplash ready={!!overview} onDone={() => setBooting(false)} />}
+      {booting && (
+        <BootSplash
+          ready={!!overview}
+          onDone={() => {
+            window.sessionStorage.setItem('gs-booted', '1')
+            setBooting(false)
+          }}
+        />
+      )}
     </div>
   )
 }

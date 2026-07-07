@@ -13,6 +13,20 @@ sys.path.insert(0, str(ROOT))
 import web  # noqa: E402
 
 
+class LocalHostGuardTests(unittest.TestCase):
+    """The DNS-rebinding guard: only loopback Host headers reach the API."""
+
+    def test_loopback_hosts_pass(self):
+        for h in ("127.0.0.1", "127.0.0.1:4747", "localhost", "LOCALHOST:80",
+                  "[::1]:4747", "[::1]"):
+            self.assertTrue(web._local_host(h), h)
+
+    def test_foreign_hosts_rejected(self):
+        for h in ("evil.com", "evil.com:4747", "127.0.0.1.evil.com",
+                  "localhost.evil.com", "", None):
+            self.assertFalse(web._local_host(h), repr(h))
+
+
 class CatalogTests(unittest.TestCase):
     def setUp(self):
         self.state = web.WebState(theme="neutral")
@@ -93,6 +107,22 @@ class CatalogTests(unittest.TestCase):
             # detail pane agree without the UI having to guess the path.
             row = web.api_catalog(state, "notebook")["items"][0]
             self.assertEqual(row["source"], item["source"])
+
+    def test_item_blocks_traversal_outside_catalog_dirs(self):
+        # GET /api/item needs no token, so a separator, '..', or a drive colon in
+        # the name segment was an arbitrary-file read (config joined
+        # state.target / name raw; memory/notebook resolved '..' through the
+        # appended '.md'). Every flat-name type must 404, never resolve.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "notebook").mkdir()
+            (root / "secret.txt").write_text("s3cret", encoding="utf-8")
+            state = web.WebState(theme="neutral", target=root)
+            for type_ in ("notebook", "memory", "config"):
+                for name in ("../secret.txt", "..\\secret.txt", "C:evil", "a/b", ".."):
+                    with self.assertRaises(web.NotFound):
+                        web.api_item(state, type_, name)
 
 
 class SpecDescTests(unittest.TestCase):
@@ -197,18 +227,33 @@ class JobManagerTests(unittest.TestCase):
         jm.wait(jid, timeout=20)
         self.assertFalse(jm.cancel(jid))
 
-    def test_on_done_fires_after_completion(self):
+    def test_on_done_fires_after_completion_with_exit_code(self):
+        # on_done receives the job's exit code so callers can react to failure
+        # (the update action only bounces the daemon when rc == 0).
         jm = web.JobManager()
         seen = []
         jid = jm.start("noop", [sys.executable, "-c", "print('x')"],
-                       on_done=lambda: seen.append(True))
+                       on_done=lambda rc: seen.append(rc))
         jm.wait(jid, timeout=20)
         import time
         for _ in range(100):           # on_done runs just after status flips
             if seen:
                 break
             time.sleep(0.05)
-        self.assertEqual(seen, [True])
+        self.assertEqual(seen, [0])
+
+    def test_on_done_gets_nonzero_exit_code_on_failure(self):
+        jm = web.JobManager()
+        seen = []
+        jid = jm.start("boom", [sys.executable, "-c", "raise SystemExit(3)"],
+                       on_done=lambda rc: seen.append(rc))
+        jm.wait(jid, timeout=20)
+        import time
+        for _ in range(100):
+            if seen:
+                break
+            time.sleep(0.05)
+        self.assertEqual(seen, [3])
 
     def test_failure_captured(self):
         jm = web.JobManager()
@@ -402,7 +447,7 @@ class McpTests(unittest.TestCase):
         for t in m["targets"]:
             self.assertIn("path", t)
             self.assertIn("commented", t)
-            self.assertIn(t["host"], ("opencode", "claude", "bob"))
+            self.assertIn(t["host"], ("opencode", "claude", "bob", "copilot"))
             self.assertIn("root", t)
             for s in t["servers"]:
                 self.assertIn(s["state"], ("enabled", "disabled", "absent"))
@@ -1413,6 +1458,75 @@ class DeployTests(unittest.TestCase):
             build.emit_bob("imperial", Path(d), Path(d))
             self.assertEqual(web.harness._theme_of_dir(Path(d)), "imperial")
 
+    def test_deploy_cmd_copilot_maps_to_copilot_emit(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            plan = web.api_deploy_cmd(self.state, {"host": "copilot", "path": d,
+                                                   "theme": "imperial"})
+            cmd = plan["cmd"]
+            self.assertEqual(cmd[cmd.index("--emit") + 1], "copilot")   # project, never global
+            self.assertEqual(cmd[cmd.index("--theme") + 1], "imperial")
+
+    def test_copilot_emit_layout_and_disable_reactivate_lifecycle(self):
+        # GitHub Copilot is a first-class host: a .github/ project layer + AGENTS.md,
+        # riding the Claude-style manifest lifecycle (deactivate stashes, reactivate
+        # restores) — with NO settings.json/hooks to (un)wire and no project MCP file.
+        import tempfile, build
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            build.emit_copilot("neutral", root, root)
+            self.assertTrue((root / "AGENTS.md").is_file())
+            self.assertTrue((root / ".github" / "agents").is_dir())
+            self.assertEqual(web.harness._install_state(root, "copilot", "project"), "active")
+            self.assertEqual(web.harness._mcp_servers_key("copilot"), "mcpServers")
+            self.assertIsNone(web.harness._mcp_config_for("copilot", "project", root))
+            self.assertEqual(web.harness._mcp_config_for("copilot", "global", root),
+                             build._copilot_config_dir() / "mcp-config.json")
+            off = web.harness._install_deactivate(root, "copilot", "project")
+            self.assertTrue(off["ok"])
+            self.assertEqual(web.harness._install_state(root, "copilot", "project"), "disabled")
+            # the managed AGENTS.md block is excised while disabled
+            self.assertNotIn("BEGIN GENESEED", (root / "AGENTS.md").read_text(encoding="utf-8")
+                             if (root / "AGENTS.md").exists() else "")
+            on = web.harness._install_reactivate(root, "copilot", "project")
+            self.assertTrue(on["ok"])
+            self.assertEqual(web.harness._install_state(root, "copilot", "project"), "active")
+            self.assertIn("BEGIN GENESEED", (root / "AGENTS.md").read_text(encoding="utf-8"))
+
+    def test_copilot_view_cfg_and_restore_emitter_are_host_correct(self):
+        # A copilot PROJECT install's data lives under <repo>/.github (not the bare
+        # root), and a restore must render the copilot 'expected' tree.
+        import build
+        self.assertEqual(web._view_cfg("copilot", "project", Path("/r")), Path("/r") / ".github")
+        self.assertEqual(web._view_cfg("copilot", "global", Path("/r")), Path("/r"))
+        self.assertIs(web._global_emitter_for("copilot-global"), build.emit_copilot_global)
+
+    def test_copilot_mcp_preset_and_toggle_off_removes_entry(self):
+        # Copilot shares the flag-less mcpServers shape (disable REMOVES the server),
+        # and its preset blocks carry the CLI's required type + tools keys.
+        block = web.harness._mcp_preset_block("markdownify", "copilot") \
+            if "markdownify" in web.harness._MCP_PRESETS \
+            else web.harness._mcp_preset_block(next(iter(web.harness._MCP_PRESETS)), "copilot")
+        self.assertEqual(block.get("type"), "local")
+        self.assertEqual(block.get("tools"), ["*"])
+        self.assertIn("command", block)
+        self.assertIn("args", block)
+        cfg = {"mcpServers": {"md": {"command": "uvx", "args": ["x"]}}}
+        self.assertEqual(web.harness._mcp_state(cfg, "md", "copilot"), "enabled")
+        off = web.harness._mcp_set_enabled(cfg, "md", False, "copilot")
+        self.assertEqual(off.get("mcpServers", {}), {})
+
+    def test_copilot_theme_detected_from_agents_md_and_instructions(self):
+        import tempfile, build
+        with tempfile.TemporaryDirectory() as d:
+            build.emit_copilot("imperial", Path(d), Path(d))
+            self.assertEqual(web.harness._theme_of_dir(Path(d)), "imperial")
+        with tempfile.TemporaryDirectory() as d:
+            build.emit_copilot_global("imperial", cfg=Path(d) / "cfg")
+            # global carrier is copilot-instructions.md — the sigil fallback must read it
+            # (the .geneseed-theme marker is written by build.py's main(), not the emit fn).
+            self.assertEqual(web.harness._theme_of_dir(Path(d) / "cfg"), "imperial")
+
     def test_registry_round_trip_and_install_targets_merge_and_prune(self):
         import tempfile, os
         import _install_registry
@@ -1523,7 +1637,8 @@ class TestInstallRemove(unittest.TestCase):
 
     def test_remove_claude_and_bob_project_installs(self):
         # Real per-repo emits (manifest-backed) -> remove must reverse them host-agnostically.
-        for host, emit in (("claude", web.build.emit_claude), ("bob", web.build.emit_bob)):
+        for host, emit in (("claude", web.build.emit_claude), ("bob", web.build.emit_bob),
+                           ("copilot", web.build.emit_copilot)):
             root = (self.tmp / f"repo_{host}").resolve()
             root.mkdir()
             emit("neutral", root)
@@ -1575,6 +1690,124 @@ class AboutOriginTests(unittest.TestCase):
         with mock.patch.object(_update, "_origin_display", return_value=od):
             payload = _web_docs._about(web.WebState(theme="neutral"))
         self.assertTrue(payload["repo_is_github"])
+
+
+class RulesTests(unittest.TestCase):
+    """user-rules.md: the seed-once stub, the parser, and the mutation/promotion
+    endpoints — including the fingerprint conflict gate and splice fidelity (a
+    mutation touches one rule's block, never the user's surrounding prose)."""
+
+    def setUp(self):
+        import tempfile
+        import build
+        self.tmp = tempfile.TemporaryDirectory()
+        self.target = Path(self.tmp.name)
+        build.ensure_rules_stub(self.target)
+        self.state = web.WebState(theme="neutral", target=self.target)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _rules_file(self) -> Path:
+        import build
+        return self.target / build.RULES_FILE
+
+    def test_stub_is_seed_once(self):
+        import build
+        p = self._rules_file()
+        self.assertTrue(p.is_file())
+        p.write_text("MINE\n", encoding="utf-8")
+        build.ensure_rules_stub(self.target)
+        self.assertEqual(p.read_text(encoding="utf-8"), "MINE\n")
+
+    def test_stub_example_does_not_parse_as_a_rule(self):
+        # The seeded format example is indented — the column-0-anchored parser
+        # must not read it as a live rule.
+        res = web.api_rules(self.state)
+        self.assertTrue(res["exists"])
+        self.assertEqual(res["rules"], [])
+        self.assertEqual(res["warnings"], [])
+
+    def test_missing_file_reports_not_seeded(self):
+        self._rules_file().unlink()
+        res = web.api_rules(self.state)
+        self.assertFalse(res["exists"])
+        self.assertEqual(res["rules"], [])
+
+    def test_add_update_delete_roundtrip_preserves_prose(self):
+        before = self._rules_file().read_text(encoding="utf-8")
+        fp = web.api_rules(self.state)["fingerprint"]
+        r1 = web.api_rules_mutate(self.state, {
+            "op": "add", "fingerprint": fp,
+            "title": "No emoji", "body": "Plain text only.", "scope": "project"})
+        self.assertTrue(r1["ok"])
+        self.assertEqual(r1["id"], 1)
+        r2 = web.api_rules_mutate(self.state, {
+            "op": "update", "id": 1, "fingerprint": r1["fingerprint"],
+            "title": "No emoji anywhere", "body": "Ever.", "scope": "user",
+            "trial_until": "2026-12-31"})
+        self.assertTrue(r2["ok"])
+        parsed = web.api_rules(self.state)["rules"]
+        self.assertEqual(parsed[0]["title"], "No emoji anywhere")
+        self.assertEqual(parsed[0]["scope"], "user")
+        self.assertEqual(parsed[0]["status"], "trial")
+        r3 = web.api_rules_mutate(self.state, {
+            "op": "delete", "id": 1, "fingerprint": r2["fingerprint"]})
+        self.assertTrue(r3["ok"])
+        # splice fidelity: after add→update→delete the file is byte-identical
+        # to the seeded stub (modulo the trailing-newline normalisation).
+        after = self._rules_file().read_text(encoding="utf-8")
+        self.assertEqual(after.rstrip("\n"), before.rstrip("\n"))
+
+    def test_stale_fingerprint_conflicts_instead_of_clobbering(self):
+        fp = web.api_rules(self.state)["fingerprint"]
+        web.api_rules_mutate(self.state, {
+            "op": "add", "fingerprint": fp,
+            "title": "First", "body": "Wins."})
+        res = web.api_rules_mutate(self.state, {
+            "op": "add", "fingerprint": fp,           # stale: file changed above
+            "title": "Second", "body": "Loses."})
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"], "conflict")
+        titles = [r["title"] for r in web.api_rules(self.state)["rules"]]
+        self.assertEqual(titles, ["First"])
+
+    def test_add_rejects_empty_title_or_body(self):
+        fp = web.api_rules(self.state)["fingerprint"]
+        for bad in ({"title": "", "body": "x"}, {"title": "x", "body": " "}):
+            with self.assertRaises(ValueError):
+                web.api_rules_mutate(self.state, {"op": "add", "fingerprint": fp, **bad})
+
+    def test_duplicate_ids_warn(self):
+        p = self._rules_file()
+        p.write_text("## R1 — A\nBody a.\n\n## R1 — B\nBody b.\n", encoding="utf-8")
+        res = web.api_rules(self.state)
+        self.assertIn("duplicate rule id R1", res["warnings"])
+
+    def test_promote_moves_memory_into_trial_rule(self):
+        mem = self.target / "memory"
+        mem.mkdir()
+        (mem / "MEMORY.md").write_text(
+            "# Memory Index\n- [prefer-tabs](prefer-tabs.md) — hook\n", encoding="utf-8")
+        (mem / "prefer-tabs.md").write_text(
+            "---\nname: prefer-tabs\ndescription: use tabs\ntype: feedback\n---\n\n"
+            "Always use tabs here.\n", encoding="utf-8")
+        fp = web.api_rules(self.state)["fingerprint"]
+        res = web.api_rules_promote(self.state, {
+            "name": "prefer-tabs", "fingerprint": fp, "delete_memory": True})
+        self.assertTrue(res["ok"])
+        self.assertEqual(res.get("deleted_memory"), "prefer-tabs")
+        self.assertFalse((mem / "prefer-tabs.md").exists())
+        rule = web.api_rules(self.state)["rules"][0]
+        self.assertEqual(rule["status"], "trial")
+        self.assertIn("memory prefer-tabs", rule["source"])
+        self.assertEqual(rule["body"], "Always use tabs here.")
+
+    def test_promote_rejects_traversal_names(self):
+        (self.target / "memory").mkdir()
+        for bad in ("", "a/b", "..\\x", "MEMORY"):
+            with self.assertRaises(web.NotFound):
+                web.api_rules_promote(self.state, {"name": bad, "fingerprint": ""})
 
 
 if __name__ == "__main__":

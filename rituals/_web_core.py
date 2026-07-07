@@ -197,13 +197,16 @@ DOC_GROUPS = [
          "request."},
         {"id": "skills", "title": "Skills", "kind": "concept",
          "link": {"hash": "#/section/skills", "label": "Browse the catalog →"},
-         "body": "26 repeatable workflows the agent can invoke by name — "
+         "body": "39 repeatable workflows the agent can invoke by name — "
          "[[brainstorm]], [[clarify]], [[plan]], [[tdd]], [[develop]], [[debug]], "
-         "[[refactor]], [[geneseed-code-review]], [[fresh-eyes]], [[review-response]], "
-         "[[commit]], [[ship]], [[release]], [[migrate]], [[git-archaeology]], "
-         "[[git-rescue]], [[repo-map]], [[document-project]], [[ingest]], "
-         "[[research]], [[handoff]], [[roast-me]], [[council]], "
-         "[[parallel-agents]], [[workflow]], [[wiki]]. A skill is a markdown "
+         "[[refactor]], [[ponytail]], [[geneseed-code-review]], [[fresh-eyes]], "
+         "[[review-response]], [[commit]], [[ship]], [[release]], [[migrate]], "
+         "[[git-archaeology]], [[git-rescue]], [[repo-map]], [[document-project]], "
+         "[[ingest]], [[prose]], [[research]], [[learning-path]], [[gap-detector]], "
+         "[[feynman]], [[crash-course]], [[drill]], [[decode]], [[handoff]], "
+         "[[roast-me]], [[council]], [[parallel-agents]], [[workflow]], [[wiki]], "
+         "[[forge-mcp]], [[frontend-design]], [[geneseed]], [[opencode-theme]], "
+         "[[herdr]]. A skill is a markdown "
          "playbook under `src/skills/`; the agent reads it before acting."},
         {"id": "memory", "title": "Memory convention", "kind": "markdown",
          "source": "src/memory/README.md"},
@@ -254,7 +257,7 @@ DOC_GROUPS = [
          "lean and full the emitted files are identical — same Agents, Skills, plugins, "
          "commands, Memory, Notebook, and host hooks — and every Rule is present and "
          "binding. The only structural change is that a **lean** install on a global, "
-         "Claude, or Bob target also ships the standalone `laws/universal.md` (the "
+         "Claude, Bob, or Copilot target also ships the standalone `laws/universal.md` (the "
          "on-demand fallback); project bundles already carry it. The only behavioural "
          "change is that each Rule's *reasoning* loads on demand instead of every turn.\n\n"
          "That one difference still has a real edge: with the rationale always in front "
@@ -278,7 +281,7 @@ DOC_GROUPS = [
          "- **Setup / re-theme wizard** (TUI) — asks for footprint alongside voice "
          "and mode.\n"
          "- **CLI** — `build.py --footprint lean` (with any `--emit`).\n\n"
-         "Works identically across every host — OpenCode, Claude Code, and Bob.\n\n"
+         "Works identically across every host — OpenCode, Claude Code, Bob, and Copilot.\n\n"
          "---\n\n"
          "**Related:** [Rules (Laws)](#/laws) · [Voice vs structure](#/docs/themes)"},
         {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
@@ -730,6 +733,8 @@ DOC_GROUPS = [
         {"id": "adapters-claude-code", "title": "Claude Code adapter",
          "kind": "markdown", "harness": "claude",
          "source": "adapters/claude-code/README.md"},
+        {"id": "token-footprint", "title": "Token footprint",
+         "kind": "markdown", "source": "docs/token-footprint.md"},
         {"id": "about", "title": "About — version, license, links",
          "kind": "about"},
     ]},
@@ -766,6 +771,12 @@ class WebState:
 
     def __init__(self, theme: str | None = None, target: Path | None = None):
         self.target = Path(target) if target else build._opencode_config_dir()
+        # The INSTALL ROOT (== build --out). For globals it IS the data dir, but a
+        # claude/bob PROJECT install keeps its data under <repo>/.claude|.bob while
+        # the .geneseed-emit/theme/footprint markers land at <repo>/ — reading them
+        # from the data dir mis-detects the install as opencode/neutral, and a
+        # Diff/Restore would then overwrite it with the wrong dialect.
+        self.root = self.target
         self.theme = theme or harness._theme_of_dir(self.target) or "neutral"
         # Detect the install mode once, so the Build action rebuilds the deployed
         # harness in place (e.g. opencode-global) rather than a bare source render.
@@ -796,38 +807,46 @@ class WebState:
                         "checked_at": time.strftime("%Y-%m-%d %H:%M")}
 
     def _detect_emit(self) -> str:
-        """The emit mode of the CURRENT target, read from its own `.geneseed-emit`
-        marker — so refresh() and a re-pointed view keep the right mode instead of
+        """The emit mode of the CURRENT install, read from its `.geneseed-emit`
+        marker — the ROOT first (where every emit writes it), then the data dir —
+        so refresh() and a re-pointed view keep the right mode instead of
         always falling back to the OpenCode default."""
-        try:
-            em = self.target / ".geneseed-emit"
-            if em.is_file():
-                v = em.read_text(encoding="utf-8").strip()
-                if v:
-                    return v
-        except OSError:
-            pass
-        return "claude-global" if (self.target / "CLAUDE.md").exists() else "opencode-global"
+        for d in (self.root, self.target):
+            try:
+                em = d / ".geneseed-emit"
+                if em.is_file():
+                    v = em.read_text(encoding="utf-8").strip()
+                    if v:
+                        return v
+            except OSError:
+                pass
+        return "claude-global" if (self.root / "CLAUDE.md").exists() else "opencode-global"
 
-    def select_view(self, target: Path):
+    def select_view(self, target: Path, root: "Path | None" = None):
         """Re-point the whole console at a different detected install's data dir — every
-        card (inventory, memory, notebook, diff) then reads from `target`."""
+        card (inventory, memory, notebook, diff) then reads from `target`. `root` is the
+        install root the markers/sigils live at (defaults to `target`; differs only for
+        claude/bob/copilot PROJECT installs, where data sits under
+        <repo>/.claude|.bob|.github)."""
         self.target = Path(target)
-        self.theme = harness._theme_of_dir(self.target) or "neutral"
+        self.root = Path(root) if root else self.target
+        self.theme = (harness._theme_of_dir(self.root)
+                      or harness._theme_of_dir(self.target) or "neutral")
         self.emit = self._detect_emit()
-        self.footprint = harness._footprint_of_dir(self.target)
+        self.footprint = harness._footprint_of_dir(self.root)
         self._inv = None
         self._doctor = None
 
     def refresh(self):
         """Drop caches and re-detect the deployed theme/emit — a finished Build may
         have re-themed the install, and the gallery's 'current' must follow it. Reads
-        from the CURRENT target's markers, so a selected (non-default) view is kept."""
+        from the CURRENT install's markers, so a selected (non-default) view is kept."""
         self._inv = None
         self._doctor = None
-        self.theme = harness._theme_of_dir(self.target) or self.theme
+        self.theme = (harness._theme_of_dir(self.root)
+                      or harness._theme_of_dir(self.target) or self.theme)
         self.emit = self._detect_emit() or self.emit
-        self.footprint = harness._footprint_of_dir(self.target)
+        self.footprint = harness._footprint_of_dir(self.root)
 
 
 def _deployed(state: WebState) -> bool:

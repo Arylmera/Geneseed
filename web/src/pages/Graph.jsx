@@ -551,10 +551,10 @@ const FILTERS = [
 ]
 const HINTS = {
   matrix:
-    'Adjacency matrix — one dot per link, zero crossings. Rows are the things that cite (agents + skills); columns are the things that get cited (agents, skills, laws). Laws never cite, so they appear only as columns — that wide gold band is every agent and skill grounding itself in the universal laws. Hover a label to light its row + column.',
-  arc: 'Arc diagram — every node on one axis, ordered by type then by how connected it is. Long arcs reach across the harness; the fan of arcs landing on the laws shows them as the shared backbone. Hover a node to isolate its arcs.',
+    'Adjacency matrix: one dot per link, zero crossings. Rows are the things that cite (agents + skills); columns are the things that get cited (agents, skills, laws). Laws never cite, so they appear only as columns; that wide gold band is every agent and skill grounding itself in the universal laws. Hover a label to light its row + column.',
+  arc: 'Arc diagram: every node on one axis, ordered by type then by how connected it is. Long arcs reach across the harness; the fan of arcs landing on the laws shows them as the shared backbone. Hover a node to isolate its arcs.',
   network:
-    'Network — the familiar layered layout, but links sit near-invisible until you focus. Hover or search a node and only its connections light up, so the structure reads instead of a hairball. Columns are sorted with the most-connected hubs on top.',
+    'Network: the familiar layered layout, but links sit near-invisible until you focus. Hover or search a node and only its connections light up, so the structure reads instead of a hairball. Columns are sorted with the most-connected hubs on top.',
 }
 
 export default function Graph() {
@@ -618,7 +618,7 @@ export default function Graph() {
           <h1 className="h">Graph</h1>
           <p className="sub">
             Every agent, skill and law in the harness with the cross-links parsed from source. Three
-            ways to read the same {M.edges.length} connections — pick the lens that fits the
+            ways to read the same {M.edges.length} connections. Pick the lens that fits the
             question. Hover anything to trace what it touches.
           </p>
         </div>

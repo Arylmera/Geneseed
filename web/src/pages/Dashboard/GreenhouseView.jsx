@@ -351,7 +351,7 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
                 <span className={`b-tl-node ${cls}`} />
                 <div className="b-tl-body">
                   <b>{j.action}</b>
-                  {j.output ? ` — ${j.output.split('\n')[0].slice(0, MAX_OUTPUT_PREVIEW)}` : ''}
+                  {j.output ? `: ${j.output.split('\n')[0].slice(0, MAX_OUTPUT_PREVIEW)}` : ''}
                 </div>
                 <span className="b-tl-when">{j.duration ? `${j.duration}s` : j.status}</span>
               </div>

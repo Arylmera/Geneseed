@@ -44,7 +44,10 @@ const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 const MAX_NOTES_CHARS = 16000          // cap the prompt; keep the most recent tail
 const MIN_NOTES_CHARS = 200            // below this, the session is too trivial to mine
 const MEMORY_DIR_NAMES = ["memory", "anamnesis"]   // neutral + imperial
-const DEBOUNCE_MS = Number(process.env.GENESEED_LEARN_DEBOUNCE_MS || 60000)
+// NaN-safe: garbage in the env var would make setTimeout fire immediately (NaN
+// delay → 0), distilling after EVERY turn instead of at session end.
+const _debounceRaw = Number(process.env.GENESEED_LEARN_DEBOUNCE_MS || 60000)
+const DEBOUNCE_MS = Number.isFinite(_debounceRaw) && _debounceRaw >= 0 ? _debounceRaw : 60000
 
 // SINGLE SOURCE of the distil instructions: rituals/harness.py extracts this exact
 // LEARN_PROMPT_HEAD template literal at runtime, so there is nothing to keep in sync.
@@ -109,6 +112,43 @@ function partsText(parts) {
     .filter((p) => p && p.type === "text" && typeof p.text === "string")
     .map((p) => p.text)
     .join("\n")
+}
+
+// ---- per-agent memory (memory/agents/<name>.md) ------------------------------
+// Child subagent sessions are task fragments — never mined into the main store —
+// but a lesson about how the *agent* should operate next time is durable. Kept
+// deliberately conservative, like the rest of this plugin: an unresolvable agent
+// name skips entirely. The Python twin (rituals/harness.py) is behaviour-identical
+// so claude/bob get the same loop via their Stop/SubagentStop hooks.
+const AGENT_NAME_RE = /^[a-z][a-z0-9-]{1,40}$/
+const MAX_AGENT_BULLETS = 100 // hard cap, oldest dropped; no pruning heuristics
+
+// SINGLE SOURCE — harness.py extracts this exact literal (see LEARN_PROMPT_HEAD).
+export const AGENT_LESSON_PROMPT = `The notes below are one subagent dispatch ("agent run").
+Output AT MOST ONE line: a durable lesson about how this agent should operate on a
+FUTURE, unrelated dispatch (a boundary that proved wrong, an input it always needs,
+a method that worked). Task residue ("fixed X", file names, ticket detail) is NOT a
+lesson. If there is none — the overwhelmingly common case — output exactly: NOTHING.`
+
+export function resolveAgentName(meta) {
+  const raw = meta?.agent ?? meta?.agentName ?? meta?.agentID ?? null
+  const name = typeof raw === "string" ? raw.trim().toLowerCase() : null
+  return name && AGENT_NAME_RE.test(name) ? name : null
+}
+
+export async function appendAgentLesson(memDir, agent, lesson) {
+  const dir = path.join(memDir, "agents")
+  await fs.mkdir(dir, { recursive: true })
+  const file = path.join(dir, `${agent}.md`)
+  let bullets = []
+  try {
+    bullets = (await fs.readFile(file, "utf8")).split("\n").filter((l) => l.startsWith("- "))
+  } catch { /* first lesson for this agent */ }
+  const day = new Date().toISOString().slice(0, 10)
+  bullets.push(`- ${day}: ${lesson.replace(/\s+/g, " ").trim()}`)
+  bullets = bullets.slice(-MAX_AGENT_BULLETS)
+  await fs.writeFile(file, `# ${agent} — lessons\n` + bullets.join("\n") + "\n", "utf8")
+  return file
 }
 
 // Flatten a session's messages into "role: text" notes, and pick the model the
@@ -214,12 +254,15 @@ export const GeneseedLearn = async ({ client }) => {
     if (inFlight.has(sid)) return   // a run is already underway; the next idle re-arms
     inFlight.add(sid)
     try {
-      // Native subagent child sessions are task fragments, not user sessions —
-      // distilling them pollutes memory with partial, low-altitude facts. Skip
-      // anything that carries a parent link (field absent → treated as top-level).
+      // A child session (carries a parent link) is a subagent dispatch: never mined
+      // into the shared store, but distilled for ONE per-agent lesson if we can name
+      // the agent. Field absent → top-level user session, distilled the old way.
+      // Unresolvable agent on a child → skip entirely (the prior behaviour).
       const info = await client.session.get?.({ path: { id: sid } }).catch(() => null)
       const meta = info?.data ?? info
-      if (meta?.parentID ?? meta?.parentId) return
+      const isChild = !!(meta?.parentID ?? meta?.parentId)
+      const agentName = isChild ? resolveAgentName(meta) : null
+      if (isChild && !agentName) return
 
       const memDir = await resolveMemoryDir()
       if (!memDir) {
@@ -246,12 +289,19 @@ export const GeneseedLearn = async ({ client }) => {
       }
 
       const existing = await existingSlugs(memDir)
-      const prompt = buildPrompt(notes, existing)
+      const prompt = isChild
+        ? [AGENT_LESSON_PROMPT, "", "NOTES:", notes].join("\n")
+        : buildPrompt(notes, existing)
 
       // Distil in a throwaway session with the session's own model, then drop it.
       const session = await client.session.create({ body: { title: "geneseed-learn (auto)" } })
       const newId = session?.id ?? session?.data?.id
-      if (newId) ours.add(newId)
+      if (!newId) {
+        // Prompting with {id: undefined} would 404 silently on every idle.
+        console.error("[geneseed-learn] session.create returned no id — skipping this distil.")
+        return
+      }
+      ours.add(newId)
       let output = ""
       try {
         const reply = await client.session.prompt({
@@ -264,6 +314,13 @@ export const GeneseedLearn = async ({ client }) => {
       }
 
       if (!output.trim() || output.trim().toUpperCase() === "NOTHING") return
+      if (isChild) {
+        const lesson = output.trim().split("\n")[0].replace(/^[-*]\s*/, "").trim()
+        if (lesson.length < 10 || lesson.length > 300) return // junk / truncation guard
+        const f = await appendAgentLesson(memDir, agentName, lesson)
+        console.error(`[geneseed-learn] agent lesson -> ${f}`)
+        return
+      }
       const written = await writeMemories(output, memDir, existing)
       if (written.length) {
         console.error(`[geneseed-learn] wrote ${written.length} memory file(s): ${written.join(", ")}`)
@@ -278,12 +335,22 @@ export const GeneseedLearn = async ({ client }) => {
 
   return {
     event: async ({ event }) => {
-      if (!event || event.type !== "session.idle") return
+      if (!event) return
       const sid =
         event.properties?.sessionID ??
         event.payload?.sessionID ??
         event.properties?.info?.id ??
         event.payload?.info?.id
+      // A deleted session must not distil later from a stale timer (and its entry
+      // must not leak in the maps for the life of the process).
+      if (event.type === "session.deleted") {
+        const t = timers.get(sid)
+        if (t) clearTimeout(t)
+        timers.delete(sid)
+        ours.delete(sid)
+        return
+      }
+      if (event.type !== "session.idle") return
       if (!sid || ours.has(sid)) return
       // session.idle fires after every turn — debounce so we distil once, at the real
       // end of the session (see header note). Each idle re-arms the timer.

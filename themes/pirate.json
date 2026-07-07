@@ -60,6 +60,7 @@
   "DESC_DRILL": "Beat shaky know-how into instinct — thrown into real waters and quizzed through yer blunders, the answer kept back 'til ye've tried.",
   "DESC_DECODE": "Make murky writ plain — the one keystone line first, a plain yarn, then a test afore ye sail on.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_RULE": "Nail a standing rule o' yer own into user-rules.md — triage what isn't one, and promote the lesson that keeps washing ashore.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Answer the inspection straight — weigh each mark, then mend it or argue it with cause.",
   "LEX_I": "Sealed Orders · Sealed Secrets",
@@ -121,5 +122,6 @@
   "DESC_MCP": "Build or batten down an MCP server — study the charter, shape tools for real work, test with the Inspector, and prove it with trials.",
   "DESC_PROSE": "Write like a soul, not a machine — heave the filler overboard, keep it active, vary the swell, and trust yer reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with real character — palette, type, and layout cut for this brief, not the common defaults, then trim her down to one bold move.",
-  "DESC_WORKFLOW": "Run a saved set o orders that drives yer crew by the chart — many sent out at once, their plunder gathered an checked in one clean voyage."
+  "DESC_WORKFLOW": "Run a saved set o orders that drives yer crew by the chart — many sent out at once, their plunder gathered an checked in one clean voyage.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

@@ -31,6 +31,124 @@ def load_theme(name: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _insert_theme_keys(raw: str, theme: dict, tmpl: dict, tmpl_keys: list,
+                       missing: list) -> str | None:
+    """Insert ONLY the missing keys into the theme's existing TEXT, each as one new
+    line at its template-order position — never re-serialising the untouched lines.
+    A full `json.dumps` round-trip cannot reproduce the shipped files byte-for-byte
+    (they mix raw Unicode with legacy \\uXXXX escapes), so re-dumping made a one-key
+    sync rewrite ~170 lines per theme; textual insertion keeps the diff to the
+    inserted line (plus at most a comma on its predecessor).
+
+    Assumes the shipped convention: `{` on its own first line, one `  "KEY": value`
+    entry per line. Returns None when the file doesn't follow it, or when the result
+    fails the reparse safety check — the caller then falls back to a full re-dump."""
+    lines = raw.splitlines()
+    if not lines or lines[0].strip() != "{":
+        return None
+
+    def line_of(key: str) -> int | None:
+        prefix = f'  "{key}":'
+        for i, ln in enumerate(lines):
+            if ln.startswith(prefix):
+                return i
+        return None
+
+    # Every existing key must be locatable as its own line, or the format assumption
+    # is wrong and inserting would corrupt the file.
+    if any(line_of(k) is None for k in theme):
+        return None
+    for k in missing:   # template order, so an earlier insert can anchor a later one
+        entry = f'  "{k}": {json.dumps(tmpl[k], ensure_ascii=False)}'
+        pred = None
+        for pk in reversed(tmpl_keys[:tmpl_keys.index(k)]):
+            li = line_of(pk)
+            if li is not None:
+                pred = li
+                break
+        if pred is None:
+            # No earlier template key exists in this theme: insert right after `{`.
+            follows = any(ln.lstrip().startswith('"') for ln in lines[1:])
+            lines.insert(1, entry + ("," if follows else ""))
+        elif lines[pred].rstrip().endswith(","):
+            lines.insert(pred + 1, entry + ",")
+        else:
+            # Predecessor was the last entry: it gains the comma, the new line is last.
+            lines[pred] += ","
+            lines.insert(pred + 1, entry)
+    new_text = "\n".join(lines) + "\n"
+    # Safety net: the surgically-edited text must parse back to exactly the merge we
+    # meant (theme + missing template keys). Anything else — a multi-line value we
+    # didn't anticipate, a stray edit — and the caller uses the re-dump fallback.
+    try:
+        reparsed = json.loads(new_text)
+    except json.JSONDecodeError:
+        return None
+    want = dict(theme)
+    for k in missing:
+        want[k] = tmpl[k]
+    return new_text if reparsed == want else None
+
+
+def sync_themes() -> int:
+    """Fill every shipped theme with the keys `_TEMPLATE.json` defines but the theme is
+    missing — the assist for the parity gate (`_theme_parity_problems`) a maintainer
+    hits after adding a new VOICE token. Each missing key is added with the template's
+    own (placeholder) value and reported so the maintainer knows exactly what to
+    restyle; keys a theme has that the template doesn't are reported too, but never
+    removed automatically (a maintainer call, not a build-time one).
+
+    New keys are inserted in TEMPLATE ORDER — matching the convention every shipped
+    theme already follows (see themes/neutral.json) — via minimal textual insertion
+    (`_insert_theme_keys`): untouched lines stay byte-identical, so a one-key sync is
+    a one-line diff per theme, and a no-op run rewrites nothing at all.
+
+    Returns the number of themes actually modified (0 == already in sync). The CLI
+    maps that to the exit code (non-zero when files changed), so CI can run
+    `build.py --sync-themes` as a check."""
+    tmpl_path = THEMES / "_TEMPLATE.json"
+    try:
+        tmpl = json.loads(tmpl_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"[sync-themes] {tmpl_path.name} unreadable: {e}")
+        return 0
+    tmpl_keys = list(tmpl.keys())
+    changed = 0
+    for p in theme_files():
+        try:
+            raw = p.read_text(encoding="utf-8")
+            theme = json.loads(raw)
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"[sync-themes] {p.name}: unreadable ({e}) — skipped")
+            continue
+        missing = [k for k in tmpl_keys if k not in theme]
+        extra = sorted(set(theme) - set(tmpl))
+        if not missing:
+            if extra:
+                print(f"[sync-themes] {p.name}: in sync (extra key(s) not in template, "
+                      f"not removed: {', '.join(extra)})")
+            continue
+        new_text = _insert_theme_keys(raw, theme, tmpl, tmpl_keys, missing)
+        if new_text is None:
+            # Unconventional formatting: fall back to a full re-dump — template order,
+            # theme-only extras preserved at the end, real Unicode kept as-is.
+            merged = {k: theme.get(k, tmpl[k]) for k in tmpl_keys}
+            for k in theme:
+                if k not in merged:
+                    merged[k] = theme[k]
+            new_text = json.dumps(merged, indent=2, ensure_ascii=False) + "\n"
+        p.write_text(new_text, encoding="utf-8")
+        changed += 1
+        print(f"[sync-themes] {p.name}: added {len(missing)} key(s) from the template — "
+              f"RESTYLE these in this theme's voice: {', '.join(missing)}")
+        if extra:
+            print(f"[sync-themes] {p.name}: extra key(s) not in template, not removed: "
+                  f"{', '.join(extra)}")
+    if not changed:
+        print("[sync-themes] all themes already carry every template key.")
+    return changed
+
+
 def substitute(text: str, theme: dict) -> str:
     def repl(m: re.Match) -> str:
         key = m.group(1)
@@ -213,6 +331,57 @@ def ensure_wiki_stub(out: Path) -> None:
         dest.write_text(WIKI_STUB, encoding="utf-8")
 
 
+# The user's own standing rules — seeded once beside AGENT.md, never overwritten,
+# never in an owned-manifest. The laws are regenerated on every update; this file
+# is where user-authored governance lives so it survives updates, reinstalls, and
+# theme switches. Deliberately NOT in BUNDLE_GITIGNORE: project rules are meant to
+# be committed and shared with the team (unlike context.json's private paths).
+# The filename is user-rules.md — not rules.md — because the neutral theme renders
+# the laws themselves as "Rules"; the user- prefix keeps the two unmistakable.
+RULES_FILE = "user-rules.md"
+
+RULES_STUB = """\
+# User rules
+
+Your own standing rules. The agent obeys every rule in this file exactly as it
+obeys the laws in AGENT.md §1 — always in force, in every task. A user rule may
+*tighten* a law, never repeal one: where they conflict, the law wins.
+
+Geneseed seeded this file once and will never overwrite it. The laws file is
+regenerated on every update — never edit that one; this file is where your own
+governance lives, and it survives updates, reinstalls, and theme switches.
+Unlike `context.json`, it is safe to commit: project rules are meant to travel
+with the repo and bind the whole team.
+
+Keep the set small — every rule here is loaded every session, and a bloated
+rule set dilutes the rules that matter. A durable fact belongs in memory, a
+pointer to documentation belongs in `context.json`; only a standing *behaviour*
+belongs here.
+
+Format — one rule per `## R<n> — Title` heading, an optional metadata line in
+parentheses, then the rule stated plainly:
+
+    ## R1 — No emoji in commit subjects
+    (scope: project | source: written by hand)
+    Commit subjects are plain text; no emoji, no decorative unicode.
+
+`trial until: YYYY-MM-DD` in the metadata line marks a rule on probation —
+usually one promoted from a recurring memory. Review it by that date, then
+graduate it (remove the marker) or demote it back to memory.
+"""
+
+
+def ensure_rules_stub(out: Path) -> None:
+    """Drop the `user-rules.md` stub beside AGENT.md the first time only — and NEVER
+    overwrite it (it holds the user's own standing rules; an update that touched it
+    would destroy exactly the governance the file exists to preserve). Never recorded
+    in an owned-manifest either, so the global emits' prune treats it as the user's —
+    the same contract as context.json and wiki.jsonc."""
+    dest = out / RULES_FILE
+    if not dest.exists():
+        dest.write_text(RULES_STUB, encoding="utf-8")
+
+
 # Bundle-level ignore so a host repo can COMMIT the rendered harness — AGENT.md, the
 # laws, agents, and skills are content worth versioning — while keeping only the
 # host-specific / personal files out. (Note: inline `#` comments are not valid in
@@ -237,6 +406,7 @@ agent-overrides.json
 .geneseed-theme
 .geneseed-emit
 .geneseed-footprint
+.geneseed-srcdirs.json
 
 # memory/ keeps its own .gitignore so learned facts stay on this machine.
 # notebook/ keeps its own .gitignore so the agent's own files stay on this machine.
@@ -341,12 +511,51 @@ def source_fingerprint() -> str:
     return h.hexdigest()[:12]
 
 
+def read_release_version(path: Path) -> "str | None":
+    """The human-readable release label (harness.config.json's `version` at the time
+    of that build) recorded in a deployed harness's .geneseed-version — the
+    `[release X]` bracket write_version appends — or None if absent/unreadable/from
+    a build predating this stamp (legacy marker, fingerprint-only)."""
+    try:
+        txt = (path / VERSION_MARKER).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    m = re.search(r"\[release ([^\]]+)\]", txt)
+    return m.group(1) if m else None
+
+
+def _warn_if_downgrade(out: Path) -> None:
+    """Loud, warn-only notice when re-emitting over an install whose recorded
+    release version is NEWER than the source tree's — the classic "forgot to git
+    pull" trap. Never blocks: the self-update flow is `git pull` + rebuild, but a
+    deliberate downgrade (checking out an older tag, testing a past release) must
+    stay possible. Silent no-op when either side's version doesn't parse (tuple
+    compare — see version_is_newer) or there's nothing deployed yet to compare."""
+    deployed = read_release_version(out)
+    if deployed is None:
+        return
+    current = source_release_version()
+    newer = version_is_newer(deployed, current)
+    if newer:
+        # ASCII-only prefix: build.py is often run with an unconfigured cp1252
+        # Windows console, where a warning-sign emoji would raise UnicodeEncodeError
+        # and eat the warning exactly when it matters.
+        print(f"[geneseed] WARN: installing older Geneseed {current} over newer "
+              f"{deployed} at {out} — did you forget git pull?")
+
+
 def write_version(out: Path) -> str:
-    """Stamp <out>/.geneseed-version with the source fingerprint + build date, so a
-    deployed harness records which source produced it. Returns the fingerprint."""
+    """Stamp <out>/.geneseed-version with the source fingerprint + build date + the
+    current release label, so a deployed harness records which source produced it.
+    Before overwriting, warns (never blocks) if the install's PREVIOUS recorded
+    release is newer than the source tree's — see `_warn_if_downgrade`. Returns the
+    fingerprint."""
+    _warn_if_downgrade(out)
     fp = source_fingerprint()
+    release = source_release_version()
     (out / VERSION_MARKER).write_text(
-        f"{fp} (built {datetime.date.today().isoformat()})\n", encoding="utf-8")
+        f"{fp} (built {datetime.date.today().isoformat()}) [release {release}]\n",
+        encoding="utf-8")
     return fp
 
 
@@ -360,6 +569,35 @@ def read_version(path: Path) -> "str | None":
     return txt.split()[0] if txt else None
 
 
+# Task 9: the portable bundle (build()) has no per-file manifest — it wipes and
+# regenerates OWNED_SRC_DIRS wholesale each run, keyed by the CURRENT theme's DIR_*
+# resolution. That is not enough on its own: if a theme's DIR_* value ever changes
+# between two builds into the SAME `out` (a theme edit, or switching themes), the
+# OLD themed dir name is never targeted by the new run's wipe and is orphaned. This
+# tiny marker remembers which dir name was actually used for each OWNED_SRC_DIRS
+# entry last time, so build() can also wipe THAT one when it no longer matches.
+# (DIR_* is theme-independent in practice today — STRUCTURE always wins over a
+# theme's own value, see effective_theme — but the marker costs nothing and closes
+# the gap the moment that changes, or for a future theme that does vary it.)
+SRC_DIRS_MARKER = ".geneseed-srcdirs.json"
+
+
+def _read_prior_src_dirs(out: Path) -> dict:
+    try:
+        data = json.loads((out / SRC_DIRS_MARKER).read_text(encoding="utf-8"))
+    except OSError:
+        return {}
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_src_dirs_marker(out: Path, resolved: dict) -> None:
+    tmp = out / (SRC_DIRS_MARKER + ".tmp")
+    tmp.write_text(json.dumps(resolved, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, out / SRC_DIRS_MARKER)
+
+
 def build(theme_name: str, out: Path, footprint: str = "full") -> None:
     """Render the bundle into `out`.
 
@@ -370,21 +608,66 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
 
     Before rendering, the dirs the build fully owns (`OWNED_SRC_DIRS` — laws,
     agents, skills, in their themed form) are wiped, so a renamed or removed source
-    file never leaves a stale copy behind. Everything else in `out` is preserved:
-    the surrounding application code, the agent's runtime `memory/` (MEMORY.md +
-    fact files, refreshed in place) and `notebook/` (the agent's sovereign
-    space — seeded once, never re-emitted; only its `.gitignore` is re-asserted),
-    and `context.json` — written once, beside
+    file never leaves a stale copy behind. A renamed DIR_* dir from a PRIOR build
+    (recorded in `.geneseed-srcdirs.json`) is wiped too, even though the current
+    theme no longer produces that name — see the marker's module comment (Task 9).
+    Accepted edge: a user dir that merely SHARES a previously-recorded themed name
+    is deleted only because the build itself recorded that name — nothing outside
+    what a prior build wrote down (and shape-checked) is ever pruned.
+    Everything else in `out` is preserved: the surrounding application code, the
+    agent's runtime `memory/` (MEMORY.md + fact files, refreshed in place) and
+    `notebook/` (the agent's sovereign space — seeded once, never re-emitted; only
+    its `.gitignore` is re-asserted), and `context.json` — written once, beside
     AGENT.md, and never touched again. The build therefore cleans its own footprint
     without ever destroying the user's repository or data."""
     theme, items = render_all(theme_name, footprint)
     assert_source_complete(items, context=f"theme '{theme_name}'")
     out.mkdir(parents=True, exist_ok=True)
 
+    # Wipe the owned dirs ONLY inside an established Geneseed bundle (marker
+    # present). A first render into an arbitrary repo (`--out .`) must never
+    # delete a pre-existing agents/ or skills/ dir the USER owns.
+    is_bundle = ((out / ".geneseed-theme").is_file()
+                 or (out / ".geneseed-version").is_file())
+    prior_src_dirs = _read_prior_src_dirs(out) if is_bundle else {}
+    resolved_src_dirs = {}
     for src_dir in OWNED_SRC_DIRS:
-        managed = out / theme.get(SRC_DIR_TOKENS[src_dir], src_dir)
-        if managed.is_dir():
+        dirname = theme.get(SRC_DIR_TOKENS[src_dir], src_dir)
+        resolved_src_dirs[src_dir] = dirname
+        managed = out / dirname
+        # A prior build recorded a DIFFERENT resolved name for this same
+        # OWNED_SRC_DIRS entry (a DIR_* rename) — that old dir is no longer
+        # produced by anything and would otherwise be orphaned; wipe it too.
+        # NEVER rmtree an unvalidated marker value: the marker is a plain file a
+        # user (or another tool) can edit — ".." would delete the bundle's PARENT,
+        # an absolute path replaces `out` entirely under Path.__truediv__, and
+        # "a/b" reaches into nested content. Only a plain single-segment dir name
+        # resolving directly under `out` is ever deleted; anything else is skipped
+        # with a loud WARN naming the marker, never guessed at.
+        prior_name = prior_src_dirs.get(src_dir)
+        if is_bundle and prior_name and prior_name != dirname:
+            if (isinstance(prior_name, str)
+                    and prior_name not in (".", "..")
+                    and not Path(prior_name).is_absolute()
+                    and Path(prior_name).name == prior_name
+                    and (out / prior_name).resolve().parent == out.resolve()):
+                stale = out / prior_name
+                if stale.is_dir():
+                    shutil.rmtree(stale)
+            else:
+                print(f"[geneseed] WARN: ignoring suspicious prior dir name "
+                      f"{ascii(prior_name)} recorded in {SRC_DIRS_MARKER} - "
+                      f"not pruned.", file=sys.stderr)
+        if not managed.is_dir():
+            continue
+        if is_bundle:
             shutil.rmtree(managed)
+        else:
+            # WARN, not the old warning-sign emoji: this print crashed with
+            # UnicodeEncodeError on a cp1252 Windows console (U+26A0 is unencodable
+            # there) — the warning must survive the consoles most likely to need it.
+            print(f"[geneseed] WARN: {managed} already exists and {out} is not a "
+                  f"Geneseed bundle — keeping it; rendered files merge into it.")
 
     nb_dirname = theme.get(SRC_DIR_TOKENS["notebook"], "notebook")
     for out_rel, text, src in items:
@@ -406,8 +689,10 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
 
     (out / ".geneseed-theme").write_text(theme_name + "\n", encoding="utf-8")
     write_version(out)
+    _write_src_dirs_marker(out, resolved_src_dirs)
     ensure_context_stub(out)
     ensure_wiki_stub(out)
+    ensure_rules_stub(out)
     ensure_bundle_gitignore(out)
     ensure_memory_index(out / theme.get(SRC_DIR_TOKENS["memory"], "memory"))
     ensure_notebook_index(out / theme.get(SRC_DIR_TOKENS["notebook"], "notebook"))
@@ -443,6 +728,39 @@ def _first_blockquote(text: str) -> str:
     return ""
 
 
+_HTML_COMMENT_RE = re.compile(r"<!--[\s\S]*?-->")
+
+
+def _desc_block_problem(text: str) -> str:
+    """Guard against `_first_blockquote` (and its `desc_of` alias, which every
+    OpenCode/Claude/Bob frontmatter `description:` is built from) silently grabbing
+    the WRONG line. `_first_blockquote` returns the first `>`-line anywhere in the
+    file — if a spec's actual first content block is plain prose (not a blockquote)
+    and a `>` line only shows up later (in a code sample, a nested callout, a stray
+    quote), the description becomes that unrelated line with no error anywhere.
+
+    Every real agent/skill spec (after its authoring `<!-- -->` comment is stripped)
+    opens with an H1 title line, then its one-line purpose as a `>` blockquote — see
+    src/agents/_template.md and src/skills/_template.md. This validates exactly that
+    shape: the first non-blank line is the title, and the very next non-blank line is
+    the blockquote (non-empty after its `>` marker is stripped). Returns "" when the
+    shape holds, else a one-line reason naming what was found instead."""
+    stripped = _HTML_COMMENT_RE.sub("", text)
+    nonblank = [ln for ln in stripped.splitlines() if ln.strip()]
+    if not nonblank:
+        return "file is empty (after stripping authoring comments)"
+    if not nonblank[0].lstrip().startswith("#"):
+        return f"first content line is not a title ('# ...'): {nonblank[0].strip()!r}"
+    if len(nonblank) < 2:
+        return "has a title but no purpose blockquote after it"
+    second = nonblank[1].strip()
+    if not second.startswith(">"):
+        return f"first block after the title is not a '>' blockquote: {second!r}"
+    if not second.lstrip(">").strip():
+        return "purpose blockquote is empty"
+    return ""
+
+
 def _is_readonly(text: str) -> bool:
     return "Read-only" in text
 
@@ -472,9 +790,9 @@ def assert_source_complete(items, *, context: str = "") -> None:
     """Refuse to emit when AGENT.md references specs that src/ doesn't provide — BEFORE
     any destructive write. A clear failure that leaves the existing install intact beats
     a half-generated bundle full of dead links (and a global re-emit that deletes the
-    good copies). This is the gate `upgrade.sh` runs on the download, brought into the
-    build itself so direct `build.py`, `harness build`, and the `setup` wizard are
-    guarded too — not just the upgrade path."""
+    good copies). This is the gate the upgrade path runs on the pulled source, brought
+    into the build itself so direct `build.py`, `harness build`, and the `setup` wizard
+    are guarded too — not just the upgrade path."""
     missing = _missing_referenced_specs(items)
     if not missing:
         return

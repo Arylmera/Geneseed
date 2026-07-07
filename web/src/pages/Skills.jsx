@@ -140,7 +140,7 @@ export default function Skills({ selected }) {
         {shown.length === 0 && (
           <div className="empty" style={{ padding: 32 }}>
             <div className="big">No skills in this class</div>
-            Try another class — or pick All.
+            Try another class, or pick All.
           </div>
         )}
       </div>

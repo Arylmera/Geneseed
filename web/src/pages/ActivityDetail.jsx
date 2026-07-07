@@ -44,7 +44,7 @@ function StreamRow({ rec }) {
         )}
         {rec.kind === 'thinking' && <span className="dim">thinking: </span>}
         {soft ? <span className="dim">{label}</span> : you ? label : <b>{label}</b>}
-        {rec.error && <span className="dim"> — {rec.error}</span>}
+        {rec.error && <span className="dim">: {rec.error}</span>}
       </div>
       {meta.length > 0 && (
         <span className="dim mono" style={{ flexShrink: 0, fontSize: 12 }}>
@@ -177,7 +177,7 @@ export default function ActivityDetail({ sid }) {
         </p>
       )}
 
-      <div className="card pad-md" style={{ borderLeft: `3px solid ${st.accent}` }}>
+      <div className="card pad-md">
         <div className="row between wrap gap-12">
           <div style={{ minWidth: 0 }}>
             <h1 className="h" style={{ margin: 0 }}>

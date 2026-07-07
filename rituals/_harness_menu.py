@@ -53,12 +53,12 @@ _LIBRARY_SECTIONS_RAW = [
 # would otherwise crowd the main menu's install block.
 _SETTINGS_ACTIONS_RAW = [
     ("mcp", "MCP servers", "Wire the MarkItDown, GitLab & Filesystem presets (and your own) into OpenCode."),
-    ("update", "Update only (download + rebuild)", "Download the latest scripts + factory from upstream and rebuild — no setup wizard."),
+    ("update", "Update only (pull + rebuild)", "Pull the latest source from the install's git origin and rebuild — no setup wizard."),
     ("build", "Rebuild bundle", "Re-render the harness from src."),
     ("setup", "Change install mode", "Re-run the setup wizard from your LOCAL source — no upstream download."),
     ("link", "Run from anywhere", "Put `geneseed` on your PATH so it runs from any directory."),
     ("unlink", "Remove from PATH", "Remove the `geneseed` launcher symlink from your PATH."),
-    ("uninstall", "Uninstall harness", "Remove a global Geneseed install (memory is kept, never deleted)."),
+    ("uninstall", "Uninstall harness", "Remove a Geneseed install — global, or this repo's (memory is kept, never deleted)."),
     ("back", "Back", "Return to the main menu."),
 ]
 _SETTINGS_ACTIONS = [(k, f"{_icon(k)}  {lbl}", d) for (k, lbl, d) in _SETTINGS_ACTIONS_RAW]
@@ -191,8 +191,9 @@ def _settings_menu(stdscr, curses, pal, here) -> None:
             pal = _tui_palette(curses, _accent_for(_installed_defaults()["theme"] or _default_theme()))
         elif sel in ("link", "unlink", "uninstall"):
             # Run the harness's own Python subcommand (no bash): link/unlink manage the
-            # PATH entry on every OS; uninstall removes a global install (it prompts on
-            # the restored terminal and keeps memory).
+            # PATH entry on every OS; uninstall removes the cwd's project install when
+            # one exists, else the global (it prompts on the restored terminal and
+            # keeps memory).
             curses.def_prog_mode()
             curses.endwin()
             run([sys.executable, str(here / "rituals" / "harness.py"), sel])

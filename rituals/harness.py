@@ -20,10 +20,14 @@ Dependency-free. Subcommands:
                                    deployed install's, and whether they match
     harness status                 print the install dashboard as text (theme, mode,
                                    counts, memory, version) — headless, any OS
-    harness uninstall [--target DIR] remove a global install via its manifest (owned
-                                   files + opencode.json entry + markers); memory is
-                                   never deleted — kept in place, or --archive-memory
-                                   moves it to archived-memory/; --yes to skip prompt
+    harness uninstall [--target DIR] remove a global OR project-scoped install via its
+                                   manifest (owned files + hooks/instructions entry +
+                                   markers); --target takes a repo or a config dir, else
+                                   the cwd is checked before falling back to the OpenCode
+                                   global config dir. memory/notebook are never deleted —
+                                   kept in place, or --archive-memory moves both to
+                                   archived-memory/ + archived-notebook/; --yes to skip
+                                   the confirm prompt
     harness setup                  interactive, dependency-free install wizard (all OSes)
     harness tui                    full-screen control panel (any VT-capable console)
     harness web                    local web UI over the deployed harness — browse
@@ -163,9 +167,10 @@ def build_argparser() -> argparse.ArgumentParser:
     df.add_argument("--theme", default=None, help="theme the deployment used "
                     "(default: auto-detected from the deployed marker/sigil)")
     df.add_argument("--full", action="store_true", help="show unified diffs, not just the file-level summary")
-    df.add_argument("--out", default=None, metavar="FILE",
+    df.add_argument("--out", nargs="?", const=True, default=None, metavar="FILE",
                     help="also write the drift as a markdown improvements file — the "
-                         "artifact to hand to an agent to back-port edits into src/")
+                         "artifact to hand to an agent to back-port edits into src/ "
+                         "(bare --out picks a timestamped file under improvements/)")
     df.set_defaults(fn=cmd_diff)
 
     ve = sub.add_parser("version", help="show installed vs current-source fingerprint and whether they match")
@@ -177,13 +182,18 @@ def build_argparser() -> argparse.ArgumentParser:
     st.set_defaults(fn=cmd_status)
 
     un = sub.add_parser("uninstall",
-                        help="remove a global Geneseed install (manifest-tracked); keeps memory unless --purge-memory")
+                        help="remove a global or project-scoped Geneseed install "
+                             "(manifest-tracked); memory/notebook are never deleted "
+                             "(--archive-memory moves them aside)")
     un.add_argument("--target", default=None,
-                    help="config dir to uninstall from (default: the OpenCode global config dir)")
+                    help="repo (project scope) or config dir (global scope) to uninstall "
+                         "from; default: the cwd if it holds a project install, else the "
+                         "OpenCode global config dir")
     un.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     un.add_argument("--archive-memory", action="store_true",
-                    help="move the memory store aside to archived-memory/<timestamp>/ "
-                         "(never deleted; default keeps it in place)")
+                    help="move the memory and notebook stores aside to sibling "
+                         "archived-memory/ + archived-notebook/ <timestamp> dirs "
+                         "(never deleted; default keeps them in place)")
     un.set_defaults(fn=cmd_uninstall)
 
     le = sub.add_parser("learn", help="distil notes/transcript into memory entries")
@@ -193,6 +203,9 @@ def build_argparser() -> argparse.ArgumentParser:
     le.add_argument("--memory", default=None,
                     help="bundle memory dir to dedup against and index into "
                          "(default: $GENESEED_MEMORY, else ./memory or ./Harness/memory)")
+    le.add_argument("--consolidate", action="store_true",
+                    help="rebuild MEMORY.md from the fact files on disk: re-index "
+                         "orphans, prune dead lines, report duplicate descriptions")
     le.set_defaults(fn=cmd_learn)
 
     su = sub.add_parser("setup", help="interactive install wizard (dependency-free, all OSes)")
@@ -212,20 +225,21 @@ def build_argparser() -> argparse.ArgumentParser:
     bs = sub.add_parser("bootstrap", help="update everything (sync + upgrade) with a "
                                           "progress UI, then run setup")
     bs.add_argument("ref", nargs="?", default=None,
-                    help="upstream ref (default: main; asked interactively if omitted)")
+                    help="accepted for back-compat; ignored (git follows the current branch)")
     bs.add_argument("extra", nargs="*", help=argparse.SUPPRESS)  # tolerate a legacy [theme] arg
     bs.add_argument("--no-setup", action="store_true", help="update only; skip the setup wizard")
     bs.set_defaults(fn=cmd_bootstrap)
 
     up = sub.add_parser("upgrade", help="self-update: git pull the install's origin (ff-only), "
-                                        "validate, then rebuild the bundle")
+                                        "validate, then rebuild the bundle + every install",
+                        aliases=["update"])
     up.add_argument("ref", nargs="?", default=None, help=argparse.SUPPRESS)  # ignored; git follows the current branch
     up.add_argument("theme", nargs="?", default=None, help="optional: force a theme (neutral|imperial|…)")
     up.set_defaults(fn=cmd_upgrade)
 
     ss = sub.add_parser("sync-self", help="refresh the orchestration layer — launchers + update "
                                           "scripts (cross-platform; replaces sync-self.sh)")
-    ss.add_argument("ref", nargs="?", default=None, help="branch or tag (default: main)")
+    ss.add_argument("ref", nargs="?", default=None, help=argparse.SUPPRESS)  # ignored; git follows the current branch
     ss.set_defaults(fn=cmd_sync_self)
 
     wb = sub.add_parser("web", help="serve the deployed harness as a local web UI "
@@ -261,7 +275,19 @@ def main() -> int:
                 pass
     ap = build_argparser()
     args = ap.parse_args()
-    return args.fn(args)
+    try:
+        return args.fn(args)
+    except KeyboardInterrupt:
+        # Ctrl-C at any prompt/step is a cancel, not a crash — no traceback.
+        print("\n[geneseed] cancelled.", file=sys.stderr)
+        return 130
+    except BrokenPipeError:
+        # `geneseed status | head` closes our stdout early; exit quietly. os._exit
+        # avoids the interpreter's own flush-on-exit re-raising into a traceback.
+        try:
+            sys.stderr.close()
+        finally:
+            os._exit(0)
 
 
 if __name__ == "__main__":

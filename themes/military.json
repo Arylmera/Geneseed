@@ -60,6 +60,7 @@
   "DESC_DRILL": "Train shaky knowledge into reflex — put into real scenarios and questioned through your mistakes, the answer held until you've tried.",
   "DESC_DECODE": "Break confusing material down — the one keystone line first, a plain analogy, then a comprehension check before you advance.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_RULE": "Draft, vet, and adopt a standing order in user-rules.md — route what isn't one, and promote the lesson that keeps reporting in.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Action the review like an AAR — verify each point, then adopt it or push back with reasons.",
   "LEX_I": "Sealed Orders · Sealed Secrets",
@@ -121,5 +122,6 @@
   "DESC_MCP": "Build or harden an MCP server — recon the spec, design task-shaped tools, test with the Inspector, and prove it with evals.",
   "DESC_PROSE": "Write prose for a human, not a machine — cut the filler, active voice, vary cadence, trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with intent — palette, type, and layout chosen for this brief, not the standard-issue defaults; plan, critique, and keep one bold move.",
-  "DESC_WORKFLOW": "Execute a saved op-order that commands your units by the numbers — parallel sweeps, staged phases, and confirmation, in one deterministic mission."
+  "DESC_WORKFLOW": "Execute a saved op-order that commands your units by the numbers — parallel sweeps, staged phases, and confirmation, in one deterministic mission.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

@@ -9,10 +9,10 @@
 [![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![stdlib only](https://img.shields.io/badge/deps-stdlib%20only-success)](build.py)
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
-[![Skills](https://img.shields.io/badge/skills-39-blueviolet)](src/skills/)
+[![Skills](https://img.shields.io/badge/skills-40-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-16-orange)](src/agents/)
 [![Laws](https://img.shields.io/badge/laws-35-critical)](src/laws/universal.md)
-[![OpenCode · Claude Code · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20AGENT.md-1f6feb)](#-2--setup)
+[![OpenCode · Claude Code · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-2--setup)
 
 [**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & TUI**](#-3--web--tui) · [**What you get**](#-4--what-you-get)
 
@@ -74,19 +74,9 @@ cd Geneseed
 
 The launcher finds Python on its own (the `py` launcher, else `python` on PATH). The full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+ `conhost` — via a stdlib-only ANSI backend; an older console degrades gracefully to the same wizard as plain text prompts. Screens and results are identical to macOS: theme → install mode → confirm → build → health check.
 
-### ⚡ The direct way — one command (OpenCode, global)
-
-The recommended install, done by hand — once into OpenCode's config dir, every repo inherits it, nothing committed into your projects:
-
-```bash
-python build.py --emit opencode-global                 # add --theme imperial if wanted
-# Optional: the learn plugin auto-locates the in-config memory store. Set this only
-# to pin it explicitly (and persist it to your shell rc):
-export GENESEED_HARNESS="$HOME/.config/opencode"
-echo 'export GENESEED_HARNESS="$HOME/.config/opencode"' >> ~/.zshrc
-```
-
-Windows is the same `python build.py` line; the optional pin is `setx GENESEED_HARNESS "$env:USERPROFILE\.config\opencode"`.
+That's the whole fast path — **[QUICKSTART.md](QUICKSTART.md)** walks it in
+5 minutes. Every other route (Claude Code, plain `AGENT.md`, per-repo installs,
+MCP servers, troubleshooting) lives in the full **[Setup guide](SETUP.md)**.
 
 ### ✅ After installing
 
@@ -131,7 +121,7 @@ Full reference — every view, the launch/daemon/PWA surface, the security model
 
 ### ⌨️ TUI — `geneseed`
 
-Same actions, no browser. Bare `geneseed` opens the **main menu** — browse, review local edits, refresh/set up, update, rebuild, memory, status, and Settings (MCP servers, run-from-anywhere, uninstall). `geneseed setup` jumps straight to the install wizard; `geneseed tui` opens the browse panel directly. The whole thing is a stdlib-only, dependency-free full-screen UI that also degrades to plain text prompts on older consoles — see [Setup](#-2--setup) above for the wizard walkthrough.
+Same actions, no browser. Bare `geneseed` opens the **main menu** — browse, review local edits, refresh/set up, update, rebuild, memory, status, and Settings (MCP servers, run-from-anywhere, uninstall — global **or** per-repo). `geneseed setup` jumps straight to the install wizard; `geneseed tui` opens the browse panel directly. The whole thing is a stdlib-only, dependency-free full-screen UI that also degrades to plain text prompts on older consoles — see [Setup](#-2--setup) above for the wizard walkthrough.
 
 ---
 
@@ -143,8 +133,8 @@ The harness ships as a small set of layers, mirrored one-for-one in the web cons
 | --- | --- |
 | **🛡️ Rules** (`laws/`) | 35 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery, non-interactive-shell, untrusted-content, least-privilege, root-cause, idempotency, calibrated-honesty, source-over-surface, total-teardown, cover-and-verify… |
 | **🤖 Agents** (16) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
-| **🛠 Skills** (39) | repeatable workflows: brainstorm · **clarify** · plan · tdd · **develop** · debug · refactor · **ponytail** · **forge-mcp** · geneseed-code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **learning-path** · **gap-detector** · **feynman** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **opencode-theme** · **herdr** |
-| **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes; `geneseed-ponytail` holds a minimal-code mode (`/ponytail lite\|full\|ultra\|off`), opt-in, injecting the laziest-that-works ruleset every turn so it doesn't drift |
+| **🛠 Skills** (40) | repeatable workflows: brainstorm · **clarify** · plan · tdd · **develop** · debug · refactor · **ponytail** · **forge-mcp** · geneseed-code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **learning-path** · **gap-detector** · **feynman** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **rule** · **opencode-theme** · **herdr** |
+| **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes; `geneseed-ponytail` holds a minimal-code mode (`/ponytail lite\|full\|ultra\|off`), opt-in, injecting the laziest-that-works ruleset every turn so it doesn't drift; `geneseed-activity` streams what each session is doing to the web console's Activity view |
 | **🧠 Memory** (`memory/`) | one-fact-per-file durable knowledge, indexed by `MEMORY.md` (git-ignored, personal) |
 | **📓 Notebook** (`notebook/`) | the agent's sovereign space — any medium (code, tools, data, notes), self-ruled via a seed-once charter, always git-ignored; only its `.gitignore` is build-asserted |
 | **🌐 Wiki** (`wiki.jsonc`) | your own machine-wide knowledge base — typically an Obsidian vault — declared once per machine: entry notes load eager/lazy, the agent reads and **writes** it under the vault's own conventions, with an inbox fallback and guard-enforced protected folders |
@@ -166,7 +156,7 @@ Fourteen themes ship — each a single JSON file in `themes/` carrying voice tok
 | 🏟️ **sports** | play-by-play commentary |
 | 🏍 **biker** · 🎤 **commentator** · 🃏 **joker** · 🤖 **marvin** · 😤 **mean** · 🏎 **verstappen** | community-added voices for fun |
 
-Pick with `--theme NAME` or via the TUI wizard. The theme is remembered in a `.geneseed-theme` marker, so later upgrades preserve it. `doctor` checks every theme defines the same keys, so flavour drift is impossible.
+Pick with `--theme NAME` or via the TUI wizard. The theme is remembered in a `.geneseed-theme` marker, so later upgrades preserve it. `doctor` checks every theme defines the same keys, so flavour drift is impossible. Adding a new voice token to `themes/_TEMPLATE.json`? Run `python build.py --sync-themes` to fill it into every theme (template's placeholder value, reported for restyling) before `doctor` is expected to pass again.
 
 ### 🪶 Footprint (lean vs full)
 
@@ -177,9 +167,11 @@ A second per-install dial, **footprint**, sets how much of the Rules `AGENT.md` 
 | **full** *(default)* | every Rule's complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
 | **lean** | each Rule's heading + the rule line, then a pointer to the full law file | ~40% smaller; rationale is one on-demand read away |
 
-Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Use **full** when token cost is a non-issue or you run a smaller model; use **lean** to reclaim context on long sessions, large repos, or cost-sensitive runs. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob).
+Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Use **full** when token cost is a non-issue or you run a smaller model; use **lean** to reclaim context on long sessions, large repos, or cost-sensitive runs. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob, Copilot).
 
 Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates each Rule's *reasoning* to on-demand (and adds the standalone laws file to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer — which is why it stays the default.
+
+Want to check a build before it touches anything real? `python build.py --validate-only --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build---validate-only).
 
 ---
 
@@ -210,7 +202,8 @@ Geneseed/
 ├── rituals/web.py        local web UI server (stdlib HTTP) behind `geneseed web`
 ├── web/                  Vite + React UI source; the committed web/dist/ build is what ships
 ├── tests/                stdlib unit tests + a Node workflow-runtime test
-├── docs/specs/           dated implementation specs — design rationale + history
+├── docs/                 guides (web-ui, wiki, …); specs/, reviews/, superpowers/ are
+│                         local working docs — git-ignored, never distributed
 ├── adapters/             per-tool glue (opencode/, claude-code/)
 └── .github/workflows/    CI: doctor + tests
 ```
@@ -245,6 +238,9 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 | **[DESIGN.md](DESIGN.md)** | Changing structure — the spec and the decisions behind it |
 | **[SHIPPED.md](SHIPPED.md)** | What's in the harness today — capabilities ↔ the spec behind each |
 | **[docs/web-ui.md](docs/web-ui.md)** | The web console — every view, the launch/daemon/PWA surface, security model |
+| **[docs/wiki.md](docs/wiki.md)** | The machine wiki — your personal knowledge base, setup and writing model |
+| **[docs/token-footprint.md](docs/token-footprint.md)** | What the harness costs in context-window tokens, per host |
+| **[docs/opencode-plugin-setup.md](docs/opencode-plugin-setup.md)** | Installing the OpenCode plugins — the one-time wiring they all share |
 | **[CHANGELOG.md](CHANGELOG.md)** | What changed between versions |
 | **[adapters/opencode/](adapters/opencode/README.md)** | Wiring OpenCode in depth — plugins, native mapping |
 | ⤷ [GLOBAL-HARNESS-SPEC.md](adapters/opencode/GLOBAL-HARNESS-SPEC.md) | The global-emit contract |
@@ -252,7 +248,6 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 | **[adapters/claude-code/](adapters/claude-code/README.md)** | The Claude Code hook adapter |
 | **[src/memory/README.md](src/memory/README.md)** | The memory convention |
 | **[src/notebook/README.md](src/notebook/README.md)** | The agent's own freeform-space convention |
-| **[docs/specs/](docs/specs/)** | Dated implementation specs — the rationale and history behind each feature |
 
 ## 🤝 Contributing
 

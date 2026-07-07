@@ -16,7 +16,7 @@ function SessionCard({ s }) {
   return (
     <div
       className="card pad-md act-card"
-      style={{ borderLeft: `3px solid ${st.accent}`, cursor: 'pointer' }}
+      style={{ cursor: 'pointer' }}
       onClick={open}
       role="link"
       tabIndex={0}
@@ -168,7 +168,7 @@ export default function Activity() {
         <div>
           <h1 className="h">Activity</h1>
           <p className="sub">
-            Live OpenCode sessions this harness is running — what each one is doing right now.
+            Live OpenCode sessions this harness is running: what each one is doing right now.
             Refreshes every couple of seconds; sessions drop off when their process exits.
           </p>
         </div>

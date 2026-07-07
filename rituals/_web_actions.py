@@ -77,6 +77,130 @@ def api_memory_delete(state: WebState, name: str) -> dict:
     return {"deleted": name}
 
 
+# ---- user rules mutations ---------------------------------------------------------
+# All writes to user-rules.md go through here (the Rules page). Every mutation
+# requires the fingerprint of the content the client last read: an agent session may
+# edit the same file mid-flight, and a stale write must 409 (the server maps
+# ok=False to 409) and re-fetch, never silently clobber the agent's rule. Edits are
+# line-range splices of one rule's block — the rest of the user's file, prose and
+# formatting alike, is never regenerated.
+
+def _rules_read(state: WebState) -> tuple[Path, str]:
+    p = _rules_path(state)
+    return p, (p.read_text(encoding="utf-8", errors="replace") if p.is_file() else "")
+
+
+def _rules_fingerprint(text: str) -> str:
+    import hashlib
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16] if text else ""
+
+
+def _rule_block(rid: int, title: str, scope: str, source: str,
+                trial_until: str, body: str) -> str:
+    meta = [f"scope: {scope}"]
+    if source:
+        meta.append(f"source: {source}")
+    if trial_until:
+        meta.append(f"trial until: {trial_until}")
+    return f"## R{rid} — {title}\n({' | '.join(meta)})\n{body.strip()}\n"
+
+
+def _rule_fields(body: dict) -> tuple[str, str, str, str, str]:
+    """Validate and normalise the writable fields of a rule from a request body.
+    Raises ValueError (→ JSON 500 with the message) on an unusable rule."""
+    title = " ".join(str(body.get("title") or "").split())
+    text = str(body.get("body") or "").strip()
+    if not title:
+        raise ValueError("a rule needs a title")
+    if not text:
+        raise ValueError("a rule needs body text")
+    scope = body.get("scope")
+    if scope not in ("user", "project"):
+        scope = "project"
+    source = " ".join(str(body.get("source") or "").split())
+    trial = str(body.get("trial_until") or "").strip()
+    if trial and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", trial):
+        raise ValueError("trial until must be YYYY-MM-DD")
+    return title, text, scope, source, trial
+
+
+def api_rules_mutate(state: WebState, body: dict) -> dict:
+    """One endpoint, three ops on user-rules.md: add (server assigns the next free
+    R<n>), update (splice the block in place), delete (drop the block). Returns
+    the fresh fingerprint so the client can chain edits without a re-fetch."""
+    op = body.get("op")
+    if op not in ("add", "update", "delete"):
+        raise NotFound(f"rules op {op!r}")
+    p, text = _rules_read(state)
+    if body.get("fingerprint", "") != _rules_fingerprint(text):
+        return {"ok": False, "error": "conflict",
+                "detail": "user-rules.md changed since you loaded it — reloading"}
+    rules, _warn = parse_rules(text)
+
+    if op == "add":
+        title, rtext, scope, source, trial = _rule_fields(body)
+        rid = max((r["id"] for r in rules), default=0) + 1
+        if not text:
+            text = "# User rules\n"
+        new = text.rstrip("\n") + "\n\n" + _rule_block(rid, title, scope, source,
+                                                       trial, rtext)
+    else:
+        try:
+            rid = int(body.get("id"))
+        except (TypeError, ValueError):
+            raise NotFound("rule id")
+        target = next((r for r in rules if r["id"] == rid), None)
+        if target is None:
+            raise NotFound(f"rule R{rid}")
+        lines = text.splitlines()
+        if op == "update":
+            title, rtext, scope, source, trial = _rule_fields(body)
+            block = _rule_block(rid, title, scope, source, trial, rtext)
+            lines[target["start"]:target["end"]] = block.rstrip("\n").splitlines()
+        else:  # delete — also swallow one preceding blank separator line
+            start = target["start"]
+            if start > 0 and not lines[start - 1].strip():
+                start -= 1
+            del lines[start:target["end"]]
+        new = "\n".join(lines).rstrip("\n") + "\n"
+
+    p.write_text(new, encoding="utf-8")
+    return {"ok": True, "op": op, "id": rid,
+            "fingerprint": _rules_fingerprint(new)}
+
+
+def api_rules_promote(state: WebState, body: dict) -> dict:
+    """Promote one memory fact into a trial rule: append it to user-rules.md with
+    provenance and a month of probation, then (opt-in) delete the source memory so
+    the lesson is not loaded twice — the web twin of the rule skill's flow."""
+    import datetime
+    name = str(body.get("name") or "")
+    d = _memory_dir(state)
+    if not d.is_dir():
+        raise NotFound("memory store")
+    if not name or "/" in name or "\\" in name or name in ("MEMORY", "README"):
+        raise NotFound(name)
+    src = d / f"{name}.md"
+    if not src.is_file():
+        raise NotFound(name)
+    fm, mem_body = harness._frontmatter(src.read_text(encoding="utf-8",
+                                                      errors="replace"))
+    today = datetime.date.today()
+    res = api_rules_mutate(state, {
+        "op": "add",
+        "fingerprint": body.get("fingerprint", ""),
+        "title": body.get("title") or fm.get("name", name),
+        "body": body.get("body") or mem_body.strip() or fm.get("description", ""),
+        "scope": body.get("scope"),
+        "source": f"memory {name}, promoted {today.isoformat()}",
+        "trial_until": (today + datetime.timedelta(days=30)).isoformat(),
+    })
+    if res.get("ok") and body.get("delete_memory"):
+        api_memory_delete(state, name)
+        res["deleted_memory"] = name
+    return res
+
+
 def api_setup(state: WebState) -> dict:
     """Install snapshot for the Settings page — harness._status_data() (the same
     source the `status` command and the TUI panel read, so the three never drift)
@@ -92,7 +216,8 @@ def api_setup(state: WebState) -> dict:
 
 
 def api_diff(state: WebState) -> dict:
-    target, theme, files = harness._diff_collect(target=state.target, theme=state.theme)
+    target, theme, files = harness._diff_collect(target=state.target, theme=state.theme,
+                                                 emit=state.emit)
     return {
         "deployed": files is not None,
         "target": str(target),
@@ -184,14 +309,14 @@ def api_mcp_toggle(state: WebState, body: dict) -> dict:
     if harness._mcp_commented(path):
         return {"ok": False,
                 "error": "config holds comments — edit it by hand to keep them"}
-    if host in ("claude", "bob"):
-        # Claude AND Bob configs are strict JSON. Parse ONCE, strictly, and rewrite THAT
-        # exact dict — so the safety check and the value we save come from the same read
-        # (no parser-mismatch, no time-of-check/time-of-use gap) and a string value
-        # containing ',]' / ', }' is never mangled by the comment-stripper's trailing-comma
-        # pass. Refuse an existing file we cannot parse rather than clobber it: it may be
-        # ~/.claude.json (projects/history) or Bob's settings.json (hooks/permissions far
-        # beyond MCP wiring).
+    if host in ("claude", "bob", "copilot"):
+        # Claude, Bob AND Copilot configs are strict JSON. Parse ONCE, strictly, and
+        # rewrite THAT exact dict — so the safety check and the value we save come from
+        # the same read (no parser-mismatch, no time-of-check/time-of-use gap) and a
+        # string value containing ',]' / ', }' is never mangled by the comment-stripper's
+        # trailing-comma pass. Refuse an existing file we cannot parse rather than clobber
+        # it: it may be ~/.claude.json (projects/history), Bob's settings.json
+        # (hooks/permissions far beyond MCP wiring) or Copilot's mcp-config.json.
         if path.is_file():
             try:
                 cfg = json.loads(path.read_text(encoding="utf-8"))
@@ -237,10 +362,10 @@ def api_installs(state: WebState) -> dict:
 
 def _view_cfg(host: str, scope: str, root) -> Path:
     """The data dir to read an install's inventory/memory/diff from. Global installs (and
-    the OpenCode per-repo bundle) keep it at the root; a Claude OR Bob per-repo install
-    keeps it under its marker dir (<repo>/.claude, <repo>/.bob) — host-driven so a new
-    nested-marker host can't silently read the bare root."""
-    if scope == "project" and host in ("claude", "bob"):
+    the OpenCode per-repo bundle) keep it at the root; a Claude, Bob OR Copilot per-repo
+    install keeps it under its marker dir (<repo>/.claude, <repo>/.bob, <repo>/.github) —
+    host-driven so a new nested-marker host can't silently read the bare root."""
+    if scope == "project" and host in ("claude", "bob", "copilot"):
         return root / build.HOSTS[host]["project_marker"]
     return root
 
@@ -263,7 +388,9 @@ def api_select_view(state: WebState, body: dict) -> dict:
     if hit is None:
         raise NotFound("unknown install (host, path)")
     host, scope, root = hit
-    state.select_view(_view_cfg(host, scope, root))
+    # Thread the install ROOT through: markers/sigils live there, not in the data
+    # dir — without it a claude/bob project view mis-detects as opencode/neutral.
+    state.select_view(_view_cfg(host, scope, root), root=root)
     return {"ok": True, "target": str(state.target), "theme": state.theme, "emit": state.emit}
 
 
@@ -271,6 +398,7 @@ _EMIT_FOR = {
     ("opencode", "global"): "opencode-global", ("opencode", "project"): "opencode",
     ("claude", "global"): "claude-global", ("claude", "project"): "claude",
     ("bob", "global"): "bob-global", ("bob", "project"): "bob",
+    ("copilot", "global"): "copilot-global", ("copilot", "project"): "copilot",
 }
 
 
@@ -335,7 +463,8 @@ def api_deploy_cmd(state: WebState, body: dict) -> dict:
     # 'project' emit there would mislabel as the global row (dedup collision). Send the
     # user to the existing global row instead.
     cfgdirs = set()
-    for cfgfn in (build._opencode_config_dir, build._claude_config_dir):
+    for cfgfn in (build._opencode_config_dir, build._claude_config_dir,
+                  build._bob_config_dir, build._copilot_config_dir):
         try:
             cfgdirs.add(cfgfn().resolve())
         except Exception:
@@ -346,7 +475,7 @@ def api_deploy_cmd(state: WebState, body: dict) -> dict:
     theme = body.get("theme") if body.get("theme") in themes else state.theme
     fp = body.get("footprint")
     fp = fp if fp in ("lean", "full") else "full"   # a fresh deploy defaults to full
-    emit = host   # project-scope emit name == host name (opencode / claude / bob)
+    emit = host   # project-scope emit name == host name (opencode / claude / bob / copilot)
     argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root), fp)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 

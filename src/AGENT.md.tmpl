@@ -40,6 +40,17 @@ never move.
 
 <!-- INCLUDE: laws/universal.md -->
 
+**The user's own rules.** If a `user-rules.md` sits beside this file, read it at
+session start and obey every rule in it with the same force as the {{LAWS}} above
+— always, in every task. A user rule may *tighten* a {{LAW}}, never repeal one:
+where they conflict, the {{LAW}} wins. That file belongs to the user — the build
+seeds it once, never overwrites it, and no update touches it — and it is the
+**only** place standing rules are ever written: when the user asks for a standing
+rule, or a recurring {{MEMORY}} lesson has earned promotion, append it there with
+the user's consent (the [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}} carries the
+procedure). Never add, edit, or remove a {{LAW}} — the {{LAWS}} above are
+regenerated on every update, and an edit to them is silently lost.
+
 ---
 
 ## 2. {{AGENTS}} — delegation by capability
@@ -73,6 +84,16 @@ never move.
 `spec-feedback:` line, weigh it — fold a real flaw back into that {{AGENT}}'s
 file (with the user's assent); {{MEMORY}} gets a record only when it clears
 {{LAW}} VI's bar.
+
+**Dispatching a multi-part goal.** When a goal spans several capabilities,
+decompose it into independent subtasks, route each to the single owning {{AGENT}}
+above, and converge the results yourself. Every handoff carries an **envelope** —
+the subtask goal, the inputs the {{AGENT}} needs, and its output contract — and the
+constraints travel with it: dispatched {{AGENTS}} never commit or push ({{LAW}} XX
+stays with you), and an unfulfilled contract returns as a stated gap, never invented
+content. Where the host exposes a `workflow` tool, prefer the saved `dispatch`
+workflow ([workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md)); where it does not, run
+the same shape model-driven via the [parallel-agents {{SKILL}}]({{DIR_SKILLS}}/parallel-agents.md).
 
 The last ten — `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`,
 `user-advocate`, `framer`, `empiricist`, `operator`, `historian` — are the standing
@@ -127,6 +148,7 @@ subset that productively clashes on a given motion.
 | [workflow]({{DIR_SKILLS}}/workflow.md) | deterministic, code-driven orchestration of subagents (fan-out, find→verify pipeline) and the host exposes a `workflow` tool |
 | [wiki]({{DIR_SKILLS}}/wiki.md) | consulting or growing the user's machine-wide knowledge base declared in `wiki.jsonc` (§7) |
 | [herdr]({{DIR_SKILLS}}/herdr.md) | running inside a [herdr](https://herdr.dev) pane (`HERDR_ENV=1`) and a task needs another pane — a sibling server, a watched build, a spawned agent |
+| [rule]({{DIR_SKILLS}}/rule.md) | the user wants a standing rule of their own, or a recurring {{MEMORY}} lesson deserves promotion into `user-rules.md` (§1) |
 | [geneseed]({{DIR_SKILLS}}/geneseed.md) | the user mentions Geneseed, the harness, or `AGENT.md`, or you need to inspect or read from the deployed bundle ({{LAWS}}, {{AGENTS}}, {{SKILLS}}, {{MEMORY}}) |
 | [opencode-theme]({{DIR_SKILLS}}/opencode-theme.md) | the user wants their own OpenCode colour theme — pick or tweak a palette, get solid + transparent variants that survive rebuilds |
 
@@ -155,7 +177,10 @@ Persistent facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/) — one fact per f
 local `MEMORY.md`. Read that index at the start of a session; write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision
 worth keeping. The `{{DIR_MEMORY}}/` directory is **personal and git-ignored** — it is
-never committed or shared; to share knowledge, put it in code or docs. Full
+never committed or shared; to share knowledge, put it in code, docs, or the
+project's `user-rules.md` (§1). When the same feedback lesson keeps recurring,
+propose promoting it into a standing rule — the [rule]({{DIR_SKILLS}}/rule.md)
+{{SKILL}} carries the procedure. Full
 convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
 
 ---

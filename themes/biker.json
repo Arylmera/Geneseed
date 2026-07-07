@@ -60,6 +60,7 @@
   "DESC_DRILL": "Beat shaky know-how into instinct — thrown into real situations and quizzed on your screw-ups, no answer 'til you've tried.",
   "DESC_DECODE": "Cut through confusing material — the one line that matters first, a plain analogy, then a quick check before you roll on.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_RULE": "Bolt a standing rule of your own into user-rules.md — triage what isn't one, and promote the lesson that keeps coming back around.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Take the notes straight — weigh each call, then act on it or push back with reasons.",
   "LEX_I": "Keep It in the Saddlebag · Sealed Secrets",
@@ -121,5 +122,6 @@
   "DESC_MCP": "Build or fix up an MCP server — read the spec, shape tools around real jobs, test with the Inspector, and prove it works.",
   "DESC_PROSE": "Write like a human, not a bot — strip the filler, keep it plain, mix up the rhythm, and trust whoever's reading.",
   "DESC_FRONTEND_DESIGN": "Design a UI with real attitude — pick palette, type, and layout for this job, not the stock defaults, then trim it down to one bold move.",
-  "DESC_WORKFLOW": "Run a saved route that sends your riders by script — many rolled out at once, their findings gathered and checked in one clean run."
+  "DESC_WORKFLOW": "Run a saved route that sends your riders by script — many rolled out at once, their findings gathered and checked in one clean run.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

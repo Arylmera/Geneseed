@@ -19,6 +19,7 @@
   may run documented examples and commands to confirm they work as written.
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Read the actual code/behaviour before describing it — never document intent
    that the code does not implement (universal {{LAW}} III).
 2. Write for the stated audience; lead with what the reader needs to do.
@@ -29,6 +30,9 @@
   confirmation that any code examples were run as written, and an explicit list of
   any surfaces left un-updated (so the caller can close the gap rather than assume
   none exists).
+- If the behaviour cannot be pinned down or an example cannot be made to run,
+  report that gap instead of documenting intent — wrong docs cost more than
+  missing ones.
 
 ## Self-improvement
 

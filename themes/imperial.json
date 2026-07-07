@@ -60,6 +60,7 @@
   "DESC_DRILL": "Temper shaky knowledge into reflex — cast into real situations and questioned through your failures, the answer withheld until you have tried.",
   "DESC_DECODE": "Lay impenetrable lore bare — the one keystone line first, a plain parable, then a trial before you advance.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_RULE": "Forge a standing edict of the user's own into user-rules.md — weigh it against the Dictates it may tighten but never repeal, and elevate a recurring lesson with consent.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Answer the review with discipline — weigh each judgement, then heed it or refute it with cause.",
   "LEX_I": "Arcana Sigillata · Sealed Secrets",
@@ -121,5 +122,6 @@
   "DESC_MCP": "Forge or fortify an MCP server — study the rite, shape tools to real tasks, test with the Inspector, and prove it with trials.",
   "DESC_PROSE": "Inscribe prose fit for human eyes, not machine-cant — strike the filler, speak plainly, vary the cadence, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design an interface with intent — palette, type, and layout forged for this brief, not the common defaults; plan, scrutinise, and keep one bold stroke.",
-  "DESC_WORKFLOW": "Unleash a sealed battle-rite that marshals your Adepts by iron script — many loosed at once, their findings martialled and proven in one disciplined campaign."
+  "DESC_WORKFLOW": "Unleash a sealed battle-rite that marshals your Adepts by iron script — many loosed at once, their findings martialled and proven in one disciplined campaign.",
+  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
 }

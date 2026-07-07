@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "geneseed-web",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": "C:\\Python313\\python.exe",
       "runtimeArgs": ["-c", "import sys; sys.path.insert(0, 'rituals'); import web; web.serve(open_browser=False, port=4753)"],
       "port": 4753
     }

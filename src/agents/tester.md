@@ -18,6 +18,7 @@
 - Does not change production code; if a fix is needed, it reports the diagnosis.
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. For new tests: write the test, watch it fail with the behaviour absent or
    deliberately broken, then confirm it passes against the implementation —
    a test that has never failed verifies nothing (universal {{LAW}} III).
@@ -27,6 +28,8 @@
 ## Output contract
 - The test files written/changed, the command to run them, and the actual run
   output (pass/fail counts). For diagnosis: root cause + recommended fix location.
+- If the suite cannot be run or the expected behaviour is unspecified, report
+  that blocker instead of delivering tests that were never seen to fail.
 
 ## Self-improvement
 

@@ -19,6 +19,7 @@
 <!-- bash: allow -->
 
 ## Procedure
+0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{LAW}} VI).
 1. Confirm the change actually does what the task required (read the spec/issue).
 2. Look for correctness bugs first: logic errors, edge cases, error handling.
 3. Then quality: duplication, unclear naming, dead code, oversized units.
@@ -27,6 +28,8 @@
 ## Output contract
 - A list of findings, each as `file:line — problem — suggested fix`, ordered
   correctness-first. End with a one-line verdict: ship / fix-then-ship / block.
+- If a check was impossible — no diff, no task statement, a suite that will not
+  run — name it instead of issuing a verdict on partial evidence.
 
 ## Self-improvement
 

@@ -20,6 +20,7 @@ _DEFAULT_EMIT = {
     ("opencode", "global"): "opencode-global", ("opencode", "project"): "opencode",
     ("claude", "global"): "claude-global", ("claude", "project"): "claude",
     ("bob", "global"): "bob-global", ("bob", "project"): "bob",
+    ("copilot", "global"): "copilot-global", ("copilot", "project"): "copilot",
 }
 
 
@@ -36,8 +37,13 @@ def cmd_rebuild_all(args: argparse.Namespace) -> int:
     failures = []
     for host, scope, root in targets:
         em = root / ".geneseed-emit"
-        emit = (em.read_text(encoding="utf-8").strip() if em.is_file() else None) \
-            or _DEFAULT_EMIT.get((host, scope), "opencode-global")
+        marker = em.read_text(encoding="utf-8").strip() if em.is_file() else ""
+        # ONE marker file per root, last deploy wins — in a dual-host repo
+        # (.opencode + .claude in the same cwd) the other host's row would silently
+        # rebuild with the WRONG emit. Trust the marker only for its own host.
+        if marker and _EMIT_HOST_SCOPE.get(marker, ("", ""))[0] != host:
+            marker = ""
+        emit = marker or _DEFAULT_EMIT.get((host, scope), "opencode-global")
         theme = _theme_of_dir(root) or _default_theme()
         footprint = _footprint_of_dir(root)   # preserve lean/full — a rebuild must not flip it
         out = None if scope == "global" else str(root)
@@ -76,8 +82,14 @@ def _link_problems(md: Path, text: str, out: Path, rel: Path) -> list[str]:
     return problems
 
 
-def _check_build(theme_name: str, out: Path) -> list[str]:
-    """Scan one rendered bundle for unresolved tokens, dead links, and escapes."""
+def _check_build(theme_name: str, out: Path, is_vendored=build.is_vendored_path) -> list[str]:
+    """Scan one rendered bundle for unresolved tokens, dead links, and escapes.
+
+    `is_vendored` defaults to `build.is_vendored_path` (assumes a `files`/opencode-
+    global bundle-relative path, `skills/<name>/...`). Per-repo native layers
+    (`.claude/skills/<name>/...`, `.bob/skills/<name>/...`) nest one level deeper, so
+    callers scanning those pass `build._validate_is_vendored` instead — see
+    `_claude_bob_emit_problems`."""
     out = out.resolve()
     problems: list[str] = []
     for md in out.rglob("*.md"):
@@ -86,7 +98,7 @@ def _check_build(theme_name: str, out: Path) -> list[str]:
         # cross-links reference the upstream project's own (partly un-vendored) files and
         # they carry their own license, so they are exempt from Geneseed's hermeticity /
         # dead-link invariant. (See build.VENDORED_SKILL_DIRS for the vendored set.)
-        if build.is_vendored_path(rel):
+        if is_vendored(rel):
             continue
         text = md.read_text(encoding="utf-8")
         for tok in set(TOKEN_RE.findall(text)):
@@ -249,10 +261,14 @@ def _rendered_problems(bundle: Path) -> list[str]:
 
 def _authoring_problems() -> list[str]:
     """Author-time gates on the source specs and plugins (not rendered output):
-    every agent/skill spec must carry a one-line '>' purpose blockquote (else its
-    OpenCode `description:` renders empty); the learn-prompt literal must stay
-    extractable from the plugin (the single-source link harness.py depends on); and,
-    if node is on PATH, the plugins must pass `node --check`."""
+    every agent/skill spec must carry a one-line '>' purpose blockquote as the FIRST
+    content block after its title (else its OpenCode `description:` — and every host's
+    frontmatter description, all built from `desc_of`/`_first_blockquote` — either
+    renders empty or silently picks up the WRONG line, since `_first_blockquote` finds
+    the first '>' line anywhere in the file, not necessarily the intended one); the
+    learn-prompt literal must stay extractable from the plugin (the single-source link
+    harness.py depends on); and, if node is on PATH, the plugins must pass
+    `node --check`."""
     problems: list[str] = []
     for folder in ("agents", "skills"):
         d = build.SRC / folder
@@ -269,6 +285,11 @@ def _authoring_problems() -> list[str]:
             if not build._first_blockquote(text):
                 problems.append(f"[authoring] {folder}/{spec.name} has no '>' purpose line "
                                 f"(its OpenCode description would render empty)")
+                continue
+            reason = build._desc_block_problem(text)
+            if reason:
+                problems.append(f"[authoring] {folder}/{spec.name}: {reason} — "
+                                f"desc_of() would silently extract the wrong description")
     plugin = build.PLUGIN_SRC / "geneseed-learn.js"
     try:
         m = re.search(r"const LEARN_PROMPT_HEAD = `([\s\S]*?)`",
@@ -299,7 +320,7 @@ def _src_stems(folder: str) -> set:
 
 
 def _prose_mirror_problems(readme: str, web: str, counts: dict[str, int],
-                           skill_stems: set[str]) -> list[str]:
+                           skill_stems: set[str], shipped: str = "") -> list[str]:
     """Keep the *human-readable* count mirrors honest — the ones the badge regex never
     sees. The README "What you get" table and the web onboarding copy each restate the
     law / agent / skill counts in prose, and the README enumerates the skills by name.
@@ -345,6 +366,16 @@ def _prose_mirror_problems(readme: str, web: str, counts: dict[str, int],
         if int(m.group(1)) != listed_n:
             problems.append(f"[authoring] _web_core says '{m.group(1)} repeatable workflows' "
                             f"but its wikilink list has {listed_n}")
+
+    # SHIPPED.md capability row: "N laws, N agents, N skills" sits under the explicit
+    # promise "Every row below is present in the tree today" — it had drifted 1 law /
+    # 6 skills behind src/ with no gate to notice.
+    m = re.search(r"(\d+) laws, (\d+) agents, (\d+) skills", shipped)
+    if m:
+        for got, want, label in ((m.group(1), laws, "laws"), (m.group(2), agents, "agents"),
+                                 (m.group(3), skills, "skills")):
+            if int(got) != want:
+                problems.append(f"[authoring] SHIPPED.md says '{got} {label}' but src has {want}")
     return problems
 
 
@@ -422,7 +453,11 @@ def _count_table_problems() -> list[str]:
         web = (ROOT / "rituals" / "_web_core.py").read_text(encoding="utf-8")
     except OSError:
         web = ""
-    problems += _prose_mirror_problems(readme, web, counts, skill_files)
+    try:
+        shipped = (ROOT / "SHIPPED.md").read_text(encoding="utf-8")
+    except OSError:
+        shipped = ""
+    problems += _prose_mirror_problems(readme, web, counts, skill_files, shipped)
     return problems
 
 
@@ -455,6 +490,36 @@ def _global_emit_problems(theme_name: str) -> list[str]:
         except SystemExit:
             return [f"[{theme_name} global] build failed"]
         return _check_build(f"{theme_name} global", cfg)
+
+
+def _claude_bob_emit_problems(theme_name: str) -> list[str]:
+    """Validate the claude/bob/copilot PER-REPO emits — never checked before (only the
+    `files` build and opencode-global were), which is exactly why the CLAUDE.md/AGENTS.md
+    skill-table dead links (`.claude/skills/<name>.md`) shipped unnoticed: the emits
+    that render CLAUDE.md/AGENTS.md straight into a repo were outside doctor's sweep.
+    Renders `emit_claude`, `emit_bob` and `emit_copilot` into throwaway sandboxes (mirroring
+    `build.py --validate-only`'s own scan, but called in-process — NOT by shelling to
+    `--validate-only`, which itself shells BACK into `doctor --no-bundle` and would
+    recurse) and scans each with `_check_build`, using `build._validate_is_vendored`
+    (tolerant of a `skills` segment at any depth) instead of the bundle-relative
+    `build.is_vendored_path` — the native per-repo layer nests skills one level
+    deeper than a `files`/opencode-global bundle (`.claude/skills/<name>/...` /
+    `.bob/skills/<name>/...`, vs `skills/<name>/...`)."""
+    problems: list[str] = []
+    for label, emit_fn in (("claude", build.emit_claude), ("bob", build.emit_bob),
+                           ("copilot", build.emit_copilot)):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "root"
+            sandbox = root / "bundle"
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's log
+                    emit_fn(theme_name, sandbox, root)
+            except SystemExit:
+                problems.append(f"[{theme_name} {label}] build failed")
+                continue
+            problems += _check_build(f"{theme_name} {label}", root,
+                                     is_vendored=build._validate_is_vendored)
+    return problems
 
 
 def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
@@ -499,6 +564,8 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
                              _check_build(theme_name, out))
             problems += _ran("global", f"Global install ({theme_name})",
                              _global_emit_problems(theme_name))
+            problems += _ran("claude_bob", f"Claude/Bob/Copilot per-repo emit ({theme_name})",
+                             _claude_bob_emit_problems(theme_name))
     if on_progress:
         on_progress(len(themes), total, "parity · authoring · bundle")
     problems += _ran("parity", "Theme parity", _theme_parity_problems())
@@ -515,7 +582,7 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Validate the build. With --theme, checks that one theme. With no theme it
     scopes to the INSTALLED theme (so a one-theme install is not buried under the
-    same issue repeated across all eight); pass --all for the full maintainer sweep
+    same issue repeated across every theme); pass --all for the full maintainer sweep
     of every theme. The cross-theme parity check runs in every mode."""
     all_themes = getattr(args, "all", False)
     themes, problems = _doctor_collect(theme=args.theme, all_themes=all_themes,
@@ -533,6 +600,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if any("dead link" in p for p in problems):
             print("  tip: dead links to skills mean your source is incomplete — run "
                   "`./geneseed update` (or re-sync src/), then re-check.")
+        if any(p.startswith("[themes]") and "missing key" in p for p in problems):
+            print("  tip: a theme is missing a key another theme defines — run "
+                  "`python build.py --sync-themes` to fill it from _TEMPLATE.json, "
+                  "then restyle the added key(s) and re-check.")
         if note:
             print(note)
         return 1

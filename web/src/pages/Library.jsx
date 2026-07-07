@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { Icon } from '../components/Icon.jsx'
-import { SECTIONS, SECTION_ORDER } from '../lib/sections.js'
+import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Markdown from '../components/Markdown.jsx'
 import ErrorState from '../components/ErrorState.jsx'
@@ -38,7 +38,7 @@ function EmptyDoc({ section, source }) {
     <div className="lib-doc-empty">
       <Icon name={SECTIONS[section].icon} className="glyph" />
       <span>
-        This entry is part of the {SECTIONS[section].label.toLowerCase()} convention — see{' '}
+        This entry is part of the {SECTIONS[section].label.toLowerCase()} convention; see{' '}
         <code className="mono">{source}</code>. It has no standalone per-entry document.
       </span>
     </div>
@@ -56,7 +56,7 @@ function EmptyDoc({ section, source }) {
 // Selecting a row pushes the matching #/item/.../<name> URL so deep-linking
 // keeps working from the search spotlight and the Graph.
 export default function Library({ overview, section, selected, dataRev }) {
-  const initialSec = section && SECTIONS[section] ? section : SECTION_ORDER[0]
+  const initialSec = section && SECTIONS[section] ? section : LIBRARY_ORDER[0]
   const [sec, setSec] = useState(initialSec)
   const [q, setQ] = useState('')
   const rowsRef = useRef(null)
@@ -142,6 +142,9 @@ export default function Library({ overview, section, selected, dataRev }) {
 
   const openItem = (name) => go(`#/item/${SECTIONS[sec].type}/${encodeURIComponent(name)}`)
   const switchSection = (k) => go(`#/section/${k}`)
+  // Agents has its own top-level tab (#/agents), like Laws and Skills: the page
+  // reuses this master-detail view locked to the agents section, chip-bar hidden.
+  const standalone = sec === 'agents'
 
   const onForget = async () => {
     const name = activeItem?.name
@@ -161,35 +164,62 @@ export default function Library({ overview, section, selected, dataRev }) {
     reloadCatalog()
   }
 
+  // Promote a memory fact into a standing trial rule in user-rules.md — the web
+  // twin of the rule skill's memory→rule flow. The fact is deleted after the
+  // promotion (the rule supersedes it; keeping both would load the lesson twice),
+  // which is why the confirm spells that out. Lands on the Rules page so the new
+  // trial rule is immediately visible and editable.
+  const onPromote = async () => {
+    const name = activeItem?.name
+    if (!name) return
+    if (
+      !window.confirm(
+        `Promote "${name}" into a standing rule? It is appended to user-rules.md as a trial rule (a month of probation), and the memory fact is deleted so the lesson isn't loaded twice.`,
+      )
+    )
+      return
+    try {
+      const cur = await api.rules()
+      await api.rulesPromote({ name, fingerprint: cur.fingerprint, delete_memory: true })
+      go('#/rules')
+    } catch (e) {
+      window.alert(`Could not promote: ${e.message}`)
+      reloadCatalog()
+    }
+  }
+
   return (
     <>
       <div className="head-row mb-16">
         <div>
           <div className="eyebrow">harness content</div>
-          <h1 className="h">Library</h1>
+          <h1 className="h">{standalone ? 'Agents' : 'Library'}</h1>
           <p className="sub">
-            Browse every layer of the deployed harness from one place. Pick a section, then read an
-            entry — the markdown comes straight from the source file.
+            {standalone
+              ? 'The capability specialists deployed in the harness. Pick one to read its charter, straight from the source file.'
+              : 'Browse every layer of the deployed harness from one place. Pick a section, then read an entry; the markdown comes straight from the source file.'}
           </p>
         </div>
       </div>
-      <div className="lib-secbar">
-        {SECTION_ORDER.map((k) => {
-          const meta = SECTIONS[k]
-          const n = counts[k] ?? null
-          return (
-            <button
-              key={k}
-              className={`lib-secchip ${sec === k ? 'on' : ''}`}
-              onClick={() => switchSection(k)}
-            >
-              <Icon name={meta.icon} className="glyph" />
-              <span>{meta.label}</span>
-              {n != null && <span className="lib-secchip-n">{n}</span>}
-            </button>
-          )
-        })}
-      </div>
+      {standalone ? null : (
+        <div className="lib-secbar">
+          {LIBRARY_ORDER.map((k) => {
+            const meta = SECTIONS[k]
+            const n = counts[k] ?? null
+            return (
+              <button
+                key={k}
+                className={`lib-secchip ${sec === k ? 'on' : ''}`}
+                onClick={() => switchSection(k)}
+              >
+                <Icon name={meta.icon} className="glyph" />
+                <span>{meta.label}</span>
+                {n != null && <span className="lib-secchip-n">{n}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {err ? <ErrorState error={err} style={{ margin: '12px 0' }} /> : null}
 
@@ -220,7 +250,7 @@ export default function Library({ overview, section, selected, dataRev }) {
             ))}
             {!ql && items.length > CAP && (
               <div className="lib-more">
-                Showing {CAP} of {items.length} — type to search the rest.
+                Showing {CAP} of {items.length}; type to search the rest.
               </div>
             )}
             {ql && matches.length === 0 && (
@@ -232,7 +262,7 @@ export default function Library({ overview, section, selected, dataRev }) {
             {items.length === 0 && (
               <div className="empty" style={{ padding: 32 }}>
                 <div className="big">Nothing here yet</div>
-                This section is empty — once the harness produces entries they will appear.
+                This section is empty; once the harness produces entries they will appear.
               </div>
             )}
           </div>
@@ -260,7 +290,14 @@ export default function Library({ overview, section, selected, dataRev }) {
                 </div>
               </div>
               {sec === 'memory' && activeItem.name !== 'MEMORY' && activeItem.name !== 'README' && (
-                <div style={{ marginTop: 12 }}>
+                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn ghost sm"
+                    onClick={onPromote}
+                    title="Turn this lesson into a standing trial rule in user-rules.md"
+                  >
+                    Promote to rule
+                  </button>
                   <button className="btn ghost sm" onClick={onForget}>
                     Forget this fact
                   </button>

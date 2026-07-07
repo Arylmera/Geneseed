@@ -132,7 +132,7 @@ are skipped and any error is swallowed, so it never blocks or disturbs a session
 
 ### Install
 
-All five plugins (learn, context, guard, workflow, notify) install together in
+All seven plugins (activity, context, guard, learn, notify, ponytail, workflow) install together in
 one step — the shared recipe lives in
 **[Plugin setup](../../docs/opencode-plugin-setup.md)** (global `cp …/plugins/*.js`
 + `GENESEED_HARNESS`, or `build.py --emit opencode` / `opencode-global`).
@@ -241,7 +241,7 @@ the script, not the model, drives the control flow.
   `workflows/` dir (`.opencode/workflows/` per-repo, `<config>/workflows/` global;
   override with `GENESEED_WORKFLOWS_DIR`). No model-authored scripts are eval'd.
 - **Call shape:** `workflow({ name, args })` — call with no name to list what is
-  available. Shipped: `council`, `review`, `research-plan-implement`.
+  available. Shipped: `council`, `review`, `research-plan-implement`, `dispatch`.
 - **Runtime API** ([`workflows/_runtime.js`](workflows/_runtime.js)): scripts get
   `agent()`, `parallel()`, `pipeline()`, `phase()`, `log()`, `budget`, `args`.
   Child work runs as real OpenCode sessions (created, prompted, then deleted);
@@ -356,10 +356,14 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   Re-emit to apply. (A future TUI screen will edit this map.) Unlisted keys are omitted,
   so the agent inherits OpenCode's defaults.
 - **Agent colours.** Each capability agent is emitted with a `color:` set to an OpenCode
-  *named theme slot* — architect=`primary`, reviewer=`warning`, tester=`success`,
-  docs=`info`, security=`error`, explorer=`accent`, council seats=`secondary` — so the
-  agent switcher and subagent output are colour-coded, and the colour tracks whatever
-  OpenCode theme you run (portable, never a raw hex). Cosmetic.
+  *named theme slot*, sourced from the active harness theme's `AGENT_COLORS` map
+  (`themes/_TEMPLATE.json`; the shipped default — architect=`primary`, reviewer=`warning`,
+  tester=`success`, docs=`info`, security=`error`, explorer=`accent`, everything else
+  (council seats)=`secondary` — is the same in every shipped theme, but a theme is free
+  to restyle its own grouping). An unrecognised slot value falls back to `secondary` with
+  a build-time warning, so a bad restyle never reaches an invalid `color:` in emitted
+  frontmatter. The agent switcher and subagent output are colour-coded this way, and the
+  colour tracks whatever OpenCode theme you run (portable, never a raw hex). Cosmetic.
 - **Branded theme** (`/theme geneseed-<theme>`). The emit writes a complete OpenCode
   theme at `.opencode/themes/geneseed-<theme>.json` (global: `<cfg>/themes/`), tinted by
   the harness theme's accent using terminal-native ANSI colours (always valid, no host
@@ -464,7 +468,7 @@ isolation, not just separate sessions.
 
 It is **not vendored** and **not installed by the harness** — treat it like the
 MarkItDown MCP server: a reference pointer you opt into, not a dependency. It does
-not follow Geneseed's plugin convention (the four vendored plugins are single-file,
+not follow Geneseed's plugin convention (the vendored plugins are single-file,
 zero-dependency `.js` copied by `cp …/plugins/*.js`; this one is multi-file
 TypeScript with npm deps — `jsonc-parser`, `zod` — and Bun-only APIs like
 `bun:sqlite`/`Bun.spawn`), so it can't ride the `build --emit opencode` install or
