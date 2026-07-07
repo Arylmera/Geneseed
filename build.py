@@ -98,8 +98,9 @@ def _validate_is_vendored(rel: Path) -> bool:
     """Like build.is_vendored_path, but tolerant of a `skills` segment appearing
     anywhere in the relative path — not only at index 0. is_vendored_path assumes a
     'files'/opencode-global bundle-relative path (skills/<name>/...); the opencode/
-    claude/bob PER-REPO native layers nest skills one level deeper
-    (.opencode/skills/<name>/..., .claude/skills/<name>/..., .bob/skills/<name>/...),
+    claude/bob/copilot PER-REPO native layers nest skills one level deeper
+    (.opencode/skills/<name>/..., .claude/skills/<name>/..., .bob/skills/<name>/...,
+    .github/skills/<name>/...),
     a shape doctor's own _check_build has never scanned (it only validates the
     `files` build and the opencode-global emit). --validate-only extends the scan to
     those per-repo layers too, so it must recognise the same vendored exemption there."""
@@ -207,6 +208,12 @@ def _validate_only(args: argparse.Namespace) -> int:
             elif emit == "bob-global":
                 emit_bob_global(args.theme, out=sandbox, cfg=cfg, footprint=args.footprint)
                 scan_dirs = [cfg]
+            elif emit == "copilot":
+                emit_copilot(args.theme, sandbox, root, args.footprint)
+                scan_dirs = [root]
+            elif emit == "copilot-global":
+                emit_copilot_global(args.theme, out=sandbox, cfg=cfg, footprint=args.footprint)
+                scan_dirs = [cfg]
             else:
                 build(args.theme, sandbox, args.footprint)
                 scan_dirs = [sandbox]
@@ -292,7 +299,7 @@ def main() -> None:
                          "directory (default: ./Harness)")
     ap.add_argument("--emit",
                     choices=["files", "opencode", "opencode-global", "claude", "claude-global",
-                             "bob", "bob-global"],
+                             "bob", "bob-global", "copilot", "copilot-global"],
                     default="files",
                     help="files: plain bundle (default). opencode: bundle + per-repo "
                          ".opencode/ subagents, native skills & opencode.json. "
@@ -303,13 +310,18 @@ def main() -> None:
                          "claude-global: render into Claude Code's global config dir "
                          "(~/.claude) — CLAUDE.md, agents, skills, settings.json hooks. "
                          "bob: per-repo AGENTS.md + .bob/ for IBM Bob (agents, skills, "
-                         "settings.json). bob-global: render into ~/.bob ($BOB_CONFIG_DIR)")
+                         "settings.json). bob-global: render into ~/.bob ($BOB_CONFIG_DIR). "
+                         "copilot: per-repo AGENTS.md + .github/ for GitHub Copilot "
+                         "(agents as .agent.md, skills; no hooks). copilot-global: render "
+                         "into ~/.copilot ($COPILOT_CONFIG_DIR) — copilot-instructions.md, "
+                         "agents, skills")
     ap.add_argument("--footprint", choices=["lean", "full"], default="full",
                     help="instruction-set footprint. full (default): every law's full text "
                          "is inlined into AGENT.md §1. lean: §1 carries terse rule lines + a "
                          "pointer to the standalone laws/universal.md (smaller context, lower "
                          "token cost per turn); the full law text always ships alongside, read "
-                         "on demand. Applies to every host (opencode/claude/bob) and scope.")
+                         "on demand. Applies to every host (opencode/claude/bob/copilot) "
+                         "and scope.")
     ap.add_argument("--root", default=None,
                     help="project root the agent/OpenCode run from — where opencode.json "
                          "and .opencode/ are placed (default: same as --out). Set this when "
@@ -359,6 +371,10 @@ def main() -> None:
         emit_bob(args.theme, out, root, args.footprint)
     elif args.emit == "bob-global":
         emit_bob_global(args.theme, out, footprint=args.footprint)
+    elif args.emit == "copilot":
+        emit_copilot(args.theme, out, root, args.footprint)
+    elif args.emit == "copilot-global":
+        emit_copilot_global(args.theme, out, footprint=args.footprint)
     else:
         build(args.theme, out, args.footprint)
 
@@ -372,6 +388,8 @@ def main() -> None:
         marker_dir = _claude_config_dir()
     elif args.emit == "bob-global":
         marker_dir = _bob_config_dir()
+    elif args.emit == "copilot-global":
+        marker_dir = _copilot_config_dir()
     else:
         marker_dir = out
     try:
@@ -385,7 +403,7 @@ def main() -> None:
         pass
     # build() already drops a .geneseed-theme marker in `out`; the global emits render
     # into the config dir without calling build(), so record the theme there too.
-    if args.emit in ("opencode-global", "claude-global", "bob-global"):
+    if args.emit in ("opencode-global", "claude-global", "bob-global", "copilot-global"):
         try:
             (marker_dir / ".geneseed-theme").write_text(args.theme + "\n", encoding="utf-8")
         except OSError:
@@ -398,7 +416,7 @@ def main() -> None:
     # a build. Records `out` (where the marker is); the web Deploy always sends out==root.
     # ponytail: a CLI `--root != --out` bundle records `out` and may read 'absent' (the
     # install layer sits under `root`) — unsupported edge; fix marker_dir=root if needed.
-    if args.emit in ("opencode", "claude", "bob"):
+    if args.emit in ("opencode", "claude", "bob", "copilot"):
         try:
             import _install_registry
             _install_registry.record(marker_dir)

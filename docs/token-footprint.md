@@ -8,16 +8,18 @@ counts are chars/4 estimates and shift a little with theme and version.
 
 The context every host injects at session start, before you type anything:
 
-| Component | Claude Code | OpenCode | Bob |
-|---|---|---|---|
-| Root instruction file | ~10.7k (`CLAUDE.md`) | ~10.6k (`AGENT.md`) | ~10.7k (`AGENTS.md`) |
-| Skill metadata (name + description) | ~1.6k | ~1.6k | ~1.6k |
-| Agent metadata | ~0.45k | ~0.55k | ~0.45k |
-| Eager memory/notebook injection | ~1.2k (SessionStart hook) | ~1.2k (context plugin) | ~1.2k (SessionStart hook) |
-| **Total** | **~14k** | **~14k** | **~14k** |
+| Component | Claude Code | OpenCode | Bob | Copilot |
+|---|---|---|---|---|
+| Root instruction file | ~10.7k (`CLAUDE.md`) | ~10.6k (`AGENT.md`) | ~10.7k (`AGENTS.md`) | ~10.7k (`AGENTS.md`) |
+| Skill metadata (name + description) | ~1.6k | ~1.6k | ~1.6k | ~1.6k |
+| Agent metadata | ~0.45k | ~0.55k | ~0.45k | ~0.45k |
+| Eager memory/notebook injection | ~1.2k (SessionStart hook) | ~1.2k (context plugin) | ~1.2k (SessionStart hook) | — (no hooks; read on demand) |
+| **Total** | **~14k** | **~14k** | **~14k** | **~12.8k** |
 
-The three emits are at parity by design: ~14k tokens, about 7% of a 200k
-window. The eager-injection path is budget-capped identically everywhere
+The emits are at parity by design: ~14k tokens, about 7% of a 200k
+window (Copilot runs slightly lighter because it has no hook mechanism — the
+memory/notebook indexes load when the agent reads them, not eagerly). The
+eager-injection path is budget-capped identically everywhere
 (16 KB per file, 48 KB total ≈ 12k tokens ceiling), so growing Memory degrades
 every host the same way instead of one silently falling behind.
 
@@ -43,7 +45,8 @@ token counter also includes, none of which Geneseed controls:
    definitions. On OpenCode this is typically 5–10k tokens before any
    harness content loads.
 2. **Your repo's docs, injected eagerly** — the context delivery
-   (plugin on OpenCode, SessionStart hook on Claude Code / Bob) discovers and
+   (plugin on OpenCode, SessionStart hook on Claude Code / Bob; Copilot has no
+   hook channel, so its sessions read docs on demand instead) discovers and
    injects `README.md`, `CONTRIBUTING.md`, and files under `docs/`, up to the
    48 KB budget (≈12k tokens). A doc-heavy repo fills it.
 3. **Wiki eager entries** plus the lazy listing of the rest, if a wiki is

@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 MODES = ["files", "opencode", "opencode-global", "claude", "claude-global",
-         "bob", "bob-global"]
+         "bob", "bob-global", "copilot", "copilot-global"]
 
 
 class EmitModeSmokeTests(unittest.TestCase):

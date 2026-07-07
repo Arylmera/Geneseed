@@ -309,14 +309,14 @@ def api_mcp_toggle(state: WebState, body: dict) -> dict:
     if harness._mcp_commented(path):
         return {"ok": False,
                 "error": "config holds comments — edit it by hand to keep them"}
-    if host in ("claude", "bob"):
-        # Claude AND Bob configs are strict JSON. Parse ONCE, strictly, and rewrite THAT
-        # exact dict — so the safety check and the value we save come from the same read
-        # (no parser-mismatch, no time-of-check/time-of-use gap) and a string value
-        # containing ',]' / ', }' is never mangled by the comment-stripper's trailing-comma
-        # pass. Refuse an existing file we cannot parse rather than clobber it: it may be
-        # ~/.claude.json (projects/history) or Bob's settings.json (hooks/permissions far
-        # beyond MCP wiring).
+    if host in ("claude", "bob", "copilot"):
+        # Claude, Bob AND Copilot configs are strict JSON. Parse ONCE, strictly, and
+        # rewrite THAT exact dict — so the safety check and the value we save come from
+        # the same read (no parser-mismatch, no time-of-check/time-of-use gap) and a
+        # string value containing ',]' / ', }' is never mangled by the comment-stripper's
+        # trailing-comma pass. Refuse an existing file we cannot parse rather than clobber
+        # it: it may be ~/.claude.json (projects/history), Bob's settings.json
+        # (hooks/permissions far beyond MCP wiring) or Copilot's mcp-config.json.
         if path.is_file():
             try:
                 cfg = json.loads(path.read_text(encoding="utf-8"))
@@ -362,10 +362,10 @@ def api_installs(state: WebState) -> dict:
 
 def _view_cfg(host: str, scope: str, root) -> Path:
     """The data dir to read an install's inventory/memory/diff from. Global installs (and
-    the OpenCode per-repo bundle) keep it at the root; a Claude OR Bob per-repo install
-    keeps it under its marker dir (<repo>/.claude, <repo>/.bob) — host-driven so a new
-    nested-marker host can't silently read the bare root."""
-    if scope == "project" and host in ("claude", "bob"):
+    the OpenCode per-repo bundle) keep it at the root; a Claude, Bob OR Copilot per-repo
+    install keeps it under its marker dir (<repo>/.claude, <repo>/.bob, <repo>/.github) —
+    host-driven so a new nested-marker host can't silently read the bare root."""
+    if scope == "project" and host in ("claude", "bob", "copilot"):
         return root / build.HOSTS[host]["project_marker"]
     return root
 
@@ -398,6 +398,7 @@ _EMIT_FOR = {
     ("opencode", "global"): "opencode-global", ("opencode", "project"): "opencode",
     ("claude", "global"): "claude-global", ("claude", "project"): "claude",
     ("bob", "global"): "bob-global", ("bob", "project"): "bob",
+    ("copilot", "global"): "copilot-global", ("copilot", "project"): "copilot",
 }
 
 
@@ -463,7 +464,7 @@ def api_deploy_cmd(state: WebState, body: dict) -> dict:
     # user to the existing global row instead.
     cfgdirs = set()
     for cfgfn in (build._opencode_config_dir, build._claude_config_dir,
-                  build._bob_config_dir):
+                  build._bob_config_dir, build._copilot_config_dir):
         try:
             cfgdirs.add(cfgfn().resolve())
         except Exception:
@@ -474,7 +475,7 @@ def api_deploy_cmd(state: WebState, body: dict) -> dict:
     theme = body.get("theme") if body.get("theme") in themes else state.theme
     fp = body.get("footprint")
     fp = fp if fp in ("lean", "full") else "full"   # a fresh deploy defaults to full
-    emit = host   # project-scope emit name == host name (opencode / claude / bob)
+    emit = host   # project-scope emit name == host name (opencode / claude / bob / copilot)
     argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root), fp)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 

@@ -172,9 +172,9 @@ def _setup_tui(stdscr):
     if footprint is None:
         return None
     out = root = None
-    # Every PROJECT emit needs the repo root (claude/bob too — without --out their
-    # CLAUDE.md/.claude land in ./Harness, never loaded). Mirrors _collect_setup_lines.
-    if emit in ("opencode", "claude", "bob"):
+    # Every PROJECT emit needs the repo root (claude/bob/copilot too — without --out
+    # their CLAUDE.md/.claude land in ./Harness, never loaded). Mirrors _collect_setup_lines.
+    if emit in ("opencode", "claude", "bob", "copilot"):
         root = _text_input(stdscr, curses, "Repo root to install into", ".")
         if root is None:
             return None

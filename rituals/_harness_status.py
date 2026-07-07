@@ -29,8 +29,9 @@ def cmd_version(args: argparse.Namespace) -> int:
     target = Path(args.target).expanduser().resolve() if args.target else build._opencode_config_dir()
     installed = build.read_version(target)
     if installed is None:   # fall back to the other hosts' config dirs, then bundles —
-        # a claude/bob-only machine must not report "no install detected".
+        # a claude/bob/copilot-only machine must not report "no install detected".
         for base in (build._claude_config_dir(), build._bob_config_dir(),
+                     build._copilot_config_dir(),
                      ROOT / "Harness", Path.cwd() / "Harness", Path.cwd()):
             v = build.read_version(base)
             if v:
@@ -59,7 +60,7 @@ def _status_data() -> dict:
     source_fp = build.source_fingerprint()
     installed_fp = ver_target = None
     othercfg = []
-    for fn in (build._claude_config_dir, build._bob_config_dir):
+    for fn in (build._claude_config_dir, build._bob_config_dir, build._copilot_config_dir):
         try:
             othercfg.append(fn())
         except Exception:  # noqa: BLE001 — a missing host dir must not sink status

@@ -198,7 +198,8 @@ def cmd_diff(args: argparse.Namespace) -> int:
                 f"[diff] {target} is a PROJECT install — diff only compares GLOBAL "
                 f"installs against a fresh render (a project layer is diffed against "
                 f"its own repo, which this command does not do). Pass --target at a "
-                f"global config dir (opencode-global/claude-global/bob-global), or omit "
+                f"global config dir (opencode-global/claude-global/bob-global/"
+                f"copilot-global), or omit "
                 f"--target to use the default.\n")
         else:
             sys.stderr.write(

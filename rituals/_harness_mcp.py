@@ -89,8 +89,8 @@ _MCP_PRESETS = {
 
 def _mcp_servers_key(host: str) -> str:
     """The config key holding the server map for `host`: OpenCode nests servers under
-    `mcp`, Claude Code and IBM Bob under `mcpServers`."""
-    return "mcpServers" if host in ("claude", "bob") else "mcp"
+    `mcp`, Claude Code, IBM Bob and GitHub Copilot under `mcpServers`."""
+    return "mcpServers" if host in ("claude", "bob", "copilot") else "mcp"
 
 
 def _mcp_preset_block(name: str, host: str = "opencode") -> dict:
@@ -98,15 +98,21 @@ def _mcp_preset_block(name: str, host: str = "opencode") -> dict:
     preset block verbatim (`type` / `command`-list / `environment` / `enabled`). Claude
     splits the command list into `command` (head) + `args` (tail), renames
     `environment` → `env`, and drops the `type` / `enabled` keys it has no concept of —
-    matching SETUP.md's `.mcp.json` shape."""
+    matching SETUP.md's `.mcp.json` shape. Copilot's mcp-config.json takes the same
+    command/args/env shape but REQUIRES `type` ('local' for a stdio server) and a
+    `tools` allowlist (`["*"]` = every tool) — docs.github.com/copilot/how-tos/
+    copilot-cli/customize-copilot/add-mcp-servers."""
     block = dict(_MCP_PRESETS[name]["block"])
-    if host not in ("claude", "bob"):   # Bob shares Claude's command/args + env shape
+    if host not in ("claude", "bob", "copilot"):   # Bob shares Claude's command/args + env shape
         return block
     cmd = list(block.get("command") or [])
     out: dict = {"command": cmd[0] if cmd else "", "args": cmd[1:]}
     env = block.get("environment")
     if env:
         out["env"] = dict(env)
+    if host == "copilot":
+        out["type"] = "local"
+        out["tools"] = ["*"]
     return out
 
 
@@ -139,7 +145,7 @@ def _mcp_state(config: dict, name: str, host: str = "opencode") -> str:
     server = (config.get(_mcp_servers_key(host)) or {}).get(name)
     if not isinstance(server, dict):
         return "absent"
-    if host in ("claude", "bob"):   # flag-less mcpServers: present == enabled
+    if host in ("claude", "bob", "copilot"):   # flag-less mcpServers: present == enabled
         return "enabled"
     return "enabled" if server.get("enabled", True) else "disabled"
 
@@ -151,7 +157,7 @@ def _mcp_set_enabled(config: dict, name: str, enabled: bool, host: str = "openco
     server = (config.get(_mcp_servers_key(host)) or {}).get(name)
     if not isinstance(server, dict):
         return config
-    if host in ("claude", "bob"):   # no enabled flag: enable is a no-op, disable removes
+    if host in ("claude", "bob", "copilot"):   # no enabled flag: enable is a no-op, disable removes
         return config if enabled else _mcp_apply(config, name, None, host)
     block = dict(server)
     block["enabled"] = enabled
@@ -173,8 +179,8 @@ def _mcp_load(path: Path, host: str = "opencode") -> dict:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return {}
-    if host in ("claude", "bob"):
-        # Both hosts keep MCP in a strict-JSON settings file — comment-tolerant
+    if host in ("claude", "bob", "copilot"):
+        # These hosts keep MCP in a strict-JSON config file — comment-tolerant
         # parsing here would let the display list servers from a file the strict
         # toggle writer then refuses (mangling risk the writer guards against).
         try:
@@ -242,6 +248,12 @@ def _mcp_config_for(host: str, scope: str, root: Path) -> "Path | None":
         # the same file the emit writes hooks into (the MCP merge only touches mcpServers).
         return (root / ".bob" / "settings.json") if scope == "project" \
             else (build._bob_config_dir() / "settings.json")
+    if host == "copilot":
+        # The Copilot CLI reads MCP servers from ~/.copilot/mcp-config.json only — it
+        # documents no per-repo config file (VS Code's .vscode/mcp.json is a different
+        # surface with a different shape), so a project install carries no MCP wiring.
+        return (build._copilot_config_dir() / "mcp-config.json") if scope == "global" \
+            else None
     return None
 
 
@@ -316,8 +328,9 @@ def _uninstall_global(target: Path, archive_memory: bool, host: str = "opencode"
     a sibling `archived-memory/<timestamp>/` when archive_memory. Returns a summary
     dict (with `archived` = the archive path, or None). Host-aware: a Claude install is
     reversed by `_claude_uninstall` (no opencode.json — settings.json hooks + the
-    CLAUDE.md block instead); IBM Bob rides the same manifest-driven reversal."""
-    if host in ("claude", "bob"):
+    CLAUDE.md block instead); IBM Bob and GitHub Copilot ride the same manifest-driven
+    reversal (a Copilot manifest simply records no settings claims to unwire)."""
+    if host in ("claude", "bob", "copilot"):
         return _claude_uninstall(target, archive_memory)
     try:
         owned = json.loads((target / build.GLOBAL_MANIFEST).read_text(encoding="utf-8")).get("owned", [])
@@ -472,7 +485,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
         sys.stderr.write(
             f"[uninstall] no Geneseed install detected at {target_desc}.\n"
             f"[uninstall] pass --target <repo> for a project install (.opencode/.claude/"
-            f".bob) or --target <config dir> for a global one.\n")
+            f".bob/.github) or --target <config dir> for a global one.\n")
         return 1
     host, scope, root = hit
     if _install_state(root, host, scope) == "absent":
@@ -487,7 +500,11 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     data = _install_data_dir(root, host, scope)
     stores = [n for n in ("memory", "notebook") if (data / n).is_dir()]
     print(f"[uninstall] target: {root} ({host}:{scope})")
-    if host in ("claude", "bob"):
+    if host == "copilot":
+        print("[uninstall] removes: agents/, skills/, markers, and the "
+              f"{build.HOSTS[host]['agent_file']} managed block (Copilot has no "
+              "settings.json/hooks to unwire; your own .github files are kept).")
+    elif host in ("claude", "bob"):
         print("[uninstall] removes: agents/, skills/, markers, the "
               f"{build.HOSTS[host]['agent_file']} managed block, and Geneseed's "
               "settings.json hooks/excludes (your own keys/hooks are kept).")
@@ -580,6 +597,7 @@ _EMIT_HOST_SCOPE = {
     "opencode": ("opencode", "project"), "opencode-global": ("opencode", "global"),
     "claude": ("claude", "project"), "claude-global": ("claude", "global"),
     "bob": ("bob", "project"), "bob-global": ("bob", "global"),
+    "copilot": ("copilot", "project"), "copilot-global": ("copilot", "global"),
 }
 
 
@@ -727,8 +745,8 @@ def _install_state(root: Path, host: str = "opencode", scope: str = "global") ->
     """'active' | 'disabled' | 'absent' for the install at `root`. Host-aware: the
     OpenCode path is unchanged; Claude dispatches to `_claude_state` (its manifest and
     stash live under a host-specific cfg dir — ~/.claude for global, <repo>/.claude for
-    a project install)."""
-    if host in ("claude", "bob"):
+    a project install). Bob and Copilot ride the same Claude-style path."""
+    if host in ("claude", "bob", "copilot"):
         return _claude_state(root, scope, host)
     # ponytail: state is just "does the stash dir exist" + "is an install present".
     # No JSON record to keep in sync with the filesystem — the dir IS the record.
@@ -839,9 +857,9 @@ def _install_deactivate(root: Path, host: str = "opencode", scope: str = "global
     artifact into `root/DISABLED_STASH/<rel>` and drop the AGENT.md `instructions`
     entry. ALL-OR-NOTHING — a move failure rolls back every move already done and
     leaves the install fully `active`, never half-gutted. Host-aware: Claude has its
-    own (manifest-driven) deactivate — see `_claude_deactivate`. IBM Bob rides the same
-    Claude-style path (manifest + AGENTS.md block), tagged by host."""
-    if host in ("claude", "bob"):
+    own (manifest-driven) deactivate — see `_claude_deactivate`. IBM Bob and GitHub
+    Copilot ride the same Claude-style path (manifest + AGENTS.md block), tagged by host."""
+    if host in ("claude", "bob", "copilot"):
         return _claude_deactivate(root, scope, host)
     if _install_state(root) != "active":
         return {"ok": False, "error": f"install is not active ({_install_state(root)})"}
@@ -888,8 +906,9 @@ def _install_reactivate(root: Path, host: str = "opencode", scope: str = "global
     """Turn a disabled install back ON: move every stashed tree back to its original
     rel path and re-add the AGENT.md `instructions` entry, then remove the empty
     stash. The inverse of `_install_deactivate`. Host-aware: Claude has its own
-    reactivate — see `_claude_reactivate`. IBM Bob rides the same Claude-style path."""
-    if host in ("claude", "bob"):
+    reactivate — see `_claude_reactivate`. IBM Bob and GitHub Copilot ride the same
+    Claude-style path."""
+    if host in ("claude", "bob", "copilot"):
         return _claude_reactivate(root, scope, host)
     if _install_state(root) != "disabled":
         return {"ok": False, "error": f"install is not disabled ({_install_state(root)})"}
@@ -1198,9 +1217,9 @@ def _claude_uninstall(cfg: Path, archive_memory: bool) -> dict:
 
 def _install_data_dir(root: Path, host: str = "opencode", scope: str = "global") -> Path:
     """The dir holding an install's manifest + memory/notebook stores: <root>/<marker>
-    for a Claude/Bob PROJECT install, else `root`. Mirrors _web_actions._view_cfg, kept
-    here too so the uninstall path carries no web dependency."""
-    if scope == "project" and host in ("claude", "bob"):
+    for a Claude/Bob/Copilot PROJECT install, else `root`. Mirrors _web_actions._view_cfg,
+    kept here too so the uninstall path carries no web dependency."""
+    if scope == "project" and host in ("claude", "bob", "copilot"):
         return root / build.HOSTS[host]["project_marker"]
     return root
 
@@ -1331,7 +1350,7 @@ def _install_uninstall(root: Path, host: str = "opencode", scope: str = "global"
     data = _install_data_dir(root, host, scope)
     # 1. Delete the harness files via the matching per-host reversal, then drop any
     #    disabled-state stash (its bytes are this install's, removed with it).
-    if host in ("claude", "bob"):
+    if host in ("claude", "bob", "copilot"):
         summary = _claude_uninstall(data, archive_memory=False)
         shutil.rmtree(data / DISABLED_STASH / host, ignore_errors=True)
     elif _install_kind(root) == "global":

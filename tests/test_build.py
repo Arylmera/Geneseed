@@ -1156,13 +1156,14 @@ class ValidateOnlyTests(unittest.TestCase):
     def test_validate_is_vendored_handles_nested_host_layouts(self):
         """_validate_is_vendored must exempt vendored skill folders wherever the
         `skills` segment sits: flat bundle root (files/opencode-global) AND the
-        one-level-deeper per-repo native layers (.opencode/.claude/.bob)."""
+        one-level-deeper per-repo native layers (.opencode/.claude/.bob/.github)."""
         vendored = build.VENDORED_SKILL_DIRS[0]   # e.g. 'react-view-transitions'
         for rel, want in [
             (Path(f"skills/{vendored}/README.md"), True),
             (Path(f".opencode/skills/{vendored}/SKILL.md"), True),
             (Path(f".claude/skills/{vendored}/SKILL.md"), True),
             (Path(f".bob/skills/{vendored}/nested/deep.md"), True),
+            (Path(f".github/skills/{vendored}/SKILL.md"), True),
             (Path("skills/commit.md"), False),                    # flat skill, not vendored
             (Path(".claude/skills/council/SKILL.md"), False),     # native, not vendored
             (Path(f"{vendored}/loose.md"), False),                # vendored name w/o skills/

@@ -20,6 +20,7 @@ _DEFAULT_EMIT = {
     ("opencode", "global"): "opencode-global", ("opencode", "project"): "opencode",
     ("claude", "global"): "claude-global", ("claude", "project"): "claude",
     ("bob", "global"): "bob-global", ("bob", "project"): "bob",
+    ("copilot", "global"): "copilot-global", ("copilot", "project"): "copilot",
 }
 
 
@@ -492,11 +493,11 @@ def _global_emit_problems(theme_name: str) -> list[str]:
 
 
 def _claude_bob_emit_problems(theme_name: str) -> list[str]:
-    """Validate the claude/bob PER-REPO emits — never checked before (only the `files`
-    build and opencode-global were), which is exactly why the CLAUDE.md/AGENTS.md
+    """Validate the claude/bob/copilot PER-REPO emits — never checked before (only the
+    `files` build and opencode-global were), which is exactly why the CLAUDE.md/AGENTS.md
     skill-table dead links (`.claude/skills/<name>.md`) shipped unnoticed: the emits
     that render CLAUDE.md/AGENTS.md straight into a repo were outside doctor's sweep.
-    Renders both `emit_claude` and `emit_bob` into throwaway sandboxes (mirroring
+    Renders `emit_claude`, `emit_bob` and `emit_copilot` into throwaway sandboxes (mirroring
     `build.py --validate-only`'s own scan, but called in-process — NOT by shelling to
     `--validate-only`, which itself shells BACK into `doctor --no-bundle` and would
     recurse) and scans each with `_check_build`, using `build._validate_is_vendored`
@@ -505,7 +506,8 @@ def _claude_bob_emit_problems(theme_name: str) -> list[str]:
     deeper than a `files`/opencode-global bundle (`.claude/skills/<name>/...` /
     `.bob/skills/<name>/...`, vs `skills/<name>/...`)."""
     problems: list[str] = []
-    for label, emit_fn in (("claude", build.emit_claude), ("bob", build.emit_bob)):
+    for label, emit_fn in (("claude", build.emit_claude), ("bob", build.emit_bob),
+                           ("copilot", build.emit_copilot)):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "root"
             sandbox = root / "bundle"
@@ -562,7 +564,7 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
                              _check_build(theme_name, out))
             problems += _ran("global", f"Global install ({theme_name})",
                              _global_emit_problems(theme_name))
-            problems += _ran("claude_bob", f"Claude/Bob per-repo emit ({theme_name})",
+            problems += _ran("claude_bob", f"Claude/Bob/Copilot per-repo emit ({theme_name})",
                              _claude_bob_emit_problems(theme_name))
     if on_progress:
         on_progress(len(themes), total, "parity · authoring · bundle")

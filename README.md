@@ -12,7 +12,7 @@
 [![Skills](https://img.shields.io/badge/skills-40-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-16-orange)](src/agents/)
 [![Laws](https://img.shields.io/badge/laws-35-critical)](src/laws/universal.md)
-[![OpenCode · Claude Code · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20AGENT.md-1f6feb)](#-2--setup)
+[![OpenCode · Claude Code · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-2--setup)
 
 [**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & TUI**](#-3--web--tui) · [**What you get**](#-4--what-you-get)
 
@@ -167,7 +167,7 @@ A second per-install dial, **footprint**, sets how much of the Rules `AGENT.md` 
 | **full** *(default)* | every Rule's complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
 | **lean** | each Rule's heading + the rule line, then a pointer to the full law file | ~40% smaller; rationale is one on-demand read away |
 
-Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Use **full** when token cost is a non-issue or you run a smaller model; use **lean** to reclaim context on long sessions, large repos, or cost-sensitive runs. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob).
+Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Use **full** when token cost is a non-issue or you run a smaller model; use **lean** to reclaim context on long sessions, large repos, or cost-sensitive runs. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob, Copilot).
 
 Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates each Rule's *reasoning* to on-demand (and adds the standalone laws file to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer — which is why it stays the default.
 

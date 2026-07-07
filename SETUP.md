@@ -59,6 +59,7 @@ straight to the wizard. Prefer to do it by hand? Pick a path below.
 | [A — OpenCode, global](#path-a--opencode-global-recommended) | **Recommended.** One install, every repo inherits it, nothing committed into projects. |
 | [B — OpenCode, per-repo](#path-b--opencode-per-repo) | You want a committed `.opencode/` layer in one repository. |
 | [C — Claude Code](#path-c--claude-code) | You drive Claude Code and want the lifecycle hooks. |
+| [C′ — GitHub Copilot](#path-c--github-copilot) | You drive the Copilot CLI, coding agent, or VS Code agent mode. |
 | [D — Any `AGENT.md` tool](#path-d--any-agentmd-tool) | Cursor, Aider, or any tool that reads a root instructions file. |
 | [E — No Python on the target](#path-e--no-python-on-the-target) | The machine that *uses* the harness can't run Python. |
 
@@ -134,6 +135,34 @@ It wires:
 
 Detail: [adapters/claude-code/](adapters/claude-code/README.md).
 
+### Path C′ — GitHub Copilot
+
+```
+python build.py --emit copilot-global          # personal: render into ~/.copilot
+python build.py --emit copilot --out . --root . # per-repo: AGENTS.md + .github/, committed
+```
+
+Copilot is Claude-shaped where it counts: skills are the same `SKILL.md` folders
+(Copilot's Agent Skills — `.github/skills/` in a repo, `~/.copilot/skills/`
+personally), agents render in Copilot's own custom-agent dialect
+(`agents/<name>.agent.md`, a `tools:` allowlist instead of Claude's denylist), and
+the preamble rides a file Copilot auto-loads: the repo-root `AGENTS.md` (CLI, coding
+agent, and VS Code agent mode) or the personal `~/.copilot/copilot-instructions.md`
+(CLI). Two differences from the Claude paths:
+
+- **No hooks.** Copilot has no settings.json or hook mechanism, so there is no
+  eager context injection and no `harness learn` Stop-hook — the memory convention
+  still applies, driven by the preamble's instructions alone.
+- **The per-repo layer lives in the shared `.github/`** (Copilot's repo config
+  surface). Safe by construction: the ownership manifest + claim-on-create never
+  touch files Geneseed didn't write — your workflows and same-named agents/skills
+  survive every emit and uninstall.
+
+MCP servers go in `~/.copilot/mcp-config.json` (the Settings/MCP screens know the
+shape). `$COPILOT_CONFIG_DIR` relocates the personal dir, mirroring
+`$BOB_CONFIG_DIR`. Note both carriers stack if you install globally *and* per-repo —
+the global emit warns when that's about to happen.
+
 ### Path D — Any `AGENT.md` tool
 
 ```
@@ -204,7 +233,7 @@ you run a smaller model.
 **Same harness, either way.** Footprint changes neither what the harness *is* nor what it
 can *do*: lean and full emit identical files (same agents, skills, plugins, commands, memory,
 notebook, hooks) and every Rule is present and binding. The only structural difference is
-that a lean install on a global / Claude / Bob target also ships the standalone
+that a lean install on a global / Claude / Bob / Copilot target also ships the standalone
 `laws/universal.md` (project bundles already carry it); the only behavioural difference is
 that each Rule's reasoning loads on demand instead of every turn — which is why full, with
 the rationale always in front of the model, applies a rule's nuance more reliably on subtle
@@ -213,7 +242,7 @@ edge cases (or with a weaker model), and stays the default.
 Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** toggle in
 the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It is
 remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
-host (OpenCode, Claude Code, Bob).
+host (OpenCode, Claude Code, Bob, Copilot).
 
 ### Dry-run a build (`--validate-only`)
 

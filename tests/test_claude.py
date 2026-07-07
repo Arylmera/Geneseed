@@ -757,6 +757,7 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         bobg = self._mk_install(self.tmp / "bobhome", ".bob")
         self.assertFalse(hc._global_hook_standing_down(bobg, repo))
 
+
     def test_cmd_context_stand_down_is_silent_and_opt_out_works(self):
         import io
         import argparse
@@ -783,6 +784,116 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             hc.cmd_context(argparse.Namespace(root=str(gcfg)))
         self.assertIn("PROJECT CONTEXT", buf.getvalue())
+
+
+class CopilotEmitTests(unittest.TestCase):
+    """GitHub Copilot host: AGENTS.md + .github/ project layer, ~/.copilot global layer
+    with copilot-instructions.md, .agent.md agent dialect, NO settings.json/hooks."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_copilot_global_writes_copilot_layout(self):
+        cfg = self.tmp / "dotcopilot"
+        build.emit_copilot_global("neutral", cfg=cfg)
+        # copilot-instructions.md carries the managed block (the CLI auto-loads it) —
+        # unlike Bob, Copilot HAS a personal instructions carrier, so no rules/ workaround.
+        ci = _read(cfg / "copilot-instructions.md")
+        self.assertIn("<!-- BEGIN GENESEED -->", ci)
+        self.assertIn("<!-- END GENESEED -->", ci)
+        self.assertFalse((cfg / "rules").exists())
+        self.assertFalse((cfg / "AGENTS.md").exists())
+        # Agents use the Copilot custom-agent dialect: .agent.md extension,
+        # name/description, tools ALLOWLIST — never Claude's disallowedTools denylist.
+        reviewer = _read(cfg / "agents" / "reviewer.agent.md")
+        self.assertIn("name: reviewer", reviewer)
+        self.assertNotIn("disallowedTools", reviewer)
+        self.assertNotIn("mode: subagent", reviewer)
+        self.assertFalse((cfg / "agents" / "reviewer.md").exists())
+        # A read-only agent lists Copilot's built-in tool ids it may keep.
+        explorer = _read(cfg / "agents" / "explorer.agent.md")
+        self.assertRegex(explorer, r"tools: \[read, search, todo, agent")
+        # NO settings.json and no hooks — Copilot has no hook mechanism; the manifest
+        # records no settings claims for the lifecycle to unwire.
+        self.assertFalse((cfg / "settings.json").exists())
+        self.assertFalse((cfg / "settings.local.json").exists())
+        man = json.loads(_read(cfg / build.GLOBAL_MANIFEST))
+        self.assertIn("claude_md", man["managed"])
+        self.assertNotIn("settings_file", man["managed"])
+        self.assertNotIn("settings_hooks", man["managed"])
+        # …but still reads as Claude-style, so uninstall picks the manifest reversal.
+        self.assertTrue(harness._manifest_is_claude(cfg))
+
+    def test_copilot_skills_byte_identical_to_opencode(self):
+        cfg, oc = self.tmp / "dotcopilot", self.tmp / "dotopencode"
+        build.emit_copilot_global("neutral", cfg=cfg)
+        build.emit_opencode_global("neutral", cfg=oc)
+        a, b = cfg / "skills" / "tdd" / "SKILL.md", oc / "skills" / "tdd" / "SKILL.md"
+        self.assertTrue(a.is_file() and b.is_file())
+        self.assertEqual(_read(a), _read(b))
+
+    def test_copilot_project_layout_under_dot_github(self):
+        repo = (self.tmp / "repo").resolve(); repo.mkdir()
+        build.emit_copilot("neutral", repo)
+        # Root AGENTS.md carries the preamble, pointers prefixed into .github/.
+        am = _read(repo / "AGENTS.md")
+        self.assertIn("<!-- BEGIN GENESEED -->", am)
+        self.assertIn(".github/memory", am)
+        # Native layer in the SHARED .github dir; agents in the .agent.md dialect.
+        self.assertTrue((repo / ".github" / "agents" / "reviewer.agent.md").is_file())
+        self.assertTrue((repo / ".github" / "skills" / "tdd" / "SKILL.md").is_file())
+        self.assertFalse((repo / ".github" / "settings.json").exists())
+        self.assertFalse((repo / ".github" / "settings.local.json").exists())
+        self.assertFalse((repo / ".github" / "rules").exists())
+        # .gitignore keeps the personal files out of the team's git — and never lists
+        # settings.local.json (a Claude-only file Copilot never writes).
+        gi = _read(repo / ".github" / ".gitignore")
+        self.assertIn("wiki.jsonc", gi)
+        self.assertNotIn("settings.local.json", gi)
+        man = json.loads(_read(repo / ".github" / build.GLOBAL_MANIFEST))
+        self.assertEqual(man["scope"], "project")
+
+    def test_copilot_project_never_clobbers_user_github_files(self):
+        # .github is the repo's own shared config surface — a user's workflows and
+        # same-named agents/skills must survive an emit untouched.
+        repo = (self.tmp / "repo2").resolve(); repo.mkdir()
+        wf = repo / ".github" / "workflows" / "ci.yml"
+        wf.parent.mkdir(parents=True)
+        wf.write_text("name: ci\n", encoding="utf-8")
+        own = repo / ".github" / "agents" / "reviewer.agent.md"
+        own.parent.mkdir(parents=True)
+        own.write_text("mine\n", encoding="utf-8")
+        build.emit_copilot("neutral", repo)
+        self.assertEqual(_read(wf), "name: ci\n")
+        self.assertEqual(_read(own), "mine\n", "claim-on-create clobbered a user agent")
+        man = json.loads(_read(repo / ".github" / build.GLOBAL_MANIFEST))
+        self.assertNotIn("agents/reviewer.agent.md", man["owned"])
+        # and an uninstall removes only Geneseed's files — the user's survive.
+        res = harness._install_uninstall(repo, "copilot", "project", "keep")
+        self.assertTrue(res["ok"])
+        self.assertEqual(_read(wf), "name: ci\n")
+        self.assertEqual(_read(own), "mine\n")
+
+    def test_no_dead_skill_links_in_copilot_agents_md(self):
+        """Same regression as CLAUDE.md/Bob's AGENTS.md — the `.github/skills/...`
+        prefixed link form must be stripped to plain names."""
+        build.emit_copilot("neutral", self.tmp / "Harness", self.tmp)
+        am = _read(self.tmp / "AGENTS.md")
+        self.assertNotRegex(am, r"\]\([^)]*(?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
+        self.assertIn("| clarify |", am)
+        self.assertIn("| council |", am)
+
+    def test_copilot_reemit_is_idempotent(self):
+        cfg = self.tmp / "dotcopilot2"
+        build.emit_copilot_global("neutral", cfg=cfg)
+        ci_before = _read(cfg / "copilot-instructions.md")
+        build.emit_copilot_global("neutral", cfg=cfg)
+        self.assertEqual(_read(cfg / "copilot-instructions.md"), ci_before)
+        self.assertEqual(ci_before.count("<!-- BEGIN GENESEED -->"), 1)
 
 
 if __name__ == "__main__":

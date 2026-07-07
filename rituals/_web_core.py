@@ -257,7 +257,7 @@ DOC_GROUPS = [
          "lean and full the emitted files are identical — same Agents, Skills, plugins, "
          "commands, Memory, Notebook, and host hooks — and every Rule is present and "
          "binding. The only structural change is that a **lean** install on a global, "
-         "Claude, or Bob target also ships the standalone `laws/universal.md` (the "
+         "Claude, Bob, or Copilot target also ships the standalone `laws/universal.md` (the "
          "on-demand fallback); project bundles already carry it. The only behavioural "
          "change is that each Rule's *reasoning* loads on demand instead of every turn.\n\n"
          "That one difference still has a real edge: with the rationale always in front "
@@ -281,7 +281,7 @@ DOC_GROUPS = [
          "- **Setup / re-theme wizard** (TUI) — asks for footprint alongside voice "
          "and mode.\n"
          "- **CLI** — `build.py --footprint lean` (with any `--emit`).\n\n"
-         "Works identically across every host — OpenCode, Claude Code, and Bob.\n\n"
+         "Works identically across every host — OpenCode, Claude Code, Bob, and Copilot.\n\n"
          "---\n\n"
          "**Related:** [Rules (Laws)](#/laws) · [Voice vs structure](#/docs/themes)"},
         {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
@@ -826,7 +826,8 @@ class WebState:
         """Re-point the whole console at a different detected install's data dir — every
         card (inventory, memory, notebook, diff) then reads from `target`. `root` is the
         install root the markers/sigils live at (defaults to `target`; differs only for
-        claude/bob PROJECT installs, where data sits under <repo>/.claude|.bob)."""
+        claude/bob/copilot PROJECT installs, where data sits under
+        <repo>/.claude|.bob|.github)."""
         self.target = Path(target)
         self.root = Path(root) if root else self.target
         self.theme = (harness._theme_of_dir(self.root)

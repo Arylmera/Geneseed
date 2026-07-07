@@ -215,6 +215,32 @@ def _claude_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[str
     return fm
 
 
+# Sibling-agent links inside an agent spec (`](skeptic.md)` — a bare same-dir
+# filename, never a path). The Copilot dialect renames every agent file to
+# `<name>.agent.md`, so these links must be rewritten with it or they die.
+_SIBLING_AGENT_LINK_RE = re.compile(r"\]\(([A-Za-z0-9_-]+)\.md\)")
+
+
+def _copilot_agent_frontmatter(stem: str, text: str, overrides: dict) -> list[str]:
+    """GitHub Copilot custom-agent frontmatter (repo .github/agents/<name>.agent.md or
+    personal ~/.copilot/agents/). `name` is optional but kept for parity with the other
+    dialects; `description` is the one required key. Copilot's `tools:` is an ALLOWLIST
+    (unset = every tool), so a read-only agent lists the built-in tool ids it may keep —
+    docs.github.com/copilot/reference/custom-agents-configuration — instead of Claude's
+    denylist: `edit`, `web` and (without the `<!-- bash: allow -->` opt-in) `execute`
+    are simply not granted. Only a `model:` override carries over."""
+    fm = [f"name: {stem}", f"description: {json.dumps(desc_of(text))}"]
+    ov = overrides.get(stem) or {}
+    if ov.get("model"):
+        fm.append(f"model: {ov['model']}")
+    if _is_readonly(text):
+        allowed = ["read", "search", "todo", "agent"]
+        if "<!-- bash: allow -->" in text:
+            allowed.append("execute")
+        fm.append("tools: [" + ", ".join(allowed) + "]")
+    return fm
+
+
 def _opencode_agent_frontmatter(stem: str, text: str, overrides: dict,
                                 theme: dict | None = None) -> list[str]:
     """OpenCode subagent frontmatter: description, mode: subagent, a NAMED theme-slot
@@ -269,9 +295,10 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
     """Render capability agents and skills into host-native files.
 
     - Agents -> `<agents_dir>/<name>.md`. `host` selects the frontmatter dialect:
-      'opencode' (description, mode: subagent, color, permission deny-tree) or
-      'claude' (name, description, disallowedTools denylist). See the two
-      `_*_agent_frontmatter` builders.
+      'opencode' (description, mode: subagent, color, permission deny-tree),
+      'claude' (name, description, disallowedTools denylist) or 'copilot'
+      (name, description, tools allowlist — and a `.agent.md` filename, Copilot's
+      custom-agent extension). See the three `_*_agent_frontmatter` builders.
     - Skills -> `<skills_dir>/<name>/SKILL.md`. BYTE-IDENTICAL across hosts: name +
       description, body link-stripped. Model-invoked via the `skill` tool, NOT slash
       commands. See adapters/opencode/GLOBAL-HARNESS-SPEC.md §9.1.
@@ -364,9 +391,16 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
         stem = fname[:-3]
         body = text.lstrip("\n")
         if folder == "agents":
-            fm = (_claude_agent_frontmatter(stem, text, overrides) if host == "claude"
-                  else _opencode_agent_frontmatter(stem, text, overrides, theme))
-            dest = agents_dir / f"{stem}.md"
+            if host == "claude":
+                fm = _claude_agent_frontmatter(stem, text, overrides)
+                dest = agents_dir / f"{stem}.md"
+            elif host == "copilot":
+                fm = _copilot_agent_frontmatter(stem, text, overrides)
+                dest = agents_dir / f"{stem}.agent.md"
+                body = _SIBLING_AGENT_LINK_RE.sub(r"](\1.agent.md)", body)
+            else:
+                fm = _opencode_agent_frontmatter(stem, text, overrides, theme)
+                dest = agents_dir / f"{stem}.md"
             kind = "agent"
         elif folder == "skills":
             fm = [f"name: {stem}", f"description: {json.dumps(desc_of(text))}"]

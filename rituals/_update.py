@@ -452,7 +452,7 @@ def _rebuild_bundle(here, out, theme, emit, root_dir, log) -> int:
 
 
 def _rebuild_installs(here: Path, log: _Log) -> int:
-    """Refresh every registered ACTIVE install (opencode/claude/bob, global and
+    """Refresh every registered ACTIVE install (opencode/claude/bob/copilot, global and
     project scope) via `harness.py rebuild-all`. The emit-marker rebuild only covers
     THIS checkout's own bundle — without this pass a claude-global or bob install
     keeps serving the OLD render after every upgrade, silently."""

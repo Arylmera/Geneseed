@@ -9,6 +9,24 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **GitHub Copilot host — `--emit copilot` / `--emit copilot-global`**: the fourth
+  first-class host, riding the Claude-shaped emit engine. Per-repo: root `AGENTS.md`
+  (auto-loaded by the Copilot CLI, coding agent, and VS Code agent mode) + a layer in
+  the shared `.github/` dir — `agents/<name>.agent.md` in Copilot's custom-agent
+  dialect (`tools:` allowlist for read-only agents, sibling links rewritten to the
+  `.agent.md` extension) and byte-identical `skills/` (Copilot Agent Skills).
+  Personal: `~/.copilot` (`$COPILOT_CONFIG_DIR` relocates) with the preamble as a
+  managed block in `copilot-instructions.md`, which the CLI auto-loads — no Bob-style
+  rules-folder workaround needed. Copilot has no settings.json or hook mechanism, so
+  the settings/hooks/excludes stage is skipped entirely (memory rides the preamble's
+  instructions); with no exclude mechanism either, the global emit warns when project
+  installs exist (both preambles stack). Writing into `.github/` is safe by
+  construction: the ownership manifest + claim-on-create never touch user files.
+  Full lifecycle parity — setup wizard/TUI rows, web console deploy option +
+  Harnesses rows, MCP wiring (`~/.copilot/mcp-config.json`, `mcpServers` with the
+  CLI's required `type`/`tools` keys, global-only), doctor per-repo emit validation,
+  rebuild-all, diff/restore, deactivate/reactivate/uninstall, footprint dial, and
+  theme detection via the `copilot-instructions.md` sigil fallback.
 - **User rules — `user-rules.md`**: a seed-once file beside AGENT.md for the user's
   own standing rules, obeyed with the same force as the laws (they may tighten a
   law, never repeal one). Same host-state contract as `context.json`: every emit

@@ -447,7 +447,7 @@ class McpTests(unittest.TestCase):
         for t in m["targets"]:
             self.assertIn("path", t)
             self.assertIn("commented", t)
-            self.assertIn(t["host"], ("opencode", "claude", "bob"))
+            self.assertIn(t["host"], ("opencode", "claude", "bob", "copilot"))
             self.assertIn("root", t)
             for s in t["servers"]:
                 self.assertIn(s["state"], ("enabled", "disabled", "absent"))
@@ -1458,6 +1458,75 @@ class DeployTests(unittest.TestCase):
             build.emit_bob("imperial", Path(d), Path(d))
             self.assertEqual(web.harness._theme_of_dir(Path(d)), "imperial")
 
+    def test_deploy_cmd_copilot_maps_to_copilot_emit(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            plan = web.api_deploy_cmd(self.state, {"host": "copilot", "path": d,
+                                                   "theme": "imperial"})
+            cmd = plan["cmd"]
+            self.assertEqual(cmd[cmd.index("--emit") + 1], "copilot")   # project, never global
+            self.assertEqual(cmd[cmd.index("--theme") + 1], "imperial")
+
+    def test_copilot_emit_layout_and_disable_reactivate_lifecycle(self):
+        # GitHub Copilot is a first-class host: a .github/ project layer + AGENTS.md,
+        # riding the Claude-style manifest lifecycle (deactivate stashes, reactivate
+        # restores) — with NO settings.json/hooks to (un)wire and no project MCP file.
+        import tempfile, build
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            build.emit_copilot("neutral", root, root)
+            self.assertTrue((root / "AGENTS.md").is_file())
+            self.assertTrue((root / ".github" / "agents").is_dir())
+            self.assertEqual(web.harness._install_state(root, "copilot", "project"), "active")
+            self.assertEqual(web.harness._mcp_servers_key("copilot"), "mcpServers")
+            self.assertIsNone(web.harness._mcp_config_for("copilot", "project", root))
+            self.assertEqual(web.harness._mcp_config_for("copilot", "global", root),
+                             build._copilot_config_dir() / "mcp-config.json")
+            off = web.harness._install_deactivate(root, "copilot", "project")
+            self.assertTrue(off["ok"])
+            self.assertEqual(web.harness._install_state(root, "copilot", "project"), "disabled")
+            # the managed AGENTS.md block is excised while disabled
+            self.assertNotIn("BEGIN GENESEED", (root / "AGENTS.md").read_text(encoding="utf-8")
+                             if (root / "AGENTS.md").exists() else "")
+            on = web.harness._install_reactivate(root, "copilot", "project")
+            self.assertTrue(on["ok"])
+            self.assertEqual(web.harness._install_state(root, "copilot", "project"), "active")
+            self.assertIn("BEGIN GENESEED", (root / "AGENTS.md").read_text(encoding="utf-8"))
+
+    def test_copilot_view_cfg_and_restore_emitter_are_host_correct(self):
+        # A copilot PROJECT install's data lives under <repo>/.github (not the bare
+        # root), and a restore must render the copilot 'expected' tree.
+        import build
+        self.assertEqual(web._view_cfg("copilot", "project", Path("/r")), Path("/r") / ".github")
+        self.assertEqual(web._view_cfg("copilot", "global", Path("/r")), Path("/r"))
+        self.assertIs(web._global_emitter_for("copilot-global"), build.emit_copilot_global)
+
+    def test_copilot_mcp_preset_and_toggle_off_removes_entry(self):
+        # Copilot shares the flag-less mcpServers shape (disable REMOVES the server),
+        # and its preset blocks carry the CLI's required type + tools keys.
+        block = web.harness._mcp_preset_block("markdownify", "copilot") \
+            if "markdownify" in web.harness._MCP_PRESETS \
+            else web.harness._mcp_preset_block(next(iter(web.harness._MCP_PRESETS)), "copilot")
+        self.assertEqual(block.get("type"), "local")
+        self.assertEqual(block.get("tools"), ["*"])
+        self.assertIn("command", block)
+        self.assertIn("args", block)
+        cfg = {"mcpServers": {"md": {"command": "uvx", "args": ["x"]}}}
+        self.assertEqual(web.harness._mcp_state(cfg, "md", "copilot"), "enabled")
+        off = web.harness._mcp_set_enabled(cfg, "md", False, "copilot")
+        self.assertEqual(off.get("mcpServers", {}), {})
+
+    def test_copilot_theme_detected_from_agents_md_and_instructions(self):
+        import tempfile, build
+        with tempfile.TemporaryDirectory() as d:
+            build.emit_copilot("imperial", Path(d), Path(d))
+            self.assertEqual(web.harness._theme_of_dir(Path(d)), "imperial")
+        with tempfile.TemporaryDirectory() as d:
+            build.emit_copilot_global("imperial", cfg=Path(d) / "cfg")
+            # global carrier is copilot-instructions.md — the sigil fallback must read it
+            # (the .geneseed-theme marker is written by build.py's main(), not the emit fn).
+            self.assertEqual(web.harness._theme_of_dir(Path(d) / "cfg"), "imperial")
+
     def test_registry_round_trip_and_install_targets_merge_and_prune(self):
         import tempfile, os
         import _install_registry
@@ -1568,7 +1637,8 @@ class TestInstallRemove(unittest.TestCase):
 
     def test_remove_claude_and_bob_project_installs(self):
         # Real per-repo emits (manifest-backed) -> remove must reverse them host-agnostically.
-        for host, emit in (("claude", web.build.emit_claude), ("bob", web.build.emit_bob)):
+        for host, emit in (("claude", web.build.emit_claude), ("bob", web.build.emit_bob),
+                           ("copilot", web.build.emit_copilot)):
             root = (self.tmp / f"repo_{host}").resolve()
             root.mkdir()
             emit("neutral", root)
