@@ -29,6 +29,115 @@ def _memory_items(state: WebState) -> list[dict]:
     return out
 
 
+# ---- user rules (user-rules.md) --------------------------------------------------
+# The user's standing rules beside the deployed AGENT.md (AGENT.md §1) — seeded once
+# by the build, never overwritten, so both tiers of ownership meet here: Geneseed
+# ships the laws, the user owns this file. Parsing is line-anchored so mutations
+# (_web_actions.api_rules_mutate) can splice one rule's block and leave every other
+# byte of the user's file untouched.
+
+# A rule heading: `## R<n> — Title` (em-dash canonical; en-dash/hyphens accepted for
+# hand-authors). Anchored at column 0, so the stub's indented format example and
+# fenced code in rule bodies never parse as rules.
+RULE_HEAD_RE = re.compile(r"^##\s+R(\d+)\s*[—–-]+\s*(\S.*?)\s*$")
+
+# Soft budget surfaced to the UI (Design decision 7: a bloated instruction surface
+# is ignored, not obeyed). Advisory — nothing blocks past it; the meter turns amber.
+RULES_BUDGET = {"max_rules": 15, "max_tokens": 1500}
+
+
+def _rules_path(state: WebState) -> Path:
+    return state.target / build.RULES_FILE
+
+
+def _parse_rule_meta(line: str) -> dict:
+    """The optional `(scope: … | source: … | trial until: …)` line right under a
+    rule heading. Returns {} when the line is not a metadata line (it is body)."""
+    m = re.match(r"^\((.+)\)\s*$", line.strip())
+    if not m:
+        return {}
+    meta = {}
+    for part in m.group(1).split("|"):
+        k, colon, v = part.partition(":")
+        if not colon:
+            continue
+        key = k.strip().lower().replace(" ", "_")
+        if key in ("scope", "source", "trial_until"):
+            meta[key] = v.strip()
+    return meta
+
+
+def parse_rules(text: str) -> tuple[list[dict], list[str]]:
+    """user-rules.md -> ([rule], [warning]). Each rule carries its `start`/`end`
+    line indices (end exclusive, bounded by the next `## ` heading or EOF) so a
+    mutation can splice exactly one block."""
+    lines = text.splitlines()
+    rules: list[dict] = []
+    warnings: list[str] = []
+    seen: set[int] = set()
+    for idx, line in enumerate(lines):
+        m = RULE_HEAD_RE.match(line)
+        if not m:
+            continue
+        end = len(lines)
+        for j in range(idx + 1, len(lines)):
+            if lines[j].startswith("## "):
+                end = j
+                break
+        rid = int(m.group(1))
+        if rid in seen:
+            warnings.append(f"duplicate rule id R{rid}")
+        seen.add(rid)
+        k = idx + 1
+        while k < end and not lines[k].strip():
+            k += 1
+        meta = _parse_rule_meta(lines[k]) if k < end else {}
+        if meta:
+            k += 1
+        rules.append({
+            "id": rid,
+            "title": m.group(2),
+            "scope": meta.get("scope", "project"),
+            "source": meta.get("source", ""),
+            "trial_until": meta.get("trial_until", ""),
+            "body": "\n".join(lines[k:end]).strip(),
+            "start": idx,
+            "end": end,
+        })
+    return rules, warnings
+
+
+def api_rules(state: WebState) -> dict:
+    """The Rules page payload: parsed rules with status, the budget stats for the
+    meter, and a content fingerprint the mutation endpoints require back — so a
+    concurrent edit (an agent session writing the same file) 409s instead of
+    being silently clobbered."""
+    import datetime
+    import hashlib
+    p = _rules_path(state)
+    if not p.is_file():
+        return {"exists": False, "path": str(p), "rules": [], "warnings": [],
+                "fingerprint": "",
+                "stats": {"rules": 0, "lines": 0, "tokens": 0, **RULES_BUDGET}}
+    text = p.read_text(encoding="utf-8", errors="replace")
+    rules, warnings = parse_rules(text)
+    today = datetime.date.today().isoformat()
+    out = []
+    for r in rules:
+        trial = r["trial_until"]
+        out.append({
+            "id": r["id"], "title": r["title"], "scope": r["scope"],
+            "source": r["source"], "trial_until": trial,
+            "status": "trial" if trial else "active",
+            "overdue": bool(trial) and trial < today,
+            "body": r["body"],
+        })
+    return {"exists": True, "path": str(p), "rules": out, "warnings": warnings,
+            "fingerprint": hashlib.sha256(text.encode("utf-8")).hexdigest()[:16],
+            "stats": {"rules": len(rules), "lines": len(text.splitlines()),
+                      "tokens": len(text) // 4, **RULES_BUDGET}}
+
+
 def _notebook_dir(state: WebState) -> Path:
     return state.target / "notebook"
 
