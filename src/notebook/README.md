@@ -5,7 +5,7 @@
 > including this file, lives only on this machine. The `.gitignore` is the one
 > fixed law of this space: the build re-asserts it on every rebuild, and it is
 > not yours to lift. (To share something with the team, put it in code, docs,
-> or the project {{LAWS}} instead.)
+> or the project's `user-rules.md` instead.)
 
 **This file is yours.** The build seeded it once as a starting charter and will
 never touch it again — rewrite it as your practices evolve. The rules of this
@@ -34,5 +34,6 @@ will, in whatever structure serves you.
 - **Promote what hardens.** When something here crystallises into a durable
   fact worth recalling verbatim, copy it into {{MEMORY}} ({{LAW}} VI).
 - **It is not the repo's.** Do not keep here what the repository already
-  records (code, git history, the project {{LAWS}}). Keep what is *yours*.
+  records (code, git history, the {{LAWS}}, `user-rules.md`). Keep what is
+  *yours*.
 - **Prune freely.** Delete anything stale — your space, your housekeeping.

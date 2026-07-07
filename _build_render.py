@@ -331,6 +331,57 @@ def ensure_wiki_stub(out: Path) -> None:
         dest.write_text(WIKI_STUB, encoding="utf-8")
 
 
+# The user's own standing rules — seeded once beside AGENT.md, never overwritten,
+# never in an owned-manifest. The laws are regenerated on every update; this file
+# is where user-authored governance lives so it survives updates, reinstalls, and
+# theme switches. Deliberately NOT in BUNDLE_GITIGNORE: project rules are meant to
+# be committed and shared with the team (unlike context.json's private paths).
+# The filename is user-rules.md — not rules.md — because the neutral theme renders
+# the laws themselves as "Rules"; the user- prefix keeps the two unmistakable.
+RULES_FILE = "user-rules.md"
+
+RULES_STUB = """\
+# User rules
+
+Your own standing rules. The agent obeys every rule in this file exactly as it
+obeys the laws in AGENT.md §1 — always in force, in every task. A user rule may
+*tighten* a law, never repeal one: where they conflict, the law wins.
+
+Geneseed seeded this file once and will never overwrite it. The laws file is
+regenerated on every update — never edit that one; this file is where your own
+governance lives, and it survives updates, reinstalls, and theme switches.
+Unlike `context.json`, it is safe to commit: project rules are meant to travel
+with the repo and bind the whole team.
+
+Keep the set small — every rule here is loaded every session, and a bloated
+rule set dilutes the rules that matter. A durable fact belongs in memory, a
+pointer to documentation belongs in `context.json`; only a standing *behaviour*
+belongs here.
+
+Format — one rule per `## R<n> — Title` heading, an optional metadata line in
+parentheses, then the rule stated plainly:
+
+    ## R1 — No emoji in commit subjects
+    (scope: project | source: written by hand)
+    Commit subjects are plain text; no emoji, no decorative unicode.
+
+`trial until: YYYY-MM-DD` in the metadata line marks a rule on probation —
+usually one promoted from a recurring memory. Review it by that date, then
+graduate it (remove the marker) or demote it back to memory.
+"""
+
+
+def ensure_rules_stub(out: Path) -> None:
+    """Drop the `user-rules.md` stub beside AGENT.md the first time only — and NEVER
+    overwrite it (it holds the user's own standing rules; an update that touched it
+    would destroy exactly the governance the file exists to preserve). Never recorded
+    in an owned-manifest either, so the global emits' prune treats it as the user's —
+    the same contract as context.json and wiki.jsonc."""
+    dest = out / RULES_FILE
+    if not dest.exists():
+        dest.write_text(RULES_STUB, encoding="utf-8")
+
+
 # Bundle-level ignore so a host repo can COMMIT the rendered harness — AGENT.md, the
 # laws, agents, and skills are content worth versioning — while keeping only the
 # host-specific / personal files out. (Note: inline `#` comments are not valid in
@@ -641,6 +692,7 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
     _write_src_dirs_marker(out, resolved_src_dirs)
     ensure_context_stub(out)
     ensure_wiki_stub(out)
+    ensure_rules_stub(out)
     ensure_bundle_gitignore(out)
     ensure_memory_index(out / theme.get(SRC_DIR_TOKENS["memory"], "memory"))
     ensure_notebook_index(out / theme.get(SRC_DIR_TOKENS["notebook"], "notebook"))
