@@ -35,6 +35,15 @@ const NAV = [
     tag: (o) => o?.counts?.laws ?? null,
   },
   {
+    // The user's own standing rules (user-rules.md) — deliberately right under
+    // Laws so the pairing reads at a glance: Laws are Geneseed's, Rules are yours.
+    hash: '#/rules',
+    id: 'rules',
+    label: 'Rules',
+    icon: 'rule',
+    match: (r) => r.view === 'rules',
+  },
+  {
     hash: '#/skills',
     id: 'skills',
     label: 'Skills',

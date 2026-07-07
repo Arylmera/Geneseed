@@ -60,6 +60,7 @@
   "DESC_DRILL": "Turn shaky knowledge into reflex — dropped into real situations and questioned through your mistakes, the answer withheld until you've tried.",
   "DESC_DECODE": "Make confusing material click — the one keystone sentence first, an everyday analogy, then a comprehension check before moving on.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_RULE": "Draft, triage, and adopt a standing user rule in user-rules.md — route what isn't a rule to memory or context.json, and promote recurring memory lessons with consent.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Respond to review feedback with rigour — verify each point, then apply it or decline it with reasons.",
   "LEX_I": "Sealed Secrets",

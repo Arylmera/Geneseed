@@ -77,6 +77,130 @@ def api_memory_delete(state: WebState, name: str) -> dict:
     return {"deleted": name}
 
 
+# ---- user rules mutations ---------------------------------------------------------
+# All writes to user-rules.md go through here (the Rules page). Every mutation
+# requires the fingerprint of the content the client last read: an agent session may
+# edit the same file mid-flight, and a stale write must 409 (the server maps
+# ok=False to 409) and re-fetch, never silently clobber the agent's rule. Edits are
+# line-range splices of one rule's block — the rest of the user's file, prose and
+# formatting alike, is never regenerated.
+
+def _rules_read(state: WebState) -> tuple[Path, str]:
+    p = _rules_path(state)
+    return p, (p.read_text(encoding="utf-8", errors="replace") if p.is_file() else "")
+
+
+def _rules_fingerprint(text: str) -> str:
+    import hashlib
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16] if text else ""
+
+
+def _rule_block(rid: int, title: str, scope: str, source: str,
+                trial_until: str, body: str) -> str:
+    meta = [f"scope: {scope}"]
+    if source:
+        meta.append(f"source: {source}")
+    if trial_until:
+        meta.append(f"trial until: {trial_until}")
+    return f"## R{rid} — {title}\n({' | '.join(meta)})\n{body.strip()}\n"
+
+
+def _rule_fields(body: dict) -> tuple[str, str, str, str, str]:
+    """Validate and normalise the writable fields of a rule from a request body.
+    Raises ValueError (→ JSON 500 with the message) on an unusable rule."""
+    title = " ".join(str(body.get("title") or "").split())
+    text = str(body.get("body") or "").strip()
+    if not title:
+        raise ValueError("a rule needs a title")
+    if not text:
+        raise ValueError("a rule needs body text")
+    scope = body.get("scope")
+    if scope not in ("user", "project"):
+        scope = "project"
+    source = " ".join(str(body.get("source") or "").split())
+    trial = str(body.get("trial_until") or "").strip()
+    if trial and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", trial):
+        raise ValueError("trial until must be YYYY-MM-DD")
+    return title, text, scope, source, trial
+
+
+def api_rules_mutate(state: WebState, body: dict) -> dict:
+    """One endpoint, three ops on user-rules.md: add (server assigns the next free
+    R<n>), update (splice the block in place), delete (drop the block). Returns
+    the fresh fingerprint so the client can chain edits without a re-fetch."""
+    op = body.get("op")
+    if op not in ("add", "update", "delete"):
+        raise NotFound(f"rules op {op!r}")
+    p, text = _rules_read(state)
+    if body.get("fingerprint", "") != _rules_fingerprint(text):
+        return {"ok": False, "error": "conflict",
+                "detail": "user-rules.md changed since you loaded it — reloading"}
+    rules, _warn = parse_rules(text)
+
+    if op == "add":
+        title, rtext, scope, source, trial = _rule_fields(body)
+        rid = max((r["id"] for r in rules), default=0) + 1
+        if not text:
+            text = "# User rules\n"
+        new = text.rstrip("\n") + "\n\n" + _rule_block(rid, title, scope, source,
+                                                       trial, rtext)
+    else:
+        try:
+            rid = int(body.get("id"))
+        except (TypeError, ValueError):
+            raise NotFound("rule id")
+        target = next((r for r in rules if r["id"] == rid), None)
+        if target is None:
+            raise NotFound(f"rule R{rid}")
+        lines = text.splitlines()
+        if op == "update":
+            title, rtext, scope, source, trial = _rule_fields(body)
+            block = _rule_block(rid, title, scope, source, trial, rtext)
+            lines[target["start"]:target["end"]] = block.rstrip("\n").splitlines()
+        else:  # delete — also swallow one preceding blank separator line
+            start = target["start"]
+            if start > 0 and not lines[start - 1].strip():
+                start -= 1
+            del lines[start:target["end"]]
+        new = "\n".join(lines).rstrip("\n") + "\n"
+
+    p.write_text(new, encoding="utf-8")
+    return {"ok": True, "op": op, "id": rid,
+            "fingerprint": _rules_fingerprint(new)}
+
+
+def api_rules_promote(state: WebState, body: dict) -> dict:
+    """Promote one memory fact into a trial rule: append it to user-rules.md with
+    provenance and a month of probation, then (opt-in) delete the source memory so
+    the lesson is not loaded twice — the web twin of the rule skill's flow."""
+    import datetime
+    name = str(body.get("name") or "")
+    d = _memory_dir(state)
+    if not d.is_dir():
+        raise NotFound("memory store")
+    if not name or "/" in name or "\\" in name or name in ("MEMORY", "README"):
+        raise NotFound(name)
+    src = d / f"{name}.md"
+    if not src.is_file():
+        raise NotFound(name)
+    fm, mem_body = harness._frontmatter(src.read_text(encoding="utf-8",
+                                                      errors="replace"))
+    today = datetime.date.today()
+    res = api_rules_mutate(state, {
+        "op": "add",
+        "fingerprint": body.get("fingerprint", ""),
+        "title": body.get("title") or fm.get("name", name),
+        "body": body.get("body") or mem_body.strip() or fm.get("description", ""),
+        "scope": body.get("scope"),
+        "source": f"memory {name}, promoted {today.isoformat()}",
+        "trial_until": (today + datetime.timedelta(days=30)).isoformat(),
+    })
+    if res.get("ok") and body.get("delete_memory"):
+        api_memory_delete(state, name)
+        res["deleted_memory"] = name
+    return res
+
+
 def api_setup(state: WebState) -> dict:
     """Install snapshot for the Settings page — harness._status_data() (the same
     source the `status` command and the TUI panel read, so the three never drift)

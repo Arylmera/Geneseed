@@ -10,6 +10,7 @@ import * as mcp from './mcp.js'
 import * as installs from './installs.js'
 import * as server from './server.js'
 import * as docs from './docs.js'
+import * as rules from './rules.js'
 
 export const api = {
   ...status,
@@ -20,4 +21,5 @@ export const api = {
   ...installs,
   ...server,
   ...docs,
+  ...rules,
 }

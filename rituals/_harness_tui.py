@@ -320,6 +320,7 @@ SKILL_CLASS: dict[str, str] = {
     "wiki": "understand",
     "prose": "understand",
     "geneseed": "understand",
+    "rule": "understand",
     "herdr": "understand",
     "crash-course": "learn",
     "drill": "learn",

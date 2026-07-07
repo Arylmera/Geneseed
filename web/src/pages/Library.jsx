@@ -164,6 +164,30 @@ export default function Library({ overview, section, selected, dataRev }) {
     reloadCatalog()
   }
 
+  // Promote a memory fact into a standing trial rule in user-rules.md — the web
+  // twin of the rule skill's memory→rule flow. The fact is deleted after the
+  // promotion (the rule supersedes it; keeping both would load the lesson twice),
+  // which is why the confirm spells that out. Lands on the Rules page so the new
+  // trial rule is immediately visible and editable.
+  const onPromote = async () => {
+    const name = activeItem?.name
+    if (!name) return
+    if (
+      !window.confirm(
+        `Promote "${name}" into a standing rule? It is appended to user-rules.md as a trial rule (a month of probation), and the memory fact is deleted so the lesson isn't loaded twice.`,
+      )
+    )
+      return
+    try {
+      const cur = await api.rules()
+      await api.rulesPromote({ name, fingerprint: cur.fingerprint, delete_memory: true })
+      go('#/rules')
+    } catch (e) {
+      window.alert(`Could not promote: ${e.message}`)
+      reloadCatalog()
+    }
+  }
+
   return (
     <>
       <div className="head-row mb-16">
@@ -266,7 +290,14 @@ export default function Library({ overview, section, selected, dataRev }) {
                 </div>
               </div>
               {sec === 'memory' && activeItem.name !== 'MEMORY' && activeItem.name !== 'README' && (
-                <div style={{ marginTop: 12 }}>
+                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn ghost sm"
+                    onClick={onPromote}
+                    title="Turn this lesson into a standing trial rule in user-rules.md"
+                  >
+                    Promote to rule
+                  </button>
                   <button className="btn ghost sm" onClick={onForget}>
                     Forget this fact
                   </button>

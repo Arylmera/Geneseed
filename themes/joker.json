@@ -60,6 +60,7 @@
   "DESC_DRILL": "Shaky knowledge into reflex — real situations, questioned through your mistakes, the answer withheld until you've tried. No cheating.",
   "DESC_DECODE": "Make confusing material click — one keystone line, a plain analogy, a comprehension check. The twist: you actually get it.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_RULE": "Pin a standing rule of yours into user-rules.md — triage what isn't one, and promote the lesson that keeps coming back for an encore.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Take the notes straight — weigh each call, then act on it or push back with reasons.",
   "LEX_I": "Don't Leak the Punchline · Sealed Secrets",

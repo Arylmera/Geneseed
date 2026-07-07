@@ -60,6 +60,7 @@
   "DESC_DRILL": "Burn shaky knowledge into reflex — dropped into live situations and probed on every misfire, the answer locked until you've tried.",
   "DESC_DECODE": "Decrypt garbled data — the one keystone line first, a plain analogy, then a three-question check before you jack out.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
+  "DESC_RULE": "Flash a standing user rule into user-rules.md — triage the noise to memory or context, and promote the lesson that keeps pinging.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Action the review clean — verify each flag, then patch it or push back with reasons.",
   "LEX_I": "Encrypt the Cache · Sealed Secrets",

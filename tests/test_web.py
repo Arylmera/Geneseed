@@ -1622,5 +1622,123 @@ class AboutOriginTests(unittest.TestCase):
         self.assertTrue(payload["repo_is_github"])
 
 
+class RulesTests(unittest.TestCase):
+    """user-rules.md: the seed-once stub, the parser, and the mutation/promotion
+    endpoints — including the fingerprint conflict gate and splice fidelity (a
+    mutation touches one rule's block, never the user's surrounding prose)."""
+
+    def setUp(self):
+        import tempfile
+        import build
+        self.tmp = tempfile.TemporaryDirectory()
+        self.target = Path(self.tmp.name)
+        build.ensure_rules_stub(self.target)
+        self.state = web.WebState(theme="neutral", target=self.target)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _rules_file(self) -> Path:
+        import build
+        return self.target / build.RULES_FILE
+
+    def test_stub_is_seed_once(self):
+        import build
+        p = self._rules_file()
+        self.assertTrue(p.is_file())
+        p.write_text("MINE\n", encoding="utf-8")
+        build.ensure_rules_stub(self.target)
+        self.assertEqual(p.read_text(encoding="utf-8"), "MINE\n")
+
+    def test_stub_example_does_not_parse_as_a_rule(self):
+        # The seeded format example is indented — the column-0-anchored parser
+        # must not read it as a live rule.
+        res = web.api_rules(self.state)
+        self.assertTrue(res["exists"])
+        self.assertEqual(res["rules"], [])
+        self.assertEqual(res["warnings"], [])
+
+    def test_missing_file_reports_not_seeded(self):
+        self._rules_file().unlink()
+        res = web.api_rules(self.state)
+        self.assertFalse(res["exists"])
+        self.assertEqual(res["rules"], [])
+
+    def test_add_update_delete_roundtrip_preserves_prose(self):
+        before = self._rules_file().read_text(encoding="utf-8")
+        fp = web.api_rules(self.state)["fingerprint"]
+        r1 = web.api_rules_mutate(self.state, {
+            "op": "add", "fingerprint": fp,
+            "title": "No emoji", "body": "Plain text only.", "scope": "project"})
+        self.assertTrue(r1["ok"])
+        self.assertEqual(r1["id"], 1)
+        r2 = web.api_rules_mutate(self.state, {
+            "op": "update", "id": 1, "fingerprint": r1["fingerprint"],
+            "title": "No emoji anywhere", "body": "Ever.", "scope": "user",
+            "trial_until": "2026-12-31"})
+        self.assertTrue(r2["ok"])
+        parsed = web.api_rules(self.state)["rules"]
+        self.assertEqual(parsed[0]["title"], "No emoji anywhere")
+        self.assertEqual(parsed[0]["scope"], "user")
+        self.assertEqual(parsed[0]["status"], "trial")
+        r3 = web.api_rules_mutate(self.state, {
+            "op": "delete", "id": 1, "fingerprint": r2["fingerprint"]})
+        self.assertTrue(r3["ok"])
+        # splice fidelity: after add→update→delete the file is byte-identical
+        # to the seeded stub (modulo the trailing-newline normalisation).
+        after = self._rules_file().read_text(encoding="utf-8")
+        self.assertEqual(after.rstrip("\n"), before.rstrip("\n"))
+
+    def test_stale_fingerprint_conflicts_instead_of_clobbering(self):
+        fp = web.api_rules(self.state)["fingerprint"]
+        web.api_rules_mutate(self.state, {
+            "op": "add", "fingerprint": fp,
+            "title": "First", "body": "Wins."})
+        res = web.api_rules_mutate(self.state, {
+            "op": "add", "fingerprint": fp,           # stale: file changed above
+            "title": "Second", "body": "Loses."})
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["error"], "conflict")
+        titles = [r["title"] for r in web.api_rules(self.state)["rules"]]
+        self.assertEqual(titles, ["First"])
+
+    def test_add_rejects_empty_title_or_body(self):
+        fp = web.api_rules(self.state)["fingerprint"]
+        for bad in ({"title": "", "body": "x"}, {"title": "x", "body": " "}):
+            with self.assertRaises(ValueError):
+                web.api_rules_mutate(self.state, {"op": "add", "fingerprint": fp, **bad})
+
+    def test_duplicate_ids_warn(self):
+        p = self._rules_file()
+        p.write_text("## R1 — A\nBody a.\n\n## R1 — B\nBody b.\n", encoding="utf-8")
+        res = web.api_rules(self.state)
+        self.assertIn("duplicate rule id R1", res["warnings"])
+
+    def test_promote_moves_memory_into_trial_rule(self):
+        mem = self.target / "memory"
+        mem.mkdir()
+        (mem / "MEMORY.md").write_text(
+            "# Memory Index\n- [prefer-tabs](prefer-tabs.md) — hook\n", encoding="utf-8")
+        (mem / "prefer-tabs.md").write_text(
+            "---\nname: prefer-tabs\ndescription: use tabs\ntype: feedback\n---\n\n"
+            "Always use tabs here.\n", encoding="utf-8")
+        fp = web.api_rules(self.state)["fingerprint"]
+        res = web.api_rules_promote(self.state, {
+            "name": "prefer-tabs", "fingerprint": fp, "delete_memory": True})
+        self.assertTrue(res["ok"])
+        self.assertEqual(res.get("deleted_memory"), "prefer-tabs")
+        self.assertFalse((mem / "prefer-tabs.md").exists())
+        rule = web.api_rules(self.state)["rules"][0]
+        self.assertEqual(rule["status"], "trial")
+        self.assertIn("memory prefer-tabs", rule["source"])
+        self.assertEqual(rule["body"], "Always use tabs here.")
+
+    def test_promote_rejects_traversal_names(self):
+        (self.target / "memory").mkdir()
+        for bad in ("", "a/b", "..\\x", "MEMORY"):
+            with self.assertRaises(web.NotFound):
+                web.api_rules_promote(self.state, {"name": bad, "fingerprint": ""})
+
+
 if __name__ == "__main__":
     unittest.main()

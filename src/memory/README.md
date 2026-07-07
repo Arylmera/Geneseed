@@ -4,7 +4,7 @@
 > to each developer, never committed or shared. The convention (`README.md`) and
 > the `.gitignore` are the only files tracked; your `MEMORY.md` index and all
 > fact files live only on your machine. (To share knowledge with the team, put
-> it in code, docs, or the project {{LAWS}} instead.)
+> it in code, docs, or the project's `user-rules.md` instead.)
 
 Durable knowledge that must survive across sessions lives here as **one fact per
 file**. An agent reads `MEMORY.md` (the local index it creates) at the start of a
@@ -45,7 +45,11 @@ The fact, stated plainly. For `feedback` and `project`, follow with
   and update that instead — no duplicates.
 - Delete a memory that turns out to be wrong.
 - Don't store what the repo already records (code structure, git history, the
-  project {{LAWS}}). Store what was *non-obvious*.
+  {{LAWS}}, `user-rules.md`). Store what was *non-obvious*.
+- When the same `feedback` lesson keeps recurring, propose promoting it into a
+  standing rule in `user-rules.md` (the rule {{SKILL}}) — with the user's
+  consent, and delete or archive the memory once promoted so the lesson is not
+  loaded twice.
 - After writing a file, add one line to `MEMORY.md`:
   `- [Title](file.md) — one-line hook`.
 - Verify a recalled memory still matches reality before acting on it
