@@ -392,11 +392,10 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
         </div>
       ) : null}
       <p className="sub mb-16">
-        Every Geneseed install on this machine: OpenCode, Claude Code, Bob, and Copilot — global
-        and per-repo.
-        Toggle one off without deleting it (files move aside, reactivate any time). Active rows
-        expand to wire their MCP servers. <strong>Rebuild all</strong> re-emits every active install
-        in its own voice and mode, as one background job.
+        Every Geneseed install on this machine: OpenCode, Claude Code, Bob, and Copilot — global and
+        per-repo. Toggle one off without deleting it (files move aside, reactivate any time). Active
+        rows expand to wire their MCP servers. <strong>Rebuild all</strong> re-emits every active
+        install in its own voice and mode, as one background job.
       </p>
       <p className="sub mb-16">
         <strong>Per-folder now overrides global.</strong> Inside a folder that has its own harness,
