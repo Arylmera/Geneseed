@@ -4,6 +4,8 @@
   "TAGLINE": "<one-line tagline shown under the AGENT.md title, in this theme's voice>",
   "LOADED_SIGIL": "<the readiness line the agent must emit before its first reply — keep it short and unmistakable>",
   "EPI_LAWS": "<epigraph above the Laws section, themed>",
+  "PACT": "<noun for the mutual user–agent contract, e.g. Pact>",
+  "EPI_PACT": "<epigraph above the Pact section, themed>",
   "EPI_AGENTS": "<epigraph above the Agents section, themed>",
   "EPI_SKILLS": "<epigraph above the Skills section, themed>",
   "EPI_MEMORY": "<epigraph above the Memory section, themed>",

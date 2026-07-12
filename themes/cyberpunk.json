@@ -4,6 +4,8 @@
   "TAGLINE": "Flash the daemon once; it runs your code on every grid you jack into.",
   "LOADED_SIGIL": "▰ Jacked in — daemons live, ICE clear, deck ready.",
   "EPI_LAWS": "Hard-coded protocols. They run on every grid, every job.",
+  "PACT": "The Handshake",
+  "EPI_PACT": "A two-way protocol between operator and system — break it and trust drops to zero.",
   "EPI_AGENTS": "Spin up the right daemon; don't run the whole job on one thread.",
   "EPI_SKILLS": "Run the proven routine before you freestyle in live ICE.",
   "EPI_MEMORY": "Commit it to storage, or it flushes when you jack out.",
