@@ -127,7 +127,7 @@ DOC_GROUPS = [
             "Once installed, the agent doesn't change *how* you talk to "
             "your tool — it changes what the tool already knows when you do.\n\n"
             "### What loaded automatically\n\n"
-            "- **`AGENT.md`** — 35 universal Rules the agent obeys.\n"
+            "- **`AGENT.md`** — {N_LAWS} universal Rules the agent obeys.\n"
             "- **Your repo's docs** — `README.md`, `CONTRIBUTING.md`, "
             "anything under `docs/` the harness discovers.\n"
             "- **Your machine's wiki** (if you set one up) — eager entries "
@@ -156,16 +156,25 @@ DOC_GROUPS = [
          "durable knowledge), and a **Notebook** (the agent's own sovereign "
          "space).\n"
          "<!--harness:opencode-->\n"
-         "On OpenCode, six **Plugins** bind the pieces to the host: "
+         "On OpenCode, {N_PLUGINS} **Plugins** bind the pieces to the host: "
          "context injection, learn-at-session-end, the safety guard, the "
-         "saved workflow runner, end-of-run notifications, and an opt-in "
-         "minimal-code mode.\n"
+         "saved workflow runner, end-of-run notifications, a live-activity "
+         "feed for this console, and an opt-in minimal-code mode.\n"
+         "<!--/harness-->\n"
+         "<!--harness:claude-->\n"
+         "On Claude Code, three settings.json **hooks** bind the pieces to "
+         "the host — context injection, the git safety gate, and "
+         "learn-at-session-end. See [How Geneseed binds to Claude Code]"
+         "(#/docs/claude-hooks).\n"
          "<!--/harness-->\n"
          "The structure "
          "is theme-independent — a "
          "theme only changes the *voice* (banner, sigil, prose), never a "
          "folder or a link. A separate dial, the **[footprint](#/docs/footprint)**, "
-         "sets how much of the Rules load inline each turn (full vs lean).\n\n"
+         "sets how much of the Rules load inline each turn (full vs lean), and "
+         "the **[collaboration layer](#/docs/collaboration)** — posture, the "
+         "Pact, typed memory, your profile — shapes how the agent works "
+         "*with you*.\n\n"
          "### What this UI actually shows\n\n"
          "The **Library** and **Graph** render the Geneseed source live — "
          "they show the harness that *would* be deployed if you rebuilt "
@@ -178,7 +187,7 @@ DOC_GROUPS = [
          "`build`."},
         {"id": "rules", "title": "Rules (Laws)", "kind": "concept",
          "link": {"hash": "#/laws", "label": "Browse the ledger →"},
-         "body": "35 universal laws the agent obeys — secrets handling, "
+         "body": "{N_LAWS} universal laws the agent obeys — secrets handling, "
          "scope discipline, verify-before-assert, surface-failures, context "
          "economy, load-the-docs, tool-discovery, non-interactive-shell, and "
          "more. Each law is a "
@@ -188,7 +197,7 @@ DOC_GROUPS = [
          "*Rules*, but the numbering and the rule itself never move."},
         {"id": "agents", "title": "Agents", "kind": "concept",
          "link": {"hash": "#/section/agents", "label": "Browse the catalog →"},
-         "body": "16 capability specialists — `reviewer`, `tester`, "
+         "body": "{N_AGENTS} capability specialists — `reviewer`, `tester`, "
          "`architect`, `docs`, `security`, `explorer`, plus a debate "
          "**council** the [[council]] skill convenes (`advocate`, `skeptic`, "
          "`pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, "
@@ -197,17 +206,12 @@ DOC_GROUPS = [
          "request."},
         {"id": "skills", "title": "Skills", "kind": "concept",
          "link": {"hash": "#/section/skills", "label": "Browse the catalog →"},
-         "body": "39 repeatable workflows the agent can invoke by name — "
-         "[[brainstorm]], [[clarify]], [[plan]], [[tdd]], [[develop]], [[debug]], "
-         "[[refactor]], [[ponytail]], [[geneseed-code-review]], [[fresh-eyes]], "
-         "[[review-response]], [[commit]], [[ship]], [[release]], [[migrate]], "
-         "[[git-archaeology]], [[git-rescue]], [[repo-map]], [[document-project]], "
-         "[[ingest]], [[prose]], [[research]], [[learning-path]], [[gap-detector]], "
-         "[[feynman]], [[crash-course]], [[drill]], [[decode]], [[handoff]], "
-         "[[roast-me]], [[council]], [[parallel-agents]], [[workflow]], [[wiki]], "
-         "[[forge-mcp]], [[frontend-design]], [[geneseed]], [[opencode-theme]], "
-         "[[herdr]]. A skill is a markdown "
-         "playbook under `src/skills/`; the agent reads it before acting."},
+         "body": "{N_SKILLS} repeatable workflows the agent can invoke by "
+         "name — from [[brainstorm]], [[clarify]], [[plan]], [[tdd]] and "
+         "[[debug]] through [[council]], [[research]] and [[ship]] to "
+         "[[roast-me]]. A skill is a markdown playbook under `src/skills/`; "
+         "the agent reads it before acting. The catalog link lists every one, "
+         "live."},
         {"id": "memory", "title": "Memory convention", "kind": "markdown",
          "source": "src/memory/README.md"},
         {"id": "notebook", "title": "Notebook (sovereign space)",
@@ -223,57 +227,33 @@ DOC_GROUPS = [
          "**Footprint** controls how much of the Rules your agent carries *inline* "
          "in `AGENT.md` every turn. Two states — **full** (the default) and "
          "**lean** — set per install. It's a token-cost dial, not a change to which "
-         "Rules apply: every Rule is always in force.\n\n"
+         "Rules apply: every Rule is always in force, and across lean and full the "
+         "emitted files are otherwise identical — same Agents, Skills, plugins, "
+         "commands, Memory, and Notebook.\n\n"
          "### The difference\n\n"
          "- **Full** — Section 1 of `AGENT.md` inlines every Rule's complete text "
          "*and* its reasoning. The agent sees the full law set, rationale included, "
          "on every single turn.\n"
          "- **Lean** — Section 1 carries each Rule as its **heading + the rule "
-         "itself** (one line), followed by a pointer to the complete law file. The "
-         "full text of every Rule still ships beside `AGENT.md` (in `laws/"
-         "universal.md`) — the agent reads it on demand when a rule's application is "
-         "unclear. Lean trims Section 1 by roughly 40%.\n\n"
-         "### Why it exists\n\n"
-         "Context is scarce and metered (Rule XV). The law set is the single largest "
-         "always-loaded block in the harness. Full keeps every word of guidance in "
-         "front of the agent at all times; lean reclaims that budget — and the tokens "
-         "you pay for it — for the actual task, keeping the rules themselves present "
-         "but moving their elaboration one read away.\n\n"
-         "### Pros & cons\n\n"
-         "**Full** — *pro:* maximum guidance density; the rationale behind every Rule "
-         "is always in context with zero indirection, which a smaller model leans on. "
-         "*con:* the largest per-turn token cost; more of the window spent on laws.\n\n"
-         "**Lean** — *pro:* ~40% smaller instruction block, so lower token cost every "
-         "turn and more room for the task — valuable on long sessions, large repos, "
-         "or cost-sensitive runs. *con:* the reasoning isn't eagerly in context; for a "
-         "nuanced edge case the agent must read the full law file (one extra fetch), "
-         "and a weaker model may apply a rule less precisely without its rationale in "
-         "front of it.\n\n"
-         "Lean is **safe**: it still ships the complete law text and explicitly points "
-         "the agent there before acting on secrets, deletion, git history, scope, or "
-         "untrusted content. It's an optimization, not a rules cut.\n\n"
-         "### Same harness, either way\n\n"
-         "Footprint changes neither what the harness *is* nor what it can *do*. Across "
-         "lean and full the emitted files are identical — same Agents, Skills, plugins, "
-         "commands, Memory, Notebook, and host hooks — and every Rule is present and "
-         "binding. The only structural change is that a **lean** install on a global, "
-         "Claude, Bob, or Copilot target also ships the standalone `laws/universal.md` (the "
-         "on-demand fallback); project bundles already carry it. The only behavioural "
-         "change is that each Rule's *reasoning* loads on demand instead of every turn.\n\n"
-         "That one difference still has a real edge: with the rationale always in front "
-         "of it, a model applies a Rule's nuance more reliably than when it must fetch "
-         "the full text first — most visible on subtle edge cases, or with a smaller / "
-         "cheaper model that may not reach for the pointer. A capable model that reads "
-         "the law when a rule's application is unclear behaves equivalently. This is why "
-         "**full is the default** and lean is the opt-in.\n\n"
+         "itself** (one line), followed by a pointer to the complete law file "
+         "(`laws/universal.md`, shipped beside `AGENT.md`) — the agent reads the "
+         "rationale on demand when a rule's application is unclear. Lean trims "
+         "Section 1 by roughly 40%.\n\n"
          "### Which to choose\n\n"
-         "- Keep **full** if token cost is a non-issue, you want the rationale always "
-         "present, or you run a smaller/cheaper model.\n"
-         "- Switch to **lean** to economize context and cost, trusting the agent to "
-         "pull the full law when it needs the *why*.\n\n"
+         "- Keep **full** if token cost is a non-issue, you want the rationale "
+         "always present, or you run a smaller/cheaper model — with the *why* "
+         "eagerly in context, a model applies a Rule's nuance more reliably. "
+         "This is why full is the default.\n"
+         "- Switch to **lean** to reclaim context and cost on long sessions, "
+         "large repos, or cost-sensitive runs, trusting the agent to pull the "
+         "full law when it needs the *why*. Lean is **safe**: the complete law "
+         "text still ships, and the harness explicitly points the agent there "
+         "before acting on secrets, deletion, git history, scope, or untrusted "
+         "content. It's an optimization, not a rules cut.\n\n"
          "### How to set it\n\n"
-         "It's set-and-forget — stored in the `.geneseed-footprint` marker and "
-         "preserved across every rebuild. Changing it re-emits the install.\n\n"
+         "It's set-and-forget — stored in the `.geneseed-footprint` marker, "
+         "preserved across every rebuild, identical on every host (OpenCode, "
+         "Claude Code, Bob, Copilot). Changing it re-emits the install.\n\n"
          "- **Settings** — the **Footprint** toggle flips the current install "
          "(full ⇄ lean) and rebuilds it in place.\n"
          "- **Harnesses tab** — a per-harness dropdown sets it for any one install "
@@ -281,14 +261,14 @@ DOC_GROUPS = [
          "- **Setup / re-theme wizard** (TUI) — asks for footprint alongside voice "
          "and mode.\n"
          "- **CLI** — `build.py --footprint lean` (with any `--emit`).\n\n"
-         "Works identically across every host — OpenCode, Claude Code, Bob, and Copilot.\n\n"
          "---\n\n"
-         "**Related:** [Rules (Laws)](#/laws) · [Voice vs structure](#/docs/themes)"},
+         "**Related:** [Rules (Laws)](#/laws) · [Voice vs structure](#/docs/themes) "
+         "· [Token footprint — the numbers](#/docs/token-footprint)"},
         {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
          "harness": "opencode",
          "link": {"hash": "#/docs/plugin-context",
                   "label": "One page per plugin →"},
-         "body": "OpenCode loads six plugins from the deployed bundle:\n\n"
+         "body": "OpenCode loads {N_PLUGINS} plugins from the deployed bundle:\n\n"
          "- **geneseed-context** — injects the project's docs *and* your "
          "machine wiki at every session start (and after compaction).\n"
          "- **geneseed-learn** — distils memory at session end (powers the "
@@ -301,7 +281,10 @@ DOC_GROUPS = [
          "run finishes, so you can step away and be called back.\n"
          "- **geneseed-ponytail** — holds an opt-in minimal-code mode "
          "(`/ponytail lite|full|ultra|off`), injecting the laziest-that-works "
-         "ruleset every turn so it doesn't drift."},
+         "ruleset every turn so it doesn't drift.\n"
+         "- **geneseed-activity** — streams what each live session is *doing* "
+         "(phase, model, tokens, files touched) to this console's Activity "
+         "view."},
         {"id": "collaboration", "title": "The collaboration layer",
          "kind": "concept", "body": (
             "Beyond the Laws, four mechanisms shape *how* the agent works "
@@ -386,24 +369,6 @@ DOC_GROUPS = [
          "agent in *this* repo to back-port the changes into `src/`. On "
          "demand: `geneseed diff --out FILE`, or the **Changes** page in this "
          "UI."},
-        {"id": "authoring", "title": "Edit the source", "kind": "concept",
-         "body": "Everything theme-independent lives under `src/` — laws, "
-         "agents, skills, memory and notebook conventions, and the "
-         "`AGENT.md.tmpl` entrypoint. Voice tokens live under `themes/` as one "
-         "JSON file per theme. After editing, `python build.py --emit "
-         "opencode-global` (or `geneseed update`) re-renders the deployed "
-         "bundle. The `doctor` action verifies the result: unresolved theme "
-         "tokens, dead links, hermetic escapes, theme-key parity, and that "
-         "the committed bundle matches a fresh render."},
-        {"id": "themes-author", "title": "Write a new theme", "kind": "concept",
-         "link": {"hash": "#/themes", "label": "Open the theme gallery →"},
-         "body": "A theme is one JSON file under `themes/` declaring voice "
-         "tokens only: `BANNER`, `TAGLINE`, `LOADED_SIGIL`, `VOICE`, the core "
-         "nouns (`LAW(S)`/`AGENT(S)`/`SKILL(S)`/`MEMORY`/`NOTEBOOK`/`WIKI`), "
-         "the law titles `LEX_*`, the section intros `INTRO_*`, the epigraphs "
-         "`EPI_*`, the `BENEDICTION`, the `ROAST_PERSONA`, and `DESC_*` "
-         "blurbs. Copy `themes/neutral.json` and edit. `python build.py "
-         "--theme yours` renders it; `doctor` checks for missing tokens."},
     ]},
     # ── 4. MCP servers ────────────────────────────────────────────────────
     # Wiring the four MCP presets into OpenCode / Claude Code. The overview
@@ -413,9 +378,10 @@ DOC_GROUPS = [
     {"id": "mcp", "label": "MCP servers", "pages": [
         {"id": "mcp-overview", "title": "MCP overview", "kind": "concept",
          "body":
-         "The Harness ships **four** ready-to-wire MCP servers as presets — "
-         "**MarkItDown** (PDF/Office → Markdown), **GitLab** (two entries, "
-         "one per instance), and **Filesystem** (scoped file access). Each is a "
+         "The Harness ships **three** ready-to-wire MCP servers as presets — "
+         "**MarkItDown** (PDF/Office → Markdown), **GitLab** (shipped as two "
+         "entries, one per instance), and **Filesystem** (scoped file access) "
+         "— four config entries in all. Each is a "
          "*local* server the agent launches on demand: registering one only "
          "points the agent at a command — *you* install the tool (or let "
          "`npx`/`pipx` fetch it) and supply any credentials.\n\n"
@@ -438,7 +404,7 @@ DOC_GROUPS = [
          "<!--harness:opencode-->\n"
          "### Toggle them without hand-editing JSON\n\n"
          "`./geneseed` → **Settings** → **MCP servers** toggles any of the "
-         "four presets into your project or global `opencode.json` — and "
+         "presets into your project or global `opencode.json` — and "
          "enables, disables, or removes them — for you. The reference "
          "config ships MarkItDown enabled and the GitLab / Filesystem "
          "entries disabled, so a merge never activates a credential-less "
@@ -701,6 +667,70 @@ DOC_GROUPS = [
          "With `GENESEED_DEBUG=1`, run `/ponytail full` — you'll see "
          "`[geneseed-ponytail] ponytail full`, and the next turn's replies "
          "favour the minimal solution."},
+        {"id": "plugin-activity", "title": "geneseed-activity", "kind": "concept",
+         "body":
+         "Feeds this console's **Activity** view: writes one small JSON file "
+         "per session (`activity/<session_id>.json` beside the OpenCode "
+         "config) recording what the harness is *doing* — current phase, "
+         "model, token and cost totals, turn-elapsed, files touched, the "
+         "plan, and the last error. The web server reads and prunes those "
+         "files; writer and reader only ever meet on the filesystem, so a "
+         "crash on either side never blocks a session.\n\n"
+         "- **One entry per top-level session** — sub-agent child sessions "
+         "and the learn plugin's throwaway distil sessions are skipped.\n"
+         "- **Self-cleaning** — the reader prunes entries whose process is "
+         "dead or whose timestamp went stale, so a crashed writer's file "
+         "disappears on its own.\n\n"
+         "### Install\n\n"
+         "Installs with the other plugins in one step — see "
+         "[Plugin setup](#/docs/plugin-setup).\n\n"
+         "### Configure\n\n"
+         "- `GENESEED_ACTIVITY=off` — hard kill switch at startup.\n"
+         "- The **Activity** page's toggle writes a `.geneseed-activity` flag "
+         "file read per event — takes effect without restarting OpenCode.\n\n"
+         "### Verify\n\n"
+         "Start a session, then open **Activity** in this console — a card "
+         "for the session appears. `GENESEED_DEBUG=1` logs each write as "
+         "`[geneseed-activity] …` to stderr."},
+    ]},
+    # ── Hooks (Claude Code) ───────────────────────────────────────────────
+    # The Claude counterpart of the Plugins group: how the harness binds to a
+    # host with no plugin dir. One page — three hooks don't need seven.
+    {"id": "hooks", "label": "Hooks", "harness": "claude", "pages": [
+        {"id": "claude-hooks", "title": "How Geneseed binds to Claude Code",
+         "kind": "concept", "body": (
+            "Claude Code has no `instructions` array and no JS plugin dir — "
+            "the harness reaches it through **`settings.json` hooks** "
+            "instead: the same capabilities the OpenCode plugins provide, "
+            "each driven by a `harness.py` subcommand. `CLAUDE.md` itself "
+            "auto-loads by location, so it needs no hook at all.\n\n"
+            "### The three hooks\n\n"
+            "- **Context injection** — `SessionStart` (startup, clear, "
+            "resume) runs `harness.py context`: auto-discovers the repo's "
+            "docs by convention and injects them before your first turn, "
+            "plus your machine wiki. It honours the same `GENESEED_CONTEXT` "
+            "manifest as the OpenCode context plugin.\n"
+            "- **Git gate** — `PreToolUse` on Bash runs `harness.py "
+            "git-gate`: enforces the safety Laws at the tool boundary, "
+            "before a shell command executes.\n"
+            "- **Learn** — `Stop` and `SubagentStop` run `harness.py learn`: "
+            "distils durable memories into the install's `memory/` store at "
+            "session end; a subagent's stop routes to the per-agent lesson "
+            "path (`memory/agents/<name>.md`).\n\n"
+            "### Where they live\n\n"
+            "The emit merges the hook groups surgically into your "
+            "`settings.json` (global `~/.claude/settings.json`, or the "
+            "project's), preserving every other key and any hooks of your "
+            "own. The install manifest records exactly which groups Geneseed "
+            "owns, so an upgrade replaces and an uninstall removes precisely "
+            "those — never yours.\n\n"
+            "### Verify\n\n"
+            "Open Claude Code in any repo: the first reply opens with the "
+            "readiness sigil and your project's docs are already in "
+            "context. End a session and check the install's `memory/` dir "
+            "for distilled files.\n\n"
+            "---\n\n"
+            "**Deeper:** [Claude Code adapter](#/docs/adapters-claude-code)")},
     ]},
     # ── 6. Reference ──────────────────────────────────────────────────────
     # Pure lookups — CLI, env vars, glossary, troubleshooting matrix.
@@ -713,6 +743,8 @@ DOC_GROUPS = [
          "kind": "glossary"},
         {"id": "trouble", "title": "Troubleshooting",
          "kind": "concept", "body": (
+            "MCP server issues have their own page: "
+            "[MCP — won't connect?](#/docs/mcp-trouble).\n\n"
             "### `geneseed: command not found`\n"
             "Run `./geneseed link` (macOS/Linux) or `.\\geneseed.cmd link` "
             "(Windows) from the cloned repo. On Windows, open a new terminal "
@@ -755,7 +787,30 @@ DOC_GROUPS = [
             "### `could not determine a model`\n"
             "Set `GENESEED_MODEL=provider/model` in your environment.\n")},
     ]},
-    # ── 7. Deeper ─────────────────────────────────────────────────────────
+    # ── 7. Extend ─────────────────────────────────────────────────────────
+    # Contributor tasks — editing Geneseed itself, not using it. Split out of
+    # How-to so the task pages stay reader-intent pure (use vs extend).
+    {"id": "extend", "label": "Extend", "pages": [
+        {"id": "authoring", "title": "Edit the source", "kind": "concept",
+         "body": "Everything theme-independent lives under `src/` — laws, "
+         "agents, skills, memory and notebook conventions, and the "
+         "`AGENT.md.tmpl` entrypoint. Voice tokens live under `themes/` as one "
+         "JSON file per theme. After editing, `python build.py --emit "
+         "opencode-global` (or `geneseed update`) re-renders the deployed "
+         "bundle. The `doctor` action verifies the result: unresolved theme "
+         "tokens, dead links, hermetic escapes, theme-key parity, and that "
+         "the committed bundle matches a fresh render."},
+        {"id": "themes-author", "title": "Write a new theme", "kind": "concept",
+         "link": {"hash": "#/themes", "label": "Open the theme gallery →"},
+         "body": "A theme is one JSON file under `themes/` declaring voice "
+         "tokens only: `BANNER`, `TAGLINE`, `LOADED_SIGIL`, `VOICE`, the core "
+         "nouns (`LAW(S)`/`AGENT(S)`/`SKILL(S)`/`MEMORY`/`NOTEBOOK`/`WIKI`), "
+         "the law titles `LEX_*`, the section intros `INTRO_*`, the epigraphs "
+         "`EPI_*`, the `BENEDICTION`, the `ROAST_PERSONA`, and `DESC_*` "
+         "blurbs. Copy `themes/neutral.json` and edit. `python build.py "
+         "--theme yours` renders it; `doctor` checks for missing tokens."},
+    ]},
+    # ── 8. Deeper ─────────────────────────────────────────────────────────
     # Design rationale, adapter internals, the install snapshot. Long-form by
     # nature — readers come here on purpose.
     {"id": "deeper", "label": "Deeper", "pages": [
@@ -783,7 +838,8 @@ DOC_GROUPS = [
 
 # Theme-aware glossary: each entry has the neutral term + the theme key whose
 # value is the themed word. The build read the same keys from theme JSON, so
-# this list matches whatever the templates actually substitute.
+# this list matches whatever the templates actually substitute. A key of None
+# marks a term that no theme renames — the same word in every voice.
 GLOSSARY_KEYS = [
     ("Rule (Law)", "LAW", "the governance rules the agent obeys"),
     ("Rules (Laws)", "LAWS", "the body of governance rules"),
@@ -794,6 +850,14 @@ GLOSSARY_KEYS = [
     ("Memory", "MEMORY", "durable, one-fact-per-file knowledge"),
     ("Notebook", "NOTEBOOK", "the agent's sovereign space"),
     ("Wiki", "WIKI", "the machine-wide knowledge base"),
+    ("Pact", "PACT", "the two-way collaboration contract"),
+    ("Posture", None, "the relationship register the agent works in "
+     "(peer, mentor, expert, assistant, artisan)"),
+    ("Footprint", None, "how much of the Rules loads inline each turn "
+     "(full vs lean)"),
+    ("Profile", None, "who you are — seeded once, colours but never binds"),
+    ("Memory force", None, "a memory's binding strength (constraint, "
+     "choice, conviction, tempered)"),
     ("Tagline", "TAGLINE", "the one-line essence of the theme"),
     ("Loaded sigil", "LOADED_SIGIL", "what the agent emits when ready"),
     ("Benediction", "BENEDICTION", "the closing line of an install"),

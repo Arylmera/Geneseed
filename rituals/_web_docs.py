@@ -10,6 +10,29 @@ from _web_core import *  # noqa: F401,F403  shared stdlib + primitives
 # ---- Docs API --------------------------------------------------------------
 
 
+def _doc_counts(state: WebState) -> dict:
+    """Live counts substituted into concept bodies ({N_LAWS} etc.) so the
+    prose can never drift from the rail — both read the same inventory. The
+    plugin count comes from the source tree: it documents what the next
+    build ships, matching the one-page-per-plugin group."""
+    inv = state.inventory
+    plugins = ROOT / "adapters" / "opencode" / "plugins"
+    return {
+        "{N_LAWS}": len(inv.get("laws") or []),
+        "{N_AGENTS}": len(inv.get("agents") or []),
+        "{N_SKILLS}": len(inv.get("skills") or []),
+        "{N_PLUGINS}": len(list(plugins.glob("geneseed-*.js"))),
+    }
+
+
+def _sub_counts(state: WebState, body: str) -> str:
+    if "{N_" not in body:
+        return body
+    for token, n in _doc_counts(state).items():
+        body = body.replace(token, str(n))
+    return body
+
+
 def _find_doc_page(page_id: str) -> "dict | None":
     """Look up a page by id across all groups. Used by /api/docs/page/<id>."""
     for g in DOC_GROUPS:
@@ -262,6 +285,11 @@ def _glossary(state: WebState) -> dict:
     themed = _load(state.theme) if state.theme != "neutral" else neutral
     rows = []
     for label, key, desc in GLOSSARY_KEYS:
+        if key is None:   # un-themed term — the same word in every voice
+            term = label.lower()
+            rows.append({"label": label, "neutral": term, "themed": term,
+                         "desc": desc})
+            continue
         rows.append({
             "label": label,
             "neutral": str(neutral.get(key, "")).strip(),
@@ -337,7 +365,7 @@ def api_docs_page(state: WebState, page_id: str,
                 "anchor": anchor,
                 "links": _resolve_links(state, body)}
     if kind == "concept":
-        body = _strip_harness_blocks(page.get("body", ""), hn)
+        body = _sub_counts(state, _strip_harness_blocks(page.get("body", ""), hn))
         return {"id": page_id, "title": page["title"], "kind": "concept",
                 "body": body, "link": page.get("link"),
                 "links": _resolve_links(state, body)}
