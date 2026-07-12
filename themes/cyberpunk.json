@@ -63,6 +63,7 @@
   "DESC_DECODE": "Decrypt garbled data — the one keystone line first, a plain analogy, then a three-question check before you jack out.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_RULE": "Flash a standing user rule into user-rules.md — triage the noise to memory or context, and promote the lesson that keeps pinging.",
+  "DESC_PROFILE": "Compile the user's ident into PROFILE.md — who they are, their rig, the bandwidth they want answers at; identity only, hard directives flash to user-rules.md.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Action the review clean — verify each flag, then patch it or push back with reasons.",
   "LEX_I": "Encrypt the Cache · Sealed Secrets",

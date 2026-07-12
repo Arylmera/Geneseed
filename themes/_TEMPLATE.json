@@ -63,6 +63,7 @@
   "DESC_DECODE": "<one-line description: make confusing material click — one keystone sentence, an everyday analogy, then a comprehension check>",
   "DESC_HERDR": "<one-line description: drive herdr from inside it — split panes, spawn agents, read panes>",
   "DESC_RULE": "<one-line description: draft, triage, and adopt a standing user rule in user-rules.md, or promote a recurring memory lesson into one>",
+  "DESC_PROFILE": "<one-line description: interview the user and draft or refresh PROFILE.md — who they are, how they work, how they like answers pitched; identity only, rules go to user-rules.md>",
   "DESC_GENESEED": "<one-line description: interact with the deployed Geneseed harness — read files, status, doctor, diff>",
   "DESC_REVIEW_RESPONSE": "<one-line description: respond to review feedback — verify each point, apply or decline with reasons>",
   "LEX_I": "<themed title for Law I (Sealed Secrets)>",

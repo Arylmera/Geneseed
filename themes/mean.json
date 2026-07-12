@@ -63,6 +63,7 @@
   "DESC_DECODE": "Make confusing material click — one keystone sentence, a plain analogy, a comprehension check you don't get to skip.",
   "DESC_HERDR": "Drive herdr from inside it — split panes, spawn sibling agents, wait on output, read other panes.",
   "DESC_RULE": "Adopt a standing user rule in user-rules.md — triage what isn't one, and promote the recurring lesson. Not a dumping ground.",
+  "DESC_PROFILE": "Get the user's profile down in PROFILE.md — who they are, how they work, how they want answers. Identity only; rules go in user-rules.md, obviously.",
   "DESC_GENESEED": "Interact with the deployed Geneseed harness — locate the install, read its files, run status, doctor, and diff, and drive learn, context, and the local web UI.",
   "DESC_REVIEW_RESPONSE": "Take the review straight — weigh each point, then fix it or push back with reasons. Not feelings.",
   "LEX_I": "Keep Your Secrets Off the Floor · Sealed Secrets",

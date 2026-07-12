@@ -35,7 +35,7 @@ Every row below is present in the tree today; "Spec" links the design record.
 | Capability | What it is | Spec |
 | --- | --- | --- |
 | **Themed generator** | One neutral `src/` → 14 themed bundles via `build.py` (stdlib only); structure stays theme-independent | [DESIGN.md](DESIGN.md) |
-| **Laws / Agents / Skills / Memory / Notebook** | 35 laws, 16 agents, 40 skills, the memory convention, and the agent's sovereign notebook | [notebook](docs/specs/2026-06-11-notebook-sovereign-space.md) · [agent-own-space](docs/specs/2026-06-10-notebook-agent-own-space.md) |
+| **Laws / Agents / Skills / Memory / Notebook** | 35 laws, 16 agents, 41 skills, the memory convention, and the agent's sovereign notebook | [notebook](docs/specs/2026-06-11-notebook-sovereign-space.md) · [agent-own-space](docs/specs/2026-06-10-notebook-agent-own-space.md) |
 | **`doctor`** | One check: unresolved tokens, dead/non-hermetic links, theme-key parity, authoring gates, rendered-bundle drift | [theme-aware doctor/diff](docs/specs/2026-06-07-theme-aware-doctor-diff.md) |
 | **`diff` + improvements export** | Deployed-vs-source drift report; export an `improvements.md` back-port | [improvements-export](docs/specs/2026-06-12-improvements-export.md) |
 | **`status` / `version`** | Headless dashboard + fingerprint verdict (no TUI needed) | [status-command](docs/specs/2026-06-07-status-command.md) · [version-and-uninstall](docs/specs/2026-06-07-version-and-uninstall.md) |
@@ -45,7 +45,7 @@ Every row below is present in the tree today; "Spec" links the design record.
 | **Workflow primitive** | Saved, code-driven subagent orchestration (`workflow` tool + runtime); shipped scripts include `dispatch` — decompose a goal, route each subtask to its owning agent, converge | [workflow-primitive](docs/specs/2026-06-09-opencode-workflow-primitive.md) |
 | **Per-agent memory** | Each capability agent keeps durable lessons in `memory/agents/<name>.md`: read at dispatch, written back mechanically by `learn` on session/subagent end (OpenCode plugin + claude/bob `SubagentStop`); `learn --consolidate` rebuilds the index | [orchestration-memory-upgrade](docs/specs/2026-07-04-orchestration-memory-upgrade.md) |
 | **Wiki integration** | Machine-wide knowledge base (`wiki.jsonc`): eager/lazy loading, conventions, protected folders enforced at the tool boundary | [wiki-knowledge-base](docs/specs/2026-06-11-wiki-knowledge-base.md) |
-| **Collaboration layer** | Negotiated postures (peer/mentor/expert/assistant/artisan, chosen at setup, inlined in AGENT.md), the bidirectional Pact, epistemically-typed memory (`force:` + Bridge rule), and a seed-once `PROFILE.md` identity with a web editor tab | [collaboration-layer](docs/specs/2026-07-12-collaboration-layer.md) |
+| **Collaboration layer** | Negotiated postures (peer/mentor/expert/assistant/artisan, chosen at setup, inlined in AGENT.md), the bidirectional Pact, epistemically-typed memory (`force:` + Bridge rule), and a seed-once `PROFILE.md` identity with a web editor tab and a `profile` skill that interviews the user to draft it | [collaboration-layer](docs/specs/2026-07-12-collaboration-layer.md) |
 | **Runtime awareness** | MCP discovery, web research, tool-call batching, review discipline baked into the laws | [runtime-awareness](docs/specs/2026-06-07-runtime-awareness-and-review-discipline.md) |
 | **Run from anywhere / uninstall** | `link`/`unlink` onto PATH; global uninstall that keeps the memory store | [version-and-uninstall](docs/specs/2026-06-07-version-and-uninstall.md) |
 
