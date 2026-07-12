@@ -62,7 +62,9 @@ export default function Profile() {
             Who you are and how you like to work, from <code className="mono">PROFILE.md</code>{' '}
             beside the deployed AGENT.md. Unlike <code className="mono">user-rules.md</code>, it is
             identity, not rules — it colours how the agent works but never binds (precedence is
-            Laws, then rules, then this). Seeded once, never overwritten by an update.
+            Laws, then rules, then this). Seeded once, never overwritten by an update. Prefer not to
+            write it by hand? Ask the agent to run the <code className="mono">profile</code> skill —
+            it interviews you and drafts this file with your consent.
           </p>
         </div>
         <button className="btn" disabled={!dirty || busy} onClick={save}>

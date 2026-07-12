@@ -324,7 +324,11 @@ DOC_GROUPS = [
             "preferences. It is identity, not rules — it colours how the "
             "agent works but never binds (precedence is Laws, then "
             "`user-rules.md`, then the profile). Edit it here under the "
-            "**Profile** tab, or in the file directly.")},
+            "**Profile** tab, or in the file directly — or let the agent "
+            "draft it: the [[profile]] skill interviews you (who you are, "
+            "how you work, how you like answers pitched) and writes the "
+            "file only with your consent, routing anything that is really "
+            "a standing rule to `user-rules.md` instead.")},
     ]},
     # ── 3. How-to ─────────────────────────────────────────────────────────
     # One task per page — most sliced out of SETUP.md (the git-worktree
