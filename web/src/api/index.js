@@ -11,6 +11,7 @@ import * as installs from './installs.js'
 import * as server from './server.js'
 import * as docs from './docs.js'
 import * as rules from './rules.js'
+import * as profile from './profile.js'
 
 export const api = {
   ...status,
@@ -22,4 +23,5 @@ export const api = {
   ...server,
   ...docs,
   ...rules,
+  ...profile,
 }

@@ -261,6 +261,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     ensure_notebook_index(cfg / "notebook")   # guarantee the index on every path (seed/migrate/keep)
     ensure_wiki_stub(cfg)   # machine-level wiki.jsonc — seeded once, user-owned, never in the manifest
     ensure_rules_stub(cfg)  # user-rules.md — seeded once, user-owned, never in the manifest
+    ensure_profile_stub(cfg)  # PROFILE.md — seeded once, user-owned, never in the manifest
 
     write_version(cfg)
     owned.append(VERSION_MARKER)
@@ -430,6 +431,7 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     ensure_notebook_index(cfg / "notebook")
     ensure_wiki_stub(cfg)
     ensure_rules_stub(cfg)
+    ensure_profile_stub(cfg)
 
     # Project hygiene: keep the personal/self-documented-never-commit files out of
     # the team's git. Claim-on-create — an existing (possibly user-authored)

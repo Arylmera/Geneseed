@@ -24,11 +24,16 @@ Each memory is a Markdown file with frontmatter:
 name: <short-kebab-case-slug>
 description: <one-line summary — used to judge relevance during recall>
 type: user | feedback | project | reference
+force: constraint | choice | conviction | tempered   # optional
 ---
 
 The fact, stated plainly. For `feedback` and `project`, follow with
 **Why:** and **How to apply:** lines. Link related memories with [[their-name]].
 ```
+
+`type` says what a memory *is about*; the optional `force` says how *firmly it
+binds* — the two are independent axes. Leave `force` off for a plain fact; add it
+when a memory is a decision or stance the agent must weigh before overriding.
 
 ## Types
 
@@ -38,6 +43,29 @@ The fact, stated plainly. For `feedback` and `project`, follow with
 - **project** — ongoing goals or constraints not derivable from the code or git
   history. Convert relative dates to absolute.
 - **reference** — pointers to external resources (URLs, dashboards, tickets).
+
+## Binding force (optional)
+
+When a memory records something the agent must not override lightly, tag how
+firmly it binds. Absent `force`, a memory is a plain fact under the rules below.
+
+- **constraint** — imposed from outside (the user, the environment, a hard
+  requirement). The agent may not relax it on its own — only surface a conflict
+  and let the user decide.
+- **choice** — a decision taken among real alternatives. Revisable, but only with
+  the user's consent, and the memory records what was chosen over what.
+- **conviction** — a stance the agent adopted and will defend. Revisable on
+  evidence, not on preference.
+- **tempered** — a former `constraint` deliberately relaxed. The memory keeps the
+  *why* so the relaxation is not silently re-tightened or re-loosened.
+
+**The Bridge rule.** When new evidence contradicts a memory that carries a
+`force`, never ignore it silently. Revise the file — record the supersession
+inline (the date, what changed, and why) rather than deleting the history. The one
+exception: a `constraint` is not the agent's to overturn — surface the
+contradiction to the user and let them rule, then record their decision (often as
+a `tempered` memory). A memory with no `force` follows the ordinary "delete a
+memory that turns out to be wrong" rule.
 
 ## Rules
 

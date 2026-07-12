@@ -83,6 +83,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     return self._send_json(api_installs(state))
                 if path == "/api/rules":
                     return self._send_json(api_rules(state))
+                if path == "/api/profile":
+                    return self._send_json(api_profile(state))
                 if path == "/api/diff":
                     return self._send_json(api_diff(state))
                 if path == "/api/docs":
@@ -192,6 +194,11 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     res = api_rules_promote(state, self._read_json_body())
                 except NotFound as e:
                     return self._send_json({"error": f"not found: {e}"}, 404)
+                return self._send_json(res, 200 if res.get("ok") else 409)
+            if path == "/api/profile":
+                # Save the whole PROFILE.md; ok=False means the client's fingerprint is
+                # stale (a concurrent edit) — 409, never clobber.
+                res = api_profile_save(state, self._read_json_body())
                 return self._send_json(res, 200 if res.get("ok") else 409)
             if path.startswith("/api/jobs/") and path.endswith("/cancel"):
                 jid = path.split("/")[3]

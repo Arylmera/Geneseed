@@ -4,6 +4,8 @@
   "TAGLINE": "Load the save once; a maxed-out co-op partner spawns in every run.",
   "LOADED_SIGIL": "🎮 Game loaded — rules patched in, party ready. GG.",
   "EPI_LAWS": "The rulebook. No exploits — it holds every run, every map.",
+  "PACT": "The Co-op Pact",
+  "EPI_PACT": "Co-op only works if both players hold their lane — no carrying, no griefing.",
   "EPI_AGENTS": "Pick the right class; don't solo the whole raid.",
   "EPI_SKILLS": "Run the practiced combo before you freestyle.",
   "EPI_MEMORY": "Hit save, or you lose the run on a crash.",

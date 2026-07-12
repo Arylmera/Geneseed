@@ -44,6 +44,15 @@ const NAV = [
     match: (r) => r.view === 'rules',
   },
   {
+    // The user's identity (PROFILE.md) — sits by Rules: Rules are what you must do,
+    // the Profile is who you are. Both files are yours, seeded once and never wiped.
+    hash: '#/profile',
+    id: 'profile',
+    label: 'Profile',
+    icon: 'profile',
+    match: (r) => r.view === 'profile',
+  },
+  {
     hash: '#/skills',
     id: 'skills',
     label: 'Skills',

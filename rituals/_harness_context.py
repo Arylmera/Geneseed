@@ -14,7 +14,7 @@ from _harness_core import *  # noqa: F401,F403  shared stdlib + primitives
 # LAZY_DIRS / EXCLUDE_DIRS) so the Claude hook and the OpenCode plugin discover the
 # SAME docs. Root entry docs are injected in full; doc trees are listed lazily.
 EAGER_ROOT = ("AGENTS.md", "AGENT.md", "CLAUDE.md", ".cursorrules",
-              "README.md", "CONTRIBUTING.md", "user-rules.md")
+              "README.md", "CONTRIBUTING.md", "user-rules.md", "PROFILE.md")
 LAZY_DIRS = ("docs", "doc", "documentation", "architecture", "adr", "ADR")
 EXCLUDE_DIRS = {"node_modules", ".git", "dist", "build", "vendor", ".next",
                 "target", ".venv", "__pycache__", ".opencode", ".harness"}

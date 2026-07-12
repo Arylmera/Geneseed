@@ -21,6 +21,7 @@ import ActivityDetail from './pages/ActivityDetail.jsx'
 import Library from './pages/Library.jsx'
 import Laws from './pages/Laws.jsx'
 import Rules from './pages/Rules.jsx'
+import Profile from './pages/Profile.jsx'
 import Skills from './pages/Skills.jsx'
 import Diff from './pages/Diff.jsx'
 import Doctor from './pages/Doctor.jsx'
@@ -153,6 +154,7 @@ export default function App() {
             )}
             {route.view === 'laws' && <Laws />}
             {route.view === 'rules' && <Rules />}
+            {route.view === 'profile' && <Profile />}
             {route.view === 'skills' && <Skills />}
             {route.view === 'section' &&
               (route.section === 'laws' ? (

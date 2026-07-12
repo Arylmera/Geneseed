@@ -138,6 +138,29 @@ def api_rules(state: WebState) -> dict:
                       "tokens": len(text) // 4, **RULES_BUDGET}}
 
 
+# ---- user profile (PROFILE.md) ---------------------------------------------------
+# The user's identity file beside the deployed AGENT.md — seeded once, never
+# overwritten, sibling to user-rules.md. Unlike rules it has no structure: it is a
+# free-text markdown file the user edits whole, so the Profile page is a plain editor
+# (no per-block splicing). Same fingerprint contract: a concurrent edit 409s.
+
+def _profile_path(state: WebState) -> Path:
+    return state.target / build.PROFILE_FILE
+
+
+def api_profile(state: WebState) -> dict:
+    """The Profile page payload: the raw PROFILE.md text and a content fingerprint the
+    save endpoint requires back, so an agent session editing the same file mid-flight
+    409s instead of being silently clobbered."""
+    import hashlib
+    p = _profile_path(state)
+    if not p.is_file():
+        return {"exists": False, "path": str(p), "text": "", "fingerprint": ""}
+    text = p.read_text(encoding="utf-8", errors="replace")
+    return {"exists": True, "path": str(p), "text": text,
+            "fingerprint": hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]}
+
+
 def _notebook_dir(state: WebState) -> Path:
     return state.target / "notebook"
 

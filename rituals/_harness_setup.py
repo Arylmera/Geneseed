@@ -45,11 +45,13 @@ def _ask_choice(prompt: str, options: list[tuple[str, str]], default: str) -> st
 
 
 def _setup_build_args(theme: str, emit: str, out: str | None = None,
-                      root: str | None = None, footprint: str = "full") -> list[str]:
+                      root: str | None = None, footprint: str = "full",
+                      posture: str = "peer") -> list[str]:
     """The build.py argv for a wizard selection (pure — unit-tested). The global
     emit takes no out/root; the others may. `footprint` adds --footprint only when it
-    departs from build.py's own default ('full'), so existing call sites and the argv
-    stay byte-identical for full installs."""
+    departs from build.py's own default ('full'), and `posture` adds --posture only when
+    it departs from 'peer', so existing call sites and the argv stay byte-identical for
+    default installs."""
     argv = ["--theme", theme, "--emit", emit]
     if emit not in ("opencode-global", "claude-global", "bob-global",
                     "copilot-global"):   # globals take no out/root
@@ -59,6 +61,8 @@ def _setup_build_args(theme: str, emit: str, out: str | None = None,
             argv += ["--root", root]
     if footprint and footprint != "full":
         argv += ["--footprint", footprint]
+    if posture and posture != "peer":
+        argv += ["--posture", posture]
     return argv
 
 
@@ -135,6 +139,50 @@ def _theme_of_dir(d: Path) -> "str | None":
             or _theme_from_agent(d / "AGENTS.md"))
 
 
+# Short blurbs for the setup wizard's posture picker; a posture without one just shows
+# its name. Postures are discovered from src/postures/, so a new one appears with no
+# code change — only an (optional) line here for a friendlier label.
+POSTURE_BLURBS = {
+    "peer": "candid equal — dense, challenges, no flattery (default)",
+    "mentor": "explains the why, checks understanding",
+    "expert": "maximum density, no basics",
+    "assistant": "precise execution, low initiative — you steer",
+    "artisan": "peer with toolsmith reflexes — terminal-first",
+}
+
+
+def _posture_options() -> list[tuple[str, str]]:
+    return [(n, POSTURE_BLURBS.get(n, "")) for n in build.posture_names()]
+
+
+def _default_posture() -> str:
+    if build.CONFIG.exists():
+        try:
+            return json.loads(build.CONFIG.read_text(encoding="utf-8")).get("posture", "peer")
+        except (json.JSONDecodeError, OSError):
+            pass
+    return "peer"
+
+
+def _posture_of_dir(d: Path) -> "str | None":
+    """The posture a deployed harness in `d` was built with, read back from the
+    instructions carrier's `## Posture` section (the inlined body opens with a
+    distinctive `**<Name>**` lead). Content-detected rather than markered — the same
+    approach as the theme sigil fallback — so rebuild-all preserves the posture without
+    a new marker file. Returns None if no carrier or no posture lead is found."""
+    names = build.posture_names()
+    for carrier in ("AGENT.md", "CLAUDE.md", "rules/geneseed.md",
+                    "copilot-instructions.md", "AGENTS.md"):
+        try:
+            text = (d / carrier).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for name in names:
+            if f"**{name.capitalize()}**" in text:
+                return name
+    return None
+
+
 def _footprint_of_dir(d: Path) -> str:
     """The instruction-set footprint a deployed harness in `d` was built with: the
     `.geneseed-footprint` marker if present, else 'full'. Unlike theme, footprint can't
@@ -158,7 +206,7 @@ def _installed_defaults() -> dict:
     from a deployed AGENT.md's sigil and the emit from a global manifest — so installs
     predating the markers are still recognised. Checks the global config dir first
     (the recommended install), then common bundle locations."""
-    found = {"theme": None, "emit": None, "footprint": None}
+    found = {"theme": None, "posture": None, "emit": None, "footprint": None}
     # (base, known_global_emit). Each host's config dir first (OpenCode global is the
     # recommended primary, then Claude, then Bob — every host in build.HOSTS, so a new
     # host can't be forgotten), then common bundle locations (host unknown -> None).
@@ -183,6 +231,8 @@ def _installed_defaults() -> dict:
                         "claude-global" if _manifest_is_claude(base) else "opencode-global")
             if found["theme"] is None:
                 found["theme"] = _theme_of_dir(base)
+            if found["posture"] is None:
+                found["posture"] = _posture_of_dir(base)
             if found["footprint"] is None and (base / ".geneseed-footprint").is_file():
                 found["footprint"] = _footprint_of_dir(base)
         except OSError:
@@ -217,6 +267,7 @@ def _collect_setup_lines() -> "dict | None":
     print("Geneseed setup — answer a few questions; nothing is written until you confirm.")
     inst = _installed_defaults()
     theme = _ask_choice("Theme", _theme_options(), inst["theme"] or _default_theme())
+    posture = _ask_choice("Posture", _posture_options(), inst["posture"] or _default_posture())
     emit = _ask_choice("Install mode", EMIT_OPTIONS, inst["emit"] or "opencode-global")
     footprint = _ask_choice("Footprint", [(k, d) for k, d in FOOTPRINT_OPTIONS],
                             inst["footprint"] or "full")
@@ -230,10 +281,11 @@ def _collect_setup_lines() -> "dict | None":
     elif emit == "files":
         out = _ask("Output dir for the bundle", "Harness")
     print("\nAbout to run:  python build.py "
-          + " ".join(_setup_build_args(theme, emit, out, root, footprint)))
+          + " ".join(_setup_build_args(theme, emit, out, root, footprint, posture)))
     if not _confirm("Proceed?", True):
         return None
-    return {"theme": theme, "emit": emit, "out": out, "root": root, "footprint": footprint}
+    return {"theme": theme, "posture": posture, "emit": emit, "out": out,
+            "root": root, "footprint": footprint}
 
 
 def _java_major_ok(version_output: str, minimum: int = 21) -> bool:
@@ -308,6 +360,7 @@ def _setup_lines() -> int:
         return 0
     theme, emit, out, root = sel["theme"], sel["emit"], sel.get("out"), sel.get("root")
     footprint = sel.get("footprint", "full")
+    posture = sel.get("posture", "peer")
     if emit == "opencode-global":
         # The build below overwrites the deployed global harness; the self-improvement
         # loops may have edited it in place. Preserve that drift first.
@@ -318,7 +371,7 @@ def _setup_lines() -> int:
                 print("  (hand that file to your agent to back-port them into src/)")
         except Exception as e:
             print(f"! could not export local edits ({e}) — continuing.")
-    argv = _setup_build_args(theme, emit, out, root, footprint)
+    argv = _setup_build_args(theme, emit, out, root, footprint, posture)
     print("Running:  python build.py " + " ".join(argv))
     rc = run([sys.executable, str(BUILD), *argv]).returncode
     if rc != 0:

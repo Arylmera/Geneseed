@@ -244,12 +244,43 @@ STRUCTURE = {
 }
 
 
+# The active posture — the relationship register inlined into AGENT.md's Posture
+# section. A build-wide selection (like SRC/THEMES), set by build.py from --posture so
+# it need not thread through every emit signature; effective_theme reads it. Default
+# 'peer'. Posture is orthogonal to theme: theme = voice, posture = relationship.
+POSTURE = "peer"
+
+
+def posture_names() -> list[str]:
+    """Discovered posture names (src/postures/*.md, minus README), 'peer' first — the
+    single source for the CLI choices and the wizard picker, so a new posture file
+    appears everywhere with no code change."""
+    names = sorted(p.stem for p in (SRC / "postures").glob("*.md")
+                   if p.stem.lower() != "readme")
+    names.sort(key=lambda n: (n != "peer", n))
+    return names or ["peer"]
+
+
+def _posture_body(theme: dict) -> str:
+    """The rendered body of the selected posture (src/postures/<POSTURE>.md), for
+    AGENT.md's {{POSTURE_BODY}} token. Falls back to 'peer', then to empty, so a bad
+    --posture degrades to the default rather than breaking the build. Rendered through
+    the theme so a posture may use themed tokens ({{LAW}}, {{PACT}}, ...)."""
+    for name in (POSTURE, "peer"):
+        path = SRC / "postures" / f"{name}.md"
+        if path.is_file():
+            return substitute(path.read_text(encoding="utf-8"), theme).strip()
+    return ""
+
+
 def effective_theme(theme_name: str) -> dict:
     """The token map used to render: the chosen theme's VOICE + VOCABULARY with the fixed
     neutral STRUCTURE laid on top (structure wins, so a theme can never change a section
     layout, the harness name, a folder name, or a law number — only the prose words and
     the agent's tone)."""
-    return {**load_theme(theme_name), **STRUCTURE}
+    theme = {**load_theme(theme_name), **STRUCTURE}
+    theme["POSTURE_BODY"] = _posture_body(theme)
+    return theme
 
 # Dirs the build fully owns: wiped and regenerated each run so a renamed/removed
 # source file never leaves a stale copy behind. `memory` and `notebook` are
@@ -380,6 +411,54 @@ def ensure_rules_stub(out: Path) -> None:
     dest = out / RULES_FILE
     if not dest.exists():
         dest.write_text(RULES_STUB, encoding="utf-8")
+
+
+# The user's profile — identity, seeded once beside AGENT.md, never overwritten, the
+# same host-state contract as user-rules.md. Its sibling holds *rules* (what the agent
+# must do); this holds *who the user is* (role, habits, how they like to be worked
+# with). Kept deliberately separate so the two never blur: a preference here never
+# binds the way a rule in user-rules.md does. Ported from Tekton's Eikōn. Plain, not
+# themed — matches user-rules.md's stub, and keeps the parity surface to zero tokens.
+PROFILE_FILE = "PROFILE.md"
+
+PROFILE_STUB = """\
+# Your profile
+
+Who you are and how you like to work — so the agent can meet you where you are
+instead of guessing. Every section is optional; delete what you don't want to
+share, add what you do. Geneseed seeded this file once and will never overwrite
+it, so it survives updates, reinstalls, and theme switches.
+
+This is *identity, not rules*. A standing rule the agent must obey belongs in
+`user-rules.md` (AGENT.md §1); this file only colours how the agent works — tone,
+depth, defaults. Where the two ever seem to conflict, the rule wins: precedence
+is laws, then user-rules, then this profile.
+
+## Who I am
+
+Role, domains you know deeply, domains you're learning. What you're usually here
+to do.
+
+## How I work
+
+Habits, tools, and environment worth knowing — your stack, your shell, the
+conventions you hold to, the things that reliably annoy you.
+
+## Register preferences
+
+How you like answers pitched: terse or expansive, teach-me or just-do-it, how
+much pushback you want, which language(s) you think in.
+"""
+
+
+def ensure_profile_stub(out: Path) -> None:
+    """Drop the `PROFILE.md` stub beside AGENT.md the first time only — never overwrite
+    it, never record it in an owned-manifest. Same user-owned contract as
+    `ensure_rules_stub` / `ensure_wiki_stub`: it holds the user's own identity, which an
+    update must never destroy."""
+    dest = out / PROFILE_FILE
+    if not dest.exists():
+        dest.write_text(PROFILE_STUB, encoding="utf-8")
 
 
 # Bundle-level ignore so a host repo can COMMIT the rendered harness — AGENT.md, the
@@ -693,6 +772,7 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
     ensure_context_stub(out)
     ensure_wiki_stub(out)
     ensure_rules_stub(out)
+    ensure_profile_stub(out)
     ensure_bundle_gitignore(out)
     ensure_memory_index(out / theme.get(SRC_DIR_TOKENS["memory"], "memory"))
     ensure_notebook_index(out / theme.get(SRC_DIR_TOKENS["notebook"], "notebook"))
