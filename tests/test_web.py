@@ -1120,6 +1120,52 @@ class HarnessFilterTests(unittest.TestCase):
             self.assertIn("example", out, hn)
             self.assertEqual(out.count("```"), 2, hn)
 
+    def test_every_plugin_ships_a_docs_page_and_overview_bullet(self):
+        # Anti-drift: a new adapters/opencode/plugins/geneseed-<name>.js must
+        # ship its own docs page (plugin-<name>), a bullet on the plugins
+        # overview, and a mention in the README + SHIPPED.md rows — this is
+        # how "six plugins" went stale when activity landed.
+        import re
+        plugin_dir = web.ROOT / "adapters" / "opencode" / "plugins"
+        names = sorted(p.stem.removeprefix("geneseed-")
+                       for p in plugin_dir.glob("geneseed-*.js"))
+        self.assertTrue(names, "no plugins found — wrong directory?")
+        page_ids = {p["id"] for g in web.DOC_GROUPS for p in g["pages"]}
+        overview = web._find_doc_page("plugins")["body"]
+        readme = (web.ROOT / "README.md").read_text(encoding="utf-8")
+        shipped = (web.ROOT / "SHIPPED.md").read_text(encoding="utf-8")
+        row = re.search(r"plugins \(([^)]*)\)", shipped)
+        self.assertIsNotNone(row, "SHIPPED.md lost its plugins (…) list")
+        shipped_names = {s.strip() for s in row.group(1).split(",")}
+        for name in names:
+            with self.subTest(plugin=name):
+                self.assertIn(f"plugin-{name}", page_ids,
+                              f"geneseed-{name}.js has no docs page")
+                self.assertIn(f"geneseed-{name}", overview,
+                              f"geneseed-{name} missing from the overview list")
+                self.assertIn(f"geneseed-{name}", readme,
+                              f"geneseed-{name} missing from the README plugins row")
+                self.assertIn(name, shipped_names,
+                              f"'{name}' missing from the SHIPPED.md plugins list")
+        self.assertEqual(shipped_names, set(names),
+                         "SHIPPED.md plugins list out of sync with adapters/opencode/plugins/")
+
+    def test_concept_counts_are_substituted_live(self):
+        # Anti-drift: counts in concept prose are {N_*} placeholders resolved
+        # from the same inventory the rail uses — never hardcoded numbers.
+        # A typo'd placeholder would leak "{N_" into the rendered body.
+        inv = self.state.inventory
+        for hn in ("opencode", "claude"):
+            for g in web.api_docs(self.state, hn)["groups"]:
+                for p in g["pages"]:
+                    body = web.api_docs_page(self.state, p["id"], hn).get("body") or ""
+                    with self.subTest(harness=hn, page=p["id"]):
+                        self.assertNotIn("{N_", body)
+        skills = web.api_docs_page(self.state, "skills", "opencode")["body"]
+        self.assertIn(str(len(inv["skills"])), skills)
+        rules = web.api_docs_page(self.state, "rules", "opencode")["body"]
+        self.assertIn(str(len(inv["laws"])), rules)
+
     def test_no_cross_harness_dead_links(self):
         # Invariant: every `#/docs/<id>` link in a VISIBLE page resolves to a
         # page visible under the SAME harness — no link dead-ends after filtering.

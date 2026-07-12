@@ -94,6 +94,7 @@ describe('Harnesses', () => {
       path: 'C:/.claude',
       theme: 'imperial',
       footprint: 'full',
+      posture: 'peer',
     })
   })
 

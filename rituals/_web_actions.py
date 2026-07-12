@@ -375,8 +375,11 @@ def api_installs(state: WebState) -> dict:
                     # Footprint marker lands at the install root (== build --out) for every
                     # emit — same dir theme reads from, so detect it the same way.
                     "footprint": harness._footprint_of_dir(root),   # 'full' when no marker
+                    "posture": harness._posture_of_dir(root),   # the install's register (None if absent)
                     "selected": _view_cfg(host, scope, root).resolve() == cur})
-    return {"installs": out}
+    # `postures` lets the Harnesses page render the per-row register picker without a
+    # second call — discovered from src/, so a new posture appears with no UI change.
+    return {"installs": out, "postures": build.posture_names()}
 
 
 def _view_cfg(host: str, scope: str, root) -> Path:
@@ -449,8 +452,12 @@ def api_install_cmd(state: WebState, body: dict) -> dict:
     # silently flips footprint, and a bogus body value can't reach the argv.
     fp = body.get("footprint")
     fp = fp if fp in ("lean", "full") else harness._footprint_of_dir(root)
+    # Posture: same rule — a valid picked register wins, else keep the install's own, so a
+    # re-theme never resets the register and a bogus body value can't reach the argv.
+    pos = body.get("posture")
+    pos = pos if pos in build.posture_names() else (harness._posture_of_dir(root) or "peer")
     out = None if scope == "global" else str(root)
-    argv = harness._setup_build_args(theme or "neutral", emit, out, out, fp)
+    argv = harness._setup_build_args(theme or "neutral", emit, out, out, fp, pos)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 
 
@@ -494,8 +501,10 @@ def api_deploy_cmd(state: WebState, body: dict) -> dict:
     theme = body.get("theme") if body.get("theme") in themes else state.theme
     fp = body.get("footprint")
     fp = fp if fp in ("lean", "full") else "full"   # a fresh deploy defaults to full
+    pos = body.get("posture")
+    pos = pos if pos in build.posture_names() else "peer"   # a fresh deploy defaults to peer
     emit = host   # project-scope emit name == host name (opencode / claude / bob / copilot)
-    argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root), fp)
+    argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root), fp, pos)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 
 
