@@ -169,6 +169,25 @@ def api_rules_mutate(state: WebState, body: dict) -> dict:
             "fingerprint": _rules_fingerprint(new)}
 
 
+def api_profile_save(state: WebState, body: dict) -> dict:
+    """Save the whole PROFILE.md from the editor. Fingerprint-guarded like the rules
+    endpoint: a stale write (an agent edited the file since the client loaded it) 409s
+    and re-fetches, never clobbers. Creates the file if the user deleted the seed."""
+    import hashlib
+    p = _profile_path(state)
+    cur = p.read_text(encoding="utf-8", errors="replace") if p.is_file() else ""
+    cur_fp = hashlib.sha256(cur.encode("utf-8")).hexdigest()[:16] if cur else ""
+    if body.get("fingerprint", "") != cur_fp:
+        return {"ok": False, "error": "conflict",
+                "detail": "PROFILE.md changed since you loaded it — reloading"}
+    new = str(body.get("text") or "")
+    if new and not new.endswith("\n"):
+        new += "\n"
+    p.write_text(new, encoding="utf-8")
+    return {"ok": True, "path": str(p),
+            "fingerprint": hashlib.sha256(new.encode("utf-8")).hexdigest()[:16] if new else ""}
+
+
 def api_rules_promote(state: WebState, body: dict) -> dict:
     """Promote one memory fact into a trial rule: append it to user-rules.md with
     provenance and a month of probation, then (opt-in) delete the source memory so
