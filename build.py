@@ -283,17 +283,24 @@ def main() -> None:
             except (ValueError, OSError):
                 pass
     default_theme = "neutral"
+    default_posture = "peer"
     if CONFIG.exists():
         # A truncated/corrupt config must not brick the CLI — fall back to neutral.
         try:
             data = json.loads(CONFIG.read_text(encoding="utf-8"))
-            default_theme = data.get("theme", "neutral") if isinstance(data, dict) else "neutral"
+            if isinstance(data, dict):
+                default_theme = data.get("theme", "neutral")
+                default_posture = data.get("posture", "peer")
         except (OSError, json.JSONDecodeError):
             print(f"[geneseed] WARN: {CONFIG.name} is unreadable — using theme 'neutral'.",
                   file=sys.stderr)
 
     ap = argparse.ArgumentParser(description="Render the Geneseed harness for a theme.")
     ap.add_argument("--theme", default=default_theme, help="theme name (neutral, imperial, ...)")
+    ap.add_argument("--posture", default=default_posture, choices=posture_names(),
+                    help="collaboration register inlined into AGENT.md (peer, mentor, "
+                         "expert, assistant, artisan). Orthogonal to --theme; default "
+                         "'peer' or the value stored in harness.config.json.")
     ap.add_argument("--out", "--target", dest="out", default="Harness",
                     help="output directory — absolute, or relative to the current "
                          "directory (default: ./Harness)")
@@ -347,6 +354,10 @@ def main() -> None:
                     help="with --validate-only, list full file paths instead of just "
                          "per-layer counts.")
     args = ap.parse_args()
+    # Posture is a build-wide selection read by _build_render.effective_theme (like
+    # SRC/THEMES), not threaded through every emit signature. Set it on the facade so
+    # it mirrors into every submodule before any render runs.
+    _build_render.POSTURE = args.posture
 
     if args.sync_themes:
         # Non-zero when files were CHANGED (0 == already in sync), so CI can run

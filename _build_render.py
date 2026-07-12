@@ -244,12 +244,43 @@ STRUCTURE = {
 }
 
 
+# The active posture — the relationship register inlined into AGENT.md's Posture
+# section. A build-wide selection (like SRC/THEMES), set by build.py from --posture so
+# it need not thread through every emit signature; effective_theme reads it. Default
+# 'peer'. Posture is orthogonal to theme: theme = voice, posture = relationship.
+POSTURE = "peer"
+
+
+def posture_names() -> list[str]:
+    """Discovered posture names (src/postures/*.md, minus README), 'peer' first — the
+    single source for the CLI choices and the wizard picker, so a new posture file
+    appears everywhere with no code change."""
+    names = sorted(p.stem for p in (SRC / "postures").glob("*.md")
+                   if p.stem.lower() != "readme")
+    names.sort(key=lambda n: (n != "peer", n))
+    return names or ["peer"]
+
+
+def _posture_body(theme: dict) -> str:
+    """The rendered body of the selected posture (src/postures/<POSTURE>.md), for
+    AGENT.md's {{POSTURE_BODY}} token. Falls back to 'peer', then to empty, so a bad
+    --posture degrades to the default rather than breaking the build. Rendered through
+    the theme so a posture may use themed tokens ({{LAW}}, {{PACT}}, ...)."""
+    for name in (POSTURE, "peer"):
+        path = SRC / "postures" / f"{name}.md"
+        if path.is_file():
+            return substitute(path.read_text(encoding="utf-8"), theme).strip()
+    return ""
+
+
 def effective_theme(theme_name: str) -> dict:
     """The token map used to render: the chosen theme's VOICE + VOCABULARY with the fixed
     neutral STRUCTURE laid on top (structure wins, so a theme can never change a section
     layout, the harness name, a folder name, or a law number — only the prose words and
     the agent's tone)."""
-    return {**load_theme(theme_name), **STRUCTURE}
+    theme = {**load_theme(theme_name), **STRUCTURE}
+    theme["POSTURE_BODY"] = _posture_body(theme)
+    return theme
 
 # Dirs the build fully owns: wiped and regenerated each run so a renamed/removed
 # source file never leaves a stale copy behind. `memory` and `notebook` are

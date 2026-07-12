@@ -164,6 +164,40 @@ class BuildRoundTripTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_posture_default_peer_is_inlined(self):
+        """With no --posture, AGENT.md's Posture section carries the peer body."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp)
+            agent = (tmp / "AGENT.md").read_text(encoding="utf-8")
+            self.assertIn("## Posture", agent)
+            self.assertIn("**Peer**", agent)
+            self.assertNotIn("**Expert**", agent)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_posture_selection_switches_the_inlined_body(self):
+        """Setting the build-wide POSTURE inlines that posture instead of peer."""
+        tmp = Path(tempfile.mkdtemp())
+        old = build.POSTURE
+        try:
+            build.POSTURE = "expert"          # facade mirrors into _build_render
+            build.build("neutral", tmp)
+            agent = (tmp / "AGENT.md").read_text(encoding="utf-8")
+            self.assertIn("**Expert**", agent)
+            self.assertNotIn("**Peer**", agent)
+            # The full catalogue always ships regardless of the active posture.
+            self.assertTrue((tmp / "postures" / "peer.md").is_file())
+        finally:
+            build.POSTURE = old
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_posture_names_discovers_files_peer_first(self):
+        names = build.posture_names()
+        self.assertEqual(names[0], "peer")            # default sorts first
+        self.assertIn("expert", names)
+        self.assertNotIn("README", names)             # README is not a posture
+
     def test_profile_is_seeded_once_and_preserved(self):
         """PROFILE.md holds the user's own identity: seeded once beside AGENT.md,
         never overwritten (same contract as wiki.jsonc / user-rules.md). It is
