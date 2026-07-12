@@ -164,6 +164,23 @@ class BuildRoundTripTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_profile_is_seeded_once_and_preserved(self):
+        """PROFILE.md holds the user's own identity: seeded once beside AGENT.md,
+        never overwritten (same contract as wiki.jsonc / user-rules.md). It is
+        identity, not rules — the stub must point rules at user-rules.md."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp)
+            prof = tmp / "PROFILE.md"
+            self.assertTrue(prof.is_file())
+            self.assertIn("user-rules.md", prof.read_text(encoding="utf-8"))
+            mine = "# Your profile\n\nI am the test user.\n"
+            prof.write_text(mine, encoding="utf-8")
+            build.build("neutral", tmp)   # rebuild over the same dir
+            self.assertEqual(prof.read_text(encoding="utf-8"), mine)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_notebook_is_preserved_across_rebuild(self):
         """The notebook is the agent's own store: NOT an owned dir, seeded once.
         A rebuild must never wipe the index or any file the agent kept there."""

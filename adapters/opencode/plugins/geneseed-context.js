@@ -110,7 +110,7 @@ function log(msg) { if (DEBUG) console.error(`[geneseed-context] ${msg}`) }
 // Root-level files injected in full. Agent-directed rules + canonical entry docs.
 const EAGER_ROOT = new Set([
   "AGENTS.md", "AGENT.md", "CLAUDE.md", ".cursorrules",
-  "README.md", "CONTRIBUTING.md", "user-rules.md",
+  "README.md", "CONTRIBUTING.md", "user-rules.md", "PROFILE.md",
 ])
 // Doc trees walked recursively; everything found is lazy (listed, not injected).
 const LAZY_DIRS = ["docs", "doc", "documentation", "architecture", "adr", "ADR"]

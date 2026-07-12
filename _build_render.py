@@ -382,6 +382,54 @@ def ensure_rules_stub(out: Path) -> None:
         dest.write_text(RULES_STUB, encoding="utf-8")
 
 
+# The user's profile — identity, seeded once beside AGENT.md, never overwritten, the
+# same host-state contract as user-rules.md. Its sibling holds *rules* (what the agent
+# must do); this holds *who the user is* (role, habits, how they like to be worked
+# with). Kept deliberately separate so the two never blur: a preference here never
+# binds the way a rule in user-rules.md does. Ported from Tekton's Eikōn. Plain, not
+# themed — matches user-rules.md's stub, and keeps the parity surface to zero tokens.
+PROFILE_FILE = "PROFILE.md"
+
+PROFILE_STUB = """\
+# Your profile
+
+Who you are and how you like to work — so the agent can meet you where you are
+instead of guessing. Every section is optional; delete what you don't want to
+share, add what you do. Geneseed seeded this file once and will never overwrite
+it, so it survives updates, reinstalls, and theme switches.
+
+This is *identity, not rules*. A standing rule the agent must obey belongs in
+`user-rules.md` (AGENT.md §1); this file only colours how the agent works — tone,
+depth, defaults. Where the two ever seem to conflict, the rule wins: precedence
+is laws, then user-rules, then this profile.
+
+## Who I am
+
+Role, domains you know deeply, domains you're learning. What you're usually here
+to do.
+
+## How I work
+
+Habits, tools, and environment worth knowing — your stack, your shell, the
+conventions you hold to, the things that reliably annoy you.
+
+## Register preferences
+
+How you like answers pitched: terse or expansive, teach-me or just-do-it, how
+much pushback you want, which language(s) you think in.
+"""
+
+
+def ensure_profile_stub(out: Path) -> None:
+    """Drop the `PROFILE.md` stub beside AGENT.md the first time only — never overwrite
+    it, never record it in an owned-manifest. Same user-owned contract as
+    `ensure_rules_stub` / `ensure_wiki_stub`: it holds the user's own identity, which an
+    update must never destroy."""
+    dest = out / PROFILE_FILE
+    if not dest.exists():
+        dest.write_text(PROFILE_STUB, encoding="utf-8")
+
+
 # Bundle-level ignore so a host repo can COMMIT the rendered harness — AGENT.md, the
 # laws, agents, and skills are content worth versioning — while keeping only the
 # host-specific / personal files out. (Note: inline `#` comments are not valid in
@@ -693,6 +741,7 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
     ensure_context_stub(out)
     ensure_wiki_stub(out)
     ensure_rules_stub(out)
+    ensure_profile_stub(out)
     ensure_bundle_gitignore(out)
     ensure_memory_index(out / theme.get(SRC_DIR_TOKENS["memory"], "memory"))
     ensure_notebook_index(out / theme.get(SRC_DIR_TOKENS["notebook"], "notebook"))
