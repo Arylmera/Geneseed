@@ -318,7 +318,9 @@ DOC_GROUPS = [
             "**assistant** (precise, low-initiative), **artisan** (peer with "
             "toolsmith reflexes). Posture is orthogonal to theme: theme is "
             "the *voice*, posture is the *relationship*. Change it in the "
-            "setup wizard or with `build.py --posture <name>`.\n\n"
+            "setup wizard, from the **Harnesses** page here (the per-install "
+            "posture dropdown, next to voice and footprint), or with "
+            "`build.py --posture <name>`. A rebuild or re-theme preserves it.\n\n"
             "### The Pact — a two-way contract\n\n"
             "Where the Laws bind the agent, the **Pact** binds the "
             "collaboration. It holds three co-equal protections (you, the "
@@ -820,6 +822,7 @@ class WebState:
         # harness in place (e.g. opencode-global) rather than a bare source render.
         self.emit = harness._installed_defaults().get("emit") or "opencode-global"
         self.footprint = harness._footprint_of_dir(self.target)   # 'full' when no marker
+        self.posture = harness._posture_of_dir(self.target) or "peer"   # detected register
         self._inv = None
         self._doctor = None
 
@@ -872,6 +875,7 @@ class WebState:
                       or harness._theme_of_dir(self.target) or "neutral")
         self.emit = self._detect_emit()
         self.footprint = harness._footprint_of_dir(self.root)
+        self.posture = harness._posture_of_dir(self.root) or "peer"
         self._inv = None
         self._doctor = None
 
@@ -885,6 +889,7 @@ class WebState:
                       or harness._theme_of_dir(self.target) or self.theme)
         self.emit = self._detect_emit() or self.emit
         self.footprint = harness._footprint_of_dir(self.root)
+        self.posture = harness._posture_of_dir(self.root) or "peer"
 
 
 def _deployed(state: WebState) -> bool:

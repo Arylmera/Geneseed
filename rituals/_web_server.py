@@ -268,10 +268,12 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     theme, emit = _build_override(state, body)
                 else:
                     theme, emit = state.theme, state.emit
-                # Footprint follows the current install (the build action never changes
-                # it — the per-harness dropdown + install action own that), so a re-theme
-                # or rebuild preserves lean/full rather than reverting to the default.
-                cmds = action_commands(action, theme=theme, emit=emit, footprint=state.footprint)
+                # Footprint and posture follow the current install (the build action never
+                # changes them — the per-harness dropdowns + install action own that), so a
+                # re-theme or rebuild preserves lean/full and the register rather than
+                # reverting to the defaults.
+                cmds = action_commands(action, theme=theme, emit=emit,
+                                       footprint=state.footprint, posture=state.posture)
                 if not cmds:
                     return self._send_json({"error": f"unknown action {action}"}, 404)
                 # Refresh when the job FINISHES — a Build may re-theme the
