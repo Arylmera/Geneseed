@@ -461,6 +461,30 @@ def ensure_profile_stub(out: Path) -> None:
         dest.write_text(PROFILE_STUB, encoding="utf-8")
 
 
+# Folders where the GLOBAL installs go dormant (sovereign repos — e.g. a vault that
+# is its own complete agent harness). Seeded once beside AGENT.md, user-owned, never
+# in an owned-manifest — the same contract as wiki.jsonc. The hooks read this file on
+# every invocation, so edits take effect immediately with no re-emit. Managed by
+# `harness exclude`, safe to edit by hand.
+EXCLUDES_FILE = "excludes.json"
+
+EXCLUDES_STUB = """\
+{
+  "_comment": "Folders where this global Geneseed install goes dormant (hooks silent, preamble suppressed). Managed by `harness exclude add|remove|list`; safe to edit by hand. Paths are absolute.",
+  "excludes": []
+}
+"""
+
+
+def ensure_excludes_stub(out: Path) -> None:
+    """Drop the `excludes.json` stub beside AGENT.md the first time only — NEVER
+    overwrite it (it holds the user's own exclusion list; see `sovereign_bypass`
+    in rituals/_harness_context.py, the runtime consumer)."""
+    dest = out / EXCLUDES_FILE
+    if not dest.exists():
+        dest.write_text(EXCLUDES_STUB, encoding="utf-8")
+
+
 # Bundle-level ignore so a host repo can COMMIT the rendered harness — AGENT.md, the
 # laws, agents, and skills are content worth versioning — while keeping only the
 # host-specific / personal files out. (Note: inline `#` comments are not valid in
