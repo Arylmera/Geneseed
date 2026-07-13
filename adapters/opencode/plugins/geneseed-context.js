@@ -59,6 +59,29 @@ import { fileURLToPath } from "node:url"
 const MARKER = "<!-- geneseed-context:v2 -->"
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
+// Sovereign-repo bypass — twin of sovereign_bypass() in rituals/_harness_context.py.
+// <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
+// this GLOBAL install goes dormant. Any error degrades to "not excluded".
+const norm = (p) => {
+  let s = path.resolve(String(p))
+  return process.platform === "win32" ? s.toLowerCase() : s
+}
+async function sovereignBypass(cwd) {
+  try {
+    const cfg = path.dirname(PLUGIN_DIR)           // plugins/ sits directly in <cfg>
+    const raw = await fs.readFile(path.join(cfg, "excludes.json"), "utf8")
+    const entries = (JSON.parse(raw).excludes) || []
+    const here = norm(cwd || process.cwd())
+    for (const e of entries) {
+      const p = typeof e === "string" ? e : e && e.path
+      if (typeof p !== "string" || !p.trim()) continue
+      const base = norm(p.trim()).replace(/[\\/]+$/, "")
+      if (here === base || here.startsWith(base + path.sep)) return true
+    }
+  } catch { /* degrade to active */ }
+  return false
+}
+
 // ---- tunable budgets (env-overridable) -------------------------------------
 // Garbage in the env var must fall back to the default, not poison the budget as
 // NaN — every `>` comparison against NaN is false, which silently DISABLES the
@@ -766,6 +789,7 @@ export const GeneseedContext = async (ctx) => {
   return {
     event: async ({ event }) => {
       if (!event || INJECT_OFF) return
+      if (await sovereignBypass(root)) return
       const sid =
         event.properties?.sessionID ?? event.payload?.sessionID ??
         event.properties?.info?.id ?? event.payload?.info?.id
@@ -794,6 +818,7 @@ export const GeneseedContext = async (ctx) => {
     // OpenCode hook; if it is absent in a build this key is simply never called.
     "experimental.session.compacting": async (_input, output) => {
       if (INJECT_OFF || (TRANSFORM && !fallbackVisible)) return
+      if (await sovereignBypass(root)) return
       try {
         const { block } = await resolveBlock(root)
         if (block && output && Array.isArray(output.context)) {
@@ -813,6 +838,7 @@ export const GeneseedContext = async (ctx) => {
     "experimental.chat.messages.transform": async (_input, output) => {
       transformSeen = true                  // the hook exists on this build
       if (INJECT_OFF || !TRANSFORM || fallbackVisible) return
+      if (await sovereignBypass(root)) return
       try {
         if (!output || !Array.isArray(output.messages) || !output.messages.length) return
         const sid = output.messages[0]?.info?.sessionID
