@@ -11,7 +11,10 @@
 3. Pass 1 — correctness: logic errors, edge cases, error handling, race
    conditions. Verify suspect behaviour by running tests, not by assuming.
 4. Pass 2 — quality: duplication, naming, dead code, units that do too much.
-5. Write each finding as `file:line — problem — fix`, correctness first.
+5. Pass 3 — spec fidelity: compare the diff against the task or issue from
+   step 1; flag anything asked for but missing, and anything present that was
+   never asked for. No spec available → say so and skip the pass.
+6. Write each finding as `file:line — problem — fix`, correctness first.
 
 ## Done when
 - Findings are reported with a clear verdict: ship / fix-then-ship / block.

@@ -29,15 +29,22 @@ finding *when/why* something changed without altering history, use git-archaeolo
    - *Stranded changes:* `git stash list` → `git stash apply <ref>`; recover dropped
      stashes via their reflog SHA.
    - *Uncommitted file clobbered:* `git restore --source=<sha> <path>`.
-4. For a **deliberate rewrite** (interactive rebase, squash, fixup, amend): work on a
+4. Resolving conflict hunks: find the primary sources for each side — commit
+   messages, PRs, original issues — and understand why each change was made.
+   Preserve both intents where possible; where incompatible, pick the one
+   matching the merge's stated goal and note the trade-off. Never invent new
+   behaviour in a resolution, and never `--abort` your way out. Before
+   concluding, run the project's checks (typecheck, tests, format) and fix
+   what the merge broke.
+5. For a **deliberate rewrite** (interactive rebase, squash, fixup, amend): work on a
    dedicated branch, never a shared one, and keep it the only change in flight
    (universal {{LAW}} II). A rewrite *creates commits* — amend, squash, `--continue`
    all do — so present what will change and get the user's acceptance before running
    it, exactly as for any commit (universal {{LAW}} XX).
-5. Verify the result before declaring success: inspect `git log --oneline`,
+6. Verify the result before declaring success: inspect `git log --oneline`,
    `git status`, and the diff against the intended state — read the actual output, do
    not assume the rewrite landed as planned (universal {{LAW}} III).
-6. Push only with the user's explicit, per-push consent — and a history rewrite needs a
+7. Push only with the user's explicit, per-push consent — and a history rewrite needs a
    **force**-push (`--force-with-lease`), which is doubly outward-facing: present what
    changed and wait for acceptance before pushing (universal {{LAW}} XX / {{LAW}} IV).
    Never force-push a shared branch without confirming it is safe to do so.
