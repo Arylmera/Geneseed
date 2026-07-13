@@ -43,6 +43,7 @@
   "DESC_CODEBASE_DESIGN": "Design deep modules — a lot of behaviour behind a small interface, seam placed on purpose, not farmed by accident.",
   "DESC_DOMAIN_MODELING": "Keep the domain glossary alive in CONTEXT.md, and log every structural call as an ADR entry.",
   "DESC_WAYFINDER": "Chart a quest too big for one run as a shared map of decision tickets, cleared one at a time until the fog lifts.",
+  "DESC_TICKETS": "Split a spec into tracer-bullet tickets with explicit blocking edges, each sized for one fresh session.",
   "DESC_ROAST_ME": "Hard-mode review of any work — blunt, exact, always actionable.",
   "DESC_FRESH_EYES": "Drop in a fresh-spawn reviewer with no save data — just the original quest and the finished build; it sets the clear conditions blind, then rules whether you actually beat it, no carry-over hype from the player.",
   "ROAST_PERSONA": "a no-mercy speedrun coach who has watched this exact mistake wipe the run",

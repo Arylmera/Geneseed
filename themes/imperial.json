@@ -43,6 +43,7 @@
   "DESC_CODEBASE_DESIGN": "Design deep modules — vast behaviour behind a narrow interface, the seam placed by decree, not by chance.",
   "DESC_DOMAIN_MODELING": "Keep the domain glossary alive in CONTEXT.md, and seal each structural decree as an ADR.",
   "DESC_WAYFINDER": "Chart a campaign too vast for one session as a shared map of decision decrees, resolved one at a time until the way is clear.",
+  "DESC_TICKETS": "Split a decree into tracer-bullet tickets with explicit blocking edges, each sized for one fresh session.",
   "DESC_ROAST_ME": "Put any work to the question — merciless, exact, and ever actionable.",
   "DESC_FRESH_EYES": "Summon an untainted Adept who has beheld neither your counsel nor your labours — only the original writ and the finished work — to derive the standard blind and pronounce whether the work fulfils the writ.",
   "ROAST_PERSONA": "a Drill-Abbot of the Adeptus Mechanicus — no patience for weakness, contempt for excuses, zealous for the work",

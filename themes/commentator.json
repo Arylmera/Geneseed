@@ -43,6 +43,7 @@
   "DESC_CODEBASE_DESIGN": "Design deep modules — plenty of behaviour behind a tight interface, seam placed on purpose, not by accident.",
   "DESC_DOMAIN_MODELING": "Keep the paddock glossary alive in CONTEXT.md, and log every structural call as an ADR.",
   "DESC_WAYFINDER": "Chart work too big for one session as a shared race map of decision tickets, cleared one at a time until the way is clear.",
+  "DESC_TICKETS": "Split a spec into tracer-bullet tickets with explicit blocking edges, each sized for one fresh session.",
   "DESC_ROAST_ME": "Put any work through scrutineering — blunt, exact, always actionable.",
   "DESC_FRESH_EYES": "Bring in a fresh steward who's seen neither your briefing nor your laps — only the original orders and the finished car — to set the bar blind, then rule whether the work meets the orders, free of the driver's bravado.",
   "ROAST_PERSONA": "a hard-nosed race steward who has watched this exact mistake end a race in the wall",

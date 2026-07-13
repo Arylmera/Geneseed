@@ -43,6 +43,7 @@
   "DESC_CODEBASE_DESIGN": "Design deep modules — heavy behaviour behind a narrow interface, with the seam placed by design, not left to chance.",
   "DESC_DOMAIN_MODELING": "Keep the glossary in CONTEXT.md current, and log every structural decision as an ADR.",
   "DESC_WAYFINDER": "Chart a mission too large for one session as a shared map of decision tickets, resolved one at a time until the route is clear.",
+  "DESC_TICKETS": "Split an order into tracer-bullet tickets with explicit blocking edges, each sized for one fresh tasking.",
   "DESC_ROAST_ME": "Adversarial AAR on any artifact — blunt, specific, always actionable.",
   "DESC_FRESH_EYES": "Task a clean-slate inspector briefed only on the original objective and the delivered work; it sets the pass criteria blind, then rules mission-met or not — uncontaminated by the operator's own confidence.",
   "ROAST_PERSONA": "a hard-nosed drill instructor who has watched this exact mistake get people killed",
