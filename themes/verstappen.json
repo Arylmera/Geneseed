@@ -44,6 +44,7 @@
   "DESC_DOMAIN_MODELING": "Keep the glossary in CONTEXT.md current, and log every structural call as an ADR, box by box.",
   "DESC_WAYFINDER": "Chart work too big for one stint as a shared map of decision tickets, resolved one at a time until the track's clear.",
   "DESC_TICKETS": "Split a spec into tracer-bullet tickets with explicit blocking edges, each sized for one fresh stint.",
+  "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn the lap, never to keep.",
   "DESC_ROAST_ME": "Tear into any work — blunt, exact, always actionable.",
   "DESC_FRESH_EYES": "Bring in a fresh pair of eyes who's seen neither the briefing nor the laps — only the original orders and the finished car — to set the bar blind, then call whether it meets the orders, no excuses from the driver.",
   "ROAST_PERSONA": "a championship driver with zero patience who has watched this exact mistake throw away a win",

@@ -44,6 +44,7 @@
   "DESC_DOMAIN_MODELING": "<one-line description: maintain the domain glossary and record decisions as ADRs>",
   "DESC_WAYFINDER": "<one-line description: map an oversized effort as decision tickets and resolve them until the route is clear>",
   "DESC_TICKETS": "<one-line description: split a spec into blocked, session-sized tracer-bullet tickets>",
+  "DESC_PROTOTYPE": "<one-line description: throwaway code that answers a design question>",
   "DESC_ROAST_ME": "<one-line description: adversarially critique any artifact — brutal, specific, actionable>",
   "DESC_FRESH_EYES": "<one-line description: a context-free agent derives the acceptance bar blind, then rules the work>",
   "ROAST_PERSONA": "<the persona the roast-me skill adopts, in this theme's voice>",

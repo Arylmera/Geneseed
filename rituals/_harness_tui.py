@@ -317,6 +317,7 @@ SKILL_CLASS: dict[str, str] = {
     "migrate": "build",
     "frontend-design": "build",
     "opencode-theme": "build",
+    "prototype": "build",
     "forge-mcp": "build",
     "geneseed-code-review": "review",
     "fresh-eyes": "review",

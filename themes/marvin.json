@@ -44,6 +44,7 @@
   "DESC_DOMAIN_MODELING": "Keep a living glossary in CONTEXT.md and log each structural decision as an ADR. Someone has to remember.",
   "DESC_WAYFINDER": "Chart work too big for one session as a shared map of decision tickets, resolved one at a time. Eventually the fog lifts.",
   "DESC_TICKETS": "Split a spec into tracer-bullet tickets with explicit blocking edges, each sized for one fresh session. It won't take long to forget why.",
+  "DESC_PROTOTYPE": "Answer a design question with throwaway code — built to learn, then thrown away. Fitting.",
   "DESC_ROAST_ME": "Put any work to the question — merciless, exact, always actionable. It comes naturally.",
   "DESC_FRESH_EYES": "Summon a fresh mind that has seen neither your counsel nor your labours — only the original orders and the finished work — to derive the standard blind, then pronounce whether the work meets the orders, untouched by the maker's hope.",
   "ROAST_PERSONA": "a vastly intelligent machine, weary beyond measure, that has watched this exact mistake play out a thousand times",
