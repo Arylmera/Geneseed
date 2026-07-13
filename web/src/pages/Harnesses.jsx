@@ -69,6 +69,27 @@ function PostureSelect({ label, value, postures, onChange }) {
   )
 }
 
+// A mode <select> in the app's `.sel` style: the operating register inlined into
+// the install's AGENT.md. The list is discovered server-side (src/modes/), so a new
+// mode appears here with no UI change; falls back to nothing until it loads.
+function ModeSelect({ label, value, modes, onChange }) {
+  if (!modes.length) return null
+  return (
+    <select
+      className="sel"
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {modes.map((m) => (
+        <option key={m} value={m}>
+          {m}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 // An on/off switch — deactivates a whole install (files moved aside, not deleted) or
 // reactivates it; also drives individual MCP servers. The on-disk stash is the truth.
 function Switch({ on, disabled, label, onToggle }) {
@@ -128,6 +149,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
   const [pick, setPick] = useState({}) // chosen voice, keyed by row id
   const [fpick, setFpick] = useState({}) // chosen footprint, keyed by row id
   const [ppick, setPpick] = useState({}) // chosen posture, keyed by row id
+  const [mpick, setMpick] = useState({}) // chosen mode, keyed by row id
   const [collapsed, setCollapsed] = useState({}) // explicit collapses; MCP rows open by default
   const [deploy, setDeploy] = useState(null) // null = closed; { path, host, theme } = the deploy form
   const [browsing, setBrowsing] = useState(false) // native folder picker in flight
@@ -149,6 +171,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
 
   const installs = instData.installs
   const postures = instData.postures || []
+  const modes = instData.modes || []
   const activeCount = installs.filter((i) => i.state === 'active').length
 
   // Two sections: machine-wide globals first, then the per-repo (folder) installs. Same
@@ -180,12 +203,16 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
   // The posture a row acts on: the explicit pick, else the install's own, else peer.
   const postureFor = (inst) => ppick[inst.id] || inst.posture || 'peer'
   const setPosture = (inst, v) => setPpick((p) => ({ ...p, [inst.id]: v }))
-  // True when voice, footprint AND posture all match what's deployed — the Apply button
-  // on an active row stays disabled until one of them actually changes.
+  // The mode a row acts on: the explicit pick, else the install's own, else direct.
+  const modeFor = (inst) => mpick[inst.id] || inst.mode || 'direct'
+  const setMode = (inst, v) => setMpick((p) => ({ ...p, [inst.id]: v }))
+  // True when voice, footprint, posture AND mode all match what's deployed — the Apply
+  // button on an active row stays disabled until one of them actually changes.
   const unchanged = (inst) =>
     voiceFor(inst) === inst.theme &&
     footprintFor(inst) === (inst.footprint || 'full') &&
-    postureFor(inst) === (inst.posture || 'peer')
+    postureFor(inst) === (inst.posture || 'peer') &&
+    modeFor(inst) === (inst.mode || 'direct')
 
   // Install a not-installed location, or rebuild an active one with the picked voice +
   // footprint — both go through the 'install' action (a non-destructive in-place
@@ -194,11 +221,12 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
     const theme = voiceFor(inst)
     const footprint = footprintFor(inst)
     const posture = postureFor(inst)
+    const mode = modeFor(inst)
     const msg =
       inst.state === 'absent'
-        ? `Install Geneseed into ${inst.path} with the “${theme}” voice (${footprint} footprint, ${posture} posture)? ` +
+        ? `Install Geneseed into ${inst.path} with the “${theme}” voice (${footprint} footprint, ${posture} posture, ${mode} mode)? ` +
           `Files are added non-destructively (your own config is left untouched); deactivate or uninstall later.`
-        : `Rebuild this install (voice “${theme}”, ${footprint} footprint, ${posture} posture)? It rebuilds in place, non-destructive.`
+        : `Rebuild this install (voice “${theme}”, ${footprint} footprint, ${posture} posture, ${mode} mode)? It rebuilds in place, non-destructive.`
     if (window.confirm(msg))
       onAction?.('install', {
         host: inst.host,
@@ -207,6 +235,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
         theme,
         footprint,
         posture,
+        mode,
       })
   }
 
@@ -294,6 +323,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
       theme: currentTheme || 'neutral',
       footprint: 'full',
       posture: 'peer',
+      mode: 'direct',
     })
 
   // The native folder chooser lives on the daemon host: a browser can't reveal a disk
@@ -330,6 +360,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
       theme: deploy.theme,
       footprint: deploy.footprint,
       posture: deploy.posture,
+      mode: deploy.mode,
     })
     if (jobId) setDeploy(null)
   }
@@ -407,6 +438,15 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                 value={deploy.posture}
                 postures={postures}
                 onChange={(v) => setDeploy((d) => ({ ...d, posture: v }))}
+              />
+            </label>
+            <label className="dp-field">
+              <span>Mode</span>
+              <ModeSelect
+                label="mode for the new harness"
+                value={deploy.mode}
+                modes={modes}
+                onChange={(v) => setDeploy((d) => ({ ...d, mode: v }))}
               />
             </label>
             <button className="btn sm" onClick={submitDeploy}>
@@ -531,8 +571,8 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
             <span className={`badge ${on ? 'ok' : ''}`}>{badge}</span>
           </td>
           <td>
-            {/* Six fixed lanes so controls align into columns regardless of which
-                          ones a row shows: voice · footprint · posture · install/apply · switch · trash.
+            {/* Seven fixed lanes so controls align into columns regardless of which
+                          ones a row shows: voice · footprint · posture · mode · install/apply · switch · trash.
                           Every lane is always rendered (empty when N/A) so nothing shifts. */}
             <div className="h-acts">
               <div className="ha-cell ha-voice">
@@ -561,6 +601,16 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                     value={postureFor(inst)}
                     postures={postures}
                     onChange={(v) => setPosture(inst, v)}
+                  />
+                ) : null}
+              </div>
+              <div className="ha-cell ha-mode">
+                {(inst.state === 'absent' || on) && onAction ? (
+                  <ModeSelect
+                    label={`mode for ${inst.host} · ${inst.scope}`}
+                    value={modeFor(inst)}
+                    modes={modes}
+                    onChange={(v) => setMode(inst, v)}
                   />
                 ) : null}
               </div>

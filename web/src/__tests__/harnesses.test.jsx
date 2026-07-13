@@ -95,6 +95,7 @@ describe('Harnesses', () => {
       theme: 'imperial',
       footprint: 'full',
       posture: 'peer',
+      mode: 'direct',
     })
   })
 

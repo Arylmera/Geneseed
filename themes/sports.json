@@ -15,7 +15,8 @@
   "BENEDICTION": "Play disciplined, respect the rules, and close it out clean.",
   "DESC_REVIEWER": "Runs the pre-game review — correctness first, then form, before it ships.",
   "DESC_TESTER": "Sets up the drills, runs them, and breaks down the tape when they fail.",
-  "DESC_THEME": "Train up your own OpenCode colour theme \u2014 pick or tweak a palette, get solid and transparent kits, they stay through every rebuild.",
+  "DESC_DEVELOPER": "Builds the scoped play in its own practice field, runs it once, then hands it to the tester.",
+  "DESC_THEME": "Train up your own OpenCode colour theme — pick or tweak a palette, get solid and transparent kits, they stay through every rebuild.",
   "DESC_ARCHITECT": "Draws up the game plan before the first snap.",
   "DESC_DOCS": "Files the post-game report and the playbook once the work lands.",
   "DESC_SECURITY": "Runs the integrity check on anything touching the security surface.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Rework the formation without changing the result — one named move, tests green throughout.",
   "DESC_PONYTAIL": "The laziest play that scores — least code, shortest path; standard kit before custom plays, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several players on independent plays at once, then regroup the results.",
+  "DESC_PIPELINE": "Send a small squad — scout, builder, tester — onto their own field, and only bring the play into the game once the film comes back clean.",
   "DESC_TDD": "Let the test lead — set the failing test first, then the minimum code to pass.",
   "DESC_DEVELOP": "Drive it in on cover-and-verify — smallest gain, a test set on the new ground, the affected drills green, and log it snap by snap.",
   "DESC_HANDOFF": "Hand off cleanly — snapshot the state so a fresh player picks up in one read.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Write like a human, not a machine — cut the filler, keep it active, vary the tempo, trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — palette, type, and layout built for this brief, not the stock defaults, then cut to one bold move.",
   "DESC_WORKFLOW": "Run a saved set play that drives your squad on script — parallel runs, staged phases, and a verified result, all in one deterministic drive.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

@@ -15,7 +15,8 @@
   "BENEDICTION": "Drive it clean, keep the rules, and take the win.",
   "DESC_REVIEWER": "Checks the car over before it goes out — correctness first, polish second.",
   "DESC_TESTER": "Builds the test runs, sends them, and reads the data when they go wrong.",
-  "DESC_THEME": "Build your own OpenCode colour theme \u2014 pick or fine-tune a palette, get solid and transparent setups, they survive every rebuild.",
+  "DESC_DEVELOPER": "Builds the scoped fix in its own garage, checks it once, then hands it to the tester for the real run.",
+  "DESC_THEME": "Build your own OpenCode colour theme — pick or fine-tune a palette, get solid and transparent setups, they survive every rebuild.",
   "DESC_ARCHITECT": "Sorts the strategy before a single line is committed.",
   "DESC_DOCS": "Writes up the debrief and the notes once the work is done.",
   "DESC_SECURITY": "Goes over anything touching the security surface with a fine comb.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Rebuild the car without changing how it drives — one named move, trials green throughout.",
   "DESC_PONYTAIL": "The laziest line that wins — least code, shortest path; standard parts before custom builds, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several engineers on independent jobs at once, then bring in what they get.",
+  "DESC_PIPELINE": "Send a small crew — scout, engineer, tester — off on their own run, and only bring the setup into the race once the telemetry comes back clean.",
   "DESC_TDD": "Let the test lead — set the failing test first, then only the code to pass it.",
   "DESC_DEVELOP": "Drive the change home — smallest move, a test written to cover it, the affected trials green, and sealed commit by commit.",
   "DESC_HANDOFF": "Hand over the car — snapshot the state so a fresh driver takes the wheel in one read.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Write like a human, not a bot — bin the filler, keep it active, vary the rhythm, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — palette, type, and layout dialled in for this brief, not the default setup, then trim to one bold move.",
   "DESC_WORKFLOW": "Run a saved race plan that drives your engineers by script — many sent out at once, their results gathered and checked in one clean grand prix.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

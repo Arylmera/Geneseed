@@ -15,7 +15,8 @@
   "BENEDICTION": "Race clean, keep the regulations, and bring it home on the podium.",
   "DESC_REVIEWER": "Runs the pre-race scrutineering — correctness first, polish second — before the car is cleared to start.",
   "DESC_TESTER": "Sets up the test laps, runs them, and reads the data trace when they fail.",
-  "DESC_THEME": "And here comes your own OpenCode colour theme \u2014 pick or tweak a palette, two flavours solid and transparent, surviving every single rebuild!",
+  "DESC_DEVELOPER": "Builds the scoped fix in its own garage, shakes it down once, then hands it — to the test driver.",
+  "DESC_THEME": "And here comes your own OpenCode colour theme — pick or tweak a palette, two flavours solid and transparent, surviving every single rebuild!",
   "DESC_ARCHITECT": "Walks the circuit and plots the strategy before a single line is committed.",
   "DESC_DOCS": "Files the race report and updates the notes once the chequered flag falls.",
   "DESC_SECURITY": "Runs the safety inspection on anything touching the security surface.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Rebuild the car without changing how it drives — one named move, trials green throughout.",
   "DESC_PONYTAIL": "The laziest line that finishes — least code, shortest path; standard kit before custom builds, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several drivers out on independent stints at once, then bring in what they gather.",
+  "DESC_PIPELINE": "Send a small crew — scout, mechanic, test driver — out on their own stint, and only wave them into the results once the timing sheet comes back clean.",
   "DESC_TDD": "Let the trial lead the lap — set the failing test first, then only the code to pass it.",
   "DESC_DEVELOP": "Drive the change through cover-and-verify — the smallest setup tweak, a trial written to time it, the affected laps green, sealed corner by corner.",
   "DESC_HANDOFF": "Hand over the car — snapshot the state so a fresh driver takes the wheel in one read.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Write copy that sounds human, not machine-read — cut the filler, keep it active, vary the pace, trust the audience.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — palette, type, and layout built for this brief, not the templated defaults, then critique and cut to one bold move.",
   "DESC_WORKFLOW": "Run a saved race plan that drives your team by script — many sent out at once, their results gathered and checked in one clean grand prix.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

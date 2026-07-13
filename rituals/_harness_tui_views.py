@@ -273,6 +273,7 @@ def _grow_flow(stdscr, sel: dict) -> int:
     out, root = sel.get("out"), sel.get("root")
     footprint = sel.get("footprint", "full")
     posture = sel.get("posture", "peer")
+    mode = sel.get("mode", "direct")
     # The theme is locked in now: repaint the rest of the flow (build → summary →
     # health check) in its accent so the chrome matches the harness being grown.
     flair = _theme_flair(theme)
@@ -296,7 +297,7 @@ def _grow_flow(stdscr, sel: dict) -> int:
         if ipath:
             extra.append(("info", f"local edits preserved -> {ipath}"))
             extra.append(("info", "hand that file to your agent to back-port them into src"))
-    argv = _setup_build_args(theme, emit, out, root, footprint, posture)
+    argv = _setup_build_args(theme, emit, out, root, footprint, posture, mode)
     status = _run_steps(stdscr, curses, pal,
                         [("Build the harness", [sys.executable, str(BUILD), *argv])],
                         heading="building")

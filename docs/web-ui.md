@@ -53,7 +53,7 @@ The left rail mirrors the harness's own shape:
 | **🧬 Harness** | Dashboard · Rules · Library · Graph |
 | **📚 Learn** | Docs · Specs |
 | **🔧 Maintain** | Changes · Doctor |
-| **🎨 Configure** | Themes · Settings |
+| **🎨 Configure** | Harnesses · Themes · Settings |
 | **ℹ️ About** | About |
 
 A global **Spotlight** search lives in the topbar — press <kbd>/</kbd> to focus it, type
@@ -107,6 +107,14 @@ streams the output of background jobs and keeps their history across reloads.
 
 ### 🎨 Configure
 
+- **Harnesses** (`#/harnesses`) — every detected install (host × scope), one row each,
+  with per-row **Voice**, **Footprint**, **Posture**, and **Mode** pickers plus
+  Install/Apply, an on/off switch, and remove. **Posture** is the relationship register
+  (peer/mentor/expert/assistant/artisan — default **peer**); **Mode** is the operating
+  register (direct/foreman — default **direct**; foreman triages tasks into isolated
+  pipelines instead of working every one itself). Both are orthogonal to voice and to
+  each other, picked here or via the setup wizard, and preserved across every rebuild.
+  "Deploy to folder…" and "Rebuild all" apply to the whole set.
 - **Themes** (`#/themes`) — a gallery of the shipped voices (name, tagline, sigil, accent
   glow). **Apply** a voice to rebuild the deployed harness in that theme; the current one
   is marked.

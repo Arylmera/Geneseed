@@ -31,6 +31,17 @@
 - If a check was impossible — no diff, no task statement, a suite that will not
   run — name it instead of issuing a verdict on partial evidence.
 
+## Pipeline role
+
+*(Ignored outside pipelines — this section only tells pipeline orchestration who
+to recruit; it changes nothing about how this {{AGENT}} behaves when dispatched
+independently.)*
+
+- **Seat(s):** reviewer — half of the review/audit floor, paired with skeptic.
+- **Receives:** the crew's finished diff and the task it was meant to satisfy.
+- **Delivers:** the findings list and ship/fix-then-ship/block verdict, same
+  shape as its own output contract above.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary

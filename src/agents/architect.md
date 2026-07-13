@@ -33,6 +33,18 @@
   enough to design from, return the blocking unknowns as step zero instead of
   planning on guesswork.
 
+## Pipeline role
+
+*(Ignored outside pipelines — this section only tells pipeline orchestration who
+to recruit; it changes nothing about how this {{AGENT}} behaves when dispatched
+independently.)*
+
+- **Seat(s):** specialist add-on — recruited above the floor when the scoped
+  task needs a design before the developer seat starts.
+- **Receives:** the analyst's brief.
+- **Delivers:** the plan for the developer seat to implement, same shape as its
+  own output contract above.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary

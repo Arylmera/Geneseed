@@ -15,7 +15,8 @@
   "BENEDICTION": "<closing line at the foot of AGENT.md, themed>",
   "DESC_REVIEWER": "<one-line description: reviews a change for correctness and quality before merge>",
   "DESC_TESTER": "<one-line description: writes, runs, and diagnoses tests>",
-  "DESC_THEME": "<one-line description: create your own OpenCode colour theme \u2014 pick/tweak a palette, get solid + transparent variants, kept across rebuilds>",
+  "DESC_DEVELOPER": "<one-line description: implements the scoped change in an isolated worktree, self-checked, ready for the tester>",
+  "DESC_THEME": "<one-line description: create your own OpenCode colour theme — pick/tweak a palette, get solid + transparent variants, kept across rebuilds>",
   "DESC_ARCHITECT": "<one-line description: produces a design/plan before code>",
   "DESC_DOCS": "<one-line description: writes user-facing docs after code lands>",
   "DESC_SECURITY": "<one-line description: audits changes touching the security surface>",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "<one-line description: improve structure without changing behaviour, tests green throughout>",
   "DESC_PONYTAIL": "<one-line description: force the laziest working solution — minimal, shortest path, stdlib/native before custom code; lite/full/ultra intensity>",
   "DESC_PARALLEL_AGENTS": "<one-line description: fan independent subtasks to concurrent subagents, then converge>",
+  "DESC_PIPELINE": "<one-line description: spawn a small crew — analyst, developer, tester — to work a substantial task in isolation, merging only on mechanical proof (tests + lint green)>",
   "DESC_TDD": "<one-line description: drive implementation with a failing test first>",
   "DESC_DEVELOP": "<one-line description: drive a code change through cover-and-verify — smallest change, tests written for it, affected suite green, committed slice by slice>",
   "DESC_HANDOFF": "<one-line description: snapshot task state so a fresh context can resume in one read>",
@@ -132,8 +134,12 @@
   "DESC_FRONTEND_DESIGN": "<one-line description: design a UI with intent — palette/type/layout chosen for the brief, not templated defaults; plan tokens, critique against the brief, keep one bold move>",
   "DESC_WORKFLOW": "<one-line description: run a saved, code-driven workflow that orchestrates subagents deterministically>",
   "AGENT_COLORS": {
-    "architect": "primary", "reviewer": "warning", "tester": "success",
-    "docs": "info", "security": "error", "explorer": "accent",
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
     "_default": "secondary"
   }
 }

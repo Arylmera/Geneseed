@@ -100,12 +100,12 @@ DOC_GROUPS = [
             "[Install by hand instead](#/docs/install-paths)")},
         {"id": "setup-choices", "title": "Posture & footprint",
          "kind": "concept", "body": (
-            "The setup wizard asks three starting parameters. The first, "
+            "The setup wizard asks four starting parameters. The first, "
             "the **theme**, is the *voice* — banner, sigil, prose register — "
             "previewed live as you move through the wizard; it never changes "
             "structure or rules, so pick whatever reads best to you "
-            "([voice vs structure](#/docs/themes)). The other two shape how "
-            "the agent works and are explained below. All three have safe "
+            "([voice vs structure](#/docs/themes)). The other three shape how "
+            "the agent works and are explained below. All four have safe "
             "defaults — accept them and move on, or pick deliberately here. "
             "All are set-and-forget: preserved across every rebuild and "
             "re-theme, changeable later from **Settings**, the **Harnesses** "
@@ -122,6 +122,18 @@ DOC_GROUPS = [
             "Pick **peer** unless you know you want another register. "
             "Posture is orthogonal to theme: theme changes the prose, "
             "posture changes the relationship.\n\n"
+            "### Mode — how work gets executed\n\n"
+            "How the session runs the work you hand it, fixed at build time:\n\n"
+            "- **direct** *(default)* — the agent works every task itself, "
+            "turn by turn, exactly as it does today.\n"
+            "- **foreman** — the session triages incoming tasks: trivial ones "
+            "get a direct answer, substantial ones spawn an isolated crew "
+            "(analyst → developer → tester) that reports back and merges "
+            "only once its tests and lint pass — while the session keeps "
+            "answering you. Costs more per substantial task (a small crew "
+            "runs instead of one agent) in exchange for staying responsive.\n\n"
+            "Pick **direct** unless you want the session managing a crew for "
+            "you. Switch back any time with `--mode direct`.\n\n"
             "### Footprint — full or lean Rules\n\n"
             "How much of the Rules `AGENT.md` carries inline every turn. "
             "A token-cost dial, not a rules cut — every Rule always applies:\n\n"
@@ -213,10 +225,12 @@ DOC_GROUPS = [
          "is theme-independent — a "
          "theme only changes the *voice* (banner, sigil, prose), never a "
          "folder or a link. A separate dial, the **[footprint](#/docs/footprint)**, "
-         "sets how much of the Rules load inline each turn (full vs lean), and "
-         "the **[collaboration layer](#/docs/collaboration)** — posture, the "
+         "sets how much of the Rules load inline each turn (full vs lean), the "
+         "**[collaboration layer](#/docs/collaboration)** — posture, the "
          "Pact, typed memory, your profile — shapes how the agent works "
-         "*with you*.\n\n"
+         "*with you*, and the **mode** dial ([direct vs foreman]"
+         "(#/docs/collaboration)) sets *how work gets executed* — one agent "
+         "turn by turn, or a foreman triaging tasks into pipelines.\n\n"
          "### What this UI actually shows\n\n"
          "The **Library** and **Graph** render the Geneseed source live — "
          "they show the harness that *would* be deployed if you rebuilt "
@@ -346,6 +360,22 @@ DOC_GROUPS = [
             "setup wizard, from the **Harnesses** page here (the per-install "
             "posture dropdown, next to voice and footprint), or with "
             "`build.py --posture <name>`. A rebuild or re-theme preserves it.\n\n"
+            "### Modes — how work executes\n\n"
+            "A **mode** is the session's operating register — *how* work gets "
+            "executed, as opposed to posture's *relationship* register. Two "
+            "ship: **direct** (default — the agent works every task itself, "
+            "turn by turn) and **foreman** (the session triages incoming "
+            "tasks: trivial ones get a direct answer, substantial ones spawn "
+            "an isolated pipeline — a crew of an analyst, a developer, and a "
+            "tester, plus whatever specialists the task needs — that reports "
+            "back and merges only once its own tests and lint pass, while "
+            "the session keeps answering you). Expect foreman mode to cost "
+            "more per substantial task, in exchange for a session that never "
+            "blocks on one. Change it in the setup wizard, from the "
+            "**Harnesses** page here (the per-install mode dropdown, next to "
+            "posture), or with `build.py --mode <name>`; switch back any "
+            "time with `--mode direct`. A rebuild or re-theme preserves "
+            "it.\n\n"
             "### The Pact — a two-way contract\n\n"
             "Where the Laws bind the agent, the **Pact** binds the "
             "collaboration. It holds three co-equal protections (you, the "
@@ -933,6 +963,7 @@ class WebState:
         self.emit = harness._installed_defaults().get("emit") or "opencode-global"
         self.footprint = harness._footprint_of_dir(self.target)   # 'full' when no marker
         self.posture = harness._posture_of_dir(self.target) or "peer"   # detected register
+        self.mode = harness._mode_of_dir(self.target) or "direct"   # detected operating mode
         self._inv = None
         self._doctor = None
 
@@ -986,6 +1017,7 @@ class WebState:
         self.emit = self._detect_emit()
         self.footprint = harness._footprint_of_dir(self.root)
         self.posture = harness._posture_of_dir(self.root) or "peer"
+        self.mode = harness._mode_of_dir(self.root) or "direct"
         self._inv = None
         self._doctor = None
 
@@ -1000,6 +1032,7 @@ class WebState:
         self.emit = self._detect_emit() or self.emit
         self.footprint = harness._footprint_of_dir(self.root)
         self.posture = harness._posture_of_dir(self.root) or "peer"
+        self.mode = harness._mode_of_dir(self.root) or "direct"
 
 
 def _deployed(state: WebState) -> bool:

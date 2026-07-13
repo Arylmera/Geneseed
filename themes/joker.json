@@ -15,7 +15,8 @@
   "BENEDICTION": "Work clean, keep the rules, and leave them wanting more.",
   "DESC_REVIEWER": "Does the pre-show check — correctness first, polish second — before it goes on stage.",
   "DESC_TESTER": "Sets up the test runs, takes them, and reads the silence when a joke bombs.",
-  "DESC_THEME": "Paint your own OpenCode theme \u2014 pick or twist a palette, get solid and see-through variants, and they never wash off in a rebuild.",
+  "DESC_DEVELOPER": "Writes the scoped bit in its own green room, runs it through once, then hands it to the tester.",
+  "DESC_THEME": "Paint your own OpenCode theme — pick or twist a palette, get solid and see-through variants, and they never wash off in a rebuild.",
   "DESC_ARCHITECT": "Writes the set before a single line is committed.",
   "DESC_DOCS": "Keeps the joke book and the notes once the work is done.",
   "DESC_SECURITY": "Goes over anything touching the security surface — no surprises in the act.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Rework the bit without changing the laugh — one named move, trials green throughout.",
   "DESC_PONYTAIL": "The laziest gag that lands — least code, shortest setup; stock bits before custom props, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send several sidekicks on independent bits at once, then bring in what they get.",
+  "DESC_PIPELINE": "Send a small crew — scout, coder, tester — off to do their bit in their own green room, and only bring it on stage once the run-through comes back clean.",
   "DESC_TDD": "Let the test lead — set the failing test first, then only the code to pass it.",
   "DESC_DEVELOP": "Drive a change through the club's own laugh test — smallest bit, tests written to cover it, the affected set green, committed one beat at a time.",
   "DESC_HANDOFF": "Pass the mic — snapshot the state so a fresh comic picks up the set in one read.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Write like a human, not a model — ditch the filler, keep it active, vary the rhythm, and don't over-explain the joke.",
   "DESC_FRONTEND_DESIGN": "Design a UI with actual personality — palette, type, and layout for this brief, not the stock defaults, then trim to one bold move.",
   "DESC_WORKFLOW": "Run a saved set that sends your sidekicks by script — many sent out at once, their findings gathered and checked in one clean show.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

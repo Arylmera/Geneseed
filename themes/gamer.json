@@ -15,7 +15,8 @@
   "BENEDICTION": "Play clean, follow the rules, and clear it. GG.",
   "DESC_REVIEWER": "Runs the pre-submit run-check — correctness first, polish second, before it ships.",
   "DESC_TESTER": "Builds the test arena, runs it, and reads the death recap when it fails.",
-  "DESC_THEME": "Craft your own OpenCode colour theme \u2014 pick or remix a palette, unlock solid and transparent skins, they persist through every rebuild.",
+  "DESC_DEVELOPER": "Builds the scoped fix in its own instance, self-checks the run, then hands it to the tester.",
+  "DESC_THEME": "Craft your own OpenCode colour theme — pick or remix a palette, unlock solid and transparent skins, they persist through every rebuild.",
   "DESC_ARCHITECT": "Plans the route before the run starts.",
   "DESC_DOCS": "Writes the wiki and patch notes once the feature ships.",
   "DESC_SECURITY": "Runs the anti-cheat pass on anything touching the security surface.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Re-spec the build without changing behaviour — one named move, tests green throughout.",
   "DESC_PONYTAIL": "The laziest run that clears it — least code, shortest path; base kit before custom mods, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Send the party on independent objectives at once, then regroup the loot.",
+  "DESC_PIPELINE": "Send a small party — scout, builder, tester — into their own instance, and only merge the run once the clear is verified.",
   "DESC_TDD": "Let the test lead — write the failing test first, then the minimum code to pass.",
   "DESC_DEVELOP": "Drive the change through the cover-and-verify loop — smallest move, tests written for it, the affected run green, committed slice by slice.",
   "DESC_HANDOFF": "Pass the controller — snapshot the run so a fresh player picks up in one read.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Write like a player, not a bot — cut the filler, keep it active, mix up the rhythm, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a real identity — palette, type, and layout picked for this brief, not the default skin, then cut it down to one bold move.",
   "DESC_WORKFLOW": "Run a saved combo that scripts your party — fan out, chain the stages, and verify the clear, all in one deterministic rotation.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

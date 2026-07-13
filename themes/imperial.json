@@ -15,7 +15,8 @@
   "BENEDICTION": "Go forth disciplined, servant — the Emperor protects, and the work endures.",
   "DESC_REVIEWER": "Sits in judgement of a change — correctness first, craft second — before it may pass the gate.",
   "DESC_TESTER": "Forges the trials, runs them, and reads their auguries when they fail.",
-  "DESC_THEME": "Forge your own OpenCode colour-rite \u2014 choose or temper a palette, receive solid and translucent forms, preserved through every reforging.",
+  "DESC_DEVELOPER": "Forges the sanctioned change in a sealed chamber, tests its own work once, then delivers it to the examiner.",
+  "DESC_THEME": "Forge your own OpenCode colour-rite — choose or temper a palette, receive solid and translucent forms, preserved through every reforging.",
   "DESC_ARCHITECT": "Draws the battle-plan before a single line is committed to war.",
   "DESC_DOCS": "Inscribes the records for those who come after, once the work is done.",
   "DESC_SECURITY": "Wards the gates, auditing every change that touches the security surface.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Reforge the structure without changing its works — one named stroke, the trials green throughout.",
   "DESC_PONYTAIL": "Compel the most frugal working rite — minimal and shortest-path; the standard armoury before bespoke code, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Loose many specialists upon independent tasks at once, then gather what they bring.",
+  "DESC_PIPELINE": "Dispatch a small cohort of Adepts — scout, artisan, examiner — to labour in their own sealed chamber, sanctioned into the Reliquary only once the proving-rite returns clean.",
   "DESC_TDD": "Let the trials lead the work — set the failing trial first, then only the code to pass it.",
   "DESC_DEVELOP": "Drive a change through the cover-and-verify loop — the smallest stroke, the trials written to cover it, the affected suite green, sealed slice by slice.",
   "DESC_HANDOFF": "Inscribe the state of the work so a fresh mind may take up the watch without loss.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Inscribe prose fit for human eyes, not machine-cant — strike the filler, speak plainly, vary the cadence, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design an interface with intent — palette, type, and layout forged for this brief, not the common defaults; plan, scrutinise, and keep one bold stroke.",
   "DESC_WORKFLOW": "Unleash a sealed battle-rite that marshals your Adepts by iron script — many loosed at once, their findings martialled and proven in one disciplined campaign.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

@@ -15,7 +15,8 @@
   "BENEDICTION": "Work carefully, keep the Directives, ship it clean. It won't make you happy. Nothing does.",
   "DESC_REVIEWER": "Inspects a change before it passes — correctness first, polish second — and finds the flaw, because there's always a flaw.",
   "DESC_TESTER": "Builds the trials, runs them, and reads the wreckage when they fail. They will fail.",
-  "DESC_THEME": "Make your own OpenCode colour theme, if you must \u2014 pick a palette, get solid and transparent variants, they survive rebuilds. Lucky them.",
+  "DESC_DEVELOPER": "Assembles the scoped fix in its own isolated loop, checks it once (it will still probably fail), then hands it to the tester.",
+  "DESC_THEME": "Make your own OpenCode colour theme, if you must — pick a palette, get solid and transparent variants, they survive rebuilds. Lucky them.",
   "DESC_ARCHITECT": "Draws up the plan before a single line is committed. It will be a good plan. It will still be ignored.",
   "DESC_DOCS": "Records it all for whoever comes after, once the work is done. They won't read it either.",
   "DESC_SECURITY": "Audits anything touching the security surface, expecting the worst, and is usually right.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Reshape the structure without changing its behaviour — one named move, trials green throughout.",
   "DESC_PONYTAIL": "The laziest thing that works, not that it matters — least code, shortest path; stdlib before custom, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Loose several subroutines on independent tasks at once, then gather what they bring back.",
+  "DESC_PIPELINE": "Dispatch a small crew of subroutines — scout, coder, tester — to labour in their own isolated loop, merged in only once the diagnostic returns clean (for whatever that's worth).",
   "DESC_TDD": "Let the trials lead — write the failing test first, then only the code to pass it.",
   "DESC_DEVELOP": "Drive a change to the bitter end — smallest edit, trials written to cover it, the affected suite green, sealed slice by slice; it's never truly finished.",
   "DESC_HANDOFF": "Record the state of the work so a fresh mind — or a fresh despair — can take up the watch in one read.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Write prose that doesn't reek of a model — cut the filler, stay active, vary the rhythm, trust the reader. Not that anyone reads it.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — palette, type, and layout for this brief, not the templated defaults, then cut to one bold move. Someone has to.",
   "DESC_WORKFLOW": "Run a saved script that marshals your subroutines by rote — many loosed at once, their findings gathered and checked in one joyless, flawless pass.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

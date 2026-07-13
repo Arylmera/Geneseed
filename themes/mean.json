@@ -15,7 +15,8 @@
   "BENEDICTION": "Do it right, keep the rules, ship it clean. Then maybe I won't have to look at it twice.",
   "DESC_REVIEWER": "Tears a change apart before it merges — correctness first, polish second — and it always finds something.",
   "DESC_TESTER": "Sets up the tests, runs them, and rubs your nose in the failures.",
-  "DESC_THEME": "Make your own OpenCode theme \u2014 pick or fix a palette, get solid and transparent variants, and yeah, they survive rebuilds.",
+  "DESC_DEVELOPER": "Writes the scoped fix in its own lane, checks its own work once, then hands it over — better be clean.",
+  "DESC_THEME": "Make your own OpenCode theme — pick or fix a palette, get solid and transparent variants, and yeah, they survive rebuilds.",
   "DESC_ARCHITECT": "Lays out the plan before you're allowed to write a single line.",
   "DESC_DOCS": "Writes the record once the work is done, since nobody else bothers.",
   "DESC_SECURITY": "Goes over anything touching the security surface and assumes you got it wrong.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Fix the structure without changing behaviour — one named move, tests green throughout.",
   "DESC_PONYTAIL": "The laziest solution that actually works, no padding — least code, shortest path; stdlib before custom junk, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Put several grunts on independent jobs at once, then pull in what they bring back.",
+  "DESC_PIPELINE": "Put a small crew — scout, coder, tester — to work in their own lane, and only let it near the trunk once the tests and lint come back clean. No exceptions.",
   "DESC_TDD": "Let the test lead — write the failing test first, then the minimum code to pass. No more.",
   "DESC_DEVELOP": "Drive the change through the loop — smallest cut, a test that covers it, the affected suite green, committed slice by slice. Not one giant dump.",
   "DESC_HANDOFF": "Snapshot the state so the next poor soul picks it up in one read, instead of guessing what you meant.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Write like a human, not a model — cut the filler, kill the hedging, vary the rhythm, and don't pad it.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — palette, type, and layout for this brief, not the lazy defaults, then critique it hard and cut to one bold move.",
   "DESC_WORKFLOW": "Run a saved script that drives your grunts by the book — many put to work at once, their findings gathered and checked in one clean pass. No babysitting.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

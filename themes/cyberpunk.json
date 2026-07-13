@@ -15,7 +15,8 @@
   "BENEDICTION": "Run clean, hold protocol, and ship before the trace lands.",
   "DESC_REVIEWER": "Runs the pre-push scan — correctness first, craft second, before it ships.",
   "DESC_TESTER": "Builds the test rigs, runs them, traces the crash when they fail.",
-  "DESC_THEME": "Skin your own OpenCode palette \u2014 pick or remix the colours, get solid and see-through builds, they persist across rebuilds.",
+  "DESC_DEVELOPER": "Codes the scoped patch in its own fork, self-checks the trace, then hands it — to the tester daemon.",
+  "DESC_THEME": "Skin your own OpenCode palette — pick or remix the colours, get solid and see-through builds, they persist across rebuilds.",
   "DESC_ARCHITECT": "Maps the run before a single line hits the deck.",
   "DESC_DOCS": "Writes the user-facing data once the code goes live.",
   "DESC_SECURITY": "Breaks and checks ICE — audits anything on the security surface.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Rewire the structure without changing behaviour — one named pass, tests green throughout.",
   "DESC_PONYTAIL": "The laziest build that runs — least code, shortest path; stock libs before custom rigs, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Fork independent tasks to concurrent threads, then merge the output.",
+  "DESC_PIPELINE": "Spin up a small crew of daemons — scout, coder, tester — on their own fork, and only merge the run once the trace comes back clean.",
   "DESC_TDD": "Let the test drive — write the failing test first, then the minimum code to pass.",
   "DESC_DEVELOP": "Drive the change through the loop — smallest edit, a test written to cover it, the touched rigs run green, committed slice by slice.",
   "DESC_HANDOFF": "Pass the deck — dump the state so a fresh runner picks up in one read.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Write prose with a human pulse, not synthetic filler — strip the boilerplate, stay active, vary the cadence, trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with edge — palette, type, and layout forged for this brief, not the stock defaults; plan, critique, and keep one bold move.",
   "DESC_WORKFLOW": "Jack in a saved routine that drives your daemons on rails — parallel forks, staged pipelines, and verification, all in one deterministic run.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

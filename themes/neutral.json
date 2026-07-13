@@ -15,7 +15,8 @@
   "BENEDICTION": "Work with discipline, keep the rules, and ship clean.",
   "DESC_REVIEWER": "Reviews a change for correctness and quality before it merges.",
   "DESC_TESTER": "Writes, runs, and diagnoses tests.",
-  "DESC_THEME": "Create your own OpenCode colour theme \u2014 pick or tweak a palette, get solid and transparent variants, kept across rebuilds.",
+  "DESC_DEVELOPER": "Implements the scoped change in an isolated worktree, self-checked and ready for the tester.",
+  "DESC_THEME": "Create your own OpenCode colour theme — pick or tweak a palette, get solid and transparent variants, kept across rebuilds.",
   "DESC_ARCHITECT": "Produces a design or implementation plan before code is written.",
   "DESC_DOCS": "Writes and updates user-facing documentation after code lands.",
   "DESC_SECURITY": "Audits changes that touch the security surface.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Improve code structure without changing behaviour — one named move, tests green throughout.",
   "DESC_PONYTAIL": "Force the laziest solution that works — minimal and shortest-path; stdlib and native before custom code, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Fan independent subtasks out to concurrent subagents, then converge the results.",
+  "DESC_PIPELINE": "Spawn a small crew — analyst, developer, tester — to work a substantial task in its own worktree, merging only once the tests and lint pass.",
   "DESC_TDD": "Drive implementation with tests — write the failing test first, then the minimum code to pass.",
   "DESC_DEVELOP": "Drive a change through the cover-and-verify loop — smallest change, tests written for it, the affected suite green, committed slice by slice.",
   "DESC_HANDOFF": "Snapshot task state so a fresh context — or another agent — can resume in one read.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Write prose for a human that doesn't read like a model — cut filler, use active voice, vary rhythm, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with a point of view — choose palette, type, and layout for this brief, not the templated defaults, then critique and cut to one bold move.",
   "DESC_WORKFLOW": "Run a saved, code-driven workflow that orchestrates subagents deterministically — parallel fan-out, staged pipelines, and verification in a single pass.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

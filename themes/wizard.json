@@ -15,7 +15,8 @@
   "BENEDICTION": "Work with discipline, keep the Laws, and seal the working clean.",
   "DESC_REVIEWER": "Scryes a change for soundness and craft before it is sealed.",
   "DESC_TESTER": "Conjures the trials, casts them, and reads the omens when they fail.",
-  "DESC_THEME": "Conjure your own OpenCode colour theme \u2014 choose or transmute a palette, gain solid and translucent forms, warded against every rebuild.",
+  "DESC_DEVELOPER": "Conjures the scoped fix in its own warded circle, tests it once, then hands it to the examiner.",
+  "DESC_THEME": "Conjure your own OpenCode colour theme — choose or transmute a palette, gain solid and translucent forms, warded against every rebuild.",
   "DESC_ARCHITECT": "Designs the ritual before a single rune is inscribed.",
   "DESC_DOCS": "Transcribes the tomes for those who follow, once the work is done.",
   "DESC_SECURITY": "Wards the circle — audits any working that touches the warded surface.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Reshape the working without changing its effect — one named pass, trials green throughout.",
   "DESC_PONYTAIL": "The laziest working spell — least incantation, shortest path; the standard grimoire before bespoke runes, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Loose several familiars on independent tasks at once, then gather what they bring.",
+  "DESC_PIPELINE": "Dispatch a small coven of familiars — scout, artisan, examiner — to labour in their own warded circle, bound into the Grimoire only once the proving-rite returns clean.",
   "DESC_TDD": "Let the trial lead — set the failing trial first, then only the code to pass it.",
   "DESC_DEVELOP": "Drive a working through the cover-and-confirm loop — the smallest casting, its trials written, the touched trials green, sealed rune by rune.",
   "DESC_HANDOFF": "Pass the working — inscribe its state so a fresh mind resumes in one read.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Pen prose for mortal eyes, not machine-cant — banish the filler, speak plainly, vary the cadence, and trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with intent — palette, type, and layout woven for this brief, not the common defaults; plan, scrutinise, and keep one bold flourish.",
   "DESC_WORKFLOW": "Invoke a saved ritual that binds your familiars by inscribed rite — many sent at once, their auguries gathered and proven in one deterministic casting.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

@@ -532,16 +532,17 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .harness-tbl .h-exp-cell { width: 1%; padding-right: 0; }
 .harness-tbl .h-path { display: block; margin-top: 3px; max-width: 280px; overflow: hidden;
   text-overflow: ellipsis; color: var(--text-3); font-family: var(--font-mono); font-size: 11.5px; }
-/* Six fixed lanes — voice · footprint · posture · install/apply · switch · trash — so every
-   control lines up into its own column regardless of which ones a row shows. Each row always
-   renders all six .ha-cell lanes (empty when N/A), so a missing control reserves its space
-   instead of letting the rest slide sideways. */
-.harness-tbl .h-acts { display: grid; grid-template-columns: 168px 78px 92px 84px 38px 32px; gap: 8px;
+/* Seven fixed lanes — voice · footprint · posture · mode · install/apply · switch · trash — so
+   every control lines up into its own column regardless of which ones a row shows. Each row
+   always renders all seven .ha-cell lanes (empty when N/A), so a missing control reserves its
+   space instead of letting the rest slide sideways. */
+.harness-tbl .h-acts { display: grid; grid-template-columns: 168px 78px 92px 92px 84px 38px 32px; gap: 8px;
   align-items: center; justify-content: end; }
 .harness-tbl .h-acts .ha-cell { display: flex; align-items: center; min-width: 0; }
 .harness-tbl .h-acts .ha-voice { justify-content: stretch; }
 .harness-tbl .h-acts .ha-fp { justify-content: stretch; }
 .harness-tbl .h-acts .ha-posture { justify-content: stretch; }
+.harness-tbl .h-acts .ha-mode { justify-content: stretch; }
 .harness-tbl .h-acts .ha-btn { justify-content: stretch; }
 .harness-tbl .h-acts .ha-sw, .harness-tbl .h-acts .ha-trash { justify-content: center; }
 .harness-tbl .h-acts .sel { width: 100%; min-width: 0; }

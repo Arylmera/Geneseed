@@ -47,10 +47,12 @@ def cmd_rebuild_all(args: argparse.Namespace) -> int:
         theme = _theme_of_dir(root) or _default_theme()
         footprint = _footprint_of_dir(root)   # preserve lean/full — a rebuild must not flip it
         posture = _posture_of_dir(root) or _default_posture()   # preserve the register too
+        mode = _mode_of_dir(root) or _default_mode()   # preserve the operating mode too
         out = None if scope == "global" else str(root)
-        argv = _setup_build_args(theme, emit, out, out, footprint, posture)
+        argv = _setup_build_args(theme, emit, out, out, footprint, posture, mode)
         label = f"{host}:{scope} ({root})"
-        print(f"[rebuild-all] {label}: theme={theme} emit={emit} footprint={footprint} posture={posture}")
+        print(f"[rebuild-all] {label}: theme={theme} emit={emit} footprint={footprint} "
+              f"posture={posture} mode={mode}")
         rc = run([sys.executable, str(BUILD), *argv]).returncode
         if rc != 0:
             failures.append(label)

@@ -31,6 +31,19 @@
 - If the suite cannot be run or the expected behaviour is unspecified, report
   that blocker instead of delivering tests that were never seen to fail.
 
+## Pipeline role
+
+*(Ignored outside pipelines — this section only tells pipeline orchestration who
+to recruit; it changes nothing about how this {{AGENT}} behaves when dispatched
+independently.)*
+
+- **Seat(s):** tester — the development floor's validator, the other half of
+  the dev↔tester loop (capped at 5 iterations).
+- **Receives:** the developer's changed worktree.
+- **Delivers:** raw test + lint output with exit codes — the mechanical proof.
+  On failure, findings go back to the developer seat; on the 5th failure, the
+  pipeline stops and reports instead of looping again.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary

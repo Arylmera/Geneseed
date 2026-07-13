@@ -15,7 +15,8 @@
   "BENEDICTION": "Stay disciplined, hold the line, ship clean. Out.",
   "DESC_REVIEWER": "Runs the pre-deployment inspection — correctness first, then quality, before it ships.",
   "DESC_TESTER": "Writes, runs, and diagnoses the live-fire tests.",
-  "DESC_THEME": "Issue your own OpenCode colour scheme \u2014 select or adjust a palette, receive solid and transparent variants, retained through every rebuild.",
+  "DESC_DEVELOPER": "Builds the scoped fix in its own sector, self-checks it once, then hands it to the tester for confirmation.",
+  "DESC_THEME": "Issue your own OpenCode colour scheme — select or adjust a palette, receive solid and transparent variants, retained through every rebuild.",
   "DESC_ARCHITECT": "Draws the operation order before a round is fired.",
   "DESC_DOCS": "Files the after-action report and field manual once the work lands.",
   "DESC_SECURITY": "Runs the threat assessment on anything touching the security perimeter.",
@@ -53,6 +54,7 @@
   "DESC_REFACTOR": "Restructure without changing behaviour — one named move, tests green throughout.",
   "DESC_PONYTAIL": "Minimum viable solution that holds — least code, shortest path; issued kit before custom build, one line before fifty. lite/full/ultra.",
   "DESC_PARALLEL_AGENTS": "Deploy independent tasks to concurrent units, then consolidate the results.",
+  "DESC_PIPELINE": "Deploy a small fire team — scout, builder, verifier — into their own sector, cleared to merge only once the after-action report comes back green.",
   "DESC_TDD": "Let the test lead — write the failing test first, then the minimum code to pass.",
   "DESC_DEVELOP": "Drive the change through the cover-and-verify loop — smallest move, tests written to cover it, affected suite green, committed slice by slice.",
   "DESC_HANDOFF": "Hand over the watch: snapshot state so a fresh operator resumes in one read.",
@@ -131,5 +133,13 @@
   "DESC_PROSE": "Write prose for a human, not a machine — cut the filler, active voice, vary cadence, trust the reader.",
   "DESC_FRONTEND_DESIGN": "Design a UI with intent — palette, type, and layout chosen for this brief, not the standard-issue defaults; plan, critique, and keep one bold move.",
   "DESC_WORKFLOW": "Execute a saved op-order that commands your units by the numbers — parallel sweeps, staged phases, and confirmation, in one deterministic mission.",
-  "AGENT_COLORS": {"architect": "primary", "reviewer": "warning", "tester": "success", "docs": "info", "security": "error", "explorer": "accent", "_default": "secondary"}
+  "AGENT_COLORS": {
+    "architect": "primary",
+    "reviewer": "warning",
+    "tester": "success",
+    "docs": "info",
+    "security": "error",
+    "explorer": "accent",
+    "_default": "secondary"
+  }
 }

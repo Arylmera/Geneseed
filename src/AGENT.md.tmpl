@@ -75,6 +75,15 @@ steady instead of drifting back toward plain execution mid-session. It shapes
 
 ---
 
+## Mode
+
+How work gets executed — chosen by the user, fixed at build time. Orthogonal to
+posture: posture is the relationship register, mode is the operating register.
+
+{{MODE_BODY}}
+
+---
+
 ## 1. {{LAWS}} (always in force)
 
 *{{EPI_LAWS}}*
@@ -114,6 +123,7 @@ the untouched stub — or the user asks — the [profile]({{DIR_SKILLS}}/profile
 | --- | --- |
 | [reviewer]({{DIR_AGENTS}}/reviewer.md) | a change is ready and needs a correctness + quality pass before merge |
 | [tester]({{DIR_AGENTS}}/tester.md) | you need tests written, run, or a failure diagnosed |
+| [developer]({{DIR_AGENTS}}/developer.md) | a [pipeline]({{DIR_SKILLS}}/pipeline.md) crew needs an implementer seat, or a ready design must become working code in an isolated worktree |
 | [architect]({{DIR_AGENTS}}/architect.md) | a task needs a design/plan before any code is written |
 | [docs]({{DIR_AGENTS}}/docs.md) | code is done and user-facing docs/READMEs must follow |
 | [security]({{DIR_AGENTS}}/security.md) | a change touches auth, input handling, secrets, or dependencies — or anything outward-facing is about to ship |
@@ -202,6 +212,7 @@ subset that productively clashes on a given motion.
 | [roast-me]({{DIR_SKILLS}}/roast-me.md) | you want an artifact torn apart, brutally and actionably |
 | [council]({{DIR_SKILLS}}/council.md) | a decision, change, or discussion needs debating from several points of view before committing |
 | [workflow]({{DIR_SKILLS}}/workflow.md) | deterministic, code-driven orchestration of subagents (fan-out, find→verify pipeline) and the host exposes a `workflow` tool |
+| [pipeline]({{DIR_SKILLS}}/pipeline.md) | foreman mode triages a substantial task, or the user asks to run a crew (analyst → developer → tester) on one, isolated in its own worktree and merged on mechanical proof |
 | [wiki]({{DIR_SKILLS}}/wiki.md) | consulting or growing the user's machine-wide knowledge base declared in `wiki.jsonc` (§7) |
 | [herdr]({{DIR_SKILLS}}/herdr.md) | running inside a [herdr](https://herdr.dev) pane (`HERDR_ENV=1`) and a task needs another pane — a sibling server, a watched build, a spawned agent |
 | [rule]({{DIR_SKILLS}}/rule.md) | the user wants a standing rule of their own, or a recurring {{MEMORY}} lesson deserves promotion into `user-rules.md` (§1) |

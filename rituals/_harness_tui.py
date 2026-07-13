@@ -167,6 +167,12 @@ def _setup_tui(stdscr):
                     default=inst["posture"] or _default_posture())
     if posture is None:
         return None
+    opmode_prompt = "Choose an operating mode" + (f"   (installed: {inst['mode']})" if inst["mode"] else "")
+    opmode = _menu(stdscr, curses, opmode_prompt,
+                   [(k, k, blurb or "operating register") for k, blurb in _mode_options()],
+                   default=inst["mode"] or _default_mode())
+    if opmode is None:
+        return None
     emit_prompt = "Choose an install mode" + (f"   (installed: {inst['emit']})" if inst["emit"] else "")
     emit = _menu(stdscr, curses, emit_prompt,
                  [(k, k, d) for k, d in EMIT_OPTIONS], default=inst["emit"] or "opencode-global")
@@ -191,7 +197,8 @@ def _setup_tui(stdscr):
             return None
     target = out or root
     flair = _theme_flair(theme)
-    summary = (f"theme = {theme}     posture = {posture}     mode = {emit}     footprint = {footprint}"
+    summary = (f"theme = {theme}     posture = {posture}     op-mode = {opmode}     "
+               f"mode = {emit}     footprint = {footprint}"
                + (f"     target = {target}" if target else ""))
     # Once a theme is chosen the confirm step speaks in its voice: the tagline is the
     # prompt and the accent tints the frame, so you feel the flavour you're about to
@@ -201,7 +208,7 @@ def _setup_tui(stdscr):
                    [("go", "Build now", summary),
                     ("cancel", "Cancel", "Make no changes and exit.")],
                    default="go", accent=flair["accent"])
-    return ({"theme": theme, "posture": posture, "emit": emit, "out": out,
+    return ({"theme": theme, "posture": posture, "mode": opmode, "emit": emit, "out": out,
              "root": root, "footprint": footprint}
             if choice == "go" else None)
 
@@ -224,6 +231,12 @@ def _retheme_tui(stdscr):
                     default=inst["posture"] or _default_posture())
     if posture is None:
         return None
+    opmode_prompt = "Choose an operating mode" + (f"   (installed: {inst['mode']})" if inst["mode"] else "")
+    opmode = _menu(stdscr, curses, opmode_prompt,
+                   [(k, k, blurb or "operating register") for k, blurb in _mode_options()],
+                   default=inst["mode"] or _default_mode())
+    if opmode is None:
+        return None
     emit = inst["emit"] or "opencode-global"
     fp_prompt = "Choose a footprint" + (f"   (installed: {inst['footprint']})" if inst["footprint"] else "")
     footprint = _menu(stdscr, curses, fp_prompt,
@@ -231,13 +244,14 @@ def _retheme_tui(stdscr):
     if footprint is None:
         return None
     flair = _theme_flair(theme)
-    summary = f"theme = {theme}     posture = {posture}     mode = {emit} (unchanged)     footprint = {footprint}"
+    summary = (f"theme = {theme}     posture = {posture}     op-mode = {opmode}     "
+               f"mode = {emit} (unchanged)     footprint = {footprint}")
     prompt = flair["tagline"] or "Ready to rebuild the harness?"
     choice = _menu(stdscr, curses, prompt,
                    [("go", "Build now", summary),
                     ("cancel", "Cancel", "Make no changes and exit.")],
                    default="go", accent=flair["accent"])
-    return ({"theme": theme, "posture": posture, "emit": emit, "out": None,
+    return ({"theme": theme, "posture": posture, "mode": opmode, "emit": emit, "out": None,
              "root": None, "footprint": footprint}
             if choice == "go" else None)
 
@@ -306,6 +320,7 @@ SKILL_CLASS: dict[str, str] = {
     "council": "design",
     "workflow": "design",
     "parallel-agents": "design",
+    "pipeline": "design",
     "codebase-design": "design",
     "domain-modeling": "design",
     "wayfinder": "design",

@@ -376,10 +376,11 @@ def api_installs(state: WebState) -> dict:
                     # emit — same dir theme reads from, so detect it the same way.
                     "footprint": harness._footprint_of_dir(root),   # 'full' when no marker
                     "posture": harness._posture_of_dir(root),   # the install's register (None if absent)
+                    "mode": harness._mode_of_dir(root),   # the install's operating mode (None if absent)
                     "selected": _view_cfg(host, scope, root).resolve() == cur})
-    # `postures` lets the Harnesses page render the per-row register picker without a
-    # second call — discovered from src/, so a new posture appears with no UI change.
-    return {"installs": out, "postures": build.posture_names()}
+    # `postures`/`modes` let the Harnesses page render the per-row pickers without a
+    # second call — discovered from src/, so a new posture/mode appears with no UI change.
+    return {"installs": out, "postures": build.posture_names(), "modes": build.mode_names()}
 
 
 def _view_cfg(host: str, scope: str, root) -> Path:
@@ -456,8 +457,12 @@ def api_install_cmd(state: WebState, body: dict) -> dict:
     # re-theme never resets the register and a bogus body value can't reach the argv.
     pos = body.get("posture")
     pos = pos if pos in build.posture_names() else (harness._posture_of_dir(root) or "peer")
+    # Mode: same rule — a valid picked mode wins, else keep the install's own, so a
+    # re-theme never resets the mode and a bogus body value can't reach the argv.
+    mode = body.get("mode")
+    mode = mode if mode in build.mode_names() else (harness._mode_of_dir(root) or "direct")
     out = None if scope == "global" else str(root)
-    argv = harness._setup_build_args(theme or "neutral", emit, out, out, fp, pos)
+    argv = harness._setup_build_args(theme or "neutral", emit, out, out, fp, pos, mode)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 
 
@@ -503,8 +508,10 @@ def api_deploy_cmd(state: WebState, body: dict) -> dict:
     fp = fp if fp in ("lean", "full") else "full"   # a fresh deploy defaults to full
     pos = body.get("posture")
     pos = pos if pos in build.posture_names() else "peer"   # a fresh deploy defaults to peer
+    mode = body.get("mode")
+    mode = mode if mode in build.mode_names() else "direct"   # a fresh deploy defaults to direct
     emit = host   # project-scope emit name == host name (opencode / claude / bob / copilot)
-    argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root), fp, pos)
+    argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root), fp, pos, mode)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 
 

@@ -198,6 +198,40 @@ class BuildRoundTripTests(unittest.TestCase):
         self.assertIn("expert", names)
         self.assertNotIn("README", names)             # README is not a posture
 
+    def test_mode_default_direct_is_inlined(self):
+        """With no --mode, AGENT.md's Mode section carries the direct body."""
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            build.build("neutral", tmp)
+            agent = (tmp / "AGENT.md").read_text(encoding="utf-8")
+            self.assertIn("## Mode", agent)
+            self.assertIn("**Direct**", agent)
+            self.assertNotIn("**Foreman**", agent)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_mode_selection_switches_the_inlined_body(self):
+        """Setting the build-wide MODE inlines that mode instead of direct."""
+        tmp = Path(tempfile.mkdtemp())
+        old = build.MODE
+        try:
+            build.MODE = "foreman"          # facade mirrors into _build_render
+            build.build("neutral", tmp)
+            agent = (tmp / "AGENT.md").read_text(encoding="utf-8")
+            self.assertIn("**Foreman**", agent)
+            self.assertNotIn("**Direct**", agent)
+            # The full catalogue always ships regardless of the active mode.
+            self.assertTrue((tmp / "modes" / "direct.md").is_file())
+        finally:
+            build.MODE = old
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_mode_names_discovers_files_direct_first(self):
+        names = build.mode_names()
+        self.assertEqual(names[0], "direct")           # default sorts first
+        self.assertIn("foreman", names)
+        self.assertNotIn("README", names)              # README is not a mode
+
     def test_profile_is_seeded_once_and_preserved(self):
         """PROFILE.md holds the user's own identity: seeded once beside AGENT.md,
         never overwritten (same contract as wiki.jsonc / user-rules.md). It is

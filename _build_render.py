@@ -273,6 +273,36 @@ def _posture_body(theme: dict) -> str:
     return ""
 
 
+# The active mode — the operating register (how work gets executed) inlined into
+# AGENT.md's Mode section. A build-wide selection (like SRC/THEMES/POSTURE), set by
+# build.py from --mode so it need not thread through every emit signature; effective_theme
+# reads it. Default 'direct'. Mode is orthogonal to theme and posture: theme = voice,
+# posture = relationship, mode = how work gets executed.
+MODE = "direct"
+
+
+def mode_names() -> list[str]:
+    """Discovered mode names (src/modes/*.md, minus README), 'direct' first — the
+    single source for the CLI choices and the wizard picker, so a new mode file
+    appears everywhere with no code change."""
+    names = sorted(p.stem for p in (SRC / "modes").glob("*.md")
+                   if p.stem.lower() != "readme")
+    names.sort(key=lambda n: (n != "direct", n))
+    return names or ["direct"]
+
+
+def _mode_body(theme: dict) -> str:
+    """The rendered body of the selected mode (src/modes/<MODE>.md), for AGENT.md's
+    {{MODE_BODY}} token. Falls back to 'direct', then to empty, so a bad --mode
+    degrades to the default rather than breaking the build. Rendered through the
+    theme so a mode may use themed tokens ({{LAW}}, {{SKILL}}, ...)."""
+    for name in (MODE, "direct"):
+        path = SRC / "modes" / f"{name}.md"
+        if path.is_file():
+            return substitute(path.read_text(encoding="utf-8"), theme).strip()
+    return ""
+
+
 def effective_theme(theme_name: str) -> dict:
     """The token map used to render: the chosen theme's VOICE + VOCABULARY with the fixed
     neutral STRUCTURE laid on top (structure wins, so a theme can never change a section
@@ -280,6 +310,7 @@ def effective_theme(theme_name: str) -> dict:
     the agent's tone)."""
     theme = {**load_theme(theme_name), **STRUCTURE}
     theme["POSTURE_BODY"] = _posture_body(theme)
+    theme["MODE_BODY"] = _mode_body(theme)
     return theme
 
 # Dirs the build fully owns: wiped and regenerated each run so a renamed/removed
