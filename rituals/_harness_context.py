@@ -63,7 +63,8 @@ def sovereign_bypass(root) -> bool:
         return False
     try:
         data = json.loads((Path(root) / _EXCLUDES_FILE).read_text(encoding="utf-8"))
-        entries = data.get("excludes") or []
+        entries = data.get("excludes")
+        entries = entries if isinstance(entries, list) else []
     except (OSError, json.JSONDecodeError, AttributeError, ValueError):
         return False
     try:

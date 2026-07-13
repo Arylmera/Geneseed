@@ -1731,6 +1731,15 @@ def test_sovereign_bypass_outside_and_degraded(tmp_path, monkeypatch):
     assert harness.sovereign_bypass(tmp_path / "no-such") is False
 
 
+def test_sovereign_bypass_non_list_excludes_value(tmp_path, monkeypatch):
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    monkeypatch.chdir(tmp_path)
+    for bad in (5, True, 3.14):
+        (cfg / "excludes.json").write_text(json.dumps({"excludes": bad}), encoding="utf-8")
+        assert harness.sovereign_bypass(cfg) is False    # truthy scalar -> not iterable, must not raise
+
+
 def test_cmd_context_silent_in_excluded(tmp_path, monkeypatch, capsys):
     import argparse
     repo = tmp_path / "vault"; repo.mkdir()
