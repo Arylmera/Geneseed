@@ -896,5 +896,47 @@ class CopilotEmitTests(unittest.TestCase):
         self.assertEqual(ci_before.count("<!-- BEGIN GENESEED -->"), 1)
 
 
+class GitGateRootTests(unittest.TestCase):
+    """Task 3: git-gate hook passes --root for the sovereign bypass."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_git_gate_hook_carries_root(self):
+        """The emitted git-gate hook command includes --root with the cfg path."""
+        import _build_emit
+        cfg = self.tmp / "dotclaude"
+        groups = _build_emit._claude_hook_groups(cfg)
+        cmd = groups["PreToolUse"][0]["hooks"][0]["command"]
+        self.assertIn("git-gate", cmd)
+        self.assertIn(f'--root "{cfg}"', cmd)
+
+    def test_reemit_prunes_old_gitgate_group(self):
+        """Upgrade round-trip: a manifest recording the pre---root git-gate group gets
+        that group pruned and the new one added — no stacking."""
+        import _build_emit
+        cfg = self.tmp / "settings_test"
+        cfg.mkdir()
+        py = f'"{sys.executable}"'
+        h = f'"{_build_emit.ROOT / "rituals" / "harness.py"}"'
+        old_group = {"matcher": "Bash",
+                     "hooks": [{"type": "command", "command": f"{py} {h} git-gate"}]}
+        settings = cfg / "settings.json"
+        settings.write_text(json.dumps({"hooks": {"PreToolUse": [old_group]}}),
+                            encoding="utf-8")
+        prior = [{"event": "PreToolUse", "group": old_group}]
+        _, managed = _build_emit._merge_claude_settings(settings, "global", prior_hooks=prior)
+        data = json.loads(settings.read_text(encoding="utf-8"))
+        cmds = [hk["command"] for g in data["hooks"]["PreToolUse"] for hk in g["hooks"]]
+        self.assertTrue(all("--root" in c for c in cmds if "git-gate" in c),
+                       f"git-gate commands missing --root: {cmds}")
+        git_gate_cmds = [c for c in cmds if "git-gate" in c]
+        self.assertEqual(len(git_gate_cmds), 1, f"expected 1 git-gate, got {len(git_gate_cmds)}")
+
+
 if __name__ == "__main__":
     unittest.main()
