@@ -35,7 +35,7 @@ Every row below is present in the tree today; "Spec" links the design record.
 | Capability | What it is | Spec |
 | --- | --- | --- |
 | **Themed generator** | One neutral `src/` → 14 themed bundles via `build.py` (stdlib only); structure stays theme-independent | [DESIGN.md](DESIGN.md) |
-| **Laws / Agents / Skills / Memory / Notebook** | 35 laws, 16 agents, 41 skills, the memory convention, and the agent's sovereign notebook | [notebook](docs/specs/2026-06-11-notebook-sovereign-space.md) · [agent-own-space](docs/specs/2026-06-10-notebook-agent-own-space.md) |
+| **Laws / Agents / Skills / Memory / Notebook** | 35 laws, 16 agents, 46 skills, the memory convention, and the agent's sovereign notebook | [notebook](docs/specs/2026-06-11-notebook-sovereign-space.md) · [agent-own-space](docs/specs/2026-06-10-notebook-agent-own-space.md) |
 | **`doctor`** | One check: unresolved tokens, dead/non-hermetic links, theme-key parity, authoring gates, rendered-bundle drift | [theme-aware doctor/diff](docs/specs/2026-06-07-theme-aware-doctor-diff.md) |
 | **`diff` + improvements export** | Deployed-vs-source drift report; export an `improvements.md` back-port | [improvements-export](docs/specs/2026-06-12-improvements-export.md) |
 | **`status` / `version`** | Headless dashboard + fingerprint verdict (no TUI needed) | [status-command](docs/specs/2026-06-07-status-command.md) · [version-and-uninstall](docs/specs/2026-06-07-version-and-uninstall.md) |
