@@ -1700,6 +1700,61 @@ class GitGateTests(unittest.TestCase):
             self.assertEqual(out, "")
 
 
+# ---- sovereign-repo bypass: hooks go silent inside excludes.json folders ----------
+
+def _excludes_cfg(tmp_path, folders):
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    (cfg / "excludes.json").write_text(json.dumps(
+        {"excludes": [{"path": str(f)} for f in folders]}), encoding="utf-8")
+    return cfg
+
+
+def test_sovereign_bypass_inside_excluded(tmp_path, monkeypatch):
+    repo = tmp_path / "vault"
+    (repo / "sub").mkdir(parents=True)
+    cfg = _excludes_cfg(tmp_path, [repo])
+    monkeypatch.chdir(repo / "sub")           # excluded via a subdirectory too
+    assert harness.sovereign_bypass(cfg) is True
+
+
+def test_sovereign_bypass_outside_and_degraded(tmp_path, monkeypatch):
+    repo = tmp_path / "vault"
+    other = tmp_path / "vault-sibling"        # prefix trap: startswith without sep guard
+    repo.mkdir(); other.mkdir()
+    cfg = _excludes_cfg(tmp_path, [repo])
+    monkeypatch.chdir(other)
+    assert harness.sovereign_bypass(cfg) is False
+    assert harness.sovereign_bypass(None) is False
+    (cfg / "excludes.json").write_text("{not json", encoding="utf-8")
+    assert harness.sovereign_bypass(cfg) is False     # malformed -> not excluded
+    assert harness.sovereign_bypass(tmp_path / "no-such") is False
+
+
+def test_cmd_context_silent_in_excluded(tmp_path, monkeypatch, capsys):
+    import argparse
+    repo = tmp_path / "vault"; repo.mkdir()
+    (repo / "README.md").write_text("# v", encoding="utf-8")
+    cfg = _excludes_cfg(tmp_path, [repo])
+    monkeypatch.chdir(repo)
+    args = argparse.Namespace(root=str(cfg))
+    assert harness.cmd_context(args) == 0
+    out = capsys.readouterr()
+    assert out.out == "" and out.err == ""
+
+
+def test_cmd_git_gate_silent_in_excluded(tmp_path, monkeypatch, capsys):
+    import argparse, io
+    repo = tmp_path / "vault"; repo.mkdir()
+    cfg = _excludes_cfg(tmp_path, [repo])
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(
+        {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}})))
+    args = argparse.Namespace(root=str(cfg))
+    assert harness.cmd_git_gate(args) == 0
+    assert capsys.readouterr().out == ""      # no ask-decision printed
+
+
 def setattr_many(mod, saved):
     mod.ROOT, mod.SRC, mod.THEMES, mod.PLUGIN_SRC, mod.CONFIG, mod.WORKFLOW_SRC = saved
 

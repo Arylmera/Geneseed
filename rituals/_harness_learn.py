@@ -295,6 +295,11 @@ def cmd_learn(args: argparse.Namespace) -> int:
             sys.stderr.write(f"  duplicate: {a} <-> {b}\n")
         return 0
 
+    # Sovereign-repo bypass: the Stop/SubagentStop hook always passes --memory
+    # (<cfg>/memory); inside an excluded folder the global install must not learn.
+    if args.memory and sovereign_bypass(Path(args.memory).parent):
+        return 0
+
     raw = Path(args.file).read_text(encoding="utf-8") if args.file else sys.stdin.read()
     notes = _read_notes(raw)
     if not notes.strip():

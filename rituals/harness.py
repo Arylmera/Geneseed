@@ -159,6 +159,9 @@ def build_argparser() -> argparse.ArgumentParser:
     c.set_defaults(fn=cmd_context)
 
     gg = sub.add_parser("git-gate", help="PreToolUse hook: force an ASK before every git commit/push (Law XX backstop)")
+    gg.add_argument("--root", default=None,
+                    help="the install's own dir (set by the emitted hook); enables the "
+                         "sovereign-repo bypass from <root>/excludes.json")
     gg.set_defaults(fn=cmd_git_gate)
 
     df = sub.add_parser("diff", help="report how a deployed global harness differs from a fresh render (back-port aid)")
