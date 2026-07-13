@@ -136,7 +136,7 @@ export default function App() {
           onSwitch={refresh}
         />
         <div className="page">
-          <div className="pad">
+          <div className={route.view === 'harnesses' ? 'pad pad-wide' : 'pad'}>
             {route.view === 'dashboard' && (
               <Dashboard
                 overview={overview}

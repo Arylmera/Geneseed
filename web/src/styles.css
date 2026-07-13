@@ -287,6 +287,7 @@ button { font-family: inherit; }
 .page { flex: 1; overflow: auto; padding: 30px 34px 120px; }
 .page.center { max-width: 1180px; margin: 0 auto; width: 100%; }
 .pad { max-width: 1180px; margin: 0 auto; }
+.pad-wide { max-width: none; }
 
 /* ============================ PRIMITIVES =============================== */
 .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em;
