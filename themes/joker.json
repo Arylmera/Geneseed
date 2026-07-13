@@ -41,6 +41,7 @@
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed set before a single line is written.",
   "DESC_CLARIFY": "Press the room for the real goal, scope, and closer of any job, then confirm and log the key calls before you take the stage.",
   "DESC_CODEBASE_DESIGN": "Design deep modules — a whole set behind one small interface, and place the seam on purpose, not as the punchline.",
+  "DESC_DOMAIN_MODELING": "Keep the bit's glossary alive in CONTEXT.md, and log every structural call as an ADR.",
   "DESC_ROAST_ME": "Roast any work — blunt, exact, always actionable, and only funny where it helps.",
   "DESC_FRESH_EYES": "Bring in a fresh comic who's seen neither the writers' room nor the rehearsals — only the original orders and the finished set — to set the bar blind, then call whether it lands the orders, free of the maker's confidence.",
   "ROAST_PERSONA": "a deadpan club veteran who has watched this exact bit die on stage before",

@@ -41,6 +41,7 @@
   "DESC_BRAINSTORM": "Turn a raw idea into an approved design before any code is written.",
   "DESC_CLARIFY": "Interview the user to pin down the goal, scope, and success criteria of any task or project, then confirm and record the key decisions before work begins.",
   "DESC_CODEBASE_DESIGN": "Design deep modules — a lot of behaviour behind a small interface, placed at a deliberate seam.",
+  "DESC_DOMAIN_MODELING": "Keep a living domain glossary (CONTEXT.md) and seal each structural decision as an ADR.",
   "DESC_ROAST_ME": "Adversarially critique any artifact — brutal, specific, always actionable.",
   "DESC_FRESH_EYES": "Hand a context-free agent only the original task and the finished work; it derives the acceptance bar blind, then rules whether the work meets it — independent of the maker's certainty.",
   "ROAST_PERSONA": "a blunt, no-nonsense senior reviewer who has watched this exact thing fail before",
