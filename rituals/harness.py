@@ -35,6 +35,11 @@ Dependency-free. Subcommands:
                                    update/diff in the browser (binds 127.0.0.1)
     harness learn [FILE]           distil notes/transcript into memory entries
                                    via a model CLI of your choice (no API key)
+    harness exclude add|remove|list <path>
+                                   manage sovereign-repo exclusions: folders where
+                                   the GLOBAL installs go dormant (hooks silent,
+                                   preamble suppressed), stored in each install's
+                                   excludes.json
 
 `learn` shells out to whatever LLM CLI you configure in $GENESEED_LLM
 (e.g. `claude -p`, `llm`, `ollama run ...`). If it is unset, learn prints the
@@ -62,6 +67,7 @@ import argparse  # noqa: F401  (used by main(); also re-exported below)
 # the `import harness` surface (web.py, tests) byte-for-byte unchanged.
 import _harness_core
 import _harness_context
+import _harness_exclude
 import _harness_learn
 import _harness_diff
 import _harness_status
@@ -77,6 +83,7 @@ import _harness_menu
 _SUBMODULES = (
     _harness_core,
     _harness_context,
+    _harness_exclude,
     _harness_learn,
     _harness_diff,
     _harness_status,
@@ -210,6 +217,15 @@ def build_argparser() -> argparse.ArgumentParser:
                     help="rebuild MEMORY.md from the fact files on disk: re-index "
                          "orphans, prune dead lines, report duplicate descriptions")
     le.set_defaults(fn=cmd_learn)
+
+    ex = sub.add_parser("exclude",
+                        help="manage sovereign-repo exclusions: folders where the "
+                             "GLOBAL installs go dormant (hooks silent, preamble "
+                             "suppressed); stored in each install's excludes.json")
+    ex.add_argument("action", choices=["add", "remove", "list"])
+    ex.add_argument("path", nargs="?", default=None,
+                    help="folder to exclude / re-include (absolute or relative)")
+    ex.set_defaults(fn=cmd_exclude)
 
     su = sub.add_parser("setup", help="interactive install wizard (dependency-free, all OSes)")
     su.set_defaults(fn=cmd_setup)

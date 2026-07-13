@@ -1764,6 +1764,98 @@ def test_cmd_git_gate_silent_in_excluded(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().out == ""      # no ask-decision printed
 
 
+# ---- `harness exclude add|remove|list` -- CLI that manages excludes.json ----------
+
+def _fake_global_installs(tmp_path, monkeypatch, hosts=("claude", "bob")):
+    """Point build.HOSTS config_dir resolvers at temp dirs holding a manifest."""
+    cfgs = {}
+    for host in hosts:
+        cfg = tmp_path / f"{host}-cfg"
+        cfg.mkdir()
+        (cfg / ".geneseed-manifest.json").write_text('{"owned": []}', encoding="utf-8")
+        (cfg / "excludes.json").write_text('{"excludes": []}', encoding="utf-8")
+        if host == "claude":
+            (cfg / "CLAUDE.md").write_text("x", encoding="utf-8")
+        cfgs[host] = cfg
+        monkeypatch.setitem(build.HOSTS[host], "config_dir", (lambda c=cfg: c))
+    for host in set(build.HOSTS) - set(hosts):   # other hosts: no install
+        monkeypatch.setitem(build.HOSTS[host], "config_dir",
+                            (lambda h=host: tmp_path / f"{h}-none"))
+    return cfgs
+
+
+def test_exclude_add_remove_roundtrip(tmp_path, monkeypatch):
+    cfgs = _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"; repo.mkdir()
+
+    res = harness.exclude_add(str(repo))
+    assert res["ok"]
+    for cfg in cfgs.values():
+        data = json.loads((cfg / "excludes.json").read_text(encoding="utf-8"))
+        assert any(Path(e["path"]) == repo.resolve() for e in data["excludes"])
+    # claude wiring: claudeMdExcludes in the excluded repo's settings.local.json
+    local = json.loads((repo / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
+    assert (cfgs["claude"] / "CLAUDE.md").resolve().as_posix() in local["claudeMdExcludes"]
+    # bob wiring: shadow stub
+    assert (repo / ".bob" / "rules" / "geneseed.md").is_file()
+    # idempotent
+    res2 = harness.exclude_add(str(repo))
+    assert res2["ok"]
+    data = json.loads((cfgs["claude"] / "excludes.json").read_text(encoding="utf-8"))
+    assert len(data["excludes"]) == 1
+
+    res3 = harness.exclude_remove(str(repo))
+    assert res3["ok"]
+    for cfg in cfgs.values():
+        data = json.loads((cfg / "excludes.json").read_text(encoding="utf-8"))
+        assert data["excludes"] == []
+    local = json.loads((repo / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
+    assert not local.get("claudeMdExcludes")
+    assert not (repo / ".bob" / "rules" / "geneseed.md").exists()
+
+
+def test_exclude_never_clobbers_user_bob_stub(tmp_path, monkeypatch):
+    _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"
+    (repo / ".bob" / "rules").mkdir(parents=True)
+    own = repo / ".bob" / "rules" / "geneseed.md"
+    own.write_text("USER CONTENT", encoding="utf-8")
+    harness.exclude_add(str(repo))
+    assert own.read_text(encoding="utf-8") == "USER CONTENT"   # not clobbered
+    harness.exclude_remove(str(repo))
+    assert own.exists()                                        # not ours -> not deleted
+
+
+def test_excludes_snapshot(tmp_path, monkeypatch):
+    _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"; repo.mkdir()
+    harness.exclude_add(str(repo))
+    snap = harness.excludes_snapshot()
+    assert len(snap["excludes"]) == 1
+    assert sorted(snap["excludes"][0]["hosts"]) == ["bob", "claude"]
+
+
+def test_exclude_add_nonexistent_path_warns_but_proceeds(tmp_path, monkeypatch):
+    cfgs = _fake_global_installs(tmp_path, monkeypatch)
+    ghost = tmp_path / "does-not-exist"
+    res = harness.exclude_add(str(ghost))
+    assert res["ok"]
+    assert any("does not exist" in m for m in res["messages"])
+    data = json.loads((cfgs["claude"] / "excludes.json").read_text(encoding="utf-8"))
+    assert any(Path(e["path"]) == ghost.resolve() for e in data["excludes"])
+    assert not (ghost / ".claude").exists()   # never materialized just to wire excludes
+
+
+def test_cmd_exclude_list_no_installs(monkeypatch, capsys):
+    for host in build.HOSTS:
+        monkeypatch.setitem(build.HOSTS[host], "config_dir",
+                            (lambda h=host: Path(f"/no-such-{h}")))
+    import argparse
+    args = argparse.Namespace(action="list", path=None)
+    assert harness.cmd_exclude(args) == 1
+    assert "no global install" in capsys.readouterr().out
+
+
 def setattr_many(mod, saved):
     mod.ROOT, mod.SRC, mod.THEMES, mod.PLUGIN_SRC, mod.CONFIG, mod.WORKFLOW_SRC = saved
 
