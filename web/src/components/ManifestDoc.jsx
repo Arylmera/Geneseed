@@ -89,9 +89,7 @@ function RawSource({ body }) {
 // they explain how to wire the thing up rather than reading as "nothing here".
 export default function ManifestDoc({ manifest, body, name }) {
   if (!manifest) {
-    return (
-      <pre className="mf-raw-pre">{(body || '').replace(/^```json\n|\n```$/g, '')}</pre>
-    )
+    return <pre className="mf-raw-pre">{(body || '').replace(/^```json\n|\n```$/g, '')}</pre>
   }
 
   if (manifest.kind === 'wiki') {
@@ -101,8 +99,8 @@ export default function ManifestDoc({ manifest, body, name }) {
         <div className="mf-empty">
           <div className="mf-empty-title">No wiki declared yet</div>
           <p>
-            A wiki is your machine-wide knowledge base — an Obsidian vault or any folder of
-            linked markdown the agent reads from and writes back to. Declare one in{' '}
+            A wiki is your machine-wide knowledge base — an Obsidian vault or any folder of linked
+            markdown the agent reads from and writes back to. Declare one in{' '}
             <code className="mono">wiki.jsonc</code> to switch it on.
           </p>
           <a className="btn ghost sm" href="#/docs/configure-wiki">
@@ -129,10 +127,10 @@ export default function ManifestDoc({ manifest, body, name }) {
       <div className="mf-empty">
         <div className="mf-empty-title">No project context declared</div>
         <p>
-          Point the agent at this project's own docs by adding entries to{' '}
+          Point the agent at the docs for this project by adding entries to{' '}
           <code className="mono">{name || 'context.json'}</code> — each with a{' '}
-          <code className="mono">path</code>, a <code className="mono">load</code> mode
-          (eager or lazy), and a description.
+          <code className="mono">path</code>, a <code className="mono">load</code> mode (eager or
+          lazy), and a description.
         </p>
         <RawSource body={body} />
       </div>
