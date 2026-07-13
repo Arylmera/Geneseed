@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { Icon } from '../components/Icon.jsx'
-import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
+import { SECTIONS, LIBRARY_ORDER, SECTION_ALIAS } from '../lib/sections.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Markdown from '../components/Markdown.jsx'
+import ManifestDoc from '../components/ManifestDoc.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 
 // The on-disk source path for a given (section, name). Surface text for the
@@ -55,8 +56,26 @@ function EmptyDoc({ section, source }) {
 //
 // Selecting a row pushes the matching #/item/.../<name> URL so deep-linking
 // keeps working from the search spotlight and the Graph.
+// Resolve a routed section onto the chip that actually hosts it: `config`
+// folds into the wiki ("Knowledge") chip, so a #/section/config genome cell or a
+// #/item/config/… deep-link lands there instead of on an absent chip.
+const resolveSec = (s) => (s && SECTIONS[s] ? SECTION_ALIAS[s] || s : LIBRARY_ORDER[0])
+
+// The Knowledge chip is a merged view: the config catalog (the two setup
+// manifests) as a "Setup" group, then every wiki page grouped by vault. Each
+// row keeps its own `type` so the detail fetch and deep-link route correctly.
+async function fetchKnowledge() {
+  const [w, c] = await Promise.all([
+    api.catalog('wiki').catch(() => ({ items: [] })),
+    api.catalog('config').catch(() => ({ items: [] })),
+  ])
+  const setup = (c.items || []).map((it) => ({ ...it, type: it.type || 'config', group: 'Setup' }))
+  const pages = (w.items || []).map((it) => ({ ...it, type: it.type || 'wiki' }))
+  return { section: 'wiki', items: [...setup, ...pages] }
+}
+
 export default function Library({ overview, section, selected, dataRev }) {
-  const initialSec = section && SECTIONS[section] ? section : LIBRARY_ORDER[0]
+  const initialSec = resolveSec(section)
   const [sec, setSec] = useState(initialSec)
   const [q, setQ] = useState('')
   const rowsRef = useRef(null)
@@ -64,8 +83,9 @@ export default function Library({ overview, section, selected, dataRev }) {
   // Sync sec from prop whenever the route hands us a different section, and drop
   // any filter text so it doesn't carry across sections.
   useEffect(() => {
-    if (section && SECTIONS[section] && section !== sec) {
-      setSec(section)
+    const next = resolveSec(section)
+    if (section && SECTIONS[section] && next !== sec) {
+      setSec(next)
       setQ('')
     }
   }, [section]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -74,7 +94,7 @@ export default function Library({ overview, section, selected, dataRev }) {
     data: catalog,
     error: catErr,
     reload: reloadCatalog,
-  } = useAsync(() => api.catalog(sec), [sec, dataRev])
+  } = useAsync(() => (sec === 'wiki' ? fetchKnowledge() : api.catalog(sec)), [sec, dataRev])
 
   // useAsync keeps the prior section's catalog in `data` while the new one is
   // in flight (so the list doesn't flash empty). Guard against that staleness:
@@ -89,21 +109,27 @@ export default function Library({ overview, section, selected, dataRev }) {
   // switching tabs). Auto-picking the first row keeps the highlighted row and
   // the detail pane in sync instead of showing a generic fallback.
   const activeName = selected || items[0]?.name || null
+  const fromCatalog = activeName ? items.find((it) => it.name === activeName) : null
+  // A merged section holds mixed item types (config manifests + wiki pages), so
+  // fetch the detail by the row's own type rather than the section's default —
+  // otherwise a `config` row would be requested as a `wiki` page and 404.
+  const activeType = fromCatalog?.type || SECTIONS[sec].type
   const { data: item, error: itemErr } = useAsync(
-    () => (activeName ? api.item(SECTIONS[sec].type, activeName) : Promise.resolve(null)),
-    [sec, activeName, dataRev],
+    () => (activeName ? api.item(activeType, activeName) : Promise.resolve(null)),
+    [sec, activeName, activeType, dataRev],
   )
 
   const err = catErr || itemErr
   // Prefer the catalog row; fall back to a synthetic row when the URL names
   // an item that isn't in the listing (e.g. a fresh deep-link before the
   // catalog finishes).
-  const fromCatalog = activeName ? items.find((it) => it.name === activeName) : null
   const synthetic = activeName
     ? { name: activeName, title: item?.title || activeName, desc: item?.desc || '' }
     : null
   const activeItem = fromCatalog || synthetic
   const counts = overview?.counts || {}
+  // The Knowledge chip subsumes the config strand, so its badge sums both.
+  const chipCount = (k) => (k === 'wiki' ? (counts.wiki || 0) + (counts.config || 0) : counts[k])
 
   // Render-cap the list so a big section (a wiki vault is the case that bites)
   // doesn't paint hundreds of rows. With no filter we show the first 50; typing
@@ -140,8 +166,22 @@ export default function Library({ overview, section, selected, dataRev }) {
     box.scrollTop = Math.max(0, elTop - box.clientHeight / 2 + el.clientHeight / 2)
   }, [sec, selected])
 
-  const openItem = (name) => go(`#/item/${SECTIONS[sec].type}/${encodeURIComponent(name)}`)
+  const openItem = (it) =>
+    go(`#/item/${it.type || SECTIONS[sec].type}/${encodeURIComponent(it.name)}`)
   const switchSection = (k) => go(`#/section/${k}`)
+
+  // Arrow keys walk the master list. Focus moves between the row buttons; Enter
+  // or Space (the button's own default) opens the focused row. Keeps browsing
+  // off the mouse without spamming the history on every keystroke.
+  const onRowsKey = (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    const btns = [...(rowsRef.current?.querySelectorAll('.lib-row') || [])]
+    const idx = btns.indexOf(document.activeElement)
+    if (idx === -1) return
+    e.preventDefault()
+    const next = e.key === 'ArrowDown' ? Math.min(idx + 1, btns.length - 1) : Math.max(idx - 1, 0)
+    btns[next]?.focus()
+  }
   // Agents has its own top-level tab (#/agents), like Laws and Skills: the page
   // reuses this master-detail view locked to the agents section, chip-bar hidden.
   const standalone = sec === 'agents'
@@ -197,7 +237,7 @@ export default function Library({ overview, section, selected, dataRev }) {
           <p className="sub">
             {standalone
               ? 'The capability specialists deployed in the harness. Pick one to read its charter, straight from the source file.'
-              : 'Browse every layer of the deployed harness from one place. Pick a section, then read an entry; the markdown comes straight from the source file.'}
+              : 'The harness content you can browse: durable memory, the notebook, and your knowledge base with its setup. Pick a section, then read an entry — straight from the source file.'}
           </p>
         </div>
       </div>
@@ -205,7 +245,7 @@ export default function Library({ overview, section, selected, dataRev }) {
         <div className="lib-secbar">
           {LIBRARY_ORDER.map((k) => {
             const meta = SECTIONS[k]
-            const n = counts[k] ?? null
+            const n = chipCount(k) ?? null
             return (
               <button
                 key={k}
@@ -239,15 +279,33 @@ export default function Library({ overview, section, selected, dataRev }) {
             placeholder={`Filter ${SECTIONS[sec].label.toLowerCase()}…`}
             aria-label={`Filter ${SECTIONS[sec].label}`}
           />
-          <div className="lib-rows" ref={rowsRef}>
-            {shown.map((it) => (
-              <LibRow
-                key={it.name}
-                item={it}
-                isOpen={activeItem?.name === it.name}
-                onOpen={() => openItem(it.name)}
-              />
-            ))}
+          <div className="lib-rows" ref={rowsRef} onKeyDown={onRowsKey}>
+            {(() => {
+              // Insert a small header each time the row's group changes. Only the
+              // merged Knowledge section tags rows with a group (Setup, then one
+              // per vault); elsewhere `group` is absent and no headers render.
+              let lastGroup = null
+              const out = []
+              for (const it of shown) {
+                if (it.group && it.group !== lastGroup) {
+                  lastGroup = it.group
+                  out.push(
+                    <div className="lib-group" key={`g-${it.group}`}>
+                      {it.group}
+                    </div>,
+                  )
+                }
+                out.push(
+                  <LibRow
+                    key={it.name}
+                    item={it}
+                    isOpen={activeItem?.name === it.name}
+                    onOpen={() => openItem(it)}
+                  />,
+                )
+              }
+              return out
+            })()}
             {!ql && items.length > CAP && (
               <div className="lib-more">
                 Showing {CAP} of {items.length}; type to search the rest.
@@ -304,7 +362,13 @@ export default function Library({ overview, section, selected, dataRev }) {
                 </div>
               )}
               <hr className="hr" />
-              {item?.body ? (
+              {activeItem?.kind === 'manifest' || item?.manifest !== undefined ? (
+                item ? (
+                  <ManifestDoc manifest={item.manifest} body={item.body} name={activeItem.name} />
+                ) : (
+                  <p className="sub">Loading…</p>
+                )
+              ) : item?.body ? (
                 <div className="lib-doc">
                   <Markdown body={item.body} links={item.links || []} />
                 </div>

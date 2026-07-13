@@ -618,6 +618,50 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .lib-row .lr-name .mono { color: var(--text-3); font-size: 11px; }
 .lib-row .lr-desc { color: var(--text-2); font-size: 12px; margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-group { padding: 10px 16px 4px; font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--text-3);
+  background: var(--surface-2); border-bottom: 1px solid var(--line); }
+
+/* Manifest doc — the parsed wiki.jsonc / context.json view (cards + entries
+   table with load-mode badges) that replaces the raw JSON dump. */
+.mf-doc { display: flex; flex-direction: column; gap: 18px; }
+.mf-vault { border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px;
+  background: var(--surface-2); }
+.mf-vault-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.mf-vault-name { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.mf-vault-path { font-size: 11.5px; color: var(--text-3); }
+.mf-vault-desc { color: var(--text-2); font-size: 13px; margin: 4px 0 10px; }
+.mf-roles { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.mf-role { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px;
+  padding: 3px 8px; border-radius: var(--r-sm); background: var(--bg-2); color: var(--text-2); }
+.mf-role .glyph { width: 13px; height: 13px; }
+.mf-role-danger { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.mf-entries { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mf-entries td { padding: 7px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.mf-entries tr:first-child td { border-top: 0; }
+.mf-path { width: 42%; color: var(--text); }
+.mf-struck { text-decoration: line-through; color: var(--text-3); }
+.mf-load-cell { width: 74px; white-space: nowrap; }
+.mf-edesc { color: var(--text-2); }
+.mf-load { display: inline-block; font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: .04em; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, currentColor 36%, transparent); }
+.mf-load-ok { color: var(--good); }
+.mf-load-warn { color: var(--warn); }
+.mf-load-muted { color: var(--text-3); }
+.mf-empty { color: var(--text-2); }
+.mf-empty-title { font-family: var(--font-display); font-weight: 600; font-size: 15px;
+  color: var(--text); margin-bottom: 6px; }
+.mf-empty p { margin: 0 0 12px; font-size: 13px; }
+.mf-raw { margin-top: 16px; }
+.mf-raw-toggle { display: inline-flex; align-items: center; gap: 6px; background: transparent;
+  border: 0; padding: 4px 0; cursor: pointer; font: inherit; font-size: 12px; color: var(--text-3); }
+.mf-raw-toggle:hover { color: var(--text); }
+.mf-caret { width: 13px; height: 13px; transition: transform .12s; }
+.mf-caret.on { transform: rotate(90deg); }
+.mf-raw-pre { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 14px 16px; overflow: auto; font-family: var(--font-mono); font-size: 12px;
+  color: var(--text-2); margin-top: 8px; }
 .detail-doc { padding: 28px 32px; }
 .detail-doc h1 { font-family: var(--font-display); font-weight: 600; font-size: 24px;
   letter-spacing: -.02em; margin: 0 0 4px; }

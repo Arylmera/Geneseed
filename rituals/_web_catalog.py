@@ -230,6 +230,7 @@ def _wiki_items(state: WebState) -> list[dict]:
                 seen.add(key)
                 items.append({"name": key, "title": md.stem,
                               "desc": desc if len(mds) == 1 else r,
+                              "type": "wiki", "kind": "page", "group": wname,
                               "source": str(md.resolve())})
     return items
 
@@ -258,12 +259,44 @@ def _flat_name(name: str) -> None:
         raise NotFound(name)
 
 
+# The two setup manifests, in listing order. Each declares *what the agent
+# loads* — project context and machine-wide wiki(s) — in the same path/load/
+# description vocabulary, which is why the web console folds them into the one
+# "Knowledge" section rather than a raw-JSON "Config" drawer.
+_CONFIG_META = {
+    "context.json": ("Project context", "what the agent loads for this project"),
+    "wiki.jsonc": ("Wiki manifest", "your machine-wide knowledge base(s)"),
+}
+
+
+def _config_manifest(name: str, p: Path):
+    """Parse a setup file into the structured shape the web detail pane renders
+    as cards + an entries table (load-mode badges), instead of a raw JSON dump.
+    Uses the harness's JSONC loader so wiki.jsonc's comments are tolerated.
+    Returns None if the file can't be parsed — the raw body is the fallback."""
+    try:
+        cfg = harness._mcp_load(p)
+    except Exception:
+        return None
+    if not isinstance(cfg, dict):
+        return None
+    if name == "wiki.jsonc":
+        wikis = cfg.get("wikis")
+        return {"kind": "wiki", "wikis": wikis if isinstance(wikis, list) else []}
+    if name == "context.json":
+        ctx = cfg.get("context")
+        return {"kind": "context", "context": ctx if isinstance(ctx, list) else []}
+    return None
+
+
 def _config_items(state: WebState) -> list[dict]:
     out = []
     for fname in ("context.json", "wiki.jsonc"):
         p = state.target / fname
         if p.is_file():
-            out.append({"name": fname, "title": fname, "desc": "",
+            title, desc = _CONFIG_META.get(fname, (fname, ""))
+            out.append({"name": fname, "title": title, "desc": desc,
+                        "type": "config", "kind": "manifest",
                         "source": str(p.resolve())})
     return out
 
@@ -355,7 +388,9 @@ def api_item(state: WebState, type_: str, name: str) -> dict:
         if not p.is_file():
             raise NotFound(name)
         raw = p.read_text(encoding="utf-8", errors="replace")
-        return {"type": type_, "name": name, "title": name, "desc": "",
+        title, desc = _CONFIG_META.get(name, (name, ""))
+        return {"type": type_, "name": name, "title": title, "desc": desc,
+                "manifest": _config_manifest(name, p),
                 "body": f"```json\n{raw}\n```", "links": [],
                 "source": str(p.resolve())}
     raise NotFound(type_)

@@ -429,6 +429,35 @@ class WikiTests(unittest.TestCase):
         with self.assertRaises(web.NotFound):
             web.api_item(self.state, "wiki", "nope:Note.md")
 
+    def test_wiki_pages_carry_group_and_type(self):
+        # The web console groups the Knowledge list by vault and routes each row
+        # by its own type, so pages must be tagged with both.
+        cat = web.api_catalog(self.state, "wiki")
+        row = next(i for i in cat["items"] if i["name"] == "test:Note.md")
+        self.assertEqual(row["type"], "wiki")
+        self.assertEqual(row["kind"], "page")
+        self.assertEqual(row["group"], "test")
+
+    def test_config_item_returns_parsed_manifest(self):
+        # The setup files render as parsed manifests (cards + an entries table),
+        # not a raw JSON dump — so api_item must hand back a structured `manifest`.
+        import json
+        (self.tmp / "context.json").write_text(
+            json.dumps({"context": [{"path": "README.md", "load": "eager", "description": "x"}]}),
+            encoding="utf-8")
+        st = web.WebState(target=str(self.tmp))
+        ctx = web.api_item(st, "config", "context.json")
+        self.assertEqual(ctx["title"], "Project context")
+        self.assertEqual(ctx["manifest"]["kind"], "context")
+        self.assertEqual(ctx["manifest"]["context"][0]["load"], "eager")
+        wk = web.api_item(st, "config", "wiki.jsonc")
+        self.assertEqual(wk["manifest"]["kind"], "wiki")
+        self.assertEqual(wk["manifest"]["wikis"][0]["name"], "test")
+        # Both surface as Setup manifests in the catalog.
+        rows = {i["name"]: i for i in web.api_catalog(st, "config")["items"]}
+        self.assertEqual(rows["context.json"]["kind"], "manifest")
+        self.assertEqual(rows["wiki.jsonc"]["title"], "Wiki manifest")
+
 
 class McpTests(unittest.TestCase):
     def test_api_mcp_lists_targets_and_states(self):

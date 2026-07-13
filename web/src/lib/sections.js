@@ -14,7 +14,10 @@ export const SECTIONS = {
   laws: { label: 'Laws', type: 'law', desc: 'governance rules', icon: 'law' },
   memory: { label: 'Memory', type: 'memory', desc: 'durable facts', icon: 'library' },
   notebook: { label: 'Notebook', type: 'notebook', desc: 'sovereign space', icon: 'notebook' },
-  wiki: { label: 'Wiki', type: 'wiki', desc: 'machine knowledge base', icon: 'graph' },
+  // The wiki chip is the merged "Knowledge" view: it lists the two setup
+  // manifests (project context + wiki.jsonc) as a Setup group, then every wiki
+  // page grouped by vault. See Library.jsx (config folds into this chip).
+  wiki: { label: 'Knowledge', type: 'wiki', desc: 'knowledge base + setup', icon: 'graph' },
   config: { label: 'Config', type: 'config', desc: 'install metadata', icon: 'settings' },
 }
 
@@ -25,11 +28,18 @@ export const SECTIONS = {
 // (TYPE_TO_SECTION, deep-link redirects).
 export const SECTION_ORDER = ['agents', 'memory', 'notebook', 'wiki', 'config']
 
-// The Library chip-bar's order. Agents also has its own top-level tab
-// (#/agents) like Laws and Skills, so the chip-bar drops it — the Library
-// listing would only be a worse second door. Agents stays in SECTION_ORDER
-// because the dashboard views and search index still count and index it.
-export const LIBRARY_ORDER = SECTION_ORDER.filter((k) => k !== 'agents')
+// The Library chip-bar's order. It drops two keys that SECTION_ORDER keeps:
+//   agents — has its own top-level tab (#/agents); a Library chip would be a
+//            worse second door.
+//   config — folds into the wiki ("Knowledge") chip, which lists the setup
+//            manifests alongside the wiki pages (they share one load vocabulary).
+// Both stay in SECTION_ORDER so the dashboard genome and search index still
+// count and index them as their own content strands.
+export const LIBRARY_ORDER = SECTION_ORDER.filter((k) => k !== 'agents' && k !== 'config')
+
+// Sections whose content is surfaced under a different chip. A deep-link or
+// genome cell for the source section resolves onto the chip that hosts it.
+export const SECTION_ALIAS = { config: 'wiki' }
 
 // Singular item type -> plural section key, for resolving #/item/<type>/<name>
 // routes back to the section that owns them.

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { SECTIONS, SECTION_ORDER, LIBRARY_ORDER, TYPE_TO_SECTION } from '../lib/sections.js'
+import {
+  SECTIONS,
+  SECTION_ORDER,
+  LIBRARY_ORDER,
+  SECTION_ALIAS,
+  TYPE_TO_SECTION,
+} from '../lib/sections.js'
 
 describe('sections taxonomy', () => {
   it('SECTION_ORDER is the SECTIONS keys minus laws and skills (each has its own tab)', () => {
@@ -17,11 +23,21 @@ describe('sections taxonomy', () => {
     expect(SECTION_ORDER).toHaveLength(5)
   })
 
-  it('LIBRARY_ORDER additionally drops agents (own tab), keeping the rest in order', () => {
-    // Agents got its own top-level tab (#/agents) like Laws and Skills, so the
-    // Library chip-bar drops it. SECTION_ORDER keeps it for dashboards/search.
-    expect(LIBRARY_ORDER).toEqual(SECTION_ORDER.filter((k) => k !== 'agents'))
+  it('LIBRARY_ORDER drops agents (own tab) and config (folds into wiki), keeping the rest', () => {
+    // Agents got its own top-level tab (#/agents) like Laws and Skills, and
+    // config folds into the wiki ("Knowledge") chip, so the Library chip-bar
+    // drops both. SECTION_ORDER keeps them for dashboards/search.
+    expect(LIBRARY_ORDER).toEqual(SECTION_ORDER.filter((k) => k !== 'agents' && k !== 'config'))
     expect(LIBRARY_ORDER).not.toContain('agents')
+    expect(LIBRARY_ORDER).not.toContain('config')
+  })
+
+  it('SECTION_ALIAS routes config onto the wiki chip that hosts it', () => {
+    // The config strand has no chip of its own; its deep-links and genome cell
+    // resolve onto the wiki (Knowledge) chip.
+    expect(SECTION_ALIAS.config).toBe('wiki')
+    // Aliased targets must themselves be a real, browsable chip.
+    expect(LIBRARY_ORDER).toContain(SECTION_ALIAS.config)
   })
 
   it('every section carries a full set of display metadata', () => {
