@@ -913,6 +913,71 @@ class SelectViewTests(unittest.TestCase):
         self.assertEqual([r for r in rows if r["selected"]][0]["host"], "claude")
 
 
+class ExcludesTests(unittest.TestCase):
+    """GET/POST /api/excludes: the web mirror of `harness exclude add|remove|list`,
+    reusing excludes_snapshot()/exclude_add()/exclude_remove() (Task 4) verbatim —
+    this endpoint owns no exclusion logic of its own, so the round trip is really
+    exercising the wiring, not re-testing _harness_exclude.py."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        self.state = web.WebState(theme="neutral")
+        self._saved_cfgs = {h: row["config_dir"] for h, row in web.build.HOSTS.items()}
+
+    def tearDown(self):
+        import shutil
+        for h, fn in self._saved_cfgs.items():
+            web.build.HOSTS[h]["config_dir"] = fn
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _fake_global_installs(self, hosts=("claude", "bob")):
+        """Point build.HOSTS config_dir resolvers at temp dirs holding a manifest —
+        the web-test-idiom twin of test_harness.py's helper of the same name (that
+        one takes a pytest `monkeypatch`; this file is unittest-style, so it patches
+        and restores by hand in setUp/tearDown instead)."""
+        cfgs = {}
+        for host in hosts:
+            cfg = self.tmp / f"{host}-cfg"
+            cfg.mkdir()
+            (cfg / ".geneseed-manifest.json").write_text('{"owned": []}', encoding="utf-8")
+            (cfg / "excludes.json").write_text('{"excludes": []}', encoding="utf-8")
+            if host == "claude":
+                (cfg / "CLAUDE.md").write_text("x", encoding="utf-8")
+            cfgs[host] = cfg
+            web.build.HOSTS[host]["config_dir"] = (lambda c=cfg: c)
+        for host in set(web.build.HOSTS) - set(hosts):   # other hosts: no install
+            web.build.HOSTS[host]["config_dir"] = (lambda h=host: self.tmp / f"{h}-none")
+        return cfgs
+
+    def test_api_excludes_roundtrip(self):
+        self._fake_global_installs()
+        repo = self.tmp / "vault"; repo.mkdir()
+        res = web.api_excludes_mutate(self.state, {"action": "add", "path": str(repo)})
+        self.assertTrue(res["ok"])
+        snap = web.api_excludes(self.state)
+        self.assertEqual(len(snap["excludes"]), 1)
+        self.assertEqual(snap["excludes"][0]["path"].rstrip("/"),
+                         str(repo).replace("\\", "/"))
+        res = web.api_excludes_mutate(self.state, {"action": "remove", "path": str(repo)})
+        self.assertTrue(res["ok"])
+        self.assertEqual(web.api_excludes(self.state)["excludes"], [])
+
+    def test_api_excludes_mutate_rejects_bad_body(self):
+        self.assertFalse(web.api_excludes_mutate(self.state, {})["ok"])
+        self.assertFalse(web.api_excludes_mutate(self.state, {"action": "add"})["ok"])
+        self.assertFalse(web.api_excludes_mutate(self.state, {"path": "/x"})["ok"])
+        self.assertFalse(web.api_excludes_mutate(self.state, {"action": "bogus", "path": "/x"})["ok"])
+        self.assertFalse(web.api_excludes_mutate(self.state, None)["ok"])
+
+    def test_api_excludes_mutate_remove_of_unknown_path_is_not_ok(self):
+        self._fake_global_installs()
+        # Never excluded -> exclude_remove finds nothing -> ok False, never a crash.
+        res = web.api_excludes_mutate(
+            self.state, {"action": "remove", "path": str(self.tmp / "never-excluded")})
+        self.assertFalse(res["ok"])
+
+
 class GraphTests(unittest.TestCase):
     def test_api_graph_nodes_and_edges_resolve(self):
         state = web.WebState(theme="neutral")

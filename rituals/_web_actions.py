@@ -362,6 +362,31 @@ def api_mcp_toggle(state: WebState, body: dict) -> dict:
     return {"ok": True, "name": name, "state": harness._mcp_state(cfg, name, host)}
 
 
+# ---- sovereign-repo exclusions -----------------------------------------------------
+# GET/POST /api/excludes — the web mirror of `harness exclude add|remove|list`
+# (Task 4's _harness_exclude.py), reusing excludes_snapshot()/exclude_add()/
+# exclude_remove() verbatim: this endpoint owns no exclusion logic of its own.
+
+def api_excludes(state: WebState) -> dict:
+    """Sovereign-repo exclusions, union across every global install (GET /api/excludes)."""
+    return harness.excludes_snapshot()
+
+
+def api_excludes_mutate(state: WebState, body: dict) -> dict:
+    """Add/remove one excluded folder (POST /api/excludes). Body:
+    {"action": "add"|"remove", "path": "<abs folder>"}. A malformed body (missing/
+    unknown action, blank path) is rejected with ok=False rather than reaching
+    exclude_add/exclude_remove, which assume a real path string."""
+    body = body or {}
+    action = body.get("action")
+    path = str(body.get("path") or "").strip()
+    if action not in ("add", "remove") or not path:
+        return {"ok": False, "path": path,
+                "messages": ["body must be {action: add|remove, path: <folder>}"]}
+    fn = harness.exclude_add if action == "add" else harness.exclude_remove
+    return fn(path)
+
+
 def api_installs(state: WebState) -> dict:
     """Detected installs across host x scope and their on/off state. One row per
     (host, scope, path) tuple — see harness._install_targets. Both OpenCode and Claude,

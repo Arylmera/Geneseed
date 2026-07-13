@@ -81,6 +81,8 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     return self._send_json(api_mcp(state))
                 if path == "/api/installs":
                     return self._send_json(api_installs(state))
+                if path == "/api/excludes":
+                    return self._send_json(api_excludes(state))
                 if path == "/api/rules":
                     return self._send_json(api_rules(state))
                 if path == "/api/profile":
@@ -166,6 +168,11 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                     res = api_install_toggle(state, self._read_json_body())
                 except NotFound as e:
                     return self._send_json({"error": f"not found: {e}"}, 404)
+                return self._send_json(res, 200 if res.get("ok") else 409)
+            if path == "/api/excludes":
+                # add/remove on a sovereign-repo exclusion; ok=False (malformed body,
+                # or nothing was excluded to remove) — 409, same convention as /api/rules.
+                res = api_excludes_mutate(state, self._read_json_body())
                 return self._send_json(res, 200 if res.get("ok") else 409)
             if path == "/api/view":
                 try:
