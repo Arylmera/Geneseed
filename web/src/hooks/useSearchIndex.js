@@ -17,9 +17,12 @@ export function useSearchIndex() {
     const job = (async () => {
       const entries = []
 
-      // Library catalogs — 7 sections in parallel.
+      // Content catalogs, in parallel. Laws and Skills live on their own tabs
+      // (not in SECTION_ORDER), but the spotlight should still find them — so
+      // index them alongside the Library sections.
+      const searchSections = ['laws', 'skills', ...SECTION_ORDER]
       const cats = await Promise.all(
-        SECTION_ORDER.map(async (sec) => {
+        searchSections.map(async (sec) => {
           try {
             const c = await api.catalog(sec)
             return { sec, items: c?.items || [] }
@@ -34,7 +37,7 @@ export function useSearchIndex() {
           const title = it.title || it.name
           entries.push({
             kind: meta.label,
-            sortKey: SECTION_ORDER.indexOf(sec),
+            sortKey: searchSections.indexOf(sec),
             title,
             desc: it.desc || '',
             hay: `${title} ${it.desc || ''} ${it.name || ''}`.toLowerCase(),
