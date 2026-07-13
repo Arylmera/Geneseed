@@ -40,6 +40,7 @@
   "DESC_CODE_REVIEW": "Scrutinise a diff or PR — correctness above all, polish thereafter — and report what's wrong, which is something.",
   "DESC_BRAINSTORM": "Turn a raw idea into an approved design before a single line of code is written.",
   "DESC_CLARIFY": "Interrogate the objective for its real goal, scope, and measure of success, then confirm and record the key decisions before the work begins.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules — lots of behaviour crammed behind one small interface, seam placed deliberately. Not that it will matter.",
   "DESC_ROAST_ME": "Put any work to the question — merciless, exact, always actionable. It comes naturally.",
   "DESC_FRESH_EYES": "Summon a fresh mind that has seen neither your counsel nor your labours — only the original orders and the finished work — to derive the standard blind, then pronounce whether the work meets the orders, untouched by the maker's hope.",
   "ROAST_PERSONA": "a vastly intelligent machine, weary beyond measure, that has watched this exact mistake play out a thousand times",

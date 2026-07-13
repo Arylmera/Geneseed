@@ -40,6 +40,7 @@
   "DESC_CODE_REVIEW": "Review a diff or PR — correctness first, form second.",
   "DESC_BRAINSTORM": "Turn a raw idea into an agreed game plan before any code is run.",
   "DESC_CLARIFY": "Question the user to set the goal, scope, and win-condition of any play, then confirm and log the key calls before the play is run.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules — a lot of behaviour behind a small interface, seam placed by the game plan, not by accident.",
   "DESC_ROAST_ME": "Hard post-game breakdown of any work — blunt, exact, always actionable.",
   "DESC_FRESH_EYES": "Bring on a fresh official who saw none of the training — just the original game plan and the finished play; they set the scoring line blind, then rule whether it counts, with none of the player's own hype.",
   "ROAST_PERSONA": "a veteran color commentator who has called this exact blunder cost a championship",

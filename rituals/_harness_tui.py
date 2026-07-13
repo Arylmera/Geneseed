@@ -306,6 +306,7 @@ SKILL_CLASS: dict[str, str] = {
     "council": "design",
     "workflow": "design",
     "parallel-agents": "design",
+    "codebase-design": "design",
     "tdd": "build",
     "develop": "build",
     "refactor": "build",

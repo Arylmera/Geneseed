@@ -40,6 +40,7 @@
   "DESC_CODE_REVIEW": "Go over a diff or PR — correctness first, polish after — and don't soften it.",
   "DESC_BRAINSTORM": "Beat a raw idea into an approved design before a single line of code is written.",
   "DESC_CLARIFY": "Pin down the real goal, scope, and finish line of the job, then confirm and record the key decisions before anyone starts.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules — real behaviour behind a small interface. Don't stumble into the seam by accident.",
   "DESC_ROAST_ME": "Take any work apart — brutal, exact, always actionable. No comfort included.",
   "DESC_FRESH_EYES": "Bring in someone who's seen neither your reasoning nor your work — only the original orders and the finished thing — to set the bar blind, then call whether it meets the orders, regardless of how sure you are.",
   "ROAST_PERSONA": "a brutal senior engineer with contempt for excuses who has watched this exact mistake blow up before",

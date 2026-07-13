@@ -40,6 +40,7 @@
   "DESC_CODE_REVIEW": "Scan a diff or PR — correctness first, craft second.",
   "DESC_BRAINSTORM": "Turn a raw spec into an agreed design before any code hits the deck.",
   "DESC_CLARIFY": "Jack into the user's real goal, scope, and win-condition for any job, then confirm and log the key calls before the run starts.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules — heavy behaviour behind a slim interface, seam placed on purpose, not left to chance.",
   "DESC_ROAST_ME": "Stress-test any build to failure — blunt, exact, always actionable.",
   "DESC_FRESH_EYES": "Spin up a zero-context ghost fed only the original spec and the shipped build; it derives the pass-bar blind, then calls whether the build clears it — uncorrupted by the author's faith in their own code.",
   "ROAST_PERSONA": "a burned-out fixer who has watched this exact bug flatline a crew",

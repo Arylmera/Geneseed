@@ -40,6 +40,7 @@
   "DESC_CODE_REVIEW": "<one-line description: review a diff/PR — correctness first, quality second>",
   "DESC_BRAINSTORM": "<one-line description: turn a raw idea into an approved design before code>",
   "DESC_CLARIFY": "<one-line description: interview the user to pin goal, scope, success criteria>",
+  "DESC_CODEBASE_DESIGN": "<one-line description: design deep modules behind small interfaces at deliberate seams>",
   "DESC_ROAST_ME": "<one-line description: adversarially critique any artifact — brutal, specific, actionable>",
   "DESC_FRESH_EYES": "<one-line description: a context-free agent derives the acceptance bar blind, then rules the work>",
   "ROAST_PERSONA": "<the persona the roast-me skill adopts, in this theme's voice>",

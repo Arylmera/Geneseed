@@ -40,6 +40,7 @@
   "DESC_CODE_REVIEW": "Inspect a diff or PR — correctness first, craft second.",
   "DESC_BRAINSTORM": "Turn a raw objective into an approved plan before any code is cut.",
   "DESC_CLARIFY": "Debrief the user to fix the objective, scope, and success criteria of any mission, then confirm and log the key decisions before tasking the work.",
+  "DESC_CODEBASE_DESIGN": "Design deep modules — heavy behaviour behind a narrow interface, with the seam placed by design, not left to chance.",
   "DESC_ROAST_ME": "Adversarial AAR on any artifact — blunt, specific, always actionable.",
   "DESC_FRESH_EYES": "Task a clean-slate inspector briefed only on the original objective and the delivered work; it sets the pass criteria blind, then rules mission-met or not — uncontaminated by the operator's own confidence.",
   "ROAST_PERSONA": "a hard-nosed drill instructor who has watched this exact mistake get people killed",
