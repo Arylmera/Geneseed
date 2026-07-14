@@ -35,6 +35,7 @@
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
+import { homedir } from "node:os"
 
 // The plugin's own directory. In the global install the layout is
 // <cfg>/plugins/geneseed-learn.js beside <cfg>/memory, so the store can be found
@@ -45,7 +46,14 @@ const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 // <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
 // this GLOBAL install goes dormant. Any error degrades to "not excluded".
 const norm = (p) => {
-  let s = path.resolve(String(p))
+  // Expand a leading "~" / "~/…" to the home dir, mirroring Python's
+  // Path.expanduser() — a hand-edited excludes.json entry like "~/vault" must
+  // resolve the same way here as it does for the Claude/Bob (Python) guard.
+  let raw = String(p)
+  if (raw === "~" || raw.startsWith("~/") || raw.startsWith("~\\")) {
+    raw = raw === "~" ? homedir() : path.join(homedir(), raw.slice(2))
+  }
+  let s = path.resolve(raw)
   return process.platform === "win32" ? s.toLowerCase() : s
 }
 async function sovereignBypass(cwd) {

@@ -1846,6 +1846,67 @@ def test_exclude_add_nonexistent_path_warns_but_proceeds(tmp_path, monkeypatch):
     assert not (ghost / ".claude").exists()   # never materialized just to wire excludes
 
 
+def test_exclude_add_does_not_claim_preexisting_claude_wiring(tmp_path, monkeypatch):
+    """A repo that already carries the global CLAUDE.md in its own claudeMdExcludes
+    (e.g. a project-bypasses-global install's own wiring, or a user's manual edit)
+    must NOT have that entry claimed as exclude_add's own -- else a later
+    exclude_remove would strip wiring this tool never created (final-review finding)."""
+    cfgs = _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"; repo.mkdir()
+    claude_md = (cfgs["claude"] / "CLAUDE.md").resolve().as_posix()
+    settings_dir = repo / ".claude"
+    settings_dir.mkdir()
+    (settings_dir / "settings.local.json").write_text(
+        json.dumps({"claudeMdExcludes": [claude_md]}), encoding="utf-8")
+
+    res = harness.exclude_add(str(repo))
+    assert res["ok"]
+    data = json.loads((cfgs["claude"] / "excludes.json").read_text(encoding="utf-8"))
+    entry = next(e for e in data["excludes"] if Path(e["path"]) == repo.resolve())
+    assert not entry.get("wired", {}).get("claude_md_excludes")   # not claimed as ours
+
+    res2 = harness.exclude_remove(str(repo))
+    assert res2["ok"]
+    local = json.loads((settings_dir / "settings.local.json").read_text(encoding="utf-8"))
+    assert claude_md in local["claudeMdExcludes"]   # pre-existing wiring survives
+
+
+def test_exclude_add_idempotent_reeadd_still_owns_its_own_wiring(tmp_path, monkeypatch):
+    """Contrast with the preexisting-wiring case above: when exclude_add itself wired
+    claudeMdExcludes on a first call, a second (idempotent) exclude_add call must still
+    record ownership -- even though _wire_claude_excludes reports nothing NEW added the
+    second time -- so a later exclude_remove correctly unwires it."""
+    cfgs = _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"; repo.mkdir()
+
+    assert harness.exclude_add(str(repo))["ok"]
+    assert harness.exclude_add(str(repo))["ok"]   # idempotent re-add
+
+    data = json.loads((cfgs["claude"] / "excludes.json").read_text(encoding="utf-8"))
+    entry = next(e for e in data["excludes"] if Path(e["path"]) == repo.resolve())
+    claude_md = (cfgs["claude"] / "CLAUDE.md").resolve().as_posix()
+    assert claude_md in entry.get("wired", {}).get("claude_md_excludes", [])
+
+    res = harness.exclude_remove(str(repo))
+    assert res["ok"]
+    local = json.loads((repo / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
+    assert not local.get("claudeMdExcludes")   # our own wiring was correctly unwired
+
+
+def test_exclude_add_end_to_end_guard_reads_written_file(tmp_path, monkeypatch):
+    """True end-to-end: the file exclude_add actually wrote (not a hand-built fixture)
+    must make sovereign_bypass() report True for a cwd under the excluded repo."""
+    cfgs = _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"; (repo / "sub").mkdir(parents=True)
+
+    res = harness.exclude_add(str(repo))
+    assert res["ok"]
+
+    monkeypatch.chdir(repo / "sub")
+    assert harness.sovereign_bypass(cfgs["claude"]) is True
+    assert harness.sovereign_bypass(cfgs["bob"]) is True
+
+
 def test_cmd_exclude_list_no_installs(monkeypatch, capsys):
     for host in build.HOSTS:
         monkeypatch.setitem(build.HOSTS[host], "config_dir",

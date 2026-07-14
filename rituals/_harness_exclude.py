@@ -68,12 +68,26 @@ def exclude_add(path: str) -> dict:
         return {"ok": False, "path": str(repo),
                 "messages": ["no global Geneseed install found — nothing to exclude from"]}
     for host, cfg in installs:
+        data = _read_excludes(cfg)
+        prior = next((e for e in data["excludes"]
+                      if isinstance(e, dict) and _same(e.get("path"), repo)), None)
+        prior_wired = (prior.get("wired") if isinstance(prior, dict) else None) or {}
         wired: dict = {}
         if host == "claude" and repo.is_dir():
             entry = (cfg / "CLAUDE.md").resolve().as_posix()
             added = _build_emit._wire_claude_excludes(
                 repo / ".claude" / "settings.local.json", [entry])
-            wired["claude_md_excludes"] = added or [entry]
+            if added:
+                wired["claude_md_excludes"] = added
+            elif prior_wired.get("claude_md_excludes"):
+                # Idempotent re-add: OUR own prior exclude_add call genuinely wired this
+                # entry (confirmed by the manifest record), so ownership carries forward
+                # even though _wire_claude_excludes reports nothing NEW this time.
+                wired["claude_md_excludes"] = prior_wired["claude_md_excludes"]
+            # else: the entry was already present for some OTHER reason (e.g. a project
+            # install's own project-bypasses-global wiring, or a bailed write) — do NOT
+            # fabricate ownership, or a later exclude_remove would strip wiring we never
+            # created.
             if not added:
                 messages.append(f"{host}: claudeMdExcludes already present (kept)")
         if host == "bob" and repo.is_dir():
@@ -97,7 +111,6 @@ def exclude_add(path: str) -> dict:
         if host == "copilot":
             messages.append("copilot: no native suppression exists — the global "
                             "copilot-instructions.md still loads there (documented limitation)")
-        data = _read_excludes(cfg)
         entries = [e for e in data["excludes"]
                    if not (isinstance(e, dict) and _same(e.get("path"), repo))]
         entries.append({"path": str(repo).replace(os.sep, "/"), "wired": wired})
