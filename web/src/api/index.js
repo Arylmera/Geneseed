@@ -12,6 +12,7 @@ import * as server from './server.js'
 import * as docs from './docs.js'
 import * as rules from './rules.js'
 import * as profile from './profile.js'
+import * as excludes from './excludes.js'
 
 export const api = {
   ...status,
@@ -24,4 +25,5 @@ export const api = {
   ...docs,
   ...rules,
   ...profile,
+  ...excludes,
 }

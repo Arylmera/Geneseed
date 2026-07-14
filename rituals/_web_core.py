@@ -320,6 +320,35 @@ DOC_GROUPS = [
          "---\n\n"
          "**Related:** [Rules (Laws)](#/laws) · [Voice vs structure](#/docs/themes) "
          "· [Token footprint — the numbers](#/docs/token-footprint)"},
+        {"id": "exclusions", "title": "Sovereign repos (exclusions)", "kind": "concept",
+         "link": {"hash": "#/harnesses", "label": "Manage in Harnesses →"},
+         "body": (
+            "A **sovereign repo** is a folder where every GLOBAL harness install goes "
+            "fully dormant: hooks stay silent and the global preamble (`AGENT.md`/"
+            "`CLAUDE.md`) is never loaded there. A repo that ships its own agent config "
+            "you don't want a global harness layered onto is the usual case.\n\n"
+            "### Total dormancy, not a filter\n\n"
+            "Exclusion is all-or-nothing per folder — it doesn't trim which Rules apply "
+            "or which Skills load, the global harness simply never engages inside that "
+            "tree. A per-repo Geneseed install in the same folder is unaffected; "
+            "exclusions only ever suppress GLOBAL installs.\n\n"
+            "### How it's wired, per host\n\n"
+            "- **Claude Code** — native suppression via `claudeMdExcludes` in the "
+            "repo's `.claude/settings.local.json`.\n"
+            "- **Bob** — a shadow `rules/geneseed.md` stub that shadows the global "
+            "one (never overwrites a hand-written stub already there).\n"
+            "- **OpenCode** — the `sovereign_bypass()` guard (Python) and its JS twin "
+            "in the plugins short-circuit at session start.\n"
+            "- **Copilot — documented limitation.** GitHub Copilot has no native "
+            "per-repo suppression hook: the global `copilot-instructions.md` still "
+            "loads even inside an excluded folder.\n\n"
+            "### Manage it\n\n"
+            "- **CLI** — `harness exclude add <path>` / `remove <path>` / `list`.\n"
+            "- **This console** — the **Excluded folders** card on the "
+            "**Harnesses** page (shown once a global install exists).\n\n"
+            "Exclusions live in each global install's own `excludes.json`, so "
+            "add/remove re-wires every global install in one call — nothing to repeat "
+            "per host.")},
         {"id": "plugins", "title": "Plugins (OpenCode)", "kind": "concept",
          "harness": "opencode",
          "link": {"hash": "#/docs/plugin-context",

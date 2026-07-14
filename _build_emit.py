@@ -638,9 +638,12 @@ def _claude_hook_groups(cfg: Path) -> dict:
     # --root carries the install's own dir so a GLOBAL hook can stand down when a project
     # install of the same host sits at/above cwd (project-bypasses-global; see cmd_context).
     context = f'{py} {h} context --root "{cfg}" || exit 0'
+    # --root enables the sovereign-repo bypass (excludes.json) — same reason context
+    # carries it. git-gate has no other install-dir dependency.
+    gate = f'{py} {h} git-gate --root "{cfg}"'
     return {
         "PreToolUse": [
-            {"matcher": "Bash", "hooks": [{"type": "command", "command": f"{py} {h} git-gate"}]},
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": gate}]},
         ],
         "SessionStart": [
             {"matcher": "startup|clear", "hooks": [{"type": "command", "command": context}]},

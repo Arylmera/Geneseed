@@ -1700,6 +1700,223 @@ class GitGateTests(unittest.TestCase):
             self.assertEqual(out, "")
 
 
+# ---- sovereign-repo bypass: hooks go silent inside excludes.json folders ----------
+
+def _excludes_cfg(tmp_path, folders):
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    (cfg / "excludes.json").write_text(json.dumps(
+        {"excludes": [{"path": str(f)} for f in folders]}), encoding="utf-8")
+    return cfg
+
+
+def test_sovereign_bypass_inside_excluded(tmp_path, monkeypatch):
+    repo = tmp_path / "vault"
+    (repo / "sub").mkdir(parents=True)
+    cfg = _excludes_cfg(tmp_path, [repo])
+    monkeypatch.chdir(repo / "sub")           # excluded via a subdirectory too
+    assert harness.sovereign_bypass(cfg) is True
+
+
+def test_sovereign_bypass_outside_and_degraded(tmp_path, monkeypatch):
+    repo = tmp_path / "vault"
+    other = tmp_path / "vault-sibling"        # prefix trap: startswith without sep guard
+    repo.mkdir(); other.mkdir()
+    cfg = _excludes_cfg(tmp_path, [repo])
+    monkeypatch.chdir(other)
+    assert harness.sovereign_bypass(cfg) is False
+    assert harness.sovereign_bypass(None) is False
+    (cfg / "excludes.json").write_text("{not json", encoding="utf-8")
+    assert harness.sovereign_bypass(cfg) is False     # malformed -> not excluded
+    assert harness.sovereign_bypass(tmp_path / "no-such") is False
+
+
+def test_sovereign_bypass_non_list_excludes_value(tmp_path, monkeypatch):
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    monkeypatch.chdir(tmp_path)
+    for bad in (5, True, 3.14):
+        (cfg / "excludes.json").write_text(json.dumps({"excludes": bad}), encoding="utf-8")
+        assert harness.sovereign_bypass(cfg) is False    # truthy scalar -> not iterable, must not raise
+
+
+def test_cmd_context_silent_in_excluded(tmp_path, monkeypatch, capsys):
+    import argparse
+    repo = tmp_path / "vault"; repo.mkdir()
+    (repo / "README.md").write_text("# v", encoding="utf-8")
+    cfg = _excludes_cfg(tmp_path, [repo])
+    monkeypatch.chdir(repo)
+    args = argparse.Namespace(root=str(cfg))
+    assert harness.cmd_context(args) == 0
+    out = capsys.readouterr()
+    assert out.out == "" and out.err == ""
+
+
+def test_cmd_git_gate_silent_in_excluded(tmp_path, monkeypatch, capsys):
+    import argparse, io
+    repo = tmp_path / "vault"; repo.mkdir()
+    cfg = _excludes_cfg(tmp_path, [repo])
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(
+        {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}})))
+    args = argparse.Namespace(root=str(cfg))
+    assert harness.cmd_git_gate(args) == 0
+    assert capsys.readouterr().out == ""      # no ask-decision printed
+
+
+# ---- `harness exclude add|remove|list` -- CLI that manages excludes.json ----------
+
+def _fake_global_installs(tmp_path, monkeypatch, hosts=("claude", "bob")):
+    """Point build.HOSTS config_dir resolvers at temp dirs holding a manifest."""
+    cfgs = {}
+    for host in hosts:
+        cfg = tmp_path / f"{host}-cfg"
+        cfg.mkdir()
+        (cfg / ".geneseed-manifest.json").write_text('{"owned": []}', encoding="utf-8")
+        (cfg / "excludes.json").write_text('{"excludes": []}', encoding="utf-8")
+        if host == "claude":
+            (cfg / "CLAUDE.md").write_text("x", encoding="utf-8")
+        cfgs[host] = cfg
+        monkeypatch.setitem(build.HOSTS[host], "config_dir", (lambda c=cfg: c))
+    for host in set(build.HOSTS) - set(hosts):   # other hosts: no install
+        monkeypatch.setitem(build.HOSTS[host], "config_dir",
+                            (lambda h=host: tmp_path / f"{h}-none"))
+    return cfgs
+
+
+def test_exclude_add_remove_roundtrip(tmp_path, monkeypatch):
+    cfgs = _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"; repo.mkdir()
+
+    res = harness.exclude_add(str(repo))
+    assert res["ok"]
+    for cfg in cfgs.values():
+        data = json.loads((cfg / "excludes.json").read_text(encoding="utf-8"))
+        assert any(Path(e["path"]) == repo.resolve() for e in data["excludes"])
+    # claude wiring: claudeMdExcludes in the excluded repo's settings.local.json
+    local = json.loads((repo / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
+    assert (cfgs["claude"] / "CLAUDE.md").resolve().as_posix() in local["claudeMdExcludes"]
+    # bob wiring: shadow stub
+    assert (repo / ".bob" / "rules" / "geneseed.md").is_file()
+    # idempotent
+    res2 = harness.exclude_add(str(repo))
+    assert res2["ok"]
+    data = json.loads((cfgs["claude"] / "excludes.json").read_text(encoding="utf-8"))
+    assert len(data["excludes"]) == 1
+
+    res3 = harness.exclude_remove(str(repo))
+    assert res3["ok"]
+    for cfg in cfgs.values():
+        data = json.loads((cfg / "excludes.json").read_text(encoding="utf-8"))
+        assert data["excludes"] == []
+    local = json.loads((repo / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
+    assert not local.get("claudeMdExcludes")
+    assert not (repo / ".bob" / "rules" / "geneseed.md").exists()
+
+
+def test_exclude_never_clobbers_user_bob_stub(tmp_path, monkeypatch):
+    _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"
+    (repo / ".bob" / "rules").mkdir(parents=True)
+    own = repo / ".bob" / "rules" / "geneseed.md"
+    own.write_text("USER CONTENT", encoding="utf-8")
+    harness.exclude_add(str(repo))
+    assert own.read_text(encoding="utf-8") == "USER CONTENT"   # not clobbered
+    harness.exclude_remove(str(repo))
+    assert own.exists()                                        # not ours -> not deleted
+
+
+def test_excludes_snapshot(tmp_path, monkeypatch):
+    _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"; repo.mkdir()
+    harness.exclude_add(str(repo))
+    snap = harness.excludes_snapshot()
+    assert len(snap["excludes"]) == 1
+    assert sorted(snap["excludes"][0]["hosts"]) == ["bob", "claude"]
+
+
+def test_exclude_add_nonexistent_path_warns_but_proceeds(tmp_path, monkeypatch):
+    cfgs = _fake_global_installs(tmp_path, monkeypatch)
+    ghost = tmp_path / "does-not-exist"
+    res = harness.exclude_add(str(ghost))
+    assert res["ok"]
+    assert any("does not exist" in m for m in res["messages"])
+    data = json.loads((cfgs["claude"] / "excludes.json").read_text(encoding="utf-8"))
+    assert any(Path(e["path"]) == ghost.resolve() for e in data["excludes"])
+    assert not (ghost / ".claude").exists()   # never materialized just to wire excludes
+
+
+def test_exclude_add_does_not_claim_preexisting_claude_wiring(tmp_path, monkeypatch):
+    """A repo that already carries the global CLAUDE.md in its own claudeMdExcludes
+    (e.g. a project-bypasses-global install's own wiring, or a user's manual edit)
+    must NOT have that entry claimed as exclude_add's own -- else a later
+    exclude_remove would strip wiring this tool never created (final-review finding)."""
+    cfgs = _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"; repo.mkdir()
+    claude_md = (cfgs["claude"] / "CLAUDE.md").resolve().as_posix()
+    settings_dir = repo / ".claude"
+    settings_dir.mkdir()
+    (settings_dir / "settings.local.json").write_text(
+        json.dumps({"claudeMdExcludes": [claude_md]}), encoding="utf-8")
+
+    res = harness.exclude_add(str(repo))
+    assert res["ok"]
+    data = json.loads((cfgs["claude"] / "excludes.json").read_text(encoding="utf-8"))
+    entry = next(e for e in data["excludes"] if Path(e["path"]) == repo.resolve())
+    assert not entry.get("wired", {}).get("claude_md_excludes")   # not claimed as ours
+
+    res2 = harness.exclude_remove(str(repo))
+    assert res2["ok"]
+    local = json.loads((settings_dir / "settings.local.json").read_text(encoding="utf-8"))
+    assert claude_md in local["claudeMdExcludes"]   # pre-existing wiring survives
+
+
+def test_exclude_add_idempotent_reeadd_still_owns_its_own_wiring(tmp_path, monkeypatch):
+    """Contrast with the preexisting-wiring case above: when exclude_add itself wired
+    claudeMdExcludes on a first call, a second (idempotent) exclude_add call must still
+    record ownership -- even though _wire_claude_excludes reports nothing NEW added the
+    second time -- so a later exclude_remove correctly unwires it."""
+    cfgs = _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"; repo.mkdir()
+
+    assert harness.exclude_add(str(repo))["ok"]
+    assert harness.exclude_add(str(repo))["ok"]   # idempotent re-add
+
+    data = json.loads((cfgs["claude"] / "excludes.json").read_text(encoding="utf-8"))
+    entry = next(e for e in data["excludes"] if Path(e["path"]) == repo.resolve())
+    claude_md = (cfgs["claude"] / "CLAUDE.md").resolve().as_posix()
+    assert claude_md in entry.get("wired", {}).get("claude_md_excludes", [])
+
+    res = harness.exclude_remove(str(repo))
+    assert res["ok"]
+    local = json.loads((repo / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
+    assert not local.get("claudeMdExcludes")   # our own wiring was correctly unwired
+
+
+def test_exclude_add_end_to_end_guard_reads_written_file(tmp_path, monkeypatch):
+    """True end-to-end: the file exclude_add actually wrote (not a hand-built fixture)
+    must make sovereign_bypass() report True for a cwd under the excluded repo."""
+    cfgs = _fake_global_installs(tmp_path, monkeypatch)
+    repo = tmp_path / "vault"; (repo / "sub").mkdir(parents=True)
+
+    res = harness.exclude_add(str(repo))
+    assert res["ok"]
+
+    monkeypatch.chdir(repo / "sub")
+    assert harness.sovereign_bypass(cfgs["claude"]) is True
+    assert harness.sovereign_bypass(cfgs["bob"]) is True
+
+
+def test_cmd_exclude_list_no_installs(monkeypatch, capsys):
+    for host in build.HOSTS:
+        monkeypatch.setitem(build.HOSTS[host], "config_dir",
+                            (lambda h=host: Path(f"/no-such-{h}")))
+    import argparse
+    args = argparse.Namespace(action="list", path=None)
+    assert harness.cmd_exclude(args) == 1
+    assert "no global install" in capsys.readouterr().out
+
+
 def setattr_many(mod, saved):
     mod.ROOT, mod.SRC, mod.THEMES, mod.PLUGIN_SRC, mod.CONFIG, mod.WORKFLOW_SRC = saved
 

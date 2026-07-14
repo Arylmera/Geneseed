@@ -50,6 +50,10 @@ vi.mock('../api/index.js', () => ({
       }),
     ),
     mcpToggle: vi.fn(() => Promise.resolve({ ok: true })),
+    excludes: vi.fn(() =>
+      Promise.resolve({ excludes: [], installs: [{ host: 'claude', cfg: '/x' }] }),
+    ),
+    excludeMutate: vi.fn(() => Promise.resolve({ ok: true, path: '/y', messages: [] })),
   },
 }))
 
@@ -241,5 +245,10 @@ describe('Harnesses', () => {
     await waitFor(() => expect(screen.getByText('MarkItDown')).toBeTruthy())
     expect(screen.getByText('GitLab')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy()
+  })
+
+  it('renders the Excluded folders card when a global install exists', async () => {
+    render(<Harnesses onAction={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Excluded folders')).toBeTruthy())
   })
 })

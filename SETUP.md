@@ -135,6 +135,30 @@ It wires:
 
 Detail: [adapters/claude-code/](adapters/claude-code/README.md).
 
+### Sovereign repos — excluding folders from the global harness
+
+Some repos are complete agent harnesses of their own (an Obsidian vault with its
+own laws, hooks and memory conventions). Inside such a repo the global Geneseed
+layer would stack on top of the local one — conflicting doctrine and wasted
+tokens. Exclude the folder instead:
+
+    harness exclude add  ~/Documents/git/Terra
+    harness exclude list
+    harness exclude remove ~/Documents/git/Terra
+
+Inside an excluded folder the global install is fully dormant: the context,
+learn and git-gate hooks exit silently (they check `<config dir>/excludes.json`
+on every call — edits take effect immediately, no re-emit), and the global
+preamble is suppressed natively (Claude: `claudeMdExcludes` written to the
+repo's own `.claude/settings.local.json`; Bob: the workspace rules shadow stub;
+OpenCode: the plugins stand down). Everything is reversed by `exclude remove`.
+
+Limitations: GitHub Copilot has no per-repo suppression mechanism, so the global
+`copilot-instructions.md` still loads there; and globally installed skills/
+subagents remain listed by the host (no native per-repo disable exists). A
+global install emitted later starts with an empty list — re-run
+`harness exclude add` (`exclude list` flags installs that diverge).
+
 ### Path C′ — GitHub Copilot
 
 ```

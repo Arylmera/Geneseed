@@ -35,11 +35,42 @@
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
+import { homedir } from "node:os"
 
 // The plugin's own directory. In the global install the layout is
 // <cfg>/plugins/geneseed-learn.js beside <cfg>/memory, so the store can be found
 // relative to this file — no manual `export GENESEED_HARNESS` needed.
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
+
+// Sovereign-repo bypass — twin of sovereign_bypass() in rituals/_harness_context.py.
+// <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
+// this GLOBAL install goes dormant. Any error degrades to "not excluded".
+const norm = (p) => {
+  // Expand a leading "~" / "~/…" to the home dir, mirroring Python's
+  // Path.expanduser() — a hand-edited excludes.json entry like "~/vault" must
+  // resolve the same way here as it does for the Claude/Bob (Python) guard.
+  let raw = String(p)
+  if (raw === "~" || raw.startsWith("~/") || raw.startsWith("~\\")) {
+    raw = raw === "~" ? homedir() : path.join(homedir(), raw.slice(2))
+  }
+  let s = path.resolve(raw)
+  return process.platform === "win32" ? s.toLowerCase() : s
+}
+async function sovereignBypass(cwd) {
+  try {
+    const cfg = path.dirname(PLUGIN_DIR)           // plugins/ sits directly in <cfg>
+    const raw = await fs.readFile(path.join(cfg, "excludes.json"), "utf8")
+    const entries = (JSON.parse(raw).excludes) || []
+    const here = norm(cwd || process.cwd())
+    for (const e of entries) {
+      const p = typeof e === "string" ? e : e && e.path
+      if (typeof p !== "string" || !p.trim()) continue
+      const base = norm(p.trim()).replace(/[\\/]+$/, "")
+      if (here === base || here.startsWith(base + path.sep)) return true
+    }
+  } catch { /* degrade to active */ }
+  return false
+}
 
 const MAX_NOTES_CHARS = 16000          // cap the prompt; keep the most recent tail
 const MIN_NOTES_CHARS = 200            // below this, the session is too trivial to mine
@@ -251,6 +282,7 @@ export const GeneseedLearn = async ({ client }) => {
   let warnedNoDir = false
 
   async function runDistill(sid) {
+    if (await sovereignBypass(process.cwd())) return
     if (inFlight.has(sid)) return   // a run is already underway; the next idle re-arms
     inFlight.add(sid)
     try {

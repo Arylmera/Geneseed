@@ -36,6 +36,8 @@ describe('api surface', () => {
       'mcpToggle',
       'installs',
       'installToggle',
+      'excludes',
+      'excludeMutate',
       'ping',
       'shutdown',
       'restart',

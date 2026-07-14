@@ -447,6 +447,28 @@ class FootprintOrphanRegressionTests(unittest.TestCase):
         finally:
             shutil.rmtree(cfg.parent, ignore_errors=True)
 
+    def test_excludes_stub_seeded_and_user_owned(self):
+        """excludes.json is seeded once beside AGENT.md, never overwritten (it holds
+        the user's own folder exclusion list). It is never in the owned-manifest, so
+        the global emits' prune treats it as the user's — the same contract as
+        context.json, wiki.jsonc, and user-rules.md."""
+        cfg = Path(tempfile.mkdtemp()) / "cfg"
+        try:
+            build.emit_claude_global("neutral", cfg=cfg)
+            dest = cfg / "excludes.json"
+            self.assertTrue(dest.is_file())
+            data = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(data["excludes"], [])
+            # never in the owned manifest
+            manifest = json.loads((cfg / ".geneseed-manifest.json").read_text(encoding="utf-8"))
+            self.assertNotIn("excludes.json", manifest["owned"])
+            # user content survives a re-emit
+            dest.write_text('{"excludes": [{"path": "C:/x"}]}', encoding="utf-8")
+            build.emit_claude_global("neutral", cfg=cfg)
+            self.assertEqual(json.loads(dest.read_text(encoding="utf-8"))["excludes"], [{"path": "C:/x"}])
+        finally:
+            shutil.rmtree(cfg.parent, ignore_errors=True)
+
 
 class CircularIncludeTests(unittest.TestCase):
     """INCLUDE resolution must catch a cycle and emit a visible marker rather than
