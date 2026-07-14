@@ -958,6 +958,8 @@ GLOSSARY_KEYS = [
     ("Pact", "PACT", "the two-way collaboration contract"),
     ("Posture", None, "the relationship register the agent works in "
      "(peer, mentor, expert, assistant, artisan)"),
+    ("Mode", None, "how work gets executed — direct (the agent works every "
+     "task itself) or foreman (substantial tasks spawn an isolated pipeline)"),
     ("Footprint", None, "how much of the Rules loads inline each turn "
      "(full vs lean)"),
     ("Profile", None, "who you are — seeded once, colours but never binds"),

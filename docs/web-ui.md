@@ -114,7 +114,10 @@ streams the output of background jobs and keeps their history across reloads.
   register (direct/foreman — default **direct**; foreman triages tasks into isolated
   pipelines instead of working every one itself). Both are orthogonal to voice and to
   each other, picked here or via the setup wizard, and preserved across every rebuild.
-  "Deploy to folder…" and "Rebuild all" apply to the whole set.
+  "Deploy to folder…" and "Rebuild all" apply to the whole set. An **Excluded folders**
+  card (shown once a global install exists) manages sovereign repos — folders where every
+  global harness goes dormant (hooks stay silent, the global preamble never loads);
+  add or remove one here, the web mirror of `harness exclude add|remove|list`.
 - **Themes** (`#/themes`) — a gallery of the shipped voices (name, tagline, sigil, accent
   glow). **Apply** a voice to rebuild the deployed harness in that theme; the current one
   is marked.
