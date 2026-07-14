@@ -957,8 +957,12 @@ class ExcludesTests(unittest.TestCase):
         self.assertTrue(res["ok"])
         snap = web.api_excludes(self.state)
         self.assertEqual(len(snap["excludes"]), 1)
+        # Mirror the product's canonicalization: exclude_add stores
+        # str(_canon(path)).replace(os.sep, "/"), and _canon resolves the path —
+        # on Windows runners that expands the 8.3 short tempdir name (RUNNER~1)
+        # to its long form (runneradmin), so compare against the resolved path.
         self.assertEqual(snap["excludes"][0]["path"].rstrip("/"),
-                         str(repo).replace("\\", "/"))
+                         repo.resolve().as_posix())
         res = web.api_excludes_mutate(self.state, {"action": "remove", "path": str(repo)})
         self.assertTrue(res["ok"])
         self.assertEqual(web.api_excludes(self.state)["excludes"], [])
