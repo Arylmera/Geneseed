@@ -798,6 +798,69 @@ which route to the same Python CLI with no bash:
 Open a new terminal after `link`, then call `geneseed` from any directory. Remove it
 again with `.\geneseed.cmd unlink`.
 
+## 🔌 Start the web UI at login
+
+The web UI is the only long-running Geneseed process. `geneseed web` spawns a
+**detached daemon** on `127.0.0.1:4747` and returns immediately, so a login hook
+that runs `geneseed web --no-browser` once — no browser tab — leaves the UI ready
+whenever you open [http://127.0.0.1:4747](http://127.0.0.1:4747). It is **per-user
+and per-machine**: each laptop runs its own daemon on its own loopback, so Windows
+and macOS are set up independently and never collide. The daemon is a singleton — a
+second launch just no-ops — so re-running it (or logging in twice) is harmless.
+
+**Windows** — drop a hidden VBS launcher in the Startup folder (runs at login, no
+console flash, removed by deleting the file). Open the folder with **Win+R** →
+`shell:startup`, then create `geneseed-web.vbs`:
+
+```vbs
+' geneseed-web.vbs — start the Geneseed web daemon at login (hidden, no browser).
+CreateObject("WScript.Shell").Run "cmd /c ""%LOCALAPPDATA%\Geneseed\bin\geneseed.cmd"" web --no-browser", 0, False
+```
+
+Expand `%LOCALAPPDATA%` to its real path (e.g. `C:\Users\you\AppData\Local`) — VBS
+does not expand environment variables inside a string. **Disable** by deleting the
+file. Prefer a scheduled task (runs hidden, can restart on failure)? Use:
+
+```powershell
+schtasks /Create /TN "Geneseed Web" /SC ONLOGON /TR "\"%LOCALAPPDATA%\Geneseed\bin\geneseed.cmd\" web --no-browser" /RL LIMITED /F
+schtasks /Delete /TN "Geneseed Web" /F   # to remove
+```
+
+**macOS** — the launcher is the `geneseed` symlink from `./geneseed link` (default
+`~/.local/bin/geneseed`). Use a **LaunchAgent** with `RunAtLoad` — and **no**
+`KeepAlive`, because the launcher exits after spawning the detached daemon (the
+daemon runs in its own session and survives). Write
+`~/Library/LaunchAgents/dev.geneseed.web.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>            <string>dev.geneseed.web</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/you/.local/bin/geneseed</string>
+    <string>web</string>
+    <string>--no-browser</string>
+  </array>
+  <key>RunAtLoad</key>        <true/>
+</dict>
+</plist>
+```
+
+Use the **absolute** path to your `geneseed` symlink (LaunchAgents don't see your
+shell `PATH`). Then load it — it also runs it once now:
+
+```bash
+launchctl load ~/Library/LaunchAgents/dev.geneseed.web.plist     # enable + start now
+launchctl unload ~/Library/LaunchAgents/dev.geneseed.web.plist   # disable
+```
+
+On either OS, `geneseed web stop` stops the running daemon without touching the
+login hook, and `geneseed web status` reports whether it's up.
+
 ## 🤖 Headless / CI (OpenCode)
 
 Once the harness is installed (Path A or B), OpenCode can run **non-interactively** —

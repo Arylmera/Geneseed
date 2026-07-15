@@ -197,6 +197,44 @@ DOC_GROUPS = [
             "---\n\n"
             "**Catalog:** [Skills](#/section/skills) · "
             "[Agents](#/section/agents) · [Rules](#/laws)")},
+        {"id": "harnesses", "title": "Supported harnesses", "kind": "concept",
+         "body":
+         "One source, **five emit targets** — each with a per-repo and a "
+         "global (`-global`) variant, plus a portable `files` bundle any "
+         "`AGENT.md`-aware tool can read. **OpenCode** runs its own engine "
+         "(JS plugins, colour themes, LSP); **Claude Code**, **Bob**, and "
+         "**Copilot** share one Claude-shaped engine that diverges only by "
+         "host dialect.\n\n"
+         "The harness itself — Rules, Agents, Skills, Memory, and the preamble "
+         "voice — is **identical on every host**. What differs is how much of "
+         "it the host can *automate* (via plugins or hooks) versus carry as "
+         "preamble discipline.\n\n"
+         "| Capability | OpenCode | Claude | Bob | Copilot |\n"
+         "| --- | :---: | :---: | :---: | :---: |\n"
+         "| Agents · Skills · Memory | ✅ | ✅ | ✅ | ✅ |\n"
+         "| Context injection | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |\n"
+         "| Memory write-back (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |\n"
+         "| Git-gate consent (Rule XX) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |\n"
+         "| Sovereign-repo excludes | ⚙️ plugin | ✅ | ✅ | ➖ |\n"
+         "| MCP server wiring | ✅ | ✅ | ✅ | ✅ |\n"
+         "| Colour themes | ✅ | ➖ | ➖ | ➖ |\n"
+         "| LSP · workflows · primary-agent · `/`-commands | ✅ | ➖ | ➖ | ➖ |\n\n"
+         "✅ native · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · "
+         "📄 preamble prose only · ➖ no host mechanism (harness discipline "
+         "still applies). ¹ Bob honours Claude-dialect hooks best-effort — "
+         "inert if unsupported, harness still holds via the preamble.\n\n"
+         "**No host drops an Agent, Skill, or the memory convention.** The "
+         "asymmetry is entirely in *automation mechanism*: OpenCode's plugins "
+         "and Claude/Bob's hooks enforce a few Rules for you, where **Copilot** "
+         "(no hook mechanism) enforces them through preamble discipline. The "
+         "OpenCode-only extras (themes, LSP, workflow runner, primary-agent) "
+         "have no analogue on a Claude-shaped host.\n\n"
+         "---\n\n"
+         "**Deeper:** [The harness model](#/docs/model) · "
+         "[Footprint per host](#/docs/footprint)"},
+        {"id": "autostart", "title": "Start the web UI at login",
+         "kind": "markdown", "source": "SETUP.md",
+         "anchor": "start-the-web-ui-at-login", "slice": True},
     ]},
     # ── 2. Core concepts ──────────────────────────────────────────────────
     # One-screen explainers. The mental model — voice vs structure, the

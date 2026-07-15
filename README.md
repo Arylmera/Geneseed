@@ -12,7 +12,7 @@
 [![Skills](https://img.shields.io/badge/skills-47-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-17-orange)](src/agents/)
 [![Laws](https://img.shields.io/badge/laws-35-critical)](src/laws/universal.md)
-[![OpenCode · Claude Code · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-2--setup)
+[![OpenCode · Claude Code · Bob · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
 
 [**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & TUI**](#-3--web--tui) · [**What you get**](#-4--what-you-get)
 
@@ -175,6 +175,46 @@ Want to check a build before it touches anything real? `python build.py --valida
 
 ---
 
+## 🔌 Supported harnesses
+
+One source, five emit targets. Geneseed builds into whichever host you point it
+at — each with a per-repo and a global (`-global`) variant — plus a portable
+`files` bundle any `AGENT.md`-aware tool can read. **OpenCode** runs its own
+engine (JS plugins, colour themes, LSP); **Claude Code**, **Bob**, and
+**Copilot** share one Claude-shaped engine that diverges only by host dialect.
+
+The harness — its Rules, Agents, Skills, Memory convention, and preamble voice —
+is **identical on every host**. What differs is how much of it the host can
+*automate* for you (via plugins or hooks) versus carry as preamble discipline.
+
+| Capability | OpenCode | Claude Code | Bob | Copilot |
+| --- | :---: | :---: | :---: | :---: |
+| **Instructions file** | `AGENT.md` + `opencode.json` | `CLAUDE.md` | `AGENTS.md` + `rules/geneseed.md` | `AGENTS.md` / `copilot-instructions.md` |
+| **Agents** (capability specialists) | ✅ native | ✅ | ✅ | ✅ `.agent.md` |
+| **Skills** (byte-identical) | ✅ | ✅ | ✅ | ✅ |
+| **Memory & Notebook** | ✅ | ✅ | ✅ | ✅ |
+| **Context injection** (Rule XVIII) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Memory write-back** (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Git-gate consent** (Rule XX) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Sovereign-repo excludes** | ⚙️ plugin | ✅ `claudeMdExcludes` | ✅ rules-shadow | ➖ none |
+| **MCP server wiring** | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcpServers` | ✅ `mcp-config.json` |
+| **Colour themes** | ✅ full palette | ➖ | ➖ | ➖ |
+| **LSP · workflow runner · primary-agent · `/`-commands** | ✅ | ➖ | ➖ | ➖ |
+
+<sub>✅ native support · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · 📄 carried by preamble prose only · ➖ no host mechanism (harness discipline still applies) · ¹ Bob honours Claude-dialect hooks best-effort — inert if unsupported, harness still holds via the preamble.</sub>
+
+**Reading the matrix.** Everything above the divider is at full parity — no host
+drops an Agent, Skill, or the memory convention. The asymmetry is entirely in
+*automation mechanism*: OpenCode's plugin surface and Claude/Bob's hook surface
+enforce a few Rules for you, where **Copilot** (no hook mechanism) enforces them
+through preamble discipline instead. The OpenCode-only extras (themes, LSP,
+workflow runner, primary-agent) have no analogue on a Claude-shaped host.
+
+Per-host wiring in depth: **[OpenCode](adapters/opencode/README.md)** ·
+**[Claude Code](adapters/claude-code/README.md)** ·
+**[Bob](adapters/bob/README.md)** · **[Copilot](adapters/copilot/README.md)**.
+Token cost per host: **[docs/token-footprint.md](docs/token-footprint.md)**.
+
 ## 🗂 Layout
 
 ```
@@ -204,7 +244,7 @@ Geneseed/
 ├── tests/                stdlib unit tests + a Node workflow-runtime test
 ├── docs/                 guides (web-ui, wiki, …); specs/, reviews/, superpowers/ are
 │                         local working docs — git-ignored, never distributed
-├── adapters/             per-tool glue (opencode/, claude-code/)
+├── adapters/             per-host glue (opencode/, claude-code/, bob/, copilot/)
 └── .github/workflows/    CI: doctor + tests
 ```
 
@@ -246,6 +286,8 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 | ⤷ [GLOBAL-HARNESS-SPEC.md](adapters/opencode/GLOBAL-HARNESS-SPEC.md) | The global-emit contract |
 | ⤷ [HOW-OPENCODE-LOADS.md](adapters/opencode/HOW-OPENCODE-LOADS.md) | Why a file shows up twice; plugin loading |
 | **[adapters/claude-code/](adapters/claude-code/README.md)** | The Claude Code hook adapter |
+| **[adapters/bob/](adapters/bob/README.md)** | The IBM Bob adapter — Claude-shaped, rules-file preamble |
+| **[adapters/copilot/](adapters/copilot/README.md)** | The GitHub Copilot adapter — reduced host, no hooks |
 | **[src/memory/README.md](src/memory/README.md)** | The memory convention |
 | **[src/notebook/README.md](src/notebook/README.md)** | The agent's own freeform-space convention |
 
