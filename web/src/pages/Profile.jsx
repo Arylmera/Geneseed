@@ -3,13 +3,15 @@ import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import Markdown from '../components/Markdown.jsx'
 
 // Profile — the user's identity (PROFILE.md beside the deployed AGENT.md). Sibling
 // to Rules: Rules are what the agent must do, the Profile is who you are — role,
 // habits, register preferences. It never binds (precedence is Laws, then user-rules,
-// then this), so this page is a plain whole-file editor, no per-block structure. The
-// save carries the fingerprint we loaded; a 409 means an agent session edited the
-// file first, and we reload instead of clobbering its write.
+// then this). A set-up profile opens as a rendered document; Edit switches to a
+// whole-file editor — no per-block structure. The save carries the fingerprint we
+// loaded; a 409 means an agent session edited the file first, and we reload instead
+// of clobbering its write.
 
 export default function Profile() {
   const { data, error, loading, reload } = useAsync(() => api.profile(), [])
@@ -17,6 +19,9 @@ export default function Profile() {
   const [fingerprint, setFingerprint] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  // null until first load: an already-written profile opens rendered, an empty one
+  // opens straight in the editor.
+  const [mode, setMode] = useState(null)
 
   // Sync the editor when a load (or reload) lands. Keyed on fingerprint so a save's
   // own reload doesn't stomp on-screen text with identical content.
@@ -24,6 +29,7 @@ export default function Profile() {
     if (data) {
       setText(data.text || '')
       setFingerprint(data.fingerprint || '')
+      setMode((m) => m || ((data.text || '').trim() ? 'view' : 'edit'))
     }
   }, [data && data.fingerprint])
 
@@ -40,6 +46,7 @@ export default function Profile() {
       if (res.ok) {
         setFingerprint(res.fingerprint || '')
         setNotice('Saved.')
+        setMode('view')
         reload()
       } else {
         setNotice(res.detail || 'Could not save — reloading.')
@@ -67,21 +74,48 @@ export default function Profile() {
             it interviews you and drafts this file with your consent.
           </p>
         </div>
-        <button className="btn" disabled={!dirty || busy} onClick={save}>
-          {busy ? 'Saving…' : 'Save'}
-        </button>
+        <div className="row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="seg" role="group" aria-label="Profile mode">
+            {[
+              ['view', 'View'],
+              ['edit', 'Edit'],
+            ].map(([k, l]) => (
+              <button key={k} className={mode === k ? 'on' : ''} onClick={() => setMode(k)}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {mode === 'edit' && (
+            <button className="btn" disabled={!dirty || busy} onClick={save}>
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+          )}
+        </div>
       </div>
 
       {notice ? <p className="sub rule-notice">{notice}</p> : null}
 
-      <textarea
-        className="rule-body-input"
-        style={{ width: '100%', minHeight: '60vh', fontFamily: 'var(--mono, monospace)' }}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        spellCheck={false}
-        aria-label="Profile markdown"
-      />
+      {mode === 'edit' ? (
+        <textarea
+          className="rule-body-input"
+          style={{ width: '100%', minHeight: '60vh', fontFamily: 'var(--mono, monospace)' }}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          spellCheck={false}
+          aria-label="Profile markdown"
+        />
+      ) : text.trim() ? (
+        <div className="card pad-lg">
+          <Markdown body={text} />
+        </div>
+      ) : (
+        <div className="card pad-lg">
+          <p className="sub" style={{ margin: 0 }}>
+            No profile yet — switch to Edit to write one, or ask the agent to run the{' '}
+            <code className="mono">profile</code> skill.
+          </p>
+        </div>
+      )}
     </>
   )
 }
