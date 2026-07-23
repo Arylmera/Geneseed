@@ -20,6 +20,20 @@ into line with the implementation.
    drift. Add pages for significant undocumented surfaces; remove docs for features that no
    longer exist (deletion is deliberate — {{LAW}} IV). For substantial writing, dispatch
    the [docs {{AGENT}}](../{{DIR_AGENTS}}/docs.md). Keep examples runnable — run them.
+   Every generated page follows three conventions:
+   - **Typed frontmatter.** Open each page with YAML frontmatter carrying `type:` (one of
+     `overview`, `module`, `api`, `flow`, `how-to`), `mirrors-commit: <sha>`, and
+     `generated: <date>` — so drift is auditable per page, not only in the HTML footer. The
+     doc-home `index.md` is reserved and carries no frontmatter.
+   - **Fenced generated regions.** Wrap the auto-generated body between
+     `<!-- geneseed:doc:start -->` and `<!-- geneseed:doc:end -->` markers, and on re-runs
+     rewrite *only* inside them — hand-authored prose outside the markers is never touched
+     ({{LAW}} XV: edit the layer you own, never the reader's additions).
+   - **Diagrams as Mermaid, keyed by purpose.** In the markdown, render diagrams as fenced
+     `mermaid` code blocks — they render natively on GitHub, Obsidian, and VS Code with no
+     dependency. Pick the kind by what you are showing: sequence for runtime/request flows,
+     ER for data models, state for lifecycles, flowchart for control flow. Reserve
+     hand-authored inline SVG for the offline HTML hero only (step 5).
 4. **Keep an index.** Ensure the doc home has an index/README linking every page, current
    with the set you just reconciled.
 5. **Regenerate the HTML overview** — one self-contained file at the doc home (e.g.
@@ -45,10 +59,11 @@ into line with the implementation.
    on consent, via the [commit {{SKILL}}](commit.md) (universal {{LAW}} XX).
 
 ## Done when
-- The doc home mirrors the current implementation: every markdown page is verified against
-  the code or flagged, examples run, and the index links them all; the single-file
-  `overview.html` opens offline and shows both the digest and the complex-core deep-dives;
-  and any surface left undocumented is named explicitly.
+- The doc home mirrors the current implementation: every markdown page carries typed
+  frontmatter, wraps its generated body in `geneseed:doc` markers, and is verified against
+  the code or flagged; examples run, Mermaid fences are well-formed, and the index links
+  them all; the single-file `overview.html` opens offline and shows both the digest and the
+  complex-core deep-dives; and any surface left undocumented is named explicitly.
 
 ## Self-improvement
 
