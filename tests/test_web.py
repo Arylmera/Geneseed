@@ -2,7 +2,9 @@
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,7 +12,51 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
+import build  # noqa: E402
 import web  # noqa: E402
+
+# A WebState built with no explicit target resolves to the machine's own OpenCode
+# config dir — so these tests used to read whatever harness the developer happened
+# to have installed, and failed outright on a machine carrying a half-removed one
+# (manifest present, agents/ and skills/ gone -> every count asserted > 0 read 0).
+#
+# Build one real opencode-global install into a temp HOME, once for the module,
+# and point the default at it. Tests then exercise the deployed-inventory path
+# the server actually uses, identically on any machine and in CI. Tests that need
+# their own tree still pass an explicit `target=` and are unaffected.
+_FIXTURE_TD: "tempfile.TemporaryDirectory | None" = None
+_FIXTURE: "Path | None" = None
+_ORIG_CONFIG_DIR = None
+
+
+def setUpModule():
+    global _FIXTURE_TD, _FIXTURE, _ORIG_CONFIG_DIR
+    _FIXTURE_TD = tempfile.TemporaryDirectory()
+    home = Path(_FIXTURE_TD.name)
+    env = {
+        **__import__("os").environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "XDG_CONFIG_HOME": str(home / ".config"),
+        "APPDATA": str(home / "AppData" / "Roaming"),
+        "LOCALAPPDATA": str(home / "AppData" / "Local"),
+    }
+    env.pop("GENESEED_HARNESS", None)
+    subprocess.run(
+        [sys.executable, str(ROOT / "build.py"), "--emit", "opencode-global",
+         "--theme", "neutral"],
+        cwd=str(ROOT), env=env, check=True,
+        capture_output=True, text=True, encoding="utf-8")
+    _FIXTURE = home / ".config" / "opencode"
+    _ORIG_CONFIG_DIR = build._opencode_config_dir
+    build._opencode_config_dir = lambda: _FIXTURE
+
+
+def tearDownModule():
+    if _ORIG_CONFIG_DIR is not None:
+        build._opencode_config_dir = _ORIG_CONFIG_DIR
+    if _FIXTURE_TD is not None:
+        _FIXTURE_TD.cleanup()
 
 
 class LocalHostGuardTests(unittest.TestCase):
