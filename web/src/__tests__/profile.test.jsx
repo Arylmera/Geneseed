@@ -12,7 +12,12 @@ vi.mock('../api/index.js', () => ({
 import Profile from '../pages/Profile.jsx'
 import { api } from '../api/index.js'
 
-const FILLED = { exists: true, path: '/x/PROFILE.md', fingerprint: 'f1', text: '# Who I am\n\nA builder.' }
+const FILLED = {
+  exists: true,
+  path: '/x/PROFILE.md',
+  fingerprint: 'f1',
+  text: '# Who I am\n\nA builder.',
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -37,14 +42,16 @@ describe('Profile', () => {
       expect(api.profileSave).toHaveBeenCalledWith({
         text: '# Who I am\n\nA builder, revised.',
         fingerprint: 'f1',
-      })
+      }),
     )
     // successful save lands back on the rendered view
     await waitFor(() => expect(screen.queryByLabelText('Profile markdown')).toBeNull())
   })
 
   it('opens straight in the editor when the profile is empty', async () => {
-    api.profile.mockImplementation(() => Promise.resolve({ exists: false, fingerprint: '', text: '' }))
+    api.profile.mockImplementation(() =>
+      Promise.resolve({ exists: false, fingerprint: '', text: '' }),
+    )
     render(<Profile />)
     await waitFor(() => expect(screen.getByLabelText('Profile markdown')).toBeTruthy())
   })

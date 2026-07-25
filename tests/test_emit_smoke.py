@@ -32,8 +32,13 @@ FOOTPRINTS = ("full", "lean")
 
 # Per-footprint ceiling on the carrier file, in characters. Tightened whenever a
 # change legitimately shrinks the harness — never loosened without a reason
-# stated in the commit message.
-CEILING = {"full": 53_000, "lean": 33_000}
+# stated in the commit message. Headroom is deliberately small (~4%): the point is
+# to fail on the next silent regrowth, not to leave room for one.
+#
+# Largest carrier at each footprint today is the host-agnostic `files` bundle,
+# which keeps the capability tables no host will catalogue for it:
+#   full 46_883   lean 29_073
+CEILING = {"full": 49_000, "lean": 30_500}
 
 # mode -> (host or None, carrier base, carrier relpath, native-layer base+dir)
 # Bases: "out" = the --out bundle, "home" = the sandboxed config dir.

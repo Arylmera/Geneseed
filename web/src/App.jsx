@@ -175,75 +175,77 @@ export default function App() {
         <div className="page">
           <div className={route.view === 'harnesses' ? 'pad pad-wide' : 'pad'}>
             <Suspense fallback={<Loading />}>
-            {route.view === 'dashboard' && (
-              <Dashboard
-                overview={overview}
-                themes={themes}
-                onAction={runAction}
-                flavour={flavour}
-                layout={layout}
-              />
-            )}
-            {route.view === 'activity' && <Activity />}
-            {route.view === 'activity-detail' && <ActivityDetail key={route.sid} sid={route.sid} />}
-            {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
-            {route.view === 'agents' && (
-              <Library overview={overview} section="agents" dataRev={dataRev} />
-            )}
-            {route.view === 'laws' && <Laws />}
-            {route.view === 'rules' && <Rules />}
-            {route.view === 'profile' && <Profile />}
-            {route.view === 'skills' && <Skills />}
-            {route.view === 'section' &&
-              (route.section === 'laws' ? (
-                <Laws />
-              ) : route.section === 'skills' ? (
-                <Skills />
-              ) : (
-                <Library overview={overview} section={route.section} dataRev={dataRev} />
-              ))}
-            {route.view === 'item' &&
-              (route.type === 'law' ? (
-                <Laws selected={route.name} />
-              ) : route.type === 'skill' ? (
-                <Skills selected={route.name} />
-              ) : (
-                <Library
+              {route.view === 'dashboard' && (
+                <Dashboard
                   overview={overview}
-                  section={TYPE_TO_SECTION[route.type] || route.type}
-                  selected={route.name}
-                  dataRev={dataRev}
+                  themes={themes}
+                  onAction={runAction}
+                  flavour={flavour}
+                  layout={layout}
                 />
-              ))}
-            {route.view === 'diff' && <Diff onMutated={reload} dataRev={dataRev} />}
-            {route.view === 'doctor' && <Doctor />}
-            {route.view === 'themes' && <Themes onAction={runAction} />}
-            {route.view === 'graph' && <Graph />}
-            {route.view === 'settings' && (
-              <Settings
-                overview={overview}
-                onAction={runAction}
-                flavour={flavour}
-                onFlavour={setFlavour}
-                accentMode={accentMode}
-                onAccentMode={setAccentMode}
-                layout={layout}
-                onLayout={setLayout}
-              />
-            )}
-            {route.view === 'harnesses' && (
-              <Harnesses
-                onAction={runAction}
-                themes={themes}
-                currentTheme={overview?.theme}
-                dataRev={dataRev}
-                onMutated={refresh}
-              />
-            )}
-            {route.view === 'docs' && (
-              <Docs page={route.page} query={query} onAction={runAction} overview={overview} />
-            )}
-            {route.view === 'about' && <About />}
+              )}
+              {route.view === 'activity' && <Activity />}
+              {route.view === 'activity-detail' && (
+                <ActivityDetail key={route.sid} sid={route.sid} />
+              )}
+              {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
+              {route.view === 'agents' && (
+                <Library overview={overview} section="agents" dataRev={dataRev} />
+              )}
+              {route.view === 'laws' && <Laws />}
+              {route.view === 'rules' && <Rules />}
+              {route.view === 'profile' && <Profile />}
+              {route.view === 'skills' && <Skills />}
+              {route.view === 'section' &&
+                (route.section === 'laws' ? (
+                  <Laws />
+                ) : route.section === 'skills' ? (
+                  <Skills />
+                ) : (
+                  <Library overview={overview} section={route.section} dataRev={dataRev} />
+                ))}
+              {route.view === 'item' &&
+                (route.type === 'law' ? (
+                  <Laws selected={route.name} />
+                ) : route.type === 'skill' ? (
+                  <Skills selected={route.name} />
+                ) : (
+                  <Library
+                    overview={overview}
+                    section={TYPE_TO_SECTION[route.type] || route.type}
+                    selected={route.name}
+                    dataRev={dataRev}
+                  />
+                ))}
+              {route.view === 'diff' && <Diff onMutated={reload} dataRev={dataRev} />}
+              {route.view === 'doctor' && <Doctor />}
+              {route.view === 'themes' && <Themes onAction={runAction} />}
+              {route.view === 'graph' && <Graph />}
+              {route.view === 'settings' && (
+                <Settings
+                  overview={overview}
+                  onAction={runAction}
+                  flavour={flavour}
+                  onFlavour={setFlavour}
+                  accentMode={accentMode}
+                  onAccentMode={setAccentMode}
+                  layout={layout}
+                  onLayout={setLayout}
+                />
+              )}
+              {route.view === 'harnesses' && (
+                <Harnesses
+                  onAction={runAction}
+                  themes={themes}
+                  currentTheme={overview?.theme}
+                  dataRev={dataRev}
+                  onMutated={refresh}
+                />
+              )}
+              {route.view === 'docs' && (
+                <Docs page={route.page} query={query} onAction={runAction} overview={overview} />
+              )}
+              {route.view === 'about' && <About />}
             </Suspense>
           </div>
         </div>
