@@ -1246,6 +1246,34 @@ class HarnessFilterTests(unittest.TestCase):
                     web._harness_blocks_balanced(text.splitlines()),
                     f"unbalanced harness markers in {where}")
 
+    def test_docs_registry_loads_every_page_from_disk(self):
+        """The registry lives in docs/web/ (a _groups.json + one .md per page),
+        not in a Python literal. A group that loses its pages, or a page whose
+        frontmatter stops naming a real group, silently vanishes from the panel —
+        so pin the shape rather than trust the glob."""
+        self.assertTrue(web.DOC_GROUPS, "docs registry loaded empty")
+        ids = [p["id"] for g in web.DOC_GROUPS for p in g["pages"]]
+        self.assertEqual(len(ids), len(set(ids)), "duplicate doc page id")
+        on_disk = {p.stem for p in web.DOC_DIR.glob("*.md")}
+        self.assertEqual(set(ids), on_disk,
+                         "every docs/web/*.md must land in exactly one group")
+        for g in web.DOC_GROUPS:
+            with self.subTest(group=g["id"]):
+                self.assertTrue(g["pages"], f"group {g['id']} has no pages")
+                self.assertTrue(g.get("label"))
+
+    def test_no_unsubstituted_count_placeholder_survives_rendering(self):
+        """Concept bodies carry {N_LAWS}/{N_AGENTS}/{N_SKILLS}, substituted at
+        render time. Moving the bodies out of Python must not orphan that step —
+        an unsubstituted placeholder renders as literal braces on the page."""
+        for g in web.DOC_GROUPS:
+            for p in g["pages"]:
+                if p.get("kind") != "concept":
+                    continue
+                with self.subTest(page=p["id"]):
+                    page = web.api_docs_page(self.state, p["id"], None)
+                    self.assertNotIn("{N_", page.get("body", ""))
+
     def test_strip_guard_not_narrower_than_matcher(self):
         # The early-out guard must catch any marker the open regex accepts —
         # including odd whitespace — or a stray-spaced marker leaks unstripped.
