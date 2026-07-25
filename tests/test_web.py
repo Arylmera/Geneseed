@@ -2,7 +2,9 @@
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,7 +12,51 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
+import build  # noqa: E402
 import web  # noqa: E402
+
+# A WebState built with no explicit target resolves to the machine's own OpenCode
+# config dir — so these tests used to read whatever harness the developer happened
+# to have installed, and failed outright on a machine carrying a half-removed one
+# (manifest present, agents/ and skills/ gone -> every count asserted > 0 read 0).
+#
+# Build one real opencode-global install into a temp HOME, once for the module,
+# and point the default at it. Tests then exercise the deployed-inventory path
+# the server actually uses, identically on any machine and in CI. Tests that need
+# their own tree still pass an explicit `target=` and are unaffected.
+_FIXTURE_TD: "tempfile.TemporaryDirectory | None" = None
+_FIXTURE: "Path | None" = None
+_ORIG_CONFIG_DIR = None
+
+
+def setUpModule():
+    global _FIXTURE_TD, _FIXTURE, _ORIG_CONFIG_DIR
+    _FIXTURE_TD = tempfile.TemporaryDirectory()
+    home = Path(_FIXTURE_TD.name)
+    env = {
+        **__import__("os").environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "XDG_CONFIG_HOME": str(home / ".config"),
+        "APPDATA": str(home / "AppData" / "Roaming"),
+        "LOCALAPPDATA": str(home / "AppData" / "Local"),
+    }
+    env.pop("GENESEED_HARNESS", None)
+    subprocess.run(
+        [sys.executable, str(ROOT / "build.py"), "--emit", "opencode-global",
+         "--theme", "neutral"],
+        cwd=str(ROOT), env=env, check=True,
+        capture_output=True, text=True, encoding="utf-8")
+    _FIXTURE = home / ".config" / "opencode"
+    _ORIG_CONFIG_DIR = build._opencode_config_dir
+    build._opencode_config_dir = lambda: _FIXTURE
+
+
+def tearDownModule():
+    if _ORIG_CONFIG_DIR is not None:
+        build._opencode_config_dir = _ORIG_CONFIG_DIR
+    if _FIXTURE_TD is not None:
+        _FIXTURE_TD.cleanup()
 
 
 class LocalHostGuardTests(unittest.TestCase):
@@ -1199,6 +1245,34 @@ class HarnessFilterTests(unittest.TestCase):
                 self.assertTrue(
                     web._harness_blocks_balanced(text.splitlines()),
                     f"unbalanced harness markers in {where}")
+
+    def test_docs_registry_loads_every_page_from_disk(self):
+        """The registry lives in docs/web/ (a _groups.json + one .md per page),
+        not in a Python literal. A group that loses its pages, or a page whose
+        frontmatter stops naming a real group, silently vanishes from the panel —
+        so pin the shape rather than trust the glob."""
+        self.assertTrue(web.DOC_GROUPS, "docs registry loaded empty")
+        ids = [p["id"] for g in web.DOC_GROUPS for p in g["pages"]]
+        self.assertEqual(len(ids), len(set(ids)), "duplicate doc page id")
+        on_disk = {p.stem for p in web.DOC_DIR.glob("*.md")}
+        self.assertEqual(set(ids), on_disk,
+                         "every docs/web/*.md must land in exactly one group")
+        for g in web.DOC_GROUPS:
+            with self.subTest(group=g["id"]):
+                self.assertTrue(g["pages"], f"group {g['id']} has no pages")
+                self.assertTrue(g.get("label"))
+
+    def test_no_unsubstituted_count_placeholder_survives_rendering(self):
+        """Concept bodies carry {N_LAWS}/{N_AGENTS}/{N_SKILLS}, substituted at
+        render time. Moving the bodies out of Python must not orphan that step —
+        an unsubstituted placeholder renders as literal braces on the page."""
+        for g in web.DOC_GROUPS:
+            for p in g["pages"]:
+                if p.get("kind") != "concept":
+                    continue
+                with self.subTest(page=p["id"]):
+                    page = web.api_docs_page(self.state, p["id"], None)
+                    self.assertNotIn("{N_", page.get("body", ""))
 
     def test_strip_guard_not_narrower_than_matcher(self):
         # The early-out guard must catch any marker the open regex accepts —

@@ -62,18 +62,21 @@ class ClaudeEmitTests(unittest.TestCase):
         self.assertFalse((self.cfg / "plugins").exists())
 
     def test_no_dead_skill_links_in_managed_block(self):
-        """CLAUDE.md's skill/agent table links are stripped to plain names — Claude
-        Code discovers skills/agents natively, and the native layer writes each skill
-        as a FOLDER (skills/<name>/SKILL.md), so a per-row `skills/<name>.md`-style
-        href is always dead. Regression for the project-scope prefixed form
+        """CLAUDE.md must carry no per-row `skills/<name>.md`-style href: the native
+        layer writes each skill as a FOLDER (skills/<name>/SKILL.md), so such a link
+        is always dead. Regression for the project-scope prefixed form
         (`.claude/skills/<name>.md`) that CAPABILITY_LINK_RE previously missed because
-        it only matched a BARE `agents/`/`skills/` prefix."""
+        it only matched a BARE `agents/`/`skills/` prefix.
+
+        Claude declares native_catalog, so the tables themselves are now replaced by
+        a pointer — there are no rows left to de-link. The dead-link assertion is
+        what this test is for and it still holds; the row assertions live on in
+        test_no_dead_skill_links_in_bob_agents_md, Bob still keeping the tables."""
         build.emit_claude("neutral", self.tmp / "Harness", self.tmp)
         cm = _read(self.tmp / "CLAUDE.md")
         self.assertNotRegex(cm, r"\]\([^)]*(?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
-        # The strip keeps the table's visible name/trigger text, not just deletes rows.
-        self.assertIn("| clarify |", cm)
-        self.assertIn("| council |", cm)
+        self.assertNotIn("| clarify |", cm)
+        self.assertIn("that list is the catalogue", cm)
 
     def test_no_dead_skill_links_in_bob_agents_md(self):
         """Same regression as CLAUDE.md, for Bob's AGENTS.md — the `.bob/skills/...`
@@ -732,17 +735,37 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         self.assertIn("../memory", rules)
         self.assertNotIn("(memory/", rules)
 
-    def _mk_install(self, parent, marker=".claude"):
+    # A sentinel manifest name for the detector tests. _global_hook_standing_down
+    # walks cwd AND every parent looking for a marker dir carrying the manifest —
+    # and self.tmp lives under the user profile, so the walk escapes the sandbox
+    # and finds the developer's own ~/.claude install. Under the real product that
+    # is correct (there, hook_root IS ~/.claude, so the identity check returns
+    # False); in the test it made an "elsewhere" directory look like a project
+    # install. Swapping the sentinel filename keeps the logic under test intact and
+    # makes any ancestor outside the sandbox unmatchable.
+    _SENTINEL_MANIFEST = ".geneseed-manifest-test-sentinel.json"
+
+    def _mk_install(self, parent, marker=".claude", manifest=None):
         d = (parent / marker)
         d.mkdir(parents=True)
-        (d / build.GLOBAL_MANIFEST).write_text("{}", encoding="utf-8")
+        (d / (manifest or build.GLOBAL_MANIFEST)).write_text("{}", encoding="utf-8")
         return d
 
     def test_detector_global_stands_down_only_for_matching_project(self):
         import _harness_context as hc
-        gcfg = self._mk_install(self.tmp / "home")          # global ~/.claude analogue
+        from unittest import mock
+        patcher = mock.patch.object(hc, "_GENESEED_MANIFEST",
+                                    self._SENTINEL_MANIFEST)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        def mk(parent, marker=".claude"):
+            return self._mk_install(parent, marker,
+                                    manifest=self._SENTINEL_MANIFEST)
+
+        gcfg = mk(self.tmp / "home")                         # global ~/.claude analogue
         repo = (self.tmp / "repo").resolve()
-        pcfg = self._mk_install(repo)                        # project <repo>/.claude
+        pcfg = mk(repo)                                      # project <repo>/.claude
         # global hook in the repo -> stands down (project hook will inject)
         self.assertTrue(hc._global_hook_standing_down(gcfg, repo))
         # the project's OWN hook never stands down
@@ -754,7 +777,7 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         sub = repo / "a" / "b"; sub.mkdir(parents=True)
         self.assertTrue(hc._global_hook_standing_down(gcfg, sub))
         # per-host: a project .opencode never silences a global .claude (different marker)
-        bobg = self._mk_install(self.tmp / "bobhome", ".bob")
+        bobg = mk(self.tmp / "bobhome", ".bob")
         self.assertFalse(hc._global_hook_standing_down(bobg, repo))
 
 

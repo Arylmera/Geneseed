@@ -241,8 +241,13 @@ def _rendered_problems(bundle: Path) -> list[str]:
         theme_name = json.loads(build.CONFIG.read_text(encoding="utf-8")).get("theme", "neutral")
     else:
         theme_name = "neutral"
+    # Render the comparison copy with the footprint the bundle was ACTUALLY built
+    # with, read from its own marker — exactly as the theme is read above. Assuming
+    # a footprint here would report every file as drifted the moment the build
+    # default moved, which is a diagnosis about this function, not about the bundle.
     try:
-        _theme, items = build.render_all(theme_name)
+        _theme, items = build.render_all(theme_name,
+                                         _footprint_of_dir(bundle))
     except SystemExit:
         return [f"[rendered] cannot render theme '{theme_name}' for {bundle.name}/"]
     problems: list[str] = []

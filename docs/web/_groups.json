@@ -1,0 +1,45 @@
+[
+  {
+    "id": "start",
+    "label": "Get started"
+  },
+  {
+    "id": "concepts",
+    "label": "Core concepts"
+  },
+  {
+    "id": "howto",
+    "label": "How-to"
+  },
+  {
+    "id": "mcp",
+    "label": "MCP servers"
+  },
+  {
+    "id": "lsp",
+    "label": "Language servers",
+    "harness": "opencode"
+  },
+  {
+    "id": "plugins",
+    "label": "Plugins",
+    "harness": "opencode"
+  },
+  {
+    "id": "hooks",
+    "label": "Hooks",
+    "harness": "claude"
+  },
+  {
+    "id": "reference",
+    "label": "Reference"
+  },
+  {
+    "id": "extend",
+    "label": "Extend"
+  },
+  {
+    "id": "deeper",
+    "label": "Deeper"
+  }
+]

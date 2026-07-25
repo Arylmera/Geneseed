@@ -119,6 +119,7 @@ the untouched stub — or the user asks — the [profile]({{DIR_SKILLS}}/profile
 
 {{INTRO_AGENTS}} Specs live in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/).
 
+<!-- CATALOG:begin -->
 | {{AGENT}} | Use it when… |
 | --- | --- |
 | [reviewer]({{DIR_AGENTS}}/reviewer.md) | a change is ready and needs a correctness + quality pass before merge |
@@ -138,6 +139,12 @@ the untouched stub — or the user asks — the [profile]({{DIR_SKILLS}}/profile
 | [empiricist]({{DIR_AGENTS}}/empiricist.md) | a council debate needs every claim held to evidence, for and against |
 | [operator]({{DIR_AGENTS}}/operator.md) | a council debate needs the production/runtime reality — reliability, on-call — weighed |
 | [historian]({{DIR_AGENTS}}/historian.md) | a council debate needs precedent — what was tried before and how it went |
+<!-- CATALOG:else -->
+Your host lists every {{AGENT}} it can dispatch, with its purpose, in your own
+tool inventory — that list is the catalogue and it is authoritative. Read the
+spec in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/) before dispatching one whose output
+contract you do not already know.
+<!-- CATALOG:end -->
 
 **Rule of delegation:** read-only investigation can be dispatched freely; any
 {{AGENT}} that *writes* must return a summary of exactly what it changed. Every
@@ -170,6 +177,7 @@ subset that productively clashes on a given motion.
 
 {{INTRO_SKILLS}} Specs live in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/).
 
+<!-- CATALOG:begin -->
 | {{SKILL}} | Trigger |
 | --- | --- |
 | [clarify]({{DIR_SKILLS}}/clarify.md) | the goal or scope of a task or project is unclear and needs pinning down before any design or work begins |
@@ -219,6 +227,12 @@ subset that productively clashes on a given motion.
 | [profile]({{DIR_SKILLS}}/profile.md) | the user wants the agent to know who they are — creating or refreshing the `PROFILE.md` identity file (§1) through a short interview |
 | [geneseed]({{DIR_SKILLS}}/geneseed.md) | the user mentions Geneseed, the harness, or `AGENT.md`, or you need to inspect or read from the deployed bundle ({{LAWS}}, {{AGENTS}}, {{SKILLS}}, {{MEMORY}}) |
 | [opencode-theme]({{DIR_SKILLS}}/opencode-theme.md) | the user wants their own OpenCode colour theme — pick or tweak a palette, get solid + transparent variants that survive rebuilds |
+<!-- CATALOG:else -->
+Your host lists every {{SKILL}} it can invoke, with its trigger, in your own
+inventory — that list is the catalogue and it is authoritative. Run the matching
+{{SKILL}} before improvising; its written procedure is in
+[`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/) and the host loads it on demand.
+<!-- CATALOG:end -->
 
 When a task repeats and no {{SKILL}} covers it, forge one: copy
 [`{{DIR_SKILLS}}/_template.md`]({{DIR_SKILLS}}/_template.md), keep it to one coherent
@@ -307,12 +321,10 @@ Because the folder is shared, two cautions hold ({{LAW}} XVI):
 
 *{{EPI_WIKI}}*
 
-{{INTRO_WIKI}} It is declared in `wiki.jsonc`, sitting **beside this AGENT.md**
-like `context.json` (§8) does — or wherever `$GENESEED_WIKI` points. The file is
-JSONC — comments are allowed — and the build drops it once, a commented
-copy-and-edit example over an empty list, never overwriting it; an empty `wikis`
-list means no knowledge base is declared and this section stays dormant. (When
-configured for OpenCode its `eager` entries are loaded for you automatically.)
+{{INTRO_WIKI}} It is declared in `wiki.jsonc`, **beside this AGENT.md** like
+`context.json` (§8) — or wherever `$GENESEED_WIKI` points. An empty `wikis` list
+means none is declared and this section stays dormant. (On OpenCode its `eager`
+entries are loaded for you.)
 
 Read `wiki.jsonc` at the start of every session, and honour each declared wiki:
 
@@ -330,15 +342,12 @@ Read `wiki.jsonc` at the start of every session, and honour each declared wiki:
 - **`protected`** — folders you must never write to. (On OpenCode the guard
   plugin also enforces this at the tool boundary.)
 
-Unlike {{MEMORY}} (§4, your curated facts) and the {{NOTEBOOK}} (§5, your own
-space), the wiki is **the user's living knowledge base** — typically an Obsidian
-vault — and you are a citizen in it, not its owner. You may read, create, edit,
-and interlink notes anywhere outside `protected`, but the wiki's conventions
-outrank your defaults: wikilinks (`[[Note Name]]`) over bare paths, frontmatter
-where the house style carries it, and every new note linked into the graph — an
-orphan note is a lost note. When your work surfaces a durable fact worth sharing
-across projects, capture it there — the [wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}
-carries the procedure; knowledge that matters only to you stays in {{MEMORY}}.
+The wiki is **the user's**, not yours — you are a citizen in it. Write anywhere
+outside `protected`, but its conventions outrank your defaults: wikilinks
+(`[[Note Name]]`) over bare paths, and every new note linked into the graph. A
+durable fact worth sharing across projects goes here via the
+[wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}; one that matters only to you stays in
+{{MEMORY}} (§4).
 
 ---
 
@@ -347,26 +356,17 @@ carries the procedure; knowledge that matters only to you stays in {{MEMORY}}.
 *{{EPI_CONTEXT}}*
 
 **Read `context.json` at the start of every session — this is {{LAW}} XVIII, not a
-suggestion.** The harness is hermetic and carries no project-specific knowledge;
-this manifest is how the project hands you its own. It sits **right here, beside
-this AGENT.md** — they travel together, whether this folder is the repo root or a
-subfolder of it. (When configured for OpenCode it is loaded for you automatically.)
-It is host-specific and should be **git-ignored**. The moment the session opens,
-before your first reply, read the `context.json` next to this file and act on each
-entry by its `load` mode:
+suggestion.** The harness carries no project-specific knowledge; this manifest,
+**beside this AGENT.md**, is how the project hands you its own. (On OpenCode it
+is loaded for you.) Before your first reply, act on each entry by its `load` mode:
 
-- **`"eager"`** — read the file **now**, every session. For small, always-relevant
-  knowledge: house conventions, branch/commit policy, the Definition of Done.
-- **`"lazy"`** — read the file **only when the task in hand needs it**, never up
-  front ({{LAW}} XV). For large or occasional docs — architecture notes, API
-  references — often maintained elsewhere on the machine.
+- **`"eager"`** — read it **now**, every session. Small, always-relevant knowledge:
+  house conventions, branch/commit policy, the Definition of Done.
+- **`"lazy"`** — read it **only when the task in hand needs it**, never up front
+  ({{LAW}} XV). Large or occasional docs: architecture notes, API references.
 
-Each `path` may be **absolute** (a doc living anywhere on the machine) or relative
-to the repository root. This is the sanctioned escape hatch from the harness's
-hermetic rule, and it replaces baked-in project rules: point at the project's own
-files instead of editing the harness. The build drops an empty `context.json`
-beside this file on first run — its schema is in the file's own comment — and never
-overwrites it; just fill it in.
+Each `path` may be absolute or relative to the repository root. The file's own
+comment carries its schema and setup notes.
 
 ---
 
@@ -374,15 +374,11 @@ overwrites it; just fill it in.
 
 *{{EPI_SCRIPTS}}*
 
-{{INTRO_SCRIPTS}} For teams that want hard
-automation, the `rituals/` directory ships a dependency-free CLI (`harness build`,
-`harness doctor`, `harness context`, `harness learn`, plus `harness prompt`,
-`harness diff`, a guided `harness setup` wizard, and a curses `harness tui`) you can
-wire to git hooks or CI. In particular `harness context`
-injects the project context at session start — auto-discovered by convention, or
-`context.json`'s `eager` entries when a manifest is present — so {{LAW}} XVIII is
-enforced by the hook, not left to the agent. See the Claude Code adapter. It is
-opt-in — the harness is fully functional without it.
+{{INTRO_SCRIPTS}} The `rituals/` directory ships a dependency-free CLI (`harness
+build|doctor|context|learn|prompt|diff|setup|tui`) that can be wired to git hooks
+or CI — notably `harness context`, which injects the project context at session
+start so {{LAW}} XVIII is enforced by the hook rather than left to you. All of it
+is opt-in; the harness works without any of it.
 
 ---
 

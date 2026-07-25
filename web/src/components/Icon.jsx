@@ -15,6 +15,7 @@ export const ICONS = {
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3',
   chevron: 'M9 6l6 6-6 6',
   x: 'M6 6l12 12M18 6L6 18',
+  menu: 'M4 7h16M4 12h16M4 17h16',
   play: 'M7 5v14l11-7L7 5Z',
   clear: 'M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14',
   download: 'M12 3v12m0 0l-4-4m4 4l4-4M4 19h16',

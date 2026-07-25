@@ -328,9 +328,9 @@ def main() -> None:
                          "(agents as .agent.md, skills; no hooks). copilot-global: render "
                          "into ~/.copilot ($COPILOT_CONFIG_DIR) — copilot-instructions.md, "
                          "agents, skills")
-    ap.add_argument("--footprint", choices=["lean", "full"], default="full",
-                    help="instruction-set footprint. full (default): every law's full text "
-                         "is inlined into AGENT.md §1. lean: §1 carries terse rule lines + a "
+    ap.add_argument("--footprint", choices=["lean", "full"], default="lean",
+                    help="instruction-set footprint. lean (default): §1 carries terse rule "
+                         "lines + a "
                          "pointer to the standalone laws/universal.md (smaller context, lower "
                          "token cost per turn); the full law text always ships alongside, read "
                          "on demand. Applies to every host (opencode/claude/bob/copilot) "

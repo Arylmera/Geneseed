@@ -45,13 +45,14 @@ def _ask_choice(prompt: str, options: list[tuple[str, str]], default: str) -> st
 
 
 def _setup_build_args(theme: str, emit: str, out: str | None = None,
-                      root: str | None = None, footprint: str = "full",
+                      root: str | None = None, footprint: str = "lean",
                       posture: str = "peer", mode: str = "direct") -> list[str]:
     """The build.py argv for a wizard selection (pure — unit-tested). The global
-    emit takes no out/root; the others may. `footprint` adds --footprint only when it
-    departs from build.py's own default ('full'), `posture` adds --posture only when
-    it departs from 'peer', and `mode` adds --mode only when it departs from 'direct',
-    so existing call sites and the argv stay byte-identical for default installs."""
+    emit takes no out/root; the others may. `footprint` is ALWAYS passed explicitly:
+    it used to be omitted when it matched build.py's default, which silently coupled
+    the wizard's answer to whatever that default happened to be — the moment the
+    default moved, picking the old default produced the new one. `posture` and `mode`
+    still elide at their defaults; neither has moved."""
     argv = ["--theme", theme, "--emit", emit]
     if emit not in ("opencode-global", "claude-global", "bob-global",
                     "copilot-global"):   # globals take no out/root
@@ -59,7 +60,7 @@ def _setup_build_args(theme: str, emit: str, out: str | None = None,
             argv += ["--out", out]
         if root:
             argv += ["--root", root]
-    if footprint and footprint != "full":
+    if footprint:
         argv += ["--footprint", footprint]
     if posture and posture != "peer":
         argv += ["--posture", posture]
@@ -226,18 +227,30 @@ def _mode_of_dir(d: Path) -> "str | None":
     return None
 
 
+FOOTPRINTS = ("lean", "full")
+
+
 def _footprint_of_dir(d: Path) -> str:
     """The instruction-set footprint a deployed harness in `d` was built with: the
     `.geneseed-footprint` marker if present, else 'full'. Unlike theme, footprint can't
     be inferred from content, so a pre-marker install (or any built before footprints
     existed) reads as 'full' — which is exactly what it is. Single source of footprint
-    detection, mirroring _theme_of_dir."""
+    detection, mirroring _theme_of_dir.
+
+    A marker holding an UNRECOGNISED value is reported, not swallowed. Falling back
+    silently is the failure mode that would let a future footprint be written by one
+    code path and read as 'full' by another — the install would then be rebuilt into
+    something its owner never chose, with nothing on screen to say so (Rule VII)."""
     try:
         marker = d / ".geneseed-footprint"
         if marker.is_file():
             v = marker.read_text(encoding="utf-8").strip()
-            if v in ("lean", "full"):
+            if v in FOOTPRINTS:
                 return v
+            if v:
+                sys.stderr.write(
+                    f"[geneseed] WARN: {marker} holds unknown footprint {v!r} — "
+                    f"reading it as 'full'. Known: {', '.join(FOOTPRINTS)}.\n")
     except OSError:
         pass
     return "full"
@@ -301,8 +314,8 @@ EMIT_OPTIONS = [
 # Instruction-set footprint — how much of the laws AGENT.md §1 carries inline. Lean
 # trades a per-turn token saving for a one-read indirection; full is the original.
 FOOTPRINT_OPTIONS = [
-    ("full", "Full — every law's complete text inlined in AGENT.md (original)."),
-    ("lean", "Lean — terse rule lines + a pointer to the full laws file (lighter context)."),
+    ("lean", "Lean — terse rule lines + a pointer to the full laws file (default, lighter context)."),
+    ("full", "Full — every law's complete text inlined in AGENT.md."),
 ]
 
 
@@ -316,7 +329,7 @@ def _collect_setup_lines() -> "dict | None":
     mode = _ask_choice("Mode", _mode_options(), inst["mode"] or _default_mode())
     emit = _ask_choice("Install mode", EMIT_OPTIONS, inst["emit"] or "opencode-global")
     footprint = _ask_choice("Footprint", [(k, d) for k, d in FOOTPRINT_OPTIONS],
-                            inst["footprint"] or "full")
+                            inst["footprint"] or "lean")
     out = root = None
     # Every PROJECT emit needs the repo root — claude/bob/copilot included: without
     # --out their CLAUDE.md/.claude land in build.py's default ./Harness, where the
@@ -405,7 +418,7 @@ def _setup_lines() -> int:
         print("[setup] cancelled — nothing written.")
         return 0
     theme, emit, out, root = sel["theme"], sel["emit"], sel.get("out"), sel.get("root")
-    footprint = sel.get("footprint", "full")
+    footprint = sel.get("footprint", "lean")
     posture = sel.get("posture", "peer")
     mode = sel.get("mode", "direct")
     if emit == "opencode-global":

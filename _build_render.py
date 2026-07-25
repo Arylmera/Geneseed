@@ -159,6 +159,38 @@ def substitute(text: str, theme: dict) -> str:
     return TOKEN_RE.sub(repl, text)
 
 
+# The two capability catalogues in AGENT.md, each wrapped as
+#   <!-- CATALOG:begin --> table <!-- CATALOG:else --> pointer <!-- CATALOG:end -->
+# so both wordings live in the template where an author can read them, and the
+# render picks a branch instead of a regex guessing where a markdown table ends.
+CATALOG_BLOCK_RE = re.compile(
+    r"[ \t]*<!-- CATALOG:begin -->\n(?P<table>.*?)"
+    r"[ \t]*<!-- CATALOG:else -->\n(?P<pointer>.*?)"
+    r"[ \t]*<!-- CATALOG:end -->\n",
+    re.S)
+
+
+def _resolve_catalogs(text: str, native_catalog: bool) -> str:
+    """Resolve AGENT.md's CATALOG blocks to exactly one branch.
+
+    A host that catalogues capabilities to the model itself — Claude Code and
+    OpenCode both put every skill's and agent's name and description in front of
+    the model unprompted — receives the same ~10.7 KB list twice, and pays for
+    our copy in context on every single session. For those hosts the tables
+    collapse to a pointer.
+
+    A host that does NOT do this keeps the tables: they are then the only thing
+    telling the model what exists, so dropping them would remove delegation and
+    skill discovery outright rather than merely save tokens. Which hosts qualify
+    is declared per host in HOSTS['<host>']['native_catalog'] and never inferred
+    here. The default is False everywhere, and resolution happens in render_file
+    — the one path every render goes through — so an emit that forgets to say
+    anything ships the tables (safe) and can never leak a raw marker."""
+    return CATALOG_BLOCK_RE.sub(
+        lambda m: m.group("pointer") if native_catalog else m.group("table"),
+        text)
+
+
 def _terse_laws(text: str, theme: dict, laws_prefix: str = "") -> str:
     """Lean rendering of the (already-themed) laws: each law's heading + its first
     sentence (the rule itself), elaboration dropped, plus a pointer to the full
@@ -188,7 +220,8 @@ def _terse_laws(text: str, theme: dict, laws_prefix: str = "") -> str:
 
 
 def render_file(path: Path, theme: dict, footprint: str = "full",
-                laws_prefix: str = "", _visiting: "frozenset[Path]" = frozenset()) -> str:
+                laws_prefix: str = "", _visiting: "frozenset[Path]" = frozenset(),
+                native_catalog: bool = False) -> str:
     """Render one source file: inline INCLUDE directives, then substitute tokens.
 
     `footprint='lean'` replaces the INLINED copy of laws/universal.md (AGENT.md §1)
@@ -196,6 +229,11 @@ def render_file(path: Path, theme: dict, footprint: str = "full",
     prefixes that pointer for hosts whose laws dir sits under a marker dir beside the
     instructions file (e.g. '.claude/'). The STANDALONE laws file is rendered by
     render_all's own loop, never through this inline path, so it always stays full.
+
+    `native_catalog=True` collapses AGENT.md's capability tables to a pointer, for
+    hosts that put the same catalogue in front of the model themselves — see
+    _resolve_catalogs. The default keeps the tables, so any caller that says
+    nothing gets the safe shape.
 
     `_visiting` carries the chain of files currently being inlined, so a circular
     INCLUDE (a -> b -> a, or a file including itself) is caught and reported as a
@@ -210,12 +248,14 @@ def render_file(path: Path, theme: dict, footprint: str = "full",
             return f"<!-- MISSING INCLUDE: {rel} -->"
         if target == here or target in _visiting:
             return f"<!-- CIRCULAR INCLUDE: {rel} -->"
-        inner = render_file(target, theme, footprint, laws_prefix, _visiting | {here}).rstrip("\n")
+        inner = render_file(target, theme, footprint, laws_prefix,
+                            _visiting | {here}, native_catalog).rstrip("\n")
         if footprint == "lean" and rel == "laws/universal.md":
             inner = _terse_laws(inner, theme, laws_prefix)
         return inner
 
     text = INCLUDE_RE.sub(inline, text)
+    text = _resolve_catalogs(text, native_catalog)
     return substitute(text, theme)
 
 
@@ -600,7 +640,8 @@ def dest_rel(rel: Path) -> Path:
 
 
 def render_all(theme_name: str, footprint: str = "full",
-               laws_prefix: str = "") -> tuple[dict, list[tuple[str, str | None, Path]]]:
+               laws_prefix: str = "",
+               native_catalog: bool = False) -> tuple[dict, list[tuple[str, str | None, Path]]]:
     """Render every source file once. Returns (theme, items) where each item is
     (output_relpath, rendered_text_or_None, source_path). Text files carry their
     rendered text; binary files carry None text and are copied from source_path.
@@ -612,6 +653,10 @@ def render_all(theme_name: str, footprint: str = "full",
     standalone laws/universal.md item stays full. `laws_prefix` is the pointer prefix
     for hosts whose laws dir lives under a marker dir (e.g. '.claude/').
 
+    `native_catalog=True` collapses AGENT.md's capability tables to a pointer —
+    pass HOSTS[host]['native_catalog'], never a guess. Defaults to False so the
+    portable bundle, which assumes no host at all, keeps them.
+
     Shared by `build()` (writes to a directory) and the prompt emitter (embeds
     the text in a single self-contained prompt) so the two never drift."""
     theme = effective_theme(theme_name)
@@ -622,7 +667,8 @@ def render_all(theme_name: str, footprint: str = "full",
         rel = path.relative_to(SRC)
         out_rel = dest_rel(themed_rel(rel, theme)).as_posix()
         if path.suffix in TEXT_SUFFIXES:
-            items.append((out_rel, render_file(path, theme, footprint, laws_prefix), path))
+            items.append((out_rel, render_file(path, theme, footprint, laws_prefix,
+                                               native_catalog=native_catalog), path))
         else:
             items.append((out_rel, None, path))
     return theme, items
@@ -732,11 +778,15 @@ def _write_src_dirs_marker(out: Path, resolved: dict) -> None:
     os.replace(tmp, out / SRC_DIRS_MARKER)
 
 
-def build(theme_name: str, out: Path, footprint: str = "full") -> None:
+def build(theme_name: str, out: Path, footprint: str = "full",
+          native_catalog: bool = False) -> None:
     """Render the bundle into `out`.
 
     `footprint='lean'` renders AGENT.md's §1 laws terse (rule + pointer); the
     standalone laws/<universal>.md beside it stays full as the on-demand fallback.
+    `native_catalog=True` collapses AGENT.md's capability tables to a pointer, for
+    a host that catalogues them itself; the default keeps them, which is what the
+    portable bundle wants since it assumes no host.
     The `.geneseed-footprint` marker is written by build.py main() (the single
     marker choke point), not here.
 
@@ -754,7 +804,8 @@ def build(theme_name: str, out: Path, footprint: str = "full") -> None:
     its `.gitignore` is re-asserted), and `context.json` — written once, beside
     AGENT.md, and never touched again. The build therefore cleans its own footprint
     without ever destroying the user's repository or data."""
-    theme, items = render_all(theme_name, footprint)
+    theme, items = render_all(theme_name, footprint,
+                              native_catalog=native_catalog)
     assert_source_complete(items, context=f"theme '{theme_name}'")
     out.mkdir(parents=True, exist_ok=True)
 
@@ -900,24 +951,33 @@ def _is_readonly(text: str) -> bool:
     return "Read-only" in text
 
 
-def _missing_referenced_specs(items) -> list[str]:
-    """Specs that AGENT.md links to but src/ does not provide.
+_TMPL_SPEC_RE = re.compile(r"\{\{DIR_(AGENTS|SKILLS)\}\}/([A-Za-z0-9_-]+)\.md")
+
+
+def _missing_referenced_specs(items=None) -> list[str]:
+    """Specs that AGENT.md's catalogue references but src/ does not provide.
 
     AGENT.md's agent/skill tables are hand-authored, while the spec files are globbed
     from src/ — so the two can fall out of sync: a row added without its file, or, far
     more often, a partial or interrupted source sync (an aborted `cp -R`, a truncated
     download). Emitting in that state writes an AGENT.md that points at files that were
     never generated — dead links — and the global emit's cleanup would delete the
-    previously-good copies too. Detect it from the rendered items, before any write."""
-    agent = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
-    if agent is None:
+    previously-good copies too.
+
+    Scans the TEMPLATE, not the rendered output. The rendered output drops the tables
+    entirely for a host that catalogues natively (see _resolve_catalogs), which left
+    this gate reading an empty catalogue and silently passing a truncated source on
+    exactly the two hosts that matter most. The template always carries the full
+    tables, so the check is host-independent — as a source-completeness gate should
+    be. `items` is accepted for call-site compatibility and no longer read."""
+    try:
+        tmpl = (SRC / "AGENT.md.tmpl").read_text(encoding="utf-8")
+    except OSError:
         return []
-    missing: list[str] = []
-    for m in CAPABILITY_LINK_RE.finditer(agent):
-        target = m.group(0).rsplit("](", 1)[1].rstrip(")")   # e.g. 'agents/advocate.md'
-        folder, _slash, fname = target.partition("/")
-        if folder in ("agents", "skills") and not (SRC / folder / fname).is_file():
-            missing.append(target)
+    missing = [f"{kind.lower()}/{name}.md"
+               for kind, name in _TMPL_SPEC_RE.findall(tmpl)
+               if name != "_template"
+               and not (SRC / kind.lower() / f"{name}.md").is_file()]
     return sorted(set(missing))
 
 
