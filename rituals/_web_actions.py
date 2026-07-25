@@ -258,12 +258,16 @@ def api_restore(state: WebState, files: list) -> dict:
     target = state.target.resolve()
     with tempfile.TemporaryDirectory() as tmp:
         expected = (Path(tmp) / "expected").resolve()
-        # Render the EXPECTED copy with the deployed install's OWN host emit, so a
-        # restore renders the right dialect (Claude/Bob agents, not a silently-OpenCode
-        # expected that would overwrite them with the wrong frontmatter / delete them).
+        # Render the EXPECTED copy with the deployed install's OWN host emit AND its own
+        # footprint, so a restore renders the right dialect (Claude/Bob agents, not a
+        # silently-OpenCode expected that would overwrite them with the wrong frontmatter
+        # / delete them) at the right size — a full-footprint expected on a lean install
+        # rewrites AGENT.md with the inlined laws and DELETES laws/universal.md, which
+        # only the lean emit writes.
         emitter = _global_emitter_for(state.emit)
         with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's own log
-            emitter(state.theme, out=Path(tmp) / "bundle", cfg=expected)
+            emitter(state.theme, out=Path(tmp) / "bundle", cfg=expected,
+                    footprint=state.footprint)
         for rel in files or []:
             rel = str(rel).replace("\\", "/").strip().lstrip("/")
             dst = (target / rel).resolve()

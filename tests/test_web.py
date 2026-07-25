@@ -217,6 +217,25 @@ class DiffTests(unittest.TestCase):
                     [], [(f["status"], f["rel"]) for f in drift],
                     f"a just-built {footprint} install reports drift")
 
+    def test_restore_keeps_a_lean_install_lean(self):
+        """Restore renders its expected copy at the install's OWN footprint. Rendered
+        at 'full' on a lean install it rewrites AGENT.md with the inlined laws and
+        deletes laws/universal.md — which only the lean emit writes — so 'discard my
+        local edit' silently converted the install to full."""
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / "cfg"
+            build.emit_opencode_global("neutral", out=Path(tmp) / "bundle",
+                                       cfg=cfg, footprint="lean")
+            (cfg / ".geneseed-footprint").write_text("lean\n", encoding="utf-8")
+            lean_agent = (cfg / "AGENT.md").read_text(encoding="utf-8")
+            (cfg / "AGENT.md").write_text(lean_agent + "\nlocal edit\n", encoding="utf-8")
+            state = web.WebState(theme="neutral", target=cfg)
+            res = web.api_restore(state, ["AGENT.md", "laws/universal.md"])
+            self.assertEqual([], res["errors"])
+            self.assertEqual([], res["deleted"])
+            self.assertTrue((cfg / "laws" / "universal.md").is_file())
+            self.assertEqual(lean_agent, (cfg / "AGENT.md").read_text(encoding="utf-8"))
+
     def test_diff_no_deployed_install(self):
         # Point at an empty temp dir => no GLOBAL_MANIFEST => deployed False.
         import tempfile
