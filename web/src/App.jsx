@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { api } from './api/index.js'
 import { useRoute } from './lib/router.js'
 import { applyAccent, applyCuratedAccent } from './lib/accents.js'
@@ -15,22 +15,28 @@ import VoicePopover from './components/VoicePopover.jsx'
 import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
 import BootSplash from './components/BootSplash.jsx'
+import Loading from './components/Loading.jsx'
+// Dashboard is the landing route, so it ships in the shell. Every other page is
+// code-split: importing all seventeen statically put the whole console — graph
+// rendering, the harness manager, the docs viewer — into one chunk that had to be
+// downloaded and parsed before the dashboard could paint, on a tool most sessions
+// only ever open to the dashboard.
 import Dashboard from './pages/Dashboard/index.jsx'
-import Activity from './pages/Activity.jsx'
-import ActivityDetail from './pages/ActivityDetail.jsx'
-import Library from './pages/Library.jsx'
-import Laws from './pages/Laws.jsx'
-import Rules from './pages/Rules.jsx'
-import Profile from './pages/Profile.jsx'
-import Skills from './pages/Skills.jsx'
-import Diff from './pages/Diff.jsx'
-import Doctor from './pages/Doctor.jsx'
-import Themes from './pages/Themes.jsx'
-import Graph from './pages/Graph.jsx'
-import Settings from './pages/Settings/index.jsx'
-import Harnesses from './pages/Harnesses.jsx'
-import Docs from './pages/Docs/index.jsx'
-import About from './pages/About.jsx'
+const Activity = lazy(() => import('./pages/Activity.jsx'))
+const ActivityDetail = lazy(() => import('./pages/ActivityDetail.jsx'))
+const Library = lazy(() => import('./pages/Library.jsx'))
+const Laws = lazy(() => import('./pages/Laws.jsx'))
+const Rules = lazy(() => import('./pages/Rules.jsx'))
+const Profile = lazy(() => import('./pages/Profile.jsx'))
+const Skills = lazy(() => import('./pages/Skills.jsx'))
+const Diff = lazy(() => import('./pages/Diff.jsx'))
+const Doctor = lazy(() => import('./pages/Doctor.jsx'))
+const Themes = lazy(() => import('./pages/Themes.jsx'))
+const Graph = lazy(() => import('./pages/Graph.jsx'))
+const Settings = lazy(() => import('./pages/Settings/index.jsx'))
+const Harnesses = lazy(() => import('./pages/Harnesses.jsx'))
+const Docs = lazy(() => import('./pages/Docs/index.jsx'))
+const About = lazy(() => import('./pages/About.jsx'))
 
 // App is a thin shell: it wires the hooks (overview, jobs, color mode) to the
 // chrome (rail, topbar, console) and dispatches the active route to a page. All
@@ -137,6 +143,7 @@ export default function App() {
         />
         <div className="page">
           <div className={route.view === 'harnesses' ? 'pad pad-wide' : 'pad'}>
+            <Suspense fallback={<Loading />}>
             {route.view === 'dashboard' && (
               <Dashboard
                 overview={overview}
@@ -206,6 +213,7 @@ export default function App() {
               <Docs page={route.page} query={query} onAction={runAction} overview={overview} />
             )}
             {route.view === 'about' && <About />}
+            </Suspense>
           </div>
         </div>
         <Console
