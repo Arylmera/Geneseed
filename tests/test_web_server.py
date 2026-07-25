@@ -145,6 +145,32 @@ class WebServerHTTPTests(unittest.TestCase):
         self.assertEqual(r2.status, 200)
         self.assertTrue(json.loads(body).get("ok"))
 
+    def test_every_table_driven_get_route_answers(self):
+        """The plain GET routes are a dict of path -> api function. A typo in a key
+        or a handler that no longer takes just `state` turns into a 404 or a 500 at
+        runtime, so walk the table itself rather than a hand-copied list of paths."""
+        routes = self.srv.RequestHandlerClass.STATE_ROUTES
+        self.assertGreaterEqual(len(routes), 10, "route table looks truncated")
+        for path in routes:
+            with self.subTest(path=path):
+                c = self._conn()
+                c.request("GET", path, headers=self._h(self.port))
+                r = c.getresponse()
+                body = r.read()
+                self.assertEqual(r.status, 200, f"{path} -> {r.status}")
+                if r.getheader("Content-Encoding") == "gzip":
+                    body = gzip.decompress(body)
+                self.assertIsInstance(json.loads(body), dict, path)
+
+    def test_unknown_api_path_falls_through_to_the_spa(self):
+        """An /api path with no route must not 500 — it falls to the static
+        handler, which serves index.html for anything it cannot find."""
+        c = self._conn()
+        c.request("GET", "/api/does-not-exist", headers=self._h(self.port))
+        r = c.getresponse()
+        r.read()
+        self.assertIn(r.status, (200, 404))
+
     def test_foreign_host_is_still_refused(self):
         c = self._conn()
         c.request("GET", "/api/overview", headers={"Host": "evil.com"})

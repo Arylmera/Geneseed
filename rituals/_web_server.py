@@ -68,19 +68,37 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
             qs = urllib.parse.urlparse(self.path).query
             return urllib.parse.parse_qs(qs).get("harness", [None])[0]
 
+        # Every GET that is just "call api_X(state) and return the JSON". Adding one
+        # is a line here; the routes below the table are the ones that genuinely
+        # differ — they parse the path, take the harness query param, or read the
+        # job manager.
+        STATE_ROUTES = {
+            "/api/overview": api_overview,
+            "/api/activity": api_activity,
+            "/api/themes": api_themes,
+            "/api/setup": api_setup,
+            "/api/doctor": api_doctor,
+            "/api/graph": api_graph,
+            "/api/mcp": api_mcp,
+            "/api/installs": api_installs,
+            "/api/excludes": api_excludes,
+            "/api/rules": api_rules,
+            "/api/profile": api_profile,
+            "/api/diff": api_diff,
+        }
+
         # ---- GET ---------------------------------------------------------
         def do_GET(self):
             if not _local_host(self.headers.get("Host")):
                 return self._send_json({"error": "forbidden host"}, 403)
             path = self.path.split("?", 1)[0]
             try:
+                handler = self.STATE_ROUTES.get(path)
+                if handler is not None:
+                    return self._send_json(handler(state))
                 if path == "/api/ping":
                     # Cheap liveness probe for `web status` / the daemon launcher.
                     return self._send_json({"ok": True, "theme": state.theme})
-                if path == "/api/overview":
-                    return self._send_json(api_overview(state))
-                if path == "/api/activity":
-                    return self._send_json(api_activity(state))
                 if path.startswith("/api/activity/"):
                     sid = urllib.parse.unquote(path[len("/api/activity/"):])
                     return self._send_json(api_activity_detail(state, sid))
@@ -92,26 +110,6 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                         raise NotFound(path)
                     return self._send_json(
                         api_item(state, parts[3], urllib.parse.unquote(parts[4])))
-                if path == "/api/themes":
-                    return self._send_json(api_themes(state))
-                if path == "/api/setup":
-                    return self._send_json(api_setup(state))
-                if path == "/api/doctor":
-                    return self._send_json(api_doctor(state))
-                if path == "/api/graph":
-                    return self._send_json(api_graph(state))
-                if path == "/api/mcp":
-                    return self._send_json(api_mcp(state))
-                if path == "/api/installs":
-                    return self._send_json(api_installs(state))
-                if path == "/api/excludes":
-                    return self._send_json(api_excludes(state))
-                if path == "/api/rules":
-                    return self._send_json(api_rules(state))
-                if path == "/api/profile":
-                    return self._send_json(api_profile(state))
-                if path == "/api/diff":
-                    return self._send_json(api_diff(state))
                 if path == "/api/docs":
                     return self._send_json(api_docs(state, self._harness()))
                 if path.startswith("/api/docs/page/"):
