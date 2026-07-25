@@ -17,24 +17,47 @@ def _local_host(host: "str | None") -> bool:
     return h.split(":", 1)[0] in ("127.0.0.1", "localhost")
 
 
+# Content types worth compressing. Everything else in dist/ (woff2, png) is
+# already compressed — re-gzipping costs CPU and gains nothing.
+_GZIP_TYPES = ("application/json", "text/", "image/svg+xml",
+               "application/manifest+json", "application/javascript")
+# Below this, the gzip header outweighs the saving.
+_GZIP_MIN = 1024
+
+
 def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder: "dict | None" = None):
+    # Static files read straight off disk on every request, for a dist/ that
+    # cannot change while the daemon runs. Cache the raw bytes; index.html is
+    # still token-injected per request, so only the on-disk bytes are shared.
+    static_cache: dict = {}
+
     class Handler(BaseHTTPRequestHandler):
+        # BaseHTTPRequestHandler defaults to HTTP/1.0, which closes the socket
+        # after every response — a fresh TCP connection per asset. Both response
+        # paths below always set Content-Length, which is what keep-alive needs.
+        protocol_version = "HTTP/1.1"
+
         def log_message(self, *a):  # silence default stderr logging
             pass
 
         def _send_json(self, obj, code=200):
-            body = json.dumps(obj).encode("utf-8")
-            self.send_response(code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            # Routed through _send_bytes so compression and header handling have
+            # exactly one implementation.
+            self._send_bytes(json.dumps(obj).encode("utf-8"),
+                             "application/json", code)
 
         def _send_bytes(self, body: bytes, ctype: str, code=200, extra=None):
+            headers = dict(extra or {})
+            if (len(body) >= _GZIP_MIN
+                    and ctype.startswith(_GZIP_TYPES)
+                    and "gzip" in (self.headers.get("Accept-Encoding") or "")):
+                body = gzip.compress(body, 6)
+                headers["Content-Encoding"] = "gzip"
+                headers["Vary"] = "Accept-Encoding"
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
-            for k, v in (extra or {}).items():
+            for k, v in headers.items():
                 self.send_header(k, v)
             self.end_headers()
             self.wfile.write(body)
@@ -110,19 +133,23 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
 
         def _read_json_body(self) -> dict:
             try:
-                length = int(self.headers.get("Content-Length") or 0)
-            except ValueError:
-                length = 0
-            if not length:
-                return {}
-            try:
-                obj = json.loads(self.rfile.read(length) or b"{}")
+                obj = json.loads(self._body or b"{}")
                 return obj if isinstance(obj, dict) else {}
             except Exception:  # noqa: BLE001
                 return {}
 
         # ---- POST --------------------------------------------------------
         def do_POST(self):
+            # Drain the request body BEFORE routing. Under keep-alive an unread
+            # body stays in the socket and the next request parses it as a
+            # request line — and the two guards below (foreign Host, bad token)
+            # both answer without ever reaching a route that would read it.
+            # HTTP/1.0 hid this by closing the connection after every response.
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            self._body = self.rfile.read(length) if length > 0 else b""
             # Same top-level guard as do_GET: an unexpected raise must yield a
             # JSON 500, not a dropped connection the UI waits on forever.
             try:
@@ -304,19 +331,28 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
             if not fp.is_file():
                 return self._send_json(
                     {"error": "web/dist missing — run the UI build"}, 500)
-            data = fp.read_bytes()
+            data = static_cache.get(fp)
+            if data is None:
+                data = static_cache[fp] = fp.read_bytes()
+            extra = None
             if fp.name == "index.html":
                 inject = f'<script>window.__GENESEED_TOKEN__="{token}";</script>'
                 data = data.replace(b"</head>", inject.encode() + b"</head>", 1)
+                # index.html carries the per-session CSRF token — never cache it.
+                extra = {"Cache-Control": "no-store"}
+            elif "/assets/" in path:
+                # Vite content-hashes everything under /assets/, so the URL
+                # changes whenever the bytes do: caching forever is safe.
+                extra = {"Cache-Control": "public, max-age=31536000, immutable"}
             ctype = {
                 ".html": "text/html", ".js": "text/javascript",
                 ".css": "text/css", ".json": "application/json",
                 ".svg": "image/svg+xml", ".ico": "image/x-icon",
-                ".woff2": "font/woff2",
+                ".woff2": "font/woff2", ".woff": "font/woff",
                 ".webmanifest": "application/manifest+json",
                 ".png": "image/png",
             }.get(fp.suffix, "application/octet-stream")
-            return self._send_bytes(data, ctype)
+            return self._send_bytes(data, ctype, extra=extra)
 
     return Handler
 
