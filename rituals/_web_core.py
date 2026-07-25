@@ -321,8 +321,8 @@ DOC_GROUPS = [
          "link": {"hash": "#/settings", "label": "Toggle it in Settings →"},
          "body":
          "**Footprint** controls how much of the Rules your agent carries *inline* "
-         "in `AGENT.md` every turn. Two states — **full** (the default) and "
-         "**lean** — set per install. It's a token-cost dial, not a change to which "
+         "in `AGENT.md` every turn. Two states — **lean** (the default) and "
+         "**full** — set per install. It's a token-cost dial, not a change to which "
          "Rules apply: every Rule is always in force, and across lean and full the "
          "emitted files are otherwise identical — same Agents, Skills, plugins, "
          "commands, Memory, and Notebook.\n\n"

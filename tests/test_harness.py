@@ -1164,20 +1164,34 @@ class McpServerTests(unittest.TestCase):
 
 
 class SetupArgsTests(unittest.TestCase):
+    """--footprint is always spelled out. It used to be elided when it matched
+    build.py's default, which tied the wizard's answer to that default: when the
+    default moved to lean, choosing 'full' would have produced a lean install."""
+
     def test_global_omits_out_and_root(self):
         self.assertEqual(
             harness._setup_build_args("neutral", "opencode-global", "x", "y"),
-            ["--theme", "neutral", "--emit", "opencode-global"])
+            ["--theme", "neutral", "--emit", "opencode-global",
+             "--footprint", "lean"])
 
     def test_files_includes_out(self):
         self.assertEqual(
             harness._setup_build_args("imperial", "files", "Bundle", None),
-            ["--theme", "imperial", "--emit", "files", "--out", "Bundle"])
+            ["--theme", "imperial", "--emit", "files", "--out", "Bundle",
+             "--footprint", "lean"])
 
     def test_opencode_includes_out_and_root(self):
         self.assertEqual(
             harness._setup_build_args("neutral", "opencode", "repo", "repo"),
-            ["--theme", "neutral", "--emit", "opencode", "--out", "repo", "--root", "repo"])
+            ["--theme", "neutral", "--emit", "opencode", "--out", "repo",
+             "--root", "repo", "--footprint", "lean"])
+
+    def test_explicit_full_survives_the_lean_default(self):
+        """The regression the elision would have caused, pinned directly."""
+        self.assertIn(
+            "full",
+            harness._setup_build_args("neutral", "opencode-global",
+                                      footprint="full"))
 
 
 class SetupFlairTests(unittest.TestCase):

@@ -259,9 +259,9 @@ can *do*: lean and full emit identical files (same agents, skills, plugins, comm
 notebook, hooks) and every Rule is present and binding. The only structural difference is
 that a lean install on a global / Claude / Bob / Copilot target also ships the standalone
 `laws/universal.md` (project bundles already carry it); the only behavioural difference is
-that each Rule's reasoning loads on demand instead of every turn — which is why full, with
-the rationale always in front of the model, applies a rule's nuance more reliably on subtle
-edge cases (or with a weaker model), and stays the default.
+that each Rule's reasoning loads on demand instead of every turn. Lean is the default;
+full, with the rationale always in front of the model, applies a rule's nuance more
+reliably on subtle edge cases or with a weaker model, and is one flag away.
 
 Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** toggle in
 the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It is
