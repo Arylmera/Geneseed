@@ -41,7 +41,7 @@ export default function Topbar({
   onSwitch,
 }) {
   return (
-    <div className="topbar">
+    <header className="topbar">
       {/* Phone-width drawer toggle. CSS hides it above 720px, where the rail is
           permanently on screen and there is nothing to toggle. */}
       <button
@@ -72,6 +72,6 @@ export default function Topbar({
       <button className="iconbtn" title="Stop server" onClick={onShutdown}>
         <Icon name="power" />
       </button>
-    </div>
+    </header>
   )
 }

@@ -146,7 +146,7 @@ const NAV = [
 
 export default function Rail({ route, overview, onOpenVoice, onNavigate }) {
   return (
-    <aside className="rail" id="rail-nav">
+    <aside className="rail" id="rail-nav" aria-label="Harness navigation">
       <button
         className="rail-brand"
         onClick={() => {

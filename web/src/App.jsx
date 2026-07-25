@@ -85,6 +85,14 @@ export default function App() {
     onError,
   })
 
+  // One sentence describing what the job runner is doing, for the live region.
+  const lastRun = runs[runs.length - 1]
+  const jobAnnouncement = !lastRun
+    ? ''
+    : lastRun.status === 'running'
+      ? `${lastRun.action} running`
+      : `${lastRun.action} ${lastRun.status}`
+
   // The accent is either the flavour's curated signature ('curated' mode) or the
   // deployed voice's accent ('auto'), adjusted for light/dark. Curated wins when
   // the flavour has an entry; otherwise we always fall back to the voice.
@@ -133,6 +141,17 @@ export default function App() {
       ref={appRef}
     >
       <div className="atmos" aria-hidden="true" />
+      {/* Keyboard users land on the rail's fourteen nav items before any page
+          content; this jumps past them. Visible only while focused. */}
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
+      {/* Actions (rebuild, update, doctor) run as background jobs whose only
+          feedback was visual — the console panel and a spinner. Announce the
+          transitions so a screen-reader user knows a job started and ended. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {jobAnnouncement}
+      </p>
       {navOpen && (
         <button
           type="button"
@@ -172,7 +191,7 @@ export default function App() {
           dataRev={dataRev}
           onSwitch={refresh}
         />
-        <div className="page">
+        <main className="page" id="main" tabIndex={-1}>
           <div className={route.view === 'harnesses' ? 'pad pad-wide' : 'pad'}>
             <Suspense fallback={<Loading />}>
               {route.view === 'dashboard' && (
@@ -248,7 +267,7 @@ export default function App() {
               {route.view === 'about' && <About />}
             </Suspense>
           </div>
-        </div>
+        </main>
         <Console
           runs={runs}
           open={consoleOpen}
