@@ -4,9 +4,22 @@
    Accent is theme-driven (set --accent / --accent-2 on .app at runtime).
    ============================================================================ */
 
+/* Breakpoints — three tiers, and only three. Every `@media (max-width: …)` below
+   uses one of these values:
+
+     1180px  wide multi-column layouts fold to fewer columns
+      960px  the rail collapses to icons; two-pane views become one
+      720px  phone width: rows stack, secondary columns drop
+
+   These used to be six ad-hoc values (720/900/960/1080/1100/1180) that each new
+   page picked for itself, so nothing lined up and a layout could half-fold. CSS
+   media queries cannot read custom properties, so this comment is the contract:
+   reuse one of the three rather than inventing a fourth. */
+
 /* Self-hosted fonts, bundled by Vite from @fontsource. A localhost console
    must not depend on a CDN: offline, the old Google Fonts import degraded
-   every flavour to system-font soup. Weights mirror the former CDN request. */
+   every flavour to system-font soup. Weights mirror the former CDN request.
+   The .woff fallbacks are stripped at build time — see vite.config.js. */
 @import '@fontsource/space-grotesk/latin-400.css';
 @import '@fontsource/space-grotesk/latin-500.css';
 @import '@fontsource/space-grotesk/latin-600.css';
@@ -231,9 +244,46 @@ button { font-family: inherit; }
   .rail-foot { padding: 12px 0 2px; }
   .rail-foot .voice { justify-content: center; padding: 8px 0; }
 }
+/* Phone width: the rail stops being a column and becomes a real off-canvas
+   drawer. Closed, it is `visibility: hidden` rather than merely translated —
+   a translated rail is still in the tab order, so keyboard users would tab
+   through fourteen invisible nav links before reaching the page. */
+.tb-menu { display: none; }
+.nav-scrim { display: none; }
+
 @media (max-width: 720px) {
   .topbar .prompt { display: none; }
   .tb-search input { width: 150px; }
+
+  .app { grid-template-columns: 1fr; }
+  .tb-menu { display: inline-grid; place-items: center; width: 34px; height: 34px;
+    flex: none; margin-left: -6px; border: 1px solid var(--line);
+    border-radius: 9px; background: var(--surface); color: var(--text-2);
+    cursor: pointer; }
+  .tb-menu:hover { color: var(--text); border-color: var(--line-2); }
+
+  :root { --rail-w: 248px; }
+  .rail { position: fixed; top: 0; left: 0; bottom: 0; z-index: 40;
+    width: var(--rail-w); height: 100dvh; overflow-y: auto;
+    padding: 18px 14px; visibility: hidden;
+    transform: translateX(-100%); transition: transform .22s ease, visibility .22s;
+    box-shadow: 0 0 60px -10px rgba(0,0,0,.8); }
+  .app.nav-open .rail { visibility: visible; transform: none; }
+  /* Labels come back: in a drawer there is room for them, unlike the icon rail. */
+  .brand-text, .voice-meta, .voice .chev { display: flex; }
+  .rail-item span, .rail-item .tag { position: static; width: auto; height: auto;
+    clip-path: none; }
+  .rail-group { font-size: 9.5px; height: auto; padding: 0 10px;
+    margin: 14px 0 6px; background: none; }
+  .rail-item { justify-content: flex-start; padding: 9px 10px; }
+
+  .nav-scrim { display: block; position: fixed; inset: 0; z-index: 39;
+    border: 0; padding: 0; background: rgba(0,0,0,.55);
+    backdrop-filter: blur(2px); cursor: pointer; }
+}
+
+@media (max-width: 720px) and (prefers-reduced-motion: reduce) {
+  .rail { transition: none; }
 }
 
 /* ---- main column ---- */
@@ -834,7 +884,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .empty { text-align: center; color: var(--text-3); padding: 60px 20px; }
 .empty .big { font-family: var(--font-display); font-size: 18px; color: var(--text-2); margin-bottom: 6px; }
 
-@media (max-width: 1080px) {
+@media (max-width: 1180px) {
   .hero { grid-template-columns: 1fr; }
   .lib { grid-template-columns: 1fr; }
 }
@@ -1118,7 +1168,7 @@ a.rail-item.active { color: var(--text); }
   color: var(--text-3); letter-spacing: .04em; margin-top: 13px;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .law-row, .law-rowhead { grid-template-columns: 52px 1fr 116px; }
   .law-princ { display: none; }
   .law-expand { padding-left: 18px; }
@@ -1203,7 +1253,7 @@ a.rail-item.active { color: var(--text); }
   border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
 .skill-doc .markdown th { background: var(--bg-2); color: var(--text); font-weight: 600; }
 .skill-doc .markdown hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .skill-row, .skill-rowhead { grid-template-columns: 1fr 130px; }
   .skill-desc { display: none; }
 }
@@ -2203,7 +2253,7 @@ a.rail-item.active { color: var(--text); }
 .dir-layout .tick { color: var(--text-2); }
 .dir-layout-note { font-size: 12px; }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .dir-grid { grid-template-columns: 1fr; }
 }
 
@@ -2502,7 +2552,7 @@ a.rail-item.active { color: var(--text); }
   letter-spacing: .14em; text-transform: uppercase; fill: var(--text-3);
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .b-hero-grid { grid-template-columns: 1fr; }
   .b-tiles { grid-template-columns: repeat(4, 1fr); }
 }
@@ -2754,7 +2804,7 @@ a.rail-item.active { color: var(--text); }
   width: 20px; height: 20px; color: var(--text-3); flex: none;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .lib.lib-2 { grid-template-columns: 1fr; }
   .lib-secbar { gap: 6px; }
   .lib-secchip { padding: 6px 11px; font-size: 12.5px; }

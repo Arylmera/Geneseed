@@ -55,7 +55,20 @@ export default function App() {
   // The splash plays on the first load of a browser session only; reloads and
   // route round-trips within the same tab skip straight to the dashboard.
   const [booting, setBooting] = useState(() => !window.sessionStorage.getItem('gs-booted'))
+  // Phone-width navigation. Above 720px the rail is always on screen and this
+  // stays false; below it the rail is an off-canvas drawer this opens.
+  const [navOpen, setNavOpen] = useState(false)
   const appRef = useRef(null)
+
+  // Esc closes the drawer, the one shortcut every drawer is expected to have.
+  useEffect(() => {
+    if (!navOpen) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') setNavOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navOpen])
 
   const onError = (e) =>
     setToast({ kind: e?.body?.kind || 'err', msg: e?.body?.message || e.message })
@@ -115,9 +128,25 @@ export default function App() {
   }
 
   return (
-    <div className={`app fl-${flavour} ${mode === 'light' ? 'light' : ''}`} ref={appRef}>
+    <div
+      className={`app fl-${flavour} ${mode === 'light' ? 'light' : ''}${navOpen ? ' nav-open' : ''}`}
+      ref={appRef}
+    >
       <div className="atmos" aria-hidden="true" />
-      <Rail route={route} overview={overview} onOpenVoice={() => setVoiceOpen((v) => !v)} />
+      {navOpen && (
+        <button
+          type="button"
+          className="nav-scrim"
+          aria-label="Close navigation"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+      <Rail
+        route={route}
+        overview={overview}
+        onOpenVoice={() => setVoiceOpen((v) => !v)}
+        onNavigate={() => setNavOpen(false)}
+      />
       {voiceOpen && (
         <VoicePopover
           themes={themes}
@@ -132,6 +161,8 @@ export default function App() {
       <div className="col">
         <Topbar
           route={route}
+          navOpen={navOpen}
+          onToggleNav={() => setNavOpen((v) => !v)}
           target={overview?.target}
           query={query}
           onQuery={setQuery}

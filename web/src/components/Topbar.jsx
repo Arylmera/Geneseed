@@ -29,6 +29,8 @@ function tabFlag(route) {
 // `geneseed web stop` and the Settings → Server card).
 export default function Topbar({
   route,
+  navOpen,
+  onToggleNav,
   target,
   query,
   onQuery,
@@ -40,6 +42,17 @@ export default function Topbar({
 }) {
   return (
     <div className="topbar">
+      {/* Phone-width drawer toggle. CSS hides it above 720px, where the rail is
+          permanently on screen and there is nothing to toggle. */}
+      <button
+        className="tb-menu"
+        onClick={onToggleNav}
+        aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
+        aria-expanded={!!navOpen}
+        aria-controls="rail-nav"
+      >
+        <Icon name={navOpen ? 'x' : 'menu'} />
+      </button>
       <div className="prompt">
         <span className="path">{promptPath(target)}</span>
         <span className="sep">$</span>
