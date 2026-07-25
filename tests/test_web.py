@@ -194,6 +194,29 @@ class SpecDescTests(unittest.TestCase):
 
 
 class DiffTests(unittest.TestCase):
+    def test_freshly_emitted_install_shows_no_drift(self):
+        """A harness that was just built must report zero local edits, at EVERY
+        footprint. The expected copy is rendered from the install's own markers —
+        theme, emit and footprint — and getting any of the three wrong invents
+        drift the user cannot clear by rebuilding.
+
+        Regression: footprint was the one not read. Every lean install therefore
+        reported two permanent edits — AGENT.md (terse §1 digest vs the inlined
+        full laws) and laws/universal.md, which only the lean global emit writes —
+        from the moment it finished building."""
+        for footprint in ("lean", "full"):
+            with self.subTest(footprint=footprint), tempfile.TemporaryDirectory() as tmp:
+                cfg = Path(tmp) / "cfg"
+                build.emit_opencode_global("neutral", out=Path(tmp) / "bundle",
+                                           cfg=cfg, footprint=footprint)
+                (cfg / ".geneseed-footprint").write_text(footprint + "\n",
+                                                         encoding="utf-8")
+                _t, _th, files = web.harness._diff_collect(target=cfg)
+                drift = [f for f in (files or []) if f["status"] != "same"]
+                self.assertEqual(
+                    [], [(f["status"], f["rel"]) for f in drift],
+                    f"a just-built {footprint} install reports drift")
+
     def test_diff_no_deployed_install(self):
         # Point at an empty temp dir => no GLOBAL_MANIFEST => deployed False.
         import tempfile

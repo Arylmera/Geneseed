@@ -43,7 +43,7 @@ def _manifest_scope(d: Path) -> str:
         return "global"
 
 
-def _diff_collect(target=None, theme=None, emit=None):
+def _diff_collect(target=None, theme=None, emit=None, footprint=None):
     """Compute the deployed-vs-source diff. Returns (target, theme, files) where files
     is a sorted list of {rel, status (edited|added|missing), diff (unified lines)} —
     or None when there is no deployed global install at target, OR the manifest at
@@ -79,11 +79,19 @@ def _diff_collect(target=None, theme=None, emit=None):
             emit = ""
     host = _EMIT_HOST_SCOPE.get(emit, ("opencode", "global"))[0]
     emitter = build.HOSTS.get(host, build.HOSTS["opencode"])["emit_global"]
+    # ...and with the deployed install's OWN footprint, read from its marker, for the
+    # same reason as the theme and the emit above. Rendering 'expected' at the wrong
+    # footprint reports two files as locally edited on every single lean install —
+    # AGENT.md (terse §1 digest vs the inlined full laws) and laws/universal.md, which
+    # only the lean global emit writes — so a freshly rebuilt harness looked drifted
+    # the moment it finished building, and no rebuild could ever clear it.
+    if not footprint:
+        footprint = _footprint_of_dir(target)
     files = []
     with tempfile.TemporaryDirectory() as tmp:
         expected = Path(tmp) / "expected"
         with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's own log
-            emitter(theme, out=Path(tmp) / "bundle", cfg=expected)
+            emitter(theme, out=Path(tmp) / "bundle", cfg=expected, footprint=footprint)
         for rel in sorted(_owned_set(target) | _owned_set(expected)):
             a, b = target / rel, expected / rel
             if a.is_file() and b.is_file():
