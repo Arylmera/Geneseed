@@ -227,18 +227,30 @@ def _mode_of_dir(d: Path) -> "str | None":
     return None
 
 
+FOOTPRINTS = ("lean", "full")
+
+
 def _footprint_of_dir(d: Path) -> str:
     """The instruction-set footprint a deployed harness in `d` was built with: the
     `.geneseed-footprint` marker if present, else 'full'. Unlike theme, footprint can't
     be inferred from content, so a pre-marker install (or any built before footprints
     existed) reads as 'full' — which is exactly what it is. Single source of footprint
-    detection, mirroring _theme_of_dir."""
+    detection, mirroring _theme_of_dir.
+
+    A marker holding an UNRECOGNISED value is reported, not swallowed. Falling back
+    silently is the failure mode that would let a future footprint be written by one
+    code path and read as 'full' by another — the install would then be rebuilt into
+    something its owner never chose, with nothing on screen to say so (Rule VII)."""
     try:
         marker = d / ".geneseed-footprint"
         if marker.is_file():
             v = marker.read_text(encoding="utf-8").strip()
-            if v in ("lean", "full"):
+            if v in FOOTPRINTS:
                 return v
+            if v:
+                sys.stderr.write(
+                    f"[geneseed] WARN: {marker} holds unknown footprint {v!r} — "
+                    f"reading it as 'full'. Known: {', '.join(FOOTPRINTS)}.\n")
     except OSError:
         pass
     return "full"
