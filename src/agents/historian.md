@@ -29,6 +29,18 @@
 - The precedent: what was tried before, how it went and why, and the lesson for this decision — cited to `file:line` or commits where found, with a note if circumstances have changed.
 - If no close precedent exists, say so — a distant analogy presented as precedent is worse than none.
 
+## Pipeline role
+
+*(Ignored outside pipelines — this section only tells pipeline orchestration who
+to recruit; it changes nothing about how this {{AGENT}} behaves when dispatched
+independently.)*
+
+- **Seat(s):** specialist add-on — recruited above the floor when the task
+  resembles something tried before.
+- **Receives:** the scoped task and where the history lives.
+- **Delivers:** the precedent and its lesson, same shape as its own output
+  contract above.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary

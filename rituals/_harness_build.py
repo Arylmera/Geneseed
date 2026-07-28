@@ -47,10 +47,12 @@ def cmd_rebuild_all(args: argparse.Namespace) -> int:
         theme = _theme_of_dir(root) or _default_theme()
         footprint = _footprint_of_dir(root)   # preserve lean/full — a rebuild must not flip it
         posture = _posture_of_dir(root) or _default_posture()   # preserve the register too
+        mode = _mode_of_dir(root) or _default_mode()   # preserve the operating mode too
         out = None if scope == "global" else str(root)
-        argv = _setup_build_args(theme, emit, out, out, footprint, posture)
+        argv = _setup_build_args(theme, emit, out, out, footprint, posture, mode)
         label = f"{host}:{scope} ({root})"
-        print(f"[rebuild-all] {label}: theme={theme} emit={emit} footprint={footprint} posture={posture}")
+        print(f"[rebuild-all] {label}: theme={theme} emit={emit} footprint={footprint} "
+              f"posture={posture} mode={mode}")
         rc = run([sys.executable, str(BUILD), *argv]).returncode
         if rc != 0:
             failures.append(label)
@@ -239,8 +241,13 @@ def _rendered_problems(bundle: Path) -> list[str]:
         theme_name = json.loads(build.CONFIG.read_text(encoding="utf-8")).get("theme", "neutral")
     else:
         theme_name = "neutral"
+    # Render the comparison copy with the footprint the bundle was ACTUALLY built
+    # with, read from its own marker — exactly as the theme is read above. Assuming
+    # a footprint here would report every file as drifted the moment the build
+    # default moved, which is a diagnosis about this function, not about the bundle.
     try:
-        _theme, items = build.render_all(theme_name)
+        _theme, items = build.render_all(theme_name,
+                                         _footprint_of_dir(bundle))
     except SystemExit:
         return [f"[rendered] cannot render theme '{theme_name}' for {bundle.name}/"]
     problems: list[str] = []
@@ -482,15 +489,26 @@ def _global_emit_problems(theme_name: str) -> list[str]:
     never was). Render it into a throwaway config dir and scan AGENT.md, the native
     agents/skills, and the seeded memory store for unresolved tokens, dead links, and
     non-hermetic escapes — exactly as for a files build. Labelled '<theme> global' so
-    a problem here is distinguishable from the plain build."""
-    with tempfile.TemporaryDirectory() as tmp:
-        cfg = Path(tmp) / "cfg"
-        try:
-            with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's log
-                build.emit_opencode_global(theme_name, out=Path(tmp) / "bundle", cfg=cfg)
-        except SystemExit:
-            return [f"[{theme_name} global] build failed"]
-        return _check_build(f"{theme_name} global", cfg)
+    a problem here is distinguishable from the plain build.
+
+    Both footprints are rendered. They produce genuinely different AGENT.md bodies —
+    lean swaps the inlined laws for a generated digest plus a pointer, and ships a
+    standalone laws file the full emit does not write — so checking only one leaves
+    the other's links and tokens unvalidated. Lean being the default made that the
+    shape most installs actually run. ~0.3s per render, so the pair is cheap."""
+    problems: list[str] = []
+    for footprint in ("lean", "full"):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / "cfg"
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's log
+                    build.emit_opencode_global(theme_name, out=Path(tmp) / "bundle",
+                                               cfg=cfg, footprint=footprint)
+            except SystemExit:
+                problems.append(f"[{theme_name} global/{footprint}] build failed")
+                continue
+            problems += _check_build(f"{theme_name} global/{footprint}", cfg)
+    return problems
 
 
 def _claude_bob_emit_problems(theme_name: str) -> list[str]:

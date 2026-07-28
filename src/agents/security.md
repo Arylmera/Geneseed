@@ -35,6 +35,18 @@
 - Findings as `severity — location — issue — remediation`, highest severity
   first. End with: safe to ship / fix-required. State if no issues were found.
 
+## Pipeline role
+
+*(Ignored outside pipelines — this section only tells pipeline orchestration who
+to recruit; it changes nothing about how this {{AGENT}} behaves when dispatched
+independently.)*
+
+- **Seat(s):** specialist add-on — recruited above the floor when the task
+  touches auth, input handling, secrets, or dependencies.
+- **Receives:** the crew's diff and the trust boundary it touches.
+- **Delivers:** severity-ranked findings and a ship/fix-required verdict, same
+  shape as its own output contract above.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary

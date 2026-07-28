@@ -2,7 +2,9 @@
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,7 +12,51 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
+import build  # noqa: E402
 import web  # noqa: E402
+
+# A WebState built with no explicit target resolves to the machine's own OpenCode
+# config dir — so these tests used to read whatever harness the developer happened
+# to have installed, and failed outright on a machine carrying a half-removed one
+# (manifest present, agents/ and skills/ gone -> every count asserted > 0 read 0).
+#
+# Build one real opencode-global install into a temp HOME, once for the module,
+# and point the default at it. Tests then exercise the deployed-inventory path
+# the server actually uses, identically on any machine and in CI. Tests that need
+# their own tree still pass an explicit `target=` and are unaffected.
+_FIXTURE_TD: "tempfile.TemporaryDirectory | None" = None
+_FIXTURE: "Path | None" = None
+_ORIG_CONFIG_DIR = None
+
+
+def setUpModule():
+    global _FIXTURE_TD, _FIXTURE, _ORIG_CONFIG_DIR
+    _FIXTURE_TD = tempfile.TemporaryDirectory()
+    home = Path(_FIXTURE_TD.name)
+    env = {
+        **__import__("os").environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "XDG_CONFIG_HOME": str(home / ".config"),
+        "APPDATA": str(home / "AppData" / "Roaming"),
+        "LOCALAPPDATA": str(home / "AppData" / "Local"),
+    }
+    env.pop("GENESEED_HARNESS", None)
+    subprocess.run(
+        [sys.executable, str(ROOT / "build.py"), "--emit", "opencode-global",
+         "--theme", "neutral"],
+        cwd=str(ROOT), env=env, check=True,
+        capture_output=True, text=True, encoding="utf-8")
+    _FIXTURE = home / ".config" / "opencode"
+    _ORIG_CONFIG_DIR = build._opencode_config_dir
+    build._opencode_config_dir = lambda: _FIXTURE
+
+
+def tearDownModule():
+    if _ORIG_CONFIG_DIR is not None:
+        build._opencode_config_dir = _ORIG_CONFIG_DIR
+    if _FIXTURE_TD is not None:
+        _FIXTURE_TD.cleanup()
 
 
 class LocalHostGuardTests(unittest.TestCase):
@@ -148,6 +194,48 @@ class SpecDescTests(unittest.TestCase):
 
 
 class DiffTests(unittest.TestCase):
+    def test_freshly_emitted_install_shows_no_drift(self):
+        """A harness that was just built must report zero local edits, at EVERY
+        footprint. The expected copy is rendered from the install's own markers —
+        theme, emit and footprint — and getting any of the three wrong invents
+        drift the user cannot clear by rebuilding.
+
+        Regression: footprint was the one not read. Every lean install therefore
+        reported two permanent edits — AGENT.md (terse §1 digest vs the inlined
+        full laws) and laws/universal.md, which only the lean global emit writes —
+        from the moment it finished building."""
+        for footprint in ("lean", "full"):
+            with self.subTest(footprint=footprint), tempfile.TemporaryDirectory() as tmp:
+                cfg = Path(tmp) / "cfg"
+                build.emit_opencode_global("neutral", out=Path(tmp) / "bundle",
+                                           cfg=cfg, footprint=footprint)
+                (cfg / ".geneseed-footprint").write_text(footprint + "\n",
+                                                         encoding="utf-8")
+                _t, _th, files = web.harness._diff_collect(target=cfg)
+                drift = [f for f in (files or []) if f["status"] != "same"]
+                self.assertEqual(
+                    [], [(f["status"], f["rel"]) for f in drift],
+                    f"a just-built {footprint} install reports drift")
+
+    def test_restore_keeps_a_lean_install_lean(self):
+        """Restore renders its expected copy at the install's OWN footprint. Rendered
+        at 'full' on a lean install it rewrites AGENT.md with the inlined laws and
+        deletes laws/universal.md — which only the lean emit writes — so 'discard my
+        local edit' silently converted the install to full."""
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / "cfg"
+            build.emit_opencode_global("neutral", out=Path(tmp) / "bundle",
+                                       cfg=cfg, footprint="lean")
+            (cfg / ".geneseed-footprint").write_text("lean\n", encoding="utf-8")
+            lean_agent = (cfg / "AGENT.md").read_text(encoding="utf-8")
+            (cfg / "AGENT.md").write_text(lean_agent + "\nlocal edit\n", encoding="utf-8")
+            state = web.WebState(theme="neutral", target=cfg)
+            res = web.api_restore(state, ["AGENT.md", "laws/universal.md"])
+            self.assertEqual([], res["errors"])
+            self.assertEqual([], res["deleted"])
+            self.assertTrue((cfg / "laws" / "universal.md").is_file())
+            self.assertEqual(lean_agent, (cfg / "AGENT.md").read_text(encoding="utf-8"))
+
     def test_diff_no_deployed_install(self):
         # Point at an empty temp dir => no GLOBAL_MANIFEST => deployed False.
         import tempfile
@@ -913,6 +1001,75 @@ class SelectViewTests(unittest.TestCase):
         self.assertEqual([r for r in rows if r["selected"]][0]["host"], "claude")
 
 
+class ExcludesTests(unittest.TestCase):
+    """GET/POST /api/excludes: the web mirror of `harness exclude add|remove|list`,
+    reusing excludes_snapshot()/exclude_add()/exclude_remove() (Task 4) verbatim —
+    this endpoint owns no exclusion logic of its own, so the round trip is really
+    exercising the wiring, not re-testing _harness_exclude.py."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        self.state = web.WebState(theme="neutral")
+        self._saved_cfgs = {h: row["config_dir"] for h, row in web.build.HOSTS.items()}
+
+    def tearDown(self):
+        import shutil
+        for h, fn in self._saved_cfgs.items():
+            web.build.HOSTS[h]["config_dir"] = fn
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _fake_global_installs(self, hosts=("claude", "bob")):
+        """Point build.HOSTS config_dir resolvers at temp dirs holding a manifest —
+        the web-test-idiom twin of test_harness.py's helper of the same name (that
+        one takes a pytest `monkeypatch`; this file is unittest-style, so it patches
+        and restores by hand in setUp/tearDown instead)."""
+        cfgs = {}
+        for host in hosts:
+            cfg = self.tmp / f"{host}-cfg"
+            cfg.mkdir()
+            (cfg / ".geneseed-manifest.json").write_text('{"owned": []}', encoding="utf-8")
+            (cfg / "excludes.json").write_text('{"excludes": []}', encoding="utf-8")
+            if host == "claude":
+                (cfg / "CLAUDE.md").write_text("x", encoding="utf-8")
+            cfgs[host] = cfg
+            web.build.HOSTS[host]["config_dir"] = (lambda c=cfg: c)
+        for host in set(web.build.HOSTS) - set(hosts):   # other hosts: no install
+            web.build.HOSTS[host]["config_dir"] = (lambda h=host: self.tmp / f"{h}-none")
+        return cfgs
+
+    def test_api_excludes_roundtrip(self):
+        self._fake_global_installs()
+        repo = self.tmp / "vault"; repo.mkdir()
+        res = web.api_excludes_mutate(self.state, {"action": "add", "path": str(repo)})
+        self.assertTrue(res["ok"])
+        snap = web.api_excludes(self.state)
+        self.assertEqual(len(snap["excludes"]), 1)
+        # Mirror the product's canonicalization: exclude_add stores
+        # str(_canon(path)).replace(os.sep, "/"), and _canon resolves the path —
+        # on Windows runners that expands the 8.3 short tempdir name (RUNNER~1)
+        # to its long form (runneradmin), so compare against the resolved path.
+        self.assertEqual(snap["excludes"][0]["path"].rstrip("/"),
+                         repo.resolve().as_posix())
+        res = web.api_excludes_mutate(self.state, {"action": "remove", "path": str(repo)})
+        self.assertTrue(res["ok"])
+        self.assertEqual(web.api_excludes(self.state)["excludes"], [])
+
+    def test_api_excludes_mutate_rejects_bad_body(self):
+        self.assertFalse(web.api_excludes_mutate(self.state, {})["ok"])
+        self.assertFalse(web.api_excludes_mutate(self.state, {"action": "add"})["ok"])
+        self.assertFalse(web.api_excludes_mutate(self.state, {"path": "/x"})["ok"])
+        self.assertFalse(web.api_excludes_mutate(self.state, {"action": "bogus", "path": "/x"})["ok"])
+        self.assertFalse(web.api_excludes_mutate(self.state, None)["ok"])
+
+    def test_api_excludes_mutate_remove_of_unknown_path_is_not_ok(self):
+        self._fake_global_installs()
+        # Never excluded -> exclude_remove finds nothing -> ok False, never a crash.
+        res = web.api_excludes_mutate(
+            self.state, {"action": "remove", "path": str(self.tmp / "never-excluded")})
+        self.assertFalse(res["ok"])
+
+
 class GraphTests(unittest.TestCase):
     def test_api_graph_nodes_and_edges_resolve(self):
         state = web.WebState(theme="neutral")
@@ -1130,6 +1287,34 @@ class HarnessFilterTests(unittest.TestCase):
                 self.assertTrue(
                     web._harness_blocks_balanced(text.splitlines()),
                     f"unbalanced harness markers in {where}")
+
+    def test_docs_registry_loads_every_page_from_disk(self):
+        """The registry lives in docs/web/ (a _groups.json + one .md per page),
+        not in a Python literal. A group that loses its pages, or a page whose
+        frontmatter stops naming a real group, silently vanishes from the panel —
+        so pin the shape rather than trust the glob."""
+        self.assertTrue(web.DOC_GROUPS, "docs registry loaded empty")
+        ids = [p["id"] for g in web.DOC_GROUPS for p in g["pages"]]
+        self.assertEqual(len(ids), len(set(ids)), "duplicate doc page id")
+        on_disk = {p.stem for p in web.DOC_DIR.glob("*.md")}
+        self.assertEqual(set(ids), on_disk,
+                         "every docs/web/*.md must land in exactly one group")
+        for g in web.DOC_GROUPS:
+            with self.subTest(group=g["id"]):
+                self.assertTrue(g["pages"], f"group {g['id']} has no pages")
+                self.assertTrue(g.get("label"))
+
+    def test_no_unsubstituted_count_placeholder_survives_rendering(self):
+        """Concept bodies carry {N_LAWS}/{N_AGENTS}/{N_SKILLS}, substituted at
+        render time. Moving the bodies out of Python must not orphan that step —
+        an unsubstituted placeholder renders as literal braces on the page."""
+        for g in web.DOC_GROUPS:
+            for p in g["pages"]:
+                if p.get("kind") != "concept":
+                    continue
+                with self.subTest(page=p["id"]):
+                    page = web.api_docs_page(self.state, p["id"], None)
+                    self.assertNotIn("{N_", page.get("body", ""))
 
     def test_strip_guard_not_narrower_than_matcher(self):
         # The early-out guard must catch any marker the open regex accepts —

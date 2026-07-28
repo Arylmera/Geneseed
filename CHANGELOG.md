@@ -84,6 +84,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   the project's own `AGENTS.md`); a re-emit strips one left by an older install.
   Project-bypasses-global on Bob now rides on its native rule precedence: the
   workspace `rules/geneseed.md` shadows the same-named global rule.
+- **Lean installs no longer report permanent phantom drift — and Restore no longer
+  converts them to full**: everything that renders an "expected" copy of an install
+  must render it at that install's OWN footprint, read from its `.geneseed-footprint`
+  marker. Three callers did not. `diff` (and the Local-edits panel it feeds) rendered
+  at `full`, so every lean install reported two edits it could never clear by
+  rebuilding — `AGENT.md` (terse §1 digest vs the inlined laws) and
+  `laws/universal.md`, which only the lean global emit writes. `doctor` validated the
+  full emit only, so a lean-only regression could ship green. Worst of the three,
+  `Restore` in the web console rendered at `full` too: discarding a local edit on a
+  lean install rewrote `AGENT.md` with the inlined laws and DELETED
+  `laws/universal.md` — silently promoting the install to a full footprint. All three
+  now read the marker. Note that the web UI serves the code it was launched with:
+  restart the daemon (`geneseed web restart`) after upgrading, or the panel keeps
+  reporting the old verdict.
 
 ### Changed
 - **`docs/specs/`, `docs/reviews/`, and `docs/superpowers/` are local working docs

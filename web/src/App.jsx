@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { api } from './api/index.js'
 import { useRoute } from './lib/router.js'
 import { applyAccent, applyCuratedAccent } from './lib/accents.js'
@@ -15,22 +15,28 @@ import VoicePopover from './components/VoicePopover.jsx'
 import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
 import BootSplash from './components/BootSplash.jsx'
+import Loading from './components/Loading.jsx'
+// Dashboard is the landing route, so it ships in the shell. Every other page is
+// code-split: importing all seventeen statically put the whole console — graph
+// rendering, the harness manager, the docs viewer — into one chunk that had to be
+// downloaded and parsed before the dashboard could paint, on a tool most sessions
+// only ever open to the dashboard.
 import Dashboard from './pages/Dashboard/index.jsx'
-import Activity from './pages/Activity.jsx'
-import ActivityDetail from './pages/ActivityDetail.jsx'
-import Library from './pages/Library.jsx'
-import Laws from './pages/Laws.jsx'
-import Rules from './pages/Rules.jsx'
-import Profile from './pages/Profile.jsx'
-import Skills from './pages/Skills.jsx'
-import Diff from './pages/Diff.jsx'
-import Doctor from './pages/Doctor.jsx'
-import Themes from './pages/Themes.jsx'
-import Graph from './pages/Graph.jsx'
-import Settings from './pages/Settings/index.jsx'
-import Harnesses from './pages/Harnesses.jsx'
-import Docs from './pages/Docs/index.jsx'
-import About from './pages/About.jsx'
+const Activity = lazy(() => import('./pages/Activity.jsx'))
+const ActivityDetail = lazy(() => import('./pages/ActivityDetail.jsx'))
+const Library = lazy(() => import('./pages/Library.jsx'))
+const Laws = lazy(() => import('./pages/Laws.jsx'))
+const Rules = lazy(() => import('./pages/Rules.jsx'))
+const Profile = lazy(() => import('./pages/Profile.jsx'))
+const Skills = lazy(() => import('./pages/Skills.jsx'))
+const Diff = lazy(() => import('./pages/Diff.jsx'))
+const Doctor = lazy(() => import('./pages/Doctor.jsx'))
+const Themes = lazy(() => import('./pages/Themes.jsx'))
+const Graph = lazy(() => import('./pages/Graph.jsx'))
+const Settings = lazy(() => import('./pages/Settings/index.jsx'))
+const Harnesses = lazy(() => import('./pages/Harnesses.jsx'))
+const Docs = lazy(() => import('./pages/Docs/index.jsx'))
+const About = lazy(() => import('./pages/About.jsx'))
 
 // App is a thin shell: it wires the hooks (overview, jobs, color mode) to the
 // chrome (rail, topbar, console) and dispatches the active route to a page. All
@@ -49,7 +55,20 @@ export default function App() {
   // The splash plays on the first load of a browser session only; reloads and
   // route round-trips within the same tab skip straight to the dashboard.
   const [booting, setBooting] = useState(() => !window.sessionStorage.getItem('gs-booted'))
+  // Phone-width navigation. Above 720px the rail is always on screen and this
+  // stays false; below it the rail is an off-canvas drawer this opens.
+  const [navOpen, setNavOpen] = useState(false)
   const appRef = useRef(null)
+
+  // Esc closes the drawer, the one shortcut every drawer is expected to have.
+  useEffect(() => {
+    if (!navOpen) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') setNavOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navOpen])
 
   const onError = (e) =>
     setToast({ kind: e?.body?.kind || 'err', msg: e?.body?.message || e.message })
@@ -65,6 +84,14 @@ export default function App() {
     onFinish: refresh,
     onError,
   })
+
+  // One sentence describing what the job runner is doing, for the live region.
+  const lastRun = runs[runs.length - 1]
+  const jobAnnouncement = !lastRun
+    ? ''
+    : lastRun.status === 'running'
+      ? `${lastRun.action} running`
+      : `${lastRun.action} ${lastRun.status}`
 
   // The accent is either the flavour's curated signature ('curated' mode) or the
   // deployed voice's accent ('auto'), adjusted for light/dark. Curated wins when
@@ -109,9 +136,36 @@ export default function App() {
   }
 
   return (
-    <div className={`app fl-${flavour} ${mode === 'light' ? 'light' : ''}`} ref={appRef}>
+    <div
+      className={`app fl-${flavour} ${mode === 'light' ? 'light' : ''}${navOpen ? ' nav-open' : ''}`}
+      ref={appRef}
+    >
       <div className="atmos" aria-hidden="true" />
-      <Rail route={route} overview={overview} onOpenVoice={() => setVoiceOpen((v) => !v)} />
+      {/* Keyboard users land on the rail's fourteen nav items before any page
+          content; this jumps past them. Visible only while focused. */}
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
+      {/* Actions (rebuild, update, doctor) run as background jobs whose only
+          feedback was visual — the console panel and a spinner. Announce the
+          transitions so a screen-reader user knows a job started and ended. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {jobAnnouncement}
+      </p>
+      {navOpen && (
+        <button
+          type="button"
+          className="nav-scrim"
+          aria-label="Close navigation"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+      <Rail
+        route={route}
+        overview={overview}
+        onOpenVoice={() => setVoiceOpen((v) => !v)}
+        onNavigate={() => setNavOpen(false)}
+      />
       {voiceOpen && (
         <VoicePopover
           themes={themes}
@@ -126,6 +180,8 @@ export default function App() {
       <div className="col">
         <Topbar
           route={route}
+          navOpen={navOpen}
+          onToggleNav={() => setNavOpen((v) => !v)}
           target={overview?.target}
           query={query}
           onQuery={setQuery}
@@ -135,79 +191,83 @@ export default function App() {
           dataRev={dataRev}
           onSwitch={refresh}
         />
-        <div className="page">
+        <main className="page" id="main" tabIndex={-1}>
           <div className={route.view === 'harnesses' ? 'pad pad-wide' : 'pad'}>
-            {route.view === 'dashboard' && (
-              <Dashboard
-                overview={overview}
-                themes={themes}
-                onAction={runAction}
-                flavour={flavour}
-                layout={layout}
-              />
-            )}
-            {route.view === 'activity' && <Activity />}
-            {route.view === 'activity-detail' && <ActivityDetail key={route.sid} sid={route.sid} />}
-            {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
-            {route.view === 'agents' && (
-              <Library overview={overview} section="agents" dataRev={dataRev} />
-            )}
-            {route.view === 'laws' && <Laws />}
-            {route.view === 'rules' && <Rules />}
-            {route.view === 'profile' && <Profile />}
-            {route.view === 'skills' && <Skills />}
-            {route.view === 'section' &&
-              (route.section === 'laws' ? (
-                <Laws />
-              ) : route.section === 'skills' ? (
-                <Skills />
-              ) : (
-                <Library overview={overview} section={route.section} dataRev={dataRev} />
-              ))}
-            {route.view === 'item' &&
-              (route.type === 'law' ? (
-                <Laws selected={route.name} />
-              ) : route.type === 'skill' ? (
-                <Skills selected={route.name} />
-              ) : (
-                <Library
+            <Suspense fallback={<Loading />}>
+              {route.view === 'dashboard' && (
+                <Dashboard
                   overview={overview}
-                  section={TYPE_TO_SECTION[route.type] || route.type}
-                  selected={route.name}
-                  dataRev={dataRev}
+                  themes={themes}
+                  onAction={runAction}
+                  flavour={flavour}
+                  layout={layout}
                 />
-              ))}
-            {route.view === 'diff' && <Diff onMutated={reload} dataRev={dataRev} />}
-            {route.view === 'doctor' && <Doctor />}
-            {route.view === 'themes' && <Themes onAction={runAction} />}
-            {route.view === 'graph' && <Graph />}
-            {route.view === 'settings' && (
-              <Settings
-                overview={overview}
-                onAction={runAction}
-                flavour={flavour}
-                onFlavour={setFlavour}
-                accentMode={accentMode}
-                onAccentMode={setAccentMode}
-                layout={layout}
-                onLayout={setLayout}
-              />
-            )}
-            {route.view === 'harnesses' && (
-              <Harnesses
-                onAction={runAction}
-                themes={themes}
-                currentTheme={overview?.theme}
-                dataRev={dataRev}
-                onMutated={refresh}
-              />
-            )}
-            {route.view === 'docs' && (
-              <Docs page={route.page} query={query} onAction={runAction} overview={overview} />
-            )}
-            {route.view === 'about' && <About />}
+              )}
+              {route.view === 'activity' && <Activity />}
+              {route.view === 'activity-detail' && (
+                <ActivityDetail key={route.sid} sid={route.sid} />
+              )}
+              {route.view === 'library' && <Library overview={overview} dataRev={dataRev} />}
+              {route.view === 'agents' && (
+                <Library overview={overview} section="agents" dataRev={dataRev} />
+              )}
+              {route.view === 'laws' && <Laws />}
+              {route.view === 'rules' && <Rules />}
+              {route.view === 'profile' && <Profile />}
+              {route.view === 'skills' && <Skills />}
+              {route.view === 'section' &&
+                (route.section === 'laws' ? (
+                  <Laws />
+                ) : route.section === 'skills' ? (
+                  <Skills />
+                ) : (
+                  <Library overview={overview} section={route.section} dataRev={dataRev} />
+                ))}
+              {route.view === 'item' &&
+                (route.type === 'law' ? (
+                  <Laws selected={route.name} />
+                ) : route.type === 'skill' ? (
+                  <Skills selected={route.name} />
+                ) : (
+                  <Library
+                    overview={overview}
+                    section={TYPE_TO_SECTION[route.type] || route.type}
+                    selected={route.name}
+                    dataRev={dataRev}
+                  />
+                ))}
+              {route.view === 'diff' && <Diff onMutated={reload} dataRev={dataRev} />}
+              {route.view === 'doctor' && <Doctor />}
+              {route.view === 'themes' && <Themes onAction={runAction} />}
+              {route.view === 'graph' && <Graph />}
+              {route.view === 'settings' && (
+                <Settings
+                  overview={overview}
+                  onAction={runAction}
+                  flavour={flavour}
+                  onFlavour={setFlavour}
+                  accentMode={accentMode}
+                  onAccentMode={setAccentMode}
+                  layout={layout}
+                  onLayout={setLayout}
+                />
+              )}
+              {route.view === 'harnesses' && (
+                <Harnesses
+                  onAction={runAction}
+                  themes={themes}
+                  currentTheme={overview?.theme}
+                  dataRev={dataRev}
+                  onMutated={refresh}
+                />
+              )}
+              {route.view === 'docs' && (
+                <Docs page={route.page} query={query} onAction={runAction} overview={overview} />
+              )}
+              {route.view === 'about' && <About />}
+            </Suspense>
           </div>
-        </div>
+        </main>
         <Console
           runs={runs}
           open={consoleOpen}

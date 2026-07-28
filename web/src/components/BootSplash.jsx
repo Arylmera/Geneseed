@@ -10,14 +10,36 @@ import React, { useEffect, useState } from 'react'
 //
 // This is a daily local tool: the ceremony is capped so it never costs more
 // than half a second, and App skips it entirely on warm same-session loads.
+//
+// The floor applies to the FIRST boot on this machine only. After that the
+// overview fetch is the only thing worth waiting for — it now returns well
+// under 550ms, so keeping the floor would be pure added latency on every fresh
+// tab, several times a day. The splash still plays; it just stops waiting on a
+// timer once it has introduced itself.
 const MIN_DISPLAY_MS = 550
+const SEEN_KEY = 'gs-splash-seen'
+
+function minDisplayMs() {
+  try {
+    if (window.localStorage.getItem(SEEN_KEY)) return 0
+    window.localStorage.setItem(SEEN_KEY, '1')
+  } catch {
+    // Private mode / storage disabled: fall back to the full ceremony.
+  }
+  return MIN_DISPLAY_MS
+}
 
 export default function BootSplash({ ready, onDone }) {
   const [minElapsed, setMinElapsed] = useState(false)
   const [fading, setFading] = useState(false)
 
   useEffect(() => {
-    const t = setTimeout(() => setMinElapsed(true), MIN_DISPLAY_MS)
+    const ms = minDisplayMs()
+    if (!ms) {
+      setMinElapsed(true)
+      return undefined
+    }
+    const t = setTimeout(() => setMinElapsed(true), ms)
     return () => clearTimeout(t)
   }, [])
 

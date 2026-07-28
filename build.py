@@ -284,6 +284,7 @@ def main() -> None:
                 pass
     default_theme = "neutral"
     default_posture = "peer"
+    default_mode = "direct"
     if CONFIG.exists():
         # A truncated/corrupt config must not brick the CLI — fall back to neutral.
         try:
@@ -291,6 +292,7 @@ def main() -> None:
             if isinstance(data, dict):
                 default_theme = data.get("theme", "neutral")
                 default_posture = data.get("posture", "peer")
+                default_mode = data.get("mode", "direct")
         except (OSError, json.JSONDecodeError):
             print(f"[geneseed] WARN: {CONFIG.name} is unreadable — using theme 'neutral'.",
                   file=sys.stderr)
@@ -301,6 +303,10 @@ def main() -> None:
                     help="collaboration register inlined into AGENT.md (peer, mentor, "
                          "expert, assistant, artisan). Orthogonal to --theme; default "
                          "'peer' or the value stored in harness.config.json.")
+    ap.add_argument("--mode", default=default_mode, choices=mode_names(),
+                    help="operating register inlined into AGENT.md (direct, foreman). "
+                         "Orthogonal to --theme/--posture; default 'direct' or the "
+                         "value stored in harness.config.json.")
     ap.add_argument("--out", "--target", dest="out", default="Harness",
                     help="output directory — absolute, or relative to the current "
                          "directory (default: ./Harness)")
@@ -322,9 +328,9 @@ def main() -> None:
                          "(agents as .agent.md, skills; no hooks). copilot-global: render "
                          "into ~/.copilot ($COPILOT_CONFIG_DIR) — copilot-instructions.md, "
                          "agents, skills")
-    ap.add_argument("--footprint", choices=["lean", "full"], default="full",
-                    help="instruction-set footprint. full (default): every law's full text "
-                         "is inlined into AGENT.md §1. lean: §1 carries terse rule lines + a "
+    ap.add_argument("--footprint", choices=["lean", "full"], default="lean",
+                    help="instruction-set footprint. lean (default): §1 carries terse rule "
+                         "lines + a "
                          "pointer to the standalone laws/universal.md (smaller context, lower "
                          "token cost per turn); the full law text always ships alongside, read "
                          "on demand. Applies to every host (opencode/claude/bob/copilot) "
@@ -358,6 +364,8 @@ def main() -> None:
     # SRC/THEMES), not threaded through every emit signature. Set it on the facade so
     # it mirrors into every submodule before any render runs.
     _build_render.POSTURE = args.posture
+    # Mode mirrors posture exactly — a build-wide selection read by effective_theme.
+    _build_render.MODE = args.mode
 
     if args.sync_themes:
         # Non-zero when files were CHANGED (0 == already in sync), so CI can run

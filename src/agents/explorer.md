@@ -33,6 +33,17 @@
 - If the search comes up empty, report what was searched and where, and answer
   not-found — a confident wrong location costs more than an honest blank.
 
+## Pipeline role
+
+*(Ignored outside pipelines — this section only tells pipeline orchestration who
+to recruit; it changes nothing about how this {{AGENT}} behaves when dispatched
+independently.)*
+
+- **Seat(s):** analyst — every crew floor opens with this seat.
+- **Receives:** the triaged task, as handed off by foreman mode or the caller.
+- **Delivers:** a distilled brief the next seat (developer/docs) can act on
+  directly — the scope, the relevant files, and any constraint already found.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary

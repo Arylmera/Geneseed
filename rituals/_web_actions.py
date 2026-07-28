@@ -258,12 +258,16 @@ def api_restore(state: WebState, files: list) -> dict:
     target = state.target.resolve()
     with tempfile.TemporaryDirectory() as tmp:
         expected = (Path(tmp) / "expected").resolve()
-        # Render the EXPECTED copy with the deployed install's OWN host emit, so a
-        # restore renders the right dialect (Claude/Bob agents, not a silently-OpenCode
-        # expected that would overwrite them with the wrong frontmatter / delete them).
+        # Render the EXPECTED copy with the deployed install's OWN host emit AND its own
+        # footprint, so a restore renders the right dialect (Claude/Bob agents, not a
+        # silently-OpenCode expected that would overwrite them with the wrong frontmatter
+        # / delete them) at the right size — a full-footprint expected on a lean install
+        # rewrites AGENT.md with the inlined laws and DELETES laws/universal.md, which
+        # only the lean emit writes.
         emitter = _global_emitter_for(state.emit)
         with contextlib.redirect_stdout(io.StringIO()):   # swallow the emit's own log
-            emitter(state.theme, out=Path(tmp) / "bundle", cfg=expected)
+            emitter(state.theme, out=Path(tmp) / "bundle", cfg=expected,
+                    footprint=state.footprint)
         for rel in files or []:
             rel = str(rel).replace("\\", "/").strip().lstrip("/")
             dst = (target / rel).resolve()
@@ -362,6 +366,31 @@ def api_mcp_toggle(state: WebState, body: dict) -> dict:
     return {"ok": True, "name": name, "state": harness._mcp_state(cfg, name, host)}
 
 
+# ---- sovereign-repo exclusions -----------------------------------------------------
+# GET/POST /api/excludes — the web mirror of `harness exclude add|remove|list`
+# (Task 4's _harness_exclude.py), reusing excludes_snapshot()/exclude_add()/
+# exclude_remove() verbatim: this endpoint owns no exclusion logic of its own.
+
+def api_excludes(state: WebState) -> dict:
+    """Sovereign-repo exclusions, union across every global install (GET /api/excludes)."""
+    return harness.excludes_snapshot()
+
+
+def api_excludes_mutate(state: WebState, body: dict) -> dict:
+    """Add/remove one excluded folder (POST /api/excludes). Body:
+    {"action": "add"|"remove", "path": "<abs folder>"}. A malformed body (missing/
+    unknown action, blank path) is rejected with ok=False rather than reaching
+    exclude_add/exclude_remove, which assume a real path string."""
+    body = body or {}
+    action = body.get("action")
+    path = str(body.get("path") or "").strip()
+    if action not in ("add", "remove") or not path:
+        return {"ok": False, "path": path,
+                "messages": ["body must be {action: add|remove, path: <folder>}"]}
+    fn = harness.exclude_add if action == "add" else harness.exclude_remove
+    return fn(path)
+
+
 def api_installs(state: WebState) -> dict:
     """Detected installs across host x scope and their on/off state. One row per
     (host, scope, path) tuple — see harness._install_targets. Both OpenCode and Claude,
@@ -376,10 +405,11 @@ def api_installs(state: WebState) -> dict:
                     # emit — same dir theme reads from, so detect it the same way.
                     "footprint": harness._footprint_of_dir(root),   # 'full' when no marker
                     "posture": harness._posture_of_dir(root),   # the install's register (None if absent)
+                    "mode": harness._mode_of_dir(root),   # the install's operating mode (None if absent)
                     "selected": _view_cfg(host, scope, root).resolve() == cur})
-    # `postures` lets the Harnesses page render the per-row register picker without a
-    # second call — discovered from src/, so a new posture appears with no UI change.
-    return {"installs": out, "postures": build.posture_names()}
+    # `postures`/`modes` let the Harnesses page render the per-row pickers without a
+    # second call — discovered from src/, so a new posture/mode appears with no UI change.
+    return {"installs": out, "postures": build.posture_names(), "modes": build.mode_names()}
 
 
 def _view_cfg(host: str, scope: str, root) -> Path:
@@ -456,8 +486,12 @@ def api_install_cmd(state: WebState, body: dict) -> dict:
     # re-theme never resets the register and a bogus body value can't reach the argv.
     pos = body.get("posture")
     pos = pos if pos in build.posture_names() else (harness._posture_of_dir(root) or "peer")
+    # Mode: same rule — a valid picked mode wins, else keep the install's own, so a
+    # re-theme never resets the mode and a bogus body value can't reach the argv.
+    mode = body.get("mode")
+    mode = mode if mode in build.mode_names() else (harness._mode_of_dir(root) or "direct")
     out = None if scope == "global" else str(root)
-    argv = harness._setup_build_args(theme or "neutral", emit, out, out, fp, pos)
+    argv = harness._setup_build_args(theme or "neutral", emit, out, out, fp, pos, mode)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 
 
@@ -503,8 +537,10 @@ def api_deploy_cmd(state: WebState, body: dict) -> dict:
     fp = fp if fp in ("lean", "full") else "full"   # a fresh deploy defaults to full
     pos = body.get("posture")
     pos = pos if pos in build.posture_names() else "peer"   # a fresh deploy defaults to peer
+    mode = body.get("mode")
+    mode = mode if mode in build.mode_names() else "direct"   # a fresh deploy defaults to direct
     emit = host   # project-scope emit name == host name (opencode / claude / bob / copilot)
-    argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root), fp, pos)
+    argv = harness._setup_build_args(theme or "neutral", emit, str(root), str(root), fp, pos, mode)
     return {"cmd": [sys.executable, str(ROOT / "build.py"), *argv]}
 
 

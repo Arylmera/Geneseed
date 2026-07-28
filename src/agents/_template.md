@@ -53,6 +53,20 @@
   cannot be fulfilled (nothing found, no data, inputs missing) — reporting the
   gap, never inventing content to fill it.
 
+## Pipeline role
+
+*(optional — only for a specialist the pipeline {{SKILL}} can recruit into a
+crew. Ignored outside pipelines — this section only
+tells pipeline orchestration who to recruit; it changes nothing about how this
+{{AGENT}} behaves when dispatched independently.)*
+
+- **Seat(s):** which crew role(s) this {{AGENT}} can fill (e.g. analyst, tester,
+  a floor specialist).
+- **Receives:** what the crew hands it when seated (the scoped task, the prior
+  seat's output, the worktree).
+- **Delivers:** what it must hand the next seat or the parent — same shape as
+  its own output contract above, nothing looser.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary

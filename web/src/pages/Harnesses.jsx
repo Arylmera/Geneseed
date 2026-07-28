@@ -69,6 +69,27 @@ function PostureSelect({ label, value, postures, onChange }) {
   )
 }
 
+// A mode <select> in the app's `.sel` style: the operating register inlined into
+// the install's AGENT.md. The list is discovered server-side (src/modes/), so a new
+// mode appears here with no UI change; falls back to nothing until it loads.
+function ModeSelect({ label, value, modes, onChange }) {
+  if (!modes.length) return null
+  return (
+    <select
+      className="sel"
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {modes.map((m) => (
+        <option key={m} value={m}>
+          {m}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 // An on/off switch — deactivates a whole install (files moved aside, not deleted) or
 // reactivates it; also drives individual MCP servers. The on-disk stash is the truth.
 function Switch({ on, disabled, label, onToggle }) {
@@ -119,6 +140,77 @@ const removeLayer = (host, scope) => {
         : "~/.config/opencode's AGENT.md, agents, skills, plugins + the opencode.json entry"
 }
 
+// Sovereign-repo exclusions: folders where every global install goes dormant. Its own
+// small card, self-contained (own fetch/reload) so it doesn't need to thread through the
+// harness table's dataRev/onMutated — /api/excludes' `installs` field is a DIFFERENT list
+// than the harness table's (host, scope, path) rows: it's excludes_snapshot()'s "which
+// global installs exist to manage exclusions for", so the card hides itself independently
+// of whatever the table above is showing.
+function ExclusionsCard() {
+  const { data, error, reload } = useAsync(() => api.excludes(), [])
+  const [busy, setBusy] = useState(false)
+  const [msgs, setMsgs] = useState([])
+
+  const mutate = async (action, path) => {
+    setBusy(true)
+    try {
+      const res = await api.excludeMutate(action, path)
+      setMsgs(res.messages || [])
+    } catch (e) {
+      // A 409 (nothing to remove, no global install) throws — the body still carries
+      // the human messages exclude_add/exclude_remove built, same as Rules.jsx's mutate.
+      setMsgs(e.body?.messages || [e.message])
+    } finally {
+      setBusy(false)
+      reload()
+    }
+  }
+
+  const pick = async () => {
+    setBusy(true)
+    try {
+      const r = await api.pickFolder()
+      if (r.path) await mutate('add', r.path)
+      else if (r.error) setMsgs([r.error])
+    } catch (e) {
+      setMsgs([e.message])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (error || !data?.installs?.length) return null // no global install -> nothing to manage
+
+  return (
+    <div className="card pad-lg mb-16">
+      <div className="card-head">
+        <h3>Excluded folders</h3>
+      </div>
+      <p className="sub mb-16">
+        Sovereign repos: inside these folders every global harness goes dormant — hooks stay silent
+        and the global preamble is not loaded.
+      </p>
+      {(data.excludes || []).map((e) => (
+        <div className="row wrap between gap-12" key={e.path}>
+          <code>{e.path}</code>
+          <span className="mono muted">[{e.hosts.join(', ')}]</span>
+          <button className="btn ghost sm" disabled={busy} onClick={() => mutate('remove', e.path)}>
+            Remove
+          </button>
+        </div>
+      ))}
+      <button className="btn ghost sm" disabled={busy} onClick={pick}>
+        <Icon name="folder" /> Exclude a folder…
+      </button>
+      {msgs.map((m, i) => (
+        <p key={i} className="sub">
+          {m}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 export default function Harnesses({ onAction, themes = [], currentTheme, dataRev, onMutated }) {
   const { data: instData, error: instErr } = useAsync(() => api.installs(), [dataRev]) // { installs }
   const { data: mcpData, error: mcpErr } = useAsync(() => api.mcp(), [dataRev]) // { targets }
@@ -128,6 +220,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
   const [pick, setPick] = useState({}) // chosen voice, keyed by row id
   const [fpick, setFpick] = useState({}) // chosen footprint, keyed by row id
   const [ppick, setPpick] = useState({}) // chosen posture, keyed by row id
+  const [mpick, setMpick] = useState({}) // chosen mode, keyed by row id
   const [collapsed, setCollapsed] = useState({}) // explicit collapses; MCP rows open by default
   const [deploy, setDeploy] = useState(null) // null = closed; { path, host, theme } = the deploy form
   const [browsing, setBrowsing] = useState(false) // native folder picker in flight
@@ -149,6 +242,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
 
   const installs = instData.installs
   const postures = instData.postures || []
+  const modes = instData.modes || []
   const activeCount = installs.filter((i) => i.state === 'active').length
 
   // Two sections: machine-wide globals first, then the per-repo (folder) installs. Same
@@ -180,12 +274,16 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
   // The posture a row acts on: the explicit pick, else the install's own, else peer.
   const postureFor = (inst) => ppick[inst.id] || inst.posture || 'peer'
   const setPosture = (inst, v) => setPpick((p) => ({ ...p, [inst.id]: v }))
-  // True when voice, footprint AND posture all match what's deployed — the Apply button
-  // on an active row stays disabled until one of them actually changes.
+  // The mode a row acts on: the explicit pick, else the install's own, else direct.
+  const modeFor = (inst) => mpick[inst.id] || inst.mode || 'direct'
+  const setMode = (inst, v) => setMpick((p) => ({ ...p, [inst.id]: v }))
+  // True when voice, footprint, posture AND mode all match what's deployed — the Apply
+  // button on an active row stays disabled until one of them actually changes.
   const unchanged = (inst) =>
     voiceFor(inst) === inst.theme &&
     footprintFor(inst) === (inst.footprint || 'full') &&
-    postureFor(inst) === (inst.posture || 'peer')
+    postureFor(inst) === (inst.posture || 'peer') &&
+    modeFor(inst) === (inst.mode || 'direct')
 
   // Install a not-installed location, or rebuild an active one with the picked voice +
   // footprint — both go through the 'install' action (a non-destructive in-place
@@ -194,11 +292,12 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
     const theme = voiceFor(inst)
     const footprint = footprintFor(inst)
     const posture = postureFor(inst)
+    const mode = modeFor(inst)
     const msg =
       inst.state === 'absent'
-        ? `Install Geneseed into ${inst.path} with the “${theme}” voice (${footprint} footprint, ${posture} posture)? ` +
+        ? `Install Geneseed into ${inst.path} with the “${theme}” voice (${footprint} footprint, ${posture} posture, ${mode} mode)? ` +
           `Files are added non-destructively (your own config is left untouched); deactivate or uninstall later.`
-        : `Rebuild this install (voice “${theme}”, ${footprint} footprint, ${posture} posture)? It rebuilds in place, non-destructive.`
+        : `Rebuild this install (voice “${theme}”, ${footprint} footprint, ${posture} posture, ${mode} mode)? It rebuilds in place, non-destructive.`
     if (window.confirm(msg))
       onAction?.('install', {
         host: inst.host,
@@ -207,6 +306,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
         theme,
         footprint,
         posture,
+        mode,
       })
   }
 
@@ -294,6 +394,7 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
       theme: currentTheme || 'neutral',
       footprint: 'full',
       posture: 'peer',
+      mode: 'direct',
     })
 
   // The native folder chooser lives on the daemon host: a browser can't reveal a disk
@@ -330,157 +431,171 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
       theme: deploy.theme,
       footprint: deploy.footprint,
       posture: deploy.posture,
+      mode: deploy.mode,
     })
     if (jobId) setDeploy(null)
   }
 
   return (
-    <div className="card pad-lg mb-16">
-      <div className="card-head">
-        <h3>Harnesses</h3>
-        <div className="right">
-          <span className="tick">
-            {activeCount} active · {installs.length} total
-          </span>
-          {onAction ? (
-            <button className="btn" onClick={() => (deploy ? setDeploy(null) : openDeploy())}>
-              <Icon name="folder" /> Deploy to folder…
-            </button>
-          ) : null}
-          <button className="btn" onClick={() => onAction('build-all')}>
-            <Icon name="refresh" /> Rebuild all
-          </button>
-        </div>
-      </div>
-
-      {deploy ? (
-        <div className="deploy-pop">
-          <div className="dp-row">
-            <input
-              className="inp dp-path"
-              type="text"
-              placeholder="/path/to/project, or click Browse…"
-              value={deploy.path}
-              onChange={(e) => setDeploy((d) => ({ ...d, path: e.target.value }))}
-              onKeyDown={(e) => e.key === 'Enter' && submitDeploy()}
-            />
-            <button className="btn ghost sm" disabled={browsing} onClick={browseFolder}>
-              {browsing ? 'Choosing…' : 'Browse…'}
+    <>
+      <div className="card pad-lg mb-16">
+        <div className="card-head">
+          <h3>Harnesses</h3>
+          <div className="right">
+            <span className="tick">
+              {activeCount} active · {installs.length} total
+            </span>
+            {onAction ? (
+              <button className="btn" onClick={() => (deploy ? setDeploy(null) : openDeploy())}>
+                <Icon name="folder" /> Deploy to folder…
+              </button>
+            ) : null}
+            <button className="btn" onClick={() => onAction('build-all')}>
+              <Icon name="refresh" /> Rebuild all
             </button>
           </div>
-          <div className="dp-row">
-            <label className="dp-field">
-              <span>Deploy as</span>
-              <select
-                className="sel"
-                aria-label="host for the new harness"
-                value={deploy.host}
-                onChange={(e) => setDeploy((d) => ({ ...d, host: e.target.value }))}
-              >
-                <option value="opencode">OpenCode</option>
-                <option value="claude">Claude Code</option>
-                <option value="bob">BOB (IBM)</option>
-                <option value="copilot">GitHub Copilot</option>
-              </select>
-            </label>
-            <label className="dp-field">
-              <span>Voice</span>
-              <VoiceSelect
-                label="voice for the new harness"
-                value={deploy.theme}
-                themes={themes}
-                onChange={(v) => setDeploy((d) => ({ ...d, theme: v }))}
-              />
-            </label>
-            <label className="dp-field">
-              <span>Footprint</span>
-              <FootprintSelect
-                label="footprint for the new harness"
-                value={deploy.footprint}
-                onChange={(v) => setDeploy((d) => ({ ...d, footprint: v }))}
-              />
-            </label>
-            <label className="dp-field">
-              <span>Posture</span>
-              <PostureSelect
-                label="posture for the new harness"
-                value={deploy.posture}
-                postures={postures}
-                onChange={(v) => setDeploy((d) => ({ ...d, posture: v }))}
-              />
-            </label>
-            <button className="btn sm" onClick={submitDeploy}>
-              Deploy
-            </button>
-            <button className="btn ghost sm" onClick={() => setDeploy(null)}>
-              Cancel
-            </button>
-          </div>
-          <p className="sub dp-note">
-            Adds a per-repo harness (
-            <code>
-              {deploy.host === 'claude'
-                ? '.claude/ + CLAUDE.md'
-                : deploy.host === 'bob'
-                  ? '.bob/ + AGENTS.md'
-                  : deploy.host === 'copilot'
-                    ? '.github/ + AGENTS.md'
-                    : '.opencode/ + AGENT.md'}
-            </code>
-            ) into the folder, non-destructively. It’s then tracked here even after you leave its
-            directory.
-          </p>
         </div>
-      ) : null}
-      <p className="sub mb-16">
-        Every Geneseed install on this machine: OpenCode, Claude Code, Bob, and Copilot — global and
-        per-repo. Toggle one off without deleting it (files move aside, reactivate any time). Active
-        rows expand to wire their MCP servers. <strong>Rebuild all</strong> re-emits every active
-        install in its own voice and mode, as one background job.
-      </p>
-      <p className="sub mb-16">
-        <strong>Per-folder now overrides global.</strong> Inside a folder that has its own harness,
-        the <em>same host’s</em> global harness steps aside; only the folder’s harness loads there
-        (the global one still applies everywhere else). Set <code>GENESEED_STACK_GLOBAL=1</code> to
-        load both. Existing installs pick this up on their next rebuild.
-      </p>
 
-      {note ? <p className="badge bad mb-16">{note}</p> : null}
+        {deploy ? (
+          <div className="deploy-pop">
+            <div className="dp-row">
+              <input
+                className="inp dp-path"
+                type="text"
+                placeholder="/path/to/project, or click Browse…"
+                value={deploy.path}
+                onChange={(e) => setDeploy((d) => ({ ...d, path: e.target.value }))}
+                onKeyDown={(e) => e.key === 'Enter' && submitDeploy()}
+              />
+              <button className="btn ghost sm" disabled={browsing} onClick={browseFolder}>
+                {browsing ? 'Choosing…' : 'Browse…'}
+              </button>
+            </div>
+            <div className="dp-row">
+              <label className="dp-field">
+                <span>Deploy as</span>
+                <select
+                  className="sel"
+                  aria-label="host for the new harness"
+                  value={deploy.host}
+                  onChange={(e) => setDeploy((d) => ({ ...d, host: e.target.value }))}
+                >
+                  <option value="opencode">OpenCode</option>
+                  <option value="claude">Claude Code</option>
+                  <option value="bob">BOB (IBM)</option>
+                  <option value="copilot">GitHub Copilot</option>
+                </select>
+              </label>
+              <label className="dp-field">
+                <span>Voice</span>
+                <VoiceSelect
+                  label="voice for the new harness"
+                  value={deploy.theme}
+                  themes={themes}
+                  onChange={(v) => setDeploy((d) => ({ ...d, theme: v }))}
+                />
+              </label>
+              <label className="dp-field">
+                <span>Footprint</span>
+                <FootprintSelect
+                  label="footprint for the new harness"
+                  value={deploy.footprint}
+                  onChange={(v) => setDeploy((d) => ({ ...d, footprint: v }))}
+                />
+              </label>
+              <label className="dp-field">
+                <span>Posture</span>
+                <PostureSelect
+                  label="posture for the new harness"
+                  value={deploy.posture}
+                  postures={postures}
+                  onChange={(v) => setDeploy((d) => ({ ...d, posture: v }))}
+                />
+              </label>
+              <label className="dp-field">
+                <span>Mode</span>
+                <ModeSelect
+                  label="mode for the new harness"
+                  value={deploy.mode}
+                  modes={modes}
+                  onChange={(v) => setDeploy((d) => ({ ...d, mode: v }))}
+                />
+              </label>
+              <button className="btn sm" onClick={submitDeploy}>
+                Deploy
+              </button>
+              <button className="btn ghost sm" onClick={() => setDeploy(null)}>
+                Cancel
+              </button>
+            </div>
+            <p className="sub dp-note">
+              Adds a per-repo harness (
+              <code>
+                {deploy.host === 'claude'
+                  ? '.claude/ + CLAUDE.md'
+                  : deploy.host === 'bob'
+                    ? '.bob/ + AGENTS.md'
+                    : deploy.host === 'copilot'
+                      ? '.github/ + AGENTS.md'
+                      : '.opencode/ + AGENT.md'}
+              </code>
+              ) into the folder, non-destructively. It’s then tracked here even after you leave its
+              directory.
+            </p>
+          </div>
+        ) : null}
+        <p className="sub mb-16">
+          Every Geneseed install on this machine: OpenCode, Claude Code, Bob, and Copilot — global
+          and per-repo. Toggle one off without deleting it (files move aside, reactivate any time).
+          Active rows expand to wire their MCP servers. <strong>Rebuild all</strong> re-emits every
+          active install in its own voice and mode, as one background job.
+        </p>
+        <p className="sub mb-16">
+          <strong>Per-folder now overrides global.</strong> Inside a folder that has its own
+          harness, the <em>same host’s</em> global harness steps aside; only the folder’s harness
+          loads there (the global one still applies everywhere else). Set{' '}
+          <code>GENESEED_STACK_GLOBAL=1</code> to load both. Existing installs pick this up on their
+          next rebuild.
+        </p>
 
-      <div className="tbl-scroll">
-        <table className="tbl harness-tbl">
-          <thead>
-            <tr>
-              <th aria-label="expand" />
-              <th>Harness</th>
-              <th>Voice</th>
-              <th>MCP</th>
-              <th>Status</th>
-              <th className="th-acts" />
-            </tr>
-          </thead>
-          {sections.map((sec) => (
-            <tbody key={sec.key}>
-              <tr className="h-group">
-                <td colSpan={6}>
-                  {sec.title}
-                  <span className="hg-sub"> · {sec.sub}</span>
-                </td>
+        {note ? <p className="badge bad mb-16">{note}</p> : null}
+
+        <div className="tbl-scroll">
+          <table className="tbl harness-tbl">
+            <thead>
+              <tr>
+                <th aria-label="expand" />
+                <th>Harness</th>
+                <th>Voice</th>
+                <th>MCP</th>
+                <th>Status</th>
+                <th className="th-acts" />
               </tr>
-              {sec.rows.length ? (
-                sec.rows.map(renderInstall)
-              ) : (
-                <tr className="h-empty-row">
-                  <td colSpan={6} className="h-empty">
-                    {sec.empty}
+            </thead>
+            {sections.map((sec) => (
+              <tbody key={sec.key}>
+                <tr className="h-group">
+                  <td colSpan={6}>
+                    {sec.title}
+                    <span className="hg-sub"> · {sec.sub}</span>
                   </td>
                 </tr>
-              )}
-            </tbody>
-          ))}
-        </table>
+                {sec.rows.length ? (
+                  sec.rows.map(renderInstall)
+                ) : (
+                  <tr className="h-empty-row">
+                    <td colSpan={6} className="h-empty">
+                      {sec.empty}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            ))}
+          </table>
+        </div>
       </div>
-    </div>
+      <ExclusionsCard />
+    </>
   )
 
   // One install row + its (conditional) remove-confirm and MCP-detail sub-rows. A function
@@ -531,8 +646,8 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
             <span className={`badge ${on ? 'ok' : ''}`}>{badge}</span>
           </td>
           <td>
-            {/* Six fixed lanes so controls align into columns regardless of which
-                          ones a row shows: voice · footprint · posture · install/apply · switch · trash.
+            {/* Seven fixed lanes so controls align into columns regardless of which
+                          ones a row shows: voice · footprint · posture · mode · install/apply · switch · trash.
                           Every lane is always rendered (empty when N/A) so nothing shifts. */}
             <div className="h-acts">
               <div className="ha-cell ha-voice">
@@ -561,6 +676,16 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                     value={postureFor(inst)}
                     postures={postures}
                     onChange={(v) => setPosture(inst, v)}
+                  />
+                ) : null}
+              </div>
+              <div className="ha-cell ha-mode">
+                {(inst.state === 'absent' || on) && onAction ? (
+                  <ModeSelect
+                    label={`mode for ${inst.host} · ${inst.scope}`}
+                    value={modeFor(inst)}
+                    modes={modes}
+                    onChange={(v) => setMode(inst, v)}
                   />
                 ) : null}
               </div>

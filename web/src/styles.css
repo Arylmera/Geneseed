@@ -4,9 +4,22 @@
    Accent is theme-driven (set --accent / --accent-2 on .app at runtime).
    ============================================================================ */
 
+/* Breakpoints — three tiers, and only three. Every `@media (max-width: …)` below
+   uses one of these values:
+
+     1180px  wide multi-column layouts fold to fewer columns
+      960px  the rail collapses to icons; two-pane views become one
+      720px  phone width: rows stack, secondary columns drop
+
+   These used to be six ad-hoc values (720/900/960/1080/1100/1180) that each new
+   page picked for itself, so nothing lined up and a layout could half-fold. CSS
+   media queries cannot read custom properties, so this comment is the contract:
+   reuse one of the three rather than inventing a fourth. */
+
 /* Self-hosted fonts, bundled by Vite from @fontsource. A localhost console
    must not depend on a CDN: offline, the old Google Fonts import degraded
-   every flavour to system-font soup. Weights mirror the former CDN request. */
+   every flavour to system-font soup. Weights mirror the former CDN request.
+   The .woff fallbacks are stripped at build time — see vite.config.js. */
 @import '@fontsource/space-grotesk/latin-400.css';
 @import '@fontsource/space-grotesk/latin-500.css';
 @import '@fontsource/space-grotesk/latin-600.css';
@@ -109,6 +122,18 @@ button { font-family: inherit; }
    theme gets a square ring, not a templated rounded one. The 3 reference themes
    resolve --r-xs to the :root 4px, so their ring is unchanged. */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-xs); }
+
+/* Available to assistive tech, never painted. Used by the live region that
+   announces background jobs — clip, not display:none, or it stops being read. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* Off-screen until focused, then a real button over the top-left corner. */
+.skip-link { position: fixed; top: 8px; left: -999px; z-index: 100;
+  padding: 10px 16px; border-radius: 10px; border: 1px solid var(--accent);
+  background: var(--surface); color: var(--text); text-decoration: none;
+  font-size: 13px; }
+.skip-link:focus { left: 8px; }
 
 /* atmosphere: faint contour glow + grain, set on the app root */
 .atmos {
@@ -231,9 +256,46 @@ button { font-family: inherit; }
   .rail-foot { padding: 12px 0 2px; }
   .rail-foot .voice { justify-content: center; padding: 8px 0; }
 }
+/* Phone width: the rail stops being a column and becomes a real off-canvas
+   drawer. Closed, it is `visibility: hidden` rather than merely translated —
+   a translated rail is still in the tab order, so keyboard users would tab
+   through fourteen invisible nav links before reaching the page. */
+.tb-menu { display: none; }
+.nav-scrim { display: none; }
+
 @media (max-width: 720px) {
   .topbar .prompt { display: none; }
   .tb-search input { width: 150px; }
+
+  .app { grid-template-columns: 1fr; }
+  .tb-menu { display: inline-grid; place-items: center; width: 34px; height: 34px;
+    flex: none; margin-left: -6px; border: 1px solid var(--line);
+    border-radius: 9px; background: var(--surface); color: var(--text-2);
+    cursor: pointer; }
+  .tb-menu:hover { color: var(--text); border-color: var(--line-2); }
+
+  :root { --rail-w: 248px; }
+  .rail { position: fixed; top: 0; left: 0; bottom: 0; z-index: 40;
+    width: var(--rail-w); height: 100dvh; overflow-y: auto;
+    padding: 18px 14px; visibility: hidden;
+    transform: translateX(-100%); transition: transform .22s ease, visibility .22s;
+    box-shadow: 0 0 60px -10px rgba(0,0,0,.8); }
+  .app.nav-open .rail { visibility: visible; transform: none; }
+  /* Labels come back: in a drawer there is room for them, unlike the icon rail. */
+  .brand-text, .voice-meta, .voice .chev { display: flex; }
+  .rail-item span, .rail-item .tag { position: static; width: auto; height: auto;
+    clip-path: none; }
+  .rail-group { font-size: 9.5px; height: auto; padding: 0 10px;
+    margin: 14px 0 6px; background: none; }
+  .rail-item { justify-content: flex-start; padding: 9px 10px; }
+
+  .nav-scrim { display: block; position: fixed; inset: 0; z-index: 39;
+    border: 0; padding: 0; background: rgba(0,0,0,.55);
+    backdrop-filter: blur(2px); cursor: pointer; }
+}
+
+@media (max-width: 720px) and (prefers-reduced-motion: reduce) {
+  .rail { transition: none; }
 }
 
 /* ---- main column ---- */
@@ -532,16 +594,17 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .harness-tbl .h-exp-cell { width: 1%; padding-right: 0; }
 .harness-tbl .h-path { display: block; margin-top: 3px; max-width: 280px; overflow: hidden;
   text-overflow: ellipsis; color: var(--text-3); font-family: var(--font-mono); font-size: 11.5px; }
-/* Six fixed lanes — voice · footprint · posture · install/apply · switch · trash — so every
-   control lines up into its own column regardless of which ones a row shows. Each row always
-   renders all six .ha-cell lanes (empty when N/A), so a missing control reserves its space
-   instead of letting the rest slide sideways. */
-.harness-tbl .h-acts { display: grid; grid-template-columns: 168px 78px 92px 84px 38px 32px; gap: 8px;
+/* Seven fixed lanes — voice · footprint · posture · mode · install/apply · switch · trash — so
+   every control lines up into its own column regardless of which ones a row shows. Each row
+   always renders all seven .ha-cell lanes (empty when N/A), so a missing control reserves its
+   space instead of letting the rest slide sideways. */
+.harness-tbl .h-acts { display: grid; grid-template-columns: 168px 78px 92px 92px 84px 38px 32px; gap: 8px;
   align-items: center; justify-content: end; }
 .harness-tbl .h-acts .ha-cell { display: flex; align-items: center; min-width: 0; }
 .harness-tbl .h-acts .ha-voice { justify-content: stretch; }
 .harness-tbl .h-acts .ha-fp { justify-content: stretch; }
 .harness-tbl .h-acts .ha-posture { justify-content: stretch; }
+.harness-tbl .h-acts .ha-mode { justify-content: stretch; }
 .harness-tbl .h-acts .ha-btn { justify-content: stretch; }
 .harness-tbl .h-acts .ha-sw, .harness-tbl .h-acts .ha-trash { justify-content: center; }
 .harness-tbl .h-acts .sel { width: 100%; min-width: 0; }
@@ -833,7 +896,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .empty { text-align: center; color: var(--text-3); padding: 60px 20px; }
 .empty .big { font-family: var(--font-display); font-size: 18px; color: var(--text-2); margin-bottom: 6px; }
 
-@media (max-width: 1080px) {
+@media (max-width: 1180px) {
   .hero { grid-template-columns: 1fr; }
   .lib { grid-template-columns: 1fr; }
 }
@@ -1117,7 +1180,7 @@ a.rail-item.active { color: var(--text); }
   color: var(--text-3); letter-spacing: .04em; margin-top: 13px;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .law-row, .law-rowhead { grid-template-columns: 52px 1fr 116px; }
   .law-princ { display: none; }
   .law-expand { padding-left: 18px; }
@@ -1202,7 +1265,7 @@ a.rail-item.active { color: var(--text); }
   border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
 .skill-doc .markdown th { background: var(--bg-2); color: var(--text); font-weight: 600; }
 .skill-doc .markdown hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .skill-row, .skill-rowhead { grid-template-columns: 1fr 130px; }
   .skill-desc { display: none; }
 }
@@ -2202,7 +2265,7 @@ a.rail-item.active { color: var(--text); }
 .dir-layout .tick { color: var(--text-2); }
 .dir-layout-note { font-size: 12px; }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .dir-grid { grid-template-columns: 1fr; }
 }
 
@@ -2501,7 +2564,7 @@ a.rail-item.active { color: var(--text); }
   letter-spacing: .14em; text-transform: uppercase; fill: var(--text-3);
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .b-hero-grid { grid-template-columns: 1fr; }
   .b-tiles { grid-template-columns: repeat(4, 1fr); }
 }
@@ -2753,7 +2816,7 @@ a.rail-item.active { color: var(--text); }
   width: 20px; height: 20px; color: var(--text-3); flex: none;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .lib.lib-2 { grid-template-columns: 1fr; }
   .lib-secbar { gap: 6px; }
   .lib-secchip { padding: 6px 11px; font-size: 12.5px; }

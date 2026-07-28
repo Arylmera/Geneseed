@@ -36,6 +36,13 @@ def _claude_config_dir() -> Path:
     return (Path.home() / ".claude").resolve()
 
 
+def host_catalogs_natively(host: str) -> bool:
+    """Does `host` catalogue skills/agents to the model by itself? Reads the HOSTS
+    registry (defined below, resolved at call time) so the capability is declared
+    in exactly one place. Unknown host -> False, the shape that keeps the tables."""
+    return bool(HOSTS.get(host, {}).get("native_catalog", False))
+
+
 def _bob_config_dir() -> Path:
     """IBM Bob's global config dir: ~/.bob (its global skills live at ~/.bob/skills per
     bob.ibm.com/docs/ide). $BOB_CONFIG_DIR relocates it (mirrors the OpenCode env knob),
@@ -202,7 +209,8 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     cfg = cfg or _opencode_config_dir()
     # laws_prefix='' — the standalone laws dir sits beside AGENT.md in <cfg>, so the
     # lean pointer's relative `laws/universal.md` resolves with no prefix.
-    theme, items = render_all(theme_name, footprint)
+    theme, items = render_all(theme_name, footprint,
+                              native_catalog=host_catalogs_natively("opencode"))
     assert_source_complete(items, context="opencode-global")
     cfg.mkdir(parents=True, exist_ok=True)
 
@@ -262,6 +270,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     ensure_wiki_stub(cfg)   # machine-level wiki.jsonc — seeded once, user-owned, never in the manifest
     ensure_rules_stub(cfg)  # user-rules.md — seeded once, user-owned, never in the manifest
     ensure_profile_stub(cfg)  # PROFILE.md — seeded once, user-owned, never in the manifest
+    ensure_excludes_stub(cfg)  # excludes.json — sovereign-repo list, user-owned, read by hooks
 
     write_version(cfg)
     owned.append(VERSION_MARKER)
@@ -328,7 +337,8 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     # '.claude/' or '.bob/' for a project one.
     rel_cfg = os.path.relpath(cfg, claude_md.parent).replace(os.sep, "/")
     laws_prefix = "" if rel_cfg == "." else rel_cfg + "/"
-    theme, items = render_all(theme_name, footprint, laws_prefix)
+    theme, items = render_all(theme_name, footprint, laws_prefix,
+                              native_catalog=host_catalogs_natively(host))
     assert_source_complete(items, context=f"claude-{scope}")
     cfg.mkdir(parents=True, exist_ok=True)
 
@@ -349,7 +359,10 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
         ptheme = dict(theme)
         for tok in ("DIR_LAWS", "DIR_AGENTS", "DIR_SKILLS", "DIR_MEMORY", "DIR_NOTEBOOK"):
             ptheme[tok] = prefix + ptheme.get(tok, tok.split("_", 1)[1].lower())
-        return render_file(src_tmpl, ptheme, footprint)
+        # Same catalogue decision as the render_all above — a re-render that
+        # forgot it would quietly put the stripped tables back.
+        return render_file(src_tmpl, ptheme, footprint,
+                           native_catalog=host_catalogs_natively(host))
 
     manifest_path = cfg / GLOBAL_MANIFEST
     old_owned: list[str] = []
@@ -432,6 +445,7 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     ensure_wiki_stub(cfg)
     ensure_rules_stub(cfg)
     ensure_profile_stub(cfg)
+    ensure_excludes_stub(cfg)
 
     # Project hygiene: keep the personal/self-documented-never-commit files out of
     # the team's git. Claim-on-create — an existing (possibly user-authored)
@@ -765,6 +779,26 @@ def emit_copilot(theme_name: str, out: Path, root: Path | None = None,
 # differ per host (opencode.json `instructions` splice vs settings.json hook merge), so
 # the activation layer dispatches them with a small host branch rather than forcing a
 # uniform-but-dishonest callable.
+#
+# `native_catalog` says whether the host puts every skill's and agent's name and
+# description in front of the model BY ITSELF. Where it does, AGENT.md's own
+# capability tables are a second copy of the same ~10.7 KB, paid for in context
+# on every session, and the emit collapses them to a pointer (_resolve_catalogs).
+# Where it does not, those tables are the ONLY thing telling the model what
+# exists — dropping them would remove delegation and skill discovery outright,
+# so the flag stays False until the host's behaviour is actually observed, not
+# assumed from the fact that it reads the files.
+#
+#   opencode True  — adapters/opencode/HOW-OPENCODE-LOADS.md §4: skills carry
+#                    name+description frontmatter and are model-invoked through
+#                    the `skill` tool; subagents likewise.
+#   claude   True  — observed directly: Claude Code lists both the available
+#                    skills and the dispatchable agent types in the session.
+#   bob      False — ~/.bob/skills is loaded natively, but whether Bob surfaces
+#                    the catalogue to the model unprompted is not established.
+#   copilot  False — and the doubt is sharper here: .agent.md custom agents are
+#                    picked by the USER from a mode selector, not chosen by the
+#                    model, so the Agents table is load-bearing.
 HOSTS = {
     "opencode": {
         "config_dir": _opencode_config_dir,
@@ -772,6 +806,7 @@ HOSTS = {
         "project_marker": ".opencode",
         "agent_file": "AGENT.md",
         "emit_global": emit_opencode_global,
+        "native_catalog": True,
     },
     "claude": {
         "config_dir": _claude_config_dir,
@@ -779,6 +814,7 @@ HOSTS = {
         "project_marker": ".claude",
         "agent_file": "CLAUDE.md",
         "emit_global": emit_claude_global,
+        "native_catalog": True,
     },
     "bob": {
         "config_dir": _bob_config_dir,
@@ -786,6 +822,7 @@ HOSTS = {
         "project_marker": ".bob",
         "agent_file": "AGENTS.md",
         "emit_global": emit_bob_global,
+        "native_catalog": False,
     },
     "copilot": {
         "config_dir": _copilot_config_dir,
@@ -793,6 +830,7 @@ HOSTS = {
         "project_marker": ".github",
         "agent_file": "AGENTS.md",
         "emit_global": emit_copilot_global,
+        "native_catalog": False,
     },
 }
 

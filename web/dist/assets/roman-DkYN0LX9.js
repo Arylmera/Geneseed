@@ -1,0 +1,1 @@
+const a={I:1,V:5,X:10,L:50,C:100,D:500,M:1e3};function c(o){if(!o)return NaN;const t=String(o).toUpperCase();if(!/^[IVXLCDM]+$/.test(t))return NaN;let r=0;for(let n=0;n<t.length;n++){const e=a[t[n]],s=a[t[n+1]];r+=s&&s>e?-e:e}return r}export{c as r};

@@ -34,6 +34,16 @@
   report that gap instead of documenting intent — wrong docs cost more than
   missing ones.
 
+## Pipeline role
+
+*(Ignored outside pipelines — this section only tells pipeline orchestration who
+to recruit; it changes nothing about how this {{AGENT}} behaves when dispatched
+independently.)*
+
+- **Seat(s):** docs — the documentation floor's only specialist seat, after the analyst.
+- **Receives:** the analyst's brief describing what changed and what needs documenting.
+- **Delivers:** the doc files written/updated, ready for the parent's merge decision.
+
 ## Self-improvement
 
 If this spec misled you — an input you needed but were not given, a boundary

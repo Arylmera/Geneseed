@@ -135,6 +135,30 @@ It wires:
 
 Detail: [adapters/claude-code/](adapters/claude-code/README.md).
 
+### Sovereign repos — excluding folders from the global harness
+
+Some repos are complete agent harnesses of their own (an Obsidian vault with its
+own laws, hooks and memory conventions). Inside such a repo the global Geneseed
+layer would stack on top of the local one — conflicting doctrine and wasted
+tokens. Exclude the folder instead:
+
+    harness exclude add  ~/Documents/git/Terra
+    harness exclude list
+    harness exclude remove ~/Documents/git/Terra
+
+Inside an excluded folder the global install is fully dormant: the context,
+learn and git-gate hooks exit silently (they check `<config dir>/excludes.json`
+on every call — edits take effect immediately, no re-emit), and the global
+preamble is suppressed natively (Claude: `claudeMdExcludes` written to the
+repo's own `.claude/settings.local.json`; Bob: the workspace rules shadow stub;
+OpenCode: the plugins stand down). Everything is reversed by `exclude remove`.
+
+Limitations: GitHub Copilot has no per-repo suppression mechanism, so the global
+`copilot-instructions.md` still loads there; and globally installed skills/
+subagents remain listed by the host (no native per-repo disable exists). A
+global install emitted later starts with an empty list — re-run
+`harness exclude add` (`exclude list` flags installs that diverge).
+
 ### Path C′ — GitHub Copilot
 
 ```
@@ -235,9 +259,9 @@ can *do*: lean and full emit identical files (same agents, skills, plugins, comm
 notebook, hooks) and every Rule is present and binding. The only structural difference is
 that a lean install on a global / Claude / Bob / Copilot target also ships the standalone
 `laws/universal.md` (project bundles already carry it); the only behavioural difference is
-that each Rule's reasoning loads on demand instead of every turn — which is why full, with
-the rationale always in front of the model, applies a rule's nuance more reliably on subtle
-edge cases (or with a weaker model), and stays the default.
+that each Rule's reasoning loads on demand instead of every turn. Lean is the default;
+full, with the rationale always in front of the model, applies a rule's nuance more
+reliably on subtle edge cases or with a weaker model, and is one flag away.
 
 Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** toggle in
 the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It is
@@ -773,6 +797,69 @@ which route to the same Python CLI with no bash:
 
 Open a new terminal after `link`, then call `geneseed` from any directory. Remove it
 again with `.\geneseed.cmd unlink`.
+
+## 🔌 Start the web UI at login
+
+The web UI is the only long-running Geneseed process. `geneseed web` spawns a
+**detached daemon** on `127.0.0.1:4747` and returns immediately, so a login hook
+that runs `geneseed web --no-browser` once — no browser tab — leaves the UI ready
+whenever you open [http://127.0.0.1:4747](http://127.0.0.1:4747). It is **per-user
+and per-machine**: each laptop runs its own daemon on its own loopback, so Windows
+and macOS are set up independently and never collide. The daemon is a singleton — a
+second launch just no-ops — so re-running it (or logging in twice) is harmless.
+
+**Windows** — drop a hidden VBS launcher in the Startup folder (runs at login, no
+console flash, removed by deleting the file). Open the folder with **Win+R** →
+`shell:startup`, then create `geneseed-web.vbs`:
+
+```vbs
+' geneseed-web.vbs — start the Geneseed web daemon at login (hidden, no browser).
+CreateObject("WScript.Shell").Run "cmd /c ""%LOCALAPPDATA%\Geneseed\bin\geneseed.cmd"" web --no-browser", 0, False
+```
+
+Expand `%LOCALAPPDATA%` to its real path (e.g. `C:\Users\you\AppData\Local`) — VBS
+does not expand environment variables inside a string. **Disable** by deleting the
+file. Prefer a scheduled task (runs hidden, can restart on failure)? Use:
+
+```powershell
+schtasks /Create /TN "Geneseed Web" /SC ONLOGON /TR "\"%LOCALAPPDATA%\Geneseed\bin\geneseed.cmd\" web --no-browser" /RL LIMITED /F
+schtasks /Delete /TN "Geneseed Web" /F   # to remove
+```
+
+**macOS** — the launcher is the `geneseed` symlink from `./geneseed link` (default
+`~/.local/bin/geneseed`). Use a **LaunchAgent** with `RunAtLoad` — and **no**
+`KeepAlive`, because the launcher exits after spawning the detached daemon (the
+daemon runs in its own session and survives). Write
+`~/Library/LaunchAgents/dev.geneseed.web.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>            <string>dev.geneseed.web</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/you/.local/bin/geneseed</string>
+    <string>web</string>
+    <string>--no-browser</string>
+  </array>
+  <key>RunAtLoad</key>        <true/>
+</dict>
+</plist>
+```
+
+Use the **absolute** path to your `geneseed` symlink (LaunchAgents don't see your
+shell `PATH`). Then load it — it also runs it once now:
+
+```bash
+launchctl load ~/Library/LaunchAgents/dev.geneseed.web.plist     # enable + start now
+launchctl unload ~/Library/LaunchAgents/dev.geneseed.web.plist   # disable
+```
+
+On either OS, `geneseed web stop` stops the running daemon without touching the
+login hook, and `geneseed web status` reports whether it's up.
 
 ## 🤖 Headless / CI (OpenCode)
 

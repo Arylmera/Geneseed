@@ -638,9 +638,12 @@ def _claude_hook_groups(cfg: Path) -> dict:
     # --root carries the install's own dir so a GLOBAL hook can stand down when a project
     # install of the same host sits at/above cwd (project-bypasses-global; see cmd_context).
     context = f'{py} {h} context --root "{cfg}" || exit 0'
+    # --root enables the sovereign-repo bypass (excludes.json) — same reason context
+    # carries it. git-gate has no other install-dir dependency.
+    gate = f'{py} {h} git-gate --root "{cfg}"'
     return {
         "PreToolUse": [
-            {"matcher": "Bash", "hooks": [{"type": "command", "command": f"{py} {h} git-gate"}]},
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": gate}]},
         ],
         "SessionStart": [
             {"matcher": "startup|clear", "hooks": [{"type": "command", "command": context}]},
@@ -1225,7 +1228,11 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
     root. The project manifest `context.json` is loaded by the context plugin, never
     listed in `instructions`."""
     root = root or out
-    build(theme_name, out, footprint)
+    # native_catalog: OpenCode reads this bundle's AGENT.md as the session
+    # preamble AND catalogues skills/agents to the model itself, so the tables
+    # would be the second copy. See HOSTS['opencode'] for why that is asserted
+    # for OpenCode and not for every host.
+    build(theme_name, out, footprint, native_catalog=host_catalogs_natively("opencode"))
     # OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
     # plain names (the portable build keeps them). The bundle's flat specs still exist
     # beside it — this is a deliberate de-link, not a fix for a broken target.

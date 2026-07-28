@@ -46,6 +46,41 @@ def _global_hook_standing_down(hook_root: Path, cwd: Path) -> bool:
     return False
 
 
+# ---- sovereign-repo bypass ---------------------------------------------------------
+# The user's excludes.json (seeded by every global emit, managed by `harness exclude`)
+# lists folders where the GLOBAL install goes fully dormant — typically repos that are
+# complete agent harnesses of their own. Read on EVERY hook call so edits take effect
+# immediately, no re-emit. Literal filename (not imported from build) keeps the hook
+# dependency-free, same as _GENESEED_MANIFEST above.
+_EXCLUDES_FILE = "excludes.json"
+
+
+def sovereign_bypass(root) -> bool:
+    """True iff cwd sits at/under any folder listed in <root>/excludes.json. Every
+    failure mode (no root, missing/malformed file, unreadable cwd) degrades to False —
+    a hook must never fail or block on the user's own file."""
+    if not root:
+        return False
+    try:
+        data = json.loads((Path(root) / _EXCLUDES_FILE).read_text(encoding="utf-8"))
+        entries = data.get("excludes")
+        entries = entries if isinstance(entries, list) else []
+    except (OSError, json.JSONDecodeError, AttributeError, ValueError):
+        return False
+    try:
+        cwd = os.path.normcase(str(Path.cwd().resolve()))
+    except OSError:
+        return False
+    for entry in entries:
+        raw = (entry.get("path") if isinstance(entry, dict) else entry) or ""
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        base = os.path.normcase(str(Path(raw.strip()).expanduser())).rstrip("\\/")
+        if cwd == base or cwd.startswith(base + os.sep):
+            return True
+    return False
+
+
 def _disp(path_str: str, root: Path) -> str:
     """Show a path relative to the repo root when it sits under it, else verbatim."""
     try:
@@ -181,6 +216,10 @@ def cmd_context(args: argparse.Namespace) -> int:
     # the same host covers this repo (the project hook injects instead). Opt out with
     # GENESEED_STACK_GLOBAL=1. Never blocks a session — worst case it injects as before.
     hook_root = Path(args.root).resolve() if getattr(args, "root", None) else None
+    # Sovereign-repo bypass: inside a user-excluded folder the global install is fully
+    # dormant — exit silently before any discovery. See excludes.json / `harness exclude`.
+    if hook_root and sovereign_bypass(hook_root):
+        return 0
     if hook_root and not os.environ.get("GENESEED_STACK_GLOBAL") \
             and _global_hook_standing_down(hook_root, root):
         return 0
@@ -235,6 +274,10 @@ def cmd_git_gate(args: argparse.Namespace) -> int:
     allow rule it writes is only consulted AFTER this hook runs. Every other tool call
     (and any unreadable payload) exits 0 with no output, deferring to the normal
     permission flow — a hook must never break a tool call (cf. cmd_context)."""
+    # Sovereign-repo bypass (see cmd_context): inside an excluded folder the gate
+    # defers entirely to the host's normal permission flow.
+    if sovereign_bypass(getattr(args, "root", None)):
+        return 0
     try:
         payload = json.loads(sys.stdin.read() or "{}")
         command = (payload.get("tool_input") or {}).get("command", "")

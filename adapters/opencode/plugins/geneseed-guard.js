@@ -18,8 +18,39 @@
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
+import { homedir } from "node:os"
 
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
+
+// Sovereign-repo bypass — twin of sovereign_bypass() in rituals/_harness_context.py.
+// <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
+// this GLOBAL install goes dormant. Any error degrades to "not excluded".
+const norm = (p) => {
+  // Expand a leading "~" / "~/…" to the home dir, mirroring Python's
+  // Path.expanduser() — a hand-edited excludes.json entry like "~/vault" must
+  // resolve the same way here as it does for the Claude/Bob (Python) guard.
+  let raw = String(p)
+  if (raw === "~" || raw.startsWith("~/") || raw.startsWith("~\\")) {
+    raw = raw === "~" ? homedir() : path.join(homedir(), raw.slice(2))
+  }
+  let s = path.resolve(raw)
+  return process.platform === "win32" ? s.toLowerCase() : s
+}
+async function sovereignBypass(cwd) {
+  try {
+    const cfg = path.dirname(PLUGIN_DIR)           // plugins/ sits directly in <cfg>
+    const raw = await fs.readFile(path.join(cfg, "excludes.json"), "utf8")
+    const entries = (JSON.parse(raw).excludes) || []
+    const here = norm(cwd || process.cwd())
+    for (const e of entries) {
+      const p = typeof e === "string" ? e : e && e.path
+      if (typeof p !== "string" || !p.trim()) continue
+      const base = norm(p.trim()).replace(/[\\/]+$/, "")
+      if (here === base || here.startsWith(base + path.sep)) return true
+    }
+  } catch { /* degrade to active */ }
+  return false
+}
 
 const MODE = (process.env.GENESEED_GUARD || "on").toLowerCase()
 const OFF = ["off", "0", "false", "no"].includes(MODE)
@@ -183,6 +214,7 @@ export const GeneseedGuard = async () => {
   return {
     "tool.execute.before": async (input, output) => {
       if (OFF) return
+      if (await sovereignBypass(process.cwd())) return
       const tool = (input?.tool || input?.name || "").toLowerCase()
       const args = output?.args || input?.args || {}
       const deny = (why) => {

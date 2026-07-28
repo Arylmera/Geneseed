@@ -9,10 +9,10 @@
 [![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![stdlib only](https://img.shields.io/badge/deps-stdlib%20only-success)](build.py)
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
-[![Skills](https://img.shields.io/badge/skills-46-blueviolet)](src/skills/)
-[![Agents](https://img.shields.io/badge/agents-16-orange)](src/agents/)
-[![Laws](https://img.shields.io/badge/laws-35-critical)](src/laws/universal.md)
-[![OpenCode · Claude Code · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-2--setup)
+[![Skills](https://img.shields.io/badge/skills-47-blueviolet)](src/skills/)
+[![Agents](https://img.shields.io/badge/agents-17-orange)](src/agents/)
+[![Laws](https://img.shields.io/badge/laws-37-critical)](src/laws/universal.md)
+[![OpenCode · Claude Code · Bob · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
 
 [**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & TUI**](#-3--web--tui) · [**What you get**](#-4--what-you-get)
 
@@ -131,9 +131,9 @@ The harness ships as a small set of layers, mirrored one-for-one in the web cons
 
 | Layer | What it is |
 | --- | --- |
-| **🛡️ Rules** (`laws/`) | 35 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery, non-interactive-shell, untrusted-content, least-privilege, root-cause, idempotency, calibrated-honesty, source-over-surface, total-teardown, cover-and-verify… |
-| **🤖 Agents** (16) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
-| **🛠 Skills** (46) | repeatable workflows: brainstorm · **clarify** · plan · **codebase-design** · **domain-modeling** · **wayfinder** · **tickets** · tdd · **develop** · debug · **prototype** · refactor · **ponytail** · **forge-mcp** · geneseed-code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **learning-path** · **gap-detector** · **feynman** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **rule** · **profile** · **opencode-theme** · **herdr** |
+| **🛡️ Rules** (`laws/`) | 37 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery, non-interactive-shell, untrusted-content, least-privilege, external-gate, root-cause, idempotency, calibrated-honesty, source-over-surface, restart-is-not-reload, total-teardown, cover-and-verify… |
+| **🤖 Agents** (17) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer`, `developer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
+| **🛠 Skills** (47) | repeatable workflows: brainstorm · **clarify** · plan · **codebase-design** · **domain-modeling** · **wayfinder** · **tickets** · tdd · **develop** · debug · **prototype** · refactor · **ponytail** · **forge-mcp** · geneseed-code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **learning-path** · **gap-detector** · **feynman** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **rule** · **profile** · **opencode-theme** · **herdr** · **pipeline** |
 | **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes; `geneseed-ponytail` holds a minimal-code mode (`/ponytail lite\|full\|ultra\|off`), opt-in, injecting the laziest-that-works ruleset every turn so it doesn't drift; `geneseed-activity` streams what each session is doing to the web console's Activity view |
 | **🧠 Memory** (`memory/`) | one-fact-per-file durable knowledge, indexed by `MEMORY.md` (git-ignored, personal) |
 | **📓 Notebook** (`notebook/`) | the agent's sovereign space — any medium (code, tools, data, notes), self-ruled via a seed-once charter, always git-ignored; only its `.gitignore` is build-asserted |
@@ -164,16 +164,56 @@ A second per-install dial, **footprint**, sets how much of the Rules `AGENT.md` 
 
 | Footprint | Section 1 of `AGENT.md` | Trade-off |
 | --- | --- | --- |
-| **full** *(default)* | every Rule's complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
-| **lean** | each Rule's heading + the rule line, then a pointer to the full law file | ~40% smaller; rationale is one on-demand read away |
+| **lean** *(default)* | each Rule's heading + the rule line, then a pointer to the full law file | ~40% smaller; rationale is one on-demand read away |
+| **full** | every Rule's complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
 
-Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Use **full** when token cost is a non-issue or you run a smaller model; use **lean** to reclaim context on long sessions, large repos, or cost-sensitive runs. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob, Copilot).
+Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Lean is the default: the rationale is one read away and the context it frees is paid back on every turn. Switch to **full** when token cost is a non-issue or you run a smaller model, which leans harder on always-present rationale. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob, Copilot).
 
 Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates each Rule's *reasoning* to on-demand (and adds the standalone laws file to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer — which is why it stays the default.
 
 Want to check a build before it touches anything real? `python build.py --validate-only --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build---validate-only).
 
 ---
+
+## 🔌 Supported harnesses
+
+One source, five emit targets. Geneseed builds into whichever host you point it
+at — each with a per-repo and a global (`-global`) variant — plus a portable
+`files` bundle any `AGENT.md`-aware tool can read. **OpenCode** runs its own
+engine (JS plugins, colour themes, LSP); **Claude Code**, **Bob**, and
+**Copilot** share one Claude-shaped engine that diverges only by host dialect.
+
+The harness — its Rules, Agents, Skills, Memory convention, and preamble voice —
+is **identical on every host**. What differs is how much of it the host can
+*automate* for you (via plugins or hooks) versus carry as preamble discipline.
+
+| Capability | OpenCode | Claude Code | Bob | Copilot |
+| --- | :---: | :---: | :---: | :---: |
+| **Instructions file** | `AGENT.md` + `opencode.json` | `CLAUDE.md` | `AGENTS.md` + `rules/geneseed.md` | `AGENTS.md` / `copilot-instructions.md` |
+| **Agents** (capability specialists) | ✅ native | ✅ | ✅ | ✅ `.agent.md` |
+| **Skills** (byte-identical) | ✅ | ✅ | ✅ | ✅ |
+| **Memory & Notebook** | ✅ | ✅ | ✅ | ✅ |
+| **Context injection** (Rule XVIII) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Memory write-back** (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Git-gate consent** (Rule XX) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Sovereign-repo excludes** | ⚙️ plugin | ✅ `claudeMdExcludes` | ✅ rules-shadow | ➖ none |
+| **MCP server wiring** | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcpServers` | ✅ `mcp-config.json` |
+| **Colour themes** | ✅ full palette | ➖ | ➖ | ➖ |
+| **LSP · workflow runner · primary-agent · `/`-commands** | ✅ | ➖ | ➖ | ➖ |
+
+<sub>✅ native support · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · 📄 carried by preamble prose only · ➖ no host mechanism (harness discipline still applies) · ¹ Bob honours Claude-dialect hooks best-effort — inert if unsupported, harness still holds via the preamble.</sub>
+
+**Reading the matrix.** Everything above the divider is at full parity — no host
+drops an Agent, Skill, or the memory convention. The asymmetry is entirely in
+*automation mechanism*: OpenCode's plugin surface and Claude/Bob's hook surface
+enforce a few Rules for you, where **Copilot** (no hook mechanism) enforces them
+through preamble discipline instead. The OpenCode-only extras (themes, LSP,
+workflow runner, primary-agent) have no analogue on a Claude-shaped host.
+
+Per-host wiring in depth: **[OpenCode](adapters/opencode/README.md)** ·
+**[Claude Code](adapters/claude-code/README.md)** ·
+**[Bob](adapters/bob/README.md)** · **[Copilot](adapters/copilot/README.md)**.
+Token cost per host: **[docs/token-footprint.md](docs/token-footprint.md)**.
 
 ## 🗂 Layout
 
@@ -204,7 +244,7 @@ Geneseed/
 ├── tests/                stdlib unit tests + a Node workflow-runtime test
 ├── docs/                 guides (web-ui, wiki, …); specs/, reviews/, superpowers/ are
 │                         local working docs — git-ignored, never distributed
-├── adapters/             per-tool glue (opencode/, claude-code/)
+├── adapters/             per-host glue (opencode/, claude-code/, bob/, copilot/)
 └── .github/workflows/    CI: doctor + tests
 ```
 
@@ -246,6 +286,8 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 | ⤷ [GLOBAL-HARNESS-SPEC.md](adapters/opencode/GLOBAL-HARNESS-SPEC.md) | The global-emit contract |
 | ⤷ [HOW-OPENCODE-LOADS.md](adapters/opencode/HOW-OPENCODE-LOADS.md) | Why a file shows up twice; plugin loading |
 | **[adapters/claude-code/](adapters/claude-code/README.md)** | The Claude Code hook adapter |
+| **[adapters/bob/](adapters/bob/README.md)** | The IBM Bob adapter — Claude-shaped, rules-file preamble |
+| **[adapters/copilot/](adapters/copilot/README.md)** | The GitHub Copilot adapter — reduced host, no hooks |
 | **[src/memory/README.md](src/memory/README.md)** | The memory convention |
 | **[src/notebook/README.md](src/notebook/README.md)** | The agent's own freeform-space convention |
 

@@ -144,10 +144,17 @@ const NAV = [
   },
 ]
 
-export default function Rail({ route, overview, onOpenVoice }) {
+export default function Rail({ route, overview, onOpenVoice, onNavigate }) {
   return (
-    <aside className="rail">
-      <button className="rail-brand" onClick={() => go('#/')} title="Dashboard">
+    <aside className="rail" id="rail-nav" aria-label="Harness navigation">
+      <button
+        className="rail-brand"
+        onClick={() => {
+          go('#/')
+          onNavigate?.()
+        }}
+        title="Dashboard"
+      >
         <Sprout />
         <div className="brand-text">
           <span className="brand-name">
@@ -172,6 +179,7 @@ export default function Rail({ route, overview, onOpenVoice }) {
               href={n.hash}
               aria-current={lit ? 'page' : undefined}
               title={n.label}
+              onClick={() => onNavigate?.()}
             >
               <Icon name={n.icon} />
               <span>{n.label}</span>
