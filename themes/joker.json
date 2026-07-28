@@ -108,6 +108,8 @@
   "LEX_XXXIII": "Clear the Whole Stage · Complete the Teardown",
   "LEX_XXXIV": "Keep the Live Bit, Not Last Night's Tape · Record the Probe, Not the Snapshot",
   "LEX_XXXV": "Cover the Bit, Then Watch It Land · Cover and Verify",
+  "LEX_XXXVI": "Someone Else Holds the Punchline · External Gate",
+  "LEX_XXXVII": "New Take, Same Old Script · Restart Is Not Reload",
   "INTRO_DOC": "This file is the warm-up a coding co-pilot reads when it joins this repository.",
   "INTRO_AGENTS": "Bring in the right sidekick for focused work instead of being the whole act yourself; each has one job and reports exactly what it did.",
   "INTRO_SKILLS": "A Skill is a bit you've rehearsed for a recurring task. Run the matching bit before you ad-lib.",

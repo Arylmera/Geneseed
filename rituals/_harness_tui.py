@@ -300,6 +300,8 @@ LAW_CLASS: dict[str, str] = {
     "XXXIII": "craft",
     "XXXIV": "verify",
     "XXXV": "verify",
+    "XXXVI": "security",
+    "XXXVII": "process",
 }
 
 # The six governance classes a law may carry — the web Laws filter chips read

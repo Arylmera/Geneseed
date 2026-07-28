@@ -108,6 +108,8 @@
   "LEX_XXXIII": "Complete the Demolition · Complete the Teardown",
   "LEX_XXXIV": "Log the Live Recon, Not a Stale Fix · Record the Probe, Not the Snapshot",
   "LEX_XXXV": "Cover Your Fire, Confirm the Hit · Cover and Verify",
+  "LEX_XXXVI": "Authority Rests Above the Trigger · External Gate",
+  "LEX_XXXVII": "Re-Arming Is Not Re-Briefing · Restart Is Not Reload",
   "INTRO_DOC": "This file is the operating manual an AI coding agent reads on entering this repository.",
   "INTRO_AGENTS": "Task focused work to the specialist whose job it is rather than running the whole op in one context; each has one objective and reports exactly what it did.",
   "INTRO_SKILLS": "A Skill is a standard operating procedure for a recurring task. Run the matching SOP before improvising.",
