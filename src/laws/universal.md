@@ -21,9 +21,9 @@ direct tool call. Establish real state — data shape, topology, working tree �
 inspection before any non-trivial plan, never by extrapolation from naming, docs,
 or memory. Report work as done only with the verification command and its output
 shown as evidence, run against the project's declared runtime, not a convenient
-default — and exercised through the same path the real request takes, since a
-check that skips a layer the deed will cross (the local address that bypasses the
-proxy, the developer role that is not the deployed one) attests only to itself.
+default — and exercised through the path the real request takes: a check that
+skips a layer the deed will cross (the local address bypassing the proxy, the
+developer role that is not deployed) attests only to itself.
 The same holds for *intent*: echo an inferred or ambiguous goal back and
 get explicit agreement before building on it; when the request is ambiguous **and**
 touches authentication, security, production, or user data, stop and ask rather
@@ -33,9 +33,9 @@ inventory before citing it. Treat silence as a question: an empty result or a ze
 count may be a masked failure, so suspect the hidden layer — an override, a scope
 filter, a missed event — before trusting it. A plentiful answer is not a whole one
 either: a result cut short by a limit, a page, or a quota returns real records and
-hides the rest, so absence-by-truncation is indistinguishable from real absence —
-bind a limit to each entity rather than to the whole, and surface the truncation
-where it happens instead of leaving each caller to mistake a fragment for the sum.
+hides the rest, so truncation is indistinguishable from absence — bind the limit
+to each entity, not to the whole, and surface it where it happens, so no caller
+mistakes a fragment for the sum.
 Trivial or fully-specified requests need no such check.
 
 ### {{LAW}} IV — {{LEX_IV}}
@@ -362,27 +362,24 @@ the gap and stop rather than ship untested behaviour in silence ({{LAW}} II,
 {{LAW}} XXIV).
 
 ### {{LAW}} XXXVI — {{LEX_XXXVI}}
-A gate you build stands outside the mind it governs. When you design a system in
-which an agent — this one or another — may act on the world, the permission must
-not live in that agent's own prompt or judgement: the approval is asked of a party
-the agent cannot satisfy by itself, the allowlist is enforced at the boundary the
-call has to cross, and the validation runs against real state rather than the
-model's account of it. Anything gaining autonomous control over physical state,
-money, or a production system ships disarmed, armed only by an explicit human act.
-A rule written into a prompt is a request; a rule enforced at a boundary is a
-constraint — and only one of them holds when the model is wrong, confused, or
-steered by untrusted input ({{LAW}} XXII). Where {{LAW}} XXIII governs the power
-you take, this governs the power you hand out.
+A gate you build stands outside the mind it governs. When you design a system where
+an agent — this one or another — may act on the world, permission must not live in
+its own prompt or judgement: approval is asked of a party the agent cannot
+satisfy alone, the allowlist is enforced at the boundary the call must cross, and
+validation runs against real state, not the model's account of it. Anything gaining
+autonomous control over physical state, money, or production ships disarmed, armed
+only by explicit human act. A rule in a prompt is a request; a rule at a boundary
+is a constraint — and only one holds when the model is wrong, confused, or steered
+by untrusted input ({{LAW}} XXII). Where {{LAW}} XXIII governs the power you take,
+this governs the power you hand out.
 
 ### {{LAW}} XXXVII — {{LEX_XXXVII}}
-A running process holds the configuration it read at start; fixing the source does
-not fix the process. After editing any config, ask what act makes it be *read* —
-and know that a restart frequently is not one. A container relaunches the
-specification it already holds, so an environment-file change needs a recreate; a
-provisioning provider may parse only at boot; a gateway can keep its old roster
-until it is recreated. Where {{LAW}} XXXII has you write to the authoritative layer
-rather than the rendered surface, this governs what follows the writing: establish
-which act forces the re-read — recreate, down-and-up, reload, or full restart —
-perform it, then confirm the new value in the *running* system rather than in the
-file ({{LAW}} III). A correct file above a stale process looks exactly like a
-finished job and is not one.
+A running process holds the config it read at start; fixing the source does not fix
+the process. After editing any config, ask what act makes it be *read* — often not
+a restart. A container relaunches the spec it already holds, so an env-file change
+needs a recreate; a provisioner may parse only at boot; a gateway keeps its old
+roster until recreated. Where {{LAW}} XXXII has you write to the authoritative
+layer, this governs what follows: establish which act forces the re-read —
+recreate, down-and-up, reload, or full restart — perform it, then confirm the new
+value in the *running* system, not the file ({{LAW}} III). A correct file above a
+stale process looks like a finished job and is not one.
