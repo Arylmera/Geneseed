@@ -33,9 +33,10 @@ finding *when/why* something changed without altering history, use git-archaeolo
    messages, PRs, original issues — and understand why each change was made.
    Preserve both intents where possible; where incompatible, pick the one
    matching the merge's stated goal and note the trade-off. Never invent new
-   behaviour in a resolution, and never `--abort` your way out. Before
-   concluding, run the project's checks (typecheck, tests, format) and fix
-   what the merge broke.
+   behaviour in a resolution, and — unlike the deliberate `--abort` in step 3
+   that undoes a botched operation on purpose — never `--abort` to escape a
+   conflict you were asked to resolve. Before concluding, run the project's
+   checks (typecheck, tests, format) and fix what the merge broke.
 5. For a **deliberate rewrite** (interactive rebase, squash, fixup, amend): work on a
    dedicated branch, never a shared one, and keep it the only change in flight
    (universal {{LAW}} II). A rewrite *creates commits* — amend, squash, `--continue`
