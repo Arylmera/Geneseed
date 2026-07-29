@@ -9,6 +9,19 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **`token-report` folder skill — session token usage breakdown on every host**: a
+  first-party folder skill (the first non-vendored entry in `VENDORED_SKILL_DIRS`,
+  which the folder mechanism carries because it bundles an executable script) that
+  renders the session's token usage as markdown tables: exact recorded totals
+  (output, fresh input, cache reads/writes; main thread vs subagents), context
+  window occupancy (session-start harness baseline, current/peak vs limit), an
+  estimated per-category attribution of what filled the context (user messages,
+  replies, thinking, per-tool calls/results, injected skill content), and the
+  heaviest single items. `scripts/token_report.py` auto-detects the host by most
+  recent session activity: exact usage on Claude Code, IBM Bob (`$BOB_CONFIG_DIR`
+  honoured) and OpenCode (storage message `tokens`); best-effort harvesting on
+  GitHub Copilot, whose session-state schema is undocumented. Carrier ceiling
+  (full) raised 49_000 → 51_000 for the new AGENT.md folder-skill entry.
 - **GitHub Copilot host — `--emit copilot` / `--emit copilot-global`**: the fourth
   first-class host, riding the Claude-shaped emit engine. Per-repo: root `AGENTS.md`
   (auto-loaded by the Copilot CLI, coding agent, and VS Code agent mode) + a layer in
