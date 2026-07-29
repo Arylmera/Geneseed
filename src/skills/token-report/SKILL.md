@@ -27,7 +27,7 @@ picking the most recently active source:
 |---|---|---|
 | Claude Code | `~/.claude/projects/<slug>/*.jsonl` | exact usage per request |
 | IBM Bob | `~/.bob/projects/<slug>/*.jsonl` (Claude-shaped, `$BOB_CONFIG_DIR` honoured) | exact usage per request |
-| OpenCode | `~/.local/share/opencode/storage/` message JSONs | exact `tokens` per request |
+| OpenCode | `~/.local/share/opencode/opencode.db` (SQLite, v1.2+; pre-1.2 falls back to `storage/` JSON files) | exact `tokens` per request; child sessions attributed as subagents |
 | GitHub Copilot | `~/.copilot/history-session-state/` | best effort — undocumented schema; token-like fields harvested, else estimates only |
 
 Useful flags: `--host claude|bob|opencode|copilot` to force a host,
