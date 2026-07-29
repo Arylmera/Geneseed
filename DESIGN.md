@@ -88,6 +88,26 @@ vault or a specific tool's hooks.
    counterpart to Law XV's runtime context economy: keep the instruction surface
    high-signal and pruned so it stays read and heeded.
 
+   A Law that clears that bar is not one edit but six, because its *satellites* —
+   themed title, class, display copy, counts — live outside `universal.md`:
+
+   1. the rule body in `src/laws/universal.md`, headed `### {{LAW}} <roman> — {{LEX_<roman>}}`;
+   2. `LEX_<roman>` in `themes/_TEMPLATE.json`, then `python build.py --sync-themes`
+      to seed every theme, then restyle each one in its own voice;
+   3. `LAW_CLASS` in `rituals/_harness_tui.py` — the governance class, one of the six
+      in `LAW_CLASSES`;
+   4. `LAW_META` in `web/src/pages/Laws.jsx` — the class fallback *and* the one-line
+      Principle shown in the web ledger. This copy exists nowhere else; a law absent
+      here renders with a blank description;
+   5. the counts — README badge and prose, `SHIPPED.md`, the web onboarding copy;
+   6. `CHANGELOG.md`.
+
+   Everything on that list is gated by `doctor` (`_count_table_problems` in
+   `rituals/_harness_build.py`), so `python rituals/harness.py doctor --all` is the
+   check, not the checklist above — the list just says what it will ask for. Steps 3
+   and 4 both earned their gate the same way: a law shipped without them, and the
+   only symptom was a wrong chip or an empty cell in a UI nobody re-read.
+
 ## 🧩 Components
 
 The `Harness/` output column shows the **neutral** folder name; the imperial theme

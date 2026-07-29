@@ -19,6 +19,12 @@ const LAW_CATS = {
 }
 const LAW_CAT_ORDER = ['security', 'verify', 'process', 'craft', 'context', 'comms']
 
+// One row per law in src/laws/universal.md: its class (fallback for an older
+// server that returns no `klass`) and the one-line principle shown in the
+// table's "Principle" column — display copy that lives nowhere else, so a law
+// missing here renders with a blank description. Doctor enforces one entry per
+// law, a known class, and agreement with LAW_CLASS (_count_table_problems in
+// rituals/_harness_build.py); keep it in step when a law lands in universal.md.
 const LAW_META = {
   1: ['security', 'Secrets never touch tracked files; only .env or a manager.'],
   2: ['process', 'One purpose per change; no silent scope creep.'],
@@ -55,6 +61,8 @@ const LAW_META = {
   33: ['craft', 'Finish a delete or rename: reconcile every reference, no danglers.'],
   34: ['verify', 'Record how to derive a volatile fact, not its stale value.'],
   35: ['verify', 'Cover new or changed behaviour with a test; run the affected tests green.'],
+  36: ['security', "Enforce permission at the boundary, never in the agent's own prompt."],
+  37: ['process', 'A restart may not reload config; force the re-read, confirm it live.'],
 }
 
 // Tiny inline formatter: render `code` spans and *emphasis* in plain rule text.

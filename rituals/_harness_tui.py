@@ -263,7 +263,8 @@ LAW_HEADING_RE = re.compile(r"^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$")
 # so the web Laws view can filter by intent (security, verification, process,
 # craft, context, communication). Keyed by Roman numeral, matching the heading
 # numbering — same source of truth across TUI and web. Update when a new rule
-# lands in universal.md.
+# lands in universal.md, together with LAW_META in web/src/pages/Laws.jsx, which
+# carries the same rule's Principle line; doctor gates both.
 LAW_CLASS: dict[str, str] = {
     "I": "security",
     "II": "process",
