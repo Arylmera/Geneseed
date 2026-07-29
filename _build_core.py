@@ -36,16 +36,19 @@ CAPABILITY_LINK_RE = re.compile(
 
 TEXT_SUFFIXES = {".md", ".tmpl", ".json", ".txt", ".yml", ".yaml"}
 
-# Third-party skills vendored VERBATIM as multi-file folders under src/skills/<name>/
-# (not Geneseed-authored flat skills) carry their own license and internal cross-links to
-# the upstream project's own files — some intentionally NOT vendored — so they are exempt
-# from the hermeticity / dead-link and authoring gates that govern Geneseed's own specs.
-# Being nested, they ride along verbatim in every emit — the `files` build (rglob copies
-# the folder through) and the OpenCode native/global skills dir (copied whole, not wrapped
-# as a flat SKILL.md) — so AGENT.md's vendored-skill pointer resolves everywhere, yet they
-# stay out of the skill COUNTS and tables. List a skill folder's name here to bring one in;
-# each carries a VENDOR.md recording its upstream source, commit, and license.
-VENDORED_SKILL_DIRS = ("react-view-transitions", "daydream")
+# Skills shipped VERBATIM as multi-file folders under src/skills/<name>/ (not flat
+# Geneseed-rendered .md skills). Most are third-party vendors carrying their own license
+# and internal cross-links to the upstream project's own files — some intentionally NOT
+# vendored — so the whole set is exempt from the hermeticity / dead-link and authoring
+# gates that govern Geneseed's own flat specs. Being nested, they ride along verbatim in
+# every emit — the `files` build (rglob copies the folder through) and the OpenCode
+# native/global skills dir (copied whole, not wrapped as a flat SKILL.md) — so AGENT.md's
+# folder-skill pointer resolves everywhere, yet they stay out of the skill COUNTS and
+# tables. List a skill folder's name here to bring one in; each carries a VENDOR.md
+# recording its provenance (upstream source, commit, license — or first-party status:
+# `token-report` is Geneseed-authored and rides this mechanism because it bundles an
+# executable script, which the flat pipeline cannot carry).
+VENDORED_SKILL_DIRS = ("react-view-transitions", "daydream", "token-report")
 
 
 def source_release_version() -> str:

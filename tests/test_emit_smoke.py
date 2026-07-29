@@ -37,8 +37,10 @@ FOOTPRINTS = ("full", "lean")
 #
 # Largest carrier at each footprint today is the host-agnostic `files` bundle,
 # which keeps the capability tables no host will catalogue for it:
-#   full 46_883   lean 29_073
-CEILING = {"full": 49_000, "lean": 30_500}
+#   full 49_072   lean 29_421
+# (full raised past 49_000 by the token-report folder-skill entry — real
+# capability growth, not regrowth.)
+CEILING = {"full": 51_000, "lean": 30_500}
 
 # mode -> (host or None, carrier base, carrier relpath, native-layer base+dir)
 # Bases: "out" = the --out bundle, "home" = the sandboxed config dir.
@@ -63,7 +65,7 @@ EXPECTED = {
 # counts are host-independent. A mismatch means the emit dropped or duplicated
 # specs — the failure mode a bare "exit 0" smoke test cannot see.
 N_AGENTS = 18
-N_SKILLS = 49
+N_SKILLS = 50
 
 
 def _native_catalog(host: "str | None") -> bool:
