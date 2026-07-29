@@ -327,6 +327,77 @@ def _src_stems(folder: str) -> set:
     return {p.stem for p in d.glob("*.md") if not p.name.startswith("_")} if d.is_dir() else set()
 
 
+_ROMAN_VALUES = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+
+
+def _roman_to_int(num: str) -> int:
+    """Roman numeral → int. Law headings number in Roman; the web ledger keys its
+    per-rule display copy by the Arabic equivalent, so the gate has to bridge the two.
+    Returns 0 on an unparseable numeral, which surfaces as a gate problem rather than
+    a crash."""
+    total = prev = 0
+    for ch in reversed(num.upper()):
+        v = _ROMAN_VALUES.get(ch)
+        if v is None:
+            return 0
+        total += -v if v < prev else v
+        prev = max(prev, v)
+    return total
+
+
+# A LAW_META row in the web Laws page: `<arabic>: ['<class>', '<principle>'],`.
+# Either quote style — a principle carrying an apostrophe is double-quoted.
+_LAW_META_ROW = re.compile(
+    r"(?m)^\s*(\d+):\s*\[\s*(['\"])(.*?)\2\s*,\s*(['\"])(.*?)\4\s*\]\s*,?\s*$")
+
+
+def _law_meta_problems(law_nums: list[str], law_class: dict[str, str],
+                       law_classes: tuple[str, ...]) -> list[str]:
+    """Keep the web Laws ledger's per-rule display copy complete. `LAW_META` in
+    web/src/pages/Laws.jsx holds each law's one-line Principle — copy that exists
+    nowhere else in the tree — and a law with no row there falls back to
+    `['craft', '']`: the rule renders with a blank description and the wrong class
+    chip. Nothing else notices, because everything upstream is fine — the catalog API
+    still serves the law, the page still renders, LAW_CLASS is complete, doctor and
+    both suites stay green. That is exactly how Laws XXXVI and XXXVII shipped
+    description-less. So assert one row per rule in universal.md, a non-empty
+    principle, a known class, no stale row, and agreement with LAW_CLASS."""
+    page = ROOT / "web" / "src" / "pages" / "Laws.jsx"
+    try:
+        text = page.read_text(encoding="utf-8")
+    except OSError as e:
+        return [f"[authoring] web/src/pages/Laws.jsx unreadable: {e}"]
+    block = re.search(r"(?m)^const LAW_META = \{$(.*?)^\}$", text, re.S)
+    if not block:
+        return ["[authoring] LAW_META literal not found in web/src/pages/Laws.jsx — the web "
+                "Laws ledger's Principle column would have no gate"]
+    meta = {int(m.group(1)): (m.group(3), m.group(5))
+            for m in _LAW_META_ROW.finditer(block.group(1))}
+    problems: list[str] = []
+    seen: set[int] = set()
+    for roman in law_nums:
+        n = _roman_to_int(roman)
+        seen.add(n)
+        if n not in meta:
+            problems.append(f"[authoring] laws/universal.md rule {roman} ({n}) has no row in "
+                            f"LAW_META (web/src/pages/Laws.jsx) — the web Laws ledger would "
+                            f"render it with a blank Principle")
+            continue
+        klass, principle = meta[n]
+        if not principle.strip():
+            problems.append(f"[authoring] LAW_META[{n}] has an empty principle line — rule "
+                            f"{roman} would render with a blank description")
+        if klass not in law_classes:
+            problems.append(f"[authoring] LAW_META[{n}] class '{klass}' is not a known class "
+                            f"{list(law_classes)}")
+        elif law_class.get(roman) and klass != law_class[roman]:
+            problems.append(f"[authoring] LAW_META[{n}] classes rule {roman} as '{klass}' but "
+                            f"LAW_CLASS says '{law_class[roman]}'")
+    for n in sorted(set(meta) - seen):
+        problems.append(f"[authoring] LAW_META lists rule {n} but laws/universal.md has no such rule")
+    return problems
+
+
 def _prose_mirror_problems(readme: str, web: str, counts: dict[str, int],
                            skill_stems: set[str], shipped: str = "") -> list[str]:
     """Keep the *human-readable* count mirrors honest — the ones the badge regex never
@@ -438,6 +509,7 @@ def _count_table_problems() -> list[str]:
     for num, klass in sorted(LAW_CLASS.items()):
         if klass not in LAW_CLASSES:
             problems.append(f"[authoring] LAW_CLASS['{num}'] = '{klass}' is not a known class {list(LAW_CLASSES)}")
+    problems += _law_meta_problems(law_nums, LAW_CLASS, LAW_CLASSES)
 
     # README capability badges must match the real counts.
     counts = {

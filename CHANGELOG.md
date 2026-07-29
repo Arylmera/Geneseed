@@ -51,6 +51,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   file is never regenerated.
 
 ### Fixed
+- **Laws XXXVI and XXXVII render their Principle in the web ledger**: both shipped
+  with no row in `LAW_META` (`web/src/pages/Laws.jsx`), the map that holds each
+  rule's one-line Principle — display copy that lives nowhere else in the tree. An
+  absent row falls back to `['craft', '']`, so the two newest laws showed a blank
+  description and a wrong class chip while everything upstream stayed correct: the
+  catalog served them, the page rendered, `LAW_CLASS` was complete, doctor and both
+  suites were green. Rows added (XXXVI · security, XXXVII · process), and `doctor`
+  gained the gate that was missing (`_law_meta_problems`): every rule in
+  `universal.md` must have a `LAW_META` row with a non-empty principle and a known
+  class that agrees with `LAW_CLASS`, and no row may outlive its rule. Sibling of
+  the `LAW_CLASS` completeness gate added after Law XXXV shipped mis-classified —
+  same failure shape, the other half of the pair. `DESIGN.md` now lists the six
+  satellite edits a new Law drags along, so the next one is a checklist, not a
+  rediscovery.
 - **Claude/Bob emits no longer ship dead skill-table links**: CLAUDE.md/AGENTS.md's
   per-row skill/agent links (e.g. `.claude/skills/council.md`) were dead — the
   native layer writes each skill as a folder (`.claude/skills/council/SKILL.md`).

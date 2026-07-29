@@ -256,6 +256,51 @@ class CountTableGateTests(unittest.TestCase):
             LAW_CLASS["I"] = orig
         self.assertTrue(any("bogus" in p for p in problems), problems)
 
+    def test_law_meta_covers_every_law(self):
+        """Every rule in universal.md must carry a principle line in the web ledger's
+        LAW_META — the live check, against the real tree. Laws XXXVI and XXXVII shipped
+        without one and rendered with a blank description; this is the gate for it."""
+        from _harness_tui import LAW_CLASS, LAW_CLASSES
+        nums = re.findall(r"(?m)^### \{\{LAW\}\} ([IVXLCDM]+)\b",
+                          (build.SRC / "laws" / "universal.md").read_text(encoding="utf-8"))
+        self.assertEqual(harness._law_meta_problems(nums, LAW_CLASS, LAW_CLASSES), [])
+
+    def test_gate_flags_law_missing_from_law_meta(self):
+        """A law with no LAW_META row (blank Principle in the web ledger) must be
+        flagged, as must an empty principle, an unknown class, a class that contradicts
+        LAW_CLASS, and a stale row for a rule that no longer exists."""
+        from _harness_tui import LAW_CLASSES
+        klass = {"I": "security", "II": "process", "XL": "craft"}
+        # XL has no LAW_META row at all — the exact Law XXXVI/XXXVII failure.
+        p = harness._law_meta_problems(["I", "XL"], klass, LAW_CLASSES)
+        self.assertTrue(any("XL" in x and "LAW_META" in x for x in p), p)
+        # Rule 2 exists in LAW_META but universal.md no longer carries it.
+        p = harness._law_meta_problems(["I"], klass, LAW_CLASSES)
+        self.assertTrue(any("lists rule 2" in x for x in p), p)
+        # LAW_META's class must agree with the server-side LAW_CLASS.
+        p = harness._law_meta_problems(["I"], {"I": "comms"}, LAW_CLASSES)
+        self.assertTrue(any("LAW_META[1]" in x and "comms" in x for x in p), p)
+
+    def test_law_meta_gate_reads_the_real_literal(self):
+        """The row regex must actually match the file's formatting — a silently empty
+        parse would make the gate vacuous. Assert it finds one row per known law."""
+        text = (ROOT / "web" / "src" / "pages" / "Laws.jsx").read_text(encoding="utf-8")
+        block = re.search(r"(?m)^const LAW_META = \{$(.*?)^\}$", text, re.S)
+        self.assertIsNotNone(block, "LAW_META literal not found in Laws.jsx")
+        rows = harness._LAW_META_ROW.findall(block.group(1))
+        nums = re.findall(r"(?m)^### \{\{LAW\}\} ([IVXLCDM]+)\b",
+                          (build.SRC / "laws" / "universal.md").read_text(encoding="utf-8"))
+        self.assertEqual(len(rows), len(nums))
+        for _, _, _, _, principle in rows:
+            self.assertTrue(principle.strip(), rows)
+
+    def test_roman_to_int(self):
+        """Law numbering bridges Roman headings to LAW_META's Arabic keys."""
+        for roman, n in (("I", 1), ("IV", 4), ("IX", 9), ("XXXV", 35),
+                         ("XXXVI", 36), ("XXXVII", 37), ("XL", 40)):
+            self.assertEqual(harness._roman_to_int(roman), n, roman)
+        self.assertEqual(harness._roman_to_int("nope"), 0)
+
 
 class ThemeDetectionTests(unittest.TestCase):
     AVAIL = ["cyberpunk", "gamer", "imperial", "military", "neutral",
