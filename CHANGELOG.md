@@ -19,9 +19,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   replies, thinking, per-tool calls/results, injected skill content), and the
   heaviest single items. `scripts/token_report.py` auto-detects the host by most
   recent session activity: exact usage on Claude Code, IBM Bob (`$BOB_CONFIG_DIR`
-  honoured) and OpenCode (storage message `tokens`); best-effort harvesting on
-  GitHub Copilot, whose session-state schema is undocumented. Carrier ceiling
-  (full) raised 49_000 → 51_000 for the new AGENT.md folder-skill entry.
+  honoured) and OpenCode; best-effort harvesting on GitHub Copilot, whose
+  session-state schema is undocumented. OpenCode reads the v1.2+ SQLite store
+  (`opencode.db`: `session`/`message`/`part` tables, JSON `data` columns,
+  step-finish fallback when a message record carries no tokens, child sessions
+  attributed as subagent usage) and falls back to the pre-1.2 `storage/` JSON
+  files when no DB exists. Carrier ceiling (full) raised 49_000 → 51_000 for
+  the new AGENT.md folder-skill entry.
 - **GitHub Copilot host — `--emit copilot` / `--emit copilot-global`**: the fourth
   first-class host, riding the Claude-shaped emit engine. Per-repo: root `AGENTS.md`
   (auto-loaded by the Copilot CLI, coding agent, and VS Code agent mode) + a layer in

@@ -6,8 +6,10 @@ Supported hosts (auto-detected by most recent session activity):
   claude    Claude Code      ~/.claude/projects/<slug>/<session>.jsonl   exact usage
   bob       IBM Bob          ~/.bob/projects/<slug>/<session>.jsonl      exact usage
                              (Claude-Code-shaped; $BOB_CONFIG_DIR honoured)
-  opencode  OpenCode         ~/.local/share/opencode/storage/            exact usage
-                             (message JSONs carry per-request `tokens`)
+  opencode  OpenCode         ~/.local/share/opencode/opencode.db         exact usage
+                             (SQLite, v1.2+: session/message/part tables,
+                             JSON `data` columns; falls back to the pre-1.2
+                             storage/ JSON files when no DB exists)
   copilot   GitHub Copilot   ~/.copilot/history-session-state/           best effort
                              (schema undocumented; token fields harvested
                              generically, estimates otherwise)
@@ -254,21 +256,39 @@ def claude_shaped_parse(host: str, path: Path) -> SessionData:
 # Host: OpenCode
 # ---------------------------------------------------------------------------
 
-def opencode_root() -> Path | None:
+def opencode_data_dir() -> Path | None:
     xdg = os.environ.get("XDG_DATA_HOME")
     candidates = ([Path(xdg) / "opencode"] if xdg else []) + \
         [Path.home() / ".local" / "share" / "opencode", Path.home() / ".opencode"]
     for c in candidates:
-        if (c / "storage").is_dir():
-            return c / "storage"
+        if c.is_dir():
+            return c
     return None
 
 
-def opencode_find(explicit=None):
-    """Return (session_id, [message files]) for the most recently active session.
+def opencode_root() -> Path | None:
+    d = opencode_data_dir()
+    return d / "storage" if d and (d / "storage").is_dir() else None
 
-    Message files live under a `message/<sessionID>/` folder somewhere below
-    storage/ (the exact nesting has moved between OpenCode versions, so walk)."""
+
+def opencode_find(explicit=None):
+    """Locate the current OpenCode session.
+
+    v1.2+ stores everything in SQLite (<data-dir>/opencode.db) — prefer that.
+    Older installs keep JSON files under storage/; fall back to walking them.
+    Returns ("db", (db_path, session_id_or_None)) or ("files", (sid, files))."""
+    d = opencode_data_dir()
+    if d:
+        db = d / "opencode.db"
+        if db.is_file():
+            return "db", (db, explicit)
+    return opencode_find_files(explicit)
+
+
+def opencode_find_files(explicit=None):
+    """Pre-SQLite fallback: (session_id, [message files]) for the most recently
+    active session. Message files live under a `message/<sessionID>/` folder
+    somewhere below storage/ (the nesting has moved between versions, so walk)."""
     storage = opencode_root()
     if not storage:
         return None
@@ -284,12 +304,140 @@ def opencode_find(explicit=None):
     if not sessions:
         return None
     if explicit and explicit in sessions:
-        return explicit, sessions[explicit]
+        return "files", (explicit, sessions[explicit])
     sid = max(sessions, key=lambda s: max(f.stat().st_mtime for f in sessions[s]))
-    return sid, sessions[sid]
+    return "files", (sid, sessions[sid])
+
+
+def _oc_usage_from_tokens(tok: dict) -> dict:
+    """Map OpenCode's tokens shape onto the common usage fields."""
+    cache = tok.get("cache") or {}
+    return {
+        "input_tokens": tok.get("input", 0),
+        "output_tokens": tok.get("output", 0) + tok.get("reasoning", 0),
+        "cache_read_input_tokens": cache.get("read", 0),
+        "cache_creation_input_tokens": cache.get("write", 0),
+    }
+
+
+def _oc_take_message(data: SessionData, msg: dict, side=False):
+    """Fold one OpenCode message record (the MessageV2 Info shape — identical in
+    the old JSON files and the SQLite `message.data` column) into the model.
+    Returns (message_id, role, had_tokens)."""
+    role = msg.get("role")
+    tok = msg.get("tokens") or {}
+    if role == "assistant" and tok:
+        data.add_usage(_oc_usage_from_tokens(tok), msg.get("modelID"), side)
+    return msg.get("id"), role, bool(role == "assistant" and tok)
+
+
+def _oc_take_part(data: SessionData, role, part: dict):
+    """Categorise one OpenCode content part (same shape in files and DB).
+    Returns the part's `tokens` dict for step-finish parts, else None."""
+    ptype = part.get("type")
+    if ptype == "text":
+        cat = "Assistant replies" if role == "assistant" else "User messages"
+        chars = len(part.get("text", ""))
+        data.cats[cat] += chars
+        if cat == "User messages" and data.first_user_chars is None:
+            data.first_user_chars = chars
+    elif ptype == "reasoning":
+        data.cats["Assistant thinking"] += len(part.get("text", ""))
+    elif ptype == "tool":
+        name = part.get("tool", "unknown")
+        state = part.get("state") or {}
+        data.cats[f"Tool call · {name}"] += len(json.dumps(state.get("input", {})))
+        out_chars = text_len(state.get("output"))
+        data.cats[f"Tool result · {name}"] += out_chars
+        data.top.append((out_chars, f"{name} result"))
+    elif ptype == "step-finish":
+        return part.get("tokens")
+    return None
+
+
+def opencode_db_parse(db_path: Path, explicit=None) -> SessionData:
+    """Parse OpenCode's SQLite store (v1.2+): `session`, `message`, `part` tables
+    with the structured payloads in JSON `data` columns. Read-only; defensive
+    about columns, since the schema is young and may evolve."""
+    import sqlite3
+    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        def rows(sql, args=()):
+            try:
+                return con.execute(sql, args).fetchall()
+            except sqlite3.Error:
+                return []
+
+        sid = explicit
+        if not sid:
+            # Prefer top-level sessions (parent_id NULL = not a subagent child),
+            # in the current project dir when recorded, newest activity first.
+            cwd = os.getcwd()
+            cands = rows("SELECT id, directory, time_updated FROM session "
+                         "WHERE parent_id IS NULL ORDER BY time_updated DESC")
+            if not cands:
+                cands = rows("SELECT id, NULL, time_updated FROM session "
+                             "ORDER BY time_updated DESC")
+            if not cands:
+                sys.exit("error: opencode.db contains no sessions")
+            sid = next((r[0] for r in cands if r[1] == cwd), cands[0][0])
+
+        data = SessionData("opencode", sid)
+        first_ts = last_ts = None
+        role_by_msg = {}
+        untokened = {}   # assistant messages with no tokens in message.data -> modelID
+
+        for mid, ts, raw in rows("SELECT id, time_created, data FROM message "
+                                 "WHERE session_id=? ORDER BY time_created, id", (sid,)):
+            try:
+                msg = json.loads(raw) if isinstance(raw, str) else (raw or {})
+            except json.JSONDecodeError:
+                continue
+            if ts:
+                first_ts = first_ts or ts
+                last_ts = ts
+            _, role, had = _oc_take_message(data, msg)
+            role_by_msg[mid] = role
+            if role == "assistant" and not had:
+                untokened[mid] = msg.get("modelID")
+
+        step_tokens = defaultdict(list)   # message_id -> [tokens dicts]
+        for mid, raw in rows("SELECT p.message_id, p.data FROM part p "
+                             "JOIN message m ON p.message_id = m.id "
+                             "WHERE m.session_id=? ORDER BY p.time_created, p.id", (sid,)):
+            try:
+                part = json.loads(raw) if isinstance(raw, str) else (raw or {})
+            except json.JSONDecodeError:
+                continue
+            tok = _oc_take_part(data, role_by_msg.get(mid), part)
+            if tok:
+                step_tokens[mid].append(tok)
+        # step-finish parts also carry usage — use them only for assistant
+        # messages whose own record had none, so nothing is double-counted.
+        for mid, model in untokened.items():
+            for tok in step_tokens.get(mid, ()):
+                data.add_usage(_oc_usage_from_tokens(tok), model)
+
+        # Child sessions are subagent runs: aggregate their usage separately —
+        # their content never enters this session's context window.
+        for (child,) in rows("SELECT id FROM session WHERE parent_id=?", (sid,)):
+            for (raw,) in rows("SELECT data FROM message WHERE session_id=?", (child,)):
+                try:
+                    msg = json.loads(raw) if isinstance(raw, str) else (raw or {})
+                except json.JSONDecodeError:
+                    continue
+                _oc_take_message(data, msg, side=True)
+
+        data.span(first_ts, last_ts)
+        data.notes.append("Source: opencode.db (SQLite, OpenCode v1.2+). Subagent "
+                          "totals aggregate this session's child sessions.")
+        return data
+    finally:
+        con.close()
 
 
 def opencode_parse(sid: str, files) -> SessionData:
+    """Pre-SQLite fallback: parse the per-message JSON files under storage/."""
     data = SessionData("opencode", sid)
     storage = opencode_root()
     role_by_msg = {}
@@ -300,22 +448,13 @@ def opencode_parse(sid: str, files) -> SessionData:
             msg = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        role = msg.get("role")
-        role_by_msg[msg.get("id")] = role
+        mid, role, _ = _oc_take_message(data, msg)
+        role_by_msg[mid] = role
         t = (msg.get("time") or {})
         ts = t.get("created") or t.get("completed")
         if ts:
             first_ts = first_ts or ts
             last_ts = ts
-        tok = msg.get("tokens") or {}
-        if role == "assistant" and tok:
-            cache = tok.get("cache") or {}
-            data.add_usage({
-                "input_tokens": tok.get("input", 0),
-                "output_tokens": tok.get("output", 0) + tok.get("reasoning", 0),
-                "cache_read_input_tokens": cache.get("read", 0),
-                "cache_creation_input_tokens": cache.get("write", 0),
-            }, msg.get("modelID"))
 
     # Content parts live under part/<messageID>/ folders (walk for the same
     # version-drift reason as messages).
@@ -332,28 +471,11 @@ def opencode_parse(sid: str, files) -> SessionData:
                         part = json.loads(pf.read_text(encoding="utf-8"))
                     except (OSError, json.JSONDecodeError):
                         continue
-                    ptype = part.get("type")
-                    if ptype == "text":
-                        cat = ("Assistant replies" if role == "assistant"
-                               else "User messages")
-                        chars = len(part.get("text", ""))
-                        data.cats[cat] += chars
-                        if cat == "User messages" and data.first_user_chars is None:
-                            data.first_user_chars = chars
-                    elif ptype == "reasoning":
-                        data.cats["Assistant thinking"] += len(part.get("text", ""))
-                    elif ptype == "tool":
-                        name = part.get("tool", "unknown")
-                        state = part.get("state") or {}
-                        data.cats[f"Tool call · {name}"] += \
-                            len(json.dumps(state.get("input", {})))
-                        out_chars = text_len(state.get("output"))
-                        data.cats[f"Tool result · {name}"] += out_chars
-                        data.top.append((out_chars, f"{name} result"))
+                    _oc_take_part(data, role, part)
 
     data.span(first_ts, last_ts)
-    data.notes.append("OpenCode records exact per-request tokens; the session-start "
-                      "baseline is the first request's input-side total.")
+    data.notes.append("Source: OpenCode JSON storage (pre-v1.2). Exact per-request "
+                      "tokens from message records.")
     return data
 
 
@@ -471,7 +593,11 @@ def detect(host_arg, transcript, session):
         found = finder()
         if not found:
             continue
-        probe = found[1][0] if isinstance(found, tuple) else found
+        if host == "opencode":     # ("db", (db_path, sid)) or ("files", (sid, files))
+            kind, payload = found
+            probe = payload[0] if kind == "db" else payload[1][0]
+        else:
+            probe = found
         mtime = probe.stat().st_mtime if probe.exists() else 0
         if best is None or mtime > best[2]:
             best = (host, found, mtime)
@@ -485,7 +611,10 @@ def load(host, found) -> SessionData:
     if host in ("claude", "bob"):
         return claude_shaped_parse(host, found)
     if host == "opencode":
-        return opencode_parse(*found)
+        kind, payload = found
+        if kind == "db":
+            return opencode_db_parse(*payload)
+        return opencode_parse(*payload)
     return copilot_parse(found)
 
 
