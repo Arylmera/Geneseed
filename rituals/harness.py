@@ -171,6 +171,13 @@ def build_argparser() -> argparse.ArgumentParser:
                          "sovereign-repo bypass from <root>/excludes.json")
     gg.set_defaults(fn=cmd_git_gate)
 
+    rg = sub.add_parser("rule-gate", help="PreToolUse hook: force an ASK before any write to "
+                                          "user-rules.md or memory (Law VI backstop)")
+    rg.add_argument("--root", default=None,
+                    help="the install's own dir (set by the emitted hook); scopes the "
+                         "memory/ match and enables the sovereign-repo bypass")
+    rg.set_defaults(fn=cmd_rule_gate)
+
     df = sub.add_parser("diff", help="report how a deployed global harness differs from a fresh render (back-port aid)")
     df.add_argument("--target", default=None,
                     help="deployed config dir (default: $OPENCODE_CONFIG_DIR / ~/.config/opencode)")

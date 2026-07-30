@@ -56,8 +56,10 @@ extend it before forging a new one, and name {{SKILLS}} by domain. Reuse before 
 
 ### {{LAW}} VI — {{LEX_VI}}
 When a session yields a durable decision, correction, non-obvious discovery, or
-architectural stance, record it to {{MEMORY}} before the session ends. No valuable
-insight perishes at session's end.
+architectural stance, record it before the session ends — through the rule {{SKILL}},
+which settles with the user whether it belongs in {{MEMORY}} or as a standing rule,
+never on your own initiative. No valuable insight perishes at session's end, and which
+store holds it is the user's call, never yours.
 
 ### {{LAW}} VII — {{LEX_VII}}
 When a step fails, errors, or returns a result you did not expect, stop and surface

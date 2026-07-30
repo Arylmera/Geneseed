@@ -1759,6 +1759,81 @@ class GitGateTests(unittest.TestCase):
             self.assertEqual(out, "")
 
 
+class RuleGateTests(unittest.TestCase):
+    """The PreToolUse rule gate (Law VI backstop): a write to `user-rules.md`, to
+    `MEMORY.md`, or to a markdown file inside THIS install's `memory/` yields a
+    `permissionDecision: "ask"` naming the rule skill — so the rule-vs-memory choice
+    reaches the user. Ordinary work, and any unreadable payload, defers silently."""
+
+    def _run(self, path, root=None, key="file_path"):
+        import argparse, contextlib, io
+        payload = json.dumps({"tool_name": "Write", "tool_input": {key: path}}) \
+            if path is not None else "not json"
+        buf, stdin = io.StringIO(), io.StringIO(payload)
+        with contextlib.redirect_stdout(buf):
+            old, sys.stdin = sys.stdin, stdin
+            try:
+                rc = harness.cmd_rule_gate(argparse.Namespace(root=root))
+            finally:
+                sys.stdin = old
+        return rc, buf.getvalue()
+
+    def _asks(self, path, root=None, key="file_path"):
+        rc, out = self._run(path, root, key)
+        self.assertEqual(rc, 0)
+        self.assertTrue(out.strip(), f"expected an ask decision for: {path}")
+        dec = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(dec["hookEventName"], "PreToolUse")
+        self.assertEqual(dec["permissionDecision"], "ask")
+        # The message IS the feature: it must name the law and route to the skill.
+        reason = dec["permissionDecisionReason"]
+        self.assertIn("Law VI", reason)
+        self.assertIn("rule skill", reason)
+
+    def _defers(self, path, root=None):
+        rc, out = self._run(path, root)
+        self.assertEqual(rc, 0)
+        self.assertEqual(out, "", f"expected no output (defer) for: {path}")
+
+    def test_named_stores_ask_anywhere(self):
+        # Both names are Geneseed's own coinage, so they need no install context.
+        for p in (r"C:\Users\me\.claude\user-rules.md",
+                  "/home/me/proj/.bob/user-rules.md",
+                  r"C:\Users\me\.claude\memory\MEMORY.md"):
+            self._asks(p)
+
+    def test_memory_files_under_this_install_ask(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "memory" / "agents").mkdir(parents=True)
+            self._asks(str(root / "memory" / "pnpm-preferred.md"), root=str(root))
+            self._asks(str(root / "memory" / "agents" / "reviewer.md"), root=str(root))
+
+    def test_ordinary_work_defers(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "memory").mkdir()
+            # A project's OWN memory/ folder is not this install's — never caught.
+            self._defers(str(Path(td) / "src" / "memory" / "notes.md"), root=str(root))
+            self._defers(str(root / "memory" / "scratch.txt"), root=str(root))
+            self._defers(str(root / "notebook" / "draft.md"), root=str(root))
+        self._defers("src/app.py")
+        self._defers("docs/rules.md")
+
+    def test_memory_match_needs_a_root(self):
+        # Without --root there is no install to scope memory/ to; only the two coined
+        # names still match, so an unrooted gate can never over-reach.
+        self._defers("/home/me/.claude/memory/fact.md")
+        self._asks("/home/me/.claude/user-rules.md")
+
+    def test_alternate_path_key_and_bad_payloads_are_handled(self):
+        self._asks("/home/me/.claude/user-rules.md", key="path")
+        for bad in (None, "", 42):
+            rc, out = self._run(bad)
+            self.assertEqual(rc, 0)
+            self.assertEqual(out, "")
+
+
 # ---- sovereign-repo bypass: hooks go silent inside excludes.json folders ----------
 
 def _excludes_cfg(tmp_path, folders):

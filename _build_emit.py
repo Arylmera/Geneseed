@@ -641,9 +641,12 @@ def _claude_hook_groups(cfg: Path) -> dict:
     # --root enables the sovereign-repo bypass (excludes.json) — same reason context
     # carries it. git-gate has no other install-dir dependency.
     gate = f'{py} {h} git-gate --root "{cfg}"'
+    rule_gate = f'{py} {h} rule-gate --root "{cfg}"'
     return {
         "PreToolUse": [
             {"matcher": "Bash", "hooks": [{"type": "command", "command": gate}]},
+            {"matcher": "Write|Edit|MultiEdit|NotebookEdit",
+             "hooks": [{"type": "command", "command": rule_gate}]},
         ],
         "SessionStart": [
             {"matcher": "startup|clear", "hooks": [{"type": "command", "command": context}]},

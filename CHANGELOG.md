@@ -9,6 +9,27 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The `rule` skill becomes the front door to both durable stores, behind a Law VI
+  gate**: nothing reaches `user-rules.md` or `memory/` on the agent's own initiative
+  any more. The skill now opens on a fork it must put to the user — *a standing rule,
+  or a fact to remember?* — because the agent silently arbitrating that was the actual
+  defect: a passing preference got legislated as a permanent rule, or a real rule was
+  filed away as a forgettable note. The memory branch asks for the binding `force`
+  (constraint · choice · conviction · tempered) and shows the exact file, frontmatter
+  included, before writing. The rule branch pressure-tests instead of drafting: the
+  user restates the rule as they would to a colleague on day one and gets interrupted
+  on jargon they cannot unpack, a missing step, or a simplification that makes the rule
+  false (the feynman skill's mechanic, borrowed — not delegated to); then a **mandatory
+  counter-example**, where the agent builds the case the rule would harm and the user
+  must either accept it or narrow the rule. A rule that cannot survive its own worst
+  case was never generic, only never contradicted. The asymmetry in cost between the
+  two branches is deliberate — cheap to remember, expensive to legislate, or the rule
+  set inflates. Enforced at the tool boundary, not just in prose: a new
+  `harness.py rule-gate` PreToolUse hook makes Claude Code and Bob **ask** before any
+  write to `user-rules.md` or a memory file, and `geneseed-guard.js` speed-bumps the
+  first such write on OpenCode (its `tool.execute.before` has no ask tier — a re-issued
+  write goes through, so nothing is ever trapped). Copilot has no hook mechanism and is
+  held by the Law and the preamble alone.
 - **`token-report` folder skill — session token usage breakdown on every host**: a
   first-party folder skill (the first non-vendored entry in `VENDORED_SKILL_DIRS`,
   which the folder mechanism carries because it bundles an executable script) that

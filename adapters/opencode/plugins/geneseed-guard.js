@@ -4,6 +4,8 @@
 // "enforce by injection, don't just instruct" stance as the context plugin:
 //   - Law I  (Sealed Secrets):  block writes to private-key / credential files.
 //   - Law IV (Deletion Is Deliberate):  block catastrophic shell commands.
+//   - Law VI (rule vs memory):  speed-bump the first write to user-rules.md or a
+//     memory file — that choice belongs to the user, via the rule skill.
 //   - Wiki (AGENT.md §7):  block mutations under a declared wiki's `protected`
 //     folders — the user's knowledge base sets its own no-go zones in wiki.jsonc.
 // High-confidence patterns only, so legitimate work is never caught. Borderline cases
@@ -205,6 +207,30 @@ async function protectedPrefixes() {
   return prefixes
 }
 
+// ---- the rule / memory stores (Law VI) -----------------------------------------
+// Whether something the user wants kept is a standing rule or a durable fact is THEIR
+// call, settled through the rule skill. `tool.execute.before` can only allow or throw —
+// it has no "ask the user" tier like the Claude/Bob Python gate (harness.py rule-gate) —
+// so this is a SPEED BUMP, not a wall: the first write to a given path is refused with
+// the Law and the skill named, and a re-issued write goes through. One beat of
+// reconsideration, and a legitimate write is never trapped.
+//
+// Install folder and file names are theme-independent by design, so the match is on
+// literal names. `user-rules.md` / `MEMORY.md` are Geneseed's own coinage and match
+// anywhere; other markdown matches only inside this install's own memory/ dir, so a
+// project's unrelated memory/ folder is never caught.
+const RULE_STORE_BUMPED = new Set()
+const nocase = (s) => (process.platform === "win32" ? s.toLowerCase() : s)
+function ruleStoreTarget(p) {
+  const abs = (path.isAbsolute(p) ? p : path.resolve(p)).replace(/\\/g, "/")
+  const base = path.basename(abs).toLowerCase()
+  if (base === "user-rules.md") return "user-rules.md"
+  if (base === "memory.md") return "the memory index"
+  if (!base.endsWith(".md")) return null
+  const mem = path.join(path.dirname(PLUGIN_DIR), "memory").replace(/\\/g, "/")
+  return nocase(abs).startsWith(nocase(mem) + "/") ? "memory" : null
+}
+
 // Mutation-class tools for the wiki check — wider than WRITE_TOOLS because moving,
 // renaming, or deleting a protected note is as destructive as overwriting it. Same
 // substring stance: over-matching the class is harmless (see WRITE_TOOLS note).
@@ -227,6 +253,14 @@ export const GeneseedGuard = async () => {
           const p = pickPath(args)
           if (p && SECRET_RE.some((re) => re.test(p))) { deny(`write to secret/key file ${p} (Law I)`); return }
           if (p && SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Law I)`)
+          const store = p && ruleStoreTarget(p)
+          if (store && !RULE_STORE_BUMPED.has(p)) {
+            RULE_STORE_BUMPED.add(p)
+            deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
+                 `choice is the user's (Law VI). Settle it through the rule skill, ` +
+                 `then re-issue this write`)
+            return
+          }
         }
         if (hasAny(tool, WIKI_MUTATE_TOOLS)) {
           const p = pickPath(args)

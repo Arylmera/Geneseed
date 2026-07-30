@@ -6,6 +6,12 @@
         "hooks": [
           { "type": "command", "command": "python rituals/harness.py git-gate" }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "python rituals/harness.py rule-gate" }
+        ]
       }
     ],
     "SessionStart": [

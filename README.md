@@ -196,12 +196,13 @@ is **identical on every host**. What differs is how much of it the host can
 | **Context injection** (Rule XVIII) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
 | **Memory write-back** (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
 | **Git-gate consent** (Rule XX) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 📄 preamble |
+| **Rule-gate consent** (Rule VI) | ⚙️ plugin² | 🪝 hook | 🪝 hook¹ | 📄 preamble |
 | **Sovereign-repo excludes** | ⚙️ plugin | ✅ `claudeMdExcludes` | ✅ rules-shadow | ➖ none |
 | **MCP server wiring** | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcpServers` | ✅ `mcp-config.json` |
 | **Colour themes** | ✅ full palette | ➖ | ➖ | ➖ |
 | **LSP · workflow runner · primary-agent · `/`-commands** | ✅ | ➖ | ➖ | ➖ |
 
-<sub>✅ native support · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · 📄 carried by preamble prose only · ➖ no host mechanism (harness discipline still applies) · ¹ Bob honours Claude-dialect hooks best-effort — inert if unsupported, harness still holds via the preamble.</sub>
+<sub>✅ native support · ⚙️ OpenCode plugin · 🪝 `settings.json` hook · 📄 carried by preamble prose only · ➖ no host mechanism (harness discipline still applies) · ¹ Bob honours Claude-dialect hooks best-effort — inert if unsupported, harness still holds via the preamble. · ² OpenCode's `tool.execute.before` can only allow or throw, with no "ask the user" tier, so the rule gate is a one-shot speed bump there rather than a prompt.</sub>
 
 **Reading the matrix.** Everything above the divider is at full parity — no host
 drops an Agent, Skill, or the memory convention. The asymmetry is entirely in

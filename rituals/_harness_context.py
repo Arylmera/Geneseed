@@ -292,3 +292,68 @@ def cmd_git_gate(args: argparse.Namespace) -> int:
             "Geneseed Law XX — every git commit/push needs explicit approval",
     }}))
     return 0
+
+
+# ---- rule-gate: rule-vs-memory is the user's call (Law VI tool-boundary backstop) ---
+# A deployed install's folder and file names are theme-INDEPENDENT by design
+# (_build_render.STRUCTURE, RULES_FILE), so the gate matches literal names and needs no
+# install lookup. `user-rules.md` and `MEMORY.md` are Geneseed's own coinage and match
+# anywhere; any other markdown matches only inside THIS install's `<root>/memory/`, so a
+# project's unrelated `memory/` folder is never caught.
+def _rule_gate_target(path: str, root) -> str | None:
+    """Name the store a write would land in — `user-rules.md`, `MEMORY.md`, or a memory
+    file — or None when the path is ordinary work. Never raises: an unusable path is
+    simply not a match."""
+    try:
+        p = Path(path)
+        name = p.name.lower()
+    except (TypeError, ValueError):
+        return None
+    if name == "user-rules.md":
+        return "user-rules.md"
+    if name == "memory.md":
+        return "the memory index"
+    if not root or not name.endswith(".md"):
+        return None
+    try:
+        if (Path(root) / "memory").resolve() in p.resolve().parents:
+            return "memory"
+    except (OSError, RuntimeError, ValueError):
+        return None
+    return None
+
+
+def cmd_rule_gate(args: argparse.Namespace) -> int:
+    """PreToolUse hook: force the host to ASK before any write to `user-rules.md` or a
+    memory file — Law VI's tool-boundary backstop. Whether a thing the user wants kept is
+    a standing rule or a durable fact is THEIR call, settled through the rule skill; this
+    gate makes the host put that call to them instead of letting the agent write on its
+    own initiative. Same contract as cmd_git_gate: reads the Claude Code PreToolUse
+    payload from stdin ({"tool_name","tool_input":{"file_path":...}}) and prints a
+    `permissionDecision: "ask"` when the target is one of the two stores, so the host
+    re-prompts on every call. Every other tool call — and any unreadable payload — exits
+    0 with no output, deferring to the normal permission flow: a hook must never break a
+    tool call (cf. cmd_context)."""
+    # Sovereign-repo bypass (see cmd_context): inside an excluded folder the gate defers
+    # entirely — such a repo runs its own memory and rule conventions.
+    if sovereign_bypass(getattr(args, "root", None)):
+        return 0
+    try:
+        payload = json.loads(sys.stdin.read() or "{}")
+        tool_input = payload.get("tool_input") or {}
+        path = tool_input.get("file_path") or tool_input.get("path") or ""
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return 0
+    if not isinstance(path, str) or not path:
+        return 0
+    target = _rule_gate_target(path, getattr(args, "root", None))
+    if not target:
+        return 0
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "ask",
+        "permissionDecisionReason":
+            f"Geneseed Law VI — writing to {target}: a standing rule, or a fact to "
+            "remember? That choice is the user's. Run the rule skill first.",
+    }}))
+    return 0

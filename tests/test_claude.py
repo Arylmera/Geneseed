@@ -938,6 +938,21 @@ class GitGateRootTests(unittest.TestCase):
         self.assertIn("git-gate", cmd)
         self.assertIn(f'--root "{cfg}"', cmd)
 
+    def test_rule_gate_hook_is_appended_and_carries_root(self):
+        """The Law VI rule gate rides the same PreToolUse event on the write tools, and
+        is APPENDED — git-gate must stay at index 0, which this file's other tests read
+        positionally. --root is what scopes the memory/ match to this install."""
+        import _build_emit
+        cfg = self.tmp / "dotclaude"
+        groups = _build_emit._claude_hook_groups(cfg)
+        rule = [g for g in groups["PreToolUse"]
+                if "rule-gate" in g["hooks"][0]["command"]]
+        self.assertEqual(len(rule), 1, "expected exactly one rule-gate group")
+        self.assertIsNot(groups["PreToolUse"][0], rule[0], "rule-gate must not be first")
+        self.assertIn(f'--root "{cfg}"', rule[0]["hooks"][0]["command"])
+        for tool in ("Write", "Edit"):
+            self.assertIn(tool, rule[0]["matcher"])
+
     def test_reemit_prunes_old_gitgate_group(self):
         """Upgrade round-trip: a manifest recording the pre---root git-gate group gets
         that group pruned and the new one added — no stacking."""
