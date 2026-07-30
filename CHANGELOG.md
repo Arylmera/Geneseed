@@ -89,6 +89,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   file is never regenerated.
 
 ### Fixed
+- **Every login launcher told you to start the web UI in the foreground**: the VBS,
+  the `schtasks` task and the macOS LaunchAgent in SETUP.md (and its `autostart`
+  web slice) all ran `geneseed web --no-browser`. Only `web start` daemonizes and
+  writes the `.geneseed-web.json` pid record — bare `web` blocks in the foreground
+  and records nothing, so the server that came up at every login was invisible to
+  `web stop`, `web restart` and `web status`. They reported "no live server" while
+  it kept serving; worse, `restart` then spawned a second daemon that could not bind
+  the taken port, leaving three live processes and the *stale* one still answering.
+  That is how a `web/dist` rebuild turned into hard MIME failures in the browser: the
+  old server kept handing out the previous `index.html`, whose chunk hashes no longer
+  existed on disk, and the SPA 404-fallback returned them as `text/html`. All four
+  launchers now use `web start`, and the section says why in a callout.
 - **Laws XXXVI and XXXVII render their Principle in the web ledger**: both shipped
   with no row in `LAW_META` (`web/src/pages/Laws.jsx`), the map that holds each
   rule's one-line Principle — display copy that lives nowhere else in the tree. An

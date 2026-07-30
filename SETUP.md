@@ -800,13 +800,21 @@ again with `.\geneseed.cmd unlink`.
 
 ## 🔌 Start the web UI at login
 
-The web UI is the only long-running Geneseed process. `geneseed web` spawns a
-**detached daemon** on `127.0.0.1:4747` and returns immediately, so a login hook
-that runs `geneseed web --no-browser` once — no browser tab — leaves the UI ready
-whenever you open [http://127.0.0.1:4747](http://127.0.0.1:4747). It is **per-user
-and per-machine**: each laptop runs its own daemon on its own loopback, so Windows
-and macOS are set up independently and never collide. The daemon is a singleton — a
-second launch just no-ops — so re-running it (or logging in twice) is harmless.
+The web UI is the only long-running Geneseed process. `geneseed web **start**`
+spawns a **detached daemon** on `127.0.0.1:4747` and returns immediately, so a login
+hook that runs `geneseed web start --no-browser` once — no browser tab — leaves the
+UI ready whenever you open [http://127.0.0.1:4747](http://127.0.0.1:4747). It is
+**per-user and per-machine**: each laptop runs its own daemon on its own loopback, so
+Windows and macOS are set up independently and never collide. The daemon is a
+singleton — a second `start` just no-ops — so re-running it (or logging in twice) is
+harmless.
+
+> **Use `web start`, not bare `web`, in every launcher below.** Without the
+> `start` action the server runs in the **foreground** and writes no
+> `.geneseed-web.json` record, so it becomes invisible to `web stop`, `web restart`
+> and `web status` — they report "no live server" while it keeps serving, and a
+> `restart` will orphan a second daemon that cannot bind the taken port. Recovering
+> then means finding it by port and killing it by hand.
 
 **Windows** — drop a hidden VBS launcher in the Startup folder (runs at login, no
 console flash, removed by deleting the file). Open the folder with **Win+R** →
@@ -814,7 +822,7 @@ console flash, removed by deleting the file). Open the folder with **Win+R** →
 
 ```vbs
 ' geneseed-web.vbs — start the Geneseed web daemon at login (hidden, no browser).
-CreateObject("WScript.Shell").Run "cmd /c ""%LOCALAPPDATA%\Geneseed\bin\geneseed.cmd"" web --no-browser", 0, False
+CreateObject("WScript.Shell").Run "cmd /c ""%LOCALAPPDATA%\Geneseed\bin\geneseed.cmd"" web start --no-browser", 0, False
 ```
 
 Expand `%LOCALAPPDATA%` to its real path (e.g. `C:\Users\you\AppData\Local`) — VBS
@@ -822,7 +830,7 @@ does not expand environment variables inside a string. **Disable** by deleting t
 file. Prefer a scheduled task (runs hidden, can restart on failure)? Use:
 
 ```powershell
-schtasks /Create /TN "Geneseed Web" /SC ONLOGON /TR "\"%LOCALAPPDATA%\Geneseed\bin\geneseed.cmd\" web --no-browser" /RL LIMITED /F
+schtasks /Create /TN "Geneseed Web" /SC ONLOGON /TR "\"%LOCALAPPDATA%\Geneseed\bin\geneseed.cmd\" web start --no-browser" /RL LIMITED /F
 schtasks /Delete /TN "Geneseed Web" /F   # to remove
 ```
 
@@ -843,6 +851,7 @@ daemon runs in its own session and survives). Write
   <array>
     <string>/Users/you/.local/bin/geneseed</string>
     <string>web</string>
+    <string>start</string>
     <string>--no-browser</string>
   </array>
   <key>RunAtLoad</key>        <true/>
