@@ -305,6 +305,12 @@ LAW_CLASS: dict[str, str] = {
     "XXXVII": "process",
 }
 
+# Lifecycle statuses an entity may carry, read from registry.json at the repo root
+# (spec 2026-07-31). Maintainer-side metadata: the registry is never rendered into a
+# bundle, so a status costs no session context — it only drives the badges in the TUI
+# and web catalogs. doctor validates the file against src/ (_registry_problems).
+ENTITY_STATUSES: tuple[str, ...] = ("experimental", "approved", "deprecated")
+
 # The six governance classes a law may carry — the web Laws filter chips read
 # exactly this set. LAW_CLASS values must be drawn from it; doctor rejects any
 # value outside it (see _count_table_problems in _harness_build.py).
@@ -397,11 +403,31 @@ def _parse_laws(text: str) -> list[dict]:
     return laws
 
 
+def load_registry() -> dict:
+    """The `entities` map from registry.json, keyed "<folder>/<stem>" — or {} when the
+    file is absent or corrupt. Deliberately forgiving: a bad registry degrades every
+    badge to "unknown" instead of breaking the browser. doctor is what fails loudly."""
+    try:
+        doc = json.loads((build.ROOT / "registry.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    entities = doc.get("entities") if isinstance(doc, dict) else None
+    return entities if isinstance(entities, dict) else {}
+
+
+def entity_status(registry: dict, key: str) -> str:
+    """One entity's lifecycle status, or "unknown" when the registry has no usable row."""
+    row = registry.get(key)
+    status = row.get("status") if isinstance(row, dict) else None
+    return status if status in ENTITY_STATUSES else "unknown"
+
+
 def _tui_inventory(theme_name: str) -> dict:
     """Render-accurate inventory for the TUI (pure — unit-tested): each agent and
     skill with its one-line purpose AND full rendered spec, plus the laws with their
     titles and bodies. Powers the two-pane browser (list + detail)."""
     _t, items = build.render_all(theme_name)
+    registry = load_registry()
     agents: list[dict] = []
     skills: list[dict] = []
     laws: list[dict] = []
@@ -411,7 +437,8 @@ def _tui_inventory(theme_name: str) -> dict:
         parts = src.relative_to(build.SRC).as_posix().split("/")
         if len(parts) == 2 and parts[1].endswith(".md") and not parts[1].startswith("_"):
             entry = {"name": parts[1][:-3], "desc": build._first_blockquote(text),
-                     "body": text, "source": str(src.resolve())}
+                     "body": text, "source": str(src.resolve()),
+                     "status": entity_status(registry, f"{parts[0]}/{parts[1][:-3]}")}
             if parts[0] == "agents":
                 agents.append(entry)
             elif parts[0] == "skills":

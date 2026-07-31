@@ -6,6 +6,7 @@ import { SECTIONS, LIBRARY_ORDER, SECTION_ALIAS } from '../lib/sections.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
+import StatusBadge from '../components/StatusBadge.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 
 // The on-disk source path for a given (section, name). Surface text for the
@@ -25,7 +26,10 @@ function libSource(sec, name) {
 function LibRow({ item, isOpen, onOpen }) {
   return (
     <button className={`lib-row ${isOpen ? 'on' : ''}`} onClick={onOpen}>
-      <div className="lr-name">{item.title || item.name}</div>
+      <div className="lr-name">
+        {item.title || item.name}
+        <StatusBadge status={item.status} />
+      </div>
       {item.desc ? <div className="lr-desc">{item.desc}</div> : null}
     </button>
   )
@@ -346,6 +350,15 @@ export default function Library({ overview, section, selected, dataRev }) {
                     {item?.source || activeItem.source || libSource(sec, activeItem.name)}
                   </div>
                 </div>
+                {/* Only agents and skills carry a lifecycle status; memory facts,
+                    notebook pages and wiki entries have none, so the cell is absent
+                    there rather than showing an empty label. */}
+                {(item?.status || activeItem.status) && (
+                  <div>
+                    <div className="tick">status</div>
+                    <div className="lib-meta-v">{item?.status || activeItem.status}</div>
+                  </div>
+                )}
               </div>
               {sec === 'memory' && activeItem.name !== 'MEMORY' && activeItem.name !== 'README' && (
                 <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>

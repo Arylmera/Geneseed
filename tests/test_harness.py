@@ -294,6 +294,23 @@ class CountTableGateTests(unittest.TestCase):
         for _, _, _, _, principle in rows:
             self.assertTrue(principle.strip(), rows)
 
+    def test_law_meta_row_survives_prettier_wrapping(self):
+        """A row too long for prettier's print width is reflowed across lines with a
+        magic trailing comma. The gate must read it anyway: when it could not, running
+        `prettier --write` on Laws.jsx dropped a law from the gate's view, and
+        `format:check` and this gate demanded contradictory formatting of one file."""
+        wrapped = (
+            "  6: [\n"
+            "    'context',\n"
+            '    "Durable decisions are recorded before the session ends.",\n'
+            "  ],\n"
+        )
+        rows = harness._LAW_META_ROW.findall(wrapped)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0][0], "6")
+        self.assertEqual(rows[0][2], "context")
+        self.assertTrue(rows[0][4].startswith("Durable decisions"))
+
     def test_roman_to_int(self):
         """Law numbering bridges Roman headings to LAW_META's Arabic keys."""
         for roman, n in (("I", 1), ("IV", 4), ("IX", 9), ("XXXV", 35),
