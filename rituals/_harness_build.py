@@ -276,7 +276,9 @@ def _authoring_problems() -> list[str]:
     the first '>' line anywhere in the file, not necessarily the intended one); the
     learn-prompt literal must stay extractable from the plugin (the single-source link
     harness.py depends on); and, if node is on PATH, the plugins must pass
-    `node --check`."""
+    `node --check`. Then three source-wide gates: the lifecycle registry must describe
+    exactly the entities src/ provides, no credential may appear in anything that
+    ships, and every vendored skill folder must carry an immutable upstream pin."""
     problems: list[str] = []
     for folder in ("agents", "skills"):
         d = build.SRC / folder
@@ -317,6 +319,9 @@ def _authoring_problems() -> list[str]:
             if r.returncode != 0:
                 tail = (r.stderr.strip().splitlines() or ["syntax error"])[-1]
                 problems.append(f"[authoring] node --check failed for {js.name}: {tail}")
+    problems += _registry_problems()
+    problems += _secret_problems()
+    problems += _vendor_pin_problems()
     problems += _count_table_problems()
     return problems
 
@@ -325,6 +330,148 @@ def _src_stems(folder: str) -> set:
     """Spec stems under src/<folder>, minus `_`-prefixed scaffolds."""
     d = build.SRC / folder
     return {p.stem for p in d.glob("*.md") if not p.name.startswith("_")} if d.is_dir() else set()
+
+
+def _registry_keys() -> set:
+    """Every entity the registry must describe: the flat agent and skill specs plus the
+    vendored skill FOLDERS (which have no flat spec but are still shipped capabilities).
+    Keyed "<folder>/<stem>", the path shape doctor already prints in its messages."""
+    keys = {f"agents/{s}" for s in _src_stems("agents")}
+    keys |= {f"skills/{s}" for s in _src_stems("skills")}
+    return keys | {f"skills/{d}" for d in build.VENDORED_SKILL_DIRS}
+
+
+_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _registry_problems() -> list[str]:
+    """registry.json must describe exactly the entities src/ provides, with well-formed
+    fields. Same two-way anti-drift shape as the SKILL_CLASS gate below: a new spec with
+    no row, and a row whose spec is gone, are both errors — without it a shipped skill
+    would show no lifecycle status in the TUI/web catalog while doctor stayed green.
+    `last_verified` may be empty (nothing writes it yet); when set, it must be a date."""
+    from _harness_tui import ENTITY_STATUSES
+    try:
+        doc = json.loads((ROOT / "registry.json").read_text(encoding="utf-8"))
+    except OSError as e:
+        return [f"[authoring] registry.json unreadable: {e}"]
+    except ValueError as e:
+        return [f"[authoring] registry.json is not valid JSON: {e}"]
+    entities = doc.get("entities") if isinstance(doc, dict) else None
+    if not isinstance(entities, dict):
+        return ["[authoring] registry.json has no 'entities' object"]
+    expected = _registry_keys()
+    problems = [f"[authoring] {key} has no row in registry.json"
+                for key in sorted(expected - set(entities))]
+    problems += [f"[authoring] registry.json lists '{key}' but no such entity exists"
+                 for key in sorted(set(entities) - expected)]
+    for key in sorted(expected & set(entities)):
+        row = entities[key]
+        if not isinstance(row, dict):
+            problems.append(f"[authoring] registry.json['{key}'] is not an object")
+            continue
+        if row.get("status") not in ENTITY_STATUSES:
+            problems.append(f"[authoring] registry.json['{key}'].status {row.get('status')!r} "
+                            f"is not one of {list(ENTITY_STATUSES)}")
+        if not _SEMVER_RE.match(str(row.get("version", ""))):
+            problems.append(f"[authoring] registry.json['{key}'].version "
+                            f"{row.get('version')!r} is not a semver (N.N.N)")
+        if not str(row.get("owner", "")).strip():
+            problems.append(f"[authoring] registry.json['{key}'] has no owner")
+        for field in ("added", "last_verified"):
+            value = str(row.get(field, ""))
+            if value and not _ISO_DATE_RE.match(value):
+                problems.append(f"[authoring] registry.json['{key}'].{field} {value!r} is "
+                                f"not an ISO date (YYYY-MM-DD) or empty")
+    return problems
+
+
+# Credential shapes, by the prefix each issuer stamps on its own tokens, plus the generic
+# `secret = "…"` assignment. Deliberately narrow: a gate that cries wolf gets disabled.
+_SECRET_PATTERNS = (
+    ("Anthropic API key", re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}")),
+    ("OpenAI-style API key", re.compile(r"\bsk-[A-Za-z0-9]{32,}")),
+    ("GitHub token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36}\b")),
+    ("AWS access key id", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("Slack token", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}")),
+    ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    ("assigned credential", re.compile(
+        r"(?i)\b(password|passwd|secret|api[_-]?key|access[_-]?token)\s*[:=]\s*"
+        r"[\"'][^\"'\s]{8,}[\"']")),
+)
+
+
+def _secret_problems() -> list[str]:
+    """No credential may ship. Sweeps the four trees `source_fingerprint()` hashes —
+    src/, themes/, the OpenCode plugins and workflows — which is exactly the material
+    that ends up inside a user's bundle. Reports file:line and the KIND of match only:
+    echoing the matched text would republish the secret into every CI log."""
+    problems: list[str] = []
+    for root in (build.SRC, build.THEMES, build.PLUGIN_SRC, build.WORKFLOW_SRC):
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or "__pycache__" in path.parts:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue  # binary or unreadable — nothing to scan
+            try:
+                rel = path.relative_to(ROOT).as_posix()
+            except ValueError:
+                rel = path.as_posix()  # scanning a tree outside the repo (a test tmpdir)
+            for i, line in enumerate(text.splitlines(), 1):
+                for label, pattern in _SECRET_PATTERNS:
+                    if pattern.search(line):
+                        problems.append(f"[authoring] possible {label} in {rel}:{i} — a "
+                                        f"credential must never be committed")
+    return problems
+
+
+_HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
+# Refs that move under the pin. Re-copying the folder months later would then change the
+# shipped skill with nothing in the diff to explain it.
+_MOVING_REFS = {"main", "master", "develop", "dev", "head", "latest", "trunk"}
+
+
+def _vendor_pin_problems() -> list[str]:
+    """Every vendored skill folder must record where it came from, under which license,
+    and at WHICH immutable commit. First-party folders that merely ride the vendored
+    mechanism for their multi-file layout (token-report) declare that instead and are
+    exempt from the pin — there is no upstream to drift against."""
+    problems: list[str] = []
+    for name in build.VENDORED_SKILL_DIRS:
+        folder = build.SRC / "skills" / name
+        if not folder.is_dir():
+            problems.append(f"[authoring] VENDORED_SKILL_DIRS lists '{name}' but "
+                            f"src/skills/{name}/ does not exist")
+            continue
+        try:
+            text = (folder / "VENDOR.md").read_text(encoding="utf-8")
+        except OSError:
+            problems.append(f"[authoring] skills/{name}/ has no VENDOR.md — its upstream, "
+                            f"pinned commit and license are unrecorded")
+            continue
+        if not re.search(r"\*\*License:\*\*", text):
+            problems.append(f"[authoring] skills/{name}/VENDOR.md records no '**License:**'")
+        upstream = re.search(r"\*\*Upstream:\*\*\s*(\S+)", text)
+        if not upstream:
+            problems.append(f"[authoring] skills/{name}/VENDOR.md declares no '**Upstream:**'")
+            continue
+        if upstream.group(1).lower().startswith("this"):
+            continue  # first-party — no upstream to pin against
+        pin = re.search(r"\*\*Commit:\*\*\s*(\S+)", text)
+        if not pin:
+            problems.append(f"[authoring] skills/{name}/VENDOR.md has no '**Commit:**' pin")
+        elif pin.group(1).lower() in _MOVING_REFS:
+            problems.append(f"[authoring] skills/{name}/VENDOR.md pins '{pin.group(1)}', a "
+                            f"moving branch — record the commit sha instead")
+        elif not _HEX40_RE.match(pin.group(1).lower()):
+            problems.append(f"[authoring] skills/{name}/VENDOR.md pin '{pin.group(1)}' is not "
+                            f"a 40-character commit sha")
+    return problems
 
 
 _ROMAN_VALUES = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
