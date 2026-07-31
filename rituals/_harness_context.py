@@ -306,7 +306,12 @@ def _rule_gate_target(path: str, root) -> str | None:
     simply not a match."""
     try:
         p = Path(path)
-        name = p.name.lower()
+        # Split on BOTH separators rather than trusting Path.name: on a POSIX host
+        # `Path(r"C:\...\user-rules.md").name` is the whole string (a backslash is an
+        # ordinary character there), so the two store names would go unrecognised in
+        # any payload carrying a Windows path. The two names are Geneseed's own
+        # coinage and must match wherever they appear, on whichever host reads them.
+        name = re.split(r"[\\/]", path)[-1].lower()
     except (TypeError, ValueError):
         return None
     if name == "user-rules.md":
