@@ -317,12 +317,19 @@ def _deployed_inventory(state: WebState) -> dict:
     property falls back to the source render otherwise, so a non-deployed dev host
     still shows a gallery."""
     render = harness._tui_inventory(state.theme)
-    # Deployed skill files carry no category, so tag each from SKILL_CLASS by name
-    # (same source of truth the source render uses) — the web Skills ledger filters on it.
-    from _harness_tui import SKILL_CLASS
+    # Deployed spec files carry neither a category nor a lifecycle status, so tag each
+    # by name from the same sources the source render uses — SKILL_CLASS for the web
+    # Skills ledger's filter chips, registry.json for the status badges. An entity the
+    # registry doesn't know (a user's own skill dropped into the install) reads
+    # "unknown", which is the honest answer rather than a borrowed default.
+    from _harness_tui import SKILL_CLASS, entity_status, load_registry
+    registry = load_registry()
     skills = _spec_entries(state.target / "skills", nested=True)
     for e in skills:
         e["klass"] = SKILL_CLASS.get(e["name"], "build")
-    return {"agents": _spec_entries(state.target / "agents", nested=False),
-            "skills": skills,
+        e["status"] = entity_status(registry, f"skills/{e['name']}")
+    agents = _spec_entries(state.target / "agents", nested=False)
+    for e in agents:
+        e["status"] = entity_status(registry, f"agents/{e['name']}")
+    return {"agents": agents, "skills": skills,
             "laws": render["laws"], "theme": state.theme}

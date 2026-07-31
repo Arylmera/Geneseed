@@ -5,6 +5,7 @@ import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import Markdown from '../components/Markdown.jsx'
+import StatusBadge from '../components/StatusBadge.jsx'
 
 // Six-class taxonomy mirroring the Laws view. The class itself comes from the
 // server (SKILL_CLASS in _harness_tui.py, shipped as `klass`); this map only
@@ -40,6 +41,7 @@ function SkillRow({ skill, isOpen, onToggle }) {
         <span className="skill-name">
           <span className="x">›</span>
           {skill.name}
+          <StatusBadge status={skill.status} />
         </span>
         <span className="skill-desc">{skill.desc}</span>
         <span className="law-class">
@@ -80,12 +82,16 @@ export default function Skills({ selected }) {
   const skills = (data.items || []).map((it) => ({
     name: it.name,
     desc: it.desc,
+    status: it.status,
     cat: it.klass && SKILL_CATS[it.klass] ? it.klass : 'build',
   }))
   const counts = {}
   skills.forEach((s) => {
     counts[s.cat] = (counts[s.cat] || 0) + 1
   })
+  // Only the non-approved states are called out (StatusBadge renders nothing for
+  // `approved`), so the readout carries the count that the badges alone would hide.
+  const experimental = skills.filter((s) => s.status === 'experimental').length
   const shown = sel === 'all' ? skills : skills.filter((s) => s.cat === sel)
 
   return (
@@ -120,7 +126,13 @@ export default function Skills({ selected }) {
           ))}
         </div>
         <span className="law-readout">
-          <b>{shown.length}</b> skills · <b>6</b> classes · source <b>src/skills/</b>
+          <b>{shown.length}</b> skills · <b>6</b> classes ·{' '}
+          {experimental > 0 ? (
+            <>
+              <b>{experimental}</b> experimental ·{' '}
+            </>
+          ) : null}
+          source <b>src/skills/</b>
         </span>
       </div>
       <div className="card law-wrap">
