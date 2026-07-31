@@ -31,7 +31,10 @@ const LAW_META = {
   3: ['verify', 'Check the real state before claiming anything is true.'],
   4: ['security', 'Destructive and outward acts need explicit confirmation.'],
   5: ['craft', 'If it repeats, make it a script or skill; reuse first.'],
-  6: ['context', 'Durable decisions are recorded before the session ends — and rule or memory is the user\'s call.'],
+  6: [
+    'context',
+    "Durable decisions are recorded before the session ends — and rule or memory is the user's call.",
+  ],
   7: ['verify', 'Stop and report a broken step; never paper over it.'],
   8: ['comms', 'Answer what is asked: no filler, no performative agreement.'],
   9: ['comms', 'Reply in the language the user writes in.'],

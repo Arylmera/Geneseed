@@ -493,9 +493,14 @@ def _roman_to_int(num: str) -> int:
 
 
 # A LAW_META row in the web Laws page: `<arabic>: ['<class>', '<principle>'],`.
-# Either quote style — a principle carrying an apostrophe is double-quoted.
+# Either quote style — a principle carrying an apostrophe is double-quoted. Every
+# `\s*` spans newlines and a trailing comma before `]` is optional, so a row prettier
+# has wrapped across several lines still matches: a row too long for the print width
+# gets reflowed with a magic trailing comma, and a gate that only understood the
+# one-line form silently lost it — leaving the law's Principle unguarded while
+# `format:check` and this gate demanded contradictory formatting of the same file.
 _LAW_META_ROW = re.compile(
-    r"(?m)^\s*(\d+):\s*\[\s*(['\"])(.*?)\2\s*,\s*(['\"])(.*?)\4\s*\]\s*,?\s*$")
+    r"(?m)^\s*(\d+):\s*\[\s*(['\"])(.*?)\2\s*,\s*(['\"])(.*?)\4\s*,?\s*\]\s*,?\s*$")
 
 
 def _law_meta_problems(law_nums: list[str], law_class: dict[str, str],
