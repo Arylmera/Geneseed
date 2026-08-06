@@ -699,6 +699,17 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
     n_plugins = _copy_plugins(oc / "plugins", owned)
     n_workflows = _copy_workflows(oc / "workflows", owned)
 
+    # WIRE — the one file of this emit the user co-owns. Every emit runs the same five
+    # stages in the same order (RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY); see
+    # _build_global._emit_claude_core for why that order is load-bearing rather than
+    # tidy. opencode.json is never in `owned`, so the merge commutes with the prune and
+    # the manifest — it used to sit after both. Byte-inert, and moving it is what lets
+    # a single seam separate "files Geneseed writes wholesale" from "files the user
+    # co-owns" in all nine emits instead of eight.
+    rel = _rel_under(out, root)
+    agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
+    cfg_name = _merge_opencode_json(root / "opencode.json", agent_path).name
+
     # Write-before-delete: only now that the whole current set is on disk do we remove
     # what this layer owned before but no longer produces (a removed agent/skill, a
     # disabled primary/command, a theme dropped from the palette). A live file is never
@@ -722,10 +733,6 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
                     "Do not edit; removed on re-emit. A pre-existing file not in this "
                     "list is yours and is never touched.",
         "owned": sorted(owned), "scope": "project"})
-
-    rel = _rel_under(out, root)
-    agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
-    cfg_name = _merge_opencode_json(root / "opencode.json", agent_path).name
 
     extras = ([f"primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
     extra = (" + " + ", ".join(extras)) if extras else ""

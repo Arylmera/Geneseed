@@ -249,10 +249,16 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
     write_version(cfg)
     owned.append(VERSION_MARKER)
-    cfg_name = _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix()).name
 
     if footprint == "lean":
         _ship_lean_laws(items, theme, cfg, owned)
+
+    # WIRE — the last render is now behind us, so this is the first stage that touches a
+    # file the user co-owns (see _emit_claude_core for the five-stage order and why it is
+    # load-bearing). The merge used to run one statement earlier, ahead of the lean laws;
+    # opencode.json is never in `owned` and the laws never read it, so the swap is
+    # byte-inert — it just puts this emit on the same contract as the other eight.
+    cfg_name = _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix()).name
 
     # Now that the whole current set is on disk, remove only what we owned before but
     # no longer produce (a removed agent/skill, a disabled primary/command). Everything
@@ -354,32 +360,9 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     owned: list[str] = []
     managed: dict = {}
 
-    # CLAUDE.md — Claude auto-loads it by location; merge as a delimited block so any
-    # user prose around it survives. `whole` (Geneseed created the file) sticks across
-    # re-emits so uninstall knows whether to delete the file or just excise the block.
-    # Exception — Bob GLOBAL: Bob never auto-loads a global ~/.bob/AGENTS.md (its
-    # always-injected channel is rules/geneseed.md, below), so a global copy is pure
-    # disk weight; none is written, and a re-emit self-heals the one an older install
-    # carries (excise the managed block, or delete the file when Geneseed created it).
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
     is_bob = host == "bob"
     is_copilot = host == "copilot"
-    if agent_text is not None and not (is_bob and scope == "global"):
-        # Project scope: the carrier sits at the repo root, the stores under <cfg> —
-        # render its store pointers with the marker-dir prefix (.claude//.bob/).
-        _managed_block_write(claude_md, _strip_capability_links(
-            _prefixed_agent_text(laws_prefix) or agent_text))
-        # No sticky "whole" flag: teardown always excises the block and deletes the
-        # file only when nothing else remains — a whole-file delete would eat prose
-        # the user added AFTER Geneseed created the file. (Old manifests may still
-        # carry the key; every remove site now ignores it.)
-        managed["claude_md"] = {
-            "rel": os.path.relpath(claude_md, cfg).replace(os.sep, "/"),
-        }
-    elif is_bob and scope == "global" and old_managed.get("claude_md"):
-        old_cm = old_managed["claude_md"] if isinstance(old_managed["claude_md"], dict) else {}
-        victim = (cfg / (old_cm.get("rel") or claude_md.name)).resolve()
-        _managed_block_remove(victim)
 
     # IBM Bob's only documented always-injected channel is the rules folder (project
     # .bob/rules/*.md, global ~/.bob/rules/*.md — bob.ibm.com/docs/ide/configuration/rules).
@@ -437,6 +420,50 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
 
     write_version(cfg)
     owned.append(VERSION_MARKER)
+
+    if footprint == "lean":
+        _ship_lean_laws(items, theme, cfg, owned)
+
+    # ---------------------------------------------------------------- WIRE ----------
+    # Everything above renders files Geneseed owns WHOLESALE. Everything from here to
+    # the prune reconciles files the USER co-owns — the CLAUDE.md/AGENTS.md managed
+    # block and settings(.local).json — reading what is already there and merging into
+    # it. Every one of the nine emits now runs the same five stages in this order:
+    #
+    #     RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY
+    #
+    # The order is load-bearing, not tidiness. WIRE must precede MANIFEST because it
+    # is what fills `managed` (settings_file/settings_hooks/settings_excludes), which
+    # the manifest records so every teardown path unwires exactly what was wired. And
+    # no RENDER may follow a WIRE, because the render half is what leaves Python for
+    # Node: a single seam can only separate the two if all of one side precedes all of
+    # the other. The managed-block stage below used to run before the render, and
+    # _ship_lean_laws after the settings merge; both moved here. Byte-inert — neither
+    # reads what the other writes, and the lean laws are never in `managed` nor
+    # CLAUDE.md ever in `owned`. tests/test_emit_phase_order.py is the gate.
+    #
+    # CLAUDE.md — Claude auto-loads it by location; merge as a delimited block so any
+    # user prose around it survives.
+    # Exception — Bob GLOBAL: Bob never auto-loads a global ~/.bob/AGENTS.md (its
+    # always-injected channel is rules/geneseed.md, above), so a global copy is pure
+    # disk weight; none is written, and a re-emit self-heals the one an older install
+    # carries (excise the managed block, or delete the file when Geneseed created it).
+    if agent_text is not None and not (is_bob and scope == "global"):
+        # Project scope: the carrier sits at the repo root, the stores under <cfg> —
+        # render its store pointers with the marker-dir prefix (.claude//.bob/).
+        _managed_block_write(claude_md, _strip_capability_links(
+            _prefixed_agent_text(laws_prefix) or agent_text))
+        # No sticky "whole" flag: teardown always excises the block and deletes the
+        # file only when nothing else remains — a whole-file delete would eat prose
+        # the user added AFTER Geneseed created the file. (Old manifests may still
+        # carry the key; every remove site now ignores it.)
+        managed["claude_md"] = {
+            "rel": os.path.relpath(claude_md, cfg).replace(os.sep, "/"),
+        }
+    elif is_bob and scope == "global" and old_managed.get("claude_md"):
+        old_cm = old_managed["claude_md"] if isinstance(old_managed["claude_md"], dict) else {}
+        victim = (cfg / (old_cm.get("rel") or claude_md.name)).resolve()
+        _managed_block_remove(victim)
 
     # Hooks embed machine-absolute paths (interpreter + checkout). At PROJECT scope
     # for Claude they go into settings.local.json — the personal, untracked settings
@@ -499,9 +526,6 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
             _unwire_claude_excludes(settings_path, prior_excl)
         elif prior_excl:
             managed["settings_excludes"] = prior_excl
-
-    if footprint == "lean":
-        _ship_lean_laws(items, theme, cfg, owned)
 
     # Write-before-delete prune: now that the whole current set is on disk, remove only
     # what we owned before but no longer produce. A live file is never momentarily absent.
