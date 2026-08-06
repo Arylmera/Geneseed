@@ -182,7 +182,7 @@ class BuildRoundTripTests(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp())
         old = _build_core.POSTURE
         try:
-            _build_core.POSTURE = "expert"          # facade mirrors into _build_render
+            _build_core.POSTURE = "expert"          # the single owner _build_render reads
             build.build("neutral", tmp)
             agent = (tmp / "AGENT.md").read_text(encoding="utf-8")
             self.assertIn("**Expert**", agent)
@@ -216,7 +216,7 @@ class BuildRoundTripTests(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp())
         old = _build_core.MODE
         try:
-            _build_core.MODE = "foreman"          # facade mirrors into _build_render
+            _build_core.MODE = "foreman"          # the single owner _build_render reads
             build.build("neutral", tmp)
             agent = (tmp / "AGENT.md").read_text(encoding="utf-8")
             self.assertIn("**Foreman**", agent)
