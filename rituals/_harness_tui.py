@@ -309,6 +309,7 @@ LAW_CLASS: dict[str, str] = {
 # (spec 2026-07-31). Maintainer-side metadata: the registry is never rendered into a
 # bundle, so a status costs no session context — it only drives the badges in the TUI
 # and web catalogs. doctor validates the file against src/ (_registry_problems).
+# entity_status also derives "personal" and "unknown"; neither is ever stored here.
 ENTITY_STATUSES: tuple[str, ...] = ("experimental", "approved", "deprecated")
 
 # The six governance classes a law may carry — the web Laws filter chips read
@@ -416,8 +417,15 @@ def load_registry() -> dict:
 
 
 def entity_status(registry: dict, key: str) -> str:
-    """One entity's lifecycle status, or "unknown" when the registry has no usable row."""
+    """One entity's lifecycle status, plus two derived states that are never stored:
+    an entity the registry has never heard of is "personal" — your own skill or agent,
+    dropped into the install, which Geneseed never shipped and does not version — while
+    a row that exists with an unusable status is "unknown". An EMPTY registry means the
+    file is missing or corrupt (load_registry swallows that), so every entity reads
+    "unknown" there rather than relabelling the whole shipped catalog as yours."""
     row = registry.get(key)
+    if row is None:
+        return "personal" if registry else "unknown"
     status = row.get("status") if isinstance(row, dict) else None
     return status if status in ENTITY_STATUSES else "unknown"
 

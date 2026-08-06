@@ -11,6 +11,11 @@ import StatusBadge from '../components/StatusBadge.jsx'
 // server (SKILL_CLASS in _harness_tui.py, shipped as `klass`); this map only
 // holds the chip label and dot colour. Same OKLCH hues as LAW_CATS so the two
 // ledgers read as one family. Order is the chip-bar order.
+//
+// `personal` is the exception: a skill the lifecycle registry has never heard of —
+// your own, living in this install only. Deliberately near-grey rather than a
+// seventh hue in the family, because it is OUTSIDE the taxonomy, not another
+// member of it. Its chip appears only where such skills exist.
 const SKILL_CATS = {
   design: { label: 'Design', c: 'oklch(0.74 0.08 280)' },
   build: { label: 'Build', c: 'oklch(0.78 0.085 95)' },
@@ -18,8 +23,9 @@ const SKILL_CATS = {
   ship: { label: 'Ship', c: 'oklch(0.76 0.075 150)' },
   understand: { label: 'Understand', c: 'oklch(0.78 0.075 200)' },
   learn: { label: 'Learn', c: 'oklch(0.76 0.085 345)' },
+  personal: { label: 'Personal', c: 'oklch(0.72 0.025 250)' },
 }
-const SKILL_CAT_ORDER = ['design', 'build', 'review', 'ship', 'understand', 'learn']
+const SKILL_CAT_ORDER = ['design', 'build', 'review', 'ship', 'understand', 'learn', 'personal']
 
 // One expandable row: lazy-loads its full body via /api/item/skill/<name> the
 // first time it opens, cached on subsequent toggles. Mirrors LawRow, minus the
@@ -92,6 +98,9 @@ export default function Skills({ selected }) {
   // Only the non-approved states are called out (StatusBadge renders nothing for
   // `approved`), so the readout carries the count that the badges alone would hide.
   const experimental = skills.filter((s) => s.status === 'experimental').length
+  // The Personal chip is earned, not permanent: an install with no skills of your own
+  // would otherwise carry a dead "Personal 0" chip on every visit.
+  const cats = SKILL_CAT_ORDER.filter((k) => k !== 'personal' || counts.personal > 0)
   const shown = sel === 'all' ? skills : skills.filter((s) => s.cat === sel)
 
   return (
@@ -112,7 +121,7 @@ export default function Skills({ selected }) {
             <span>All</span>
             <span className="cn">{skills.length}</span>
           </button>
-          {SKILL_CAT_ORDER.map((k) => (
+          {cats.map((k) => (
             <button
               key={k}
               className={`law-cat ${sel === k ? 'on' : ''}`}
@@ -126,7 +135,7 @@ export default function Skills({ selected }) {
           ))}
         </div>
         <span className="law-readout">
-          <b>{shown.length}</b> skills · <b>6</b> classes ·{' '}
+          <b>{shown.length}</b> skills · <b>{cats.length}</b> classes ·{' '}
           {experimental > 0 ? (
             <>
               <b>{experimental}</b> experimental ·{' '}

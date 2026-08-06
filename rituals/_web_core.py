@@ -321,13 +321,16 @@ def _deployed_inventory(state: WebState) -> dict:
     # by name from the same sources the source render uses — SKILL_CLASS for the web
     # Skills ledger's filter chips, registry.json for the status badges. An entity the
     # registry doesn't know (a user's own skill dropped into the install) reads
-    # "unknown", which is the honest answer rather than a borrowed default.
+    # "personal", which is the honest answer rather than a borrowed default — and it
+    # carries its own class too, since filing it under the "build" fallback would claim
+    # a Geneseed taxonomy slot it was never given.
     from _harness_tui import SKILL_CLASS, entity_status, load_registry
     registry = load_registry()
     skills = _spec_entries(state.target / "skills", nested=True)
     for e in skills:
-        e["klass"] = SKILL_CLASS.get(e["name"], "build")
         e["status"] = entity_status(registry, f"skills/{e['name']}")
+        e["klass"] = ("personal" if e["status"] == "personal"
+                      else SKILL_CLASS.get(e["name"], "build"))
     agents = _spec_entries(state.target / "agents", nested=False)
     for e in agents:
         e["status"] = entity_status(registry, f"agents/{e['name']}")

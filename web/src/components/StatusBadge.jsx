@@ -7,6 +7,10 @@ import React from 'react'
 // `approved` renders NOTHING on purpose: it is the state of nearly every entity, so
 // sixty-odd identical pills would be noise — the deviations are the whole signal.
 // Reuses the house `.badge` styles, which every theme flavour already restyles.
+//
+// `personal` (registry knows nothing about it) and `unknown` (registry unreadable, so
+// nothing is known about anything) both mean "no lifecycle status", but only the first
+// is a statement about the entity — hence two labels, not one.
 const STATUS = {
   experimental: {
     label: 'experimental',
@@ -17,6 +21,11 @@ const STATUS = {
     label: 'deprecated',
     cls: 'bad',
     hint: 'On its way out — look for the replacement before building on it.',
+  },
+  personal: {
+    label: 'personal',
+    cls: '',
+    hint: 'Yours — present in this install, not shipped or versioned by Geneseed.',
   },
   unknown: {
     label: 'no status',
