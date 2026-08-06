@@ -133,6 +133,19 @@ renders it as the name in parentheses.
 - Resolves `<!-- INCLUDE: relpath -->` by inlining the rendered target.
 - Unknown tokens are left visible (debugging aid); `doctor` flags them.
 - Stdlib only; no third-party dependencies, ever.
+- **`_build_core` is the single owner of the generator's mutable configuration** — the
+  source/theme roots, the four `_<host>_config_dir` resolvers, and the build-wide
+  posture/mode selection, listed in its `_OWNED` tuple. The membership rule is *does
+  anything ever redirect this name* — a redirect that reaches some of five copies is
+  worse than one that reaches none, because it half-works in silence.
+  `build.py` splices its four `_build_*` submodules into one shared namespace, so
+  every other shared name exists as a copy in each of them; the owned ones deliberately
+  do not. They are held back from both `_build_core.__all__` and the splice, so there is
+  exactly one binding: read them as `_build_core.SRC`, redirect them by writing
+  `_build_core.SRC`. `build.SRC` still reads (that is the runtime's surface) but refuses
+  writes — a write through the facade cannot be restored reliably, and a redirect that
+  silently outlives its test poisons every later read. A bare `SRC` left in a submodule
+  raises `NameError` rather than quietly reading a stale copy; that noise is the point.
 
 ## 🚫 Explicitly out of scope
 

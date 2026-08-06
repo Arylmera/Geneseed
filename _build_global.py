@@ -1,10 +1,15 @@
-"""Geneseed build — the global OpenCode emit: config-dir resolution, the install
-manifest, global memory/notebook seeding, emit_opencode_global.
+"""Geneseed build — the global emits: the install manifest, global memory/notebook
+seeding, the HOSTS registry, and emit_{opencode,claude,bob,copilot}[_global].
 
 Part of the build CLI (see build.py). Imports the shared toolset from _build_core."""
 from __future__ import annotations
 
+import _build_core
 from _build_core import *  # noqa: F401,F403  shared stdlib + constants
+
+# The source/theme roots, the host config-dir resolvers and the posture/mode selection
+# belong to _build_core alone (its `_OWNED` tuple) — never star-imported, never spliced,
+# always `_build_core.X`.
 
 
 def _write_manifest_atomic(path: Path, data: dict) -> None:
@@ -16,24 +21,11 @@ def _write_manifest_atomic(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
-def _opencode_config_dir() -> Path:
-    """OpenCode's global config dir. Precedence: $OPENCODE_CONFIG_DIR (relocates the
-    whole dir — use it to keep the harness in a git-tracked folder) > $XDG_CONFIG_HOME
-    /opencode > ~/.config/opencode."""
-    env = os.environ.get("OPENCODE_CONFIG_DIR")
-    if env:
-        return Path(env).expanduser().resolve()
-    xdg = os.environ.get("XDG_CONFIG_HOME")
-    base = Path(xdg).expanduser() if xdg else Path.home() / ".config"
-    return (base / "opencode").resolve()
-
-
-def _claude_config_dir() -> Path:
-    """Claude Code's global/user config dir: ~/.claude (Windows: %USERPROFILE%\\.claude,
-    which Path.home() resolves). Unlike OpenCode there is no documented env var that
-    relocates it, so — by design — this resolver is simpler than its sibling: no env
-    branch. (configuration: https://code.claude.com/docs/en/configuration)"""
-    return (Path.home() / ".claude").resolve()
+# The four `_<host>_config_dir` resolvers moved to _build_core, which owns them along
+# with the source roots (see its `_OWNED` tuple and the membership note there): a global
+# emit falls back to `cfg or _<host>_config_dir()`, so a test that redirects one and
+# reaches only some copies renders into the developer's real install. Read them as
+# `_build_core._claude_config_dir()`.
 
 
 def host_catalogs_natively(host: str) -> bool:
@@ -41,28 +33,6 @@ def host_catalogs_natively(host: str) -> bool:
     registry (defined below, resolved at call time) so the capability is declared
     in exactly one place. Unknown host -> False, the shape that keeps the tables."""
     return bool(HOSTS.get(host, {}).get("native_catalog", False))
-
-
-def _bob_config_dir() -> Path:
-    """IBM Bob's global config dir: ~/.bob (its global skills live at ~/.bob/skills per
-    bob.ibm.com/docs/ide). $BOB_CONFIG_DIR relocates it (mirrors the OpenCode env knob),
-    so a CI/locked-down setup can point it at a git-tracked folder."""
-    env = os.environ.get("BOB_CONFIG_DIR")
-    if env:
-        return Path(env).expanduser().resolve()
-    return (Path.home() / ".bob").resolve()
-
-
-def _copilot_config_dir() -> Path:
-    """GitHub Copilot's personal config dir: ~/.copilot — the CLI auto-loads
-    copilot-instructions.md there and discovers skills/ and agents/ natively
-    (docs.github.com/copilot/how-tos/copilot-cli). $COPILOT_CONFIG_DIR relocates it
-    (Geneseed's knob, mirroring $BOB_CONFIG_DIR — Copilot documents no such env var,
-    but tests/doctor and locked-down setups still need to re-point the target)."""
-    env = os.environ.get("COPILOT_CONFIG_DIR")
-    if env:
-        return Path(env).expanduser().resolve()
-    return (Path.home() / ".copilot").resolve()
 
 
 GLOBAL_MANIFEST = ".geneseed-manifest.json"
@@ -74,7 +44,7 @@ GLOBAL_MANIFEST = ".geneseed-manifest.json"
 # filename-keyed match would suppress the project's own AGENTS.md too), so Bob's bypass
 # rides on its rules folder instead — the workspace rules/geneseed.md overrides the
 # global one (see _emit_claude_core).
-_PREAMBLE_CONFIG_DIR = {"CLAUDE.md": _claude_config_dir}
+_PREAMBLE_CONFIG_DIR = {"CLAUDE.md": _build_core._claude_config_dir}
 
 # The workspace rules stub a PROJECT Bob emit ships as .bob/rules/geneseed.md. Its only
 # job is to exist under the same name as the global ~/.bob/rules/geneseed.md so Bob's
@@ -118,7 +88,7 @@ def _global_memory(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
                         shutil.copy2(f, dest)
                 return f"migrated {nm}/ -> {mem_name}/"
     for _out_rel, text, src in items:
-        sp = src.relative_to(SRC).as_posix().split("/")
+        sp = src.relative_to(_build_core.SRC).as_posix().split("/")
         if sp[0] == "memory" and len(sp) > 1:
             dest = mem_dir / Path(*sp[1:])
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -154,7 +124,7 @@ def _global_notebook(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
                     shutil.copy2(f, dest)
             return f"migrated {nb_name}/"
     for _out_rel, text, src in items:
-        sp = src.relative_to(SRC).as_posix().split("/")
+        sp = src.relative_to(_build_core.SRC).as_posix().split("/")
         if sp[0] == nb_name and len(sp) > 1:
             dest = nb_dir / Path(*sp[1:])
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -206,7 +176,7 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     existing memory store (the legacy bundle location); nothing is built there.
     `cfg` overrides the target dir (default: the resolved OpenCode config dir) — used
     by `harness.py diff` to render an 'expected' copy into a temp dir for comparison."""
-    cfg = cfg or _opencode_config_dir()
+    cfg = cfg or _build_core._opencode_config_dir()
     # laws_prefix='' — the standalone laws dir sits beside AGENT.md in <cfg>, so the
     # lean pointer's relative `laws/universal.md` resolves with no prefix.
     theme, items = render_all(theme_name, footprint,
@@ -569,7 +539,7 @@ def emit_claude_global(theme_name: str, out: Path | None = None, cfg: Path | Non
     gains Geneseed's hooks with ABSOLUTE harness.py paths (hooks run with the project
     cwd, not the config dir). `cfg` overrides the target (used by tests / doctor to
     render an expected copy into a temp dir)."""
-    cfg = cfg or _claude_config_dir()
+    cfg = cfg or _build_core._claude_config_dir()
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
         theme_name, cfg, cfg / "CLAUDE.md", "global", out, footprint)
     print(f"[geneseed] claude-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
@@ -668,7 +638,7 @@ def emit_bob_global(theme_name: str, out: Path | None = None, cfg: Path | None =
     matching check: the project's own `rules/geneseed.md` shadow stub is written
     specifically so the workspace copy always wins over the global one by filename,
     regardless of which was emitted first — see `_BOB_RULES_STUB`."""
-    cfg = cfg or _bob_config_dir()
+    cfg = cfg or _build_core._bob_config_dir()
     _warn_bob_global_over_project(cfg)
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
         theme_name, cfg, cfg / "AGENTS.md", "global", out, footprint, host="bob")
@@ -743,7 +713,7 @@ def emit_copilot_global(theme_name: str, out: Path | None = None, cfg: Path | No
     (tests/doctor). Warns (non-blocking) when project-scoped Copilot installs are
     already registered — the two preambles stack; see
     `_warn_copilot_global_over_project`."""
-    cfg = cfg or _copilot_config_dir()
+    cfg = cfg or _build_core._copilot_config_dir()
     _warn_copilot_global_over_project(cfg)
     n_agents, n_skills, _n_hooks, mem_status, nb_status, _ = _emit_claude_core(
         theme_name, cfg, cfg / "copilot-instructions.md", "global", out, footprint,
@@ -801,7 +771,7 @@ def emit_copilot(theme_name: str, out: Path, root: Path | None = None,
 #                    model, so the Agents table is load-bearing.
 HOSTS = {
     "opencode": {
-        "config_dir": _opencode_config_dir,
+        "config_dir": _build_core._opencode_config_dir,
         "config_file": "opencode.json",
         "project_marker": ".opencode",
         "agent_file": "AGENT.md",
@@ -809,7 +779,7 @@ HOSTS = {
         "native_catalog": True,
     },
     "claude": {
-        "config_dir": _claude_config_dir,
+        "config_dir": _build_core._claude_config_dir,
         "config_file": "settings.json",
         "project_marker": ".claude",
         "agent_file": "CLAUDE.md",
@@ -817,7 +787,7 @@ HOSTS = {
         "native_catalog": True,
     },
     "bob": {
-        "config_dir": _bob_config_dir,
+        "config_dir": _build_core._bob_config_dir,
         "config_file": "settings.json",
         "project_marker": ".bob",
         "agent_file": "AGENTS.md",
@@ -825,7 +795,7 @@ HOSTS = {
         "native_catalog": False,
     },
     "copilot": {
-        "config_dir": _copilot_config_dir,
+        "config_dir": _build_core._copilot_config_dir,
         "config_file": "mcp-config.json",
         "project_marker": ".github",
         "agent_file": "AGENTS.md",

@@ -3,7 +3,21 @@
 Owns the stdlib imports, ROOT/SRC/CONFIG/THEMES paths, the token/include/
 capability regexes and the text-suffix set. Re-exported so each submodule
 can `from _build_core import *`; cross-submodule names are linked at import
-time by build.py (the facade), mirroring harness.py's layout."""
+time by build.py (the facade), mirroring harness.py's layout.
+
+**This module is the SOLE owner of the generator's mutable configuration** — the
+source/theme roots, the host config-dir resolvers, and the build-wide posture/mode
+selection (the `_OWNED` tuple below). Those names are deliberately excluded from
+both `__all__` and build.py's namespace splice, so no submodule ever holds a copy:
+every reader spells them `_build_core.SRC`, and redirecting one — `_build_core.SRC
+= tmp`, or `mock.patch.object(_build_core, "SRC", tmp)`, the way tests point the
+generator at a fixture tree — is a single write seen everywhere. Write them HERE,
+never through the facade: `build.SRC` reads (that is the runtime's surface) but
+refuses writes, because a write there cannot be restored reliably.
+
+A bare `SRC` left behind in a submodule raises NameError instead of silently
+reading a stale copy — that is the property this arrangement buys, and the reason
+build.py no longer mirrors attribute writes across four modules."""
 from __future__ import annotations
 
 
@@ -22,6 +36,18 @@ SRC = ROOT / "src"
 CONFIG = ROOT / "harness.config.json"
 THEMES = ROOT / "themes"
 VERSION_MARKER = ".geneseed-version"
+
+# Derived once at import, exactly as when they lived in _build_emit: redirecting
+# ROOT/THEMES does NOT move them (nothing has ever relied on that — the tests that
+# repoint the source tree set each of these explicitly).
+COLOR_THEMES = THEMES / "opencode"
+PLUGIN_SRC = ROOT / "adapters" / "opencode" / "plugins"
+WORKFLOW_SRC = ROOT / "adapters" / "opencode" / "workflows"
+
+# Build-wide selections read by _build_render.effective_theme, set once by build.py's
+# main() from --posture/--mode rather than threaded through every emit signature.
+POSTURE = "peer"
+MODE = "direct"
 
 TOKEN_RE = re.compile(r"\{\{([A-Z_]+)\}\}")
 INCLUDE_RE = re.compile(r"^[ \t]*<!--[ \t]*INCLUDE:[ \t]*(?P<path>[^ \t]+)[ \t]*-->[ \t]*$", re.M)
@@ -49,6 +75,69 @@ TEXT_SUFFIXES = {".md", ".tmpl", ".json", ".txt", ".yml", ".yaml"}
 # `token-report` is Geneseed-authored and rides this mechanism because it bundles an
 # executable script, which the flat pipeline cannot carry).
 VENDORED_SKILL_DIRS = ("react-view-transitions", "daydream", "token-report")
+
+
+def _opencode_config_dir() -> Path:
+    """OpenCode's global config dir. Precedence: $OPENCODE_CONFIG_DIR (relocates the
+    whole dir — use it to keep the harness in a git-tracked folder) > $XDG_CONFIG_HOME
+    /opencode > ~/.config/opencode."""
+    env = os.environ.get("OPENCODE_CONFIG_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".config"
+    return (base / "opencode").resolve()
+
+
+def _claude_config_dir() -> Path:
+    """Claude Code's global/user config dir: ~/.claude (Windows: %USERPROFILE%\\.claude,
+    which Path.home() resolves). Unlike OpenCode there is no documented env var that
+    relocates it, so — by design — this resolver is simpler than its sibling: no env
+    branch. (configuration: https://code.claude.com/docs/en/configuration)"""
+    return (Path.home() / ".claude").resolve()
+
+
+def _bob_config_dir() -> Path:
+    """IBM Bob's global config dir: ~/.bob (its global skills live at ~/.bob/skills per
+    bob.ibm.com/docs/ide). $BOB_CONFIG_DIR relocates it (mirrors the OpenCode env knob),
+    so a CI/locked-down setup can point it at a git-tracked folder."""
+    env = os.environ.get("BOB_CONFIG_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    return (Path.home() / ".bob").resolve()
+
+
+def _copilot_config_dir() -> Path:
+    """GitHub Copilot's personal config dir: ~/.copilot — the CLI auto-loads
+    copilot-instructions.md there and discovers skills/ and agents/ natively
+    (docs.github.com/copilot/how-tos/copilot-cli). $COPILOT_CONFIG_DIR relocates it
+    (Geneseed's knob, mirroring $BOB_CONFIG_DIR — Copilot documents no such env var,
+    but tests/doctor and locked-down setups still need to re-point the target)."""
+    env = os.environ.get("COPILOT_CONFIG_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    return (Path.home() / ".copilot").resolve()
+
+
+# The single-owner set. Excluded from `__all__` (so `from _build_core import *`
+# cannot copy them) and from build.py's splice (so `vars(submodule).update(...)`
+# cannot push them back), which together guarantee exactly one binding per name.
+#
+# Membership test: does anything ever REDIRECT this name — a test pointing the
+# generator at a fixture tree, `--posture` selecting a register, a suite pointing a
+# host's config dir at a sandbox? If yes it must be owned, because a redirect that
+# reaches only some of five copies is worse than one that reaches none: it half-works,
+# silently. The four `_*_config_dir` resolvers are here for exactly that reason — a
+# global emit falls back to `cfg or _<host>_config_dir()`, so a resolver a test failed
+# to redirect writes into the developer's REAL install.
+_OWNED = ("ROOT", "SRC", "CONFIG", "THEMES", "CAPABILITY_LINK_RE",
+          "COLOR_THEMES", "PLUGIN_SRC", "WORKFLOW_SRC", "POSTURE", "MODE",
+          "VENDORED_SKILL_DIRS", "_opencode_config_dir", "_claude_config_dir",
+          "_bob_config_dir", "_copilot_config_dir")
+
+__all__ = ["argparse", "datetime", "hashlib", "json", "os", "re", "shutil", "sys",
+           "Path", "VERSION_MARKER", "TOKEN_RE", "INCLUDE_RE", "TEXT_SUFFIXES",
+           "source_release_version", "version_is_newer"]
 
 
 def source_release_version() -> str:

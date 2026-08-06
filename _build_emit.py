@@ -4,11 +4,12 @@ opencode.json merge, plugin/workflow copy, primary-agent and theme writers.
 Part of the build CLI (see build.py). Imports the shared toolset from _build_core."""
 from __future__ import annotations
 
+import _build_core
 from _build_core import *  # noqa: F401,F403  shared stdlib + constants
 
-
-PLUGIN_SRC = ROOT / "adapters" / "opencode" / "plugins"
-WORKFLOW_SRC = ROOT / "adapters" / "opencode" / "workflows"
+# PLUGIN_SRC / WORKFLOW_SRC / COLOR_THEMES moved to _build_core with the rest of the
+# path constants (its `_OWNED` tuple): one binding, no spliced copies, so a test that
+# repoints the source tree is seen here too. Spelled `_build_core.X` on every read.
 
 
 def _strip_capability_links(text: str) -> str:
@@ -19,7 +20,7 @@ def _strip_capability_links(text: str) -> str:
     the section intros keep their `agents/` / `skills/` folder pointer; only the
     per-row spec links are removed. The portable `files` emit keeps the links (its
     specs are flat siblings that resolve)."""
-    return CAPABILITY_LINK_RE.sub(r"\1", text)
+    return _build_core.CAPABILITY_LINK_RE.sub(r"\1", text)
 
 
 def _strip_skill_body_links(body: str) -> str:
@@ -135,7 +136,7 @@ def _write_theme(themes_dir: Path, theme_name: str, theme: dict) -> Path:
 # Curated full-palette OpenCode colour themes (themes/opencode/*.json), decoupled from
 # the voice theme. Each source carries one palette (named roles); the slot map below is
 # shared, so a new theme = one palette file. See docs/specs/2026-06-17-opencode-color-themes.md.
-COLOR_THEMES = THEMES / "opencode"
+# The path itself is _build_core.COLOR_THEMES (single-owner set); read it there.
 
 # OpenCode theme slot -> palette role. Background roles flip to "none" in the transparent
 # flavour (see _TRANSPARENT_NONE) — that's the ONLY difference between the two flavours.
@@ -174,9 +175,10 @@ def _color_theme_json(palette: dict, transparent: bool) -> dict:
 
 def color_theme_files() -> list[Path]:
     """Shipped colour-theme sources under themes/opencode/, excluding `_`-prefixed scaffolds."""
-    if not COLOR_THEMES.is_dir():
+    if not _build_core.COLOR_THEMES.is_dir():
         return []
-    return sorted(p for p in COLOR_THEMES.glob("*.json") if not p.name.startswith("_"))
+    return sorted(p for p in _build_core.COLOR_THEMES.glob("*.json")
+                  if not p.name.startswith("_"))
 
 
 def _write_color_themes(themes_dir: Path) -> list[Path]:
@@ -350,13 +352,13 @@ def _write_native_layer(items, agents_dir: Path, skills_dir: Path, overrides=Non
         return False
 
     for _out_rel, text, src in items:
-        sparts = src.relative_to(SRC).as_posix().split("/")
+        sparts = src.relative_to(_build_core.SRC).as_posix().split("/")
         # Vendored third-party skill folders (skills/<name>/…) ride along verbatim into
         # the native skills dir, preserving their own multi-file layout and upstream
         # format, so AGENT.md's vendored-skill pointer resolves in this emit too (the
         # global install builds no sibling bundle). They are copied through — NOT wrapped
         # as a native SKILL.md — and never counted as harness skills.
-        if len(sparts) >= 2 and sparts[0] == "skills" and sparts[1] in VENDORED_SKILL_DIRS:
+        if len(sparts) >= 2 and sparts[0] == "skills" and sparts[1] in _build_core.VENDORED_SKILL_DIRS:
             dest = skills_dir.joinpath(*sparts[1:])
             if not _claim(dest):
                 continue
@@ -681,7 +683,7 @@ def _hook_shim_body() -> str:
     """The shim's contents: forward argv verbatim to harness.py, print nothing, and
     propagate the child's exit code. `%*` / `"$@"` keep the emitted `--root "<cfg>"`
     quoting intact, so no re-quoting happens at either layer."""
-    py, h = sys.executable, ROOT / "rituals" / "harness.py"
+    py, h = sys.executable, _build_core.ROOT / "rituals" / "harness.py"
     if sys.platform == "win32":
         # Bare `exit /b` propagates the LIVE errorlevel; `%ERRORLEVEL%` would expand at
         # parse time and return a stale one. Never plain `exit` — that kills the parent
@@ -749,7 +751,7 @@ def _hook_prefix() -> str:
     print(f"[geneseed] WARN: could not write the hook shim at {_hook_shim_path()} — "
           "emitting hooks that call the interpreter directly. They will break if this "
           "checkout moves; re-run the build to repair them.", file=sys.stderr)
-    return f'"{sys.executable}" "{ROOT / "rituals" / "harness.py"}"'
+    return f'"{sys.executable}" "{_build_core.ROOT / "rituals" / "harness.py"}"'
 
 
 def _claude_hook_groups(cfg: Path) -> dict:
@@ -1169,9 +1171,9 @@ def _copy_plugins(dst: Path, owned: list | None = None) -> int:
     caller tracks an ownership manifest (the global emit), pass `owned` and each copy
     is appended to it as `plugins/<name>`."""
     n = 0
-    if PLUGIN_SRC.is_dir():
+    if _build_core.PLUGIN_SRC.is_dir():
         dst.mkdir(parents=True, exist_ok=True)
-        for js in sorted(PLUGIN_SRC.glob("*.js")):
+        for js in sorted(_build_core.PLUGIN_SRC.glob("*.js")):
             shutil.copy2(js, dst / js.name)
             if owned is not None:
                 owned.append(f"plugins/{js.name}")
@@ -1185,9 +1187,9 @@ def _copy_workflows(dst: Path, owned: list | None = None) -> int:
     relative `../workflows/` path. Maintained files, copied verbatim like the plugins;
     `owned` works as in `_copy_plugins` (entries land as `workflows/<name>`)."""
     n = 0
-    if WORKFLOW_SRC.is_dir():
+    if _build_core.WORKFLOW_SRC.is_dir():
         dst.mkdir(parents=True, exist_ok=True)
-        for js in sorted(WORKFLOW_SRC.glob("*.js")):
+        for js in sorted(_build_core.WORKFLOW_SRC.glob("*.js")):
             shutil.copy2(js, dst / js.name)
             if owned is not None:
                 owned.append(f"workflows/{js.name}")
@@ -1210,7 +1212,7 @@ AGENT_OVERRIDES_STUB = {
     "agents": {},
 }
 
-PRIMARY_AGENT_SRC = ROOT / "adapters" / "opencode" / "agents" / "orchestrator.md"
+PRIMARY_AGENT_SRC = _build_core.ROOT / "adapters" / "opencode" / "agents" / "orchestrator.md"
 
 # O7: skills also exposed as /slash commands when GENESEED_COMMANDS is set. The hot set
 # — the workflows worth a one-keystroke trigger. Any name absent from src/ is skipped.
@@ -1301,7 +1303,7 @@ def _write_command_layer(items, command_dir: Path) -> list[Path]:
     for _out_rel, text, src in items:
         if text is None:
             continue
-        sp = src.relative_to(SRC).as_posix().split("/")
+        sp = src.relative_to(_build_core.SRC).as_posix().split("/")
         if len(sp) == 2 and sp[0] == "skills" and sp[1].endswith(".md") and not sp[1].startswith("_"):
             by_name[sp[1][:-3]] = text
     written: list[Path] = []

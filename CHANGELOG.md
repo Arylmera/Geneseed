@@ -182,6 +182,25 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   reporting the old verdict.
 
 ### Changed
+- **The generator's configuration now has one owner instead of five copies.** `build.py`
+  splices its four `_build_*` submodules into a shared namespace, which gave each of them
+  its own copy of `SRC`, `THEMES`, `ROOT`, `CONFIG`, `PLUGIN_SRC`, `WORKFLOW_SRC`,
+  `COLOR_THEMES`, `CAPABILITY_LINK_RE`, `VENDORED_SKILL_DIRS`, the four
+  `_<host>_config_dir` resolvers and the posture/mode selection — and forced a facade
+  `__setattr__` that mirrored every write out to all four so that redirecting one
+  actually reached the render code. `_build_core` now owns those names outright: they are
+  held back from both its `__all__` and the splice, so no copy exists, and the mirror is
+  deleted. Emitted output is unchanged — verified byte-for-byte against the previous
+  revision across the full 259-cell matrix (14 themes × 9 emit modes × 2 footprints, plus
+  every posture and mode). Two consequences for anyone working on the generator: read
+  them as `_build_core.SRC`, not a bare `SRC` (a bare one now raises `NameError` instead
+  of silently reading a stale copy), and redirect them by writing `_build_core.SRC` —
+  `build.SRC` still reads but refuses writes, because `mock.patch.object(build, "SRC", …)`
+  deleted rather than restored the attribute on exit and leaked the redirect into every
+  later test in the process. A test now walks the suite and fails on any redirect of a
+  shared-but-unowned name, the shape that quietly stops covering what it claims to —
+  `_opencode_config_dir` was already in that state, one missing `cfg=` argument away from
+  sending a global emit into the developer's own `~/.config/opencode`.
 - **`docs/specs/`, `docs/reviews/`, and `docs/superpowers/` are local working docs
   now**: untracked from git and added to `.gitignore`. They are per-machine work
   artifacts (dated specs are drafted, executed, then dropped — the existing

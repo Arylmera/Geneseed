@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import _build_core
 import _build_emit as emit
 
 # The harness.py subcommands whose whole purpose is to stand between the agent and an
@@ -77,7 +78,7 @@ class HookShimTests(unittest.TestCase):
         self.assertIsNotNone(p, "shim could not be written into a fresh temp home")
         self.assertTrue(p.is_file())
         body = p.read_text(encoding="utf-8")
-        self.assertIn(str(emit.ROOT / "rituals" / "harness.py"), body)
+        self.assertIn(str(_build_core.ROOT / "rituals" / "harness.py"), body)
         self.assertIn(sys.executable, body)
 
     def test_shim_forwards_argv_and_stays_silent(self):
@@ -115,7 +116,7 @@ class HookShimTests(unittest.TestCase):
         p = emit._write_hook_shim()
         p.write_text("#!/bin/sh\nexec /gone/python /gone/harness.py \"$@\"\n", encoding="utf-8")
         emit._write_hook_shim()
-        self.assertIn(str(emit.ROOT / "rituals" / "harness.py"),
+        self.assertIn(str(_build_core.ROOT / "rituals" / "harness.py"),
                       p.read_text(encoding="utf-8"))
 
     def test_emitted_commands_name_the_shim_not_the_checkout(self):
@@ -126,7 +127,7 @@ class HookShimTests(unittest.TestCase):
         for c in cmds:
             with self.subTest(cmd=c):
                 self.assertIn(shim, c)
-                self.assertNotIn(str(emit.ROOT / "rituals"), c)
+                self.assertNotIn(str(_build_core.ROOT / "rituals"), c)
 
     def test_falls_back_to_the_direct_form_when_the_shim_cannot_be_written(self):
         """Emitting a command that names a shim which does not exist would fail on EVERY
@@ -151,7 +152,7 @@ class HookShimTests(unittest.TestCase):
         rewrites the shim — so it could only ever observe the freshly repaired file and
         reported clean no matter how broken things were. It now samples before the loop;
         this test pins the detection itself."""
-        sys.path.insert(0, str(emit.ROOT / "rituals"))
+        sys.path.insert(0, str(_build_core.ROOT / "rituals"))
         import _harness_build  # noqa: E402  (local: keeps the module list minimal)
         p = emit._write_hook_shim()
         self.assertEqual(_harness_build._shim_problems(), [], "healthy shim flagged")
@@ -164,7 +165,7 @@ class HookShimTests(unittest.TestCase):
     def test_doctor_gate_is_silent_when_no_shim_exists(self):
         """A source checkout that has never emitted owns no shim, and `_hook_prefix`
         falls back to the direct form when it cannot write one. Neither is a defect."""
-        sys.path.insert(0, str(emit.ROOT / "rituals"))
+        sys.path.insert(0, str(_build_core.ROOT / "rituals"))
         import _harness_build  # noqa: E402
         self.assertFalse(emit._hook_shim_path().exists())
         self.assertEqual(_harness_build._shim_problems(), [])
@@ -172,7 +173,7 @@ class HookShimTests(unittest.TestCase):
     def test_sniff_recognises_both_the_legacy_and_the_shim_shape(self):
         """During migration both shapes are in the wild. Dropping the legacy marker would
         make every not-yet-migrated install invisible to the orphan scan."""
-        legacy = f'"{sys.executable}" "{emit.ROOT / "rituals" / "harness.py"}" git-gate'
+        legacy = f'"{sys.executable}" "{_build_core.ROOT / "rituals" / "harness.py"}" git-gate'
         shim = f'"{emit._hook_shim_path()}" git-gate'
         for cmd in (legacy, shim):
             with self.subTest(cmd=cmd):

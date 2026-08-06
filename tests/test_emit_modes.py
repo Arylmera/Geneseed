@@ -20,6 +20,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
+import _build_core  # noqa: E402  (owner of the source roots / posture / mode — see its docstring)
 
 
 def _quiet(fn, *a, **kw):
@@ -96,7 +97,7 @@ class OpencodePerRepoTests(_Tmp):
         self.assertIs(cfg.get("lsp"), True)            # code intelligence enabled (all built-in servers)
         # AGENT.md keeps its prose but the per-row spec links are de-linked to names.
         agent_md = (out / "AGENT.md").read_text(encoding="utf-8")
-        self.assertEqual(build.CAPABILITY_LINK_RE.findall(agent_md), [])
+        self.assertEqual(_build_core.CAPABILITY_LINK_RE.findall(agent_md), [])
 
     def test_manifest_tracks_owned_files(self):
         out = self.d / "bundle"

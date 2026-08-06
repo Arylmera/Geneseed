@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
 import harness  # noqa: E402
+import _build_core  # noqa: E402  (the single owner of ROOT/SRC/THEMES — see its docstring)
 import _build_emit  # noqa: E402  (hook shim path + the Geneseed-hook marker tuple)
 import _harness_build  # noqa: E402  (monkeypatched directly for the rebuild-all test)
 
@@ -75,7 +76,7 @@ class ClaudeEmitTests(unittest.TestCase):
         self.assertTrue(gen)
         shim = str(_build_emit._hook_shim_path())
         self.assertTrue(all(shim in c for c in gen), gen)
-        self.assertFalse(any(str(build.ROOT) in c for c in gen),
+        self.assertFalse(any(str(_build_core.ROOT) in c for c in gen),
                          f"emitted hooks still name the checkout: {gen}")
         # No cat AGENT.md at global scope; plugins dir never written.
         self.assertFalse(any("cat AGENT.md" in c for c in _hook_cmds(s)))
@@ -605,7 +606,7 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         s = self._settings(repo)
         # claudeMdExcludes suppresses the GLOBAL ~/.claude/CLAUDE.md, and only that.
         # Posix spelling: the entries are glob patterns, where a backslash escapes.
-        want = (build._claude_config_dir() / "CLAUDE.md").resolve().as_posix()
+        want = (_build_core._claude_config_dir() / "CLAUDE.md").resolve().as_posix()
         self.assertIn(want, s.get("claudeMdExcludes", []))
         # context hook is scope-aware: --root points at the project's own .claude.
         ctx = [c for c in _hook_cmds(s) if "context" in c]
@@ -694,7 +695,7 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         # strip it (and drop it from the manifest) rather than carry it forward.
         repo = (self.tmp / "bobrepo2").resolve(); repo.mkdir()
         build.emit_bob("neutral", repo)
-        stale = str((build._bob_config_dir() / "AGENTS.md").resolve())
+        stale = str((_build_core._bob_config_dir() / "AGENTS.md").resolve())
         sp = repo / ".bob" / "settings.json"
         s = json.loads(_read(sp)); s["claudeMdExcludes"] = [stale]
         sp.write_text(json.dumps(s, indent=2) + "\n", encoding="utf-8")
@@ -980,7 +981,7 @@ class GitGateRootTests(unittest.TestCase):
         cfg = self.tmp / "settings_test"
         cfg.mkdir()
         py = f'"{sys.executable}"'
-        h = f'"{_build_emit.ROOT / "rituals" / "harness.py"}"'
+        h = f'"{_build_core.ROOT / "rituals" / "harness.py"}"'
         old_group = {"matcher": "Bash",
                      "hooks": [{"type": "command", "command": f"{py} {h} git-gate"}]}
         settings = cfg / "settings.json"

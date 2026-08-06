@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
+import _build_core  # noqa: E402  (owner of the source roots / posture / mode — see its docstring)
 import harness  # noqa: E402
 import _harness_build  # noqa: E402  the namespace whose ROOT the gates read
 import _harness_tui  # noqa: E402
@@ -51,11 +52,11 @@ class _FakeTree:
             (self.root / "src/skills" / name).mkdir()
         self._patches = [
             mock.patch.object(_harness_build, "ROOT", self.root),
-            mock.patch.object(build, "SRC", self.root / "src"),
-            mock.patch.object(build, "THEMES", self.root / "themes"),
-            mock.patch.object(build, "PLUGIN_SRC", self.root / "plugins"),
-            mock.patch.object(build, "WORKFLOW_SRC", self.root / "workflows"),
-            mock.patch.object(build, "VENDORED_SKILL_DIRS", tuple(self.vendored)),
+            mock.patch.object(_build_core, "SRC", self.root / "src"),
+            mock.patch.object(_build_core, "THEMES", self.root / "themes"),
+            mock.patch.object(_build_core, "PLUGIN_SRC", self.root / "plugins"),
+            mock.patch.object(_build_core, "WORKFLOW_SRC", self.root / "workflows"),
+            mock.patch.object(_build_core, "VENDORED_SKILL_DIRS", tuple(self.vendored)),
         ]
         for p in self._patches:
             p.start()
@@ -196,7 +197,7 @@ class VendorPinTests(unittest.TestCase):
 
     def test_flags_a_listed_folder_that_does_not_exist(self):
         with _FakeTree() as t:  # noqa: F841
-            with mock.patch.object(build, "VENDORED_SKILL_DIRS", ("gone",)):
+            with mock.patch.object(_build_core, "VENDORED_SKILL_DIRS", ("gone",)):
                 problems = harness._vendor_pin_problems()
         self.assertTrue(any("does not exist" in p for p in problems), problems)
 
@@ -223,7 +224,7 @@ class EntityStatusTests(unittest.TestCase):
     def test_corrupt_registry_loads_as_empty(self):
         with _FakeTree() as t:
             (t.root / "registry.json").write_text("{oops", encoding="utf-8")
-            with mock.patch.object(build, "ROOT", t.root):
+            with mock.patch.object(_build_core, "ROOT", t.root):
                 self.assertEqual(_harness_tui.load_registry(), {})
 
     def test_inventory_carries_a_status_for_every_entity(self):
