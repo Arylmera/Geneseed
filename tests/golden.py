@@ -199,17 +199,26 @@ def cell_env(home: Path) -> dict:
     return env
 
 
-def run_cell(gen: list[str], cell: dict) -> "dict[str, bytes] | str":
+def run_cell(gen: list[str], cell: dict, repeat: int = 1) -> "dict[str, bytes] | str":
     """Run one generator over one cell in a fresh sandbox. Returns the snapshot, or an
-    error string — a generator that crashes is a finding, not an exception to raise."""
+    error string — a generator that crashes is a finding, not an exception to raise.
+
+    `repeat > 1` runs the generator that many times into the SAME sandbox and snapshots
+    the end state. That is the re-emit path — the one real users are on from their second
+    build onwards, and the one this harness could not see at all until now: idempotence,
+    the write-before-delete prune, claim-on-create and the managed-block merge only have
+    anything to do when the target already exists."""
     with tempfile.TemporaryDirectory() as td:
         home, out = Path(td) / "home", Path(td) / "out"
         home.mkdir()
         env = cell_env(home)
-        proc = subprocess.run(gen + _argv(cell, out), cwd=str(ROOT), env=env,
-                              capture_output=True, text=True)
-        if proc.returncode != 0:
-            return f"exit {proc.returncode}: {(proc.stderr or proc.stdout).strip()[:400]}"
+        for n in range(1, repeat + 1):
+            proc = subprocess.run(gen + _argv(cell, out), cwd=str(ROOT), env=env,
+                                  capture_output=True, text=True)
+            if proc.returncode != 0:
+                emit = f"emit {n} of {repeat}: " if repeat > 1 else ""
+                return (f"{emit}exit {proc.returncode}: "
+                        f"{(proc.stderr or proc.stdout).strip()[:400]}")
         sick = _shim_health(Path(td))
         if sick:
             return sick
@@ -227,15 +236,18 @@ def _diff(name: str, a: bytes, b: bytes) -> str:
     return "\n".join("    " + x for x in lines[:14])
 
 
-def compare(ref: list[str], new: list[str], quick: bool, limit: int) -> int:
+def compare(ref: list[str], new: list[str], quick: bool, limit: int,
+            ref_repeat: int = 1, new_repeat: int = 1) -> int:
     matrix = cells(quick)
-    print(f"[golden] {len(matrix)} cells · ref={' '.join(ref)} · new={' '.join(new)}")
+    times = {1: "", 2: " ×2"}
+    print(f"[golden] {len(matrix)} cells · ref={' '.join(ref)}{times.get(ref_repeat, '')}"
+          f" · new={' '.join(new)}{times.get(new_repeat, '')}")
     failures: list[str] = []
     for i, cell in enumerate(matrix, 1):
         cid = f"{cell['theme']}/{cell['emit']}/{cell['footprint']}" + \
               (f"/{cell['posture']}" if cell.get("posture") else "") + \
               (f"/{cell['mode']}" if cell.get("mode") else "")
-        a, b = run_cell(ref, cell), run_cell(new, cell)
+        a, b = run_cell(ref, cell, ref_repeat), run_cell(new, cell, new_repeat)
         if isinstance(a, str) or isinstance(b, str):
             failures.append(f"  {cid}: generator failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                             f"\n    new: {b if isinstance(b, str) else 'ok'}")
@@ -284,9 +296,20 @@ def main(argv=None) -> int:
     ap.add_argument("--quick", action="store_true",
                     help="neutral theme only (18 cells) — for fast iteration")
     ap.add_argument("--limit", type=int, default=5, help="failing cells to detail")
+    ap.add_argument("--idempotent", action="store_true",
+                    help="re-emit gate: compare a FRESH emit against a second emit onto "
+                         "the tree the first one left. Everything else here emits into a "
+                         "clean sandbox, so idempotence, the write-before-delete prune, "
+                         "claim-on-create and the managed-block merge are otherwise never "
+                         "exercised — and that is the path every user is on from their "
+                         "second build onwards. Uses --ref alone; --new is ignored.")
     args = ap.parse_args(argv)
     ref = _split(args.ref) if args.ref else [sys.executable, "build.py"]
     new = _split(args.new) if args.new else ref
+    if args.idempotent:
+        # Both sides are the SAME generator; the variable is whether the target already
+        # holds a previous emit. A difference here is a re-emit bug, not a port bug.
+        return compare(ref, ref, args.quick, args.limit, ref_repeat=1, new_repeat=2)
     return compare(ref, new, args.quick, args.limit)
 
 
