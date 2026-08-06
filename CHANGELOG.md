@@ -107,6 +107,19 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   file is never regenerated.
 
 ### Fixed
+- **The golden acceptance harness could render into your real install.** `tests/golden.py`
+  runs the generator over 259 cells, ~126 of which are `*-global` emits whose whole job is
+  to write into a host's global config dir, and it sandboxes them by redirecting `HOME`
+  and `XDG_CONFIG_HOME`. That was not enough: each host resolver checks its own relocation
+  variable *first* and returns before ever consulting those paths, so anyone with
+  `OPENCODE_CONFIG_DIR` set — the documented way to keep the harness in a git-tracked
+  folder — had every global cell rendering straight into the real target. Reproduced
+  against the pre-fix code: a single `opencode-global` cell wrote 135 files outside the
+  sandbox. The cell environment now clears `OPENCODE_CONFIG_DIR`, `BOB_CONFIG_DIR` and
+  `COPILOT_CONFIG_DIR`, plus every `GENESEED_*` knob except the one it sets itself —
+  cleared by prefix, so a knob added later is neutralised by default. Four tests pin it,
+  including one that re-derives the variable list from `_build_core`'s own source rather
+  than trusting a hand-written list to stay current.
 - **Every login launcher told you to start the web UI in the foreground**: the VBS,
   the `schtasks` task and the macOS LaunchAgent in SETUP.md (and its `autostart`
   web slice) all ran `geneseed web --no-browser`. Only `web start` daemonizes and

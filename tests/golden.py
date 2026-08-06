@@ -17,13 +17,33 @@ It is useful BEFORE any Node exists, in two ways:
 
     python tests/golden.py                                   # determinism self-check
     python tests/golden.py --quick                           # neutral theme only, fast
-    python tests/golden.py --new "node bin/geneseed-gen.js"  # the P1 gate
+    python tests/golden.py --new "node bin/geneseed-gen.js"  # the P2 gate
     python tests/golden.py --new "python ../old/build.py"    # cross-revision regression
 
+DO NOT MISTAKE THE SELF-CHECK FOR A REGRESSION GATE. With no --new this compares the
+generator against ITSELF: it proves the output is deterministic, and it stays green
+through a refactor that changes every emitted byte, as long as it changes them
+consistently. To gate a refactor you need a second, OLDER generator:
+
+    git worktree add /tmp/pre <the-commit-before-your-change>
+    python tests/golden.py --ref "<python> /tmp/pre/build.py" --new "<python> build.py"
+
+Pass a literal interpreter path there — `which python` under Git Bash yields a
+`;`-joined string `_split` cannot parse — and decode any redirected output as UTF-8,
+since the `·`/`—` separators below make `tail` fail on a cp1252 console.
+
+That cross-revision form compares CONTENT too, so it is a refactor gate, not a content
+gate: `.geneseed-version` records `source_fingerprint()` and today's date, so two
+revisions whose `src/`or `themes/` differ at all will differ in every cell on that one
+file (and a run spanning midnight will too). That is working as intended — the marker is
+supposed to change when the source does — but read the diff before believing a
+"regression".
+
 SAFETY: every cell runs with HOME/USERPROFILE/XDG_CONFIG_HOME/APPDATA/LOCALAPPDATA
-redirected into a throwaway dir (the recipe tests/test_emit_smoke.py uses). Without
-that, the ~126 *-global cells would render straight into the real config dirs and
-overwrite the user's actual installs. Never remove the sandbox.
+redirected into a throwaway dir (the recipe tests/test_emit_smoke.py uses), AND with
+every host relocation variable cleared — see run_cell, where the reason is spelled out.
+Without both halves the ~126 *-global cells render straight into the real config dirs and
+overwrite the user's actual installs, twice per run. Never remove the sandbox.
 """
 from __future__ import annotations
 
@@ -146,19 +166,46 @@ def _shim_health(sandbox: Path) -> "str | None":
     return None
 
 
+# Host relocation knobs. Each resolver checks its own variable FIRST and returns before
+# ever consulting HOME/XDG (_build_core.py:84/104/116), so redirecting HOME alone does
+# NOT sandbox the *-global emits. Measured, not theorised: with OPENCODE_CONFIG_DIR
+# exported, one opencode-global cell wrote 135 files straight into the real target.
+RELOCATION_VARS = ("OPENCODE_CONFIG_DIR", "BOB_CONFIG_DIR", "COPILOT_CONFIG_DIR")
+
+
+def cell_env(home: Path) -> dict:
+    """The environment one cell runs in: every path the generator resolves redirected
+    into `home`, and every knob that could redirect or alter output cleared.
+
+    Two distinct reasons to clear. The relocation vars are a SAFETY matter — leaving one
+    set renders into the developer's real install, ~126 global cells per run, and it is a
+    documented knob people really do export (it is how you keep the harness in a
+    git-tracked folder). The remaining GENESEED_* knobs are a MEANING matter: several
+    change what gets emitted (GENESEED_PRIMARY and GENESEED_COMMANDS add files,
+    GENESEED_STACK_GLOBAL takes a different excludes branch), so inheriting them makes
+    the same matrix mean something different on each machine. Cleared by PREFIX, not by
+    name, so a knob added later is neutralised by default rather than quietly joining the
+    inherited set."""
+    env = dict(os.environ, HOME=str(home), USERPROFILE=str(home),
+               XDG_CONFIG_HOME=str(home / ".config"),
+               APPDATA=str(home / "AppData" / "Roaming"),
+               LOCALAPPDATA=str(home / "AppData" / "Local"),
+               GENESEED_HOME=str(home / ".geneseed"),
+               PYTHONUTF8="1")
+    for var in RELOCATION_VARS:
+        env.pop(var, None)
+    for var in [k for k in env if k.startswith("GENESEED_") and k != "GENESEED_HOME"]:
+        env.pop(var, None)
+    return env
+
+
 def run_cell(gen: list[str], cell: dict) -> "dict[str, bytes] | str":
     """Run one generator over one cell in a fresh sandbox. Returns the snapshot, or an
     error string — a generator that crashes is a finding, not an exception to raise."""
     with tempfile.TemporaryDirectory() as td:
         home, out = Path(td) / "home", Path(td) / "out"
         home.mkdir()
-        env = dict(os.environ, HOME=str(home), USERPROFILE=str(home),
-                   XDG_CONFIG_HOME=str(home / ".config"),
-                   APPDATA=str(home / "AppData" / "Roaming"),
-                   LOCALAPPDATA=str(home / "AppData" / "Local"),
-                   GENESEED_HOME=str(home / ".geneseed"),
-                   PYTHONUTF8="1")
-        env.pop("GENESEED_HARNESS", None)
+        env = cell_env(home)
         proc = subprocess.run(gen + _argv(cell, out), cwd=str(ROOT), env=env,
                               capture_output=True, text=True)
         if proc.returncode != 0:
