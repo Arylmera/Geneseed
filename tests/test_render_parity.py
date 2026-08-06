@@ -22,6 +22,12 @@ posture and mode against a themed tree).
 Matrix: every theme on the default axes, every axis combination on one theme, and every
 posture and mode once. Set GENESEED_PARITY_FULL=1 for the full cartesian product.
 
+Known weak spot, written down rather than discovered later: with no `node` on PATH this
+whole class SKIPS, and a skipped suite still reports OK. That is the "gate that never
+fires" shape P0 warned about, and the mitigation is procedural — CI must have Node, and
+the port's own acceptance runs are worthless without it. Do not read a green suite on a
+Node-less machine as evidence the port is intact.
+
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
 import json

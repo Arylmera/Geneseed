@@ -226,8 +226,10 @@ export function themedRel(rel, theme) {
 
 /** `_build_render.dest_rel` — AGENT.md.tmpl -> AGENT.md; everything else keeps its name. */
 export function destRel(rel) {
+  // path.join normalises the '.' that dirname returns for a bare filename, so a
+  // top-level AGENT.md.tmpl comes back as 'AGENT.md', not './AGENT.md'.
   return path.basename(rel) === 'AGENT.md.tmpl'
-    ? path.join(path.dirname(rel), 'AGENT.md').replace(/^\.[\\/]/, '')
+    ? path.join(path.dirname(rel), 'AGENT.md')
     : rel;
 }
 
