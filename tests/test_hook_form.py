@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import _build_core
-import _build_emit as emit
+import _build_settings  # noqa: E402  (the host-config wiring layer)
 
 # The harness.py subcommands whose whole purpose is to stand between the agent and an
 # act needing the user's word. Everything else must fail open.
@@ -23,7 +23,7 @@ GATES = ("git-gate", "rule-gate")
 class HookFormTests(unittest.TestCase):
     def _all_commands(self):
         with tempfile.TemporaryDirectory() as td:
-            groups = emit._claude_hook_groups(Path(td))
+            groups = _build_settings._claude_hook_groups(Path(td))
             for event, gs in groups.items():
                 for g in gs:
                     for h in g.get("hooks", []):
@@ -74,7 +74,7 @@ class HookShimTests(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_shim_is_written_and_runs_the_harness(self):
-        p = emit._write_hook_shim()
+        p = _build_settings._write_hook_shim()
         self.assertIsNotNone(p, "shim could not be written into a fresh temp home")
         self.assertTrue(p.is_file())
         body = p.read_text(encoding="utf-8")
@@ -86,7 +86,7 @@ class HookShimTests(unittest.TestCase):
         path and signal by printing JSON. A shim that echoes anything of its own turns
         a blocking gate into a silently permissive one, so `@echo off` and the absence
         of any print are load-bearing, not cosmetic."""
-        body = emit._write_hook_shim().read_text(encoding="utf-8")
+        body = _build_settings._write_hook_shim().read_text(encoding="utf-8")
         if sys.platform == "win32":
             self.assertTrue(body.startswith("@echo off"), body)
             self.assertIn("setlocal", body)   # must not leak vars into the agent's env
@@ -104,26 +104,26 @@ class HookShimTests(unittest.TestCase):
         """Windows cannot replace a file that a firing hook is executing right now, so an
         unchanged shim must never be rewritten — otherwise a rebuild during a live
         session raises a sharing violation into the build."""
-        p = emit._write_hook_shim()
+        p = _build_settings._write_hook_shim()
         before = p.stat().st_mtime_ns
-        again = emit._write_hook_shim()
+        again = _build_settings._write_hook_shim()
         self.assertEqual(p, again)
         self.assertEqual(before, again.stat().st_mtime_ns, "unchanged shim was rewritten")
 
     def test_stale_shim_is_refreshed(self):
         """The shim body carries the checkout path, and refreshing it on every emit is
         what replaces the self-heal the old checkout-in-the-command form gave for free."""
-        p = emit._write_hook_shim()
+        p = _build_settings._write_hook_shim()
         p.write_text("#!/bin/sh\nexec /gone/python /gone/harness.py \"$@\"\n", encoding="utf-8")
-        emit._write_hook_shim()
+        _build_settings._write_hook_shim()
         self.assertIn(str(_build_core.ROOT / "rituals" / "harness.py"),
                       p.read_text(encoding="utf-8"))
 
     def test_emitted_commands_name_the_shim_not_the_checkout(self):
         with tempfile.TemporaryDirectory() as td:
-            groups = emit._claude_hook_groups(Path(td))
+            groups = _build_settings._claude_hook_groups(Path(td))
         cmds = [h["command"] for gs in groups.values() for g in gs for h in g["hooks"]]
-        shim = str(emit._hook_shim_path())
+        shim = str(_build_settings._hook_shim_path())
         for c in cmds:
             with self.subTest(cmd=c):
                 self.assertIn(shim, c)
@@ -135,13 +135,13 @@ class HookShimTests(unittest.TestCase):
         pre-shim direct form is strictly no worse than the old behaviour, so that is the
         fallback."""
         boom = lambda: None                       # noqa: E731 — stand-in for a failed write
-        real = emit._write_hook_shim
-        emit._write_hook_shim = lambda: None
+        real = _build_settings._write_hook_shim
+        _build_settings._write_hook_shim = lambda: None
         try:
             with contextlib.redirect_stderr(io.StringIO()) as err:
-                prefix = emit._hook_prefix()
+                prefix = _build_settings._hook_prefix()
         finally:
-            emit._write_hook_shim = real
+            _build_settings._write_hook_shim = real
         del boom
         self.assertIn(sys.executable, prefix)
         self.assertIn("harness.py", prefix)
@@ -154,7 +154,7 @@ class HookShimTests(unittest.TestCase):
         this test pins the detection itself."""
         sys.path.insert(0, str(_build_core.ROOT / "rituals"))
         import _harness_build  # noqa: E402  (local: keeps the module list minimal)
-        p = emit._write_hook_shim()
+        p = _build_settings._write_hook_shim()
         self.assertEqual(_harness_build._shim_problems(), [], "healthy shim flagged")
         p.write_text('#!/bin/sh\nexec "/gone/python" "/gone/harness.py" "$@"\n',
                      encoding="utf-8")
@@ -167,18 +167,18 @@ class HookShimTests(unittest.TestCase):
         falls back to the direct form when it cannot write one. Neither is a defect."""
         sys.path.insert(0, str(_build_core.ROOT / "rituals"))
         import _harness_build  # noqa: E402
-        self.assertFalse(emit._hook_shim_path().exists())
+        self.assertFalse(_build_settings._hook_shim_path().exists())
         self.assertEqual(_harness_build._shim_problems(), [])
 
     def test_sniff_recognises_both_the_legacy_and_the_shim_shape(self):
         """During migration both shapes are in the wild. Dropping the legacy marker would
         make every not-yet-migrated install invisible to the orphan scan."""
         legacy = f'"{sys.executable}" "{_build_core.ROOT / "rituals" / "harness.py"}" git-gate'
-        shim = f'"{emit._hook_shim_path()}" git-gate'
+        shim = f'"{_build_settings._hook_shim_path()}" git-gate'
         for cmd in (legacy, shim):
             with self.subTest(cmd=cmd):
-                self.assertTrue(any(m in cmd for m in emit._GENESEED_HOOK_SNIFF))
-        self.assertFalse(any(m in "echo hi" for m in emit._GENESEED_HOOK_SNIFF),
+                self.assertTrue(any(m in cmd for m in _build_settings._GENESEED_HOOK_SNIFF))
+        self.assertFalse(any(m in "echo hi" for m in _build_settings._GENESEED_HOOK_SNIFF),
                          "a plain user hook must never be mistaken for Geneseed's")
 
 

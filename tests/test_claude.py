@@ -18,6 +18,7 @@ import build  # noqa: E402
 import harness  # noqa: E402
 import _build_core  # noqa: E402  (the single owner of ROOT/SRC/THEMES — see its docstring)
 import _build_emit  # noqa: E402  (hook shim path + the Geneseed-hook marker tuple)
+import _build_settings  # noqa: E402  (the host-config wiring layer)
 import _harness_build  # noqa: E402  (monkeypatched directly for the rebuild-all test)
 
 
@@ -40,7 +41,7 @@ def _geneseed_cmds(settings: dict):
     were never removed. Keying off the production marker tuple means a future change to
     the emitted shape can never silently hollow these assertions out again."""
     return [c for c in _hook_cmds(settings)
-            if any(m in c for m in _build_emit._GENESEED_HOOK_SNIFF)]
+            if any(m in c for m in _build_settings._GENESEED_HOOK_SNIFF)]
 
 
 class ClaudeEmitTests(unittest.TestCase):
@@ -74,7 +75,7 @@ class ClaudeEmitTests(unittest.TestCase):
         s = json.loads(_read(self.cfg / "settings.json"))
         gen = _geneseed_cmds(s)
         self.assertTrue(gen)
-        shim = str(_build_emit._hook_shim_path())
+        shim = str(_build_settings._hook_shim_path())
         self.assertTrue(all(shim in c for c in gen), gen)
         self.assertFalse(any(str(_build_core.ROOT) in c for c in gen),
                          f"emitted hooks still name the checkout: {gen}")
@@ -954,7 +955,7 @@ class GitGateRootTests(unittest.TestCase):
         """The emitted git-gate hook command includes --root with the cfg path."""
         import _build_emit
         cfg = self.tmp / "dotclaude"
-        groups = _build_emit._claude_hook_groups(cfg)
+        groups = _build_settings._claude_hook_groups(cfg)
         cmd = groups["PreToolUse"][0]["hooks"][0]["command"]
         self.assertIn("git-gate", cmd)
         self.assertIn(f'--root "{cfg}"', cmd)
@@ -965,7 +966,7 @@ class GitGateRootTests(unittest.TestCase):
         positionally. --root is what scopes the memory/ match to this install."""
         import _build_emit
         cfg = self.tmp / "dotclaude"
-        groups = _build_emit._claude_hook_groups(cfg)
+        groups = _build_settings._claude_hook_groups(cfg)
         rule = [g for g in groups["PreToolUse"]
                 if "rule-gate" in g["hooks"][0]["command"]]
         self.assertEqual(len(rule), 1, "expected exactly one rule-gate group")
@@ -988,7 +989,7 @@ class GitGateRootTests(unittest.TestCase):
         settings.write_text(json.dumps({"hooks": {"PreToolUse": [old_group]}}),
                             encoding="utf-8")
         prior = [{"event": "PreToolUse", "group": old_group}]
-        _, managed = _build_emit._merge_claude_settings(settings, "global", prior_hooks=prior)
+        _, managed = _build_settings._merge_claude_settings(settings, "global", prior_hooks=prior)
         data = json.loads(settings.read_text(encoding="utf-8"))
         cmds = [hk["command"] for g in data["hooks"]["PreToolUse"] for hk in g["hooks"]]
         self.assertTrue(all("--root" in c for c in cmds if "git-gate" in c),

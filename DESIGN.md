@@ -133,6 +133,14 @@ renders it as the name in parentheses.
 - Resolves `<!-- INCLUDE: relpath -->` by inlining the rendered target.
 - Unknown tokens are left visible (debugging aid); `doctor` flags them.
 - Stdlib only; no third-party dependencies, ever.
+- **`_build_settings.py` is the half of the emit that edits files you co-own** — the
+  `settings.json` / `opencode.json` merges, JSONC parsing, the hook shim and the managed
+  CLAUDE.md block. It is a separate module because every function in it reconciles
+  Geneseed's claim with content Geneseed did not write, and because nine of its ten entry
+  points are driven by the *runtime* as well as by an emit (`rituals/_harness_mcp.py` uses
+  them for deactivate, remerge, reactivate and uninstall; so do `exclude` and `mcp`).
+  Its dependency closure points one way only: nothing in it calls into `_build_render` or
+  `_build_emit`. Keep it that way — that closure is what makes it a unit.
 - **`_build_core` is the single owner of the generator's mutable configuration** — the
   source/theme roots, the four `_<host>_config_dir` resolvers, and the build-wide
   posture/mode selection, listed in its `_OWNED` tuple. The membership rule is *does

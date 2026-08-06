@@ -21,7 +21,10 @@ import tempfile
 # build.py is a thin facade mirroring harness.py: it owns the CLI entry (main)
 # and the import-time wiring. The render/emit/global pipelines live in
 # _build_{render,emit,global}.py; foundational imports and constants in
-# _build_core.py. After importing the submodules we link them into ONE shared
+# _build_core.py; the host-config wiring the user co-owns (settings.json /
+# opencode.json merges, JSONC, the hook shim, managed blocks) in _build_settings.py,
+# split out because it is the half of the emit that cannot change host language and
+# because the runtime drives it directly. After importing the submodules we link them into ONE shared
 # namespace so cross-module calls resolve as in the original flat file, and the
 # `import build` surface (harness, web, tests) stays byte-for-byte unchanged.
 #
@@ -30,11 +33,12 @@ import tempfile
 # here would be circular; that is also why this merge exists instead of build
 # simply reusing a shared facade helper from the harness tree.
 import _build_core
+import _build_settings
 import _build_render
 import _build_emit
 import _build_global
 
-_SUBMODULES = (_build_core, _build_render, _build_emit, _build_global)
+_SUBMODULES = (_build_core, _build_settings, _build_render, _build_emit, _build_global)
 # _build_core._OWNED is deliberately held back from the splice. Those names are the
 # generator's MUTABLE configuration (source/theme roots, posture/mode); copying them
 # into four namespaces is what forced the old attribute mirror below, and a copy is

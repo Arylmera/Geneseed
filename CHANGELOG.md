@@ -182,6 +182,19 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   reporting the old verdict.
 
 ### Changed
+- **The host-config wiring moved into its own module, `_build_settings.py`.** The emit was
+  doing two unrelated jobs in one file: computing bundle content, and reconciling
+  Geneseed's claim inside files you also edit — `settings.json`, `opencode.json`, the
+  managed `CLAUDE.md` block — through JSONC parsing and surgical merges. The second job is
+  not really part of generation at all: nine of its ten entry points are called by the
+  *runtime* (deactivate, remerge, reactivate, uninstall, plus `exclude` and `mcp`), not by
+  a build. Splitting them takes `_build_emit.py` from 1466 lines to 734 and leaves a layer
+  whose dependency closure points one way only — nothing in it calls back into the render
+  or emit code. Nothing moved namespace: `build.py` splices the new module alongside the
+  others, so every existing call site resolves unchanged, and emitted output is identical
+  across all 259 golden cells. If you monkeypatch any of it, patch `_build_settings` —
+  patching another submodule's spliced copy binds a copy the real caller never reads, and
+  a test now fails on that shape.
 - **The generator's configuration now has one owner instead of five copies.** `build.py`
   splices its four `_build_*` submodules into a shared namespace, which gave each of them
   its own copy of `SRC`, `THEMES`, `ROOT`, `CONFIG`, `PLUGIN_SRC`, `WORKFLOW_SRC`,

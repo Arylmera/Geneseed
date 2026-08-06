@@ -34,6 +34,7 @@ import _build_core  # noqa: E402
 import _build_render  # noqa: E402
 import _build_emit  # noqa: E402
 import _build_global  # noqa: E402
+import _build_settings  # noqa: E402
 
 SUBMODULES = (_build_render, _build_emit, _build_global)
 
@@ -111,6 +112,48 @@ class SingleBindingTests(unittest.TestCase):
         self.assertEqual(offenders, [], "\n".join(
             [""] + offenders + ["-> add the name to _build_core._OWNED (and read it as "
                                 "_build_core.<name>), or patch the defining module"]))
+
+    def test_no_test_patches_a_submodules_spliced_copy(self):
+        """Same narrowing one level down: patch the module that DEFINES the name.
+
+        The splice gives every submodule a copy of every shared name, so
+        `_build_emit._write_hook_shim = ...` binds a copy while the real caller —
+        `_hook_prefix`, which lives in _build_settings — keeps reading its own module's
+        globals and never sees the patch. That is exactly what happened when the wiring
+        layer moved out of _build_emit: the monkeypatch silently stopped working. It
+        failed loudly there only because the assertion was positive; the same mistake on
+        an assertNotIn would have gone green while testing nothing."""
+        defines = {}
+        for mod in (_build_core, _build_settings, _build_render, _build_emit, _build_global):
+            tree = ast.parse(Path(mod.__file__).read_text(encoding="utf-8"))
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    defines[node.name] = mod.__name__
+                elif isinstance(node, ast.Assign):
+                    for t in node.targets:
+                        if isinstance(t, ast.Name):
+                            defines.setdefault(t.id, mod.__name__)
+        # test-local alias -> real module, so `import _build_emit as emit` is still caught
+        offenders = []
+        for path in sorted(Path(__file__).parent.glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            alias = {a.asname or a.name: a.name
+                     for n in ast.walk(tree) if isinstance(n, ast.Import)
+                     for a in n.names if a.name.startswith("_build_")}
+            for node in ast.walk(tree):
+                target = name = None
+                if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                        and node.value.id in alias and not isinstance(node.ctx, ast.Load)):
+                    target, name = alias[node.value.id], node.attr
+                elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "object" and len(node.args) > 1
+                        and isinstance(node.args[0], ast.Name) and node.args[0].id in alias
+                        and isinstance(node.args[1], ast.Constant)):
+                    target, name = alias[node.args[0].id], node.args[1].value
+                if target and defines.get(name, target) != target:
+                    offenders.append(f"{path.name}:{node.lineno} patches {target}.{name}, "
+                                     f"but {defines[name]} defines it")
+        self.assertEqual(offenders, [], "\n".join([""] + offenders))
 
     def test_unknown_attribute_still_raises_attributeerror(self):
         """__getattr__ must not turn a typo into something else — `build.NOPE` is still
