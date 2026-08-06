@@ -162,6 +162,25 @@ class RedirectReachesTheGeneratorTests(unittest.TestCase):
         self.assertTrue((cfg / "AGENT.md").is_file(),
                         "the global emit ignored the redirected config dir")
 
+    def test_config_dir_redirect_reaches_hosts_and_the_preamble_map(self):
+        """Two module-level dicts hold a callable per host. Binding the resolver FUNCTION
+        into them captures it at import — a second binding the owner cannot reach, which
+        is the same 'redirect reaches only some copies' defect one level down. Both are
+        late-bound instead; this is what fails if either goes back to a direct reference.
+
+        `_PREAMBLE_CONFIG_DIR` is the one with teeth: its value is written into a real
+        settings file as a claudeMdExcludes path, so a missed redirect bakes whoever ran
+        the build into an emitted config."""
+        marker = Path("redirected-config-dir")
+        with mock.patch.object(_build_core, "_claude_config_dir", lambda: marker):
+            self.assertEqual(build.HOSTS["claude"]["config_dir"](), marker)
+            self.assertEqual(_build_global._PREAMBLE_CONFIG_DIR["CLAUDE.md"](), marker)
+        for host, name in (("opencode", "_opencode_config_dir"),
+                           ("bob", "_bob_config_dir"),
+                           ("copilot", "_copilot_config_dir")):
+            with mock.patch.object(_build_core, name, lambda: marker):
+                self.assertEqual(build.HOSTS[host]["config_dir"](), marker, host)
+
     def test_src_and_mode_redirect_reach_the_mode_body(self):
         (self.tmp / "modes").mkdir()
         (self.tmp / "modes" / "fixture.md").write_text(

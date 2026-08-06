@@ -44,7 +44,12 @@ GLOBAL_MANIFEST = ".geneseed-manifest.json"
 # filename-keyed match would suppress the project's own AGENTS.md too), so Bob's bypass
 # rides on its rules folder instead — the workspace rules/geneseed.md overrides the
 # global one (see _emit_claude_core).
-_PREAMBLE_CONFIG_DIR = {"CLAUDE.md": _build_core._claude_config_dir}
+# Late-bound on purpose: binding `_build_core._claude_config_dir` itself would capture the
+# function OBJECT at import, giving the resolver a second binding that redirecting the
+# owner cannot reach — the exact "reaches only some copies" failure `_OWNED` exists to
+# prevent. This dict feeds the claudeMdExcludes path written into a real settings file, so
+# a missed redirect bakes the developer's own home into an emitted config.
+_PREAMBLE_CONFIG_DIR = {"CLAUDE.md": lambda: _build_core._claude_config_dir()}
 
 # The workspace rules stub a PROJECT Bob emit ships as .bob/rules/geneseed.md. Its only
 # job is to exist under the same name as the global ~/.bob/rules/geneseed.md so Bob's
@@ -771,7 +776,7 @@ def emit_copilot(theme_name: str, out: Path, root: Path | None = None,
 #                    model, so the Agents table is load-bearing.
 HOSTS = {
     "opencode": {
-        "config_dir": _build_core._opencode_config_dir,
+        "config_dir": lambda: _build_core._opencode_config_dir(),
         "config_file": "opencode.json",
         "project_marker": ".opencode",
         "agent_file": "AGENT.md",
@@ -779,7 +784,7 @@ HOSTS = {
         "native_catalog": True,
     },
     "claude": {
-        "config_dir": _build_core._claude_config_dir,
+        "config_dir": lambda: _build_core._claude_config_dir(),
         "config_file": "settings.json",
         "project_marker": ".claude",
         "agent_file": "CLAUDE.md",
@@ -787,7 +792,7 @@ HOSTS = {
         "native_catalog": True,
     },
     "bob": {
-        "config_dir": _build_core._bob_config_dir,
+        "config_dir": lambda: _build_core._bob_config_dir(),
         "config_file": "settings.json",
         "project_marker": ".bob",
         "agent_file": "AGENTS.md",
@@ -795,7 +800,7 @@ HOSTS = {
         "native_catalog": False,
     },
     "copilot": {
-        "config_dir": _build_core._copilot_config_dir,
+        "config_dir": lambda: _build_core._copilot_config_dir(),
         "config_file": "mcp-config.json",
         "project_marker": ".github",
         "agent_file": "AGENTS.md",
