@@ -2,6 +2,7 @@
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -115,6 +116,25 @@ class CatalogTests(unittest.TestCase):
     def test_catalog_unknown_section_raises(self):
         with self.assertRaises(web.NotFound):
             web.api_catalog(self.state, "bogus")
+
+    def test_a_skill_of_your_own_reads_personal_and_keeps_out_of_the_taxonomy(self):
+        """A skill the lifecycle registry never heard of — dropped into the install by
+        hand — must be tagged `personal` on BOTH axes. Filing it under the `build`
+        class fallback would claim a Geneseed taxonomy slot it was never given."""
+        mine = _FIXTURE / "skills" / "my-own-thing"
+        mine.mkdir(parents=True)
+        (mine / "SKILL.md").write_text("---\nname: my-own-thing\n---\n\nMine.\n",
+                                       encoding="utf-8")
+        try:
+            items = web.api_catalog(web.WebState(theme="neutral"), "skills")["items"]
+        finally:
+            shutil.rmtree(mine, ignore_errors=True)
+        by_name = {e["name"]: e for e in items}
+        self.assertEqual(by_name["my-own-thing"]["status"], "personal")
+        self.assertEqual(by_name["my-own-thing"]["klass"], "personal")
+        # A shipped skill next to it is untouched — still classed, still approved.
+        self.assertEqual(by_name["commit"]["klass"], "ship")
+        self.assertEqual(by_name["commit"]["status"], "approved")
 
     def test_item_agent_returns_body(self):
         name = web.api_catalog(self.state, "agents")["items"][0]["name"]

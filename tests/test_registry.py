@@ -207,10 +207,18 @@ class EntityStatusTests(unittest.TestCase):
         self.assertEqual(_harness_tui.entity_status(registry, "skills/rule"), "experimental")
         self.assertEqual(_harness_tui.entity_status(registry, "skills/commit"), "approved")
 
-    def test_unknown_key_and_unusable_rows_degrade_to_unknown(self):
-        self.assertEqual(_harness_tui.entity_status({}, "skills/nope"), "unknown")
+    def test_unusable_rows_degrade_to_unknown(self):
         self.assertEqual(_harness_tui.entity_status({"a": "nope"}, "a"), "unknown")
         self.assertEqual(_harness_tui.entity_status({"a": {"status": "x"}}, "a"), "unknown")
+
+    def test_an_entity_the_registry_never_heard_of_is_personal(self):
+        registry = {"skills/rule": _row()}
+        self.assertEqual(_harness_tui.entity_status(registry, "skills/mine"), "personal")
+
+    def test_an_empty_registry_is_unknown_not_personal(self):
+        # A missing or corrupt registry.json must not relabel the whole shipped
+        # catalog as the user's own work — that is the one case "no status" is for.
+        self.assertEqual(_harness_tui.entity_status({}, "skills/rule"), "unknown")
 
     def test_corrupt_registry_loads_as_empty(self):
         with _FakeTree() as t:
