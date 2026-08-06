@@ -9,6 +9,23 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The generator's render core now exists in JavaScript as well as Python, and a test
+  proves the two produce identical bytes.** Nothing about running Geneseed changes yet —
+  Python is still what builds your harness — but this is the first piece of the runtime to
+  be ported, and it lands with the gate that will keep the rest honest:
+  `tests/test_render_parity.py` renders every theme in both languages, on every footprint,
+  catalogue, posture and mode axis, writes both trees to disk and compares them byte for
+  byte. Writing to disk rather than comparing strings is deliberate: on Windows, Python's
+  text writer silently turns every `\n` into `\r\n` and Node's does not, so a port that
+  skipped that detail would differ in every single file while looking correct in a diff
+  viewer.
+- **Every emit now runs its stages in one fixed order** — render everything Geneseed owns,
+  then reconcile the files you co-own (`settings.json`, `opencode.json`, the CLAUDE.md
+  block), then prune, then record the manifest, then verify. Three emits used to interleave
+  those stages differently. Output is unchanged, byte for byte, on all 259 theme × host ×
+  footprint combinations; what changes is that there is now a single seam between "files
+  Geneseed writes wholesale" and "files you co-own", which is what lets the render half
+  move to another language without the merge logic following it.
 - **Emitted hooks now go through a stable shim, so moving the checkout no longer kills
   every install at once.** Until now each of the four Claude/Bob hook commands embedded
   two machine-absolute paths — this machine's Python interpreter and this clone's

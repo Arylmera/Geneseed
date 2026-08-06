@@ -141,6 +141,23 @@ renders it as the name in parentheses.
   them for deactivate, remerge, reactivate and uninstall; so do `exclude` and `mcp`).
   Its dependency closure points one way only: nothing in it calls into `_build_render` or
   `_build_emit`. Keep it that way — that closure is what makes it a unit.
+- **Every emit runs five stages in one order: `RENDER* → WIRE* → PRUNE → MANIFEST →
+  VERIFY`.** RENDER writes files Geneseed owns wholesale; WIRE is `_build_settings`
+  reconciling files you co-own; PRUNE removes what the previous manifest owned and this
+  emit no longer produces; MANIFEST records both; VERIFY re-reads the merge to confirm it
+  stuck. WIRE must precede MANIFEST because wiring is what fills the `managed` record the
+  manifest stores, and no RENDER may follow a WIRE because the render half is the half
+  that leaves Python. `tests/test_emit_phase_order.py` fails the build if any of the nine
+  emits drifts out of that order, or if a new file-mutating routine in `_build_settings`
+  is called from an emit without being classified.
+- **The render core has a Node twin: [`js/render.mjs`](js/render.mjs).** It is a
+  translation of `_build_render.py`'s pure pipeline, byte-identical by test rather than by
+  intent — `tests/test_render_parity.py` renders both over every theme × footprint ×
+  catalog × laws-prefix × posture × mode and compares the written trees byte for byte,
+  plus the item order, which is observable and derives from a platform-dependent path
+  sort. `js/lib/pyfs.mjs` holds the primitives where the two runtimes disagree in silence;
+  `Path.write_text`'s `\n` → `os.linesep` translation is the load-bearing one. Zero
+  dependencies on that side too.
 - **`_build_core` is the single owner of the generator's mutable configuration** — the
   source/theme roots, the four `_<host>_config_dir` resolvers, and the build-wide
   posture/mode selection, listed in its `_OWNED` tuple. The membership rule is *does
