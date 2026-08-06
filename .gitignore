@@ -1,6 +1,10 @@
 __pycache__/
 *.pyc
 .geneseed-mirror/
+# Project-scope runtime state the workflow plugin writes (.geneseed/workflow-runs/).
+# Distinct from the USER-scope ~/.geneseed/ that holds the hook shim — same name, two
+# scopes. Running a pipeline inside this checkout would otherwise leave it untracked.
+.geneseed/
 *.log
 
 # Generated build output — derivable from src/ via build.py, never committed.

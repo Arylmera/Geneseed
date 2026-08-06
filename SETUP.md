@@ -133,6 +133,14 @@ It wires:
   `GENESEED_LLM` (e.g. `claude -p`); unset, it's a harmless no-op. Geneseed never
   embeds an API key.
 
+All four hooks are emitted as one stable path — the **hook shim** at
+`~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows) — instead of writing
+this machine's Python interpreter and this checkout into your `settings.json`. The shim
+carries those two volatile paths itself, so moving or replacing the clone no longer
+breaks the hooks in every install at once: one `geneseed build` rewrites the shim and
+every install is live again. It is refreshed on every emit, and `geneseed doctor`
+reports it if it was ever stale. `GENESEED_HOME` relocates it.
+
 Detail: [adapters/claude-code/](adapters/claude-code/README.md).
 
 ### Sovereign repos — excluding folders from the global harness
@@ -701,6 +709,7 @@ not connected, walk these in order:
 
 | Variable | Used by | Effect |
 | --- | --- | --- |
+| `GENESEED_HOME` | emit / hooks | dir holding the hook shim `bin/geneseed-hook` (default: `~/.geneseed`). Change it and re-run the build, so emitted hooks point at the new location |
 | `GENESEED_HARNESS` | learn plugin | base whose `memory/` the plugin writes to (optional — the plugin auto-locates the in-config store; set to pin it) |
 | `GENESEED_MEMORY` | learn plugin / CLI | explicit memory dir (overrides the above) |
 | `GENESEED_CONTEXT` | context plugin / CLI | explicit `context.json` path |

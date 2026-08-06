@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
 import harness  # noqa: E402
+import _build_emit  # noqa: E402  (hook shim path + the Geneseed-hook marker tuple)
 import _harness_build  # noqa: E402  (monkeypatched directly for the rebuild-all test)
 
 
@@ -26,6 +27,19 @@ def _read(p):
 def _hook_cmds(settings: dict):
     return [h["command"] for ev in (settings.get("hooks") or {}).values()
             for g in ev for h in g["hooks"]]
+
+
+def _geneseed_cmds(settings: dict):
+    """Geneseed's own hook commands, recognised the way PRODUCTION recognises them.
+
+    Deliberately not a literal: these tests used to grep for "harness.py", which the
+    emitted command stopped containing the moment hooks moved behind the shim. Three
+    assertTrue sites would have failed loudly (fine) — but three assertFalse sites would
+    have started passing VACUOUSLY, quietly certifying "hooks removed" for hooks that
+    were never removed. Keying off the production marker tuple means a future change to
+    the emitted shape can never silently hollow these assertions out again."""
+    return [c for c in _hook_cmds(settings)
+            if any(m in c for m in _build_emit._GENESEED_HOOK_SNIFF)]
 
 
 class ClaudeEmitTests(unittest.TestCase):
@@ -52,11 +66,17 @@ class ClaudeEmitTests(unittest.TestCase):
         # A read-only agent maps the deny-tree to disallowedTools.
         explorer = _read(self.cfg / "agents" / "explorer.md")
         self.assertIn("disallowedTools:", explorer)
-        # settings.json hooks call harness.py by ABSOLUTE path (hook cwd is the project).
+        # settings.json hooks reach the harness by ABSOLUTE path (hook cwd is the
+        # project, so nothing relative would resolve). That path is the stable shim,
+        # NOT this checkout — which is the whole point: the emitted config must survive
+        # the checkout moving. Assert both halves so neither can regress silently.
         s = json.loads(_read(self.cfg / "settings.json"))
-        gen = [c for c in _hook_cmds(s) if "harness.py" in c]
+        gen = _geneseed_cmds(s)
         self.assertTrue(gen)
-        self.assertTrue(all(str(build.ROOT) in c for c in gen))
+        shim = str(_build_emit._hook_shim_path())
+        self.assertTrue(all(shim in c for c in gen), gen)
+        self.assertFalse(any(str(build.ROOT) in c for c in gen),
+                         f"emitted hooks still name the checkout: {gen}")
         # No cat AGENT.md at global scope; plugins dir never written.
         self.assertFalse(any("cat AGENT.md" in c for c in _hook_cmds(s)))
         self.assertFalse((self.cfg / "plugins").exists())
@@ -316,7 +336,7 @@ class ClaudeSafetyTests(unittest.TestCase):
         s = json.loads(_read(self.cfg / "settings.json"))
         self.assertEqual(s["model"], "opus")
         self.assertIn("echo mine", _hook_cmds(s))
-        self.assertFalse(any("harness.py" in c for c in _hook_cmds(s)), "geneseed hooks not removed")
+        self.assertFalse(_geneseed_cmds(s), "geneseed hooks not removed")
         # Geneseed's own agents are gone; markers gone.
         self.assertFalse((self.cfg / "agents" / "reviewer.md").exists())
         self.assertFalse((self.cfg / build.GLOBAL_MANIFEST).exists())
@@ -369,7 +389,7 @@ class ClaudeActivationTests(unittest.TestCase):
         self.assertNotIn("<!-- BEGIN GENESEED -->", cm)
         self.assertIn("keep", cm)
         s = json.loads(_read(self.cfg / "settings.json"))
-        self.assertFalse(any("harness.py" in c for c in _hook_cmds(s)))
+        self.assertFalse(_geneseed_cmds(s))
         # markers stay put
         self.assertTrue((self.cfg / build.VERSION_MARKER).is_file())
 
@@ -381,7 +401,7 @@ class ClaudeActivationTests(unittest.TestCase):
         self.assertIn("<!-- BEGIN GENESEED -->", cm)
         self.assertIn("keep", cm)
         s = json.loads(_read(self.cfg / "settings.json"))
-        self.assertTrue(any("harness.py" in c for c in _hook_cmds(s)))
+        self.assertTrue(_geneseed_cmds(s))
         self.assertFalse((self.cfg / ".geneseed-disabled").exists(), "stash not cleaned")
 
     def test_reactivate_discards_stash_after_reemit_while_disabled(self):
@@ -718,10 +738,10 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
 
         build.emit_claude("neutral", repo)
         s_shared = json.loads(_read(cfg / "settings.json"))
-        self.assertFalse(any("harness.py" in c for c in _hook_cmds(s_shared)),
+        self.assertFalse(_geneseed_cmds(s_shared),
                          "hooks left in the team-shared settings.json")
         s_local = self._settings(repo)
-        self.assertTrue(any("harness.py" in c for c in _hook_cmds(s_local)))
+        self.assertTrue(_geneseed_cmds(s_local))
         man = json.loads(_read(cfg / build.GLOBAL_MANIFEST))
         self.assertEqual(man["managed"].get("settings_file"), "settings.local.json")
 

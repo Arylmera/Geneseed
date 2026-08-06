@@ -9,6 +9,24 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **Emitted hooks now go through a stable shim, so moving the checkout no longer kills
+  every install at once.** Until now each of the four Claude/Bob hook commands embedded
+  two machine-absolute paths — this machine's Python interpreter and this clone's
+  `rituals/harness.py` — directly in your `settings.json`. Relocating or replacing the
+  checkout therefore broke the gates in every deployed install simultaneously, and the
+  only repair was re-emitting every config. The emit now writes one small shim at
+  `~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows, relocatable with
+  `GENESEED_HOME`) and points every hook at that single stable path; the shim holds the
+  two volatile paths instead. Re-pointing every install at a new checkout is now one
+  file write. The shim is refreshed on every emit — that refresh is what replaces the
+  accidental self-heal the old form had, since a config that no longer names the
+  checkout can no longer detect that the checkout moved — and a new `doctor` gate reads
+  it back and reports a shim that points at nothing. The shim is deliberately silent:
+  `git-gate` and `rule-gate` return success on every path and signal their verdict as
+  JSON on **stdout**, so a single stray byte would turn a blocking gate into a silently
+  permissive one. Existing installs migrate on their next build — the manifest-driven
+  prune replaces the old hook groups exactly, and the orphan scan now recognises both
+  the legacy and the shim shape so a stranded hook still surfaces.
 - **The `rule` skill becomes the front door to both durable stores, behind a Law VI
   gate**: nothing reaches `user-rules.md` or `memory/` on the agent's own initiative
   any more. The skill now opens on a fork it must put to the user — *a standing rule,

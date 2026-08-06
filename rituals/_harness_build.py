@@ -430,6 +430,38 @@ def _secret_problems() -> list[str]:
     return problems
 
 
+def _shim_problems() -> list[str]:
+    """The hook shim must exist and must point at a harness.py that is actually there.
+
+    This gate exists because the shim DISARMED an accidental safety net. When the
+    emitted hook command still carried the checkout path, moving the checkout made that
+    command non-canonical, so the next emit's prune-and-rewire repaired every install by
+    itself. Now the config is invariant under a move and the stale path lives in the shim
+    body — which no other gate reads, since the build scan only walks *.md. Without this
+    check a moved checkout would leave every gate silently dead: the hooks still fire,
+    the shim still runs, and the interpreter reports "no such file" into a channel
+    nobody reads.
+
+    Absent shim is NOT a problem: a source checkout that has never emitted anything has
+    no reason to own one, and `_hook_prefix` falls back to the direct form when it cannot
+    write one. Only a shim that exists and is broken is worth reporting."""
+    p = build._hook_shim_path()
+    if not p.is_file():
+        return []
+    try:
+        body = p.read_text(encoding="utf-8")
+    except OSError as e:
+        return [f"[shim] {p} exists but cannot be read ({e}) — hooks may be dead"]
+    # The body is machine-generated; both forms quote the two paths and nothing else.
+    quoted = re.findall(r'"([^"]+)"', body)
+    missing = [q for q in quoted if not Path(q).exists()]
+    if missing:
+        return [f"[shim] {p} pointed at {m}, which does not exist — every hook in every "
+                f"install was dead (the checkout most likely moved). This run's own "
+                f"emit has refreshed it; no further action needed." for m in missing]
+    return []
+
+
 _HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
 # Refs that move under the pin. Re-copying the folder months later would then change the
 # shipped skill with nothing in the diff to explain it.
@@ -790,6 +822,10 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
     # Only probe the deployed install when we actually need it (no theme / not --all).
     detected = None if (theme or all_themes) else _installed_defaults().get("theme")
     themes = _themes_to_check(theme, all_themes, detected, available)
+    # Sampled HERE, before the emit loop below — every emit rewrites the hook shim, so a
+    # check placed after them could only ever observe the freshly repaired file and would
+    # be dead code that always reports clean. Reported in its usual slot further down.
+    shim_probs = _shim_problems()
     total = len(themes) + 1
     problems: list[str] = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -814,6 +850,7 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
     problems += _ran("parity", "Theme parity", _theme_parity_problems())
     problems += _ran("colors", "Colour themes", _color_theme_problems())
     problems += _ran("authoring", "Authoring gates", _authoring_problems())
+    problems += _ran("shim", "Hook shim", shim_probs)
     if not no_bundle:
         b = Path(bundle).expanduser().resolve() if bundle else ROOT / "Harness"
         problems += _ran("bundle", "Committed bundle drift", _rendered_problems(b))

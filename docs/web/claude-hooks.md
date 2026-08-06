@@ -17,6 +17,16 @@ Claude Code has no `instructions` array and no JS plugin dir — the harness rea
 
 The emit merges the hook groups surgically into your `settings.json` (global `~/.claude/settings.json`, or the project's), preserving every other key and any hooks of your own. The install manifest records exactly which groups Geneseed owns, so an upgrade replaces and an uninstall removes precisely those — never yours.
 
+### The hook shim
+
+Hooks run with the project as their working directory, so every command has to be an absolute path. Rather than write the interpreter and this checkout into your `settings.json`, the emit points all four hooks at one stable file — the **hook shim**, at `~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows). The shim holds the two volatile paths; the config holds none.
+
+That indirection is what lets the checkout move. Before it, relocating or replacing the clone silently broke the gates in every install at once, and the only repair was re-emitting every config. Now a single build rewrites the shim and every install is live again. The shim is refreshed on **every** emit, so an ordinary `geneseed build` is the repair; `geneseed doctor` reports it if it was ever stale.
+
+Set `GENESEED_HOME` to keep the shim somewhere other than `~/.geneseed`.
+
+The shim prints nothing of its own, deliberately: the gates return success on every path and signal their verdict as JSON on **stdout**, so a single stray byte from the shim would corrupt that verdict and turn a blocking gate into a silently permissive one.
+
 ### Verify
 
 Open Claude Code in any repo: the first reply opens with the readiness sigil and your project's docs are already in context. End a session and check the install's `memory/` dir for distilled files.
