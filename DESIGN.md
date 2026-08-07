@@ -198,6 +198,18 @@ renders it as the name in parentheses.
   file-driven path into a recursive delete), user edits between two emits, and a truncated
   source tree. `tests/golden.py` now compares both streams too, as `<stdout>`/`<stderr>`
   pseudo-files.
+- **The write-before-delete prune finally has a gate that makes it delete.**
+  `golden.py --idempotent` re-emits the *same* configuration, so the owned set is identical
+  on both passes and `old_owned - owned` is always empty — 259 green cells said nothing
+  about the prune. `--deletion` emits configuration A, then B onto A's tree, and compares
+  the result against a **fresh** emit of B: a working prune makes those byte-identical, a
+  missing one leaves A's files behind, and one widened past the difference deletes files B
+  still wants. Both axes were measured rather than assumed (`lean → full` drops the
+  single-file laws pointer, `neutral → imperial` drops the theme-named OpenCode theme), and
+  a cell whose two configurations stop differing is rejected instead of quietly becoming a
+  second `--idempotent`. The one thing it forgives is named per cell: the agent's own
+  memory and notebook seeds are written **once** and never re-rendered, so they keep the
+  pre-switch vocabulary by design — and a cell whose carve-out excuses nothing fails too.
 - **All nine emits now cross that seam.** The last of the render half is
   `_emit_claude_core`, the shared engine behind six of the nine — Claude, Bob and Copilot
   at both scopes — so until it moved, two thirds of the matrix compared Python against
@@ -216,6 +228,25 @@ renders it as the name in parentheses.
   (with the bundle in a subfolder, so `--out` and the target are not the same directory), a
   `.claude/` the user got to first, and every write-once file edited *between* two emits —
   the only way a byte comparison can tell "kept your store" from "re-seeded it".
+- **The wiring layer has a Node twin as well: [`js/settings.mjs`](js/settings.mjs)** — the
+  JSONC reader, the `opencode.json` and `settings.json` merges, the hook shim, the
+  managed-block machinery and the settings integrity check. Nothing imports it yet; it is
+  proven before it is wired, the way every piece before it was. It is the last unit to
+  cross because it is the one the **runtime** drives too: eleven of its names have a
+  consumer outside the emit tree, ten of them in `rituals/_harness_mcp.py`, which is what
+  actually pins it — remerge, deactivate, reactivate, uninstall and `exclude` all edit a
+  real settings.json through these functions, and until now nothing compared two runtimes
+  across any of them. `tests/test_settings_parity.py` drives seven scripted sequences —
+  not seven isolated calls, because the defects here are sequence defects — over states no
+  emit-time gate could construct: a settings.json carrying the user's own hooks, a
+  commented JSONC, a recorded claim set that is no longer canonical, a settings file that
+  is not valid JSON, and the migration where an older install wired hooks into a different
+  file. **The shim is compared, not skipped.** It is the one function whose Python output
+  is legitimately runtime-dependent — it bakes the interpreter and the checkout — so the
+  Node twin takes both as arguments and the gate feeds it the two Python computed, which
+  makes every byte comparable, both platform branches included. What stays unproven is
+  which values a Node driver will pass, and that is one line at a future call site rather
+  than anything in the body.
 - **Python and JavaScript disagree about JSON, in two ways that reach emitted bytes.**
   `json.dumps` escapes non-ASCII and `JSON.stringify` does not, which is 44–50
   `description:` lines per theme; and `json.loads` distinguishes `20` from `1.0` where
@@ -227,9 +258,13 @@ renders it as the name in parentheses.
   The split between the two writers is **compact vs indented**, not string vs container:
   Python's default separators are `(', ', ': ')`, but passing an indent switches them to
   `(',', ': ')` — exactly what `JSON.stringify(v, null, 2)` emits. So `jsonDumpsIndent`
-  covers every container the generator writes (measured: all 27 `json.dumps` call sites
-  use one of two indented shapes), while `jsonDumps` stays string-only and throws on a
-  container rather than silently emitting the wrong separators.
+  covers every container the render half writes, while `jsonDumps` stays string-only and
+  throws on a container rather than silently emitting the wrong separators. The wiring
+  layer is where the third form finally has callers: `jsonDumpsCompact` writes a container
+  with no indent, which cannot delegate to `JSON.stringify` at all — patching the
+  separators into the serialised text would corrupt any string holding a comma or a colon
+  — so the walk is written out, with `sort_keys=True` as an option because the orphan scan
+  keys on it.
 - **`_build_core` is the single owner of the generator's mutable configuration** — the
   source/theme roots, the four `_<host>_config_dir` resolvers, and the build-wide
   posture/mode selection, listed in its `_OWNED` tuple. The membership rule is *does

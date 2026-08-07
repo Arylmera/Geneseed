@@ -17,6 +17,8 @@ It is useful BEFORE any Node exists, in two ways:
 
     python tests/golden.py                                   # determinism self-check
     python tests/golden.py --quick                           # neutral theme only, fast
+    python tests/golden.py --idempotent                      # re-emit onto an existing tree
+    python tests/golden.py --deletion                        # the prune's deletion path
     python tests/golden.py --new "node bin/geneseed-gen.js"  # the P2 gate
     python tests/golden.py --new "python ../old/build.py"    # cross-revision regression
 
@@ -105,6 +107,48 @@ def cells(quick: bool = False, themes: "list[str] | None" = None) -> list[dict]:
     return out
 
 
+# The deletion matrix. `--idempotent` re-emits the SAME configuration, so `owned` is
+# identical on both passes and the write-before-delete prune never has anything to
+# delete: across five sessions nothing in this repo had ever executed its deletion path.
+# These cells emit configuration A, then configuration B onto A's tree, and compare the
+# result against a FRESH emit of B. A working prune makes those two byte-identical; a
+# deleted prune leaves A's extra files behind, and a prune widened past
+# `old_owned - owned` deletes files B owns and still wants.
+#
+# Both axes were MEASURED against the emitted manifests, not assumed, and each is here
+# because the other does not cover it:
+#
+#   lean -> full   drops `laws/universal.md` — the single-file lean laws pointer — from
+#                  every emit that ships laws. Not from the per-repo opencode one.
+#   neutral -> imperial drops `themes/geneseed-<name>.json`, which is named after the
+#                  theme and which only the two opencode emits own.
+#
+# `files` is in neither list and that is a finding, not an omission: `build()` writes no
+# manifest, so the portable bundle has no `old_owned` and therefore no prune at all.
+# `run_cell` refuses a cell where nothing disappeared, so a pair that stops deleting
+# (a renamed file, a footprint that stops differing) fails loudly instead of quietly
+# becoming a second copy of `--idempotent`.
+_DELETION_AXES = (
+    ("lean-to-full", {"footprint": "lean"}, {"footprint": "full"},
+     ("opencode-global", "claude", "claude-global", "bob", "bob-global",
+      "copilot", "copilot-global"), ()),
+    ("theme-swap", {"theme": "neutral"}, {"theme": "imperial"},
+     ("opencode", "opencode-global"), ("memory/README.md", "notebook/README.md")),
+)
+
+
+def deletion_cells(quick: bool = False) -> list[dict]:
+    """One cell per (emit, axis) pair that really does shrink `owned`. Each cell is the
+    AFTER configuration carrying the BEFORE one under `before`."""
+    out = []
+    for label, before, after, emits, sovereign in _DELETION_AXES:
+        for emit in (emits[:1] if quick else emits):
+            base = {"theme": "neutral", "emit": emit, "footprint": "full"}
+            out.append(dict(base, **after, before=dict(base, **before),
+                            label=f"{emit}/{label}", sovereign=sovereign))
+    return out
+
+
 def _argv(cell: dict, out: Path) -> list[str]:
     a = ["--theme", cell["theme"], "--emit", cell["emit"],
          "--footprint", cell["footprint"], "--out", str(out)]
@@ -139,6 +183,14 @@ def _normalise(data: bytes, roots: list[tuple[str, Path]]) -> bytes:
 _SHIM_GLOB = "geneseed-hook"
 
 
+def _files(sandbox: Path) -> set[str]:
+    """Every file a cell left behind, POSIX-relative to the sandbox, shim excluded.
+    Shared with `_snapshot` so the deletion matrix and the byte comparison can never
+    disagree about what "a file this cell produced" means."""
+    return {p.relative_to(sandbox).as_posix() for p in sandbox.rglob("*")
+            if p.is_file() and not p.name.startswith(_SHIM_GLOB)}
+
+
 def _snapshot(sandbox: Path, roots: list[tuple[str, Path]]) -> dict[str, bytes]:
     """Every file produced by one cell, normalised, keyed by POSIX-relative path.
 
@@ -154,11 +206,9 @@ def _snapshot(sandbox: Path, roots: list[tuple[str, Path]]) -> dict[str, bytes]:
     producing a `__pycache__` was the one path this harness refused to look at. Nothing in
     a sandbox creates one (build.py runs with cwd=ROOT), so keeping them costs no cell."""
     snap: dict[str, bytes] = {}
-    for p in sorted(sandbox.rglob("*")):
-        if not p.is_file() or p.name.startswith(_SHIM_GLOB):
-            continue
+    for rel in sorted(_files(sandbox)):
         try:
-            snap[p.relative_to(sandbox).as_posix()] = _normalise(p.read_bytes(), roots)
+            snap[rel] = _normalise((sandbox / rel).read_bytes(), roots)
         except OSError:
             continue
     return snap
@@ -223,18 +273,32 @@ def run_cell(gen: list[str], cell: dict, repeat: int = 1) -> "dict[str, bytes] |
     the end state. That is the re-emit path — the one real users are on from their second
     build onwards, and the one this harness could not see at all until now: idempotence,
     the write-before-delete prune, claim-on-create and the managed-block merge only have
-    anything to do when the target already exists."""
+    anything to do when the target already exists.
+
+    `cell["before"]` runs a DIFFERENT configuration first, into the same sandbox. That is
+    the one thing `repeat` cannot do: with the configuration held fixed, `owned` is
+    identical on both passes and the prune's `old_owned - owned` is always empty. A cell
+    with a `before` whose tree loses nothing is rejected rather than run — see
+    `_DELETION_AXES`."""
     with tempfile.TemporaryDirectory() as td:
         home, out = Path(td) / "home", Path(td) / "out"
         home.mkdir()
         env = cell_env(home)
-        for n in range(1, repeat + 1):
-            proc = subprocess.run(gen + _argv(cell, out), cwd=str(ROOT), env=env,
+        steps = ([cell["before"]] if cell.get("before") else []) + [cell] * repeat
+        seeded: "set[str] | None" = None
+        for n, step in enumerate(steps, 1):
+            proc = subprocess.run(gen + _argv(step, out), cwd=str(ROOT), env=env,
                                   capture_output=True, text=True)
             if proc.returncode != 0:
-                emit = f"emit {n} of {repeat}: " if repeat > 1 else ""
+                emit = f"emit {n} of {len(steps)}: " if len(steps) > 1 else ""
                 return (f"{emit}exit {proc.returncode}: "
                         f"{(proc.stderr or proc.stdout).strip()[:400]}")
+            if n == 1 and cell.get("before"):
+                seeded = _files(Path(td))
+        if seeded is not None and not seeded - _files(Path(td)):
+            return ("nothing was removed between the two configurations: either the "
+                    "write-before-delete prune ran and deleted nothing, or this cell no "
+                    "longer changes `owned` and has become a second `--idempotent`")
         sick = _shim_health(Path(td))
         if sick:
             return sick
@@ -263,32 +327,53 @@ def _diff(name: str, a: bytes, b: bytes) -> str:
 
 
 def compare(ref: list[str], new: list[str], quick: bool, limit: int,
-            ref_repeat: int = 1, new_repeat: int = 1) -> int:
-    matrix = cells(quick)
+            ref_repeat: int = 1, new_repeat: int = 1,
+            matrix: "list[dict] | None" = None) -> int:
+    matrix = cells(quick) if matrix is None else matrix
     times = {1: "", 2: " ×2"}
     print(f"[golden] {len(matrix)} cells · ref={' '.join(ref)}{times.get(ref_repeat, '')}"
           f" · new={' '.join(new)}{times.get(new_repeat, '')}")
     failures: list[str] = []
     for i, cell in enumerate(matrix, 1):
-        cid = f"{cell['theme']}/{cell['emit']}/{cell['footprint']}" + \
-              (f"/{cell['posture']}" if cell.get("posture") else "") + \
-              (f"/{cell['mode']}" if cell.get("mode") else "")
-        a, b = run_cell(ref, cell, ref_repeat), run_cell(new, cell, new_repeat)
+        cid = cell.get("label") or (
+            f"{cell['theme']}/{cell['emit']}/{cell['footprint']}"
+            + (f"/{cell['posture']}" if cell.get("posture") else "")
+            + (f"/{cell['mode']}" if cell.get("mode") else ""))
+        # The reference side of a deletion cell is the AFTER configuration emitted into a
+        # clean sandbox — the tree the prune is supposed to reproduce.
+        ref_cell = {k: v for k, v in cell.items() if k != "before"}
+        a, b = run_cell(ref, ref_cell, ref_repeat), run_cell(new, cell, new_repeat)
         # The streams are only comparable when both sides ran the same number of times.
         # Emit two legitimately says different things from emit one — it warns about files
-        # it now finds already there — so `--idempotent`, which compares a fresh emit
-        # against a repeated one, drops them rather than reporting a difference that is
-        # the point of the flag.
-        if ref_repeat != new_repeat and not isinstance(a, str) and not isinstance(b, str):
+        # it now finds already there — so `--idempotent` and `--deletion`, which compare a
+        # fresh emit against a tree that already held one, drop them rather than reporting
+        # a difference that is the point of the flag.
+        runs = (ref_repeat, new_repeat + (1 if cell.get("before") else 0))
+        if runs[0] != runs[1] and not isinstance(a, str) and not isinstance(b, str):
             for snap in (a, b):
                 snap.pop("<stdout>", None)
                 snap.pop("<stderr>", None)
         if isinstance(a, str) or isinstance(b, str):
             failures.append(f"  {cid}: generator failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                             f"\n    new: {b if isinstance(b, str) else 'ok'}")
-        elif a != b:
-            only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
-            differing = sorted(k for k in set(a) & set(b) if a[k] != b[k])
+            continue
+        only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
+        differing = sorted(k for k in set(a) & set(b) if a[k] != b[k])
+        # The sovereign write-once seeds. A deletion cell switches the theme under a tree
+        # that already has one, and the agent's own spaces are seeded ONCE and never
+        # re-rendered by design (`_build_render.py:880` for the bundle's notebook,
+        # `_global_memory`/`_global_notebook` for the config dirs) — so they keep the
+        # pre-switch vocabulary while a fresh emit renders the new one. That is the
+        # contract, not a prune failure. Named per cell rather than filtered globally, and
+        # a cell whose carve-out catches NOTHING fails: a normaliser that has stopped
+        # excusing anything is hiding whatever it would excuse next.
+        stale = {k for k in differing if any(k.endswith(s) for s in cell.get("sovereign", ()))}
+        differing = [k for k in differing if k not in stale]
+        if cell.get("sovereign") and not stale:
+            failures.append(f"  {cid}: no file kept its pre-switch text — the sovereign "
+                            f"carve-out {list(cell['sovereign'])} excuses nothing here "
+                            f"and must be removed")
+        elif only_a or only_b or differing:
             parts = [f"  {cid}: {len(only_a)} missing, {len(only_b)} extra, "
                      f"{len(differing)} differing"]
             parts += [f"    - only in ref: {k}" for k in only_a[:5]]
@@ -338,9 +423,19 @@ def main(argv=None) -> int:
                          "claim-on-create and the managed-block merge are otherwise never "
                          "exercised — and that is the path every user is on from their "
                          "second build onwards. Uses --ref alone; --new is ignored.")
+    ap.add_argument("--deletion", action="store_true",
+                    help="prune gate: emit configuration A, then B onto A's tree, and "
+                         "compare against a fresh emit of B. --idempotent cannot reach "
+                         "the write-before-delete prune's deletion path, because both of "
+                         "its emits share one configuration and `old_owned - owned` is "
+                         "therefore always empty. Uses --ref alone; --new is ignored.")
     args = ap.parse_args(argv)
     ref = _split(args.ref) if args.ref else [sys.executable, "build.py"]
     new = _split(args.new) if args.new else ref
+    if args.deletion:
+        # Both sides are the SAME generator; the variable is what the target held before.
+        return compare(ref, ref, args.quick, args.limit,
+                       matrix=deletion_cells(args.quick))
     if args.idempotent:
         # Both sides are the SAME generator; the variable is whether the target already
         # holds a previous emit. A difference here is a re-emit bug, not a port bug.

@@ -86,5 +86,28 @@ class CellEnvIsolationTests(unittest.TestCase):
                             f"{var}={env[var]!r} escapes the sandbox root")
 
 
+class DeletionMatrixCoverageTests(unittest.TestCase):
+    """A gate on the gate, in the shape `test_the_matrix_covers_every_theme_and_axis`
+    already has: the deletion matrix is only worth its runtime if it reaches every prune
+    there is. Free to run — it inspects the matrix, it does not emit."""
+
+    def test_every_emit_that_prunes_has_a_deletion_cell(self):
+        # Every emit but `files` writes a manifest, and a manifest is exactly what gives
+        # an emit an `old_owned` to prune against. `files` has none, so `build()` has no
+        # prune to exercise — that is the reason it is absent, and if it ever grows one
+        # this test is where the omission surfaces.
+        covered = {c["emit"] for c in golden.deletion_cells()}
+        self.assertEqual(covered, set(golden.EMITS) - {"files"},
+                         "an emit with a manifest has no cell that makes its prune delete")
+
+    def test_every_cell_changes_exactly_one_axis(self):
+        for cell in golden.deletion_cells():
+            before = cell["before"]
+            changed = [k for k in ("theme", "emit", "footprint")
+                       if cell[k] != before[k]]
+            self.assertEqual(len(changed), 1, f"{cell['label']}: changed {changed}")
+            self.assertEqual(cell["emit"], before["emit"])
+
+
 if __name__ == "__main__":
     unittest.main()
