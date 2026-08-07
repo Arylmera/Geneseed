@@ -213,12 +213,22 @@ def js_cfg() -> dict:
     a themed DIR_* rename — mutates the one object every module reads. A subprocess has no
     such reference. Sending it restores the property across the seam: one write, seen
     everywhere, including in Node. It is the `_OWNED` membership test one level out — does
-    anything REDIRECT this name — answered for a name that had passed it by accident."""
+    anything REDIRECT this name — answered for a name that had passed it by accident.
+
+    `capabilityLinkRe` is the same finding one name over, and the suite found it rather
+    than review: `_claude_bob_emit_problems`'s doctor test REDIRECTS this regex to the
+    pre-fix form and asserts the emit then produces dead links. In-process that reached
+    `_strip_capability_links`; once the claude emits render in Node it reached nothing,
+    and the test went red for the right reason. It travels as its `.pattern` string —
+    Python and JS spell this one identically, and the alternative (a second hardcoded
+    copy on the Node side) is exactly the two-bindings shape `_OWNED` exists to forbid.
+    A future pattern using a Python-only construct would have to be spelled for both."""
     import _build_render        # local: _build_render imports this module at import time
     return {"root": str(ROOT), "src": str(SRC), "themes": str(THEMES),
             "config": str(CONFIG), "colorThemes": str(COLOR_THEMES),
             "pluginSrc": str(PLUGIN_SRC), "workflowSrc": str(WORKFLOW_SRC),
             "posture": POSTURE, "mode": MODE,
+            "capabilityLinkRe": CAPABILITY_LINK_RE.pattern,
             "structure": dict(_build_render.STRUCTURE)}
 
 

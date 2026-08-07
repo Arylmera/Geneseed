@@ -4,18 +4,25 @@
  * `js/render.mjs` renders, `js/native.mjs` and `js/opencode.mjs` write the host-native
  * layers; this module is the piece that turns them into a bundle on disk and the CLI that
  * a `build.py` emit spawns. It is a translation of `_build_render.build` plus the RENDER
- * half of `_build_emit.emit_opencode`.
+ * halves of `_build_emit.emit_opencode` and `_build_global._emit_claude_core` — the last
+ * of which is the shared engine behind six of the nine emits, so the three job kinds
+ * below cover all nine.
  *
  * THE HANDOFF. Python drives, one spawn per emit:
  *
- *     python build.py --emit opencode
+ *     python build.py --emit claude
  *       +- spawn  node js/emit.mjs <job.json>
  *       |     Node renders and writes every file Geneseed owns wholesale
- *       |     Node returns { owned, stats, stdout, stderr } as JSON on stdout
- *       +- Python  WIRE       _merge_opencode_json / _merge_claude_settings / ...
+ *       |     Node returns { owned, stats, claudeMdText, stdout, stderr } as JSON on stdout
+ *       +- Python  WIRE       _managed_block_write / _merge_claude_settings /
+ *       |                     _wire_claude_excludes / _merge_opencode_json
  *       +- Python  PRUNE      old_owned - owned
  *       +- Python  MANIFEST   owned + managed
  *       +- Python  VERIFY     _settings_integrity_check
+ *
+ * `claudeMdText` is the one payload field that is not a file this process wrote: the
+ * managed block's content is a RENDER, the merge that places it into a file the user
+ * co-owns is WIRE, and the seam runs between them.
  *
  * Python drives because during P2 the runtime *is* Python and calls `build.emit_*`
  * in-process from doctor, web deploy, setup and rebuild-all; Node-as-driver would wrap
@@ -49,7 +56,7 @@ import {
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
-import { renderAll, SRC_DIR_TOKENS } from './render.mjs';
+import { renderAll, renderFile, SRC_DIR_TOKENS } from './render.mjs';
 import { writeNativeLayer, loadAgentOverrides } from './native.mjs';
 import {
   ensureAgentOverridesStub, writePrimaryAgent, writeCommandLayer, writePonytailCommand,
@@ -66,7 +73,15 @@ const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
 /** `_build_render.OWNED_SRC_DIRS` — wiped and regenerated each run. */
 const OWNED_SRC_DIRS = ['laws', 'agents', 'skills'];
 
-/** `_build_core.CAPABILITY_LINK_RE`. */
+/**
+ * `_build_core.CAPABILITY_LINK_RE` — the DEFAULT only.
+ *
+ * `cfg.capabilityLinkRe` overrides it and the driver always supplies one, for the same
+ * reason `cfg.structure` exists: the constant is in `_OWNED` because a doctor test
+ * redirects it to the pre-fix form and asserts the emit then renders dead links, and a
+ * redirect that stops at the process boundary half-works silently. The literal stays as
+ * the fallback for the parity harnesses, which drive this module in-process.
+ */
 const CAPABILITY_LINK_RE =
   /\[([^\]]+)\]\((?:(?!https?:\/\/|\/)[A-Za-z0-9_.-]+\/)*(?:agents|skills)\/[A-Za-z0-9_-]+\.md\)/g;
 
@@ -162,6 +177,26 @@ usually one promoted from a recurring memory. Review it by that date, then
 graduate it (remove the marker) or demote it back to memory.
 `;
 
+/** `_build_render.EXCLUDES_FILE`. */
+const EXCLUDES_FILE = 'excludes.json';
+
+/** `_build_render.EXCLUDES_STUB` — one long line, exactly as Python spells it. */
+const EXCLUDES_STUB = `\
+{
+  "_comment": "Folders where this global Geneseed install goes dormant (hooks silent, preamble suppressed). Managed by \`harness exclude add|remove|list\`; safe to edit by hand. Paths are absolute.",
+  "excludes": []
+}
+`;
+
+/** `_build_global._BOB_RULES_STUB` — the workspace shadow stub a PROJECT Bob emit ships. */
+const BOB_RULES_STUB = `\
+<!-- geneseed: workspace shadow stub -->
+This project's Geneseed instructions are the repo-root \`AGENTS.md\`, which Bob
+auto-loads. This file exists only to shadow the same-named global Geneseed rules
+file (\`~/.bob/rules/geneseed.md\`) so the global preamble does not stack on top of
+the project's own. Follow the root \`AGENTS.md\`.
+`;
+
 /** `_build_render.PROFILE_FILE`. */
 const PROFILE_FILE = 'PROFILE.md';
 
@@ -241,6 +276,24 @@ function rglobFiles(root, out = []) {
     if (name === '__pycache__') continue;
     const full = path.join(root, name);
     if (isDir(full)) rglobFiles(full, out);
+    else out.push(full);
+  }
+  return out;
+}
+
+/**
+ * `Path.rglob("*")` restricted to files, keeping EVERYTHING — including `__pycache__`.
+ *
+ * Not a duplicate of `rglobFiles` by accident: `source_fingerprint`'s Python filters
+ * `__pycache__` and the legacy-store migration in `_global_memory` does not, so a single
+ * walk would be wrong for one caller either way. A user's legacy bundle really can carry
+ * one (the harness ships `.py` skill scripts), and copying it or not is a byte difference
+ * the two runtimes would disagree on silently.
+ */
+function rglobAllFiles(root, out = []) {
+  for (const name of readdirSync(root)) {
+    const full = path.join(root, name);
+    if (isDir(full)) rglobAllFiles(full, out);
     else out.push(full);
   }
   return out;
@@ -433,9 +486,15 @@ function ensureProfileStub(out) {
   if (!existsSync(dest)) writeText(dest, PROFILE_STUB);
 }
 
-// `ensure_excludes_stub` is deliberately absent: it is reachable only from
-// `_emit_claude_core`, which is not ported yet, so it lands with its caller rather than
-// as an untested export nothing drives.
+/**
+ * `_build_render.ensure_excludes_stub` — the sovereign-repo list, seeded once and NEVER
+ * overwritten. Reachable only from the Claude-shaped emits, which is why it arrived with
+ * `emitClaudeRender` rather than with the bundle stubs beside it.
+ */
+function ensureExcludesStub(out) {
+  const dest = path.join(out, EXCLUDES_FILE);
+  if (!existsSync(dest)) writeText(dest, EXCLUDES_STUB);
+}
 
 /** `_build_render.ensure_bundle_gitignore`. */
 function ensureBundleGitignore(out) {
@@ -584,9 +643,12 @@ export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog =
 // emit_opencode — the RENDER stage only
 // ---------------------------------------------------------------------------
 
-/** `_build_emit._strip_capability_links`. */
-function stripCapabilityLinks(text) {
-  return text.replace(CAPABILITY_LINK_RE, '$1');
+/** `_build_emit._strip_capability_links` — `re.sub(r"\1")`, so the pattern needs `g`. */
+function stripCapabilityLinks(cfg, text) {
+  const re = cfg.capabilityLinkRe
+    ? new RegExp(cfg.capabilityLinkRe, 'g')
+    : CAPABILITY_LINK_RE;
+  return text.replace(re, '$1');
 }
 
 /**
@@ -610,7 +672,7 @@ export function emitOpencodeRender(cfg, job) {
   // OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
   // plain names (the portable build keeps them). A deliberate de-link, not a fix.
   const agentMd = path.join(out, 'AGENT.md');
-  if (isFile(agentMd)) writeText(agentMd, stripCapabilityLinks(readText(agentMd)));
+  if (isFile(agentMd)) writeText(agentMd, stripCapabilityLinks(cfg, readText(agentMd)));
 
   const owned = [];
   const { theme, items } = renderAll(cfg, _theme);
@@ -645,6 +707,240 @@ export function emitOpencodeRender(cfg, job) {
 }
 
 // ---------------------------------------------------------------------------
+// _emit_claude_core — the RENDER stage only
+// ---------------------------------------------------------------------------
+
+/**
+ * `_build_global._global_memory` — ensure `<cfg>/memory` exists, without ever touching a
+ * store that already holds something.
+ *
+ * The three outcomes are the returned status string, which the emit prints, so they are
+ * compared through stdout as well as through the tree. Python's `theme` parameter is
+ * dropped: the store dir is ALWAYS the classic English `memory/`, never themed (the
+ * OpenCode config dir uses fixed names), so the argument was never read.
+ *
+ * The migration branch copies arbitrary USER files out of a legacy bundle, which is the
+ * reason this is not a plain translation: everything it touches is the user's, and the
+ * only thing keeping it safe is that it runs at all only when the destination is empty.
+ */
+function globalMemory(cfgDir, items, legacy, srcRoot) {
+  const memName = 'memory';
+  const memDir = path.join(cfgDir, memName);
+  if (isDir(memDir) && readdirSync(memDir).length) return `kept ${memName}/`;
+  mkdirSync(memDir, { recursive: true });
+  if (legacy) {
+    // `dict.fromkeys([mem_name, "memory", "anamnesis"])` — de-duplicated, order kept.
+    // `mem_name` is the literal 'memory' and the Python docstring beside it says the
+    // store name is NEVER themed, so the first two entries always collapse and
+    // `anamnesis` — an older themed install's name — is the only live alias. The dedupe
+    // is what keeps the duplicate harmless rather than copying the same dir twice.
+    for (const nm of [...new Set([memName, 'memory', 'anamnesis'])]) {
+      const src = path.join(legacy, nm);
+      if (isDir(src) && readdirSync(src).length) {
+        for (const f of rglobAllFiles(src)) {
+          const dest = path.join(memDir, path.relative(src, f));
+          mkdirSync(path.dirname(dest), { recursive: true });
+          copyFile(f, dest);
+        }
+        return `migrated ${nm}/ -> ${memName}/`;
+      }
+    }
+  }
+  for (const { text, src } of items) {
+    const sp = relPosix(srcRoot, src).split('/');
+    if (sp[0] === 'memory' && sp.length > 1) {
+      const dest = path.join(memDir, ...sp.slice(1));
+      mkdirSync(path.dirname(dest), { recursive: true });
+      if (text !== null) writeText(dest, text);
+      else copyFile(src, dest);
+    }
+  }
+  return `seeded ${memName}/`;
+}
+
+/** `_build_global._global_notebook` — the same shape, with no `anamnesis` alias. */
+function globalNotebook(cfgDir, items, legacy, srcRoot) {
+  const nbName = 'notebook';
+  const nbDir = path.join(cfgDir, nbName);
+  if (isDir(nbDir) && readdirSync(nbDir).length) return `kept ${nbName}/`;
+  mkdirSync(nbDir, { recursive: true });
+  if (legacy) {
+    const src = path.join(legacy, nbName);
+    if (isDir(src) && readdirSync(src).length) {
+      for (const f of rglobAllFiles(src)) {
+        const dest = path.join(nbDir, path.relative(src, f));
+        mkdirSync(path.dirname(dest), { recursive: true });
+        copyFile(f, dest);
+      }
+      return `migrated ${nbName}/`;
+    }
+  }
+  for (const { text, src } of items) {
+    const sp = relPosix(srcRoot, src).split('/');
+    if (sp[0] === nbName && sp.length > 1) {
+      const dest = path.join(nbDir, ...sp.slice(1));
+      mkdirSync(path.dirname(dest), { recursive: true });
+      if (text !== null) writeText(dest, text);
+      else copyFile(src, dest);
+    }
+  }
+  return `seeded ${nbName}/`;
+}
+
+/**
+ * `_build_global._ship_lean_laws`.
+ *
+ * Historically the one RENDER that ran AFTER a WIRE, which is why the phase-order
+ * normalisation had to move it before the seam could be cut. Re-derived rather than
+ * trusted: its inputs are `items` and `theme` (both from `render_all`) and its only
+ * output besides the files is what it APPENDS to `owned` — which travels back in the
+ * payload for the manifest and the prune. It reads nothing any wiring stage writes, so
+ * its new position is not merely legal, it has no dependency on the old one.
+ */
+function shipLeanLaws(items, theme, cfgDir, owned) {
+  const lawsDir = theme.DIR_LAWS ?? 'laws';
+  for (const { rel, text } of items) {
+    const parts = rel.split('/');
+    // `parts.length` mirrors Python's `parts and parts[0]`, where `Path("").parts` really
+    // is empty. `String.split` never returns an empty array, so this half can never be
+    // false here — kept for the mirror, and its mutation stays green because there is
+    // nothing to detect, not because the gate cannot see it.
+    if (text !== null && parts.length && parts[0] === lawsDir) {
+      const dest = path.join(cfgDir, ...parts);
+      mkdirSync(path.dirname(dest), { recursive: true });
+      writeText(dest, text);
+      owned.push(rel);
+    }
+  }
+}
+
+/**
+ * The RENDER half of `_build_global._emit_claude_core`: everything up to (not including)
+ * the CLAUDE.md managed-block merge. WIRE, PRUNE, MANIFEST and VERIFY stay in Python.
+ *
+ * Six emits route through here — claude, bob and copilot at both scopes — so this one
+ * job is what puts two thirds of the matrix on the seam.
+ *
+ * `claudeMdText` is the payload's one item that is not a file this process wrote. WIRE
+ * needs the managed block's text, and that text is a RENDER (`prefixedAgentText`
+ * re-renders AGENT.md with every store dir prefixed), so it is computed here and merged
+ * there. `emitOpencodeRender` needed nothing of the kind — its wired file is derived from
+ * a path, not from a render.
+ */
+export function emitClaudeRender(cfg, job) {
+  const {
+    theme: themeName, cfgDir, claudeMd, scope, out, footprint, host, nativeCatalog,
+    oldOwned,
+  } = job;
+
+  // `os.path.relpath(cfg, claude_md.parent)` — note the reversed argument order, and
+  // that Python answers '.' for an identical pair where `path.relative` answers ''.
+  const relCfg = path.relative(path.dirname(claudeMd), cfgDir).split(path.sep).join('/')
+    || '.';
+  const lawsPrefix = relCfg === '.' ? '' : `${relCfg}/`;
+  const { theme, items } = renderAll(cfg, themeName, { footprint, lawsPrefix, nativeCatalog });
+  assertSourceComplete(cfg, `claude-${scope}`);
+  mkdirSync(cfgDir, { recursive: true });
+
+  /** `_emit_claude_core._prefixed_agent_text`. */
+  const prefixedAgentText = (prefix) => {
+    const tmplItem = items.find((i) => i.rel === 'AGENT.md');
+    if (tmplItem === undefined) return null;
+    // Deliberately NOT the same lookup as `agentText` below: that one skips an
+    // AGENT.md whose text is null, this one does not. Unreachable today (`.md` is a
+    // text suffix, so the render is never null) and reproduced anyway, because the two
+    // spellings sit four lines apart in the Python and only one of them filters.
+    //
+    // The fast path itself is byte-inert, measured: removing it re-renders with a theme
+    // whose DIR_* tokens gained an EMPTY prefix and with the same lawsPrefix, so it
+    // produces exactly the item's own text. The mutation stays green, and that is
+    // "nothing to detect" rather than "the gate cannot see it" — recorded the way
+    // `themed_rel` and `lstripNewlines` are, so the two verdicts stay distinguishable.
+    if (!prefix) return tmplItem.text;
+    const ptheme = { ...theme };
+    for (const tok of ['DIR_LAWS', 'DIR_AGENTS', 'DIR_SKILLS', 'DIR_MEMORY', 'DIR_NOTEBOOK']) {
+      ptheme[tok] = prefix + (ptheme[tok] ?? tok.split('_').slice(1).join('_').toLowerCase());
+    }
+    // Same catalogue decision as the renderAll above — a re-render that forgot it would
+    // quietly put the stripped tables back.
+    return renderFile(cfg, tmplItem.src, ptheme, footprint, '', new Set(), nativeCatalog);
+  };
+
+  const owned = [];
+  const agentText = items.find((i) => i.rel === 'AGENT.md' && i.text !== null)?.text ?? null;
+  const isBob = host === 'bob';
+  const isCopilot = host === 'copilot';
+
+  // Bob's always-injected channel is the rules folder. At GLOBAL scope rules/geneseed.md
+  // IS the preamble (a global ~/.bob/AGENTS.md is not auto-loaded), and its pointers need
+  // a `../` prefix because it sits one level below the stores; at PROJECT scope it is the
+  // slim shadow stub whose only job is to have the same filename.
+  if (isBob && agentText !== null) {
+    const rulesMd = path.join(cfgDir, 'rules', 'geneseed.md');
+    mkdirSync(path.dirname(rulesMd), { recursive: true });
+    writeText(rulesMd, scope === 'project' ? BOB_RULES_STUB
+      : stripCapabilityLinks(cfg, prefixedAgentText('../') || agentText));
+    owned.push('rules/geneseed.md');
+  }
+
+  ensureAgentOverridesStub(cfg, cfgDir);
+  // Bob's agents/skills use the Claude dialect verbatim; Copilot has its own frontmatter.
+  // `manifestExisted` is deliberately not passed: the Python does not pass it either, so
+  // the pre-manifest header line is unreachable from this emit on both sides.
+  const { nAgents, nSkills, written } = writeNativeLayer(
+    items, path.join(cfgDir, 'agents'), path.join(cfgDir, 'skills'),
+    loadAgentOverrides(cfgDir),
+    { host: isCopilot ? 'copilot' : 'claude', oldOwned, cfg: cfgDir, src: cfg.src });
+  for (const p of written) owned.push(relPosix(cfgDir, p));
+
+  const memStatus = globalMemory(cfgDir, items, out, cfg.src);
+  ensureMemoryIndex(path.join(cfgDir, 'memory'));
+  const nbStatus = globalNotebook(cfgDir, items, out, cfg.src);
+  ensureNotebookIndex(path.join(cfgDir, 'notebook'));
+  ensureWikiStub(cfgDir);
+  ensureRulesStub(cfgDir);
+  ensureProfileStub(cfgDir);
+  ensureExcludesStub(cfgDir);
+
+  // Project hygiene, claim-on-create: an existing (possibly user-authored) .gitignore is
+  // never rewritten, but one we created stays owned across re-emits.
+  if (scope === 'project') {
+    const gi = path.join(cfgDir, '.gitignore');
+    const giLines = (host === 'claude' ? ['settings.local.json'] : [])
+      .concat(['wiki.jsonc', 'agent-overrides.json']);
+    if (!existsSync(gi)) {
+      writeText(gi, `${giLines.join('\n')}\n`);
+      owned.push('.gitignore');
+    } else if (oldOwned.includes('.gitignore')) {
+      owned.push('.gitignore');
+    }
+  }
+
+  writeVersion(cfg, cfgDir);
+  owned.push(VERSION_MARKER);
+
+  if (footprint === 'lean') shipLeanLaws(items, theme, cfgDir, owned);
+
+  // The last render of the emit, and the only one whose product is not written here.
+  // Bob at GLOBAL scope gets no managed block at all, so nothing is rendered for it —
+  // the condition is the merge's, kept here so RENDER produces exactly what WIRE
+  // consumes and no more.
+  let claudeMdText = null;
+  if (agentText !== null && !(isBob && scope === 'global')) {
+    claudeMdText = stripCapabilityLinks(cfg, prefixedAgentText(lawsPrefix) || agentText);
+  }
+
+  return {
+    owned,
+    stats: { nAgents, nSkills },
+    memStatus,
+    nbStatus,
+    hasAgentText: agentText !== null,
+    claudeMdText,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The CLI — one job in, one JSON document out
 // ---------------------------------------------------------------------------
 
@@ -655,6 +951,7 @@ const KINDS = {
     return {};
   },
   opencode: emitOpencodeRender,
+  claude: emitClaudeRender,
 };
 
 function main(argv) {

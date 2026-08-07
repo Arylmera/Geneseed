@@ -47,7 +47,8 @@ PHASE_NAME = {RENDER: "RENDER", WIRE: "WIRE", PRUNE: "PRUNE",
 # Both are spliced rather than classified so the ORDER INSIDE the render half keeps being
 # checked — collapsing them to one RENDER entry would make the gate monotonic by
 # construction and stop it seeing a wiring call that drifted in among the writers.
-DELEGATES = ("_emit_claude_core", "_opencode_render", "_opencode_render_py")
+DELEGATES = ("_emit_claude_core", "_opencode_render", "_opencode_render_py",
+             "_claude_render", "_claude_render_py")
 
 # Explicitly classified calls, by the phase they belong to.
 PHASE = {
