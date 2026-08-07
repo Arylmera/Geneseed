@@ -9,6 +9,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's fourth piece, and the first one you actually run: if you have Node
+  installed, `geneseed build` and `--emit opencode` now render through it.** This is the
+  first change in the port that touches your machine, and the point is that you should not
+  be able to tell — the bundle is byte-for-byte what Python produced, down to the progress
+  lines. No Node, or `GENESEED_NO_JS=1`, and the Python path runs exactly as before; there
+  is nothing to install and nothing to configure either way.
+  The new gate is what makes that claim checkable: it builds the same target twice, once
+  each way, and compares the files, both output streams and the exit code — including
+  cases a normal build never produces, like a second build over an existing one, a
+  hand-edited `.geneseed-srcdirs.json` pointing outside the bundle, and files you edited
+  between two builds that the harness promises never to overwrite. The build-comparison
+  harness now checks the console output too, which nothing had ever compared.
 - **The port's third piece: the OpenCode extras — colour themes, the opt-in primary agent
   and slash commands, the plugin and workflow copies, and the `agent-overrides.json`
   stub.** Still nothing changes about running Geneseed; Python remains what builds your

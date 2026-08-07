@@ -179,6 +179,25 @@ renders it as the name in parentheses.
   contain, and compares the files, the returned ownership list, **and both output
   streams** — the staleness notice goes to stdout where every native-layer warning goes to
   stderr, an asymmetry inherited from the Python rather than corrected.
+- **The seam is now a real process boundary: `build.py` spawns Node once per emit.**
+  [`js/emit.mjs`](js/emit.mjs) writes the bundle (`build`) and the OpenCode layer's RENDER
+  stage; Python keeps WIRE, PRUNE, MANIFEST and VERIFY, and drives — so doctor, web deploy,
+  setup and rebuild-all keep calling `build.emit_*` in-process with no call site changed.
+  Node falls back to Python when `node` is missing, silently and by design: the whole claim
+  is that the two are indistinguishable. `GENESEED_NO_JS=1` forces the Python path.
+  **The child's stdout carries the protocol document and nothing else — structurally.**
+  `js/emit.mjs` replaces `process.stdout.write` and `process.stderr.write` with buffers for
+  the whole run and restores them only to emit that document, so a stray `console.log`
+  cannot corrupt the handoff; it lands in the payload, Python re-prints it, and the byte
+  comparison fails. Python re-emits both buffers through its own `print`, which is what
+  keeps the bytes identical: Node writes UTF-8 unconditionally where Python writes the
+  console's locale encoding. `tests/test_emit_boundary.py` runs the real generator twice
+  over the same cell — Node driving, then `GENESEED_NO_JS=1` — and compares the tree,
+  **stdout, stderr and the exit code**, over cells a uniform matrix cannot reach: a
+  re-emit, a renamed owned dir, a *suspicious* name in `.geneseed-srcdirs.json` (the one
+  file-driven path into a recursive delete), user edits between two emits, and a truncated
+  source tree. `tests/golden.py` now compares both streams too, as `<stdout>`/`<stderr>`
+  pseudo-files.
 - **Python and JavaScript disagree about JSON, in two ways that reach emitted bytes.**
   `json.dumps` escapes non-ASCII and `JSON.stringify` does not, which is 44–50
   `description:` lines per theme; and `json.loads` distinguishes `20` from `1.0` where
@@ -198,6 +217,12 @@ renders it as the name in parentheses.
   posture/mode selection, listed in its `_OWNED` tuple. The membership rule is *does
   anything ever redirect this name* — a redirect that reaches some of five copies is
   worse than one that reaches none, because it half-works in silence.
+  The process seam extended that rule: everything the Node child reads travels in one
+  explicit `cfg` object (`_build_core.js_cfg`), because a subprocess cannot share a
+  binding. That is how `STRUCTURE` joined it — it had passed the membership test by
+  accident, since the splice shares the dict *by reference* and a test mutating
+  `build.STRUCTURE` reached every reader. A child process shares nothing, so it now
+  travels too.
   `build.py` splices its four `_build_*` submodules into one shared namespace, so
   every other shared name exists as a copy in each of them; the owned ones deliberately
   do not. They are held back from both `_build_core.__all__` and the splice, so there is
