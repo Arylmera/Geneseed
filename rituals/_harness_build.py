@@ -245,9 +245,26 @@ def _rendered_problems(bundle: Path) -> list[str]:
     # with, read from its own marker — exactly as the theme is read above. Assuming
     # a footprint here would report every file as drifted the moment the build
     # default moved, which is a diagnosis about this function, not about the bundle.
+    #
+    # ...and in the DIALECT it was emitted in, read from its own `.geneseed-emit`
+    # marker, for the same reason again. A bundle is not always the portable one: a host
+    # that catalogues skills and agents to the model itself gets AGENT.md's tables
+    # collapsed to a pointer (`native_catalog`), and the OpenCode emits additionally
+    # strip the per-row spec links. Rendering the portable shape and comparing it against
+    # an OpenCode bundle reports AGENT.md as stale on EVERY run, and no rebuild can ever
+    # clear it — the emit puts the difference back by design. `harness.py diff` already
+    # avoids this exact trap (see `_harness_diff._diff_collect`); this check did not.
+    # An absent or unrecognised marker means the portable `files` bundle, which is what
+    # `native_catalog=False` and no stripping describe.
+    try:
+        emit = (bundle / ".geneseed-emit").read_text(encoding="utf-8").strip()
+    except OSError:
+        emit = ""
+    host = _EMIT_HOST_SCOPE.get(emit, ("", ""))[0]
     try:
         _theme, items = build.render_all(theme_name,
-                                         _footprint_of_dir(bundle))
+                                         _footprint_of_dir(bundle),
+                                         native_catalog=build.host_catalogs_natively(host))
     except SystemExit:
         return [f"[rendered] cannot render theme '{theme_name}' for {bundle.name}/"]
     problems: list[str] = []
@@ -260,6 +277,11 @@ def _rendered_problems(bundle: Path) -> list[str]:
         elif rel.parts[0] == nb_dirname and rel.name != ".gitignore":
             continue   # seed-once, agent-owned: a rewrite is not drift
         elif text is not None:
+            # The OpenCode emits de-link AGENT.md's per-row agent/skill table entries
+            # after rendering (OpenCode never follows those hrefs), so the bundle on disk
+            # legitimately differs from `render_all`'s output for this one file.
+            if host == "opencode" and out_rel == "AGENT.md":
+                text = build._strip_capability_links(text)
             if dest.read_text(encoding="utf-8") != text:
                 problems.append(f"[rendered] {bundle.name}/{out_rel} stale (differs from a fresh render) — rebuild")
         elif dest.read_bytes() != src.read_bytes():

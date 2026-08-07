@@ -2,6 +2,8 @@
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import contextlib
+import io
 import json
 import os
 import re
@@ -1093,6 +1095,63 @@ class RenderedCheckTests(unittest.TestCase):
 
     def test_absent_bundle_is_noop(self):
         self.assertEqual(harness._rendered_problems(ROOT / "does-not-exist"), [])
+
+    # The two tests above build the PORTABLE bundle, which is the only dialect a
+    # `build.build()` fixture can produce — so for as long as they were the whole
+    # coverage, a bundle emitted for a host that catalogues natively was unreachable and
+    # the check's dialect-blindness could not be seen. It reported a freshly emitted
+    # OpenCode bundle as stale on every run, with no rebuild able to clear it.
+
+    def _opencode_bundle(self, d: Path, footprint: str = "lean") -> None:
+        """A real OpenCode project bundle, with the markers a deployed one carries.
+        `.geneseed-emit` is written by build.py's main(), not by the emit function, so a
+        test that calls the emitter directly has to write it exactly as an install has."""
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", d, root=d, footprint=footprint)
+        (d / ".geneseed-theme").write_text("neutral\n", encoding="utf-8")
+        (d / ".geneseed-footprint").write_text(footprint + "\n", encoding="utf-8")
+        (d / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
+
+    def test_opencode_bundle_is_not_drift(self):
+        """An OpenCode bundle straight out of the emitter is not drifted. Its AGENT.md
+        differs from `render_all`'s output by construction — the catalogue tables are
+        collapsed to a pointer and the per-row spec links are stripped — so a check that
+        renders the portable shape flags it forever."""
+        d = Path(tempfile.mkdtemp())
+        try:
+            self._opencode_bundle(d)
+            self.assertEqual(harness._rendered_problems(d), [])
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_opencode_bundle_still_detects_real_drift(self):
+        """...and the dialect awareness must not have bought that by switching the check
+        off. A hand-edited AGENT.md in an OpenCode bundle is still drift."""
+        d = Path(tempfile.mkdtemp())
+        try:
+            self._opencode_bundle(d)
+            agent_md = d / "AGENT.md"
+            agent_md.write_text(agent_md.read_text(encoding="utf-8") + "\ntampered\n",
+                                encoding="utf-8")
+            probs = harness._rendered_problems(d)
+            self.assertTrue(any("AGENT.md" in p and "stale" in p for p in probs),
+                            f"real drift in an OpenCode bundle went unreported: {probs}")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_opencode_bundle_detects_drift_in_a_de_linked_file(self):
+        """The de-linking carve-out is scoped to AGENT.md alone. A tampered agent spec —
+        a file the carve-out must not cover — is still drift."""
+        d = Path(tempfile.mkdtemp())
+        try:
+            self._opencode_bundle(d)
+            spec = d / "agents" / "reviewer.md"
+            spec.write_text("tampered", encoding="utf-8")
+            probs = harness._rendered_problems(d)
+            self.assertTrue(any("reviewer.md" in p and "stale" in p for p in probs),
+                            f"drift in a non-AGENT.md file went unreported: {probs}")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 class McpServerTests(unittest.TestCase):
