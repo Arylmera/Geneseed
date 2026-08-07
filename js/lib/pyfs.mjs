@@ -77,21 +77,67 @@ export function copyFile(src, dest) {
  * the surrogate pair is escaped one code unit at a time, which is exactly what Python
  * emits (`😀`).
  *
- * Strings only, and loudly so. `json.dumps` of a container also differs by its default
- * separators — Python writes `{"a": 1, "b": 2}` where JS writes `{"a":1,"b":2}` — and the
- * two `ensure_ascii=False` call sites in the generator need a third behaviour again.
- * Guessing at one signature that covers all three is how a silent divergence gets built;
- * each lands with the code that needs it.
+ * Strings only, and loudly so — a COMPACT container is the one shape that genuinely
+ * differs: Python's default separators are `(', ', ': ')`, so it writes `{"a": 1, "b": 2}`
+ * where `JSON.stringify` writes `{"a":1,"b":2}`. Indented containers do NOT have that
+ * problem (see `jsonDumpsIndent`), which is why the split is compact-vs-indented rather
+ * than string-vs-container.
  */
 export function jsonDumps(s) {
   if (typeof s !== 'string') {
-    throw new TypeError('jsonDumps takes a string; containers differ from json.dumps by '
-      + 'separators as well as by escaping and need their own writer');
+    throw new TypeError('jsonDumps takes a string; a COMPACT container differs from '
+      + "json.dumps by Python's ', ' / ': ' separators too \u2014 use jsonDumpsIndent, or "
+      + 'write the compact-container form when something actually needs it');
   }
-  // Spelled with \u escapes, never literals: a JS source file carrying a raw U+2028
-  // or U+2029 terminates the line it sits on, and the parse error points elsewhere.
-  return JSON.stringify(s).replace(/[\u007f-\uffff]/g,
+  return escapeNonAscii(JSON.stringify(s));
+}
+
+/**
+ * `ensure_ascii=True`: escape everything Python's encoder does and JS's does not.
+ *
+ * Applied to the SERIALISED text, which is safe because a JSON document can only carry
+ * non-ASCII inside string literals. Spelled with \\u escapes, never literals: a JS source
+ * file carrying a raw U+2028 or U+2029 terminates the line it sits on, and the parse
+ * error points somewhere else entirely.
+ */
+function escapeNonAscii(text) {
+  return text.replace(/[\u007f-\uffff]/g,
     (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+}
+
+/**
+ * `json.dumps(obj, indent=2)` \u2014 and with `{ ensureAscii: false }`, the
+ * `ensure_ascii=False` variant. Those are the only two container shapes the generator
+ * writes; measured across all 27 `json.dumps` call sites.
+ *
+ * Indentation is what makes this tractable: passing `indent` switches Python's
+ * separators from `(', ', ': ')` to `(',', ': ')`, which is exactly what
+ * `JSON.stringify(v, null, 2)` emits. Verified rather than argued \u2014
+ * `tests/test_opencode_extras_parity.py` compares both variants against Python over a
+ * corpus of container shapes.
+ */
+export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {
+  const text = JSON.stringify(value, null, 2);
+  return ensureAscii ? escapeNonAscii(text) : text;
+}
+
+/**
+ * `PurePath._str_normcase` \u2014 Windows compares and sorts paths case-folded, POSIX does
+ * not. This is what makes `sorted(SRC.rglob('*'))` and `sorted(d.glob('*.json'))`
+ * platform-dependent, and the order is observable: the prompt emitter embeds items in
+ * order, and each emit's written list becomes the ownership manifest the prune diffs.
+ *
+ * Two residual differences, both unreachable with this repo's ASCII filenames: Python
+ * compares by code point where JS compares by UTF-16 code unit (differs only above the
+ * BMP), and `str.lower()` is not `toLowerCase()` for a handful of characters.
+ */
+export const normcase = process.platform === 'win32' ? (s) => s.toLowerCase() : (s) => s;
+
+/** `sorted()` over paths \u2014 one owner, so two call sites cannot drift apart. */
+export function comparePaths(a, b) {
+  const A = normcase(a);
+  const B = normcase(b);
+  return A < B ? -1 : A > B ? 1 : 0;
 }
 
 /**
@@ -110,6 +156,15 @@ class PyNumber {
   constructor(value, source) { this.value = value; this.source = source; }
   valueOf() { return this.value; }
   toString() { return pyStr(this); }
+
+  /**
+   * Re-serialising parsed JSON must round-trip the way Python's does. Without this,
+   * `JSON.stringify` would walk the wrapper and emit `{"value":1,"source":"1.0"}`.
+   * `JSON.rawJSON` (Node >= 21) writes the text verbatim, and `pyStr` supplies the text
+   * Python would have \u2014 NOT the original literal, because `json.dumps(json.loads('1.50'))`
+   * is `1.5`: Python re-formats through repr rather than echoing the source.
+   */
+  toJSON() { return JSON.rawJSON(pyStr(this)); }
 }
 
 /**

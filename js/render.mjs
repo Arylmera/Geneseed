@@ -28,7 +28,7 @@
  */
 import { readdirSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { readText, parseJson } from './lib/pyfs.mjs';
+import { readText, parseJson, normcase, comparePaths } from './lib/pyfs.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
 export const STRUCTURE = {
@@ -52,17 +52,6 @@ const CATALOG_BLOCK_RE =
   /[ \t]*<!-- CATALOG:begin -->\n(?<table>[\s\S]*?)[ \t]*<!-- CATALOG:else -->\n(?<pointer>[\s\S]*?)[ \t]*<!-- CATALOG:end -->\n/g;
 
 /**
- * `PurePath._str_normcase`. Windows path comparison and sorting are case-folded; POSIX
- * is not. This is what makes `sorted(SRC.rglob("*"))` platform-dependent, and item order
- * is observable — the prompt emitter embeds the items in order.
- *
- * Two residual differences, both unreachable with this repo's ASCII filenames: Python
- * compares by code point where JS compares by UTF-16 code unit (differs only above the
- * BMP), and `str.lower()` is not `toLowerCase()` for a handful of characters.
- */
-const normcase = process.platform === 'win32' ? (s) => s.toLowerCase() : (s) => s;
-
-/**
  * `PurePath.suffix`. Not `path.extname`: Python returns '' for a name whose only dot is
  * leading (`.gitignore`) or trailing (`foo.`), where `extname` returns '' and '.'
  * respectively. Neither spelling is in TEXT_SUFFIXES, so the divergence is invisible
@@ -84,10 +73,7 @@ function sortedSourceFiles(src) {
       else out.push(full);
     }
   })(src);
-  return out.sort((a, b) => {
-    const A = normcase(a), B = normcase(b);
-    return A < B ? -1 : A > B ? 1 : 0;
-  });
+  return out.sort(comparePaths);   // `sorted()` — case-folded on Windows only
 }
 
 /** `_build_render.load_theme`. Throws where Python calls `sys.exit`. */

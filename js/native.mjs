@@ -63,7 +63,7 @@ function warn(line) {
 }
 
 /** `_build_render._first_blockquote` — the one-line purpose of a spec. */
-function firstBlockquote(text) {
+export function firstBlockquote(text) {
   // `splitlines()` also breaks on VT, FF, FS-GS-RS, NEL and the two Unicode separators;
   // `split('\n')` does not. Measured: no `src/**.md` contains any of them, and readText
   // has already folded CRLF and CR. Likewise `str.strip()` covers a few code points JS's
@@ -76,7 +76,7 @@ function firstBlockquote(text) {
 }
 
 /** `_build_emit.desc_of`. */
-function descOf(text) {
+export function descOf(text) {
   return firstBlockquote(text);
 }
 
@@ -86,7 +86,7 @@ function isReadonly(text) {
 }
 
 /** `_build_emit._strip_skill_body_links`. */
-function stripSkillBodyLinks(body) {
+export function stripSkillBodyLinks(body) {
   return body.replace(SKILL_BODY_LINK_RE, '$1');
 }
 
@@ -165,6 +165,25 @@ function agentOverride(overrides, stem) {
   return (Object.prototype.hasOwnProperty.call(overrides, stem) && overrides[stem]) || {};
 }
 
+/**
+ * The four optional per-agent override lines.
+ *
+ * Emitted ONLY when configured, so an empty `agent-overrides.json` is zero change. The
+ * `model`/`variant` tests are truthiness and the `temperature`/`steps` tests are
+ * `is not None` — a configured `temperature: 0` must survive, an empty model must not.
+ *
+ * Python spells these four ifs out twice, in `_opencode_agent_frontmatter` and in
+ * `_write_primary_agent`. One owner here rather than a second copy: the two Python
+ * bodies are identical today, and the parity gate drives BOTH call sites, so if they
+ * ever diverge the gate says so instead of the copies silently rotting apart.
+ */
+export function pushOverrideLines(fm, ov) {
+  if (pyTruthy(ov.model)) fm.push(`model: ${pyStr(ov.model)}`);
+  if (given(ov.temperature)) fm.push(`temperature: ${pyStr(ov.temperature)}`);
+  if (pyTruthy(ov.variant)) fm.push(`variant: ${pyStr(ov.variant)}`);
+  if (given(ov.steps)) fm.push(`steps: ${pyStr(ov.steps)}`);
+}
+
 /** `_build_emit._claude_agent_frontmatter`. */
 function claudeAgentFrontmatter(stem, text, overrides) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(descOf(text))}`];
@@ -195,14 +214,7 @@ function copilotAgentFrontmatter(stem, text, overrides) {
 function opencodeAgentFrontmatter(stem, text, overrides, theme = null) {
   const fm = [`description: ${jsonDumps(descOf(text))}`, 'mode: subagent'];
   fm.push(`color: ${agentColor(stem, theme)}`);
-  const ov = agentOverride(overrides, stem);
-  // Emitted ONLY when configured, so an empty agent-overrides.json is zero change. The
-  // `model`/`variant` tests are truthiness and the `temperature`/`steps` tests are
-  // `is not None` — a configured `temperature: 0` must survive, an empty model must not.
-  if (pyTruthy(ov.model)) fm.push(`model: ${pyStr(ov.model)}`);
-  if (given(ov.temperature)) fm.push(`temperature: ${pyStr(ov.temperature)}`);
-  if (pyTruthy(ov.variant)) fm.push(`variant: ${pyStr(ov.variant)}`);
-  if (given(ov.steps)) fm.push(`steps: ${pyStr(ov.steps)}`);
+  pushOverrideLines(fm, agentOverride(overrides, stem));
   if (isReadonly(text)) {
     fm.push('permission:', '  edit: deny', '  webfetch: deny');
     if (text.includes('<!-- bash: allow -->')) fm.push('  bash:', '    "*": ask');
