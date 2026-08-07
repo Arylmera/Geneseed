@@ -28,7 +28,9 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -171,6 +173,107 @@ def _parse_version_tuple(v: str) -> "tuple[int, ...] | None":
             return None
         out.append(int(p))
     return tuple(out)
+
+
+JS_EMIT = ROOT / "js" / "emit.mjs"
+
+
+def js_render_available() -> bool:
+    """Can this emit hand its RENDER stage to Node?
+
+    True when `node` is on PATH and the emitter is present. False falls back to the
+    Python implementation, which is still the reference during P2 — the two are held
+    byte-identical by `tests/golden.py` and `tests/test_emit_boundary.py`.
+
+    `GENESEED_NO_JS=1` forces the Python path (bisecting a divergence, or a machine whose
+    `node` is broken rather than absent). NOTE the fallback is SILENT by design: the whole
+    claim of the port is that the two runtimes are indistinguishable, so a notice would be
+    noise on every build. The cost is that on a Node-less machine the parity gates skip
+    and prove nothing — the same weak spot `tests/test_render_parity.py` documents, and
+    the reason CI must have Node."""
+    if os.environ.get("GENESEED_NO_JS"):
+        return False
+    return shutil.which("node") is not None and JS_EMIT.is_file()
+
+
+def js_cfg() -> dict:
+    """The generator's mutable configuration as the Node side's `cfg` object.
+
+    One function, so the driver and the four parity dump harnesses cannot disagree about
+    what the render half reads. Everything in it is an `_OWNED` name — which is the point:
+    Node holds no module-level configuration at all, so a test that redirects `SRC` or
+    `POSTURE` here reaches the subprocess too, the same single write it already was.
+
+    `primaryAgentSrc` is deliberately absent: it lives in `_build_emit`, and only the
+    OpenCode job needs it, so that caller adds it rather than this module reaching across.
+
+    `structure` is here because the PORT found it missing. `_build_render.STRUCTURE` is not
+    in `_OWNED`, and in-process it did not need to be: the splice copies the dict by
+    REFERENCE, so `build.STRUCTURE[token] = ...` — how `SrcDirRenameOrphanTests` simulates
+    a themed DIR_* rename — mutates the one object every module reads. A subprocess has no
+    such reference. Sending it restores the property across the seam: one write, seen
+    everywhere, including in Node. It is the `_OWNED` membership test one level out — does
+    anything REDIRECT this name — answered for a name that had passed it by accident."""
+    import _build_render        # local: _build_render imports this module at import time
+    return {"root": str(ROOT), "src": str(SRC), "themes": str(THEMES),
+            "config": str(CONFIG), "colorThemes": str(COLOR_THEMES),
+            "pluginSrc": str(PLUGIN_SRC), "workflowSrc": str(WORKFLOW_SRC),
+            "posture": POSTURE, "mode": MODE,
+            "structure": dict(_build_render.STRUCTURE)}
+
+
+def run_node(job: dict) -> dict:
+    """Run one RENDER job in Node and return its result payload.
+
+    THE PROTOCOL. The job goes over a temp FILE, not stdin — a Windows pipe would put an
+    encoding and a buffering question between the two processes for no gain, and the job
+    can carry a whole manifest. The result comes back as exactly one JSON document on the
+    child's stdout, which `js/emit.mjs` reserves for it by replacing `process.stdout.write`
+    for the duration of the run.
+
+    THE TWO STREAMS ARE DATA, NOT OUTPUT. Node buffers everything the generator prints and
+    hands it back in the payload; this function re-emits it through Python's own
+    `sys.stdout` / `sys.stderr`. That is what keeps the emitted bytes identical: Node writes
+    UTF-8 unconditionally, where Python writes the console's locale encoding, so letting
+    the child inherit the streams would diverge on exactly the cp1252 Windows console that
+    several of these warnings exist to survive. Ordering is preserved for free — RENDER is
+    one contiguous stage, so the child's whole block belongs at the call site.
+
+    Raises SystemExit(n) for a deliberate refusal the child already explained on stderr
+    (an incomplete source), and RuntimeError for a crash or a broken protocol — never a
+    silent partial tree."""
+    node = shutil.which("node")
+    if node is None:                       # js_render_available() is the caller's guard
+        raise RuntimeError("[geneseed] node is not on PATH")
+    fd, job_path = tempfile.mkstemp(prefix="geneseed-job-", suffix=".json")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(json.dumps(job).encode("utf-8"))
+        proc = subprocess.run(
+            [node, str(JS_EMIT), job_path], cwd=str(ROOT), capture_output=True,
+            **({"creationflags": subprocess.CREATE_NO_WINDOW}
+               if sys.platform == "win32" else {}))
+    finally:
+        os.unlink(job_path)
+
+    # Decoded as UTF-8, never with `text=True`: that would use the locale encoding, and
+    # Node writes UTF-8 whatever the console is.
+    try:
+        res = json.loads(proc.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise RuntimeError(
+            f"[geneseed] the Node render half did not return a protocol document ({e}). "
+            f"exit={proc.returncode}\n  stdout: {proc.stdout[:400]!r}\n"
+            f"  stderr: {proc.stderr[:400]!r}") from None
+
+    sys.stdout.write(res.get("stdout", ""))
+    sys.stderr.write(res.get("stderr", ""))
+    if not res.get("ok"):
+        if res.get("error"):
+            raise RuntimeError("[geneseed] the Node render half crashed:\n"
+                               + res["error"])
+        raise SystemExit(res.get("exit", 1))
+    return res
 
 
 def version_is_newer(a: str, b: str) -> "bool | None":

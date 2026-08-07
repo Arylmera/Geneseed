@@ -41,7 +41,13 @@ PHASE_NAME = {RENDER: "RENDER", WIRE: "WIRE", PRUNE: "PRUNE",
 # at the call site, which is how the six thin claude/bob/copilot wrappers get checked at
 # all (each is four lines around one `_emit_claude_core` call). Every other callee is
 # either classified below or phase-neutral.
-DELEGATES = ("_emit_claude_core",)
+#
+# `_opencode_render` / `_opencode_render_py` are the RENDER stage after the Node seam was
+# cut: the dispatcher picks a runtime, the `_py` sibling is the reference implementation.
+# Both are spliced rather than classified so the ORDER INSIDE the render half keeps being
+# checked — collapsing them to one RENDER entry would make the gate monotonic by
+# construction and stop it seeing a wiring call that drifted in among the writers.
+DELEGATES = ("_emit_claude_core", "_opencode_render", "_opencode_render_py")
 
 # Explicitly classified calls, by the phase they belong to.
 PHASE = {
@@ -56,6 +62,10 @@ PHASE = {
     "ensure_profile_stub": RENDER, "ensure_excludes_stub": RENDER,
     "ensure_agent_overrides_stub": RENDER, "ensure_context_stub": RENDER,
     "ensure_bundle_gitignore": RENDER,
+    # The seam itself. One spawn per emit, and everything it writes is RENDER by
+    # construction — `js/emit.mjs` holds no wiring code at all, which is the property
+    # the whole phase order exists to make possible.
+    "run_node": RENDER,
     # WIRE — files the user co-owns; read-modify-write, never clobbered.
     "_managed_block_write": WIRE, "_managed_block_remove": WIRE,
     "_merge_claude_settings": WIRE, "_wire_claude_excludes": WIRE,

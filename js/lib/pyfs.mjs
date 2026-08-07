@@ -239,3 +239,80 @@ export function pyStr(value) {
   }
   throw new TypeError(`pyStr has no Python-agreeing rendering for ${typeof value}`);
 }
+
+/**
+ * `repr(value)` for the values a theme or an override file can hold.
+ *
+ * Python quotes strings with `'`, switching to `"` only when the string contains a `'`
+ * and no `"`, and spells the three singletons with a capital. Anything else is a
+ * container, whose repr differs structurally; guessing at a rendering would be worse
+ * than failing, so it falls through to `pyStr`.
+ *
+ * Lives here rather than beside its first caller because `pyAscii` below is the same
+ * function with one more escaping rule, and two copies of the quote choice would be two
+ * things to keep in agreement.
+ *
+ * Containers ARE rendered, unlike in `pyStr`, and the difference is not an inconsistency.
+ * `pyStr` interpolates into an emitted file, where a shape nobody decided the semantics
+ * for must be a question rather than a guessed byte. `repr` renders a value into a WARNING
+ * about that very value — a list in `.geneseed-srcdirs.json` is precisely what the warning
+ * exists to report, and throwing there would turn "this file is corrupt" into a crash. The
+ * value always came from JSON, so the type set is closed and the rendering is exact.
+ */
+function pyReprImpl(v, ascii) {
+  if (typeof v === 'string') {
+    let body = '';
+    for (const ch of v) {                 // by CODE POINT: `\U########` is one escape
+      const cp = ch.codePointAt(0);
+      if (ch === '\\') body += '\\\\';
+      else if (ch === '\n') body += '\\n';
+      else if (ch === '\r') body += '\\r';
+      else if (ch === '\t') body += '\\t';
+      else if (cp < 0x20 || cp === 0x7f) body += `\\x${cp.toString(16).padStart(2, '0')}`;
+      else if (cp < 0x7f) body += ch;
+      else if (!ascii) body += ch;        // repr() keeps printable non-ASCII verbatim
+      else if (cp <= 0xff) body += `\\x${cp.toString(16).padStart(2, '0')}`;
+      else if (cp <= 0xffff) body += `\\u${cp.toString(16).padStart(4, '0')}`;
+      else body += `\\U${cp.toString(16).padStart(8, '0')}`;
+    }
+    // The quote choice reads the ESCAPED body, which is safe: no escape sequence above
+    // introduces a quote character, so a `'` or `"` in it came from the input.
+    return body.includes("'") && !body.includes('"')
+      ? `"${body}"`
+      : `'${body.replaceAll("'", "\\'")}'`;
+  }
+  if (v === null) return 'None';
+  if (v === true) return 'True';
+  if (v === false) return 'False';
+  if (Array.isArray(v)) return `[${v.map((x) => pyReprImpl(x, ascii)).join(', ')}]`;
+  if (typeof v === 'object' && !(v instanceof PyNumber)) {
+    // JSON object keys are always strings, so `repr(key)` is the string branch above.
+    return `{${Object.entries(v)
+      .map(([k, x]) => `${pyReprImpl(k, ascii)}: ${pyReprImpl(x, ascii)}`)
+      .join(', ')}}`;
+  }
+  return pyStr(v);
+}
+
+export function pyRepr(v) {
+  return pyReprImpl(v, false);
+}
+
+/**
+ * `ascii(value)` — `repr()` with every non-ASCII character escaped as well.
+ *
+ * Used where a warning quotes a value that came out of a file a user (or another tool)
+ * may have written: `build`'s prune guard names the suspicious dir name it refused to
+ * delete from `.geneseed-srcdirs.json`. Escaping is the point — a dir name carrying a
+ * newline or a right-to-left override must be readable in the warning, not act on the
+ * terminal, and Python already made that choice by spelling it `ascii()` rather than an
+ * f-string.
+ *
+ * The two share ONE implementation on purpose. The first draft gave `pyAscii` its own
+ * container and quote handling, and a mutation exposed the consequence immediately:
+ * `pyRepr`'s container branches became unreachable, so half of the code was dead and
+ * neither copy's escaping could drift without the other silently keeping the gate green.
+ */
+export function pyAscii(v) {
+  return pyReprImpl(v, true);
+}

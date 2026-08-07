@@ -30,7 +30,7 @@
  */
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { writeText, copyFile, jsonDumps, parseJson, pyStr, pyTruthy, readText }
+import { writeText, copyFile, jsonDumps, parseJson, pyStr, pyRepr, pyTruthy, readText }
   from './lib/pyfs.mjs';
 
 /** Mirrors `_build_core.VENDORED_SKILL_DIRS`. */
@@ -111,26 +111,6 @@ function agentColorMap(theme) {
   }
   if (!Object.prototype.hasOwnProperty.call(cleaned, '_default')) cleaned._default = 'secondary';
   return cleaned;
-}
-
-/**
- * `repr()` for the values that reach the AGENT_COLORS warning — a JSON scalar from a
- * theme file. Python quotes strings with `'`, and spells the three singletons with a
- * capital. Anything else is a container, whose repr differs structurally; it is not
- * reachable here (the value is compared against a set of strings first) and guessing at
- * a rendering would be worse than failing.
- */
-function pyRepr(v) {
-  if (typeof v === 'string') {
-    const esc = v.replaceAll('\\', '\\\\');
-    return esc.includes("'") && !esc.includes('"')
-      ? `"${esc}"`
-      : `'${esc.replaceAll("'", "\\'")}'`;
-  }
-  if (v === null) return 'None';
-  if (v === true) return 'True';
-  if (v === false) return 'False';
-  return pyStr(v);
 }
 
 /** `_build_emit._agent_color`. */
@@ -256,8 +236,15 @@ function relPosix(base, target) {
  * is the module-level single owner; here it travels explicitly, as in `js/render.mjs`).
  *
  * Returns `{ nAgents, nSkills, written }` — Python's 3-tuple, with `written` as absolute
- * paths in write order. The caller relativises them into the ownership manifest, so the
- * ORDER is observable: it lands in `owned`, which the prune diffs against.
+ * paths in write order.
+ *
+ * That order is NOT observable, and this comment used to claim it was ("it lands in
+ * `owned`, which the prune diffs against"). Measured when a mutation reversing it stayed
+ * green: all three manifest writers spell `"owned": sorted(owned)` and every prune is
+ * `set(old_owned) - set(owned)`, so the sequence is erased on both sides. Write order is
+ * kept because it mirrors the Python and costs nothing, not because anything reads it —
+ * the same distinction `themed_rel` earned, and the reason the mutation is recorded here
+ * rather than papered over with a cell that cannot exist.
  */
 export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, {
   host = 'opencode', oldOwned = null, cfg = null, manifestExisted = true,

@@ -38,8 +38,12 @@ export const STRUCTURE = {
   DIR_NOTEBOOK: 'notebook',
 };
 
-/** Source top-level dirs whose OUTPUT name is themed. Mirrors `SRC_DIR_TOKENS`. */
-const SRC_DIR_TOKENS = {
+/**
+ * Source top-level dirs whose OUTPUT name is themed. Mirrors `SRC_DIR_TOKENS`.
+ * Exported because `js/emit.mjs`'s `build` resolves the same tokens to decide which
+ * dirs it owns and wipes — one owner, so the two cannot disagree about a folder name.
+ */
+export const SRC_DIR_TOKENS = {
   laws: 'DIR_LAWS', agents: 'DIR_AGENTS', skills: 'DIR_SKILLS',
   memory: 'DIR_MEMORY', notebook: 'DIR_NOTEBOOK',
 };
@@ -197,9 +201,18 @@ function registerBody(cfg, theme, dir, selected, fallback) {
   return '';
 }
 
-/** `_build_render.effective_theme`. */
+/**
+ * `_build_render.effective_theme`.
+ *
+ * `cfg.structure` overrides the constant below when the driver supplies one, and it
+ * always does. STRUCTURE is a module-level dict on the Python side that tests MUTATE to
+ * simulate a themed DIR_* rename (`SrcDirRenameOrphanTests`); in-process that reaches
+ * every reader because the splice shares one dict object, and across a process boundary
+ * it reaches nothing at all unless it travels. The constant stays as the default for the
+ * parity harnesses, which drive this module directly.
+ */
 export function effectiveTheme(cfg, themeName) {
-  const theme = { ...loadTheme(cfg, themeName), ...STRUCTURE };
+  const theme = { ...loadTheme(cfg, themeName), ...(cfg.structure ?? STRUCTURE) };
   theme.POSTURE_BODY = registerBody(cfg, theme, 'postures', cfg.posture ?? 'peer', 'peer');
   theme.MODE_BODY = registerBody(cfg, theme, 'modes', cfg.mode ?? 'direct', 'direct');
   return theme;

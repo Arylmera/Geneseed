@@ -812,7 +812,17 @@ def build(theme_name: str, out: Path, footprint: str = "full",
     `notebook/` (the agent's sovereign space — seeded once, never re-emitted; only
     its `.gitignore` is re-asserted), and `context.json` — written once, beside
     AGENT.md, and never touched again. The build therefore cleans its own footprint
-    without ever destroying the user's repository or data."""
+    without ever destroying the user's repository or data.
+
+    RENDER runs in Node when one is available (`js/emit.mjs`'s `build`), and in the body
+    below otherwise. The two are held byte-identical by `tests/golden.py` and
+    `tests/test_emit_boundary.py`; see `_build_core.run_node` for the protocol and
+    `js/emit.mjs` for why the child's stdout is not its progress stream."""
+    if _build_core.js_render_available():
+        _build_core.run_node({"kind": "build", "cfg": _build_core.js_cfg(),
+                              "theme": theme_name, "out": str(out),
+                              "footprint": footprint, "nativeCatalog": native_catalog})
+        return
     theme, items = render_all(theme_name, footprint,
                               native_catalog=native_catalog)
     assert_source_complete(items, context=f"theme '{theme_name}'")

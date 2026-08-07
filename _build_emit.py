@@ -614,6 +614,78 @@ def _write_ponytail_command(command_dir: Path) -> Path:
     return dest
 
 
+def _opencode_render_py(theme_name: str, out: Path, root: Path, footprint: str,
+                        native_catalog: bool, old_owned: list[str],
+                        manifest_existed: bool) -> dict:
+    """The RENDER stage of `emit_opencode`, in Python — the reference the Node
+    implementation (`js/emit.mjs`'s `emitOpencodeRender`) is held byte-identical to.
+
+    Returns the two things the WIRE/PRUNE/MANIFEST stages need from it: `owned` (the
+    layer's files, relative to `.opencode/`, in write order) and the counts the final
+    progress line reports. Nothing else crosses the seam."""
+    oc = root / ".opencode"
+    # native_catalog: OpenCode reads this bundle's AGENT.md as the session
+    # preamble AND catalogues skills/agents to the model itself, so the tables
+    # would be the second copy. See HOSTS['opencode'] for why that is asserted
+    # for OpenCode and not for every host.
+    build(theme_name, out, footprint, native_catalog=native_catalog)
+    # OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
+    # plain names (the portable build keeps them). The bundle's flat specs still exist
+    # beside it — this is a deliberate de-link, not a fix for a broken target.
+    agent_md = out / "AGENT.md"
+    if agent_md.is_file():
+        agent_md.write_text(_strip_capability_links(agent_md.read_text(encoding="utf-8")),
+                            encoding="utf-8")
+
+    owned: list[str] = []
+    theme, items = render_all(theme_name)
+
+    ensure_agent_overrides_stub(out)
+    overrides = _load_agent_overrides(out)
+
+    n_agents, n_skills, written = _write_native_layer(
+        items, oc / "agents", oc / "skills", overrides,
+        host="opencode", old_owned=old_owned, cfg=oc, manifest_existed=manifest_existed,
+        theme=theme)
+    owned += [p.relative_to(oc).as_posix() for p in written]
+    primary = _write_primary_agent(oc / "agents", overrides)
+    if primary:
+        owned.append(primary.relative_to(oc).as_posix())
+    commands = _write_command_layer(items, oc / "command")
+    commands.append(_write_ponytail_command(oc / "command"))   # always-on /ponytail switch
+    owned += [p.relative_to(oc).as_posix() for p in commands]
+    theme_file = _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
+    owned.append(theme_file.relative_to(oc).as_posix())
+    for p in _write_color_themes(oc / "themes"):   # curated full-palette colour themes (solid + transparent)
+        owned.append(p.relative_to(oc).as_posix())
+
+    n_plugins = _copy_plugins(oc / "plugins", owned)
+    n_workflows = _copy_workflows(oc / "workflows", owned)
+    return {"owned": owned,
+            "stats": {"nAgents": n_agents, "nSkills": n_skills, "nPlugins": n_plugins,
+                      "nWorkflows": n_workflows, "nCommands": len(commands),
+                      "primary": bool(primary)}}
+
+
+def _opencode_render(theme_name: str, out: Path, root: Path, footprint: str,
+                     native_catalog: bool, old_owned: list[str],
+                     manifest_existed: bool) -> dict:
+    """RENDER — one spawn into Node when it is available, the Python body otherwise.
+
+    `old_owned` and `manifest_existed` are read by the CALLER and passed in rather than
+    read here, so the manifest has one owner across the seam: Python reads it, prunes
+    against it and writes it, and the child never opens it."""
+    if _build_core.js_render_available():
+        return _build_core.run_node({
+            "kind": "opencode",
+            "cfg": {**_build_core.js_cfg(), "primaryAgentSrc": str(PRIMARY_AGENT_SRC)},
+            "theme": theme_name, "out": str(out), "root": str(root),
+            "footprint": footprint, "nativeCatalog": native_catalog,
+            "oldOwned": old_owned, "manifestExisted": manifest_existed})
+    return _opencode_render_py(theme_name, out, root, footprint, native_catalog,
+                               old_owned, manifest_existed)
+
+
 def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
                   footprint: str = "full") -> None:
     """Render the standard bundle, then add an OpenCode-native layer derived from
@@ -628,18 +700,6 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
     root. The project manifest `context.json` is loaded by the context plugin, never
     listed in `instructions`."""
     root = root or out
-    # native_catalog: OpenCode reads this bundle's AGENT.md as the session
-    # preamble AND catalogues skills/agents to the model itself, so the tables
-    # would be the second copy. See HOSTS['opencode'] for why that is asserted
-    # for OpenCode and not for every host.
-    build(theme_name, out, footprint, native_catalog=host_catalogs_natively("opencode"))
-    # OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
-    # plain names (the portable build keeps them). The bundle's flat specs still exist
-    # beside it — this is a deliberate de-link, not a fix for a broken target.
-    agent_md = out / "AGENT.md"
-    if agent_md.is_file():
-        agent_md.write_text(_strip_capability_links(agent_md.read_text(encoding="utf-8")),
-                            encoding="utf-8")
     # `.opencode/` used to be fully wiped and rebuilt every re-emit — simple, but it
     # destroyed ANY user-authored file under it (a hand-added agent, plugin, command),
     # not just the one carve-out (themes) the old code knew to snapshot-and-restore.
@@ -674,30 +734,14 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
         except (json.JSONDecodeError, OSError):
             old_owned = []
 
-    owned: list[str] = []
-    theme, items = render_all(theme_name)
-
-    ensure_agent_overrides_stub(out)
-    overrides = _load_agent_overrides(out)
-
-    n_agents, n_skills, written = _write_native_layer(
-        items, oc / "agents", oc / "skills", overrides,
-        host="opencode", old_owned=old_owned, cfg=oc, manifest_existed=manifest_existed,
-        theme=theme)
-    owned += [p.relative_to(oc).as_posix() for p in written]
-    primary = _write_primary_agent(oc / "agents", overrides)
-    if primary:
-        owned.append(primary.relative_to(oc).as_posix())
-    commands = _write_command_layer(items, oc / "command")
-    commands.append(_write_ponytail_command(oc / "command"))   # always-on /ponytail switch
-    owned += [p.relative_to(oc).as_posix() for p in commands]
-    theme_file = _write_theme(oc / "themes", theme_name, theme)   # branded `/theme geneseed-<theme>`
-    owned.append(theme_file.relative_to(oc).as_posix())
-    for p in _write_color_themes(oc / "themes"):   # curated full-palette colour themes (solid + transparent)
-        owned.append(p.relative_to(oc).as_posix())
-
-    n_plugins = _copy_plugins(oc / "plugins", owned)
-    n_workflows = _copy_workflows(oc / "workflows", owned)
+    # RENDER — one process seam. Everything Geneseed owns wholesale is written by
+    # `_opencode_render`, in Node when there is one; only `owned` and the progress counts
+    # come back across it.
+    render = _opencode_render(theme_name, out, root, footprint,
+                              host_catalogs_natively("opencode"),
+                              old_owned, manifest_existed)
+    owned = render["owned"]
+    stats = render["stats"]
 
     # WIRE — the one file of this emit the user co-owns. Every emit runs the same five
     # stages in the same order (RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY); see
@@ -734,8 +778,9 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
                     "list is yours and is never touched.",
         "owned": sorted(owned), "scope": "project"})
 
-    extras = ([f"primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
+    extras = ([f"primary agent"] if stats["primary"] else []) + \
+             ([f"{stats['nCommands']} command(s)"] if stats["nCommands"] else [])
     extra = (" + " + ", ".join(extras)) if extras else ""
-    print(f"[geneseed] opencode layer: {n_agents} subagents, {n_skills} skills, "
-          f"{n_plugins} plugin(s), {n_workflows} workflow file(s), "
+    print(f"[geneseed] opencode layer: {stats['nAgents']} subagents, {stats['nSkills']} skills, "
+          f"{stats['nPlugins']} plugin(s), {stats['nWorkflows']} workflow file(s), "
           f"{cfg_name} (instructions: {agent_path}){extra}")

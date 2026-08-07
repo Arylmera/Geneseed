@@ -32,6 +32,14 @@ Pass a literal interpreter path there — `which python` under Git Bash yields a
 `;`-joined string `_split` cannot parse — and decode any redirected output as UTF-8,
 since the `·`/`—` separators below make `tail` fail on a cp1252 console.
 
+Each cell compares every file the generator wrote AND both of its output streams, which
+appear in the snapshot as the pseudo-files `<stdout>` and `<stderr>`. The streams matter
+because that is where the generator prints progress, where the Node handoff returns its
+protocol document, and where the emitted hook gates signal a verdict — nothing compared
+them until the render half started running in another process. They are dropped when the
+two sides run a different number of times (`--idempotent`), since emit two legitimately
+says different things from emit one.
+
 That cross-revision form compares CONTENT too, so it is a refactor gate, not a content
 gate: `.geneseed-version` records `source_fingerprint()` and today's date, so two
 revisions whose `src/`or `themes/` differ at all will differ in every cell on that one
@@ -224,7 +232,17 @@ def run_cell(gen: list[str], cell: dict, repeat: int = 1) -> "dict[str, bytes] |
             return sick
         # <REPO> matters only once the two sides run from different checkouts (the Node
         # port, or a cross-revision regression run); harmless when they share one.
-        return _snapshot(Path(td), [("<HOME>", home), ("<OUT>", out), ("<REPO>", ROOT)])
+        roots = [("<HOME>", home), ("<OUT>", out), ("<REPO>", ROOT)]
+        snap = _snapshot(Path(td), roots)
+        # The two STREAMS, as pseudo-files. The emit's stdout used to be compared by
+        # nothing at all, which left the port free to add a byte to it — the stream the
+        # generator prints progress on, the Node handoff returns its protocol document on,
+        # and the emitted git-gate and rule-gate hooks signal their verdict on. Only the
+        # LAST run's streams are kept, matching the snapshot, which is why they are
+        # compared only when both sides ran the same number of times (see `compare`).
+        snap["<stdout>"] = _normalise(proc.stdout.encode("utf-8", "replace"), roots)
+        snap["<stderr>"] = _normalise(proc.stderr.encode("utf-8", "replace"), roots)
+        return snap
 
 
 def _diff(name: str, a: bytes, b: bytes) -> str:
@@ -248,6 +266,15 @@ def compare(ref: list[str], new: list[str], quick: bool, limit: int,
               (f"/{cell['posture']}" if cell.get("posture") else "") + \
               (f"/{cell['mode']}" if cell.get("mode") else "")
         a, b = run_cell(ref, cell, ref_repeat), run_cell(new, cell, new_repeat)
+        # The streams are only comparable when both sides ran the same number of times.
+        # Emit two legitimately says different things from emit one — it warns about files
+        # it now finds already there — so `--idempotent`, which compares a fresh emit
+        # against a repeated one, drops them rather than reporting a difference that is
+        # the point of the flag.
+        if ref_repeat != new_repeat and not isinstance(a, str) and not isinstance(b, str):
+            for snap in (a, b):
+                snap.pop("<stdout>", None)
+                snap.pop("<stderr>", None)
         if isinstance(a, str) or isinstance(b, str):
             failures.append(f"  {cid}: generator failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                             f"\n    new: {b if isinstance(b, str) else 'ok'}")
