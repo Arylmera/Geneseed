@@ -158,6 +158,23 @@ renders it as the name in parentheses.
   sort. `js/lib/pyfs.mjs` holds the primitives where the two runtimes disagree in silence;
   `Path.write_text`'s `\n` → `os.linesep` translation is the load-bearing one. Zero
   dependencies on that side too.
+- **The host-native layer has one too: [`js/native.mjs`](js/native.mjs)** — the point where
+  RENDER stops being a pure function of `src/`. Its output depends on your
+  `agent-overrides.json`, on which files already exist in the target (claim-on-create never
+  overwrites a file Geneseed did not write), and on which of the three host dialects is
+  emitting. None of those is reachable from a bundle-emitting test: an emit always writes an
+  *empty* overrides stub into a *fresh* tree. So it has a gate of its own,
+  `tests/test_native_layer_parity.py`, which hands both implementations the same rendered
+  items and compares the written tree byte for byte, the returned ownership list *in order*,
+  and the warning stream — and asserts the Node side printed nothing at all on stdout,
+  because the emitted hook gates signal their verdict there and return 0 on every path.
+- **Python and JavaScript disagree about JSON, in two ways that reach emitted bytes.**
+  `json.dumps` escapes non-ASCII and `JSON.stringify` does not, which is 44–50
+  `description:` lines per theme; and `json.loads` distinguishes `20` from `1.0` where
+  `JSON.parse` collapses both to one double, so `temperature: 1.0` would emit as
+  `temperature: 1`. `js/lib/pyfs.mjs` settles both — the second by parsing through the
+  reviver's `context.source` so the literal survives. Every JSON the generator reads goes
+  through `parseJson`, themes included, so the rule has no exceptions to remember.
 - **`_build_core` is the single owner of the generator's mutable configuration** — the
   source/theme roots, the four `_<host>_config_dir` resolvers, and the build-wide
   posture/mode selection, listed in its `_OWNED` tuple. The membership rule is *does

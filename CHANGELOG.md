@@ -9,6 +9,21 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's second piece: the layer that writes your host-native agents and skills now
+  exists in JavaScript too, with a test that covers the cases a normal build never
+  reaches.** Nothing about running Geneseed changes yet — Python still builds your harness.
+  What is new is the gate. Until now every acceptance test emitted into an empty folder with
+  an empty `agent-overrides.json`, so three behaviours had never been checked in either
+  language: what happens when you *have* overrides, what happens when a file already exists
+  that Geneseed did not write (it is left alone, and you are told), and what the three host
+  dialects do differently. `tests/test_native_layer_parity.py` runs all of them in both
+  languages and compares the files, the ownership record and the warnings.
+- **A bug this found before anyone hit it:** an `agent-overrides.json` setting
+  `"temperature": 1.0` would have emitted `temperature: 1.0` from Python and
+  `temperature: 1` from JavaScript, because JavaScript has one number type where Python has
+  two. No build-and-compare test could have caught it — the build always writes an *empty*
+  overrides file, so no such test has ever had an override to render. Fixed, and pinned by a
+  test that compares number formatting directly.
 - **The generator's render core now exists in JavaScript as well as Python, and a test
   proves the two produce identical bytes.** Nothing about running Geneseed changes yet —
   Python is still what builds your harness — but this is the first piece of the runtime to
