@@ -9,6 +9,14 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's third piece: the OpenCode extras — colour themes, the opt-in primary agent
+  and slash commands, the plugin and workflow copies, and the `agent-overrides.json`
+  stub.** Still nothing changes about running Geneseed; Python remains what builds your
+  harness. The point again is what the new test reaches. Two of these layers only exist
+  when `GENESEED_PRIMARY` or `GENESEED_COMMANDS` is set, so a normal build never writes
+  them and no build-and-compare test ever had — they are now checked in both languages
+  with the flags on and off, along with the "your overrides predate an upgrade" notice in
+  each of its four states.
 - **The port's second piece: the layer that writes your host-native agents and skills now
   exists in JavaScript too, with a test that covers the cases a normal build never
   reaches.** Nothing about running Geneseed changes yet — Python still builds your harness.

@@ -168,13 +168,31 @@ renders it as the name in parentheses.
   items and compares the written tree byte for byte, the returned ownership list *in order*,
   and the warning stream — and asserts the Node side printed nothing at all on stdout,
   because the emitted hook gates signal their verdict there and return 0 on every path.
+- **The OpenCode extras are ported too: [`js/opencode.mjs`](js/opencode.mjs)** — the
+  branded and curated colour themes, the opt-in primary agent and slash-command layer, the
+  always-on `/ponytail` switch, the verbatim plugin/workflow copies, and the
+  `agent-overrides.json` stub with its staleness notice. Half of it sits behind
+  `GENESEED_PRIMARY` / `GENESEED_COMMANDS`, which are off by default — so a default emit
+  never writes the primary agent or any command, and neither does any golden cell.
+  `tests/test_opencode_extras_parity.py` drives both implementations with those flags on
+  and off, over every theme plus synthetic ACCENT values the shipped themes do not
+  contain, and compares the files, the returned ownership list, **and both output
+  streams** — the staleness notice goes to stdout where every native-layer warning goes to
+  stderr, an asymmetry inherited from the Python rather than corrected.
 - **Python and JavaScript disagree about JSON, in two ways that reach emitted bytes.**
   `json.dumps` escapes non-ASCII and `JSON.stringify` does not, which is 44–50
   `description:` lines per theme; and `json.loads` distinguishes `20` from `1.0` where
   `JSON.parse` collapses both to one double, so `temperature: 1.0` would emit as
   `temperature: 1`. `js/lib/pyfs.mjs` settles both — the second by parsing through the
-  reviver's `context.source` so the literal survives. Every JSON the generator reads goes
-  through `parseJson`, themes included, so the rule has no exceptions to remember.
+  reviver's `context.source` so the literal survives, and re-serialising through
+  `JSON.rawJSON` so it survives a round trip. Every JSON the generator reads goes through
+  `parseJson`, themes included, so the rule has no exceptions to remember.
+  The split between the two writers is **compact vs indented**, not string vs container:
+  Python's default separators are `(', ', ': ')`, but passing an indent switches them to
+  `(',', ': ')` — exactly what `JSON.stringify(v, null, 2)` emits. So `jsonDumpsIndent`
+  covers every container the generator writes (measured: all 27 `json.dumps` call sites
+  use one of two indented shapes), while `jsonDumps` stays string-only and throws on a
+  container rather than silently emitting the wrong separators.
 - **`_build_core` is the single owner of the generator's mutable configuration** — the
   source/theme roots, the four `_<host>_config_dir` resolvers, and the build-wide
   posture/mode selection, listed in its `_OWNED` tuple. The membership rule is *does
