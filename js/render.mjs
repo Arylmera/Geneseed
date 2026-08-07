@@ -28,7 +28,7 @@
  */
 import { readdirSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { readText } from './lib/pyfs.mjs';
+import { readText, parseJson } from './lib/pyfs.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
 export const STRUCTURE = {
@@ -99,7 +99,11 @@ export function loadTheme(cfg, name) {
       .map((f) => f.slice(0, -5)).sort().join(', ');
     throw new Error(`[geneseed] unknown theme '${name}'. available: ${available}`);
   }
-  return JSON.parse(readText(p));
+  // parseJson, not JSON.parse: one rule for every JSON the generator reads, so a numeric
+  // theme value keeps the int/float distinction Python's `str()` and `repr()` render
+  // differently. No shipped theme has one today; `_theme_json`'s ACCENT and the
+  // AGENT_COLORS validation warning are both one authoring typo away from needing it.
+  return parseJson(readText(p));
 }
 
 /** `_build_render.substitute`. */
