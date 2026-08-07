@@ -152,6 +152,12 @@ CELLS = [
      "prepare": {2: _rename_owned_dir}},
     {"id": "files/suspicious-owned-dir", "emit": "files", "theme": "neutral", "repeat": 2,
      "prepare": {2: _suspicious_owned_dir}},
+    # `root` != `out`: the bundle in a subfolder of the project. Node uses BOTH paths —
+    # the bundle goes to `out`, `.opencode/` to `root` — and no golden cell passes
+    # `--root` at all, so without this the two runtimes are never compared on the
+    # arrangement every repo-with-a-Harness-folder install actually uses.
+    {"id": "opencode/bundle-in-subfolder", "emit": "opencode", "theme": "neutral",
+     "subfolder": True, "repeat": 2},
     {"id": "files/non-string-owned-dirs", "emit": "files", "theme": "neutral", "repeat": 2,
      "prepare": {2: _non_string_owned_dirs}},
     {"id": "files/non-bundle-out", "emit": "files", "theme": "neutral",
@@ -182,6 +188,11 @@ def _run_side(cell: dict, js: bool) -> dict:
         argv = [sys.executable, "build.py", "--theme", cell["theme"],
                 "--emit", cell["emit"], "--footprint", cell.get("footprint", "full"),
                 "--out", str(out)]
+        if cell.get("subfolder"):
+            # The bundle lives UNDER the project root: `out` and `root` diverge, and the
+            # child uses both — `.opencode/` goes to root while AGENT.md stays in out.
+            argv[argv.index("--out") + 1] = str(out / "Harness")
+            argv += ["--root", str(out)]
         prepare = cell.get("prepare", {})
         proc = None
         for n in range(1, cell.get("repeat", 1) + 1):
@@ -241,7 +252,8 @@ class EmitBoundaryTests(unittest.TestCase):
                if c["id"] in ("files/renamed-owned-dir", "files/suspicious-owned-dir",
                               "files/non-bundle-out", "opencode/primary+commands",
                               "files/user-edits", "files/legacy-wiki", "files/downgrade",
-                              "files/non-string-owned-dirs")}
+                              "files/non-string-owned-dirs",
+                              "opencode/bundle-in-subfolder")}
 
         renamed = got["files/renamed-owned-dir"]
         self.assertEqual(renamed["exit"], 0)
@@ -258,6 +270,17 @@ class EmitBoundaryTests(unittest.TestCase):
         self.assertIn("évil/precious.txt", suspicious["files"],
                       "the escaping dir was DELETED — the guard let a marker-supplied "
                       "path reach the recursive delete")
+
+        sub = got["opencode/bundle-in-subfolder"]
+        self.assertIn("out/.opencode/agents/reviewer.md", sub["files"],
+                      "the native layer did not land in `root` — the cell collapsed back "
+                      "to root == out and compares nothing new")
+        self.assertIn("out/Harness/AGENT.md", sub["files"],
+                      "the bundle did not land in the subfolder")
+        self.assertIn(b'"Harness/AGENT.md"',
+                      sub["files"].get("out/opencode.json", b""),
+                      "the instruction path is not prefixed with the bundle's location, "
+                      "so it would not resolve from the project root")
 
         nonstring = got["files/non-string-owned-dirs"]
         self.assertIn(rb"['\xe9vil']", nonstring["stderr"],
