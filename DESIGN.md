@@ -198,6 +198,24 @@ renders it as the name in parentheses.
   file-driven path into a recursive delete), user edits between two emits, and a truncated
   source tree. `tests/golden.py` now compares both streams too, as `<stdout>`/`<stderr>`
   pseudo-files.
+- **All nine emits now cross that seam.** The last of the render half is
+  `_emit_claude_core`, the shared engine behind six of the nine — Claude, Bob and Copilot
+  at both scopes — so until it moved, two thirds of the matrix compared Python against
+  Python. Three things in it are not translations. `_ship_lean_laws` is the render that
+  used to run *after* a wiring stage, and it does two jobs: it writes the standalone laws
+  file and it **claims** it, so a later switch back to the full footprint prunes it.
+  `_global_memory` / `_global_notebook` copy arbitrary **user** files in from a legacy
+  bundle — the one-time migration that keeps a host switch from losing learned facts — and
+  the only thing making that safe is that they run at all only when the destination is
+  empty. And the payload has to carry something that is not a file: **`claudeMdText`**, the
+  text of CLAUDE.md's managed block, because computing it is a render (AGENT.md re-rendered
+  with every store dir prefixed) while merging it into a file the user co-owns is wiring.
+  `hasAgentText` travels beside it and is a *different* predicate — Bob at global scope
+  emits a preamble but gets no managed block.
+  The boundary gate grew the states that go with them: a legacy bundle to migrate from
+  (with the bundle in a subfolder, so `--out` and the target are not the same directory), a
+  `.claude/` the user got to first, and every write-once file edited *between* two emits —
+  the only way a byte comparison can tell "kept your store" from "re-seeded it".
 - **Python and JavaScript disagree about JSON, in two ways that reach emitted bytes.**
   `json.dumps` escapes non-ASCII and `JSON.stringify` does not, which is 44–50
   `description:` lines per theme; and `json.loads` distinguishes `20` from `1.0` where
@@ -222,7 +240,10 @@ renders it as the name in parentheses.
   binding. That is how `STRUCTURE` joined it — it had passed the membership test by
   accident, since the splice shares the dict *by reference* and a test mutating
   `build.STRUCTURE` reached every reader. A child process shares nothing, so it now
-  travels too.
+  travels too — and `CAPABILITY_LINK_RE` followed it for the same reason one phase later,
+  found not by review but by the doctor test that redirects the regex to its pre-fix form
+  and asserts the emit then renders dead links. It had been in `_OWNED` all along; what
+  changed is that the code reading it moved into another process.
   `build.py` splices its four `_build_*` submodules into one shared namespace, so
   every other shared name exists as a copy in each of them; the owned ones deliberately
   do not. They are held back from both `_build_core.__all__` and the splice, so there is

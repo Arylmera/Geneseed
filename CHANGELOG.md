@@ -9,6 +9,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's fifth piece: every emit now renders through Node when you have it —
+  Claude, Bob and Copilot included, per-repo and global.** Before this, only `build` and
+  `--emit opencode` did; the other six went on running the Python. As with the last four
+  pieces, the whole point is that you cannot tell: same files, same console output, same
+  exit code. No Node, or `GENESEED_NO_JS=1`, and nothing changes at all.
+  What is worth knowing is what the new tests now watch, because these emits touch files
+  you co-own and files you own outright. Your `settings.json` / `settings.local.json` hook
+  merge and the managed block inside `CLAUDE.md` / `AGENTS.md` are compared byte for byte
+  between the two runtimes for the first time, and so are the cases that only happen on a
+  real machine: an install migrating a `memory/` or `notebook/` store in from an older
+  bundle, a project `.claude/` where you already put your own agent or `.gitignore`, and
+  every seeded-once file — `excludes.json`, `user-rules.md`, `PROFILE.md`, `wiki.jsonc`,
+  your memory index — **edited between two builds**, which is the only way a comparison can
+  prove a rebuild left them alone instead of rewriting them with the same bytes.
 - **The port's fourth piece, and the first one you actually run: if you have Node
   installed, `geneseed build` and `--emit opencode` now render through it.** This is the
   first change in the port that touches your machine, and the point is that you should not
