@@ -61,7 +61,7 @@ def _marker(out: Path, resolved: dict) -> None:
                                        encoding="utf-8")
 
 
-def _rename_owned_dir(out: Path) -> None:
+def _rename_owned_dir(out: Path, home: Path) -> None:
     """A prior build recorded a DIFFERENT name for the laws dir, and that dir still
     exists. The next build must wipe it — the orphan branch `SRC_DIRS_MARKER` exists for
     and that no uniform matrix reaches, because DIR_* resolves the same in all 14 themes."""
@@ -70,7 +70,7 @@ def _rename_owned_dir(out: Path) -> None:
     (out / "leges" / "stale.md").write_text("orphaned by a rename\n", encoding="utf-8")
 
 
-def _suspicious_owned_dir(out: Path) -> None:
+def _suspicious_owned_dir(out: Path, home: Path) -> None:
     """The same record, holding a name that escapes the bundle. `build` must REFUSE it,
     warn naming the value, and leave the target alone — this is the only path in the
     render half where file content chooses the argument of a recursive delete.
@@ -83,7 +83,7 @@ def _suspicious_owned_dir(out: Path) -> None:
     (victim / "precious.txt").write_text("not the build's to delete\n", encoding="utf-8")
 
 
-def _user_edits_between_emits(out: Path) -> None:
+def _user_edits_between_emits(out: Path, home: Path) -> None:
     """Everything the bundle promises never to overwrite, CHANGED after the first build.
 
     Without this the write-once contracts are untestable by byte comparison: a second
@@ -101,14 +101,14 @@ def _user_edits_between_emits(out: Path) -> None:
     (out / ".gitignore").write_text("# customised by the host repo\n", encoding="utf-8")
 
 
-def _legacy_wiki_manifest(out: Path) -> None:
+def _legacy_wiki_manifest(out: Path, home: Path) -> None:
     """An install seeded before the JSONC rename. `wiki.jsonc` must NOT be created beside
     it: seeding a second manifest would fork the user's declarations, and the consumers
     still honour the old name."""
     (out / "wiki.json").write_text('{"wikis": []}\n', encoding="utf-8")
 
 
-def _install_is_newer_than_source(out: Path) -> None:
+def _install_is_newer_than_source(out: Path, home: Path) -> None:
     """A deployed install stamped with a release NEWER than the source tree's — the
     forgot-to-pull trap. Warns, never blocks, and warns on STDOUT while its neighbour in
     the same function warns on stderr; the split is exactly what this gate compares."""
@@ -116,7 +116,7 @@ def _install_is_newer_than_source(out: Path) -> None:
         "deadbeefcafe (built 2099-01-01) [release 999.0.0]\n", encoding="utf-8")
 
 
-def _non_string_owned_dirs(out: Path) -> None:
+def _non_string_owned_dirs(out: Path, home: Path) -> None:
     """The same record holding values that are not strings at all.
 
     Three disagreements in one cell: `ascii()` of a list and of an int (JS `String()`
@@ -126,11 +126,115 @@ def _non_string_owned_dirs(out: Path) -> None:
     _marker(out, {"laws": ["évil"], "agents": [], "skills": 123})
 
 
-def _preexisting_user_dir(out: Path) -> None:
+def _preexisting_user_dir(out: Path, home: Path) -> None:
     """`out` is NOT a Geneseed bundle and already holds an `agents/`. The build must keep
     it and say so — on stdout, which is the stream this gate exists to compare."""
     (out / "agents").mkdir(parents=True, exist_ok=True)
     (out / "agents" / "mine.md").write_text("the user's own\n", encoding="utf-8")
+
+
+# ------------------------------------------------------------ the claude-shaped emits
+# `--out` is not the target for these: `_emit_claude_core` writes into <cfg> (the config
+# dir for a *-global emit, <root>/.claude|.bob|.github for a project one) and takes `out`
+# only as the LEGACY BUNDLE to migrate a memory/notebook store from. That asymmetry is
+# what the two migration cells below exercise.
+
+def _legacy_stores(out: Path, home: Path) -> None:
+    """A sibling Harness bundle at `out` holding memory and notebook stores, with the
+    global config dir still empty. `_global_memory`/`_global_notebook` must migrate them
+    in — the one-time copy that keeps a host switch from losing learned facts.
+
+    It copies ARBITRARY USER FILES, which is why the fixture plants a `__pycache__/`
+    entry: `Path.rglob("*")` here does NOT filter it, unlike the walk behind
+    `source_fingerprint`, so a port that reused the filtering one drops a file silently.
+    A legacy bundle really can carry one — Geneseed ships a `.py` skill script."""
+    for rel, body in (("memory/learned.md", "# a fact from the old host\n"),
+                      ("memory/__pycache__/stale.pyc", "not source, still the user's\n"),
+                      ("memory/sub/deep.md", "# nested\n"),
+                      ("notebook/scratch.md", "# the agent's own scratch\n")):
+        dest = out / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(body, encoding="utf-8")
+
+
+def _legacy_anamnesis(out: Path, home: Path) -> None:
+    """The same migration, through the SECOND alias. `memory/` is present but EMPTY, so
+    the loop must skip it and fall through to the themed `anamnesis/` name a
+    differently-themed older install used.
+
+    Empty rather than absent on purpose: `is_dir() and any(iterdir())` is two predicates,
+    and an absent dir exercises only the first. A port that dropped the emptiness half
+    would report `migrated memory/` having copied nothing, and the store would then be
+    seeded by neither path."""
+    (out / "memory").mkdir(parents=True, exist_ok=True)
+    dest = out / "anamnesis" / "vault.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("# migrated from a themed store\n", encoding="utf-8")
+
+
+def _legacy_in_subfolder(out: Path, home: Path) -> None:
+    """The legacy store inside the BUNDLE, with the bundle in a subfolder of the repo.
+
+    `emit_claude(theme, out, root)` writes into `root/.claude` and takes `out` — the
+    sibling Harness bundle — only as the migration source. With the default `root == out`
+    the two are the same directory, so every cell before this one would pass just as
+    happily if the port had derived the legacy path from `<cfg>`'s parent instead of
+    reading it from the job. This is the `opencode/bundle-in-subfolder` finding one level
+    out: a gate written to catch degenerate fixtures can ship with one."""
+    dest = out / "Harness" / "memory" / "carried-over.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("# a fact from the bundle's own store\n", encoding="utf-8")
+
+
+def _user_owns_claude_files(out: Path, home: Path) -> None:
+    """A project `.claude/` the user got to first. Three claims in one cell:
+
+    * `agents/reviewer.md` collides with a Geneseed spec and is NOT in a prior manifest —
+      claim-on-create must keep it, warn, and leave it out of `owned`;
+    * `.gitignore` already exists, so the emit must neither rewrite it nor own it (the
+      third of that branch's three arms — the other two are reached by any re-emit cell);
+    * `excludes.json` is the sovereign-repo list, seeded once and never overwritten."""
+    (out / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
+    (out / ".claude" / "agents" / "reviewer.md").write_text(
+        "---\nname: reviewer\n---\n\nmy own reviewer\n", encoding="utf-8")
+    (out / ".claude" / ".gitignore").write_text("# mine, not Geneseed's\n", encoding="utf-8")
+    (out / ".claude" / "excludes.json").write_text(
+        '{"excludes": ["C:/work/secret"]}\n', encoding="utf-8")
+
+
+def _claude_user_edits(out: Path, home: Path) -> None:
+    """Everything a Claude-shaped install promises never to overwrite, CHANGED between
+    the two emits — plus prose around the CLAUDE.md managed block.
+
+    Without the edit these are invisible to a byte comparison: emit two rewrites the same
+    bytes emit one wrote, so deleting every `if not exists` guard produces an identical
+    tree. `memory/README.md` and `notebook/README.md` are the sharp ones — they are
+    SEEDED from src, so only an edit can tell "kept the store" from "re-seeded it"."""
+    cfg = out / ".claude"
+    (cfg / "memory" / "README.md").write_text("the agent rewrote the store's charter\n",
+                                              encoding="utf-8")
+    (cfg / "memory" / "MEMORY.md").write_text("# Memory Index\n\n- a learned fact\n",
+                                              encoding="utf-8")
+    (cfg / "notebook" / "README.md").write_text("the agent rewrote its own charter\n",
+                                                encoding="utf-8")
+    (cfg / "notebook" / "NOTEBOOK.md").write_text("# Notebook Index\n\n- a page\n",
+                                                  encoding="utf-8")
+    (cfg / "excludes.json").write_text('{"excludes": ["C:/work/secret"]}\n', encoding="utf-8")
+    (cfg / "user-rules.md").write_text("# User rules\n\n## R1 — mine\n", encoding="utf-8")
+    (cfg / "PROFILE.md").write_text("# Your profile\n\nmine\n", encoding="utf-8")
+    (cfg / "wiki.jsonc").write_text('{"wikis": [{"name": "Brain"}]}\n', encoding="utf-8")
+    # Prose on BOTH sides of the block: the merge must replace only what is between the
+    # delimiters, and the replacement text is the render half's `claudeMdText`.
+    cm = out / "CLAUDE.md"
+    text = cm.read_text(encoding="utf-8")
+    cm.write_text("# My own preamble\n\nkeep me above.\n\n" + text
+                  + "\nand keep me below.\n", encoding="utf-8")
+
+
+def _legacy_wiki_claude(out: Path, home: Path) -> None:
+    """A `.claude/` seeded before the JSONC rename. No second manifest may appear."""
+    (out / ".claude").mkdir(parents=True, exist_ok=True)
+    (out / ".claude" / "wiki.json").write_text('{"wikis": []}\n', encoding="utf-8")
 
 
 CELLS = [
@@ -168,6 +272,40 @@ CELLS = [
      "prepare": {1: _legacy_wiki_manifest}},
     {"id": "files/downgrade", "emit": "files", "theme": "neutral", "repeat": 2,
      "prepare": {2: _install_is_newer_than_source}},
+    # The six Claude-shaped emits. Until they crossed the seam their golden cells
+    # compared Python against Python, so `settings(.local).json`, the CLAUDE.md managed
+    # block, the memory/notebook stores and the lean laws under <cfg> had never been
+    # byte-compared between the two runtimes at all.
+    {"id": "claude/project", "emit": "claude", "theme": "neutral", "repeat": 2},
+    {"id": "claude/project-lean", "emit": "claude", "theme": "imperial",
+     "footprint": "lean"},
+    # Global + lean: the one arrangement where `laws_prefix` must come out EMPTY. The
+    # relative path from the carrier's dir to <cfg> is the same dir, which Python spells
+    # '.' and `path.relative` spells '' — get that wrong and every lean pointer in the
+    # preamble becomes an absolute `/laws/universal.md`.
+    {"id": "claude/global-lean", "emit": "claude-global", "theme": "neutral",
+     "footprint": "lean", "repeat": 2},
+    {"id": "claude/legacy-stores", "emit": "claude-global", "theme": "neutral",
+     "prepare": {1: _legacy_stores}},
+    {"id": "claude/legacy-anamnesis", "emit": "claude-global", "theme": "neutral",
+     "prepare": {1: _legacy_anamnesis}},
+    {"id": "claude/bundle-in-subfolder", "emit": "claude", "theme": "neutral",
+     "subfolder": True, "prepare": {1: _legacy_in_subfolder}},
+    {"id": "claude/user-owns-files", "emit": "claude", "theme": "neutral", "repeat": 2,
+     "prepare": {1: _user_owns_claude_files}},
+    {"id": "claude/user-edits", "emit": "claude", "theme": "neutral", "repeat": 2,
+     "prepare": {2: _claude_user_edits}},
+    {"id": "claude/legacy-wiki", "emit": "claude", "theme": "neutral",
+     "prepare": {1: _legacy_wiki_claude}},
+    {"id": "bob/project", "emit": "bob", "theme": "neutral", "repeat": 2},
+    # Bob GLOBAL is the emit with no managed block at all: rules/geneseed.md carries the
+    # preamble, re-rendered with a `../` prefix, and `claudeMdText` must come back null
+    # or Python would write an ~/.bob/AGENTS.md that Bob never loads.
+    {"id": "bob/global-lean", "emit": "bob-global", "theme": "imperial",
+     "footprint": "lean", "repeat": 2},
+    {"id": "copilot/project-lean", "emit": "copilot", "theme": "neutral",
+     "footprint": "lean", "repeat": 2},
+    {"id": "copilot/global", "emit": "copilot-global", "theme": "neutral"},
 ]
 
 
@@ -198,7 +336,7 @@ def _run_side(cell: dict, js: bool) -> dict:
         for n in range(1, cell.get("repeat", 1) + 1):
             if n in prepare:
                 out.mkdir(parents=True, exist_ok=True)
-                prepare[n](out)
+                prepare[n](out, home)
             proc = subprocess.run(argv, cwd=str(ROOT), env=env, capture_output=True,
                                   **_NO_WINDOW)
         roots = [("<HOME>", home), ("<OUT>", out), ("<TD>", td)]
@@ -331,6 +469,143 @@ class EmitBoundaryTests(unittest.TestCase):
                          "the downgrade notice moved to stderr; its neighbour in the same "
                          "function warns there and this one deliberately does not")
 
+    def test_the_claude_cells_reach_the_branches_they_name(self):
+        """The same guard, for the six Claude-shaped emits. Every cell above compares two
+        trees and passes when they match — including when they match because the branch
+        it was written for never ran. These assertions are what make the difference
+        between "the two runtimes agree" and "the two runtimes agree about something".
+
+        Two shapes are guarded here that no earlier cell could express: a write-once file
+        the second emit must NOT rewrite (only detectable because the fixture CHANGED it
+        first), and a render whose product never lands in the child's own tree — the
+        CLAUDE.md managed block, which Python writes from the text Node computed."""
+        got = {c["id"]: _run_side(c, js=True) for c in CELLS
+               if c["id"].startswith(("claude/", "bob/", "copilot/"))}
+
+        proj = got["claude/project"]
+        self.assertIn(b"<!-- BEGIN GENESEED -->", proj["files"].get("out/CLAUDE.md", b""),
+                      "no managed block in CLAUDE.md — the render half's `claudeMdText` "
+                      "never reached the merge")
+        self.assertIn(b"claudeMdExcludes",
+                      proj["files"].get("out/.claude/settings.local.json", b""),
+                      "no project-bypasses-global exclude — `hasAgentText` did not cross "
+                      "the seam, and it is a DIFFERENT predicate from `claudeMdText`")
+        self.assertIn(b'".gitignore"',
+                      proj["files"].get("out/.claude/.geneseed-manifest.json", b""),
+                      "a .gitignore Geneseed created on emit one stopped being owned on "
+                      "emit two — the prune would then delete it")
+        self.assertIn(b"settings.local.json", proj["files"].get("out/.claude/.gitignore", b""),
+                      "the Claude-only .gitignore line is missing")
+
+        lean = got["claude/project-lean"]
+        self.assertIn("out/.claude/laws/universal.md", lean["files"],
+                      "the lean footprint shipped no standalone laws file — "
+                      "_ship_lean_laws never ran, and it is the render that used to sit "
+                      "on the far side of a wiring stage")
+        self.assertIn(b"`.claude/laws/universal.md`", lean["files"].get("out/CLAUDE.md", b""),
+                      "the lean pointer is not prefixed with the marker dir, so it does "
+                      "not resolve from the repo-root carrier")
+        self.assertIn(b'"laws/universal.md"',
+                      lean["files"].get("out/.claude/.geneseed-manifest.json", b""),
+                      "the lean laws were written but not CLAIMED — a later switch back "
+                      "to full would leave them behind as dead weight, and writing them "
+                      "is only half of what _ship_lean_laws does")
+
+        glob = got["claude/global-lean"]
+        self.assertIn(b"`laws/universal.md`", glob["files"].get("home/.claude/CLAUDE.md", b""),
+                      "the global lean pointer is not bare — `os.path.relpath` answers "
+                      "'.' for an identical pair where `path.relative` answers '', and "
+                      "an unguarded port turns the prefix into a leading slash")
+
+        stores = got["claude/legacy-stores"]
+        self.assertIn(b"migrated memory/ -> memory/", stores["stdout"])
+        self.assertIn(b"migrated notebook/", stores["stdout"])
+        self.assertIn("home/.claude/memory/__pycache__/stale.pyc", stores["files"],
+                      "the migration dropped a __pycache__ entry — this walk keeps "
+                      "everything, unlike the one behind source_fingerprint")
+        self.assertIn("home/.claude/memory/sub/deep.md", stores["files"])
+        self.assertNotIn("home/.claude/memory/README.md", stores["files"],
+                         "the store was SEEDED as well as migrated — the two are "
+                         "exclusive, and only a populated legacy bundle can tell")
+
+        anam = got["claude/legacy-anamnesis"]
+        self.assertIn(b"migrated anamnesis/ -> memory/", anam["stdout"],
+                      "the second store alias was never tried — either the empty "
+                      "`memory/` beside it was treated as a store, or the alias is gone")
+        self.assertIn("home/.claude/memory/vault.md", anam["files"])
+
+        sub = got["claude/bundle-in-subfolder"]
+        self.assertIn("out/.claude/memory/carried-over.md", sub["files"],
+                      "the migration source is not `--out` — with root == out the two "
+                      "are the same directory and every other cell would still pass")
+        self.assertIn("out/CLAUDE.md", sub["files"],
+                      "the carrier did not land at the project ROOT")
+
+        mine = got["claude/user-owns-files"]
+        self.assertIn(b"kept your existing agents/reviewer.md", mine["stderr"],
+                      "claim-on-create did not fire for a colliding user agent")
+        self.assertIn(b"my own reviewer", mine["files"].get("out/.claude/agents/reviewer.md", b""),
+                      "the user's own agent was clobbered")
+        self.assertNotIn(b'".gitignore"',
+                         mine["files"].get("out/.claude/.geneseed-manifest.json", b""),
+                         "Geneseed claimed a .gitignore it found already there — "
+                         "uninstall would then delete the user's file")
+        self.assertIn(b"mine, not Geneseed's", mine["files"].get("out/.claude/.gitignore", b""))
+        self.assertIn(b"C:/work/secret", mine["files"].get("out/.claude/excludes.json", b""),
+                      "the sovereign-repo list was overwritten by its stub")
+
+        edits = got["claude/user-edits"]
+        for rel, needle in ((".claude/memory/README.md", b"rewrote the store's charter"),
+                            (".claude/memory/MEMORY.md", b"a learned fact"),
+                            (".claude/notebook/README.md", b"rewrote its own charter"),
+                            (".claude/notebook/NOTEBOOK.md", b"- a page"),
+                            (".claude/excludes.json", b"C:/work/secret"),
+                            (".claude/user-rules.md", b"R1"),
+                            (".claude/PROFILE.md", b"mine"),
+                            (".claude/wiki.jsonc", b"Brain")):
+            self.assertIn(needle, edits["files"].get(f"out/{rel}", b""),
+                          f"{rel} was rewritten by the re-emit — it is written once and "
+                          f"never re-emitted, and a cell that did not CHANGE it first "
+                          f"could not tell the difference")
+        carrier = edits["files"].get("out/CLAUDE.md", b"")
+        self.assertIn(b"keep me above", carrier)
+        self.assertIn(b"and keep me below", carrier)
+        self.assertEqual(carrier.count(b"<!-- BEGIN GENESEED -->"), 1,
+                         "the managed block stacked instead of being replaced")
+
+        self.assertNotIn("out/.claude/wiki.jsonc", got["claude/legacy-wiki"]["files"],
+                         "a second wiki manifest was seeded beside the legacy one")
+
+        bob = got["bob/project"]
+        self.assertIn(b"workspace shadow stub",
+                      bob["files"].get("out/.bob/rules/geneseed.md", b""),
+                      "the project Bob rules file is not the slim stub — a full second "
+                      "preamble copy doubles the per-turn token cost")
+        self.assertIn(b"<!-- BEGIN GENESEED -->", bob["files"].get("out/AGENTS.md", b""))
+        self.assertIn("out/.bob/settings.json", bob["files"],
+                      "Bob documents no settings.local.json variant")
+
+        bobg = got["bob/global-lean"]
+        rules = bobg["files"].get("home/.bob/rules/geneseed.md", b"")
+        self.assertNotIn(b"workspace shadow stub", rules,
+                         "the GLOBAL Bob rules file is the stub — at global scope it IS "
+                         "the preamble, the sole carrier of the harness voice")
+        self.assertIn(b"`../laws/universal.md`", rules,
+                      "the global Bob preamble's pointers are not `../`-prefixed, so "
+                      "they resolve under rules/ where nothing exists")
+        self.assertNotIn("home/.bob/AGENTS.md", bobg["files"],
+                         "a global ~/.bob/AGENTS.md was written — Bob never auto-loads "
+                         "one, and `claudeMdText` must come back null to prevent it")
+
+        cop = got["copilot/project-lean"]
+        self.assertIn("out/.github/agents/reviewer.agent.md", cop["files"],
+                      "the Copilot agent dialect did not run")
+        self.assertNotIn("out/.github/settings.json", cop["files"],
+                         "Copilot has no settings.json and no hook mechanism")
+        self.assertIn(b"<!-- BEGIN GENESEED -->",
+                      got["copilot/global"]["files"]
+                      .get("home/.copilot/copilot-instructions.md", b""))
+
     def test_the_protocol_owns_stdout(self):
         """The child's real stdout carries exactly one JSON document — no progress line,
         no stray library print, nothing before or after it.
@@ -368,7 +643,12 @@ class EmitBoundaryTests(unittest.TestCase):
         """`assert_source_complete` is the one refusal in the render half, and it must
         cross the seam intact: same stderr, same exit status. Driven against a fixture
         source tree with one referenced spec removed, because the real `src/` is complete
-        and no bundle-emitting cell can construct this."""
+        and no bundle-emitting cell can construct this.
+
+        Both job kinds are checked, because the message carries a `context=` the CALLER
+        chooses — `theme '<name>'` for the bundle, `claude-<scope>` for the six
+        Claude-shaped emits. A port that hardcoded one of them would diverge on a path no
+        cell can reach, since every cell renders a complete source."""
         with tempfile.TemporaryDirectory(prefix="geneseed-incomplete-") as td_s:
             td = Path(td_s)
             src = td / "src"
@@ -409,6 +689,33 @@ class EmitBoundaryTests(unittest.TestCase):
             self.assertFalse((td / "out").exists(),
                              "the child wrote before refusing; the refusal must land "
                              "BEFORE any destructive write")
+
+            # The same refusal through the claude job, whose `context=` is built from the
+            # SCOPE rather than the theme — and whose <cfg> must also stay untouched.
+            err2 = io.StringIO()
+            with mock.patch.object(_build_core, "SRC", src), \
+                 contextlib.redirect_stderr(err2), \
+                 self.assertRaises(SystemExit) as py_exit2:
+                build.assert_source_complete(None, context="claude-global")
+
+            cfg_dir = td / "cfg"
+            job2 = {"kind": "claude", "cfg": {**_build_core.js_cfg(), "src": str(src)},
+                    "theme": "neutral", "cfgDir": str(cfg_dir),
+                    "claudeMd": str(cfg_dir / "CLAUDE.md"), "scope": "global",
+                    "out": None, "footprint": "full", "host": "claude",
+                    "nativeCatalog": True, "oldOwned": []}
+            job_file.write_text(json.dumps(job2), encoding="utf-8")
+            proc2 = subprocess.run([NODE, str(ROOT / "js" / "emit.mjs"), str(job_file)],
+                                   cwd=str(ROOT), capture_output=True, **_NO_WINDOW)
+            payload2 = json.loads(proc2.stdout)
+
+            self.assertIn("claude-global", err2.getvalue())              # the fixture bites
+            self.assertFalse(payload2["ok"])
+            self.assertEqual(payload2["exit"], py_exit2.exception.code)
+            self.assertEqual(payload2["stderr"], err2.getvalue())
+            self.assertNotIn("error", payload2)
+            self.assertFalse(cfg_dir.exists(),
+                             "the claude job created <cfg> before refusing")
 
 
 if __name__ == "__main__":

@@ -144,10 +144,18 @@ def _snapshot(sandbox: Path, roots: list[tuple[str, Path]]) -> dict[str, bytes]:
 
     Walks the whole sandbox, not just --out: the six *-global emits write into the
     redirected config dirs instead of --out, and hashing only --out would silently
-    compare two empty trees and call it a pass."""
+    compare two empty trees and call it a pass.
+
+    It used to skip `__pycache__` too, and that skip was blind exactly where it mattered.
+    The source walk behind every render already drops those dirs
+    ([`_build_render.py:673`](../_build_render.py)), so the ONLY way one can enter an
+    emitted tree is the legacy-store migration in `_global_memory` — which copies whatever
+    a user's old bundle holds, unfiltered. Filtering here meant the one path capable of
+    producing a `__pycache__` was the one path this harness refused to look at. Nothing in
+    a sandbox creates one (build.py runs with cwd=ROOT), so keeping them costs no cell."""
     snap: dict[str, bytes] = {}
     for p in sorted(sandbox.rglob("*")):
-        if not p.is_file() or "__pycache__" in p.parts or p.name.startswith(_SHIM_GLOB):
+        if not p.is_file() or p.name.startswith(_SHIM_GLOB):
             continue
         try:
             snap[p.relative_to(sandbox).as_posix()] = _normalise(p.read_bytes(), roots)
