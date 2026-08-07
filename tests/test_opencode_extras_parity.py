@@ -65,6 +65,10 @@ JSON_CORPUS = [
     # stayed green until these existed.
     {"f": 1.0, "i": 20, "small": 0.1, "negzero": -0.0, "huge": 1e21, "tiny": 1e-5},
     {"$schema": "https://opencode.ai/theme.json", "theme": {"primary": 6, "text": "none"}},
+    # Deliberately out of order, at two levels, with a case difference and a non-ASCII key:
+    # `sort_keys=True` is recursive and orders by code point, so a corpus whose maps are
+    # already sorted cannot tell a working sort from a missing one.
+    {"z": 1, "a": {"y": 2, "b": 3}, "é": 4, "Z": 5},
 ]
 
 _STALE_OVERRIDES = json.dumps(
@@ -256,6 +260,17 @@ class OpencodeExtrasParityTests(unittest.TestCase):
                               for o in JSON_CORPUS], got["raw"],
                              "jsonDumpsIndent({ensureAscii:false}) disagrees with "
                              "json.dumps(obj, indent=2, ensure_ascii=False)")
+            # The COMPACT form, deferred through three phases and finally needed by
+            # js/settings.mjs (four bare call sites, two `sort_keys=True`, counted with
+            # `ast`). It is the one shape that cannot delegate to JSON.stringify: with no
+            # indent Python's separators are `(', ', ': ')`, and patching them into the
+            # serialised text would corrupt any string containing a comma or a colon.
+            self.assertEqual([json.dumps(o) for o in JSON_CORPUS], got["compact"],
+                             "jsonDumpsCompact disagrees with json.dumps(obj)")
+            self.assertEqual([json.dumps(o, sort_keys=True) for o in JSON_CORPUS],
+                             got["sorted"],
+                             "jsonDumpsCompact({sortKeys:true}) disagrees with "
+                             "json.dumps(obj, sort_keys=True)")
 
     def _run_node(self, tmp: Path, jobs: list):
         jobs_file = tmp / "jobs.json"
@@ -314,6 +329,13 @@ class OpencodeExtrasMatrixTests(unittest.TestCase):
                             and any(isinstance(v, str) and any(ord(c) > 126 for c in v)
                                     for v in o.values())
                             for o in JSON_CORPUS), "no non-ASCII string")
+        self.assertTrue(any(isinstance(o, dict) and list(o) != sorted(o)
+                            and any(isinstance(v, dict) and list(v) != sorted(v)
+                                    for v in o.values())
+                            for o in JSON_CORPUS),
+                        "no map whose keys are out of order at TWO levels — sort_keys=True "
+                        "is recursive, and an already-sorted corpus cannot tell a working "
+                        "sort from a missing one")
 
 
 if __name__ == "__main__":

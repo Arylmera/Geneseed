@@ -86,8 +86,8 @@ export function copyFile(src, dest) {
 export function jsonDumps(s) {
   if (typeof s !== 'string') {
     throw new TypeError('jsonDumps takes a string; a COMPACT container differs from '
-      + "json.dumps by Python's ', ' / ': ' separators too \u2014 use jsonDumpsIndent, or "
-      + 'write the compact-container form when something actually needs it');
+      + "json.dumps by Python's ', ' / ': ' separators too \u2014 use jsonDumpsIndent or "
+      + 'jsonDumpsCompact');
   }
   return escapeNonAscii(JSON.stringify(s));
 }
@@ -119,6 +119,85 @@ function escapeNonAscii(text) {
 export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {
   const text = JSON.stringify(value, null, 2);
   return ensureAscii ? escapeNonAscii(text) : text;
+}
+
+/**
+ * `json.dumps(obj)` and `json.dumps(obj, sort_keys=True)` — the COMPACT container form.
+ *
+ * Deferred through three phases because guessing its signature would have been worse than
+ * not having it; `js/settings.mjs` is the code that finally needs it, and the shapes were
+ * counted with `ast` rather than assumed: four bare `json.dumps(container)` and two
+ * `sort_keys=True`, all inside `_build_settings.py`, none of them `ensure_ascii=False`.
+ *
+ * It cannot delegate to `JSON.stringify` the way `jsonDumpsIndent` does. Without an indent
+ * Python's separators are `(', ', ': ')` — `{"a": 1, "b": [1, 2]}` where `JSON.stringify`
+ * writes `{"a":1,"b":[1,2]}` — and patching the separators back into the serialised text
+ * would corrupt any string containing `,` or `:`. So the walk is written out.
+ *
+ * `sortKeys` sorts with JS's default comparator (UTF-16 code units) where Python sorts by
+ * code point; the two disagree only above the BMP, which no settings.json key reaches. A
+ * non-finite number throws rather than emitting `NaN`/`Infinity`: Python's encoder writes
+ * those bare tokens, which is not valid JSON, and no caller here can produce one.
+ */
+export function jsonDumpsCompact(value, { sortKeys = false, ensureAscii = true } = {}) {
+  const text = compactImpl(value, sortKeys);
+  return ensureAscii ? escapeNonAscii(text) : text;
+}
+
+function compactImpl(v, sortKeys) {
+  if (v === null || v === undefined) return 'null';
+  if (v === true) return 'true';
+  if (v === false) return 'false';
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (v instanceof PyNumber || typeof v === 'number') {
+    const n = v instanceof PyNumber ? v.value : v;
+    if (!Number.isFinite(n)) {
+      throw new TypeError(`jsonDumpsCompact got ${n}; Python's encoder writes a bare `
+        + 'NaN/Infinity token there, which is not JSON, and nothing here can produce one');
+    }
+    return pyStr(v);
+  }
+  if (Array.isArray(v)) return `[${v.map((x) => compactImpl(x, sortKeys)).join(', ')}]`;
+  if (typeof v === 'object') {
+    const keys = sortKeys ? Object.keys(v).sort() : Object.keys(v);
+    return `{${keys.map((k) => `${JSON.stringify(k)}: ${compactImpl(v[k], sortKeys)}`)
+      .join(', ')}}`;
+  }
+  throw new TypeError(`jsonDumpsCompact has no rendering for ${typeof v}`);
+}
+
+/**
+ * Python's `==` for values that came out of `json.loads` \u2014 the operator behind
+ * `group in arr`, `rec in canon_flat` and `arr.remove(group)`.
+ *
+ * `===` is identity for containers, so a naive port of `if group in arr` never matches and
+ * `_merge_claude_settings` re-adds its own hook group on every emit \u2014 the exact defect the
+ * prior-claim pruning exists to prevent, reintroduced by a one-word translation.
+ *
+ * `PyNumber` compares by its VALUE, which is right: Python's `{"a": 1} == {"a": 1.0}` is
+ * True even though `repr` renders the two differently. The one gap left is Python's
+ * `1 == True`; a settings.json holding a bool where the manifest recorded a number is not
+ * a shape any writer here produces.
+ */
+export function pyEq(a, b) {
+  const x = a instanceof PyNumber ? a.value : a;
+  const y = b instanceof PyNumber ? b.value : b;
+  if (x === null || y === null || typeof x !== 'object' || typeof y !== 'object') {
+    return x === y;
+  }
+  if (Array.isArray(x) !== Array.isArray(y)) return false;
+  if (Array.isArray(x)) {
+    return x.length === y.length && x.every((v, i) => pyEq(v, y[i]));
+  }
+  const kx = Object.keys(x);
+  const ky = Object.keys(y);
+  return kx.length === ky.length
+    && kx.every((k) => Object.prototype.hasOwnProperty.call(y, k) && pyEq(x[k], y[k]));
+}
+
+/** `value in list` and `list.index(value)` under `pyEq` \u2014 Python's `in`, not `includes`. */
+export function indexOfEq(arr, value) {
+  return arr.findIndex((v) => pyEq(v, value));
 }
 
 /**

@@ -9,6 +9,23 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's sixth piece: the layer that edits *your* config files now has a Node twin
+  too — proven, not yet wired in.** Nothing about your builds changes with this; the new
+  code is not called yet. What changes is that the merging into `settings.json`, the
+  `opencode.json` wiring, the managed block in `CLAUDE.md` and the hook shim are now
+  compared byte for byte between the two runtimes, across states no ordinary build ever
+  reaches: a settings file carrying your own hooks beside Geneseed's, one with comments in
+  it (which the harness refuses to rewrite, and says so), one that is not valid JSON, and
+  an older install whose hooks were wired into a different file and have to be unwired
+  there. These are the paths `deactivate`, `remerge`, `reactivate`, `uninstall` and
+  `exclude` run on a real machine, and nothing had ever compared them.
+- **The rebuild's clean-up of files it no longer produces is now actually tested.** The
+  build removes what a previous build owned and this one does not — a dropped skill, a
+  footprint switch, a theme change. The acceptance harness re-emitted the *same*
+  configuration twice, so there was never anything to remove and the clean-up ran empty
+  every time. It now builds one configuration, builds a different one on top, and checks
+  the result matches a fresh build of the second — which catches both a clean-up that
+  leaves stale files behind and one that deletes files the new build still needs.
 - **The port's fifth piece: every emit now renders through Node when you have it —
   Claude, Bob and Copilot included, per-repo and global.** Before this, only `build` and
   `--emit opencode` did; the other six went on running the Python. As with the last four

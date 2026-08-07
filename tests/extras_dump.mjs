@@ -19,7 +19,7 @@ import {
   writeCommandLayer, writePonytailCommand, copyPlugins, copyWorkflows,
 } from '../js/opencode.mjs';
 import { loadAgentOverrides } from '../js/native.mjs';
-import { parseJson, jsonDumpsIndent } from '../js/lib/pyfs.mjs';
+import { parseJson, jsonDumpsCompact, jsonDumpsIndent } from '../js/lib/pyfs.mjs';
 
 const jobs = parseJson(readFileSync(process.argv[2], 'utf8'));
 const ENV_KEYS = ['GENESEED_PRIMARY', 'GENESEED_COMMANDS'];
@@ -30,6 +30,11 @@ for (const job of jobs) {
     writeFileSync(job.resultFile, JSON.stringify({
       ascii: corpus.map((o) => jsonDumpsIndent(o)),
       raw: corpus.map((o) => jsonDumpsIndent(o, { ensureAscii: false })),
+      // The COMPACT form, which cannot delegate to JSON.stringify at all: without an indent
+      // Python's separators are `(', ', ': ')`. Its callers live in js/settings.mjs; the
+      // measurement stays here so one corpus answers the whole separator question.
+      compact: corpus.map((o) => jsonDumpsCompact(o)),
+      sorted: corpus.map((o) => jsonDumpsCompact(o, { sortKeys: true })),
     }), 'utf8');
     continue;
   }
