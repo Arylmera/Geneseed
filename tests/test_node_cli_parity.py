@@ -30,6 +30,7 @@ the mutation that motivated the rewrite now fires here.
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -270,37 +271,61 @@ class NodeDriverSurface(unittest.TestCase):
             differing = sorted(k for k in a if a[k] != b[k])
             self.assertEqual(differing, [], f"differing under a non-ASCII path: {differing[:8]}")
 
-    def test_the_relocation_var_moves_the_global_target(self):
-        """`$OPENCODE_CONFIG_DIR` must relocate the whole config dir on this driver too.
+    def test_every_relocation_var_moves_its_global_target(self):
+        """Each `*_CONFIG_DIR` must relocate its own config dir on this driver too.
 
         No golden cell can check this, and the reason is a safety measure: `cell_env`
         deliberately CLEARS every relocation variable, because leaving one set would send
-        ~126 global cells into the developer's real install. So the matrix runs with the var
-        unset, and a driver that ignored it entirely would be byte-identical in all 259
-        cells while writing to `~/.config/opencode` on any machine that exports it — which
-        is the documented way to keep the harness in a git-tracked folder.
+        ~126 global cells into the developer's real install. So the matrix runs with the
+        vars unset, and a driver that ignored one would be byte-identical in all 259 cells
+        while writing into the user's real config dir on every machine that exports it —
+        which is the documented way to keep a harness in a git-tracked folder.
 
-        That is the same hazard `test_golden_sandbox.py` pins for the Python generator,
-        asked of the second one. Asserted on the TARGET rather than by observing a leak: a
-        test that proved the bug by performing it would perform it.
+        Parameterised over the hosts rather than written once, because it was written once:
+        the first version covered `$OPENCODE_CONFIG_DIR` alone, and when the Copilot pair
+        crossed, a mutation that ignored `$COPILOT_CONFIG_DIR` passed every gate in the
+        repo. The prose describing the hazard had been generalised to the new host; the
+        test had not. A per-host table is what makes the next host's omission a failure
+        instead of an oversight.
+
+        Asserted on the TARGET rather than by observing a leak: a test that proved the bug
+        by performing it would perform it.
         """
-        with tempfile.TemporaryDirectory() as tmp_s:
-            tmp = Path(tmp_s)
-            home, relocated = tmp / "home", tmp / "relocated-config"
-            home.mkdir()
-            env = golden.cell_env(home)
-            env["OPENCODE_CONFIG_DIR"] = str(relocated)
-            r = run_cli(["--theme", "neutral", "--emit", "opencode-global",
-                         "--footprint", "lean", "--out", str(tmp / "legacy")], env=env)
-            self.assertEqual(r.returncode, 0, f"emit failed: {(r.stderr or r.stdout)[:300]}")
-            self.assertTrue(
-                (relocated / "AGENT.md").is_file(),
-                "the node driver ignored $OPENCODE_CONFIG_DIR — it would render into the "
-                "user's real ~/.config/opencode on every machine that sets it")
-            self.assertFalse(
-                (home / ".config" / "opencode" / "AGENT.md").is_file(),
-                "the node driver wrote to the DEFAULT config dir as well as the relocated "
-                "one")
+        # (env var, emit, the marker file the emit writes into its config dir, default dir)
+        hosts = [
+            ("OPENCODE_CONFIG_DIR", "opencode-global", "AGENT.md",
+             Path(".config") / "opencode"),
+            ("COPILOT_CONFIG_DIR", "copilot-global", "copilot-instructions.md",
+             Path(".copilot")),
+        ]
+        covered = {e for e in ported() if e.endswith("-global")}
+        self.assertEqual(
+            {h[1] for h in hosts}, covered,
+            "a global emit crossed without a relocation-var cell (or this table names one "
+            "that has not crossed) — that is exactly the omission this table exists to make "
+            "visible")
+
+        for var, emit, marker, default_rel in hosts:
+            with self.subTest(var=var):
+                with tempfile.TemporaryDirectory() as tmp_s:
+                    tmp = Path(tmp_s)
+                    home, relocated = tmp / "home", tmp / "relocated-config"
+                    home.mkdir()
+                    env = golden.cell_env(home)
+                    env[var] = str(relocated)
+                    r = run_cli(["--theme", "neutral", "--emit", emit,
+                                 "--footprint", "lean", "--out", str(tmp / "legacy")],
+                                env=env)
+                    self.assertEqual(r.returncode, 0,
+                                     f"{emit} failed: {(r.stderr or r.stdout)[:300]}")
+                    self.assertTrue(
+                        (relocated / marker).is_file(),
+                        f"the node driver ignored ${var} — it would render into the user's "
+                        f"real ~/{default_rel.as_posix()} on every machine that sets it")
+                    self.assertFalse(
+                        (home / default_rel / marker).is_file(),
+                        f"the node driver wrote to the DEFAULT config dir as well as the "
+                        f"one ${var} names")
 
     def test_a_global_copilot_emit_warns_about_registered_project_installs(self):
         """A two-step sequence the matrix cannot express, and therefore never runs.
@@ -314,35 +339,76 @@ class NodeDriverSurface(unittest.TestCase):
 
         So this drives the real sequence: register a project install, then emit globally,
         and require the two CLIs to agree on what they say about it.
+
+        The registry it reads is seeded with THREE rows on purpose, and each one is there
+        because a mutation survived without it:
+
+          * a `copilot` project install — the row the warning is about;
+          * an `opencode` project install — a live row with a DIFFERENT marker. With only
+            the copilot row present, a `_project_survivors` that ignored the marker entirely
+            returned the same single root and said the same thing;
+          * a row pointing at a directory that no longer exists — without it `kept` equals
+            the original list, the prune-on-read never writes, and dropping the write is
+            invisible.
+
+        So the comparison covers `installs.json` as well as the warning: the prune is a
+        WRITE to a file the acceptance matrix compares byte-for-byte, and it is the part of
+        this read path most likely to be wrong.
         """
         with tempfile.TemporaryDirectory() as tmp_s:
-            said = {}
+            said, registry = {}, {}
             for side, gen in (("py", [sys.executable, "build.py"]),
                               ("node", [NODE, str(CLI)])):
                 sb = Path(tmp_s) / side
-                home, repo, cfgdir = sb / "home", sb / "repo", sb / "copilot-cfg"
+                home, repo, oc_repo = sb / "home", sb / "repo", sb / "oc-repo"
+                cfgdir = sb / "copilot-cfg"
                 home.mkdir(parents=True)
                 env = golden.cell_env(home)
                 env["COPILOT_CONFIG_DIR"] = str(cfgdir)
-                for argv in (["--emit", "copilot", "--out", str(repo)],
-                             ["--emit", "copilot-global", "--out", str(sb / "legacy")]):
+
+                def emit(argv, side=side, gen=gen, env=env):
                     r = subprocess.run(
                         gen + ["--theme", "neutral", "--footprint", "lean", *argv],
                         cwd=str(ROOT), env=env, capture_output=True, text=True,
                         encoding="utf-8")
                     self.assertEqual(r.returncode, 0,
                                      f"{side} {argv[1]} failed: {(r.stderr or r.stdout)[:300]}")
-                said[side] = golden._normalise(
-                    r.stderr.encode("utf-8", "replace"),
-                    [("<HOME>", home), ("<OUT>", repo), ("<REPO>", ROOT)])
+                    return r
+
+                emit(["--emit", "copilot", "--out", str(repo)])
+                emit(["--emit", "opencode", "--out", str(oc_repo)])
+
+                # The dead row, added after the live ones so the prune has something to do.
+                reg = home / ".config" / "geneseed" / "installs.json"
+                rows = json.loads(reg.read_text(encoding="utf-8"))
+                reg.write_text(json.dumps(rows + [str(sb / "deleted-install")], indent=2)
+                               + "\n", encoding="utf-8")
+
+                r = emit(["--emit", "copilot-global", "--out", str(sb / "legacy")])
+                roots = [("<HOME>", home), ("<OUT>", repo), ("<OC>", oc_repo),
+                         ("<SB>", sb), ("<REPO>", ROOT)]
+                said[side] = golden._normalise(r.stderr.encode("utf-8", "replace"), roots)
+                registry[side] = golden._normalise(reg.read_bytes(), roots)
 
             self.assertIn(b"project Copilot install(s) already exist", said["py"],
                           "the project emit did not register, so the global emit had "
                           "nothing to warn about and this cell tested nothing")
+            self.assertIn(b"1 project Copilot install(s)", said["py"],
+                          "the warning counted something other than the single copilot "
+                          "root — the opencode row is supposed to be filtered out by its "
+                          "marker, and if it is not this cell cannot see that it is not")
+            self.assertNotIn(b"deleted-install", registry["py"],
+                             "python did not prune the dead row, so this cell cannot tell "
+                             "whether the node driver does")
             self.assertEqual(said["py"], said["node"],
                              "the two drivers disagree about the stacking warning:\n"
                              f"  python: {said['py'][:300]!r}\n"
                              f"  node:   {said['node'][:300]!r}")
+            self.assertEqual(registry["py"], registry["node"],
+                             "the two drivers disagree about the registry after a "
+                             "prune-on-read:\n"
+                             f"  python: {registry['py'][:300]!r}\n"
+                             f"  node:   {registry['node'][:300]!r}")
 
     def test_the_footprint_default_is_the_flags_not_the_functions(self):
         """build.py:354's flag defaults to `lean`; every emit SIGNATURE defaults to `full`.
