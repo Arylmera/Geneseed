@@ -464,7 +464,7 @@ renders it as the name in parentheses.
   to import `build` for the marker filenames they need.
   **A cell is not an emit here, and that is the phase's first design question.** A verb's
   observable surface is stdout, stderr, the **exit code** and whatever it wrote, so
-  [`tests/harness_golden.py`](tests/harness_golden.py) compares all four across 93 seeded
+  [`tests/harness_golden.py`](tests/harness_golden.py) compares all four across 103 seeded
   worlds — reusing `golden.py`'s `cell_env`, `_normalise`, `_snapshot` and `_split` rather
   than growing a second set of rules about sandboxes and CRLF. `cwd` is an **input** to
   three of the four (discovery, the sovereign bypass, and learn's memory search all read

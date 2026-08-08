@@ -18,7 +18,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   Claude/Bob install still needs a Python on your machine. Wiring the new twin in is a
   separate step, deliberately: an install's hooks are the part that fails *silently* when it
   is wrong, so it moves once and with the evidence in hand.
-  What is in hand: 93 side-by-side checks covering both, comparing everything either one can
+  What is in hand: 103 side-by-side checks covering both, comparing everything either one can
   be observed doing — what it prints, what it warns, the exit code it returns, and every file
   it writes. Discovery with and without a `context.json`, globs, `extend`, the
   project-bypasses-global stand-down, sovereign-repo exclusions, malformed payloads, memory
