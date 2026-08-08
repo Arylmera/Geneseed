@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -54,17 +55,30 @@ EMITS = ("files", "opencode", "opencode-global", "claude", "claude-global",
          "bob", "bob-global", "copilot", "copilot-global")
 
 
+def _js_string_list(text: str, marker: str) -> set[str]:
+    i = text.index(marker) + len(marker)
+    return {tok.strip().strip("'\"")
+            for tok in text[i:text.index("]", i)].split(",") if tok.strip()}
+
+
 def ported() -> set[str]:
     """The `PORTED` set, read out of the driver's source.
 
     Parsed rather than hardcoded so this file cannot claim an emit has crossed when the
     driver still refuses it — the list has to come from the thing under test.
+
+    Two spellings, because P4e changed one: while the port was partial `PORTED` was a
+    literal subset, and now that all nine have crossed it is `new Set(EMITS)`. Following
+    the alias rather than accepting a hardcoded nine is what keeps this honest — a tenth
+    emit added to `EMITS` would then be claimed as ported by this reader, and
+    `test_the_node_driver_classifies_every_emit` would have nothing to say about it. That
+    is correct only because `PORTED` genuinely IS `EMITS` in the source; the day it stops
+    being, the literal branch below takes over again.
     """
     text = CLI.read_text(encoding="utf-8")
-    marker = "const PORTED = new Set(["
-    i = text.index(marker) + len(marker)
-    body = text[i:text.index("])", i)]
-    return {tok.strip().strip("'\"") for tok in body.split(",") if tok.strip()}
+    if "const PORTED = new Set(EMITS)" in text:
+        return _js_string_list(text, "const EMITS = [")
+    return _js_string_list(text, "const PORTED = new Set([")
 
 
 def _path_without_python() -> "tuple[str, list[str]]":
@@ -290,22 +304,39 @@ class NodeDriverSurface(unittest.TestCase):
 
         Asserted on the TARGET rather than by observing a leak: a test that proved the bug
         by performing it would perform it.
+
+        CLAUDE IS THE INVERSE ROW, and it is the reason this table grew a `moves` column
+        rather than gaining one more entry. `_build_core._claude_config_dir` has NO env
+        branch BY DESIGN — Claude Code documents no such variable — so for that host the
+        property to hold is the opposite one: setting the variable a reader would expect to
+        work must NOT move the target. Expressed as absence ("claude-global has no row")
+        the table could not distinguish a deliberate design from a forgotten host, which is
+        precisely the failure mode the `covered` cross-check exists to catch.
         """
-        # (env var, emit, the marker file the emit writes into its config dir, default dir)
+        # (env var, whether it MOVES the target, emit, marker file, default dir)
         hosts = [
-            ("OPENCODE_CONFIG_DIR", "opencode-global", "AGENT.md",
+            ("OPENCODE_CONFIG_DIR", True, "opencode-global", "AGENT.md",
              Path(".config") / "opencode"),
-            ("COPILOT_CONFIG_DIR", "copilot-global", "copilot-instructions.md",
+            ("COPILOT_CONFIG_DIR", True, "copilot-global", "copilot-instructions.md",
              Path(".copilot")),
+            # `rules/geneseed.md`, not AGENTS.md: Bob never auto-loads a global AGENTS.md,
+            # so the global emit deliberately writes none and puts the preamble in its
+            # always-injected rules folder instead. The first version of this row named
+            # AGENTS.md and failed — the table caught its own author.
+            ("BOB_CONFIG_DIR", True, "bob-global", Path("rules") / "geneseed.md",
+             Path(".bob")),
+            # No relocation variable exists for Claude. The one a reader would reach for is
+            # planted anyway, so "it is ignored" is asserted rather than assumed.
+            ("CLAUDE_CONFIG_DIR", False, "claude-global", "CLAUDE.md", Path(".claude")),
         ]
         covered = {e for e in ported() if e.endswith("-global")}
         self.assertEqual(
-            {h[1] for h in hosts}, covered,
+            {h[2] for h in hosts}, covered,
             "a global emit crossed without a relocation-var cell (or this table names one "
             "that has not crossed) — that is exactly the omission this table exists to make "
             "visible")
 
-        for var, emit, marker, default_rel in hosts:
+        for var, moves, emit, marker, default_rel in hosts:
             with self.subTest(var=var):
                 with tempfile.TemporaryDirectory() as tmp_s:
                     tmp = Path(tmp_s)
@@ -318,34 +349,58 @@ class NodeDriverSurface(unittest.TestCase):
                                 env=env)
                     self.assertEqual(r.returncode, 0,
                                      f"{emit} failed: {(r.stderr or r.stdout)[:300]}")
-                    self.assertTrue(
-                        (relocated / marker).is_file(),
-                        f"the node driver ignored ${var} — it would render into the user's "
-                        f"real ~/{default_rel.as_posix()} on every machine that sets it")
-                    self.assertFalse(
-                        (home / default_rel / marker).is_file(),
-                        f"the node driver wrote to the DEFAULT config dir as well as the "
-                        f"one ${var} names")
+                    if moves:
+                        self.assertTrue(
+                            (relocated / marker).is_file(),
+                            f"the node driver ignored ${var} — it would render into the "
+                            f"user's real ~/{default_rel.as_posix()} on every machine that "
+                            f"sets it")
+                        self.assertFalse(
+                            (home / default_rel / marker).is_file(),
+                            f"the node driver wrote to the DEFAULT config dir as well as "
+                            f"the one ${var} names")
+                    else:
+                        self.assertTrue(
+                            (home / default_rel / marker).is_file(),
+                            f"{emit} did not render into ~/{default_rel.as_posix()}")
+                        self.assertFalse(
+                            (relocated / marker).is_file(),
+                            f"the node driver honoured ${var}, which does not exist for "
+                            f"this host — Python's resolver has no env branch at all, so "
+                            f"the two CLIs would disagree about where a global Claude "
+                            f"install lives on any machine that sets it")
 
-    def test_a_global_copilot_emit_warns_about_registered_project_installs(self):
+    # (project emit, global emit, its config-dir variable, the word the warning uses).
+    # A TABLE for the same reason the relocation one is: when the Copilot pair crossed,
+    # this cell was written for Copilot alone, and P4e added a SECOND host with a stacking
+    # warning of its own (`_warn_bob_global_over_project`). Left as one hard-coded host it
+    # would have covered Bob's warning with nothing at all, which is precisely the M30
+    # shape — prose generalised to the new host, gate not. The cross-check below is what
+    # turns the next such host into a failure rather than an oversight.
+    STACKING_HOSTS = [
+        ("copilot", "copilot-global", "COPILOT_CONFIG_DIR", b"Copilot"),
+        ("bob", "bob-global", "BOB_CONFIG_DIR", b"Bob"),
+    ]
+
+    def test_a_global_emit_warns_about_registered_project_installs(self):
         """A two-step sequence the matrix cannot express, and therefore never runs.
 
-        `_warn_copilot_global_over_project` reads the install registry, so it only speaks
-        when a PROJECT copilot install is already on record. Every golden cell emits into a
-        fresh sandbox whose registry is empty, so `_project_survivors` returns `[]` and the
-        warning is UNREACHABLE in all 259 of them — including its whole
-        `registryRoots`/`projectSurvivors` read path, which is where the prune-on-read that
-        rewrites `installs.json` lives.
+        Both `_warn_copilot_global_over_project` and `_warn_bob_global_over_project` read
+        the install registry, so they only speak when a PROJECT install of that host is
+        already on record. Every golden cell emits into a fresh sandbox whose registry is
+        empty, so `_project_survivors` returns `[]` and the warning is UNREACHABLE in all
+        259 of them — including its whole `registryRoots`/`projectSurvivors` read path,
+        which is where the prune-on-read that rewrites `installs.json` lives.
 
-        So this drives the real sequence: register a project install, then emit globally,
-        and require the two CLIs to agree on what they say about it.
+        So this drives the real sequence per host: register a project install, then emit
+        globally, and require the two CLIs to agree on what they say about it.
 
         The registry it reads is seeded with THREE rows on purpose, and each one is there
         because a mutation survived without it:
 
-          * a `copilot` project install — the row the warning is about;
+          * a project install of the host under test — the row the warning is about;
           * an `opencode` project install — a live row with a DIFFERENT marker. With only
-            the copilot row present, a `_project_survivors` that ignored the marker entirely
+            the first row present, a `_project_survivors` that ignored the marker entirely
             returned the same single root and said the same thing;
           * a row pointing at a directory that no longer exists — without it `kept` equals
             the original list, the prune-on-read never writes, and dropping the write is
@@ -355,16 +410,30 @@ class NodeDriverSurface(unittest.TestCase):
         WRITE to a file the acceptance matrix compares byte-for-byte, and it is the part of
         this read path most likely to be wrong.
         """
+        # Every ported global emit whose host also has a PROJECT emit can stack, and so
+        # needs a row here. `files`/`opencode-global` are excluded because opencode's
+        # bypass is a real exclude mechanism, not a warning.
+        warned = {h[1] for h in self.STACKING_HOSTS}
+        self.assertTrue(
+            warned <= {e for e in ported() if e.endswith("-global")},
+            f"this table names a global emit that has not crossed: "
+            f"{sorted(warned - ported())}")
+
+        for project, glob_emit, var, word in self.STACKING_HOSTS:
+            with self.subTest(host=project):
+                self._assert_stacking_warning(project, glob_emit, var, word)
+
+    def _assert_stacking_warning(self, project, glob_emit, var, word):
         with tempfile.TemporaryDirectory() as tmp_s:
             said, registry = {}, {}
             for side, gen in (("py", [sys.executable, "build.py"]),
                               ("node", [NODE, str(CLI)])):
                 sb = Path(tmp_s) / side
                 home, repo, oc_repo = sb / "home", sb / "repo", sb / "oc-repo"
-                cfgdir = sb / "copilot-cfg"
+                cfgdir = sb / "host-cfg"
                 home.mkdir(parents=True)
                 env = golden.cell_env(home)
-                env["COPILOT_CONFIG_DIR"] = str(cfgdir)
+                env[var] = str(cfgdir)
 
                 def emit(argv, side=side, gen=gen, env=env):
                     r = subprocess.run(
@@ -375,7 +444,7 @@ class NodeDriverSurface(unittest.TestCase):
                                      f"{side} {argv[1]} failed: {(r.stderr or r.stdout)[:300]}")
                     return r
 
-                emit(["--emit", "copilot", "--out", str(repo)])
+                emit(["--emit", project, "--out", str(repo)])
                 emit(["--emit", "opencode", "--out", str(oc_repo)])
 
                 # The dead row, added after the live ones so the prune has something to do.
@@ -384,17 +453,17 @@ class NodeDriverSurface(unittest.TestCase):
                 reg.write_text(json.dumps(rows + [str(sb / "deleted-install")], indent=2)
                                + "\n", encoding="utf-8")
 
-                r = emit(["--emit", "copilot-global", "--out", str(sb / "legacy")])
+                r = emit(["--emit", glob_emit, "--out", str(sb / "legacy")])
                 roots = [("<HOME>", home), ("<OUT>", repo), ("<OC>", oc_repo),
                          ("<SB>", sb), ("<REPO>", ROOT)]
                 said[side] = golden._normalise(r.stderr.encode("utf-8", "replace"), roots)
                 registry[side] = golden._normalise(reg.read_bytes(), roots)
 
-            self.assertIn(b"project Copilot install(s) already exist", said["py"],
+            self.assertIn(b"project %s install(s) already exist" % word, said["py"],
                           "the project emit did not register, so the global emit had "
                           "nothing to warn about and this cell tested nothing")
-            self.assertIn(b"1 project Copilot install(s)", said["py"],
-                          "the warning counted something other than the single copilot "
+            self.assertIn(b"1 project %s install(s)" % word, said["py"],
+                          f"the warning counted something other than the single {project} "
                           "root — the opencode row is supposed to be filtered out by its "
                           "marker, and if it is not this cell cannot see that it is not")
             self.assertNotIn(b"deleted-install", registry["py"],
@@ -402,13 +471,196 @@ class NodeDriverSurface(unittest.TestCase):
                              "whether the node driver does")
             self.assertEqual(said["py"], said["node"],
                              "the two drivers disagree about the stacking warning:\n"
-                             f"  python: {said['py'][:300]!r}\n"
-                             f"  node:   {said['node'][:300]!r}")
+                             f"  python: {said['py'][:400]!r}\n"
+                             f"  node:   {said['node'][:400]!r}")
             self.assertEqual(registry["py"], registry["node"],
                              "the two drivers disagree about the registry after a "
                              "prune-on-read:\n"
                              f"  python: {registry['py'][:300]!r}\n"
                              f"  node:   {registry['node'][:300]!r}")
+
+    def test_the_emitted_hook_shim_names_a_real_python_3(self):
+        """WHICH interpreter the Node driver discovered — the half `_shim_health` cannot ask.
+
+        `golden._shim_health` requires every quoted string in the shim body to EXIST, which
+        is what refuses `"undefined"`. It cannot tell an interpreter from any other file
+        that happens to be there, and the Node driver has no `sys.executable` to inherit —
+        it scans PATH. So a discovery that picked up, say, the Microsoft Store alias stub,
+        or a `python` that is really a shell wrapper, would satisfy existence and still
+        leave every hook in the install dead.
+
+        The driver itself may not spawn anything (see the static half of the refutation
+        above); this test may, and that asymmetry is the point — the check that costs a
+        subprocess belongs in the gate, not in the shipped code.
+        """
+        with tempfile.TemporaryDirectory() as tmp_s:
+            tmp = Path(tmp_s)
+            home, out = tmp / "home", tmp / "out"
+            home.mkdir()
+            r = run_cli(["--theme", "neutral", "--emit", "claude", "--footprint", "lean",
+                         "--out", str(out)], env=golden.cell_env(home))
+            self.assertEqual(r.returncode, 0, f"claude emit failed: {(r.stderr or r.stdout)[:400]}")
+
+            shims = [p for p in tmp.rglob("*")
+                     if p.is_file() and p.name.startswith(golden._SHIM_GLOB)]
+            self.assertTrue(shims, "the node driver wired hooks but wrote no shim")
+            body = shims[0].read_text(encoding="utf-8")
+            quoted = re.findall(r'"([^"]+)"', body)
+            self.assertTrue(quoted, f"the shim bakes no quoted paths at all: {body!r}")
+            runner = quoted[0]
+
+            probe = subprocess.run([runner, "-c", "import sys; print(sys.version_info[0])"],
+                                   capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(
+                probe.returncode, 0,
+                f"the shim's interpreter {runner!r} does not run — every hook in an install "
+                f"emitted by this driver is dead. stderr: {probe.stderr.strip()[:200]}")
+            self.assertEqual(
+                probe.stdout.strip(), "3",
+                f"the shim's interpreter {runner!r} is not Python 3: {probe.stdout!r}")
+
+    def test_an_emitted_hook_command_actually_runs(self):
+        """The end-to-end question neither the matrix nor `_shim_health` asks: do the hooks
+        this driver emitted RUN?
+
+        Everything else about hooks is checked structurally — settings.json is compared
+        byte-for-byte, the shim is asserted to exist and to name existing files. None of
+        that executes anything, and the failure this phase is designed around (a shim
+        naming an interpreter that cannot run harness.py) is invisible to all of it,
+        because Geneseed's hooks signal through stdout and return 0 on every path.
+
+        So this takes a hook command out of the settings file the driver just wrote, runs
+        it exactly as the host would — through the shell, with the `|| exit 0` intact — and
+        requires it to succeed.
+        """
+        with tempfile.TemporaryDirectory() as tmp_s:
+            tmp = Path(tmp_s)
+            home, out = tmp / "home", tmp / "out"
+            home.mkdir()
+            env = golden.cell_env(home)
+            r = run_cli(["--theme", "neutral", "--emit", "claude", "--footprint", "lean",
+                         "--out", str(out)], env=env)
+            self.assertEqual(r.returncode, 0, f"claude emit failed: {(r.stderr or r.stdout)[:400]}")
+
+            settings = json.loads(
+                (out / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
+            commands = [h["command"]
+                        for groups in settings.get("hooks", {}).values()
+                        for g in groups for h in g.get("hooks", [])
+                        if isinstance(h, dict) and "command" in h]
+            self.assertTrue(commands, "the emitted settings file carries no hook commands")
+            # The SessionStart/context one: it reads the install and prints its JSON verdict,
+            # which is the fullest path of the four and needs no tool payload on stdin.
+            picked = [c for c in commands if " context " in c] or commands
+            # cwd is the INSTALL, not the sandbox root, and that is load-bearing rather
+            # than tidiness: the context hook stands down silently when cwd is not a
+            # Geneseed install (project-bypasses-global), so running it from anywhere else
+            # produces an empty stdout and a green exit — the exact shape of the disabled
+            # hook this test exists to detect. Measured, after the first version of this
+            # cell failed that way.
+            proc = subprocess.run(picked[0], shell=True, cwd=str(out), env=env,
+                                  capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(
+                proc.returncode, 0,
+                f"an emitted hook command failed to run:\n  {picked[0]}\n"
+                f"  stderr: {proc.stderr.strip()[:300]}")
+            self.assertTrue(
+                proc.stdout.strip(),
+                f"the emitted hook ran but printed nothing — Geneseed's hooks signal "
+                f"through stdout, so a silent one is a disabled one:\n  {picked[0]}")
+
+    def test_a_hook_writing_emit_refuses_when_no_interpreter_is_discoverable(self):
+        """The decision this phase had to take, asserted as behaviour.
+
+        `--emit files` succeeds with no Python on PATH — that is the passthrough refutation
+        above, and it must keep succeeding. The four hook-writing emits are the opposite
+        case: the hooks they wire ARE Python, so an emit that cannot name an interpreter
+        would be writing a shim that disables every hook in the install, silently. The
+        driver refuses with exit 4 instead, and writes nothing.
+
+        Same stripped PATH as the passthrough test on purpose: one environment, two
+        opposite required outcomes, which is what makes the distinction real rather than
+        asserted.
+        """
+        stripped, dropped = _path_without_python()
+        self.assertTrue(dropped, "PATH held no python at all, so this run proves nothing")
+
+        for emit in ("claude", "claude-global", "bob", "bob-global"):
+            with self.subTest(emit=emit):
+                with tempfile.TemporaryDirectory() as tmp_s:
+                    tmp = Path(tmp_s)
+                    out = tmp / "out"
+                    env = golden.cell_env(tmp / "home")
+                    env["PATH"] = stripped
+                    # $PYTHON is the documented override in both front doors and is NOT
+                    # cleared by cell_env, so a developer who exports it would otherwise
+                    # make this gate vacuous.
+                    env.pop("PYTHON", None)
+                    r = run_cli(["--theme", "neutral", "--emit", emit, "--footprint", "lean",
+                                 "--out", str(out)], env=env)
+                    self.assertEqual(
+                        r.returncode, 4,
+                        f"--emit {emit} with no interpreter must refuse with exit 4, got "
+                        f"{r.returncode}. stderr: {(r.stderr or r.stdout).strip()[:300]}")
+                    self.assertFalse(
+                        out.exists(),
+                        f"--emit {emit} refused but had already written to {out}")
+
+    def test_verify_reports_an_orphaned_geneseed_hook(self):
+        """VERIFY is SILENT ON SUCCESS, which is a fifth kind of coverage hole.
+
+        `_settings_integrity_check` runs on every Claude-shaped emit and prints only when it
+        finds a fault. Every golden cell is clean, so it prints nothing in all 259 of them —
+        which means DELETING the call is byte-identical across the entire acceptance matrix.
+        Not unreachable (it runs every time) and not indistinguishable-by-fixture in the
+        earlier senses: its whole output is conditional on a fault no cell creates.
+
+        So this creates one. A user-authored hook whose command matches a Geneseed sniff
+        marker but is in no recorded claim group is exactly what the orphan scan exists to
+        report, it survives the merge (which only prunes groups it RECORDED), and it makes
+        both implementations speak — so their stderr can be compared.
+        """
+        with tempfile.TemporaryDirectory() as tmp_s:
+            said = {}
+            for side, gen in (("py", [sys.executable, "build.py"]),
+                              ("node", [NODE, str(CLI)])):
+                sb = Path(tmp_s) / side
+                home, out = sb / "home", sb / "repo"
+                home.mkdir(parents=True)
+                env = golden.cell_env(home)
+
+                def emit(side=side, gen=gen, env=env, out=out):
+                    r = subprocess.run(
+                        gen + ["--theme", "neutral", "--emit", "claude", "--footprint",
+                               "lean", "--out", str(out)],
+                        cwd=str(ROOT), env=env, capture_output=True, text=True,
+                        encoding="utf-8")
+                    self.assertEqual(r.returncode, 0,
+                                     f"{side} claude emit failed: {(r.stderr or r.stdout)[:300]}")
+                    return r
+
+                emit()
+                sf = out / ".claude" / "settings.local.json"
+                data = json.loads(sf.read_text(encoding="utf-8"))
+                data.setdefault("hooks", {}).setdefault("Stop", []).append(
+                    {"matcher": "*", "hooks": [
+                        {"type": "command", "command": '"python" "/elsewhere/harness.py" learn'}]})
+                sf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+                r = emit()
+                said[side] = golden._normalise(
+                    r.stderr.encode("utf-8", "replace"),
+                    [("<HOME>", home), ("<OUT>", out), ("<REPO>", ROOT)])
+
+            self.assertIn(
+                b"Geneseed-pattern hook present but NOT recorded", said["py"],
+                "the planted hook no longer makes python's VERIFY speak, so this cell "
+                "cannot tell whether the node driver runs the stage at all")
+            self.assertEqual(
+                said["py"], said["node"],
+                "the two drivers disagree about the VERIFY stage:\n"
+                f"  python: {said['py'][:300]!r}\n"
+                f"  node:   {said['node'][:300]!r}")
 
     def test_the_footprint_default_is_the_flags_not_the_functions(self):
         """build.py:354's flag defaults to `lean`; every emit SIGNATURE defaults to `full`.

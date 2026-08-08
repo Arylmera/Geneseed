@@ -231,12 +231,30 @@ def _snapshot(sandbox: Path, roots: list[tuple[str, Path]]) -> dict[str, bytes]:
     return snap
 
 
-def _shim_health(sandbox: Path) -> "str | None":
+# The emits that wire settings.json hooks, and therefore MUST leave a shim behind. Named
+# rather than derived: it is the contract `_shim_health` holds the generators to, and
+# reading it out of either generator would let the gate drift along with the thing it gates.
+_HOOK_EMITS = frozenset({"claude", "claude-global", "bob", "bob-global"})
+
+
+def _shim_health(sandbox: Path, emit: str) -> "str | None":
     """The check that replaces comparing the shim. Emitted hooks are worthless if the
     shim they all name is missing or points at nothing, and no byte-diff of the emitted
-    tree can reveal that — the shim lives outside it. Returns a problem, or None."""
+    tree can reveal that — the shim lives outside it. Returns a problem, or None.
+
+    `emit` is a parameter because "no shim" used to return None unconditionally, and that
+    was a hole precisely where this function is the only gate. A generator that wired
+    settings.json correctly — every hook command naming the shim path, so every byte of
+    every compared file matches — but never WROTE the shim would pass: the comparison sees
+    identical settings, and this function saw nothing to check. The install is then one
+    where all six hook groups point at a file that does not exist. The four hook-writing
+    emits must produce one; the other five legitimately produce none, and asserting that
+    direction too is what stops this from becoming a check that only ever passes."""
     found = [p for p in sandbox.rglob("*") if p.is_file() and p.name.startswith(_SHIM_GLOB)]
     if not found:
+        if emit in _HOOK_EMITS:
+            return (f"--emit {emit} wires settings.json hooks but wrote no hook shim: "
+                    "every emitted hook command names a file that does not exist")
         return None  # emits with no hooks (files, copilot, opencode) legitimately write none
     for p in found:
         try:
@@ -316,7 +334,7 @@ def run_cell(gen: list[str], cell: dict, repeat: int = 1) -> "dict[str, bytes] |
             return ("nothing was removed between the two configurations: either the "
                     "write-before-delete prune ran and deleted nothing, or this cell no "
                     "longer changes `owned` and has become a second `--idempotent`")
-        sick = _shim_health(Path(td))
+        sick = _shim_health(Path(td), cell["emit"])
         if sick:
             return sick
         # <REPO> matters only once the two sides run from different checkouts (the Node
