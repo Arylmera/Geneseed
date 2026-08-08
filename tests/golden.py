@@ -429,18 +429,50 @@ def main(argv=None) -> int:
                          "the write-before-delete prune's deletion path, because both of "
                          "its emits share one configuration and `old_owned - owned` is "
                          "therefore always empty. Uses --ref alone; --new is ignored.")
+    ap.add_argument("--emits", default=None,
+                    help="comma-separated --emit modes to keep (default: all nine). For a "
+                         "PARTIAL port: the Node driver crosses one emit at a time, so "
+                         "`--new 'node bin/geneseed.mjs' --emits files` gates exactly what "
+                         "has crossed instead of reporting eight refusals as failures. "
+                         "Drop the flag once all nine cross — it narrows the matrix and "
+                         "narrowing it is the thing to stop doing.")
     args = ap.parse_args(argv)
     ref = _split(args.ref) if args.ref else [sys.executable, "build.py"]
     new = _split(args.new) if args.new else ref
+    keep = None
+    if args.emits:
+        keep = [e.strip() for e in args.emits.split(",") if e.strip()]
+        unknown = sorted(set(keep) - set(EMITS))
+        if unknown:
+            print(f"[golden] unknown --emits value(s): {', '.join(unknown)} "
+                  f"(choose from {', '.join(EMITS)})")
+            return 2
+    def _keep(matrix: list[dict]) -> "list[dict] | None":
+        """Apply --emits, refusing an EMPTY result rather than reporting 0/0 as a pass.
+        A filter that matches nothing is the silent-cap failure mode this file exists to
+        avoid: `--emits files` against the deletion matrix selects no cell at all, and
+        "0 cells, no differences" reads exactly like a green run."""
+        if keep is None:
+            return matrix
+        kept = [c for c in matrix if c["emit"] in keep]
+        if not kept:
+            print(f"[golden] --emits {','.join(keep)} selected 0 of {len(matrix)} cells "
+                  f"— nothing would be compared, which is not a pass.")
+            return None
+        return kept
+
     if args.deletion:
         # Both sides are the SAME generator; the variable is what the target held before.
-        return compare(ref, ref, args.quick, args.limit,
-                       matrix=deletion_cells(args.quick))
+        m = _keep(deletion_cells(args.quick))
+        return 2 if m is None else compare(ref, ref, args.quick, args.limit, matrix=m)
     if args.idempotent:
         # Both sides are the SAME generator; the variable is whether the target already
         # holds a previous emit. A difference here is a re-emit bug, not a port bug.
-        return compare(ref, ref, args.quick, args.limit, ref_repeat=1, new_repeat=2)
-    return compare(ref, new, args.quick, args.limit)
+        m = _keep(cells(args.quick))
+        return 2 if m is None else compare(ref, ref, args.quick, args.limit,
+                                           ref_repeat=1, new_repeat=2, matrix=m)
+    m = _keep(cells(args.quick))
+    return 2 if m is None else compare(ref, new, args.quick, args.limit, matrix=m)
 
 
 if __name__ == "__main__":
