@@ -40,6 +40,7 @@ import { fileURLToPath } from 'node:url';
 import {
   build, emitOpencodeRender, emitOpencodeGlobalRender, emitClaudeRender,
 } from '../js/emit.mjs';
+import { settingsIntegrityCheck } from '../js/settings.mjs';
 import { writeText, parseJson, jsonDumpsIndent } from '../js/lib/pyfs.mjs';
 
 /** `_build_core.ROOT` — the checkout, from this script's own location (bin/..). */
@@ -53,24 +54,15 @@ const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global'
   'bob', 'bob-global', 'copilot', 'copilot-global'];
 
 /**
- * The emits this driver can run end to end.
+ * The emits this driver can run end to end — all nine, as of P4e.
  *
- * An emit that is NOT here refuses with exit 3 rather than silently producing a partial
- * tree, and `tests/golden.py --emits` narrows the acceptance matrix to this set — deleting
- * that flag is how the phase ends.
- *
- * The four still missing are `claude`, `claude-global`, `bob` and `bob-global`, and they
- * are missing for one shared reason rather than for want of typing. All four write
- * `settings.json` hooks, so they reach `hookPrefix`, which needs the two machine-absolute
- * values `_build_settings._hook_runner_entry()` returns: `sys.executable` and the harness
- * entry point. **A Node driver has no `sys.executable`** — the hooks it would be wiring are
- * Python, and `process.execPath` is node. That is the one place the port's "no Python
- * needed" promise meets the fact that the runtime it wires has not crossed, and it is a
- * decision rather than a translation. The two Copilot emits ride the same shared engine and
- * do NOT reach it (`js/emit.mjs:1166` gates the whole settings path behind `!isCopilot`),
- * which is exactly why they could cross first and isolate that question.
+ * The set is kept (rather than deleted along with the refusal branch) because it is the
+ * thing `test_the_node_driver_classifies_every_emit` reads to assert the PARTITION: every
+ * `--emit` choice is either here or refused with exit 3, so a tenth emit added to `EMITS`
+ * without crossing is a failure rather than an oversight. It is also what
+ * `test_every_relocation_var_moves_its_global_target` cross-checks its host table against.
  */
-const PORTED = new Set(['files', 'opencode', 'opencode-global', 'copilot', 'copilot-global']);
+const PORTED = new Set(EMITS);
 
 /** `_build_global.GLOBAL_MANIFEST`. */
 const GLOBAL_MANIFEST = '.geneseed-manifest.json';
@@ -262,6 +254,163 @@ function copilotConfigDir() {
   const env = process.env.COPILOT_CONFIG_DIR;
   if (env) return pyResolve(env);
   return pyResolve(path.join(os.homedir(), '.copilot'));
+}
+
+/**
+ * `_build_core._claude_config_dir` — `~/.claude`, and there is NO env branch BY DESIGN.
+ *
+ * Its three siblings all check a `*_CONFIG_DIR` variable first; this one does not, because
+ * Claude Code documents none and inventing one here would make the two CLIs disagree about
+ * where a global install lives. The absence is the specification, so it is asserted rather
+ * than merely not implemented — `test_every_relocation_var_moves_its_global_target` carries
+ * an INVERSE row for this host: setting `$CLAUDE_CONFIG_DIR` must NOT move the target.
+ * Without that row the table could only say "no cell covers Claude", which reads the same
+ * as an omission.
+ */
+function claudeConfigDir() {
+  return pyResolve(path.join(os.homedir(), '.claude'));
+}
+
+/** `_build_core._bob_config_dir` — `~/.bob`, relocatable via `$BOB_CONFIG_DIR`. */
+function bobConfigDir() {
+  const env = process.env.BOB_CONFIG_DIR;
+  if (env) return pyResolve(env);
+  return pyResolve(path.join(os.homedir(), '.bob'));
+}
+
+/**
+ * The interpreter the emitted hook shim bakes — the one value in this port with no Python
+ * counterpart to translate, and therefore the phase's actual decision.
+ *
+ * `_build_settings._hook_runner_entry()` returns `sys.executable`: the interpreter that is
+ * running `build.py` at that moment. A Node driver has no such thing. `process.execPath` is
+ * node, and the hooks being wired are Python (`rituals/harness.py`), so the value has to be
+ * DISCOVERED, and the failure mode when discovery comes up empty is the thing to design for
+ * rather than an edge case: a shim naming an interpreter that does not exist is a SILENTLY
+ * DISABLED HOOK. Every Geneseed hook signals through stdout and returns 0 on every path, so
+ * a dead one reports nothing; `golden.py` excludes the shim from byte comparison by name
+ * (`_SHIM_GLOB`), so no acceptance cell would contradict it either. An install that looks
+ * complete and has four dead hooks is strictly worse than a build that stops.
+ *
+ * So: DISCOVER, and REFUSE (exit 4) when there is nothing to find. That refusal is honest
+ * rather than merely safe — the hooks are Python, so a machine with no Python cannot run
+ * them whatever this driver writes, and the fallback it names (`python build.py`) is by
+ * definition available exactly when the emit would have been meaningful.
+ *
+ * WHY THIS IS A FILESYSTEM SCAN AND NOT A PROBE. `geneseed.cmd` picks the first candidate
+ * that actually RUNS (`%%C -c "pass"`), because cmd's `where` happily returns the Microsoft
+ * Store alias stub — an app-execution shim that prints an install hint and exits non-zero.
+ * This driver cannot copy that: `test_the_driver_imports_no_child_process_module` bans
+ * `child_process` outright, and that ban is load-bearing (it is half of the proof that this
+ * file is a second implementation rather than a passthrough to `build.py`). Measured on
+ * Windows 11 instead of assumed: `existsSync` returns FALSE for the Store alias, because
+ * `statSync` on the reparse point raises `EACCES` — so the natural spelling already skips
+ * the stub the launcher needed a subprocess to detect. The explicit `WindowsApps` skip
+ * below does not rely on that ACL behaviour, which is one machine's observation and not a
+ * guarantee.
+ *
+ * `$PYTHON` overrides everything, which is not a new knob: it is the documented contract of
+ * both front doors (`geneseed:51`, `geneseed.cmd`). It is resolved to an absolute path like
+ * any other candidate, because a bare name baked into the shim would fail `_shim_health`
+ * — golden requires every quoted string in the shim body to exist on disk.
+ */
+function discoverRunner() {
+  const win = process.platform === 'win32';
+  const names = win ? ['py.exe', 'python.exe', 'python3.exe'] : ['python3', 'python'];
+
+  const usable = (p) => {
+    // An app-execution alias lives here and is not an interpreter. Skipped by segment
+    // rather than by size or link target so the rule holds regardless of how a given
+    // machine's ACLs make it stat.
+    if (win && p.split(path.sep).includes('WindowsApps')) return false;
+    return existsSync(p) && isFile(p);
+  };
+
+  const override = process.env.PYTHON;
+  if (override) {
+    if (path.isAbsolute(override) && usable(override)) return override;
+    for (const dir of (process.env.PATH || '').split(path.delimiter)) {
+      if (!dir) continue;
+      for (const suffix of win ? ['', '.exe'] : ['']) {
+        const p = path.join(dir, override + suffix);
+        if (usable(p)) return p;
+      }
+    }
+    return null;  // an explicit $PYTHON that resolves to nothing is an error, not a hint
+  }
+
+  // Name-major, in `geneseed.cmd`'s order: `py` before `python` before `python3`, so the
+  // shim this driver writes names the same interpreter the launchers would have used.
+  for (const name of names) {
+    for (const dir of (process.env.PATH || '').split(path.delimiter)) {
+      if (!dir) continue;
+      const p = path.join(dir, name);
+      if (usable(p)) return p;
+    }
+  }
+  return null;
+}
+
+/**
+ * `_build_settings._hook_runner_entry()`'s two values, or a refusal.
+ *
+ * `entry` is free — this driver knows `ROOT`, so `<checkout>/rituals/harness.py` is the
+ * same string Python computes. Only `runner` has to be discovered.
+ */
+function hookOptsOrDie(emit) {
+  const runner = discoverRunner();
+  if (runner === null) {
+    die(4, `--emit ${emit} wires Geneseed's hooks, and those hooks are Python scripts — `
+      + 'but no Python interpreter could be found on PATH (looked for '
+      + `${process.platform === 'win32' ? 'py, python, python3' : 'python3, python'}). `
+      + 'Emitting anyway would write a hook shim naming an interpreter that does not '
+      + 'exist, which disables every hook in the install silently. Set $PYTHON to one, '
+      + `or run: python build.py --emit ${emit}`);
+  }
+  return { runner, entry: path.join(ROOT, 'rituals', 'harness.py') };
+}
+
+/**
+ * `_build_global._preamble_exclude` — the `claudeMdExcludes` entry a PROJECT install writes
+ * to suppress the GLOBAL preamble of the same host, or null for a host that gets none.
+ *
+ * `_PREAMBLE_CONFIG_DIR` has exactly one key, so only a `CLAUDE.md` carrier resolves to a
+ * value: Bob's and Copilot's `AGENTS.md`, and Copilot's `copilot-instructions.md`, get null.
+ *
+ * Computed HERE and not in the render child, and that is the inverted boundary rule doing
+ * real work rather than being restated. P3b's note on the Python original: it resolves
+ * through `_build_core._claude_config_dir`, an `_OWNED` name precisely because the suite
+ * redirects it at a sandbox, and a redirect that stops at a subprocess half-works in
+ * silence. The child must therefore never derive it — but this file is the PARENT, so
+ * deriving it is exactly this file's job, and `js/emit.mjs` receives the answer.
+ *
+ * POSIX spelling, per the original: `claudeMdExcludes` entries are glob patterns, where a
+ * backslash is an escape, so the Windows-native form risks never matching.
+ */
+function preambleExclude(claudeMd) {
+  if (path.basename(claudeMd) !== 'CLAUDE.md') return null;
+  return pyResolve(path.join(claudeConfigDir(), 'CLAUDE.md')).split(path.sep).join('/');
+}
+
+/**
+ * `_build_global._warn_bob_global_over_project` — informational, never auto-removes.
+ *
+ * Same shape as `warnCopilotGlobalOverProject` and a DIFFERENT message, because the two
+ * hosts differ in what they can promise: Copilot simply stacks both preambles, while Bob's
+ * workspace rules may or may not shadow the global copy depending on precedence nothing can
+ * verify at emit time — so this text hedges where Copilot's asserts.
+ */
+function warnBobGlobalOverProject() {
+  const survivors = projectSurvivors('bob');
+  if (!survivors.length) return;
+  process.stderr.write(
+    `[geneseed] WARN: ${survivors.length} project Bob install(s) already exist — `
+    + 'emitting GLOBAL now means BOTH may auto-load together in those repos '
+    + "(doubled context) unless Bob's workspace rules truly shadow the global "
+    + "one there. Review and remove what you don't want:\n");
+  for (const root of survivors) {
+    process.stderr.write(`  - ${root}  ->  harness uninstall --target "${root}"\n`);
+  }
 }
 
 /**
@@ -579,13 +728,15 @@ function emitOpencodeGlobal(cfg, args, out) {
  * entry point) that a Node driver has no way to produce. Copilot crossing first isolates
  * this driver body from that question entirely.
  *
- * `hookOpts` is consequently OMITTED rather than passed as `{}` or `null`. If a future
- * change ever routed a Copilot emit into the hook path, `hookPrefix()` would receive
- * `undefined`, hit its own default and throw the error it was built to throw — where `null`
- * would raise an unrelated TypeError and `{}` would bake the literal string `"undefined"`
- * into the shim and silently kill every hook in the install. Fail loud, on purpose.
+ * `hookOpts` is OMITTED for a host that does not wire hooks, rather than passed as `{}` or
+ * `null`. If a future change ever routed a Copilot emit into the hook path, `hookPrefix()`
+ * would receive `undefined`, hit its own default and throw the error it was built to throw
+ * — where `null` would raise an unrelated TypeError and `{}` would bake the literal string
+ * `"undefined"` into the shim and silently kill every hook in the install. Fail loud, on
+ * purpose. The four hook-writing hosts pass a real pair from `hookOptsOrDie`, which refuses
+ * the whole emit rather than ever producing a partial one.
  */
-function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out }) {
+function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpts }) {
   const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
   let oldOwned = [];
   let oldManaged = {};
@@ -601,12 +752,15 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out }) {
 
   // RENDER + WIRE in one child's worth of work. `preambleExclude` is null for every host
   // but Claude — `_PREAMBLE_CONFIG_DIR` has exactly one key, `CLAUDE.md` — so neither
-  // Copilot carrier filename (copilot-instructions.md, AGENTS.md) resolves to one.
+  // Copilot carrier filename (copilot-instructions.md, AGENTS.md) resolves to one, and
+  // neither does Bob's. Spelling it as a call rather than a literal is what makes that a
+  // measured `null` instead of an assumed one.
   const rendered = emitClaudeRender(cfg, {
     theme: args.theme, cfgDir, claudeMd, scope, host,
     out: out === null ? null : out,
     footprint: args.footprint, nativeCatalog: NATIVE_CATALOG[host] ?? false,
-    oldOwned, oldManaged, preambleExclude: null,
+    oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd),
+    ...(hookOpts ? { hookOpts } : {}),
   });
   const { owned, stats, memStatus, nbStatus, managed } = rendered;
 
@@ -622,12 +776,24 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out }) {
     scope,
   });
 
-  // VERIFY — Python re-reads the settings file and matches it against the recorded claims.
-  // Skipped for Copilot, which writes no settings file (`_emit_claude_core:827`), which is
-  // the other half of why Copilot is the pair that could cross first.
+  // VERIFY — re-read the settings file just written and match it against the claims just
+  // recorded, so a merge that silently did not stick (a commented file, a mid-flight
+  // external edit, a bug in the merge) is loud now instead of surfacing as hooks that
+  // quietly never fire. Skipped for Copilot, which writes no settings file at all
+  // (`_emit_claude_core:827`) — the other half of why Copilot could cross first.
+  //
+  // On the Python driver this stage runs in Python AFTER a Node child did the wiring, which
+  // makes it a live cross-implementation check on every build. Here both halves are Node, so
+  // that particular property is gone and only the self-check remains — worth stating,
+  // because it is a real reduction in what a Claude emit proves about itself, and the thing
+  // that replaces it is the acceptance matrix rather than anything at runtime.
+  //
+  // SILENT ON SUCCESS, which is its own coverage hazard: a clean emit prints nothing, so
+  // deleting this call is byte-identical in all 259 cells. `test_verify_reports_an_orphaned
+  // _geneseed_hook` plants the fault that makes it speak.
   if (!isCopilot) {
-    throw new Error('the VERIFY stage has not crossed to the Node driver: '
-      + `--emit for host '${host}' must stay on python build.py`);
+    settingsIntegrityCheck(
+      path.join(cfgDir, managed.settings_file || 'settings.json'), managed, 'present');
   }
   return {
     nAgents: stats.nAgents,
@@ -664,6 +830,76 @@ function emitCopilotGlobal(cfg, args, out) {
     + 'No settings.json/hooks (Copilot has no hook mechanism — memory rides the '
     + "preamble's instructions); MCP servers go in mcp-config.json.\n");
   return cfgDir;
+}
+
+/**
+ * `_build_global.emit_claude_global` — into Claude Code's global config dir (~/.claude).
+ *
+ * `hookOptsOrDie` is called BEFORE the engine rather than inside it, so a machine with no
+ * interpreter refuses having written nothing at all. Deciding it late would leave a
+ * half-rendered config dir behind the refusal.
+ */
+function emitClaudeGlobal(cfg, args, out) {
+  const cfgDir = claudeConfigDir();
+  const hookOpts = hookOptsOrDie(args.emit);
+  const r = emitClaudeCore(cfg, args, {
+    cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'global', host: 'claude', out,
+    hookOpts,
+  });
+  process.stdout.write(`[geneseed] claude-global -> ${cfgDir}: ${r.nAgents} subagents, `
+    + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
+    + `${r.memStatus}, ${r.nbStatus}. No plugins/workflows/themes (no Claude analogue); `
+    + '~/.claude/plugins is never touched. Hooks call harness.py by absolute path; set '
+    + 'GENESEED_HARNESS only to relocate memory.\n');
+  return cfgDir;
+}
+
+/** `_build_global.emit_claude` — per-repo: CLAUDE.md at the root + a `.claude/` layer. */
+function emitClaude(cfg, args, out) {
+  const root = args.root ? resolveOut(args.root) : out;
+  const hookOpts = hookOptsOrDie(args.emit);
+  const r = emitClaudeCore(cfg, args, {
+    cfgDir: path.join(root, '.claude'), claudeMd: path.join(root, 'CLAUDE.md'),
+    scope: 'project', host: 'claude', out, hookOpts,
+  });
+  process.stdout.write(`[geneseed] claude (folder) -> ${root}: CLAUDE.md + .claude/ `
+    + `(${r.nAgents} subagents, ${r.nSkills} skills, ${r.nHooks} hook group(s), `
+    + `settings.json), ${r.memStatus}, ${r.nbStatus}.\n`);
+}
+
+/**
+ * `_build_global.emit_bob_global` — into Bob's global config dir (~/.bob).
+ *
+ * The warning fires BEFORE the emit, matching the Python order: it is about a state this
+ * emit is at the point of creating, so printing it afterwards would describe the situation
+ * as though the operator had already chosen it.
+ */
+function emitBobGlobal(cfg, args, out) {
+  const cfgDir = bobConfigDir();
+  const hookOpts = hookOptsOrDie(args.emit);
+  warnBobGlobalOverProject();
+  const r = emitClaudeCore(cfg, args, {
+    cfgDir, claudeMd: path.join(cfgDir, 'AGENTS.md'), scope: 'global', host: 'bob', out,
+    hookOpts,
+  });
+  process.stdout.write(`[geneseed] bob-global -> ${cfgDir}: ${r.nAgents} subagents, `
+    + `${r.nSkills} skills, rules/geneseed.md (Bob's always-injected channel; a global `
+    + 'AGENTS.md is not auto-loaded, so none is written), '
+    + `${r.nHooks} hook group(s), settings.json, ${r.memStatus}, ${r.nbStatus}.\n`);
+  return cfgDir;
+}
+
+/** `_build_global.emit_bob` — per-repo: AGENTS.md at the root + a `.bob/` layer. */
+function emitBob(cfg, args, out) {
+  const root = args.root ? resolveOut(args.root) : out;
+  const hookOpts = hookOptsOrDie(args.emit);
+  const r = emitClaudeCore(cfg, args, {
+    cfgDir: path.join(root, '.bob'), claudeMd: path.join(root, 'AGENTS.md'),
+    scope: 'project', host: 'bob', out, hookOpts,
+  });
+  process.stdout.write(`[geneseed] bob (folder) -> ${root}: AGENTS.md + .bob/ `
+    + `(${r.nAgents} subagents, ${r.nSkills} skills, rules/geneseed.md shadow stub, `
+    + `${r.nHooks} hook group(s), settings.json), ${r.memStatus}, ${r.nbStatus}.\n`);
 }
 
 /**
@@ -706,6 +942,10 @@ function main(argv) {
       + 'which is still Python. Run: python build.py --validate-only');
   }
 
+  // Every `--emit` choice has crossed as of P4e, so this branch is now unreachable — and it
+  // stays, because it is the partition `test_the_node_driver_classifies_every_emit` asserts:
+  // a tenth emit added to `EMITS` and not to `PORTED` refuses loudly here instead of falling
+  // through the dispatch's `else` and silently building a plain bundle.
   if (!PORTED.has(args.emit)) {
     die(3, `--emit ${args.emit} has not crossed to the Node driver yet (only `
       + `${[...PORTED].join(', ')} has). Run: python build.py --emit ${args.emit}`);
@@ -728,6 +968,14 @@ function main(argv) {
     emitCopilot(cfg, args, out);
   } else if (args.emit === 'copilot-global') {
     markerDir = emitCopilotGlobal(cfg, args, out);
+  } else if (args.emit === 'claude') {
+    emitClaude(cfg, args, out);
+  } else if (args.emit === 'claude-global') {
+    markerDir = emitClaudeGlobal(cfg, args, out);
+  } else if (args.emit === 'bob') {
+    emitBob(cfg, args, out);
+  } else if (args.emit === 'bob-global') {
+    markerDir = emitBobGlobal(cfg, args, out);
   } else {
     // `nativeCatalog: false` is build.py:421's three-positional-argument call reproduced:
     // `build(args.theme, out, args.footprint)` leaves `native_catalog` at its signature
