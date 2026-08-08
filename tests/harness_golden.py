@@ -211,6 +211,23 @@ def _context_cells() -> list[dict]:
                              ("trailing-comma", '{"context": [{"path": "a"},]}\n'),
                              ("missing-comma", '{"context": [], "extend": true "x": 1}\n'),
                              ("truncated", '{"context": [{"path": "a"\n'))],
+        # Valid JSON of the WRONG SHAPE. A user hand-edits this file, and each of these
+        # raised out of a SessionStart hook before the guards went in: no `.get` on a list,
+        # an object under "context" iterating to strings, a string entry, a numeric path.
+        # They are four cells and not one because they land in two different places — the
+        # first two fall through to discovery, the last two produce nothing at all.
+        ctx(id="context/manifest-is-a-list", world=dict(_DOCS_WORLD, **{
+            "repo/context.json": '["README.md"]\n'}),
+            expect=["auto-discovery", "The readme."]),
+        ctx(id="context/manifest-context-is-an-object", world=dict(_DOCS_WORLD, **{
+            "repo/context.json": '{"context": {"path": "README.md"}}\n'}),
+            expect=["auto-discovery", "The readme."]),
+        ctx(id="context/manifest-entry-is-a-string", world=dict(_DOCS_WORLD, **{
+            "repo/context.json": '{"context": ["README.md"]}\n'}),
+            expect_silent=True, expect=["nothing to load"]),
+        ctx(id="context/manifest-entry-path-is-a-number", world=dict(_DOCS_WORLD, **{
+            "repo/context.json": '{"context": [{"path": 7}]}\n'}),
+            expect_silent=True, expect=["nothing to load"]),
         ctx(id="context/harness-dir-wins",
             world=dict(_DOCS_WORLD, **{
                 "repo/context.json": '{"context": [{"path": "NOTES.md"}]}\n',
@@ -239,6 +256,15 @@ def _context_cells() -> list[dict]:
                     '{"context": [{"path": "{sb/}/outside/handbook.md",'
                     ' "description": "outside the repo"}]}\n'}),
             expect=["# Handbook", "outside the repo"]),
+        ctx(id="context/case-folded-sort-order",
+            # `sorted(Path...)` folds case on Windows and does not on POSIX, so the LISTED
+            # ORDER of the lazy entries is platform-dependent — and a JS `sort()` with no
+            # comparator sorts by UTF-16 code unit, which puts every capital before every
+            # lowercase. `Zebra` vs `alpha` is the pair that separates the two; a world of
+            # all-lowercase names cannot, which is why this cell is not `_DOCS_WORLD`.
+            world={"repo/README.md": "# root\n", "repo/Zebra.md": "z\n",
+                   "repo/alpha.md": "a\n", "repo/Beta.md": "b\n"},
+            expect=["Zebra.md", "alpha.md", "Beta.md"]),
         ctx(id="context/non-ascii-doc",
             world={"repo/README.md": "# Dépôt — résumé\n\nAccented ✓ and an em dash —.\n"},
             expect=["Dépôt", "em dash"]),
@@ -382,9 +408,16 @@ def _rule_gate_cells() -> list[dict]:
         rg("memory-index", "{repo/}/memory/MEMORY.md", expect=[ASK, "the memory index"]),
         rg("memory-index-anywhere", "{sb/}/elsewhere/MEMORY.md", expect=[ASK]),
         # The two coined names match on WHICHEVER host reads the payload, which is why the
-        # split is on both separators. A POSIX `Path(r"C:\x\user-rules.md").name` is the
-        # whole string, so a `.name` implementation goes silent here and nowhere else.
-        rg("windows-path-on-any-host", "C:\\\\work\\\\repo\\\\user-rules.md", expect=[ASK]),
+        # split is on both separators. This cell is the POSIX-facing half and it is
+        # VACUOUS on Windows — measured, not assumed: `path.basename` there already splits
+        # on both, so swapping the split for a basename leaves it green (mutation M3). The
+        # two cells below are what make that swap observable on this platform, and they are
+        # the direction nobody would think to write: a name a BASENAME finds and a split
+        # does not.
+        rg("windows-path-on-any-host", "C:\\work\\repo\\user-rules.md", expect=[ASK]),
+        rg("drive-relative-path-has-no-separator", "C:user-rules.md", expect_silent=True),
+        rg("trailing-separator-leaves-no-name", "C:\\x\\user-rules.md\\",
+           expect_silent=True),
         rg("memory-file-under-root", "{cfg/}/memory/some-fact.md", root="{cfg}",
            world={"repo/.keep": "", "cfg/memory/.keep": ""},
            expect=[ASK, "writing to memory"]),
@@ -482,6 +515,21 @@ def _learn_cells() -> list[dict]:
               # process instead of merely printing wrong.
               expect=["wrote 1 memory file"],
               expect_files=["repo/memory/alpha-fact.md"]),
+        learn("non-ascii-model-reply-without-utf8-mode",
+              ["learn", "--memory", "{repo}/memory"],
+              world=dict(mem, **{"reply/out.md": FACT_ONE.replace(
+                  "Body of the first fact.", "Le dépôt — résumé accentué.")}),
+              # `cell_env` sets PYTHONUTF8=1, and that MASKS the defect this cell is for:
+              # in UTF-8 mode `locale.getpreferredencoding(False)` is utf-8, so a bare
+              # `text=True` on the model's pipe happens to be right. Nothing outside the
+              # test suite sets that variable — measured across the launchers — so a real
+              # Windows user is on the code-page path. Turning it off here is the mirror of
+              # golden's deliberately-CLEARED-env hole: a variable the fixture SETS can
+              # hide a bug just as well as one it clears. Vacuous on POSIX, where the
+              # preferred encoding is UTF-8 either way.
+              env=dict(_LLM, FAKE_LLM_OUT="{sb}/reply/out.md", PYTHONUTF8="0"),
+              expect=["wrote 1 memory file"],
+              expect_files=["repo/memory/alpha-fact.md"]),
         learn("model-says-nothing", ["learn", "--memory", "{repo}/memory"],
               world=dict(mem, **{"reply/out.md": "NOTHING\n"}),
               env=dict(_LLM, FAKE_LLM_OUT="{sb}/reply/out.md"),
@@ -547,7 +595,16 @@ def _learn_cells() -> list[dict]:
               expect=["hook_event_name"]),
         learn("notes-tail-is-kept", ["learn"],
               stdin="HEAD-MARKER\n" + ("filler line\n" * 3000) + "TAIL-MARKER\n",
-              expect=["TAIL-MARKER"]),
+              expect=["TAIL-MARKER"], expect_absent=["HEAD-MARKER"]),
+        learn("notes-tail-is-counted-in-code-points", ["learn"],
+              # `notes[-16000:]` counts CODE POINTS; a JS `slice(-16000)` counts UTF-16
+              # units and keeps roughly half as much text once astral characters are in
+              # play — and can cut a surrogate pair in half on the way. An all-BMP fixture
+              # cannot tell the two apart, so this one is deliberately not all-BMP. It runs
+              # on the no-LLM path so the prompt lands on stdout instead of in an argv,
+              # which on Windows has a 32k ceiling this would otherwise breach.
+              stdin="HEAD-MARKER\n" + ("X" * 14000) + ("\U0001F600" * 3000) + "\nTAIL\n",
+              expect=["TAIL"], expect_absent=["HEAD-MARKER"]),
         learn("subagent-lesson", ["learn", "--memory", "{repo}/memory"],
               world=dict(mem, **{"reply/out.md": "Always read the target before porting.\n"}),
               env=dict(_LLM, FAKE_LLM_OUT="{sb}/reply/out.md"),
@@ -579,6 +636,21 @@ def _learn_cells() -> list[dict]:
                      {"argv": ["learn", "--memory", "{repo}/memory"], "cwd": "repo",
                       "stdin": _payload(hook_event_name="SubagentStop", agent_name="explore")}],
               expect=["agent lesson"], expect_files=["repo/memory/agents/explore.md"]),
+        learn("subagent-lesson-drops-the-oldest-bullet",
+              ["learn", "--memory", "{repo}/memory"],
+              # The 100-bullet cap needs a file that is ALREADY at the cap; running the
+              # verb a hundred times to reach it would be the same assertion at a hundred
+              # times the cost. Seeding the precondition is what makes an
+              # empty-precondition hole reachable at all.
+              world=dict(mem, **{
+                  "reply/out.md": "Read the target before trusting any brief.\n",
+                  "repo/memory/agents/explore.md": "# explore — lessons\n" + "".join(
+                      f"- 2026-01-0{n % 9 + 1}: seeded lesson number {n:03d}\n"
+                      for n in range(100))}),
+              env=dict(_LLM, FAKE_LLM_OUT="{sb}/reply/out.md"),
+              stdin=_payload(hook_event_name="SubagentStop", agent_name="explore"),
+              expect=["agent lesson"],
+              expect_files=["repo/memory/agents/explore.md"]),
         learn("sovereign-bypass", ["learn", "--memory", "{cfg}/memory"],
               world={"repo/.keep": "", "cfg/memory/.keep": "", "reply/out.md": FACT_ONE,
                      "cfg/excludes.json": '{"excludes": [{"path": "{repo/}"}]}\n'},

@@ -136,6 +136,30 @@ class TheAcceptanceHarnessIsNotVacuous(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)),
                          "two cells share an id, so one of them is invisible in the report")
 
+    def test_the_vacuity_check_reports_each_kind_of_broken_expectation(self):
+        """The checker is the gate's gate, and nothing else watches it.
+
+        Deleting the `expect` loop from `check_expectations` leaves the whole matrix green
+        (mutation M21): every cell still compares, every comparison still matches, and the
+        one thing that would have noticed a cell no longer exercising what it names is
+        gone. Declaring an expectation and RUNNING it are two properties, and the test
+        above only covers the first — the same split as a narrowing flag needing a wiring
+        test separate from a test of what it narrows.
+        """
+        snap = {"<stdout>": b"hello world", "<stderr>": b"", "<exit>": b"0",
+                "made/it.md": b""}
+        self.assertFalse(harness_golden.check_expectations(
+            {"expect": ["hello"], "expect_absent": ["goodbye"],
+             "expect_files": ["made/it.md"]}, snap))
+        for kind, cell in (
+                ("expect", {"expect": ["absent phrase"]}),
+                ("expect_absent", {"expect_absent": ["hello"]}),
+                ("expect_silent", {"expect_silent": True}),
+                ("expect_files", {"expect_files": ["never/written.md"]})):
+            with self.subTest(kind=kind):
+                self.assertTrue(harness_golden.check_expectations(cell, snap),
+                                f"{kind} was violated and the checker said nothing")
+
     def test_only_narrows_the_matrix_and_refuses_an_empty_selection(self):
         """A narrowing flag needs its own WIRING test, separate from any test of what it
         narrows — P4c shipped one whose gate was correct and simply not connected."""

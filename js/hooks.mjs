@@ -84,12 +84,12 @@ function pyResolve(p) {
  */
 function pyStrPath(p) {
   const n = path.normalize(p);
-  if (n.length > 1 && (n.endsWith(path.sep) || n.endsWith('/'))) {
-    const stripped = n.slice(0, -1);
-    // `C:\` and `/` are roots, not trailing separators.
-    return path.parse(stripped).root === n ? n : stripped;
-  }
-  return n;
+  // A root's separator is part of it, not a trailing one: `str(Path("C:/"))` is `C:\`,
+  // and `str(Path("C:/x/"))` is `C:\x`. Comparing the NORMALISED string to its own root is
+  // what tells the two apart — `path.parse('C:').root` is `''`, so stripping first and
+  // asking afterwards gets `C:\` wrong.
+  if (n === path.parse(n).root) return n;
+  return /[\\/]$/.test(n) ? n.replace(/[\\/]+$/, '') : n;
 }
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
@@ -395,8 +395,14 @@ export function resolveContextSets(root) {
   let entries;
   let extend;
   try {
-    const data = JSON.parse(raw);
+    let data = JSON.parse(raw);
+    // Valid JSON of the wrong SHAPE, guarded on both sides — see the Python original. JS
+    // would not have thrown here (`[].context` is merely undefined), which is exactly why
+    // the guard is written out rather than left to fall out of the language: without it,
+    // the two CLIs disagree about a file a user really does hand-edit.
+    data = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
     entries = data.context || [];
+    if (!Array.isArray(entries)) entries = [];
     extend = Boolean(data.extend);
   } catch {
     // See the Python original for why the decoder's own message is not quoted: the two
@@ -426,7 +432,8 @@ export function resolveContextSets(root) {
   }
 
   for (const entry of entries) {
-    const raw = ((entry && entry.path) || '').trim();
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const raw = typeof entry.path === 'string' ? entry.path.trim() : '';
     if (!raw) continue;
     const load = entry.load === undefined ? 'eager' : entry.load;
     const desc = entry.description === undefined ? '' : entry.description;

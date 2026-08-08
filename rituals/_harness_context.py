@@ -159,7 +159,14 @@ def _resolve_context_sets(root: Path) -> tuple[list[dict], list[dict], str]:
         return [], [], str(manifest)
     try:
         data = json.loads(raw)
-        entries = data.get("context", []) or []
+        # The manifest is a file the USER owns, and a hook must never crash on one — the
+        # same contract sovereign_bypass states for excludes.json. Valid JSON of the wrong
+        # SHAPE used to raise straight out of a SessionStart hook: a top-level list has no
+        # .get, a "context" that is an object iterates to strings, and a string entry has
+        # no .get either. Each is a traceback where a shrug is wanted.
+        data = data if isinstance(data, dict) else {}
+        entries = data.get("context") or []
+        entries = entries if isinstance(entries, list) else []
         extend = bool(data.get("extend"))
     except json.JSONDecodeError:
         # The decoder's own message is deliberately NOT quoted. It was, and it is the one
@@ -193,7 +200,10 @@ def _resolve_context_sets(root: Path) -> tuple[list[dict], list[dict], str]:
             put(x["path"], "lazy", "")
 
     for entry in entries:
-        raw = (entry.get("path") or "").strip()
+        if not isinstance(entry, dict):
+            continue
+        raw = entry.get("path")
+        raw = raw.strip() if isinstance(raw, str) else ""
         if not raw:
             continue
         load = entry.get("load", "eager")

@@ -37,12 +37,19 @@ def main() -> int:
         prompt = sys.argv[1] if len(sys.argv) > 1 else ""
         Path(echo).parent.mkdir(parents=True, exist_ok=True)
         Path(echo).write_text(prompt, encoding="utf-8")
+    # Raw BYTES, not `sys.stdout.write`. A model CLI emits UTF-8 whatever the machine's
+    # code page is, and this fixture has to do the same unconditionally — writing through
+    # the text layer would make the reply's encoding follow the interpreter's own mode, so
+    # the cell that runs with UTF-8 mode OFF (learn/non-ascii-model-reply-without-utf8-mode)
+    # would be testing this file's encoding rather than the reader's.
     src = os.environ.get("FAKE_LLM_OUT")
     if src and Path(src).is_file():
-        sys.stdout.write(Path(src).read_text(encoding="utf-8"))
+        sys.stdout.buffer.write(Path(src).read_bytes())
+        sys.stdout.buffer.flush()
     err = os.environ.get("FAKE_LLM_ERR")
     if err:
-        sys.stderr.write(err)
+        sys.stderr.buffer.write(err.encode("utf-8"))
+        sys.stderr.buffer.flush()
     return int(os.environ.get("FAKE_LLM_RC") or 0)
 
 
