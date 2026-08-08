@@ -9,27 +9,43 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's tenth piece: every install mode now works from `node bin/geneseed.mjs`,
+  including the four that install hooks.** `claude`, `claude-global`, `bob` and `bob-global`
+  were the last four on Python, and they were last because of one honest problem: a hook is
+  a small script that launches the Python harness, so whatever writes one has to name a
+  Python interpreter on your machine — and the Node command has no way to inherit the answer
+  the Python command simply knows about itself.
+  **It now finds one, and refuses to build if it cannot.** It looks at `$PYTHON` first (the
+  same variable the `geneseed` launchers honour), then for `py`, `python` and `python3` on
+  your `PATH`. If none of them is there, the emit stops with a clear message and writes
+  nothing at all. That refusal is the point rather than a limitation: hooks that name a
+  missing interpreter do not fail loudly, they simply never fire, and an install that looks
+  finished with six dead hooks is worse than a build that stopped and told you. If you hit
+  it, `python build.py --emit claude` still works — and by definition it works exactly when
+  the emit would have been worth anything.
+  On Windows it deliberately steps past the Microsoft Store's `python.exe` placeholder, the
+  one that opens the Store instead of running anything.
+  Everything else is unchanged and verified: same files, same console output, same exit
+  codes as `python build.py`, across every theme, both footprints, all five postures and
+  both modes — and now with nothing narrowed out of that comparison. The emitted hooks are
+  checked to actually run, not merely to exist.
+  Still no `package.json` and no published package; that remains a later phase. What exists
+  today is a runnable script in the checkout.
 - **The port's ninth piece, and the first one you can run without Python: `node
   bin/geneseed.mjs` builds the bundle.** Everything before this rendered *inside* a build
   that Python started; this is a second front door. `node bin/geneseed.mjs --theme imperial`
   produces the same bundle, the same console output and the same exit code as `python
   build.py --theme imperial` — verified byte-for-byte over every theme, both footprints, all
   five postures and both modes.
-  **Five modes work this way so far** — the plain bundle (`--emit files`), both OpenCode
-  installs (`opencode`, `opencode-global`) and both Copilot ones (`copilot`,
-  `copilot-global`) — including the parts that only happen on your *second* build: the Node
-  driver reads the previous manifest, removes what the layer no longer owns, and rewrites
-  the manifest exactly as Python does. `$OPENCODE_CONFIG_DIR` and `$COPILOT_CONFIG_DIR`
-  relocate the global targets on the Node side too, so keeping your harness in a git-tracked
-  folder works unchanged.
-  **The four still on Python are the ones that install hooks** — `claude`, `claude-global`,
-  `bob` and `bob-global`. A hook is a small script that launches the Python harness, so
-  whatever writes one has to name a Python interpreter on your machine; the Node command has
-  no way to know which one, and guessing would leave you with hooks that silently never
-  fire. That is being solved deliberately rather than quickly. Asking the Node command for
-  one of those four tells you so and stops, rather than writing half a harness. Nothing
-  about the Python command changes: it is still the one the wizard, the web console, doctor
-  and upgrade all use, and it stays that way until every mode has crossed.
+  **Five modes worked this way when this entry was written** — the plain bundle (`--emit
+  files`), both OpenCode installs (`opencode`, `opencode-global`) and both Copilot ones
+  (`copilot`, `copilot-global`) — including the parts that only happen on your *second*
+  build: the Node driver reads the previous manifest, removes what the layer no longer owns,
+  and rewrites the manifest exactly as Python does. `$OPENCODE_CONFIG_DIR` and
+  `$COPILOT_CONFIG_DIR` relocate the global targets on the Node side too, so keeping your
+  harness in a git-tracked folder works unchanged. (The remaining four followed — see the
+  entry above.) Nothing about the Python command changes at any point: it is still the one
+  the wizard, the web console, doctor and upgrade all use.
   Two flags are deliberately *not* coming to the Node side. `--sync-themes` edits this
   repository's own theme files — maintainer tooling, not something an installed copy should
   carry — and `--validate-only` needs the Python doctor to do its second half. Both say so

@@ -332,18 +332,22 @@ renders it as the name in parentheses.
   `main()` rather than replacing it.** `build.py` is also the `import build` facade that 19
   `rituals/` modules read 55 distinct names from, and roughly eleven sites spawn it as a
   subprocess; none of them flip, because flipping them would make Node mandatory for the
-  *Python* runtime and kill the silent `js_render_available()` fallback. Three emits cross so
-  far, each adding one thing: `--emit files` is the one whose Python dispatcher hands the
-  whole emit to Node and returns; `--emit opencode` is the first whose **driver body** — PRE
-  (the manifest read), PRUNE, the atomic MANIFEST write, the summary line — had to be ported
-  beside the RENDER/WIRE half that already ran there; and `--emit opencode-global` is the
-  first **global** target, which is where the inverted boundary rule stops being theory. The
-  host config-dir resolvers are exactly the values a render child must never resolve, so the
-  driver originates them — `pyResolve` reproducing `Path.resolve(strict=False)`, because
-  `realpathSync` throws on the normal case where nobody has created the config dir yet. An
-  emit that has not crossed **refuses with exit 3** instead of producing a partial tree, and
-  `tests/golden.py --emits` narrows the matrix to what has; deleting that flag is how the
-  phase ends.
+  *Python* runtime and kill the silent `js_render_available()` fallback. **All nine emits now
+  cross**, and they crossed in an order where each added one thing: `--emit files` is the one
+  whose Python dispatcher hands the whole emit to Node and returns; `--emit opencode` is the
+  first whose **driver body** — PRE (the manifest read), PRUNE, the atomic MANIFEST write, the
+  summary line — had to be ported beside the RENDER/WIRE half that already ran there; and
+  `--emit opencode-global` is the first **global** target, which is where the inverted
+  boundary rule stops being theory. The host config-dir resolvers are exactly the values a
+  render child must never resolve, so the driver originates them — `pyResolve` reproducing
+  `Path.resolve(strict=False)`, because `realpathSync` throws on the normal case where nobody
+  has created the config dir yet. An emit that has not crossed **refuses with exit 3** instead
+  of producing a partial tree; that branch is now unreachable and stays, because it is the
+  partition `test_the_node_driver_classifies_every_emit` asserts — a tenth emit that failed to
+  cross would refuse loudly rather than fall through to building a plain bundle.
+  `tests/golden.py --emits` is no longer part of the acceptance command (the full 259 run
+  is), but the flag stays: it is how a single emit is narrowed to while iterating, and it
+  carries its own wiring gate and mutation history.
   **The Copilot pair crossed next, and which two was the decision.** All six remaining emits
   share one engine (`_emit_claude_core`), so porting the engine looks like it should get all
   six at once. Four of them write `settings.json` hooks, so they reach `hookPrefix`, which
@@ -354,9 +358,31 @@ renders it as the name in parentheses.
   rides the shared engine without touching either — which buys the entire driver body
   (manifest-with-`managed`, prune, atomic write) while leaving the interpreter question
   isolated and labelled rather than answered in passing. `hookOpts` is consequently
-  **omitted** rather than sent as `{}` or `null`: omitted, a stray call throws the error
-  P3b built for it; `null` raises an unrelated `TypeError`; `{}` bakes the literal string
-  `"undefined"` into the shim and silently kills every hook in the install.
+  **omitted** for a host that wires no hooks, rather than sent as `{}` or `null`: omitted, a
+  stray call throws the error P3b built for it; `null` raises an unrelated `TypeError`; `{}`
+  bakes the literal string `"undefined"` into the shim and silently kills every hook in the
+  install.
+  **Then the interpreter question had to be answered, and the answer is to refuse.** The four
+  hook-writing emits discover a Python rather than inheriting one: `$PYTHON` first (the
+  documented contract of both front doors), then `py`, `python`, `python3` on `PATH`. When
+  none is found the emit **exits 4 having written nothing**, because a shim naming an absent
+  interpreter is a *silently disabled hook* — every Geneseed hook returns 0 and signals
+  through stdout, and `golden.py` excludes the shim from byte comparison by name, so nothing
+  in the system would report it. An install that looks complete with six dead hook groups is
+  worse than a build that stops, and the command the refusal names (`python build.py`) is
+  available exactly when the emit would have meant anything. Discovery is a **filesystem
+  scan, not a probe**, and that is forced: the Node driver may not import `child_process` (it
+  is half the proof that it is a second implementation rather than a passthrough), so
+  `geneseed.cmd`'s "first candidate that actually runs" test is unavailable. Measured rather
+  than assumed — `existsSync` returns false for the Microsoft Store alias stub, because
+  `statSync` on the reparse point raises `EACCES`, so the plain spelling already skips the
+  thing the launcher needed a subprocess to detect.
+  **VERIFY did not need porting; it needed calling.** `settingsIntegrityCheck` has been
+  complete in `js/settings.mjs` since P3a with no production caller, so the "largest unported
+  unit left" was one call site. What changed with it is what it proves: on the Python driver
+  the stage runs in Python *after* a Node child did the wiring, making it a live
+  cross-implementation check on every build; with both halves in Node that property is gone
+  and only the self-check remains.
   **Two hazards here are invisible to a byte comparison for opposite reasons.**
   `json.dumps` defaults to `ensure_ascii=True` where `JSON.stringify` does not — a
   difference the matrix catches in the manifest (its comment carries an em dash) and cannot
@@ -405,6 +431,27 @@ renders it as the name in parentheses.
   tests. The markers go through `pyfs.writeText`, never `writeFileSync`: `Path.write_text`
   opens in text mode with `newline=None`, so a marker written with a bare LF differs from
   Python's on Windows in every cell.
+  **The hook path is where the matrix is weakest, because the shim is excluded from it by
+  name.** That exclusion is what made byte-parity reachable for a Node generator at all — the
+  shim body bakes the writing generator's interpreter and checkout, so it would differ in
+  every cell — and it leaves a hole exactly where the last four emits work. `_shim_health`
+  fills part of it by asserting the shim exists and names files that exist, and it used to
+  return "fine" when it found *no* shim: a generator that wired `settings.json` correctly
+  (every command naming the shim path, so every compared byte matches) but never wrote the
+  shim passed. It now takes the emit and requires the four hook-writing ones to produce a
+  shim. Two further things no byte comparison can reach get hand-written cells: *which*
+  interpreter the shim names (its runner is executed and required to be Python 3 — the driver
+  may not spawn, the gate may, and that asymmetry is the point), and whether the emitted
+  hooks **run** at all, by taking a command out of the settings file and running it through
+  the shell with its `|| exit 0` intact.
+  **A fifth kind of coverage hole: SILENT ON SUCCESS.** VERIFY runs on every Claude-shaped
+  emit and prints only on a fault, and no cell creates one — so deleting the call is
+  byte-identical across all 259. That is neither unreachable (it runs every time) nor
+  indistinguishable-by-fixture in the earlier senses; its whole *output* is conditional. The
+  cell that closes it plants a user-authored hook matching a sniff marker, which makes both
+  implementations speak so their stderr can be compared. The four earlier kinds —
+  fresh-sandbox, flag-never-varied, deliberately-cleared-env, empty-precondition — each
+  needed a different fix, and so did this one.
 
 ## 🚫 Explicitly out of scope
 
