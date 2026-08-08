@@ -217,13 +217,20 @@ renders it as the name in parentheses.
   second `--idempotent`. The one thing it forgives is named per cell: the agent's own
   memory and notebook seeds are written **once** and never re-rendered, so they keep the
   pre-switch vocabulary by design — and a cell whose carve-out excuses nothing fails too.
-- **Eight of the nine emits cross that seam** — and this bullet said *nine* for two phases
-  before anyone counted. `emit_opencode_global` spawns Node **zero** times: its render half
-  is still inline Python, `js/emit.mjs` offers no job kind for it, and
-  `tests/test_emit_boundary.py` has no cell for it either, which is why nothing contradicted
-  the sentence. `tests/test_seam_coverage.py` now measures the spawn count of every mode and
-  fails if the table drifts, so the claim can only be restored by a cell that earns it.
-  The largest of the eight is `_emit_claude_core`, the shared engine behind six — Claude,
+- **All nine emits cross that seam** — and this bullet said so for two phases while eight
+  did. `emit_opencode_global` spawned Node **zero** times: its render half was inline
+  Python, `js/emit.mjs` offered no job kind for it, and `tests/test_emit_boundary.py` had no
+  cell for it either, which is why nothing contradicted the sentence.
+  `tests/test_seam_coverage.py` measures the spawn count of every mode, fails if the table
+  drifts, and **refuses a mode that crosses without a boundary cell** — so the count above
+  is a measurement, and restoring it cost the six cells that earn it. Porting the ninth was
+  assembly rather than translation (58 of the 65 functions in its closure were already in
+  `js/`), and its structural work was elsewhere: unlike its eight siblings it had no
+  `_render_py` / `_wire_py` pair to port into, so the pair had to be **created**. That
+  shape is not tidiness — `run_node` classifies as RENDER, so an emit whose two dispatch
+  statements are folded into one is perfectly monotone, renders, manifests, and wires
+  nothing the phase-order gate can see.
+  The largest of the nine is `_emit_claude_core`, the shared engine behind six — Claude,
   Bob and Copilot at both scopes — so until it moved, two thirds of the matrix compared
   Python against Python. Three things in it are not translations. `_ship_lean_laws` is the render that
   used to run *after* a wiring stage, and it does two jobs: it writes the standalone laws
