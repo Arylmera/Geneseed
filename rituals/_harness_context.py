@@ -151,11 +151,27 @@ def _resolve_context_sets(root: Path) -> tuple[list[dict], list[dict], str]:
         return e, l, f"auto-discovery [{root}]"
 
     try:
-        data = json.loads(manifest.read_text(encoding="utf-8"))
+        raw = manifest.read_text(encoding="utf-8")
+    except OSError as exc:
+        # A read failure is not a syntax error and must not be reported as one — the file
+        # passed is_file() a moment ago, so this is a permission problem or a race.
+        sys.stderr.write(f"[context] could not read {manifest}: {exc}\n")
+        return [], [], str(manifest)
+    try:
+        data = json.loads(raw)
         entries = data.get("context", []) or []
         extend = bool(data.get("extend"))
-    except (json.JSONDecodeError, OSError) as exc:
-        sys.stderr.write(f"[context] could not parse {manifest}: {exc}\n")
+    except json.JSONDecodeError:
+        # The decoder's own message is deliberately NOT quoted. It was, and it is the one
+        # line in these four verbs that no second implementation can reproduce: Python and
+        # V8 disagree on the wording AND on the offset for the commonest typos — a trailing
+        # comma points at the comma in one and at the character after it in the other, and
+        # V8's `Unexpected token 'x'` carries no offset at all. Measured across twenty
+        # malformed documents before this line was rewritten. The wording follows the
+        # precedent already set for a malformed settings.json (_build_settings.py), which
+        # was decided for the same reason.
+        sys.stderr.write(f"[context] {manifest} is not valid JSON — no context was "
+                         f"loaded (fix the syntax, then re-run).\n")
         return [], [], str(manifest)
 
     if not entries and not extend:

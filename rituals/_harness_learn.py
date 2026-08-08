@@ -79,7 +79,10 @@ def _learn_agent_lesson(meta: dict, notes: str, args: argparse.Namespace) -> int
         sys.stderr.write("[learn] $GENESEED_LLM unset — printing agent-lesson prompt.\n\n")
         print(prompt)
         return 0
-    proc = run(llm.split() + [prompt], capture_output=True, text=True)
+    # encoding="utf-8", never a bare text=True: without it the model's reply is decoded
+    # with the console code page (cp1252 on Windows), so a lesson carrying an em dash or an
+    # accent is mojibake'd on its way into memory/agents/. Same fix as cmd_learn below.
+    proc = run(llm.split() + [prompt], capture_output=True, text=True, encoding="utf-8")
     out = proc.stdout.strip()
     if out and out.upper() != "NOTHING":
         lesson = out.splitlines()[0].lstrip("-*").strip()
@@ -323,7 +326,11 @@ def cmd_learn(args: argparse.Namespace) -> int:
         print(prompt)
         return 0
 
-    proc = run(llm.split() + [prompt], capture_output=True, text=True)
+    # encoding="utf-8", never a bare text=True. A model CLI writes UTF-8 whatever the
+    # console code page is; decoding it as cp1252 turns every accented word and every em
+    # dash in a distilled memory into mojibake, and the corrupted text is then WRITTEN to
+    # the memory store, so the damage outlives the process.
+    proc = run(llm.split() + [prompt], capture_output=True, text=True, encoding="utf-8")
     output = proc.stdout
     if mem_dir and output.strip() and output.strip().upper() != "NOTHING":
         written = _write_memories(output, mem_dir, existing)
