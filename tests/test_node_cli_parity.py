@@ -8,17 +8,25 @@ with no cell to contradict the prose — and this file is what refuses it.
 
 The refutation is two-sided ON PURPOSE, because each side is blind where the other sees:
 
-  * The DYNAMIC half shadows `python`/`python3`/`py` with a sentinel-writing stub at the
-    front of the child's PATH. It catches a spawn that a static read would miss inside a
-    disabled branch or behind an alias — P3c's lesson that "a static reachability walk
-    cannot see a disabled branch, only a spawn count can".
+  * The DYNAMIC half runs the driver with every Python REMOVED from PATH. It catches a
+    spawn that a static read would miss inside a disabled branch or behind an alias —
+    P3c's lesson that "a static reachability walk cannot see a disabled branch, only a
+    spawn count can".
   * The STATIC half asserts the driver's source imports no child-process module at all.
     It catches the spawn the dynamic half is blind to: an ABSOLUTE interpreter path, which
-    never consults PATH and so never meets the stub.
+    never consults PATH and so never notices that PATH lost anything.
 
-Neither alone is a proof. Together they close both doors, and the mutation that opens
-either one fails exactly one of them — which is the point of keeping them separate rather
-than folding them into a single "is it really Node" assertion.
+Neither alone is a proof. Together they close both doors, and each is the ONLY one that
+catches its own mutation — which is why they are two tests and not one.
+
+The dynamic half removes PATH entries rather than shadowing them with a stub, and that is
+a correction rather than a preference. The first version of it dropped a `python.cmd`
+sentinel trap at the front of PATH and asserted the sentinel was never written. It was
+VACUOUS on Windows: since the batch-file argument-injection fix, Node refuses to run a
+`.cmd`/`.bat` through `spawn` without `shell: true`, so a passthrough driver spawning a
+bare `python` never reached the trap and the gate passed a mutation built to break it.
+Removal has no such hole — an absent interpreter is absent to every spawn mechanism — and
+the mutation that motivated the rewrite now fires here.
 """
 from __future__ import annotations
 
@@ -58,6 +66,24 @@ def ported() -> set[str]:
     return {tok.strip().strip("'\"") for tok in body.split(",") if tok.strip()}
 
 
+def _path_without_python() -> "tuple[str, list[str]]":
+    """PATH with every directory holding an interpreter removed, and what was removed.
+
+    Returning the dropped list is the vacuity guard: on a machine whose PATH never had a
+    python, "the driver ran without one" is true and meaningless, and the caller fails
+    instead of banking a green it did not earn.
+    """
+    names = (["python.exe", "python3.exe", "py.exe"] if sys.platform == "win32"
+             else ["python", "python3"])
+    kept, dropped = [], []
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if entry and any((Path(entry) / n).exists() for n in names):
+            dropped.append(entry)
+        else:
+            kept.append(entry)
+    return os.pathsep.join(kept), dropped
+
+
 def run_cli(args: list[str], env: dict | None = None) -> subprocess.CompletedProcess:
     # encoding="utf-8" (never bare text=True): the child writes UTF-8 whatever the console
     # is, and this repo's one unpinned capture is a bug it already carries.
@@ -69,41 +95,34 @@ def run_cli(args: list[str], env: dict | None = None) -> subprocess.CompletedPro
 class NodeDriverIsNotAPassthrough(unittest.TestCase):
     """The two halves of the refutation. See the module docstring for why both exist."""
 
-    def test_it_builds_with_every_python_on_path_replaced_by_a_trap(self):
-        """DYNAMIC. Shadow every spelling of the interpreter and emit anyway.
+    def test_it_builds_with_no_python_reachable_on_path(self):
+        """DYNAMIC. Emit with every interpreter removed from PATH.
 
-        A passthrough driver runs the stub, the stub drops a sentinel and exits 1, and both
-        the sentinel and the non-zero exit say so. A real Node driver never looks.
+        A passthrough driver's `spawn('python', ...)` fails with ENOENT and the emit dies;
+        a real Node driver never notices. `node` itself is invoked by absolute path, so
+        stripping PATH cannot take the runtime out from under the test.
         """
+        stripped, dropped = _path_without_python()
+        self.assertTrue(
+            dropped,
+            "PATH held no python at all, so this run proves nothing about whether the "
+            "driver would have found one — the gate needs a python to remove.")
+
         with tempfile.TemporaryDirectory() as tmp_s:
             tmp = Path(tmp_s)
-            stubs, sentinel, out = tmp / "stubs", tmp / "python-was-called", tmp / "out"
-            stubs.mkdir()
-            for name in ("python", "python3", "py"):
-                if sys.platform == "win32":
-                    # .cmd so libuv's PATHEXT search finds it for a bare `python`, with or
-                    # without shell:true.
-                    (stubs / f"{name}.cmd").write_bytes(
-                        f"@echo off\r\n> \"{sentinel}\" echo called\r\nexit /b 1\r\n"
-                        .encode("utf-8"))
-                else:
-                    p = stubs / name
-                    p.write_bytes(f'#!/bin/sh\necho called > "{sentinel}"\nexit 1\n'
-                                  .encode("utf-8"))
-                    p.chmod(0o755)
-
+            out = tmp / "out"
             env = golden.cell_env(tmp / "home")
-            env["PATH"] = str(stubs) + os.pathsep + os.environ.get("PATH", "")
+            env["PATH"] = stripped
             r = run_cli(["--theme", "neutral", "--emit", "files", "--footprint", "lean",
                          "--out", str(out)], env=env)
 
-            self.assertFalse(
-                sentinel.exists(),
-                "bin/geneseed.mjs invoked a Python interpreter from PATH — it is driving "
-                "the Python CLI rather than being a second implementation of it.")
-            self.assertEqual(r.returncode, 0, f"emit failed: {r.stderr or r.stdout}")
+            self.assertEqual(
+                r.returncode, 0,
+                "bin/geneseed.mjs failed with no python on PATH — it is driving the "
+                f"Python CLI rather than being a second implementation of it. "
+                f"stderr: {(r.stderr or r.stdout).strip()[:300]}")
             self.assertTrue((out / "AGENT.md").is_file(),
-                            "no bundle was produced with python shadowed")
+                            "no bundle was produced with python off PATH")
 
     def test_the_driver_imports_no_child_process_module(self):
         """STATIC. The door the PATH stub cannot watch: an absolute interpreter path.
