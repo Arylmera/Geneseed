@@ -3,11 +3,22 @@ opencode.json merges, the hook shim, and the managed-block machinery.
 
 **This is the half of the emit that edits files the USER co-owns**, and the reason it is
 its own module: every function here reconciles Geneseed's claim with content it did not
-write, and nine of the ten entry points are called from the RUNTIME as well as from an
-emit — `rituals/_harness_mcp.py` drives them for deactivate, remerge, reactivate and
-uninstall, and `exclude`/`mcp` use them too. Rendering can move hosts; this cannot,
-without either spawning an interpreter per `exclude add` or maintaining two
-implementations of the code that edits somebody's real settings.json.
+write. AST-measured: **eleven names have a consumer outside the emit tree**, across three
+modules — ten in `rituals/_harness_mcp.py` (deactivate, remerge, reactivate, uninstall),
+two in `rituals/_harness_exclude.py` (both shared with mcp), one in
+`rituals/_harness_build.py` (`_hook_shim_path`).
+
+This docstring used to frame the port as a choice between "spawning an interpreter per
+`exclude add` or maintaining two implementations of the code that edits somebody's real
+settings.json". P3b took neither horn, because neither was the situation: this module
+cannot be deleted while the runtime is Python, so ONE implementation was never on the
+table — only the question of which boundary each owns. The EMIT half now wires in Node
+(`js/settings.mjs`, driven from `js/emit.mjs`); the RUNTIME half stays here. What makes
+that safe is not hope, it is that the two are forced to interoperate rather than merely
+resemble each other: `_settings_integrity_check` below still runs in PYTHON at the end of
+every Claude-shaped emit, reading back the settings file Node just wrote and comparing it
+against the claims Node just returned, and `tests/test_harness.py`'s uninstall tests emit
+through Node and unwire through here.
 
 The dependency closure is deliberately empty in one direction: nothing here calls into
 _build_render or _build_emit. Keep it that way — that closure is what makes this a unit
@@ -276,11 +287,30 @@ def _hook_shim_path() -> Path:
     return _shim_home().joinpath(*_SHIM_REL)
 
 
+def _hook_runner_entry() -> "tuple[str, str]":
+    """The two machine-absolute values the shim body bakes: the interpreter and the
+    entry point it hands argv to.
+
+    Its own function because the Node side of the emit needs the SAME two values and
+    cannot compute them: `process.execPath` inside the render child is *node*, and the
+    hooks it is wiring are still Python. So the driver reads them here and sends them
+    across (`js/settings.mjs`'s `hookShimBody(runner, entry, platform)` takes them as
+    arguments), which makes this the single owner — the alternative is two spellings of
+    "which interpreter runs the hooks", one of which would be wrong.
+
+    They stay `sys.executable` + `<checkout>/rituals/harness.py` for as long as the HOOKS
+    are Python. `process.execPath` and a Node entry point become right the day the hooks
+    cross, not the day the driver does — and until then every already-emitted install's
+    shim body is unchanged, which is what keeps `_write_hook_shim`'s unchanged-content
+    fast path taking and `_harness_build._shim_problems`' quoted-path scan resolving."""
+    return sys.executable, str(_build_core.ROOT / "rituals" / "harness.py")
+
+
 def _hook_shim_body() -> str:
     """The shim's contents: forward argv verbatim to harness.py, print nothing, and
     propagate the child's exit code. `%*` / `"$@"` keep the emitted `--root "<cfg>"`
     quoting intact, so no re-quoting happens at either layer."""
-    py, h = sys.executable, _build_core.ROOT / "rituals" / "harness.py"
+    py, h = _hook_runner_entry()
     if sys.platform == "win32":
         # Bare `exit /b` propagates the LIVE errorlevel; `%ERRORLEVEL%` would expand at
         # parse time and return a stale one. Never plain `exit` — that kills the parent
@@ -348,7 +378,8 @@ def _hook_prefix() -> str:
     print(f"[geneseed] WARN: could not write the hook shim at {_hook_shim_path()} — "
           "emitting hooks that call the interpreter directly. They will break if this "
           "checkout moves; re-run the build to repair them.", file=sys.stderr)
-    return f'"{sys.executable}" "{_build_core.ROOT / "rituals" / "harness.py"}"'
+    py, h = _hook_runner_entry()
+    return f'"{py}" "{h}"'
 
 
 def _claude_hook_groups(cfg: Path) -> dict:

@@ -384,6 +384,17 @@ export function writeHookShim(p, body, platform = process.platform) {
  * cmd.exe, 127 under sh) and take both gates down with them.
  */
 export function hookPrefix({ runner, entry, platform = process.platform } = {}) {
+  // NOT a default. `runner`/`entry` have no computable fallback on this side — the child's
+  // own `process.execPath` is node and the hooks it wires are Python — and the failure mode
+  // of letting them through undefined is the worst kind this unit has: `hookShimBody` bakes
+  // `"undefined" "undefined" %*`, the shim is rewritten with it, every hook in the install
+  // dies, and because the hooks signal through stdout and return 0 on every path, nothing
+  // reports it. The shim is also excluded from golden's byte comparison by name, so no
+  // acceptance gate would catch it either. Throw where it is cheap to see.
+  if (!runner || !entry) {
+    throw new Error('hookPrefix: runner and entry are required — the emitted hook shim '
+      + 'bakes them, and there is no correct value to guess from inside Node');
+  }
   const p = hookShimPath(platform);
   const shim = writeHookShim(p, hookShimBody(runner, entry, platform), platform);
   if (shim !== null) return `"${shim}"`;

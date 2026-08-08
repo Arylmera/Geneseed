@@ -669,21 +669,46 @@ def _opencode_render_py(theme_name: str, out: Path, root: Path, footprint: str,
 
 def _opencode_render(theme_name: str, out: Path, root: Path, footprint: str,
                      native_catalog: bool, old_owned: list[str],
-                     manifest_existed: bool) -> dict:
+                     manifest_existed: bool, agent_path: str) -> dict:
     """RENDER — one spawn into Node when it is available, the Python body otherwise.
 
     `old_owned` and `manifest_existed` are read by the CALLER and passed in rather than
     read here, so the manifest has one owner across the seam: Python reads it, prunes
-    against it and writes it, and the child never opens it."""
+    against it and writes it, and the child never opens it. `agent_path` is WIRE's one
+    input and travels for the same reason: `_rel_under` is the Python side by design, so
+    the value arrives decided rather than re-derived on the far side.
+
+    Since P3b the spawn runs the WIRE half too (one child per emit is the contract); the
+    wiring keeps its own statement at the call site — see `_opencode_wire` below."""
     if _build_core.js_render_available():
         return _build_core.run_node({
             "kind": "opencode",
             "cfg": {**_build_core.js_cfg(), "primaryAgentSrc": str(PRIMARY_AGENT_SRC)},
             "theme": theme_name, "out": str(out), "root": str(root),
             "footprint": footprint, "nativeCatalog": native_catalog,
-            "oldOwned": old_owned, "manifestExisted": manifest_existed})
+            "oldOwned": old_owned, "manifestExisted": manifest_existed,
+            "agentPath": agent_path})
     return _opencode_render_py(theme_name, out, root, footprint, native_catalog,
                                old_owned, manifest_existed)
+
+
+def _opencode_wire_py(root: Path, agent_path: str) -> str:
+    """WIRE — the one file of this emit the user co-owns. Returns the target's BASENAME,
+    which is all the caller consumes (`opencode.json` or the `.jsonc` sibling when that is
+    what is on disk). Reference implementation of `js/emit.mjs`'s opencode wire half."""
+    return _merge_opencode_json(root / "opencode.json", agent_path).name
+
+
+def _opencode_wire(rendered: dict, root: Path, agent_path: str) -> str:
+    """WIRE — already done by the child that rendered, or run here against Python.
+
+    Same shape as `_build_global._claude_wire`, and for the same reason: one spawn per
+    emit means this stage cannot dispatch on its own, so the payload carrying `cfgName`
+    IS the signal that Node already wired."""
+    cfg_name = rendered.get("cfgName")
+    if cfg_name is not None:
+        return cfg_name
+    return _opencode_wire_py(root, agent_path)
 
 
 def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
@@ -734,12 +759,17 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
         except (json.JSONDecodeError, OSError):
             old_owned = []
 
+    # `_rel_under` stays Python (see `_opencode_render`), so the instruction path is
+    # computed before the seam and travels into it as WIRE's one input.
+    rel = _rel_under(out, root)
+    agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
+
     # RENDER — one process seam. Everything Geneseed owns wholesale is written by
     # `_opencode_render`, in Node when there is one; only `owned` and the progress counts
     # come back across it.
     render = _opencode_render(theme_name, out, root, footprint,
                               host_catalogs_natively("opencode"),
-                              old_owned, manifest_existed)
+                              old_owned, manifest_existed, agent_path)
     owned = render["owned"]
     stats = render["stats"]
 
@@ -749,10 +779,10 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
     # tidy. opencode.json is never in `owned`, so the merge commutes with the prune and
     # the manifest — it used to sit after both. Byte-inert, and moving it is what lets
     # a single seam separate "files Geneseed writes wholesale" from "files the user
-    # co-owns" in all nine emits instead of eight.
-    rel = _rel_under(out, root)
-    agent_path = f"{rel}/AGENT.md" if rel else "AGENT.md"
-    cfg_name = _merge_opencode_json(root / "opencode.json", agent_path).name
+    # co-owns" in eight of the nine emits. The ninth, `emit_opencode_global`, has no
+    # seam at all: measured, it spawns Node zero times, so its own `_merge_opencode_json`
+    # is still Python. `tests/test_seam_coverage.py` pins that count.
+    cfg_name = _opencode_wire(render, root, agent_path)
 
     # Write-before-delete: only now that the whole current set is on disk do we remove
     # what this layer owned before but no longer produces (a removed agent/skill, a

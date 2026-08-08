@@ -437,94 +437,82 @@ def _claude_render_py(theme_name: str, cfg: Path, claude_md: Path, scope: str,
             "claudeMdText": claude_md_text}
 
 
+def _preamble_exclude(claude_md: Path) -> "str | None":
+    """The `claudeMdExcludes` entry a PROJECT install writes to suppress the GLOBAL
+    preamble of the same host — or None for a host that gets none (everything but Claude).
+
+    Its own function because this value has to CROSS THE SEAM, and deriving it on the far
+    side would be wrong. `_PREAMBLE_CONFIG_DIR` resolves through
+    `_build_core._claude_config_dir`, which is an `_OWNED` name precisely because the suite
+    redirects it at a sandbox — and a redirect that stops at a subprocess half-works in
+    silence (`STRUCTURE` at P2d, `CAPABILITY_LINK_RE` at P2e, this at P3b). Computing it
+    HERE and sending the answer keeps the redirect a single write, the same way
+    `nativeCatalog` arrives decided rather than re-derived. The failure mode if it did not
+    travel is not subtle: a test running against a sandbox would write the developer's real
+    ~/.claude/CLAUDE.md into an exclude list, and suppress it.
+
+    as_posix: claudeMdExcludes entries are glob patterns, where a backslash is an escape —
+    the Windows-native spelling risks never matching."""
+    cfgdir = _PREAMBLE_CONFIG_DIR.get(claude_md.name)
+    return (cfgdir() / claude_md.name).resolve().as_posix() if cfgdir else None
+
+
 def _claude_render(theme_name: str, cfg: Path, claude_md: Path, scope: str,
                    out: Path | None, footprint: str, host: str,
-                   native_catalog: bool, old_owned: list) -> dict:
+                   native_catalog: bool, old_owned: list, old_managed: dict) -> dict:
     """RENDER — one spawn into Node when there is one, the Python body otherwise.
 
     Six of the nine emits (claude, bob, copilot × project/global) route through here, so
     this one call is what puts two thirds of the matrix on the seam; before it they
-    compared Python against Python and touched the boundary at all."""
+    compared Python against Python and touched the boundary at all.
+
+    Since P3b the spawn runs the WIRE half too — ONE child per emit is the contract, and
+    a second spawn to wire would double the cost of every emit for nothing. The wiring
+    still gets its own statement at the call site (`_claude_wire` below), because that is
+    what keeps the emit reading as RENDER -> WIRE and keeps `test_emit_phase_order.py`
+    able to check the order of both halves rather than one opaque call."""
     if _build_core.js_render_available():
+        runner, entry = _hook_runner_entry()
         return _build_core.run_node({
             "kind": "claude", "cfg": _build_core.js_cfg(),
             "theme": theme_name, "cfgDir": str(cfg), "claudeMd": str(claude_md),
             "scope": scope, "out": str(out) if out is not None else None,
             "footprint": footprint, "host": host, "nativeCatalog": native_catalog,
-            "oldOwned": old_owned})
+            "oldOwned": old_owned,
+            # WIRE's inputs. `oldManaged` is the previous manifest's claim set; the two
+            # hook values are the interpreter and entry point the shim bakes, which the
+            # child cannot compute (its own `process.execPath` is node, and the hooks it
+            # is wiring are Python) — see `_build_settings._hook_runner_entry`.
+            "oldManaged": old_managed, "preambleExclude": _preamble_exclude(claude_md),
+            "hookOpts": {"runner": runner, "entry": entry}})
     return _claude_render_py(theme_name, cfg, claude_md, scope, out, footprint, host,
                              native_catalog, old_owned)
 
 
-def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
-                      out: Path | None = None, footprint: str = "full",
-                      host: str = "claude") -> tuple:
-    """Shared engine for the Claude-shaped emits (Claude global → ~/.claude, folder →
-    <repo>/.claude; Bob and Copilot ride the same engine — see their emit_* wrappers).
-    Mirrors emit_opencode_global's manifest + write-before-delete prune, but for the
-    Claude layout: CLAUDE.md as a managed block (auto-loaded by Claude), agents in the
-    Claude subagent dialect, byte-identical skills, settings.json hooks merged
-    surgically. NO plugins/workflows/colour-themes (Claude has no analogue; its
-    plugins/ dir is a managed marketplace, never written). User content is never
-    clobbered: agents/skills collide → claim-on-create skip; CLAUDE.md → block merge;
-    settings.json → surgical, recorded hook merge. memory/notebook/wiki are host state,
-    never tracked, never deleted. `host` names the dialect ('claude' | 'bob' |
-    'copilot') — it can no longer be inferred from the carrier filename, since Bob and
-    Copilot both use a repo-root AGENTS.md at project scope. Returns
-    (n_agents, n_skills, n_hook_groups, mem_status, nb_status, managed)."""
-    manifest_path = cfg / GLOBAL_MANIFEST
-    old_owned: list[str] = []
-    old_managed: dict = {}
-    if manifest_path.exists():
-        try:
-            data = json.loads(manifest_path.read_text(encoding="utf-8"))
-            old_owned = data.get("owned", []) or []
-            om = data.get("managed")
-            old_managed = om if isinstance(om, dict) else {}
-        except (json.JSONDecodeError, OSError):
-            old_owned, old_managed = [], {}
+def _claude_wire_py(cfg: Path, claude_md: Path, scope: str, host: str, old_managed: dict,
+                    claude_md_text: "str | None", agent_text_present: bool,
+                    preamble_exclude: "str | None") -> dict:
+    """WIRE — the files the Claude-shaped emits do NOT own: the CLAUDE.md/AGENTS.md managed
+    block and settings(.local).json. Reference implementation of `js/emit.mjs`'s wire half.
 
-    is_bob = host == "bob"
-    is_copilot = host == "copilot"
+    Everything the RENDER stage wrote, it wrote wholesale. Everything here reconciles
+    Geneseed's claim with content it did not write, reading what is already on disk and
+    merging into it. Returns `managed` — the claim set the manifest records so every
+    teardown path unwires exactly what was wired, which is why WIRE must precede MANIFEST.
 
-    # RENDER — one process seam. Everything Geneseed owns wholesale is written by
-    # `_claude_render`, in Node when there is one; only `owned`, the progress counts and
-    # the managed block's text come back across it.
-    render = _claude_render(theme_name, cfg, claude_md, scope, out, footprint, host,
-                            host_catalogs_natively(host), old_owned)
-    owned: list[str] = render["owned"]
-    n_agents = render["stats"]["nAgents"]
-    n_skills = render["stats"]["nSkills"]
-    mem_status, nb_status = render["memStatus"], render["nbStatus"]
-    agent_text_present = render["hasAgentText"]
-    claude_md_text = render["claudeMdText"]
-
+    Split out of `_emit_claude_core` at P3b so the seam has a single Python body to be the
+    reference for, exactly as `_claude_render_py` is for the render half. It runs only
+    under `GENESEED_NO_JS=1` and `golden.py --ref <old worktree>`; see P2d's note on where
+    the Python path's coverage went."""
+    is_bob, is_copilot = host == "bob", host == "copilot"
     managed: dict = {}
 
-    # ---------------------------------------------------------------- WIRE ----------
-    # Everything above renders files Geneseed owns WHOLESALE. Everything from here to
-    # the prune reconciles files the USER co-owns — the CLAUDE.md/AGENTS.md managed
-    # block and settings(.local).json — reading what is already there and merging into
-    # it. Every one of the nine emits now runs the same five stages in this order:
-    #
-    #     RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY
-    #
-    # The order is load-bearing, not tidiness. WIRE must precede MANIFEST because it
-    # is what fills `managed` (settings_file/settings_hooks/settings_excludes), which
-    # the manifest records so every teardown path unwires exactly what was wired. And
-    # no RENDER may follow a WIRE, because the render half is what leaves Python for
-    # Node: a single seam can only separate the two if all of one side precedes all of
-    # the other. The managed-block stage below used to run before the render, and
-    # _ship_lean_laws after the settings merge; both moved here. Byte-inert — neither
-    # reads what the other writes, and the lean laws are never in `managed` nor
-    # CLAUDE.md ever in `owned`. tests/test_emit_phase_order.py is the gate.
-    #
     # CLAUDE.md — Claude auto-loads it by location; merge as a delimited block so any
     # user prose around it survives. `claude_md_text` is the render half's product; it
     # is None exactly when no block is to be written.
     # Exception — Bob GLOBAL: Bob never auto-loads a global ~/.bob/AGENTS.md (its
-    # always-injected channel is rules/geneseed.md, above), so a global copy is pure
-    # disk weight; none is written, and a re-emit self-heals the one an older install
+    # always-injected channel is rules/geneseed.md), so a global copy is pure disk
+    # weight; none is written, and a re-emit self-heals the one an older install
     # carries (excise the managed block, or delete the file when Geneseed created it).
     if claude_md_text is not None:
         _managed_block_write(claude_md, claude_md_text)
@@ -579,11 +567,8 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
         # bypass is the same-named workspace rules file.
         prior_excl = old_managed.get("settings_excludes")
         prior_excl = prior_excl if isinstance(prior_excl, list) else []
-        cfgdir = _PREAMBLE_CONFIG_DIR.get(claude_md.name)
-        if scope == "project" and agent_text_present and cfgdir:
-            # as_posix: claudeMdExcludes entries are glob patterns, where a backslash is
-            # an escape — the Windows-native spelling risks never matching.
-            want_excl = [(cfgdir() / claude_md.name).resolve().as_posix()]
+        if scope == "project" and agent_text_present and preamble_exclude:
+            want_excl = [preamble_exclude]
             if os.environ.get("GENESEED_STACK_GLOBAL"):
                 _unwire_claude_excludes(settings_path, want_excl)
                 managed["settings_excludes"] = []
@@ -601,6 +586,79 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
             _unwire_claude_excludes(settings_path, prior_excl)
         elif prior_excl:
             managed["settings_excludes"] = prior_excl
+    return managed
+
+
+def _claude_wire(rendered: dict, cfg: Path, claude_md: Path, scope: str, host: str,
+                 old_managed: dict) -> dict:
+    """WIRE — already done by the child that rendered, or run here against Python.
+
+    This stage cannot dispatch on its own: one spawn per emit is the contract, so when
+    Node ran, it wired inside the SAME child and the claim set came back in the payload.
+    `managed is not None` is the test rather than a truthiness one — a Copilot emit with
+    no preamble legitimately produces `{}`, and `if managed:` would then re-run the whole
+    stage in Python against a tree Node had already wired. (`pyTruthy`, fourth phase.)"""
+    managed = rendered.get("managed")
+    if managed is not None:
+        return managed
+    return _claude_wire_py(cfg, claude_md, scope, host, old_managed,
+                           rendered["claudeMdText"], rendered["hasAgentText"],
+                           _preamble_exclude(claude_md))
+
+
+def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
+                      out: Path | None = None, footprint: str = "full",
+                      host: str = "claude") -> tuple:
+    """Shared engine for the Claude-shaped emits (Claude global → ~/.claude, folder →
+    <repo>/.claude; Bob and Copilot ride the same engine — see their emit_* wrappers).
+    Mirrors emit_opencode_global's manifest + write-before-delete prune, but for the
+    Claude layout: CLAUDE.md as a managed block (auto-loaded by Claude), agents in the
+    Claude subagent dialect, byte-identical skills, settings.json hooks merged
+    surgically. NO plugins/workflows/colour-themes (Claude has no analogue; its
+    plugins/ dir is a managed marketplace, never written). User content is never
+    clobbered: agents/skills collide → claim-on-create skip; CLAUDE.md → block merge;
+    settings.json → surgical, recorded hook merge. memory/notebook/wiki are host state,
+    never tracked, never deleted. `host` names the dialect ('claude' | 'bob' |
+    'copilot') — it can no longer be inferred from the carrier filename, since Bob and
+    Copilot both use a repo-root AGENTS.md at project scope. Returns
+    (n_agents, n_skills, n_hook_groups, mem_status, nb_status, managed)."""
+    manifest_path = cfg / GLOBAL_MANIFEST
+    old_owned: list[str] = []
+    old_managed: dict = {}
+    if manifest_path.exists():
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            old_owned = data.get("owned", []) or []
+            om = data.get("managed")
+            old_managed = om if isinstance(om, dict) else {}
+        except (json.JSONDecodeError, OSError):
+            old_owned, old_managed = [], {}
+
+    is_copilot = host == "copilot"
+
+    # ---- RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY ----------------------------
+    # The order is load-bearing, not tidiness, and it is why the two stages below are two
+    # statements even though Node runs both in ONE child. WIRE must precede MANIFEST
+    # because it is what fills `managed` (settings_file/settings_hooks/settings_excludes),
+    # which the manifest records so every teardown path unwires exactly what was wired;
+    # and no RENDER may follow a WIRE, because a render writes files Geneseed owns
+    # WHOLESALE while a wire reconciles files the USER co-owns. Before this order existed
+    # the managed block was written first and `_ship_lean_laws` last; both moved.
+    # tests/test_emit_phase_order.py is the gate, and it walks these two statements.
+    #
+    # RENDER — one process seam. Everything Geneseed owns wholesale, plus the managed
+    # block's TEXT, which is a render (`_prefixed_agent_text`) even though merging it is a
+    # wire.
+    render = _claude_render(theme_name, cfg, claude_md, scope, out, footprint, host,
+                            host_catalogs_natively(host), old_owned, old_managed)
+    owned: list[str] = render["owned"]
+    n_agents = render["stats"]["nAgents"]
+    n_skills = render["stats"]["nSkills"]
+    mem_status, nb_status = render["memStatus"], render["nbStatus"]
+
+    # WIRE — the CLAUDE.md/AGENTS.md managed block and settings(.local).json. Performed by
+    # the render child when there was one; by `_claude_wire_py` otherwise.
+    managed = _claude_wire(render, cfg, claude_md, scope, host, old_managed)
 
     # Write-before-delete prune: now that the whole current set is on disk, remove only
     # what we owned before but no longer produce. A live file is never momentarily absent.
@@ -626,10 +684,20 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
                     "deleted. `managed` records the CLAUDE.md block + settings.json "
                     "hooks so uninstall removes exactly those.",
         "owned": sorted(owned), "managed": managed, "scope": scope})
-    # Verify the merge actually stuck (a commented file, a mid-flight external edit, or
-    # a bug in the merge itself would otherwise go unnoticed until the hooks silently
-    # don't fire) — loud warning only, never fatal to the emit.
+    # VERIFY — that the merge actually stuck (a commented file, a mid-flight external edit,
+    # or a bug in the merge itself would otherwise go unnoticed until the hooks silently
+    # don't fire). Loud warning only, never fatal to the emit.
+    #
+    # This stage stays in PYTHON, and not by omission. It runs after MANIFEST, and MANIFEST
+    # is Python, so with one spawn per emit there is no child left to run it in. That turns
+    # out to be worth having rather than merely tolerable: `_settings_integrity_check` never
+    # writes, so what happens on every Claude-shaped emit now is that PYTHON re-reads the
+    # settings file NODE just wrote and compares it against the claims NODE just returned.
+    # Two implementations of the wiring layer coexist while the runtime is still Python, and
+    # this is the check that makes them prove they agree on a real file, on every build,
+    # rather than only under a parity harness.
     if not is_copilot:
+        settings_path = cfg / (managed.get("settings_file") or "settings.json")
         _settings_integrity_check(settings_path, managed, expect="present")
     return n_agents, n_skills, len(managed.get("settings_hooks", [])), mem_status, nb_status, managed
 

@@ -237,6 +237,66 @@ def _legacy_wiki_claude(out: Path, home: Path) -> None:
     (out / ".claude" / "wiki.json").write_text('{"wikis": []}\n', encoding="utf-8")
 
 
+def _claude_stale_excludes(out: Path, home: Path) -> None:
+    """Two prior `settings_excludes` claims, recorded OUT OF ORDER, before the re-emit.
+
+    Every other cell leaves this list one entry long, because `want_excl` is always a
+    single path and a fresh install has no prior — so `sorted(set(prior) | set(added))`
+    and a plain concatenation produce the same bytes and the sort is invisible. That is
+    P3a's one-element-array finding at a new call site: the entries land in the manifest,
+    where their ORDER is byte-visible, and the sort only matters once a real install has
+    accumulated a second claim. Recording them reversed is what makes the two spellings
+    differ.
+
+    The two are PREPENDED to what emit one recorded rather than replacing it — the first
+    draft replaced it, and the resulting claim set came back two entries long instead of
+    three because the live exclude, already present in settings.json, is not re-added by
+    the second emit and so falls out of a prior that no longer names it. Correct
+    behaviour ("claim only what Geneseed itself wired"), wrong fixture: it produced the
+    same short list this cell exists to lengthen.
+
+    Sorted order is deliberately not insertion order — `CLAUDE.md` sorts first on its
+    capital C, and it is recorded last."""
+    cfg = out / ".claude"
+    manifest = cfg / ".geneseed-manifest.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    managed = data.setdefault("managed", {})
+    managed["settings_excludes"] = [
+        (home / ".claude" / "zz-legacy.md").resolve().as_posix(),
+        (home / ".claude" / "aa-legacy.md").resolve().as_posix(),
+    ] + list(managed.get("settings_excludes") or [])
+    manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def _claude_commented_settings(out: Path, home: Path) -> None:
+    """A `settings.local.json` the user has commented. The merge must REFUSE to rewrite it.
+
+    Nothing else in this matrix drives that branch, and since P3b the refusal happens
+    inside the Node child — so this cell is what compares the two runtimes' decision to
+    leave a user's file alone, the warning they print about it, and the claim set they
+    fall back to (the manifest's prior, never the canonical groups they did not write)."""
+    cfg = out / ".claude"
+    cfg.mkdir(parents=True, exist_ok=True)
+    (cfg / "settings.local.json").write_text(
+        '{\n  // my own settings, hand-annotated\n  "model": "opus"\n}\n', encoding="utf-8")
+
+
+def _opencode_commented_jsonc(out: Path, home: Path) -> None:
+    """A commented `opencode.jsonc`, which `_opencode_target` prefers over the `.json`.
+
+    This is the only cell that reaches `_warn_commented_jsonc` — the ONE routine in the
+    wiring layer that prints to STDOUT rather than stderr. That asymmetry is the Python's
+    own and is reproduced rather than tidied, and since P3b the print happens inside the
+    Node child, where stdout is the protocol's. So the cell proves three things at once:
+    the child's buffer captured the line instead of corrupting the handoff, Python
+    re-emitted it on its own stdout, and the two runtimes said the same thing in the same
+    place. It is also the only cell in which wiring twice would be visible — a second
+    merge prints the warning a second time."""
+    (out / "opencode.jsonc").write_text(
+        '{\n  // hand-annotated, do not clobber\n  "$schema": '
+        '"https://opencode.ai/config.json"\n}\n', encoding="utf-8")
+
+
 CELLS = [
     {"id": "files/neutral/full", "emit": "files", "theme": "neutral", "footprint": "full"},
     {"id": "files/imperial/lean", "emit": "files", "theme": "imperial", "footprint": "lean"},
@@ -306,6 +366,15 @@ CELLS = [
     {"id": "copilot/project-lean", "emit": "copilot", "theme": "neutral",
      "footprint": "lean", "repeat": 2},
     {"id": "copilot/global", "emit": "copilot-global", "theme": "neutral"},
+    # WIRE joined the child at P3b. These three drive the wiring branches nothing else
+    # reaches — the excludes union with a real prior, the two comment bail-outs, and the
+    # unit's one stdout writer.
+    {"id": "claude/stale-excludes", "emit": "claude", "theme": "neutral", "repeat": 2,
+     "prepare": {2: _claude_stale_excludes}},
+    {"id": "claude/commented-settings", "emit": "claude", "theme": "neutral", "repeat": 2,
+     "prepare": {1: _claude_commented_settings}},
+    {"id": "opencode/commented-jsonc", "emit": "opencode", "theme": "neutral", "repeat": 2,
+     "prepare": {1: _opencode_commented_jsonc}},
 ]
 
 
@@ -340,10 +409,21 @@ def _run_side(cell: dict, js: bool) -> dict:
             proc = subprocess.run(argv, cwd=str(ROOT), env=env, capture_output=True,
                                   **_NO_WINDOW)
         roots = [("<HOME>", home), ("<OUT>", out), ("<TD>", td)]
+        # The hook shim, read back explicitly because `golden._snapshot` drops it by name.
+        # Golden is right to: across REVISIONS the body bakes whichever interpreter and
+        # checkout wrote it, so it would differ in every cell and drown the real findings.
+        # Here both sides are the same revision on the same machine, so the two bodies must
+        # be IDENTICAL — and since P3b it is the Node child that writes this file, through
+        # `hookPrefix`, which is the one place a Node driver could plausibly start baking
+        # `process.execPath` instead of the Python that actually runs the hooks. Without
+        # this line that substitution passes every gate in the repo: golden filters the
+        # file out, and `_shim_problems` only fires once the baked path stops existing.
+        shim = sorted(p for p in home.rglob("geneseed-hook*") if p.is_file())
         return {"exit": proc.returncode,
                 "stdout": golden._normalise(proc.stdout, roots),
                 "stderr": golden._normalise(proc.stderr, roots),
-                "files": golden._snapshot(td, roots)}
+                "files": golden._snapshot(td, roots),
+                "shim": {p.name: golden._normalise(p.read_bytes(), roots) for p in shim}}
 
 
 @unittest.skipUnless(NODE, "node is not on PATH — the emit boundary cannot be exercised")
@@ -366,6 +446,12 @@ class EmitBoundaryTests(unittest.TestCase):
                                  f"{cell['id']}: STDERR differs")
                 self.assertEqual(sorted(py["files"]), sorted(node["files"]),
                                  f"{cell['id']}: different files written")
+                self.assertEqual(py["shim"], node["shim"],
+                                 f"{cell['id']}: the hook shim differs between the two "
+                                 f"runtimes. Both must bake the interpreter and entry "
+                                 f"point that actually run the hooks — which are Python's "
+                                 f"for as long as the hooks are Python, whichever process "
+                                 f"wrote the file.")
                 differing = [k for k in sorted(py["files"])
                              if py["files"][k] != node["files"][k]]
                 if differing:
@@ -380,6 +466,98 @@ class EmitBoundaryTests(unittest.TestCase):
                               f"differ.{hint}\n  first: {k} at byte {at}\n"
                               f"  python: {a[max(0, at - 40):at + 40]!r}\n"
                               f"  node:   {b[max(0, at - 40):at + 40]!r}")
+
+    def test_the_wire_cells_reach_the_branches_they_name(self):
+        """The three P3b cells, each of which exists for one wiring branch.
+
+        Same guard as its two siblings and the same reason: a cell whose fixture stopped
+        constructing the state it names still compares two identical trees and reports
+        success. These three are the ones whose subject is a file the USER co-owns, so a
+        cell going quiet here means the port's most dangerous code is unwatched."""
+        got = {cid: _run_side(next(c for c in CELLS if c["id"] == cid), js=True)
+               for cid in ("claude/stale-excludes", "claude/commented-settings",
+                           "opencode/commented-jsonc")}
+
+        stale = got["claude/stale-excludes"]
+        manifest = json.loads(stale["files"]["out/.claude/.geneseed-manifest.json"])
+        excl = manifest["managed"]["settings_excludes"]
+        self.assertGreaterEqual(
+            len(excl), 3,
+            f"settings_excludes is {excl} — the seeded prior claims did not survive the "
+            f"union, so this cell is back to the one-element list every other cell has "
+            f"and the sort it exists to observe is invisible again")
+        self.assertEqual(excl, sorted(excl),
+                         "the recorded excludes are not sorted — a plain concatenation "
+                         "of prior + added would look exactly like this")
+        # And the sort must have actually REORDERED something. `_claude_stale_excludes`
+        # records the live CLAUDE.md exclude LAST; seeing it first is the only proof that
+        # sorted order and the manifest's recorded order are different lists here. (The
+        # first draft of this assertion compared `excl` against `sorted(excl, key=...)`
+        # with a constant key — a stable sort by a constant is the identity, so it could
+        # never fail. A gate is code, and so is its assertion.)
+        self.assertTrue(
+            excl[0].endswith("/CLAUDE.md"),
+            f"expected the capital-C entry first, got {excl[0]!r}. The fixture records it "
+            f"last, so if it is not first the list was never reordered and this cell "
+            f"cannot tell `sorted(set(prior) | set(added))` from a concatenation.")
+
+        commented = got["claude/commented-settings"]
+        self.assertIn(b"has comments", commented["stderr"],
+                      "the settings merge did not hit its comment bail-out — the user's "
+                      "annotated file was parsed as plain JSON, or rewritten")
+        self.assertIn(b"// my own settings", commented["files"][
+            "out/.claude/settings.local.json"],
+            "the user's comment was destroyed; the whole point of the branch is that this "
+            "file is left exactly as it was")
+
+        jsonc = got["opencode/commented-jsonc"]
+        self.assertIn(b"comments", jsonc["stdout"],
+                      "the commented-jsonc warning is not on STDOUT. It is the one message "
+                      "in the wiring layer that goes there rather than to stderr, and "
+                      "since P3b it is printed inside the Node child — so this assertion "
+                      "is what proves the child's buffer carried it across the protocol "
+                      "instead of corrupting it.")
+        # `_run_side` keeps the LAST emit's streams, so one is the whole expectation: the
+        # merge refuses to rewrite the file, so emit two still has a real change to make
+        # and warns again. TWO would mean the file was merged twice in a single run — the
+        # child wiring it and Python wiring it again, which is exactly what a `cfgName`
+        # missing from the payload produces, and the only place in the matrix where that
+        # double-wire leaves a trace instead of being idempotent and invisible.
+        self.assertEqual(
+            jsonc["stdout"].count(b"has comments \xe2\x80\x94 not rewriting it"), 1,
+            "expected exactly one commented-jsonc warning in the run")
+        self.assertIn(b"// hand-annotated", jsonc["files"]["out/opencode.jsonc"])
+
+    def test_the_shim_comparison_is_not_vacuous(self):
+        """`shim` is `{}` for every cell that wires no hooks — files, opencode and copilot
+        all legitimately produce none — so the equality above would hold trivially if the
+        Node child had stopped writing one at all.
+
+        What must be true: a Claude-shaped cell produces exactly ONE shim, its name is the
+        platform's, and its body names the interpreter that runs the hooks. That last check
+        is the point of the whole comparison — it is what makes `process.execPath` an
+        observable substitution instead of a silent one."""
+        wired = _run_side(next(c for c in CELLS if c["id"] == "claude/project"), js=True)
+        self.assertEqual(len(wired["shim"]), 1,
+                         f"expected exactly one hook shim, got {sorted(wired['shim'])} — "
+                         f"the comparison in the gate above is comparing nothing")
+        name, body = next(iter(wired["shim"].items()))
+        self.assertEqual(name, "geneseed-hook.cmd" if sys.platform == "win32"
+                         else "geneseed-hook")
+        self.assertIn(Path(sys.executable).name.encode(), body,
+                      "the shim written by the NODE child does not name the Python "
+                      "interpreter. The hooks it launches are harness.py; a shim baking "
+                      "node's own execPath makes every hook in the install dead, and the "
+                      "hooks report success on every path.")
+        self.assertIn(b"harness.py", body)
+        self.assertNotIn(b"undefined", body,
+                         "`hookOpts` did not reach `hookPrefix` — the shim baked the "
+                         "literal string 'undefined' as its interpreter")
+
+        unwired = _run_side(next(c for c in CELLS if c["id"] == "copilot/global"), js=True)
+        self.assertEqual(unwired["shim"], {},
+                         "Copilot has no hook mechanism at all, so an emit that wrote a "
+                         "shim for it wired something it should not have")
 
     def test_the_cells_reach_the_branches_they_name(self):
         """Guards the gate above from passing vacuously. Each of these cells exists for
