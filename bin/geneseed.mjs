@@ -279,95 +279,44 @@ function bobConfigDir() {
 }
 
 /**
- * The interpreter the emitted hook shim bakes — the one value in this port with no Python
- * counterpart to translate, and therefore the phase's actual decision.
+ * `_build_settings._hook_runner_entry()`'s two values — this driver's answer, which since
+ * P5b is NOT Python's.
  *
- * `_build_settings._hook_runner_entry()` returns `sys.executable`: the interpreter that is
- * running `build.py` at that moment. A Node driver has no such thing. `process.execPath` is
- * node, and the hooks being wired are Python (`rituals/harness.py`), so the value has to be
- * DISCOVERED, and the failure mode when discovery comes up empty is the thing to design for
- * rather than an edge case: a shim naming an interpreter that does not exist is a SILENTLY
- * DISABLED HOOK. Every Geneseed hook signals through stdout and returns 0 on every path, so
- * a dead one reports nothing; `golden.py` excludes the shim from byte comparison by name
- * (`_SHIM_GLOB`), so no acceptance cell would contradict it either. An install that looks
- * complete and has four dead hooks is strictly worse than a build that stops.
+ * The Python original returns `sys.executable` and `<checkout>/rituals/harness.py`: the
+ * interpreter running `build.py`, and the harness it will hand `%*` to. This driver returns
+ * `process.execPath` and `<checkout>/bin/geneseed-hook.mjs`, because the four verbs the
+ * emitted hooks invoke — context, git-gate, rule-gate, learn — are now Node, and an install
+ * this driver emits therefore needs no Python at all for its hooks.
  *
- * So: DISCOVER, and REFUSE (exit 4) when there is nothing to find. That refusal is honest
- * rather than merely safe — the hooks are Python, so a machine with no Python cannot run
- * them whatever this driver writes, and the fallback it names (`python build.py`) is by
- * definition available exactly when the emit would have been meaningful.
+ * WHAT THIS RETIRED, AND WHY IT IS A DELETION. Until this phase the function was
+ * `hookOptsOrDie`: it scanned PATH for an interpreter and refused the four Claude-shaped
+ * emits with exit 4 when it found none, because writing a shim that names a nonexistent
+ * interpreter silently disables every hook in the install. Both halves are gone. `runner` is
+ * `process.execPath` — the node already running this file, which by construction exists —
+ * so there is nothing left to discover and no way for discovery to fail. P4e kept the
+ * unreachable exit-3 branch because `test_the_node_driver_classifies_every_emit` asserts a
+ * partition it belongs to; nothing asserts a partition over this one, so keeping it would
+ * be keeping code no test can reach for no stated reason.
  *
- * WHY THIS IS A FILESYSTEM SCAN AND NOT A PROBE. `geneseed.cmd` picks the first candidate
- * that actually RUNS (`%%C -c "pass"`), because cmd's `where` happily returns the Microsoft
- * Store alias stub — an app-execution shim that prints an install hint and exits non-zero.
- * This driver cannot copy that: `test_the_driver_imports_no_child_process_module` bans
- * `child_process` outright, and that ban is load-bearing (it is half of the proof that this
- * file is a second implementation rather than a passthrough to `build.py`). Measured on
- * Windows 11 instead of assumed: `existsSync` returns FALSE for the Store alias, because
- * `statSync` on the reparse point raises `EACCES` — so the natural spelling already skips
- * the stub the launcher needed a subprocess to detect. The explicit `WindowsApps` skip
- * below does not rely on that ACL behaviour, which is one machine's observation and not a
- * guarantee.
+ * THE SHIM IS MACHINE-WIDE, AND THAT IS THE DECISION THIS PHASE ACTUALLY TOOK.
+ * `hookShimPath()` is `$GENESEED_HOME`-or-`~/.geneseed` + `bin/geneseed-hook[.cmd]`, with no
+ * per-install component: every emit of every install on the machine rewrites the same file,
+ * and every install's hooks execute it. While both drivers baked Python that was invisible,
+ * because last-writer-wins wrote the same thing. It is observable now — a machine whose last
+ * emit ran through this file has EVERY install's hooks running under Node, including
+ * installs `python build.py` wrote, and the reverse.
  *
- * `$PYTHON` overrides everything, which is not a new knob: it is the documented contract of
- * both front doors (`geneseed:51`, `geneseed.cmd`). It is resolved to an absolute path like
- * any other candidate, because a bare name baked into the shim would fail `_shim_health`
- * — golden requires every quoted string in the shim body to exist on disk.
+ * That is correct exactly while the two entry points answer the same verbs the same way, so
+ * the gate that used to be a formality is now load-bearing:
+ * `test_the_entry_carries_exactly_the_verbs_the_emitter_wires` reads the emitter's wiring
+ * and `bin/geneseed-hook.mjs`'s VERBS table and requires them EQUAL — a wired verb the entry
+ * lacks is a dead hook on every install on the machine, not just this one. The alternative
+ * considered and rejected was a per-driver shim path: the path is baked into every already
+ * emitted hook command, so changing it makes every existing install's hooks stale until
+ * re-emit, which is P10's migration arriving five phases early.
  */
-function discoverRunner() {
-  const win = process.platform === 'win32';
-  const names = win ? ['py.exe', 'python.exe', 'python3.exe'] : ['python3', 'python'];
-
-  const usable = (p) => {
-    // An app-execution alias lives here and is not an interpreter. Skipped by segment
-    // rather than by size or link target so the rule holds regardless of how a given
-    // machine's ACLs make it stat.
-    if (win && p.split(path.sep).includes('WindowsApps')) return false;
-    return existsSync(p) && isFile(p);
-  };
-
-  const override = process.env.PYTHON;
-  if (override) {
-    if (path.isAbsolute(override) && usable(override)) return override;
-    for (const dir of (process.env.PATH || '').split(path.delimiter)) {
-      if (!dir) continue;
-      for (const suffix of win ? ['', '.exe'] : ['']) {
-        const p = path.join(dir, override + suffix);
-        if (usable(p)) return p;
-      }
-    }
-    return null;  // an explicit $PYTHON that resolves to nothing is an error, not a hint
-  }
-
-  // Name-major, in `geneseed.cmd`'s order: `py` before `python` before `python3`, so the
-  // shim this driver writes names the same interpreter the launchers would have used.
-  for (const name of names) {
-    for (const dir of (process.env.PATH || '').split(path.delimiter)) {
-      if (!dir) continue;
-      const p = path.join(dir, name);
-      if (usable(p)) return p;
-    }
-  }
-  return null;
-}
-
-/**
- * `_build_settings._hook_runner_entry()`'s two values, or a refusal.
- *
- * `entry` is free — this driver knows `ROOT`, so `<checkout>/rituals/harness.py` is the
- * same string Python computes. Only `runner` has to be discovered.
- */
-function hookOptsOrDie(emit) {
-  const runner = discoverRunner();
-  if (runner === null) {
-    die(4, `--emit ${emit} wires Geneseed's hooks, and those hooks are Python scripts — `
-      + 'but no Python interpreter could be found on PATH (looked for '
-      + `${process.platform === 'win32' ? 'py, python, python3' : 'python3, python'}). `
-      + 'Emitting anyway would write a hook shim naming an interpreter that does not '
-      + 'exist, which disables every hook in the install silently. Set $PYTHON to one, '
-      + `or run: python build.py --emit ${emit}`);
-  }
-  return { runner, entry: path.join(ROOT, 'rituals', 'harness.py') };
+function hookRunnerEntry() {
+  return { runner: process.execPath, entry: path.join(ROOT, 'bin', 'geneseed-hook.mjs') };
 }
 
 /**
@@ -733,8 +682,8 @@ function emitOpencodeGlobal(cfg, args, out) {
  * would receive `undefined`, hit its own default and throw the error it was built to throw
  * — where `null` would raise an unrelated TypeError and `{}` would bake the literal string
  * `"undefined"` into the shim and silently kill every hook in the install. Fail loud, on
- * purpose. The four hook-writing hosts pass a real pair from `hookOptsOrDie`, which refuses
- * the whole emit rather than ever producing a partial one.
+ * purpose. The four hook-writing hosts pass a real pair from `hookRunnerEntry()`, which
+ * cannot fail to produce one — `process.execPath` is the node already running.
  */
 function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpts }) {
   const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
@@ -835,13 +784,13 @@ function emitCopilotGlobal(cfg, args, out) {
 /**
  * `_build_global.emit_claude_global` — into Claude Code's global config dir (~/.claude).
  *
- * `hookOptsOrDie` is called BEFORE the engine rather than inside it, so a machine with no
- * interpreter refuses having written nothing at all. Deciding it late would leave a
- * half-rendered config dir behind the refusal.
+ * `hookRunnerEntry()` is still called BEFORE the engine, though it can no longer refuse:
+ * the shape stayed after P5b deleted the refusal so that a future value which CAN fail is
+ * decided while nothing has been written, rather than behind a half-rendered config dir.
  */
 function emitClaudeGlobal(cfg, args, out) {
   const cfgDir = claudeConfigDir();
-  const hookOpts = hookOptsOrDie(args.emit);
+  const hookOpts = hookRunnerEntry();
   const r = emitClaudeCore(cfg, args, {
     cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'global', host: 'claude', out,
     hookOpts,
@@ -857,7 +806,7 @@ function emitClaudeGlobal(cfg, args, out) {
 /** `_build_global.emit_claude` — per-repo: CLAUDE.md at the root + a `.claude/` layer. */
 function emitClaude(cfg, args, out) {
   const root = args.root ? resolveOut(args.root) : out;
-  const hookOpts = hookOptsOrDie(args.emit);
+  const hookOpts = hookRunnerEntry();
   const r = emitClaudeCore(cfg, args, {
     cfgDir: path.join(root, '.claude'), claudeMd: path.join(root, 'CLAUDE.md'),
     scope: 'project', host: 'claude', out, hookOpts,
@@ -876,7 +825,7 @@ function emitClaude(cfg, args, out) {
  */
 function emitBobGlobal(cfg, args, out) {
   const cfgDir = bobConfigDir();
-  const hookOpts = hookOptsOrDie(args.emit);
+  const hookOpts = hookRunnerEntry();
   warnBobGlobalOverProject();
   const r = emitClaudeCore(cfg, args, {
     cfgDir, claudeMd: path.join(cfgDir, 'AGENTS.md'), scope: 'global', host: 'bob', out,
@@ -892,7 +841,7 @@ function emitBobGlobal(cfg, args, out) {
 /** `_build_global.emit_bob` — per-repo: AGENTS.md at the root + a `.bob/` layer. */
 function emitBob(cfg, args, out) {
   const root = args.root ? resolveOut(args.root) : out;
-  const hookOpts = hookOptsOrDie(args.emit);
+  const hookOpts = hookRunnerEntry();
   const r = emitClaudeCore(cfg, args, {
     cfgDir: path.join(root, '.bob'), claudeMd: path.join(root, 'AGENTS.md'),
     scope: 'project', host: 'bob', out, hookOpts,

@@ -9,15 +9,30 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's twelfth piece: an install built with `node bin/geneseed.mjs` no longer needs
+  Python at all.** The hooks it wires now launch the Node twin, so building and running a
+  Claude or Bob install is Python-free end to end. Building one used to stop with an error
+  if no Python could be found; there is nothing left to find, so that error is gone.
+  **One thing worth knowing if you have several installs on one machine.** The small
+  launcher your hooks go through (`~/.geneseed/bin/geneseed-hook`, or `.cmd` on Windows) is
+  *shared* — one file for the whole machine, not one per install. It always was, and while
+  both commands wrote the same thing into it that made no difference. It does now: whichever
+  command you ran **last** decides what every install's hooks launch. Both answer the four
+  hook commands identically, and a check enforces that they keep doing so, so in practice
+  you should see nothing — but if you mix `python build.py` and `node bin/geneseed.mjs`,
+  that is the rule.
+  Also fixed on the way: on Windows the Node hooks ended their lines differently from the
+  Python ones. No host was affected — they all read JSON or plain text — but it was a real
+  difference in the one place the side-by-side checks structurally could not see, so it is
+  fixed and now checked in raw bytes.
 - **The port's eleventh piece, and the first that is not the builder: the four hooks your
   install runs every session have a Node twin.** `context` (the one that injects your repo's
   docs at session start), `git-gate` and `rule-gate` (the two that make the host ask before a
   commit or a memory write), and `learn` (the one that distils a session into memory) all now
   run from `node bin/geneseed-hook.mjs` as well as from `python rituals/harness.py`.
-  **Nothing about your installs changes yet.** Emitted hooks still call Python, and building a
-  Claude/Bob install still needs a Python on your machine. Wiring the new twin in is a
-  separate step, deliberately: an install's hooks are the part that fails *silently* when it
-  is wrong, so it moves once and with the evidence in hand.
+  **At the time, nothing about your installs changed.** Wiring the new twin in was kept a
+  separate step, deliberately — an install's hooks are the part that fails *silently* when it
+  is wrong, so it moved once and with the evidence in hand. That step is the entry above.
   What is in hand: 103 side-by-side checks covering both, comparing everything either one can
   be observed doing — what it prints, what it warns, the exit code it returns, and every file
   it writes. Discovery with and without a `context.json`, globs, `extend`, the
@@ -38,15 +53,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   a small script that launches the Python harness, so whatever writes one has to name a
   Python interpreter on your machine — and the Node command has no way to inherit the answer
   the Python command simply knows about itself.
-  **It now finds one, and refuses to build if it cannot.** It looks at `$PYTHON` first (the
+  **At the time it found one, and refused to build if it could not** — superseded by the
+  twelfth piece above, where the hooks stopped being Python and there was no longer anything
+  to find. It looked at `$PYTHON` first (the
   same variable the `geneseed` launchers honour), then for `py`, `python` and `python3` on
-  your `PATH`. If none of them is there, the emit stops with a clear message and writes
-  nothing at all. That refusal is the point rather than a limitation: hooks that name a
-  missing interpreter do not fail loudly, they simply never fire, and an install that looks
-  finished with six dead hooks is worse than a build that stopped and told you. If you hit
-  it, `python build.py --emit claude` still works — and by definition it works exactly when
-  the emit would have been worth anything.
-  On Windows it deliberately steps past the Microsoft Store's `python.exe` placeholder, the
+  your `PATH`, and stopped with a clear message having written nothing if none was there.
+  That refusal was the point rather than a limitation: hooks that name a missing interpreter
+  do not fail loudly, they simply never fire, and an install that looks finished with six
+  dead hooks is worse than a build that stopped and told you.
+  On Windows it deliberately stepped past the Microsoft Store's `python.exe` placeholder, the
   one that opens the Store instead of running anything.
   Everything else is unchanged and verified: same files, same console output, same exit
   codes as `python build.py`, across every theme, both footprints, all five postures and
@@ -102,9 +117,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   every build** — the one that re-reads your settings file and warns if the hooks did not
   actually land — now verifies Node's work from the other implementation, on every build,
   which is a stronger guarantee than either half could give alone. And the **hook shim**
-  still points at Python and `harness.py`, because the hooks themselves are still Python:
-  no already-installed harness has its shim rewritten, and nothing you have deployed
-  changes. That last one used to be invisible to every test — the shim is deliberately
+  still pointed at Python and `harness.py` at that stage, because the hooks themselves were
+  still Python — so nothing already deployed changed. (It points at Node as of the twelfth
+  piece above.) That last one used to be invisible to every test — the shim is deliberately
   excluded from the byte comparison so a version-to-version run is not drowned in noise —
   so the boundary test now compares it directly.
   Newly watched, because nothing reached them before: a `settings.local.json` you have

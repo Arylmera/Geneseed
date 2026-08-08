@@ -3,10 +3,10 @@
  *
  * These are the commands the emitted `settings.json` actually invokes on a user's machine,
  * every session: a SessionStart injector, two PreToolUse gates, and a Stop/SubagentStop
- * distiller. They are the whole reason `bin/geneseed.mjs` still refuses the four
- * Claude-shaped emits with exit 4 when it cannot discover a Python — the hooks it would
- * wire are Python, so an install emitted without one is an install with six dead hook
- * groups and nothing anywhere to report it.
+ * distiller. Since P5b they are also what the emitted hooks name: `bin/geneseed.mjs` bakes
+ * `<node> <checkout>/bin/geneseed-hook.mjs` into the machine-wide shim, so an install this
+ * driver emits has no Python in its hook path at all — which is what let the interpreter
+ * discovery and its exit-4 refusal be deleted rather than merely bypassed.
  *
  * Ported from `rituals/_harness_context.py` and `rituals/_harness_learn.py`, whose shared
  * primitives live in `_harness_core.py`. `rituals/harness.py` links all fourteen
@@ -200,8 +200,25 @@ function readStdin() {
   }
 }
 
-const out = (s) => process.stdout.write(s);
-const err = (s) => process.stderr.write(s);
+/**
+ * The two output funnels, with Python's newline translation reproduced.
+ *
+ * `sys.stdout` is a TextIOWrapper with `newline=None`, so on Windows every `\n` a hook
+ * prints leaves the process as `\r\n` — and `harness.py`'s `reconfigure(encoding="utf-8")`
+ * changes the encoding only, not that. `process.stdout` translates nothing, so an install
+ * emitted by the Node driver would hand its host different BYTES than the same install
+ * emitted by Python: measured at 176 vs 171 for one `context` run.
+ *
+ * `harness_golden.py` structurally cannot see it — `subprocess` decodes with universal
+ * newlines on the way back, folding both to `\n` before any cell compares them, the same
+ * shape as the shim's exclusion from `golden.py`. It went unobservable while nothing baked
+ * this entry into a shim; P5b's flip makes it what a real host reads, so it is fixed here
+ * and gated in binary rather than left on the known-differences list.
+ */
+const NL = process.platform === 'win32' ? '\r\n' : '\n';
+const xlate = (s) => (NL === '\n' ? s : s.replaceAll('\n', NL));
+const out = (s) => process.stdout.write(xlate(s));
+const err = (s) => process.stderr.write(xlate(s));
 
 /**
  * `_build_core._opencode_config_dir`, duplicated rather than imported.

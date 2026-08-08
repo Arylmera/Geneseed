@@ -278,10 +278,11 @@ renders it as the name in parentheses.
   tests do the same across a whole lifecycle, wiring through Node and unwiring through
   Python. `emit_opencode_global`'s own `opencode.json` merge also stays in Python, for the
   duller reason that it has no child to join.
-  **The hook shim keeps baking the Python interpreter and `rituals/harness.py`** even though
-  Node writes the file, because the hooks it launches are still Python; `process.execPath`
-  becomes the right answer the day the hooks cross, not the day the driver does. So no
-  already-emitted install's shim changes. That substitution used to be invisible to every
+  **The hook shim baked the Python interpreter and `rituals/harness.py` through P5a** even
+  though Node wrote the file, because the hooks it launched were still Python;
+  `process.execPath` was to become the right answer the day the hooks crossed, not the day
+  the driver did. They crossed in P5a and the substitution landed in P5b — see *the shim is
+  machine-wide* below. That substitution used to be invisible to every
   gate — golden filters the shim out by name so a cross-revision run is not drowned in
   noise, and `doctor`'s check only fires once the baked path stops existing — so the
   boundary gate now compares the shim body between the two runtimes directly.
@@ -362,8 +363,11 @@ renders it as the name in parentheses.
   stray call throws the error P3b built for it; `null` raises an unrelated `TypeError`; `{}`
   bakes the literal string `"undefined"` into the shim and silently kills every hook in the
   install.
-  **Then the interpreter question had to be answered, and the answer is to refuse.** The four
-  hook-writing emits discover a Python rather than inheriting one: `$PYTHON` first (the
+  **Then the interpreter question had to be answered, and the answer was to refuse — until
+  P5b deleted the question.** (What follows describes P4e; the shim bakes Node now, and
+  neither the discovery nor the refusal survives. Kept because the *reasoning* is why the
+  flip could only land once the hook verbs had crossed.) The four
+  hook-writing emits discovered a Python rather than inheriting one: `$PYTHON` first (the
   documented contract of both front doors), then `py`, `python`, `python3` on `PATH`. When
   none is found the emit **exits 4 having written nothing**, because a shim naming an absent
   interpreter is a *silently disabled hook* — every Geneseed hook returns 0 and signals
@@ -376,7 +380,7 @@ renders it as the name in parentheses.
   `geneseed.cmd`'s "first candidate that actually runs" test is unavailable. Measured rather
   than assumed — `existsSync` returns false for the Microsoft Store alias stub, because
   `statSync` on the reparse point raises `EACCES`, so the plain spelling already skips the
-  thing the launcher needed a subprocess to detect.
+  thing the launcher needed a subprocess to detect. (End of the superseded passage.)
   **VERIFY did not need porting; it needed calling.** `settingsIntegrityCheck` has been
   complete in `js/settings.mjs` since P3a with no production caller, so the "largest unported
   unit left" was one call site. What changed with it is what it proves: on the Python driver
@@ -489,14 +493,46 @@ renders it as the name in parentheses.
   because they were never the same problem. `learn` also gained `encoding="utf-8"` on the
   model CLI's pipe: a bare `text=True` decodes the reply with the console code page, and
   the mojibake is *written to the memory store*, so it outlives the process.
-- **Nothing bakes the Node hook entry into a shim yet, and that is the phase boundary.**
-  `bin/geneseed.mjs` still writes `<python> <checkout>/rituals/harness.py` and still refuses
-  the four Claude-shaped emits with exit 4 when it cannot discover a Python, because a
-  Geneseed install has more Python in it than these four verbs. The acceptance harness is
-  what keeps the port from being dead code in the meantime — it executes
-  `bin/geneseed-hook.mjs` as a real process against the Python one, which is the lesson from
-  a stage that sat complete and uncalled in `js/settings.mjs` for two phases and was then
-  briefed as unported.
+- **The shim bakes Node now, and the shim is machine-wide.** `bin/geneseed.mjs` writes
+  `<node> <checkout>/bin/geneseed-hook.mjs`, so an install it emits needs no Python for its
+  hooks at all; the interpreter discovery and the exit-4 refusal that guarded it are deleted
+  rather than bypassed, because `process.execPath` is the node already running and cannot
+  fail to exist. What makes this a decision rather than a substitution is that
+  `hookShimPath()` has **no per-install component** — `$GENESEED_HOME`-or-`~/.geneseed` plus
+  `bin/geneseed-hook[.cmd]` — so every emit on a machine rewrites one file that every
+  install's hooks execute. Last writer wins, and after the flip that is observable: a
+  machine whose last emit ran through Node has every install's hooks running under Node,
+  including installs `python build.py` wrote. That is correct exactly while the two entry
+  points answer the same verbs identically, which turns
+  `test_the_entry_carries_exactly_the_verbs_the_emitter_wires` from a formality into the
+  gate the design rests on. A per-driver shim path was considered and rejected: the path is
+  baked into every already-emitted hook command, so changing it makes every existing
+  install's hooks stale until re-emit.
+  **The cell that asked which interpreter the driver discovered became a cell that runs the
+  shim.** Asserting the runner's identity stopped meaning anything once the answer was
+  "node"; the property underneath was always the chain, so the gate now pulls the git-gate
+  command out of the settings file the driver just wrote, runs it through the shell with a
+  commit payload, and requires the verdict document back — an assertion that would pass
+  unchanged against a Python-baked shim. Its former opposite number flipped with it: with
+  every Python stripped from PATH, the four hook-writing emits must now *succeed* and their
+  hooks must still answer.
+  **The pre-shim fallback is recognisable to cleanup only by a coincidence of filename**,
+  and that is now gated. When the shim cannot be written, `hookPrefix` emits
+  `"<node>" "<checkout>/bin/geneseed-hook.mjs"`, which `GENESEED_HOOK_SNIFF` matches through
+  `SHIM_MARK` — the marker lives in the shim's *filename*, and the Node entry happens to
+  share it. An unrecognised hook is one no `unlink`, `uninstall` or orphan scan can find.
+  **Node's hooks now translate newlines like Python's.** `sys.stdout` is a TextIOWrapper
+  with `newline=None`, so Python's hooks emit CRLF on Windows; `process.stdout` translates
+  nothing, measured at 176 bytes against 171 for one `context` run. Every cell in
+  `harness_golden.py` reads stdout through a universal-newline decoder, so the difference
+  was invisible to the entire matrix — the same shape as the shim's exclusion from
+  `golden.py`. Harmless while nothing baked the Node entry; the bytes a real host reads once
+  something does. `js/hooks.mjs`'s two output funnels translate, and one gate reads raw
+  bytes.
+  The acceptance harness is what kept the port from being dead code before any of this — it
+  executes `bin/geneseed-hook.mjs` as a real process against the Python one, which is the
+  lesson from a stage that sat complete and uncalled in `js/settings.mjs` for two phases and
+  was then briefed as unported.
   **Adding a module that legitimately spawns opened a door the driver's own gate cannot see
   through**: `test_the_driver_imports_no_child_process_module` greps `bin/geneseed.mjs`'s
   source, and one `import` of `js/hooks.mjs` would put `child_process` in the driver's

@@ -1,10 +1,17 @@
 """The hook entry point's own gates — the ones `tests/harness_golden.py` cannot give.
 
-That harness proves the two CLIs BEHAVE the same across 93 cells. It cannot prove:
+That harness proves the two CLIs BEHAVE the same across 103 cells. It cannot prove:
 
   * that the four verbs it compares are the four the emitted `settings.json` invokes — a
     fifth hook wired in `js/settings.mjs` would simply never be compared, and an absent
-    row reads exactly like a forgotten one;
+    row reads exactly like a forgotten one. **Load-bearing since P5b**, not merely tidy:
+    the hook shim is machine-wide (`~/.geneseed/bin/geneseed-hook[.cmd]`, no per-install
+    component) and last-writer-wins, so the two entry points answering the same verb set
+    is what makes it safe for a Node emit to own the hooks of an install Python wrote;
+  * that the two agree on the BYTES they print. Every cell reads stdout through a
+    universal-newline decoder, which folds Python's Windows CRLF and Node's LF to the same
+    string before any comparison happens — a property the harness's own transport erases
+    rather than a gap in any cell;
   * that `bin/geneseed-hook.mjs` is a second implementation rather than a shell around
     `python rituals/harness.py` — a passthrough would pass all 93 cells perfectly, because
     it would BE the Python CLI (the same hole `test_node_cli_parity.py` refutes for the
@@ -327,6 +334,55 @@ class TheEntryRefusesRatherThanNoOps(unittest.TestCase):
         r = run_hook([])
         self.assertEqual(r.returncode, 2, r.stderr[:200])
         self.assertFalse(r.stdout)
+
+    def test_the_two_entry_points_agree_on_stdout_BYTES(self):
+        """The one difference the 103-cell matrix structurally cannot see.
+
+        Every cell in `harness_golden.py` compares stdout through `subprocess` with
+        `text=True`, which decodes with universal newlines — so a hook printing `\\r\\n` and
+        a hook printing `\\n` are folded to the same string before any cell looks. That is
+        the same shape as the shim's exclusion from `golden.py`: not a gap in a cell, a
+        property the harness's own plumbing erases. **A cross-implementation gate cannot see
+        what its transport normalises**, so this one reads raw bytes.
+
+        The difference was real and measured, not hypothetical: `sys.stdout` is a
+        TextIOWrapper with `newline=None`, so Python's hooks emit CRLF on Windows, and
+        `harness.py`'s `reconfigure(encoding="utf-8")` changes only the encoding.
+        `process.stdout` translates nothing — 176 bytes against 171 for one `context` run
+        before `js/hooks.mjs` grew its translating funnels.
+
+        It went unobservable and harmless while nothing baked the Node entry into a shim.
+        P5b's flip makes it the bytes a real host reads on a real user's machine, which is
+        why it is fixed and gated here rather than carried on the known-differences list.
+        """
+        with tempfile.TemporaryDirectory() as tmp_s:
+            tmp = Path(tmp_s)
+            (tmp / "home").mkdir()
+            (tmp / "README.md").write_text("# bytes\n", encoding="utf-8")
+            env = golden.cell_env(tmp / "home")
+            argv = ["context", "--root", str(tmp)]
+            raw = {}
+            for side, cmd in (("py", [sys.executable, str(HARNESS_PY)]),
+                              ("node", [NODE, str(HOOK_CLI)])):
+                # No text=, no encoding=: bytes, so the decoder cannot fold the difference.
+                raw[side] = subprocess.run(cmd + argv, cwd=str(tmp), env=env,
+                                           capture_output=True).stdout
+
+            self.assertTrue(raw["py"], "the python reference printed nothing, so this cell "
+                                       "would pass on two silent implementations")
+            self.assertEqual(
+                raw["py"].count(b"\n"), raw["node"].count(b"\n"),
+                "the two entry points printed a different number of lines, so the byte "
+                "comparison below would be about content rather than newlines")
+            self.assertEqual(
+                raw["py"], raw["node"],
+                "the two hook entry points hand their host different BYTES:\n"
+                f"  python: {len(raw['py'])} bytes, "
+                f"{raw['py'].count(chr(13).encode() + chr(10).encode())} CRLF\n"
+                f"  node:   {len(raw['node'])} bytes, "
+                f"{raw['node'].count(chr(13).encode() + chr(10).encode())} CRLF\n"
+                f"  python tail: {raw['py'][-80:]!r}\n"
+                f"  node tail:   {raw['node'][-80:]!r}")
 
     def test_an_emitted_hook_command_shape_runs_through_the_shell(self):
         """End-to-end, through `sh`/`cmd.exe`, with the `|| exit 0` a real emitted command

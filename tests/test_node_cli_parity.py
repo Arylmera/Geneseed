@@ -99,6 +99,36 @@ def _path_without_python() -> "tuple[str, list[str]]":
     return os.pathsep.join(kept), dropped
 
 
+def _emitted_hook_command(case: unittest.TestCase, sandbox: Path, verb: str) -> str:
+    """The hook command for `verb`, out of whatever settings file an emit just wrote.
+
+    Reads the command rather than reconstructing it, which is the whole point: a cell that
+    rebuilt `"<shim>" git-gate --root "<cfg>"` from parts would still pass if the emitter
+    stopped writing that command at all.
+
+    Searches the whole sandbox rather than a fixed `<out>/.claude/settings.local.json`,
+    because the four hook-writing emits do not agree on where it lands: bob's is under
+    `.bob/`, and the two globals write into the config dirs `golden.cell_env` redirects
+    into the sandbox home, not into `--out` at all.
+    """
+    commands = []
+    for p in sorted(sandbox.rglob("settings*.json")):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        commands += [h["command"]
+                     for groups in (data.get("hooks") or {}).values()
+                     for g in groups for h in g.get("hooks", [])
+                     if isinstance(h, dict) and "command" in h]
+    case.assertTrue(commands, f"no settings file under {sandbox} carries a hook command")
+    picked = [c for c in commands if verb in c]
+    case.assertTrue(picked, f"no emitted hook command carries {verb!r}: {commands}")
+    return picked[0]
+
+
 def run_cli(args: list[str], env: dict | None = None) -> subprocess.CompletedProcess:
     # encoding="utf-8" (never bare text=True): the child writes UTF-8 whatever the console
     # is, and this repo's one unpinned capture is a bug it already carries.
@@ -479,45 +509,62 @@ class NodeDriverSurface(unittest.TestCase):
                              f"  python: {registry['py'][:300]!r}\n"
                              f"  node:   {registry['node'][:300]!r}")
 
-    def test_the_emitted_hook_shim_names_a_real_python_3(self):
-        """WHICH interpreter the Node driver discovered — the half `_shim_health` cannot ask.
+    def test_the_emitted_hook_shim_answers_the_gate_it_bakes(self):
+        """The shim ITSELF, executed — the assertion that outlives P5b's decision.
 
-        `golden._shim_health` requires every quoted string in the shim body to EXIST, which
-        is what refuses `"undefined"`. It cannot tell an interpreter from any other file
-        that happens to be there, and the Node driver has no `sys.executable` to inherit —
-        it scans PATH. So a discovery that picked up, say, the Microsoft Store alias stub,
-        or a `python` that is really a shell wrapper, would satisfy existence and still
-        leave every hook in the install dead.
+        Until this phase the cell here asked WHICH interpreter the Node driver discovered:
+        it pulled the first quoted path out of the shim body and probed it for
+        `sys.version_info[0] == 3`. That question stopped existing along with the discovery.
+        The driver bakes `process.execPath` now, so a runner check would be asserting that
+        node is node.
 
-        The driver itself may not spawn anything (see the static half of the refutation
-        above); this test may, and that asymmetry is the point — the check that costs a
-        subprocess belongs in the gate, not in the shipped code.
+        The property underneath it was never the runner's identity. `golden._shim_health`
+        requires the shim's quoted paths to EXIST, which refuses `"undefined"` and nothing
+        else — a shim naming a real file that cannot answer a verb is a silently disabled
+        hook, because every Geneseed hook returns 0 and signals through stdout, so "did
+        nothing" and "worked" are the same observation. So this takes the git-gate command
+        out of the settings file the driver just wrote, runs it through the shell with the
+        payload a host sends, and requires the verdict document back.
+
+        git-gate rather than the `context` its sibling
+        (`test_an_emitted_hook_command_actually_runs`) picks: it is the verb whose entire
+        output is a JSON document on stdout, so a truncated or polluted stream fails here
+        and merely looks quiet there. Runtime-agnostic on purpose — it would pass unchanged
+        against a Python-baked shim, which is what makes it a cell about the chain rather
+        than about the decision.
         """
         with tempfile.TemporaryDirectory() as tmp_s:
             tmp = Path(tmp_s)
             home, out = tmp / "home", tmp / "out"
             home.mkdir()
+            env = golden.cell_env(home)
             r = run_cli(["--theme", "neutral", "--emit", "claude", "--footprint", "lean",
-                         "--out", str(out)], env=golden.cell_env(home))
+                         "--out", str(out)], env=env)
             self.assertEqual(r.returncode, 0, f"claude emit failed: {(r.stderr or r.stdout)[:400]}")
 
             shims = [p for p in tmp.rglob("*")
                      if p.is_file() and p.name.startswith(golden._SHIM_GLOB)]
             self.assertTrue(shims, "the node driver wired hooks but wrote no shim")
-            body = shims[0].read_text(encoding="utf-8")
-            quoted = re.findall(r'"([^"]+)"', body)
-            self.assertTrue(quoted, f"the shim bakes no quoted paths at all: {body!r}")
-            runner = quoted[0]
+            command = _emitted_hook_command(self, tmp, " git-gate ")
+            self.assertIn(
+                str(shims[0]), command,
+                f"the emitted git-gate command does not go through the shim this driver "
+                f"wrote, so running it proves nothing about the shim:\n  {command}")
 
-            probe = subprocess.run([runner, "-c", "import sys; print(sys.version_info[0])"],
-                                   capture_output=True, text=True, encoding="utf-8")
+            proc = subprocess.run(
+                command, shell=True, cwd=str(out), env=env, capture_output=True, text=True,
+                encoding="utf-8",
+                input=json.dumps({"tool_name": "Bash",
+                                  "tool_input": {"command": "git commit -m x"}}))
             self.assertEqual(
-                probe.returncode, 0,
-                f"the shim's interpreter {runner!r} does not run — every hook in an install "
-                f"emitted by this driver is dead. stderr: {probe.stderr.strip()[:200]}")
-            self.assertEqual(
-                probe.stdout.strip(), "3",
-                f"the shim's interpreter {runner!r} is not Python 3: {probe.stdout!r}")
+                proc.returncode, 0,
+                f"the emitted git-gate command failed to run:\n  {command}\n"
+                f"  stderr: {proc.stderr.strip()[:300]}")
+            self.assertIn(
+                "permissionDecision", proc.stdout,
+                f"the shim ran but git-gate produced no verdict document — the gate is "
+                f"disabled and nothing else would report it:\n  {command}\n"
+                f"  stdout: {proc.stdout[:300]!r}")
 
     def test_an_emitted_hook_command_actually_runs(self):
         """The end-to-end question neither the matrix nor `_shim_health` asks: do the hooks
@@ -569,18 +616,24 @@ class NodeDriverSurface(unittest.TestCase):
                 f"the emitted hook ran but printed nothing — Geneseed's hooks signal "
                 f"through stdout, so a silent one is a disabled one:\n  {picked[0]}")
 
-    def test_a_hook_writing_emit_refuses_when_no_interpreter_is_discoverable(self):
-        """The decision this phase had to take, asserted as behaviour.
+    def test_a_hook_writing_emit_needs_no_python_at_all(self):
+        """P5b's decision, asserted as behaviour — and it is the exact INVERSE of the cell
+        that stood here.
 
-        `--emit files` succeeds with no Python on PATH — that is the passthrough refutation
-        above, and it must keep succeeding. The four hook-writing emits are the opposite
-        case: the hooks they wire ARE Python, so an emit that cannot name an interpreter
-        would be writing a shim that disables every hook in the install, silently. The
-        driver refuses with exit 4 instead, and writes nothing.
+        Through P4e this was `test_a_hook_writing_emit_refuses_when_no_interpreter_is_
+        discoverable`: with every Python stripped from PATH the four Claude-shaped emits had
+        to refuse with exit 4 and write nothing, because the hooks they wired were Python
+        and a shim naming an absent interpreter disables every hook in an install silently.
+        The four verbs those hooks invoke are Node now and the shim bakes
+        `<node> <checkout>/bin/geneseed-hook.mjs`, so the required outcome flips: the emit
+        must SUCCEED, and its hooks must still work.
 
-        Same stripped PATH as the passthrough test on purpose: one environment, two
-        opposite required outcomes, which is what makes the distinction real rather than
-        asserted.
+        Same fixture, deliberately — the stripped PATH is the passthrough test's, so the
+        three outcomes this environment now has to produce (`--emit files` succeeds, a hook
+        emit succeeds, its hooks answer) sit in one measured world rather than three
+        convenient ones. Emitting is the weaker half: the strong half is running the emitted
+        git-gate command with that same PATH, which is what would catch a hook path that
+        reaches back for Python anywhere along it.
         """
         stripped, dropped = _path_without_python()
         self.assertTrue(dropped, "PATH held no python at all, so this run proves nothing")
@@ -592,19 +645,80 @@ class NodeDriverSurface(unittest.TestCase):
                     out = tmp / "out"
                     env = golden.cell_env(tmp / "home")
                     env["PATH"] = stripped
-                    # $PYTHON is the documented override in both front doors and is NOT
-                    # cleared by cell_env, so a developer who exports it would otherwise
-                    # make this gate vacuous.
+                    # $PYTHON was the documented discovery override and is NOT cleared by
+                    # cell_env. Nothing reads it here any more, and clearing it is what says
+                    # so: if the emit ever went green only because a developer exported one,
+                    # this cell would be measuring the developer's shell.
                     env.pop("PYTHON", None)
                     r = run_cli(["--theme", "neutral", "--emit", emit, "--footprint", "lean",
                                  "--out", str(out)], env=env)
                     self.assertEqual(
-                        r.returncode, 4,
-                        f"--emit {emit} with no interpreter must refuse with exit 4, got "
+                        r.returncode, 0,
+                        f"--emit {emit} with no python on PATH must succeed, got "
                         f"{r.returncode}. stderr: {(r.stderr or r.stdout).strip()[:300]}")
-                    self.assertFalse(
-                        out.exists(),
-                        f"--emit {emit} refused but had already written to {out}")
+
+                    command = _emitted_hook_command(self, tmp, " git-gate ")
+                    proc = subprocess.run(
+                        command, shell=True, cwd=str(tmp), env=env, capture_output=True,
+                        text=True, encoding="utf-8",
+                        input=json.dumps({"tool_name": "Bash",
+                                          "tool_input": {"command": "git commit -m x"}}))
+                    self.assertEqual(
+                        proc.returncode, 0,
+                        f"the hook {emit} emitted failed to run with no python on "
+                        f"PATH:\n  {command}\n  stderr: {proc.stderr.strip()[:300]}")
+                    self.assertIn(
+                        "permissionDecision", proc.stdout,
+                        f"the hook {emit} emitted ran with no python on PATH but "
+                        f"produced no verdict — it is disabled, and nothing else "
+                        f"reports that:\n  {command}\n  stdout: {proc.stdout[:300]!r}")
+
+    def test_the_pre_shim_fallback_command_is_still_recognisable_as_geneseed(self):
+        """The coincidence P5b's flip made load-bearing, gated.
+
+        `hookPrefix` falls back to `"<runner>" "<entry>"` when the shim cannot be written,
+        and `GENESEED_HOOK_SNIFF` — `['harness.py', 'geneseed-hook']` — is how `unlink`,
+        `uninstall` and the orphan scan tell a Geneseed hook from a user's. The Python
+        driver's entry ends in `harness.py` and matches the first marker. This driver's ends
+        in `bin/geneseed-hook.mjs`, which matches the SECOND marker only because the file
+        was named after the shim: `SHIM_MARK` is `'geneseed-hook'` and the marker lives in
+        the shim's FILENAME. Nothing asserted that, and the cost of it silently ceasing to
+        hold is a hook no cleanup path can find — an orphan the user has to delete by hand.
+
+        Reaching the fallback behaviourally rather than by reading the source: point
+        `$GENESEED_HOME` at a regular FILE, so `mkdirSync` under it fails with ENOTDIR, the
+        shim write returns null, and the emit takes the branch.
+        """
+        with tempfile.TemporaryDirectory() as tmp_s:
+            tmp = Path(tmp_s)
+            home, out = tmp / "home", tmp / "out"
+            home.mkdir()
+            blocker = tmp / "not-a-dir"
+            blocker.write_text("", encoding="utf-8")
+            env = golden.cell_env(home)
+            env["GENESEED_HOME"] = str(blocker)
+
+            r = run_cli(["--theme", "neutral", "--emit", "claude", "--footprint", "lean",
+                         "--out", str(out)], env=env)
+            self.assertEqual(r.returncode, 0,
+                             f"claude emit failed: {(r.stderr or r.stdout)[:400]}")
+            # The vacuity guard has to be the absence of the shim FILE, not the absence of
+            # its name in the command: the fallback names `bin/geneseed-hook.mjs`, which
+            # contains `_SHIM_GLOB` — which is the very coincidence under test.
+            written = [p for p in tmp.rglob("*")
+                       if p.is_file() and p.name.startswith(golden._SHIM_GLOB)]
+            self.assertFalse(
+                written,
+                "a shim was written after all, so this cell never reached the fallback it "
+                f"exists to check: {written}")
+
+            command = _emitted_hook_command(self, tmp, " git-gate ")
+            import build  # noqa: PLC0415 — the sniff's source of truth, and only here
+            markers = build._GENESEED_HOOK_SNIFF
+            self.assertTrue(
+                any(m in command for m in markers),
+                f"the pre-shim fallback command carries none of {list(markers)}, so no "
+                f"cleanup path can recognise the hooks this driver emitted:\n  {command}")
 
     def test_verify_reports_an_orphaned_geneseed_hook(self):
         """VERIFY is SILENT ON SUCCESS, which is a fifth kind of coverage hole.

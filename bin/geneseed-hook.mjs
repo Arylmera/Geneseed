@@ -18,19 +18,24 @@
  *     `test_the_node_driver_classifies_every_emit` asserts a partition over them. Verbs
  *     are a different shape and would sit awkwardly inside that.
  *
- * WHAT DOES NOT HAPPEN HERE YET. Nothing bakes this file into a shim. `bin/geneseed.mjs`
- * still writes `<python> <checkout>/rituals/harness.py` and still refuses the four
- * Claude-shaped emits with exit 4 when it cannot find a Python, because a Geneseed install
- * has more Python in it than these four verbs. The refusal retires when the emitted hooks
- * can name this file, which is a call-site decision and one that has to be taken with the
- * shim's parity cells rewritten in the same change — not a side effect of the port
- * landing. `tests/harness_golden.py` is what keeps this from being dead code in the
- * meantime: it executes this binary, as a process, against the Python one.
+ * WHAT BAKES THIS FILE, SINCE P5b. `bin/geneseed.mjs` writes `<node> <checkout>/bin/
+ * geneseed-hook.mjs` into the machine-wide shim, so an install this driver emitted needs no
+ * Python for its hooks. The exit-4 refusal it used to raise when no interpreter was
+ * discoverable is gone with the discovery that fed it.
  *
- * The verb set is deliberately SMALL and refuses the rest by name. `harness.py` dispatches
- * 25 subcommands; a hook entry that silently accepted `doctor` and did nothing would be
- * the worst available failure, because every Geneseed hook returns 0 and signals through
- * stdout — so "did nothing" and "worked" are the same observation.
+ * That shim is SHARED — `~/.geneseed/bin/geneseed-hook[.cmd]`, with no per-install
+ * component — so the last driver to emit anything on a machine owns every install's hooks,
+ * including installs the other driver wrote. That is safe exactly while the two entry
+ * points answer the same verbs identically, which is not a hope:
+ * `test_the_entry_carries_exactly_the_verbs_the_emitter_wires` pins the verb set to the
+ * hooks the emitter wires, and `tests/harness_golden.py` runs this binary as a process
+ * against the Python one on stdout, stderr, exit code and every file written.
+ *
+ * The verb set is deliberately SMALL and refuses the rest by name. `harness.py` has 24
+ * subparsers (25 invocable names — `update` is an alias of `upgrade`); a hook entry that
+ * silently accepted `doctor` and did nothing would be the worst available failure, because
+ * every Geneseed hook returns 0 and signals through stdout — so "did nothing" and "worked"
+ * are the same observation.
  */
 import { cmdContext, cmdGitGate, cmdRuleGate, cmdLearn } from '../js/hooks.mjs';
 
@@ -47,7 +52,9 @@ const VERBS = {
 };
 
 function die(code, msg) {
-  process.stderr.write(`geneseed-hook: error: ${msg}\n`);
+  // CRLF on Windows, for the same reason `js/hooks.mjs`'s funnels translate: argparse
+  // writes this line through `sys.stderr`, which does.
+  process.stderr.write(`geneseed-hook: error: ${msg}${process.platform === 'win32' ? '\r\n' : '\n'}`);
   return code;
 }
 
