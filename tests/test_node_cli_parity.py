@@ -270,6 +270,38 @@ class NodeDriverSurface(unittest.TestCase):
             differing = sorted(k for k in a if a[k] != b[k])
             self.assertEqual(differing, [], f"differing under a non-ASCII path: {differing[:8]}")
 
+    def test_the_relocation_var_moves_the_global_target(self):
+        """`$OPENCODE_CONFIG_DIR` must relocate the whole config dir on this driver too.
+
+        No golden cell can check this, and the reason is a safety measure: `cell_env`
+        deliberately CLEARS every relocation variable, because leaving one set would send
+        ~126 global cells into the developer's real install. So the matrix runs with the var
+        unset, and a driver that ignored it entirely would be byte-identical in all 259
+        cells while writing to `~/.config/opencode` on any machine that exports it — which
+        is the documented way to keep the harness in a git-tracked folder.
+
+        That is the same hazard `test_golden_sandbox.py` pins for the Python generator,
+        asked of the second one. Asserted on the TARGET rather than by observing a leak: a
+        test that proved the bug by performing it would perform it.
+        """
+        with tempfile.TemporaryDirectory() as tmp_s:
+            tmp = Path(tmp_s)
+            home, relocated = tmp / "home", tmp / "relocated-config"
+            home.mkdir()
+            env = golden.cell_env(home)
+            env["OPENCODE_CONFIG_DIR"] = str(relocated)
+            r = run_cli(["--theme", "neutral", "--emit", "opencode-global",
+                         "--footprint", "lean", "--out", str(tmp / "legacy")], env=env)
+            self.assertEqual(r.returncode, 0, f"emit failed: {(r.stderr or r.stdout)[:300]}")
+            self.assertTrue(
+                (relocated / "AGENT.md").is_file(),
+                "the node driver ignored $OPENCODE_CONFIG_DIR — it would render into the "
+                "user's real ~/.config/opencode on every machine that sets it")
+            self.assertFalse(
+                (home / ".config" / "opencode" / "AGENT.md").is_file(),
+                "the node driver wrote to the DEFAULT config dir as well as the relocated "
+                "one")
+
     def test_the_footprint_default_is_the_flags_not_the_functions(self):
         """build.py:354's flag defaults to `lean`; every emit SIGNATURE defaults to `full`.
 
