@@ -1,6 +1,13 @@
-"""The hook entry point's own gates — the ones `tests/harness_golden.py` cannot give.
+"""The Node entry points' own gates — the ones `tests/harness_golden.py` cannot give.
 
-That harness proves the two CLIs BEHAVE the same across 103 cells. It cannot prove:
+There are two of them since P5c, and the split is the file's first subject.
+`bin/geneseed-hook.mjs` carries the four verbs an emitted `settings.json` invokes and is
+kept minimal because the machine-wide shim execs it on every tool call;
+`bin/geneseed-cli.mjs` carries the harness subcommands a hook never invokes, starting with
+`exclude`. `rituals/harness.py` is one program answering both sets, so the reference side of
+every comparison is one command and the candidate side is two.
+
+That harness proves the CLIs BEHAVE the same across 125 cells. It cannot prove:
 
   * that the four verbs it compares are the four the emitted `settings.json` invokes — a
     fifth hook wired in `js/settings.mjs` would simply never be compared, and an absent
@@ -12,8 +19,8 @@ That harness proves the two CLIs BEHAVE the same across 103 cells. It cannot pro
     universal-newline decoder, which folds Python's Windows CRLF and Node's LF to the same
     string before any comparison happens — a property the harness's own transport erases
     rather than a gap in any cell;
-  * that `bin/geneseed-hook.mjs` is a second implementation rather than a shell around
-    `python rituals/harness.py` — a passthrough would pass all 93 cells perfectly, because
+  * that either entry is a second implementation rather than a shell around
+    `python rituals/harness.py` — a passthrough would pass every cell perfectly, because
     it would BE the Python CLI (the same hole `test_node_cli_parity.py` refutes for the
     generator driver, one binary along);
   * that the gate documents it emits are the ones a HOST honours. Both implementations
@@ -48,6 +55,7 @@ import harness_golden  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 HOOK_CLI = ROOT / "bin" / "geneseed-hook.mjs"
+HARNESS_CLI = ROOT / "bin" / "geneseed-cli.mjs"
 HOOK_JS = ROOT / "js" / "hooks.mjs"
 DRIVER = ROOT / "bin" / "geneseed.mjs"
 HARNESS_PY = ROOT / "rituals" / "harness.py"
@@ -60,6 +68,13 @@ def run_hook(args: list[str], stdin: str = "", env: dict | None = None,
     # encoding="utf-8" and never a bare text=True — the child writes UTF-8 whatever the
     # console code page is.
     return subprocess.run([NODE, str(HOOK_CLI), *args], input=stdin, cwd=str(cwd or ROOT),
+                          capture_output=True, text=True, encoding="utf-8", env=env)
+
+
+def run_cli(args: list[str], env: dict | None = None,
+            cwd: Path | None = None) -> subprocess.CompletedProcess:
+    """The NON-hook entry point, `bin/geneseed-cli.mjs`."""
+    return subprocess.run([NODE, str(HARNESS_CLI), *args], input="", cwd=str(cwd or ROOT),
                           capture_output=True, text=True, encoding="utf-8", env=env)
 
 
@@ -76,12 +91,22 @@ def wired_hook_verbs() -> set[str]:
     return set(re.findall(r"\$\{run\}\s+([a-z][a-z-]*)", body))
 
 
-def entry_verbs() -> set[str]:
-    """The verbs `bin/geneseed-hook.mjs` carries, read out of its `VERBS` table."""
-    text = HOOK_CLI.read_text(encoding="utf-8")
+def _verbs_of(entry: Path) -> set[str]:
+    """The verbs an entry point carries, read out of its `VERBS` table."""
+    text = entry.read_text(encoding="utf-8")
     body = text[text.index("const VERBS = {"):]
     body = body[:body.index("\n};")]
     return set(re.findall(r"^\s{2}'?([a-z][a-z-]*)'?:\s*\{", body, re.M))
+
+
+def entry_verbs() -> set[str]:
+    """`bin/geneseed-hook.mjs`'s table — the verbs a HOOK invokes."""
+    return _verbs_of(HOOK_CLI)
+
+
+def cli_verbs() -> set[str]:
+    """`bin/geneseed-cli.mjs`'s table — the harness subcommands a hook never invokes."""
+    return _verbs_of(HARNESS_CLI)
 
 
 def harness_py_subcommands() -> set[str]:
@@ -111,17 +136,60 @@ class TheVerbSetIsATable(unittest.TestCase):
     def test_every_entry_verb_is_a_real_harness_subcommand(self):
         """The shim bakes ONE entry, and which one it bakes is a per-driver decision. So
         both entry points have to answer to the same verb names — a Node-emitted install
-        and a Python-emitted one must be interchangeable from the host's side."""
-        missing = sorted(entry_verbs() - harness_py_subcommands())
-        self.assertFalse(missing, f"bin/geneseed-hook.mjs carries {missing}, which "
-                                  f"rituals/harness.py has no subparser for")
+        and a Python-emitted one must be interchangeable from the host's side.
+
+        Both Node entries are checked, not just the hook one: `bin/geneseed-cli.mjs` is
+        equally a twin of `rituals/harness.py`, and a verb it spelled differently would be
+        a command that works on one runtime and not the other.
+        """
+        for name, entry, verbs in (("bin/geneseed-hook.mjs", HOOK_CLI, entry_verbs()),
+                                   ("bin/geneseed-cli.mjs", HARNESS_CLI, cli_verbs())):
+            with self.subTest(entry=name):
+                missing = sorted(verbs - harness_py_subcommands())
+                self.assertFalse(missing, f"{name} carries {missing}, which "
+                                          f"rituals/harness.py has no subparser for")
+
+    def test_the_two_entry_points_carry_disjoint_verb_sets(self):
+        """P5c split the Node side in two where `rituals/harness.py` is one program, so a
+        verb now has to belong to exactly one of them.
+
+        A verb in BOTH tables would be two implementations of one command, and nothing would
+        say which one a user reaches: the shim bakes `bin/geneseed-hook.mjs` and a person
+        types `bin/geneseed-cli.mjs`. It would also make the equality gate above meaningless
+        in the direction that matters — the hook entry could grow `exclude` and stay 'equal'
+        to the wired set only by the CLI entry dropping it.
+        """
+        both = sorted(entry_verbs() & cli_verbs())
+        self.assertFalse(both, f"{both} is carried by BOTH Node entry points; a verb "
+                               f"belongs to exactly one of them")
+        self.assertTrue(cli_verbs(), "bin/geneseed-cli.mjs's VERBS table parsed as empty, "
+                                     "so the disjointness above is vacuous")
 
     def test_the_matrix_covers_every_verb_it_claims(self):
-        covered = {c["id"].split("/")[0] for c in harness_golden.cells()}
-        self.assertEqual(covered, entry_verbs(),
-                         "tests/harness_golden.py's cells and the entry point's verbs "
-                         "have diverged: an uncovered verb is an unported one that "
+        """Per BINARY, and that is the shape change P5c forced.
+
+        Before this phase there was one candidate command and one verb set. Now a cell
+        declares which entry answers it, so the partition has two sides and each is checked
+        against the table it belongs to. Collapsing the two — asserting only that the union
+        matches — would let a cell be filed under the wrong binary and still pass.
+        """
+        covered = {"hook": set(), "cli": set()}
+        for c in harness_golden.cells():
+            covered[c.get("bin", "hook")].add(c["id"].split("/")[0])
+        self.assertEqual(covered["hook"], entry_verbs(),
+                         "tests/harness_golden.py's hook cells and the hook entry point's "
+                         "verbs have diverged: an uncovered verb is an unported one that "
                          "nothing would report.")
+        self.assertEqual(covered["cli"], cli_verbs(),
+                         "tests/harness_golden.py's cli cells and bin/geneseed-cli.mjs's "
+                         "verbs have diverged.")
+
+    def test_every_cell_declares_a_binary_that_exists(self):
+        """A typo'd `bin` would send a cell to the reference on both sides — which always
+        passes, the same silent-green the `--new-cli` refusal exists to prevent."""
+        bad = sorted({c["id"] for c in harness_golden.cells()
+                      if c.get("bin", "hook") not in ("hook", "cli")})
+        self.assertFalse(bad, f"cells with an unknown `bin`: {bad}")
 
 
 @unittest.skipIf(NODE is None, "node is not on PATH")
@@ -166,6 +234,30 @@ class TheAcceptanceHarnessIsNotVacuous(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertTrue(harness_golden.check_expectations(cell, snap),
                                 f"{kind} was violated and the checker said nothing")
+
+    def test_a_missing_candidate_binary_refuses_rather_than_comparing_ref_to_itself(self):
+        """DECLARING the two-binary split and WIRING it are two properties.
+
+        P4c shipped a narrowing flag whose gate was correct and simply not connected, and
+        P5a's M21 was the same split for `check_expectations`. Here the silent failure is
+        specific: `--new` without `--new-cli` would send every non-hook cell to the
+        REFERENCE on both sides, and a cell compared against itself always passes — an
+        unported verb would read as a ported one, which is the exact thing this harness
+        exists to make impossible.
+        """
+        ref = f"{sys.executable} {HARNESS_PY}"
+        self.assertEqual(
+            harness_golden.main(["--only", "exclude", "--new", ref]), 2,
+            "--new without --new-cli silently compared the non-hook cells against the "
+            "reference itself")
+        self.assertEqual(
+            harness_golden.main(["--only", "exclude/list-with-no-global-install",
+                                 "--new", ref, "--new-cli", ref]), 0,
+            "supplying both candidate binaries must run the cell rather than refuse")
+        self.assertEqual(
+            harness_golden.main(["--only", "git-gate/commit", "--new", ref]), 0,
+            "--new alone must still work when no SELECTED cell needs the other binary — "
+            "the refusal is about the selection, not about the matrix")
 
     def test_only_narrows_the_matrix_and_refuses_an_empty_selection(self):
         """A narrowing flag needs its own WIRING test, separate from any test of what it
@@ -275,6 +367,135 @@ class TheHookEntryIsNotAPassthrough(unittest.TestCase):
 
 
 @unittest.skipIf(NODE is None, "node is not on PATH")
+class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
+    """`bin/geneseed-cli.mjs`, and the ban here is the STRONG one.
+
+    The hook entry could only assert the narrow property — exactly one child-process binding,
+    because `learn`'s whole purpose is handing notes to `$GENESEED_LLM`. Nothing this entry
+    carries has any reason to start a process, so it gets the driver's ban verbatim: no
+    child-process module anywhere in its transitive imports. The day a verb that genuinely
+    spawns lands here (`web`, `upgrade`), this gate is where that decision gets recorded.
+    """
+
+    def test_the_cli_reaches_no_child_process_module(self):
+        """STATIC, and transitive — a source grep on the entry alone cannot see an import
+        one module deep, which is the hole P5a had to close for the generator driver."""
+        seen, queue = set(), [HARNESS_CLI]
+        while queue:
+            f = queue.pop()
+            if f in seen or not f.is_file():
+                continue
+            seen.add(f)
+            text = f.read_text(encoding="utf-8")
+            for banned in ("node:child_process", "'child_process'", '"child_process"'):
+                self.assertNotIn(
+                    banned, text,
+                    f"bin/geneseed-cli.mjs reaches {banned} through {f.relative_to(ROOT)}")
+            for spec in re.findall(r"from\s+'(\.[^']+)'", text):
+                queue.append((f.parent / spec).resolve())
+        self.assertGreater(len(seen), 2,
+                           "the import walk found almost nothing, so it proves nothing")
+
+    def test_exclude_reads_a_real_install_with_no_python_on_path(self):
+        """DYNAMIC. A passthrough's `spawn('python', ...)` dies with ENOENT here; a second
+        implementation never notices. `node` is invoked by absolute path, so stripping PATH
+        cannot take the runtime out from under the test."""
+        stripped, dropped = _path_without_python()
+        self.assertTrue(dropped, "PATH held no python at all, so this run proves nothing")
+        with tempfile.TemporaryDirectory() as tmp_s:
+            tmp = Path(tmp_s)
+            home, repo = tmp / "home", tmp / "repo"
+            (home / ".claude").mkdir(parents=True)
+            repo.mkdir()
+            (home / ".claude" / ".geneseed-manifest.json").write_text(
+                '{"owned": []}\n', encoding="utf-8")
+            (home / ".claude" / "excludes.json").write_text(
+                json.dumps({"excludes": [{"path": repo.as_posix()}]}), encoding="utf-8")
+            env = golden.cell_env(home)
+            env["PATH"] = stripped
+
+            r = run_cli(["exclude", "list"], env=env, cwd=repo)
+            self.assertEqual(r.returncode, 0, f"exclude list failed: {r.stderr[:300]}")
+            self.assertIn("[claude]", r.stdout,
+                          "exclude list produced no install row with python off PATH — it "
+                          "is driving the Python CLI rather than being a second "
+                          "implementation")
+
+
+@unittest.skipIf(NODE is None, "node is not on PATH")
+class ExcludeWiringIsOwnershipTracked(unittest.TestCase):
+    """Asserted ABSOLUTELY, against both implementations, because a comparison is blind here.
+
+    `exclude add` writes a `claudeMdExcludes` entry into the excluded repo's
+    `settings.local.json` and records that it did. `exclude remove` strips only what that
+    record claims. Two writers that both claimed wiring they found rather than created would
+    agree in every cell of the matrix while both deleted a line out of a user's own settings
+    file — the same shape as P4e/M43 and as the gate-document assertion below.
+    """
+
+    def _run(self, cmd, argv, home, repo):
+        r = subprocess.run(cmd + argv, cwd=str(repo), env=golden.cell_env(home),
+                           capture_output=True, text=True, encoding="utf-8")
+        self.assertIn(r.returncode, (0, 1), f"{argv} crashed: {r.stderr[:300]}")
+        return r
+
+    def _excludes_of(self, repo):
+        p = repo / ".claude" / "settings.local.json"
+        if not p.is_file():
+            return None
+        return json.loads(p.read_text(encoding="utf-8")).get("claudeMdExcludes")
+
+    def _world(self, tmp):
+        home, repo = tmp / "home", tmp / "repo"
+        (home / ".claude").mkdir(parents=True)
+        repo.mkdir()
+        (home / ".claude" / ".geneseed-manifest.json").write_text(
+            '{"owned": []}\n', encoding="utf-8")
+        return home, repo
+
+    def _implementations(self):
+        return (("python", [sys.executable, str(HARNESS_PY)]),
+                ("node", [NODE, str(HARNESS_CLI)]))
+
+    def test_remove_unwires_what_add_wired(self):
+        """The positive control, and it is not optional: without it the test below passes
+        on an implementation that never unwires anything at all."""
+        for label, cmd in self._implementations():
+            with self.subTest(impl=label), tempfile.TemporaryDirectory() as tmp_s:
+                home, repo = self._world(Path(tmp_s))
+                self._run(cmd, ["exclude", "add", str(repo)], home, repo)
+                self.assertTrue(self._excludes_of(repo),
+                                "add wired nothing, so the removal below proves nothing")
+                self._run(cmd, ["exclude", "remove", str(repo)], home, repo)
+                self.assertFalse(self._excludes_of(repo),
+                                 "remove left behind the claudeMdExcludes entry add wrote")
+
+    def test_add_does_not_claim_wiring_it_found_rather_than_created(self):
+        """The entry is present and OUR record of it is not — a project install's own
+        project-bypasses-global wiring, or a hand edit. Fabricating ownership there makes
+        the next `remove` delete a line Geneseed never wrote.
+
+        The precondition is reached behaviourally rather than by guessing the entry string:
+        one `add` creates both, then the install's `excludes.json` is deleted, which erases
+        the record while leaving the wiring in the repo exactly as another writer would.
+        """
+        for label, cmd in self._implementations():
+            with self.subTest(impl=label), tempfile.TemporaryDirectory() as tmp_s:
+                home, repo = self._world(Path(tmp_s))
+                self._run(cmd, ["exclude", "add", str(repo)], home, repo)
+                before = self._excludes_of(repo)
+                self.assertTrue(before, "add wired nothing, so this cell has no precondition")
+                (home / ".claude" / "excludes.json").unlink()
+
+                self._run(cmd, ["exclude", "add", str(repo)], home, repo)
+                self._run(cmd, ["exclude", "remove", str(repo)], home, repo)
+                self.assertEqual(
+                    self._excludes_of(repo), before,
+                    f"{label}: exclude add claimed ownership of a claudeMdExcludes entry it "
+                    f"found rather than created, and the following remove deleted it")
+
+
+@unittest.skipIf(NODE is None, "node is not on PATH")
 class TheGateDocumentIsWhatAHostHonours(unittest.TestCase):
     """Asserted absolutely, against a literal, because this is the shape a comparison is
     blind to: both implementations could carry the same typo'd key and agree forever while
@@ -319,7 +540,10 @@ class TheEntryRefusesRatherThanNoOps(unittest.TestCase):
         Geneseed hook returns 0 and signals through stdout, so a silent no-op and a
         success are the SAME observation — the refusal is what makes the difference
         visible, and it names the command that does work."""
-        for verb in ("doctor", "build", "status", "uninstall"):
+        # `exclude` is in this list since P5c and is the interesting one: it is a verb the
+        # SIBLING Node binary answers, so "some Node entry point handles it" is now true
+        # while "this one does" must stay false. The shim bakes exactly one of the two.
+        for verb in ("doctor", "build", "status", "uninstall", "exclude"):
             with self.subTest(verb=verb):
                 r = run_hook([verb])
                 self.assertEqual(r.returncode, 2,

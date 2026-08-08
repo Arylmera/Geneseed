@@ -42,6 +42,13 @@ import {
 } from '../js/emit.mjs';
 import { settingsIntegrityCheck } from '../js/settings.mjs';
 import { writeText, parseJson, jsonDumpsIndent } from '../js/lib/pyfs.mjs';
+// P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
+// find a global install, and a resolver that decides WHERE a driver writes is the last thing
+// that should exist twice. golden.py's 259 cells are what made the move safe to attempt.
+import {
+  GLOBAL_MANIFEST, expanduser, pyResolve, opencodeConfigDir, claudeConfigDir, bobConfigDir,
+  copilotConfigDir,
+} from '../js/hosts.mjs';
 
 /** `_build_core.ROOT` — the checkout, from this script's own location (bin/..). */
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -64,8 +71,6 @@ const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global'
  */
 const PORTED = new Set(EMITS);
 
-/** `_build_global.GLOBAL_MANIFEST`. */
-const GLOBAL_MANIFEST = '.geneseed-manifest.json';
 /** `_build_emit.PRIMARY_AGENT_SRC`. */
 const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orchestrator.md');
 /**
@@ -187,95 +192,6 @@ function makeCfg(args) {
     posture: args.posture,
     mode: args.mode,
   };
-}
-
-/**
- * `Path.expanduser()` — a LEADING `~` only, and `~` alone counts.
- *
- * Deliberately not a general tilde expansion: Python does not expand `~user` on Windows the
- * way a shell would, and every caller here feeds it a config-dir env var.
- */
-function expanduser(p) {
-  if (p === '~') return os.homedir();
-  if (p.startsWith('~/') || p.startsWith('~\\')) return path.join(os.homedir(), p.slice(2));
-  return p;
-}
-
-/**
- * `Path.resolve()` — absolute, symlinks followed, and the filesystem's OWN casing.
- *
- * `path.resolve` does none of the last two and `realpathSync` THROWS on a path that does not
- * exist yet, which is the normal case here: the first `--emit opencode-global` on a machine
- * resolves a config dir nobody has created. Python's `resolve(strict=False)` canonicalises
- * the part that exists and appends the rest verbatim, so that is what this reproduces.
- * It matters because the resolved directory is printed on stdout and compared byte-for-byte.
- */
-function pyResolve(p) {
-  let cur = path.resolve(expanduser(p));
-  const tail = [];
-  for (;;) {
-    try {
-      return tail.length ? path.join(realpathSync.native(cur), ...tail) : realpathSync.native(cur);
-    } catch {
-      const parent = path.dirname(cur);
-      if (parent === cur) return path.resolve(expanduser(p));  // nothing on this path exists
-      tail.unshift(path.basename(cur));
-      cur = parent;
-    }
-  }
-}
-
-/**
- * `_build_core._opencode_config_dir` — and the four resolvers like it are the reason this
- * driver exists rather than a child doing the work.
- *
- * P3c's rule was "the child must never resolve this": a render child that did would write
- * 135 files into the developer's real `~/.config/opencode`. This file is the PARENT, so the
- * rule inverts — resolving it here is exactly the job. Precedence is the env var (which
- * relocates the whole dir), then `$XDG_CONFIG_HOME/opencode`, then `~/.config/opencode`.
- */
-function opencodeConfigDir() {
-  const env = process.env.OPENCODE_CONFIG_DIR;
-  if (env) return pyResolve(env);
-  const xdg = process.env.XDG_CONFIG_HOME;
-  const base = xdg ? expanduser(xdg) : path.join(os.homedir(), '.config');
-  return pyResolve(path.join(base, 'opencode'));
-}
-
-/**
- * `_build_core._copilot_config_dir` — `~/.copilot`, relocatable via `$COPILOT_CONFIG_DIR`.
- *
- * Geneseed's own knob, mirroring `$BOB_CONFIG_DIR`: Copilot documents no such variable, but
- * tests, doctor and locked-down setups still need to re-point the target. Like every
- * relocation variable it is CLEARED by `golden.cell_env`, so no cell can observe whether
- * this driver honours it — see `test_the_relocation_var_moves_the_global_target`.
- */
-function copilotConfigDir() {
-  const env = process.env.COPILOT_CONFIG_DIR;
-  if (env) return pyResolve(env);
-  return pyResolve(path.join(os.homedir(), '.copilot'));
-}
-
-/**
- * `_build_core._claude_config_dir` — `~/.claude`, and there is NO env branch BY DESIGN.
- *
- * Its three siblings all check a `*_CONFIG_DIR` variable first; this one does not, because
- * Claude Code documents none and inventing one here would make the two CLIs disagree about
- * where a global install lives. The absence is the specification, so it is asserted rather
- * than merely not implemented — `test_every_relocation_var_moves_its_global_target` carries
- * an INVERSE row for this host: setting `$CLAUDE_CONFIG_DIR` must NOT move the target.
- * Without that row the table could only say "no cell covers Claude", which reads the same
- * as an omission.
- */
-function claudeConfigDir() {
-  return pyResolve(path.join(os.homedir(), '.claude'));
-}
-
-/** `_build_core._bob_config_dir` — `~/.bob`, relocatable via `$BOB_CONFIG_DIR`. */
-function bobConfigDir() {
-  const env = process.env.BOB_CONFIG_DIR;
-  if (env) return pyResolve(env);
-  return pyResolve(path.join(os.homedir(), '.bob'));
 }
 
 /**

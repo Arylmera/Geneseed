@@ -539,6 +539,40 @@ renders it as the name in parentheses.
   process with that source still clean. `tests/test_hook_cli_parity.py` walks the driver's
   transitive relative imports instead — the same assertion, one level out, added because of
   this phase.
+- **The first NON-hook verb crosses, and it needed a third binary rather than a row in an
+  existing table.** `harness exclude add|remove|list` — the sovereign-repo exclusions —
+  is now [`js/excludes.mjs`](js/excludes.mjs) behind
+  [`bin/geneseed-cli.mjs`](bin/geneseed-cli.mjs). The *reader* had been ported since P5a
+  (`sovereignBypass` runs on every hook call); this is the writer, which maintains
+  `excludes.json` across every global install and wires each host's native per-repo
+  suppression into the excluded repo.
+  **Where to put it was the whole question, and two of the three answers cost something
+  specific.** Growing `bin/geneseed-hook.mjs` would have meant relaxing
+  `test_the_entry_carries_exactly_the_verbs_the_emitter_wires` from equality to a subset
+  relation — the gate the machine-wide shim now rests on — *and* loading `js/settings.mjs`
+  plus `js/emit.mjs`, ~2,100 lines, on every `PreToolUse` call, against a spec that says the
+  shim must exec a minimal entry. Putting it in `bin/geneseed.mjs` would have crossed two
+  different Python programs: that file is `build.py`'s `main()`, parses generator flags with
+  a partition asserted over them, and carries a `child_process` ban that `web` and `upgrade`
+  will eventually need broken — the ban should outlive them, not be dismantled by the first
+  verb that does not need it. So the two Node entries are **disjoint by assertion**, and
+  `tests/harness_golden.py` grew a `bin` per cell and a `--new-cli` beside `--new`.
+  **Supplying one candidate binary and not the other is refused, not defaulted**: an
+  unsupplied cell would compare the reference against itself, which always passes and reads
+  exactly like a ported verb.
+  **The ownership rule is asserted absolutely, because a comparison is blind to it.**
+  `exclude add` records the `claudeMdExcludes` entry it *created* so that `exclude remove`
+  strips only that; an entry found rather than created — a project install's own wiring, or
+  a hand edit — must never be claimed. Two writers that both claimed what they found would
+  agree in every cell of the matrix while both deleting a line out of a user's settings file,
+  so that one is a hand-written gate run against **both** implementations, with the
+  positive control (`remove` really does unwire what `add` wired) beside it, since without it
+  the test passes on an implementation that never unwires anything.
+  **Two writers for one user-owned file is a stated, temporary cost.**
+  `rituals/_web_actions.py` calls the Python `exclude_add`/`exclude_remove` verbatim and the
+  web server is a later phase, so until then both exist — held byte-equal by the matrix, and
+  atomic (temp + rename) on both sides, so a concurrent pair loses an edit rather than
+  tearing the file.
 
 ## 🚫 Explicitly out of scope
 

@@ -34,7 +34,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readText, writeText, jsonDumpsCompact, normcase, comparePaths }
+import { readText, writeText, jsonDumpsCompact, normcase, comparePaths, pyPrint, pyPrintErr }
   from './lib/pyfs.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -200,25 +200,12 @@ function readStdin() {
   }
 }
 
-/**
- * The two output funnels, with Python's newline translation reproduced.
- *
- * `sys.stdout` is a TextIOWrapper with `newline=None`, so on Windows every `\n` a hook
- * prints leaves the process as `\r\n` — and `harness.py`'s `reconfigure(encoding="utf-8")`
- * changes the encoding only, not that. `process.stdout` translates nothing, so an install
- * emitted by the Node driver would hand its host different BYTES than the same install
- * emitted by Python: measured at 176 vs 171 for one `context` run.
- *
- * `harness_golden.py` structurally cannot see it — `subprocess` decodes with universal
- * newlines on the way back, folding both to `\n` before any cell compares them, the same
- * shape as the shim's exclusion from `golden.py`. It went unobservable while nothing baked
- * this entry into a shim; P5b's flip makes it what a real host reads, so it is fixed here
- * and gated in binary rather than left on the known-differences list.
- */
-const NL = process.platform === 'win32' ? '\r\n' : '\n';
-const xlate = (s) => (NL === '\n' ? s : s.replaceAll('\n', NL));
-const out = (s) => process.stdout.write(xlate(s));
-const err = (s) => process.stderr.write(xlate(s));
+// The two output funnels, with Python's newline translation reproduced. They moved to
+// `js/lib/pyfs.mjs` in P5c — beside `writeText`, which is the same rule for FILES — when
+// `js/excludes.mjs` became the second caller; see that docblock for why the translation
+// exists and which gate can see it.
+const out = pyPrint;
+const err = pyPrintErr;
 
 /**
  * `_build_core._opencode_config_dir`, duplicated rather than imported.

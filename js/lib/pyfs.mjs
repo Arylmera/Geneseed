@@ -10,6 +10,7 @@
  */
 import { writeFileSync, readFileSync, copyFileSync, statSync, utimesSync } from 'node:fs';
 import { EOL } from 'node:os';
+import path from 'node:path';
 
 /**
  * `Path.write_text(text, encoding="utf-8")`.
@@ -394,4 +395,47 @@ export function pyRepr(v) {
  */
 export function pyAscii(v) {
   return pyReprImpl(v, true);
+}
+
+/**
+ * `print()` — the two output funnels, with Python's newline translation reproduced.
+ *
+ * The STREAM twin of `writeText` above, and it lives beside it because it is the same rule:
+ * `sys.stdout` is a TextIOWrapper with `newline=None`, so on Windows every `\n` a CLI prints
+ * leaves the process as `\r\n` — and `harness.py`'s `reconfigure(encoding="utf-8")` changes
+ * the encoding only, not that. `process.stdout` translates nothing, so a Node CLI would hand
+ * its caller different BYTES than the Python one: measured at 176 vs 171 for one `context`
+ * run before this existed.
+ *
+ * `harness_golden.py` structurally cannot see the difference — `subprocess` decodes with
+ * universal newlines on the way back, folding both shapes to `\n` before any cell compares
+ * them, the same shape as the shim's exclusion from `golden.py`. So the gate for it is
+ * `test_the_two_entry_points_agree_on_stdout_BYTES`, which captures raw bytes. Moved here
+ * from `js/hooks.mjs` in P5c, when `js/excludes.mjs` became the second caller: a translation
+ * that exists twice is a translation that can be fixed once.
+ */
+const xlate = (s) => (EOL === '\n' ? s : s.replaceAll('\n', EOL));
+export const pyPrint = (s) => process.stdout.write(xlate(s));
+export const pyPrintErr = (s) => process.stderr.write(xlate(s));
+
+/**
+ * `str(PurePath(s))` — separators normalised to the platform's, `.` components dropped,
+ * duplicate separators collapsed, a trailing one removed.
+ *
+ * `path.normalize` is NOT this: it also collapses `a/../b` to `b`, and `PurePath` keeps the
+ * `..` because a symlinked `a` makes those two different directories. The distinction is
+ * live in `js/excludes.mjs`, where a hand-edited `excludes.json` entry is compared against a
+ * RESOLVED repo path — Python never matches a `..` entry there, and a normalising port would
+ * match it and unwire a file the reference would have left alone.
+ */
+export function pyPathStr(s) {
+  const raw = path.parse(s).root;
+  // Each separator individually, never `replace(/[\\/]+/g, sep)`: a UNC root's LEADING pair
+  // is part of it, so collapsing runs turns `//server/share/x` into `\server\share\x`.
+  // Measured against `str(Path(...))` over a 25-path corpus; that was the one that differed.
+  const root = raw.replace(/[\\/]/g, path.sep);
+  const parts = s.slice(raw.length).split(/[\\/]+/).filter((p) => p !== '' && p !== '.');
+  const tail = parts.join(path.sep);
+  if (!root) return tail || '.';
+  return root + tail;
 }

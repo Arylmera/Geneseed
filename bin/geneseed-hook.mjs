@@ -101,9 +101,14 @@ function main(argv) {
   }
   const spec = VERBS[verb];
   if (!spec) {
+    // "elsewhere", not "still Python": since P5c some verbs also answer from
+    // `bin/geneseed-cli.mjs`, and naming that file here would mean this entry carrying a
+    // copy of its sibling's verb table — the one thing
+    // `test_the_two_entry_points_carry_disjoint_verb_sets` exists to keep from happening.
+    // `rituals/harness.py` answers all 24, so it is the command that is always right.
     return die(2, `invalid choice: '${verb}'. This entry point carries only the four HOOK `
-      + `verbs (${Object.keys(VERBS).join(', ')}); every other harness subcommand is `
-      + 'still Python — run `python rituals/harness.py ' + verb + '`.');
+      + `verbs (${Object.keys(VERBS).join(', ')}); every other harness subcommand lives `
+      + 'elsewhere — run `python rituals/harness.py ' + verb + '`.');
   }
   const parsed = parse(spec, argv.slice(1));
   if (parsed.error) return die(2, parsed.error);

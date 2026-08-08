@@ -197,18 +197,30 @@ graduate it (remove the marker) or demote it back to memory.
 `;
 
 /** `_build_render.EXCLUDES_FILE`. */
-const EXCLUDES_FILE = 'excludes.json';
+export const EXCLUDES_FILE = 'excludes.json';
 
-/** `_build_render.EXCLUDES_STUB` — one long line, exactly as Python spells it. */
-const EXCLUDES_STUB = `\
+/**
+ * `_build_render.EXCLUDES_STUB` — one long line, exactly as Python spells it.
+ *
+ * Exported since P5c because `js/excludes.mjs` reads it as the single source of the shape a
+ * missing or corrupt `excludes.json` degrades to, exactly as `_harness_exclude._read_excludes`
+ * reads `build.EXCLUDES_STUB` rather than spelling `{"excludes": []}` a second time.
+ */
+export const EXCLUDES_STUB = `\
 {
   "_comment": "Folders where this global Geneseed install goes dormant (hooks silent, preamble suppressed). Managed by \`harness exclude add|remove|list\`; safe to edit by hand. Paths are absolute.",
   "excludes": []
 }
 `;
 
-/** `_build_global._BOB_RULES_STUB` — the workspace shadow stub a PROJECT Bob emit ships. */
-const BOB_RULES_STUB = `\
+/**
+ * `_build_global._BOB_RULES_STUB` — the workspace shadow stub a PROJECT Bob emit ships.
+ *
+ * Exported since P5c: `harness exclude add` writes the SAME stub into an excluded repo, and
+ * decides ownership on the next `remove` by comparing the file's content to it byte for byte
+ * — so a second spelling here would orphan every stub the other writer created.
+ */
+export const BOB_RULES_STUB = `\
 <!-- geneseed: workspace shadow stub -->
 This project's Geneseed instructions are the repo-root \`AGENTS.md\`, which Bob
 auto-loads. This file exists only to shadow the same-named global Geneseed rules

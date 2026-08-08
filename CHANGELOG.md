@@ -9,6 +9,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's thirteenth piece, and the first command that is not a hook: `geneseed exclude`
+  has a Node twin.** `exclude add`, `exclude remove` and `exclude list` — the sovereign-repo
+  exclusions, the folders where your global install goes quiet — now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. Both maintain the
+  same `excludes.json` in every global install, both wire the same per-host suppression into
+  the excluded folder, and 22 side-by-side checks compare everything either one can be
+  observed doing.
+  **Why a new command file rather than an existing one.** The hook launcher is deliberately
+  tiny — it runs on *every* tool call — and the builder is under a rule that it may not start
+  other programs, which is half of what proves it is a real second implementation. Neither
+  was the right home for an ordinary CLI command, so there is now a third: the hook launcher,
+  the builder, and this. Nothing you have installed changes.
+  **Nothing about your existing exclusions changes**, and the Python command is still there —
+  the web UI's exclusions page calls straight into it, so both stay until that page moves too.
 - **The port's twelfth piece: an install built with `node bin/geneseed.mjs` no longer needs
   Python at all.** The hooks it wires now launch the Node twin, so building and running a
   Claude or Bob install is Python-free end to end. Building one used to stop with an error

@@ -16,7 +16,20 @@ not "one emit into one sandbox" — it is:
 
     python tests/harness_golden.py                              # determinism self-check
     python tests/harness_golden.py --only context               # one verb, fast
-    python tests/harness_golden.py --new "node bin/geneseed-hook.mjs"    # the P5 gate
+    python tests/harness_golden.py --new "node bin/geneseed-hook.mjs" \
+                                  --new-cli "node bin/geneseed-cli.mjs"     # the P5 gate
+
+TWO CANDIDATE BINARIES, ONE REFERENCE
+-------------------------------------
+`rituals/harness.py` answers all 24 subcommands, so the REFERENCE side is one command for
+every cell. The Node side is split: `bin/geneseed-hook.mjs` carries the four verbs a hook
+invokes and stays minimal because the shim execs it on every tool call, and
+`bin/geneseed-cli.mjs` carries the rest. So a cell declares which one answers it — `bin`,
+defaulting to `"hook"` — and `--new-cli` supplies the second command.
+
+Supplying `--new` while a selected cell needs `--new-cli` REFUSES rather than quietly
+comparing that cell's reference against itself: a ref-vs-ref cell always passes, which reads
+exactly like a ported verb. Same discipline as `--only` refusing an empty selection.
 
 DO NOT MISTAKE THE SELF-CHECK FOR A REGRESSION GATE — the same warning golden.py carries.
 With no --new this runs the reference CLI against ITSELF and proves only that the cells are
@@ -61,8 +74,6 @@ import golden  # noqa: E402  (needs tests/ on the path first)
 
 ROOT = golden.ROOT
 FAKE_LLM = ROOT / "tests" / "fixtures" / "fake_llm.py"
-
-VERBS = ("context", "git-gate", "rule-gate", "learn")
 
 # One canned model reply, reused wherever the shape of the fact does not matter. Written
 # as a fixture file rather than inline in the env so the fake CLI's contract stays "read a
@@ -111,6 +122,9 @@ def cells() -> list[dict]:
     """Every cell, grouped by verb. A cell is a dict:
 
         id            "<verb>/<name>", the display key and the --only prefix
+        bin           which candidate binary answers this verb: "hook" (default) or "cli".
+                      The REFERENCE is one command for every cell — `rituals/harness.py`
+                      answers all 24 subcommands — so only the candidate side splits.
         world         {relative path: text} seeded into the sandbox before the run
         steps         [{argv, stdin, cwd}] — more than one runs them in order into the
                       SAME sandbox, and only the LAST step's streams are compared (the
@@ -131,7 +145,8 @@ def cells() -> list[dict]:
     unparseable-input path instead of the one it names. Six cells were written that way
     and every one of them was caught by its own `expect` rather than by review.
     """
-    return _context_cells() + _git_gate_cells() + _rule_gate_cells() + _learn_cells()
+    return (_context_cells() + _git_gate_cells() + _rule_gate_cells() + _learn_cells()
+            + _exclude_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -676,6 +691,160 @@ def _learn_cells() -> list[dict]:
 
 
 # --------------------------------------------------------------------------------------
+# exclude  —  the first NON-hook verb, answered by `bin/geneseed-cli.mjs`
+# --------------------------------------------------------------------------------------
+#
+# A global install is "a host config dir holding a Geneseed manifest", so every cell seeds
+# that file rather than running an emit. `golden.cell_env` redirects HOME/USERPROFILE/XDG
+# into `{home}` and CLEARS every `*_CONFIG_DIR` relocation variable, which is what puts the
+# four hosts at fixed, seedable paths under the sandbox.
+
+_MANIFEST = '{"owned": []}\n'
+_CLAUDE = {"home/.claude/.geneseed-manifest.json": _MANIFEST}
+_BOB = {"home/.bob/.geneseed-manifest.json": _MANIFEST}
+_COPILOT = {"home/.copilot/.geneseed-manifest.json": _MANIFEST}
+_OPENCODE = {"home/.config/opencode/.geneseed-manifest.json": _MANIFEST}
+
+
+def _exclude_cells() -> list[dict]:
+    def ex(name, argv, world=None, steps=None, **kw):
+        return dict(id=f"exclude/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    steps=steps or [{"argv": argv, "cwd": "repo"}], **kw)
+
+    def excludes(host_dir, body):
+        return {f"home/{host_dir}/excludes.json": body}
+
+    return [
+        # ---- list ----
+        ex("list-with-no-global-install", ["exclude", "list"],
+           expect=["no global install found"]),
+        ex("list-with-nothing-excluded", ["exclude", "list"], world=_CLAUDE,
+           expect=["no folders excluded"]),
+        ex("list-one-folder", ["exclude", "list"],
+           world=dict(_CLAUDE, **excludes(".claude",
+                                          '{"excludes": [{"path": "{repo/}"}]}\n')),
+           expect=["repo  [claude]"]),
+        ex("list-flags-a-host-that-is-missing-the-entry", ["exclude", "list"],
+           # The divergence `excludes_snapshot` exists to surface: a global emit made AFTER
+           # the exclusions were added starts from an empty stub, so one install knows about
+           # a folder and another does not.
+           world=dict(_CLAUDE, **_BOB,
+                      **excludes(".claude", '{"excludes": [{"path": "{repo/}"}]}\n')),
+           expect=["(MISSING from: bob", "re-run `harness exclude add`"]),
+        ex("list-a-bare-string-entry", ["exclude", "list"],
+           # The pre-`wired` on-disk shape, still supported by both readers.
+           world=dict(_CLAUDE, **excludes(".claude", '{"excludes": ["{repo/}"]}\n')),
+           expect=["repo  [claude]"]),
+        ex("list-skips-unusable-entries", ["exclude", "list"],
+           # A hand-edited file, and the entries are the four shapes that reached
+           # `excludes_snapshot` as something other than a path. Reaching "no folders
+           # excluded" IS the assertion — that line is only printed when every entry was
+           # filtered out, so it cannot be produced by a reader that kept any of them.
+           world=dict(_CLAUDE, **excludes(
+               ".claude", '{"excludes": [7, null, {"path": 3}, "", {"nope": 1}]}\n')),
+           expect=["no folders excluded"]),
+        # ---- add ----
+        ex("add-wires-claude", ["exclude", "add", "{repo}"], world=_CLAUDE,
+           expect=["excluded."],
+           expect_files=["home/.claude/excludes.json",
+                         "repo/.claude/settings.local.json"]),
+        ex("add-is-idempotent", None, world=_CLAUDE,
+           # Two runs into one sandbox. The second is the one compared, and it is the branch
+           # where `wireClaudeExcludes` reports nothing new but ownership still has to carry
+           # forward from OUR own prior record — a re-add that dropped it would leave a
+           # later `remove` unable to unwire what it wired.
+           steps=[{"argv": ["exclude", "add", "{repo}"], "cwd": "repo"},
+                  {"argv": ["exclude", "add", "{repo}"], "cwd": "repo"}],
+           expect=["claudeMdExcludes already present (kept)", "excluded."],
+           expect_files=["home/.claude/excludes.json",
+                         "repo/.claude/settings.local.json"]),
+        ex("add-writes-the-bob-shadow-stub", ["exclude", "add", "{repo}"], world=_BOB,
+           expect=["excluded."],
+           expect_files=["repo/.bob/rules/geneseed.md", "home/.bob/excludes.json"]),
+        ex("add-keeps-a-foreign-bob-stub", ["exclude", "add", "{repo}"],
+           # Ownership is decided by CONTENT: a stub that exists but is not ours must be
+           # kept and recorded as not-ours, so the next remove leaves it alone.
+           world=dict(_BOB, **{"repo/.bob/rules/geneseed.md": "# my own rules\n"}),
+           expect=["rules/geneseed.md already exists (kept, not ours)", "excluded."],
+           expect_files=["repo/.bob/rules/geneseed.md"]),
+        ex("add-warns-for-copilot", ["exclude", "add", "{repo}"], world=_COPILOT,
+           expect=["copilot: no native suppression exists", "excluded."]),
+        ex("add-walks-every-host-in-registry-order", ["exclude", "add", "{repo}"],
+           # THREE messages, one per host that has something to say, and the ORDER is the
+           # point: `HOSTS` is opencode, claude, bob, copilot, and stderr carries them in
+           # that sequence. `expect` cannot state an order — the byte comparison of
+           # `<stderr>` is what gates it, and these substrings only keep the cell honest
+           # about still producing all three.
+           world=dict(_OPENCODE, **_CLAUDE, **_BOB, **_COPILOT,
+                      **{"repo/.bob/rules/geneseed.md": "# my own rules\n",
+                         "repo/.claude/settings.local.json":
+                             '{"claudeMdExcludes": ["{home/}/.claude/CLAUDE.md"]}\n'}),
+           expect=["claude: claudeMdExcludes already present (kept)",
+                   "bob: rules/geneseed.md already exists (kept, not ours)",
+                   "copilot: no native suppression exists"],
+           expect_files=["home/.config/opencode/excludes.json",
+                         "home/.claude/excludes.json", "home/.bob/excludes.json",
+                         "home/.copilot/excludes.json"]),
+        ex("add-with-no-global-install", ["exclude", "add", "{repo}"],
+           expect=["no global Geneseed install found", "nothing done for"]),
+        ex("add-a-folder-that-does-not-exist", ["exclude", "add", "{sb}/ghost"],
+           # Excluded anyway — the folder may be created later — and NO host wiring is
+           # attempted, because there is nowhere to put it.
+           world=_CLAUDE,
+           expect=["does not exist (excluded anyway)", "excluded."],
+           expect_absent=["claudeMdExcludes already present"]),
+        ex("add-a-relative-path", ["exclude", "add", "."], world=_CLAUDE,
+           # `_canon` resolves against CWD, which is an INPUT to this harness. What is
+           # stored and printed must be the absolute path, not the dot.
+           expect=["repo excluded."], expect_absent=["\" . \""]),
+        ex("add-without-a-path", ["exclude", "add"], world=_CLAUDE,
+           # From `cmd_exclude`'s own body, not from argparse — which is why it is compared
+           # rather than merely asserted. Exit code 2 is part of the compared surface.
+           expect=["needs a folder path"]),
+        ex("add-into-a-corrupt-excludes-file", ["exclude", "add", "{repo}"],
+           # `_read_excludes` degrades to the seeded stub's shape, so the add still succeeds
+           # and the file it leaves behind is valid again. The FILE comparison is the
+           # assertion; `expect` only proves the cell still reaches the write.
+           world=dict(_CLAUDE, **excludes(".claude", "{not json\n")),
+           expect=["excluded."], expect_files=["home/.claude/excludes.json"]),
+        # ---- remove ----
+        ex("remove-unwires-what-add-wired", None, world=dict(_CLAUDE, **_BOB),
+           steps=[{"argv": ["exclude", "add", "{repo}"], "cwd": "repo"},
+                  {"argv": ["exclude", "remove", "{repo}"], "cwd": "repo"}],
+           # The tree left behind is the assertion: the bob stub AND its now-empty `rules/`
+           # directory are gone, and `claudeMdExcludes` is out of settings.local.json.
+           expect=["re-included."],
+           expect_files=["home/.claude/excludes.json", "home/.bob/excludes.json"]),
+        ex("remove-a-folder-that-was-never-excluded", ["exclude", "remove", "{repo}"],
+           world=_CLAUDE, expect=["was not excluded", "nothing done for"]),
+        ex("remove-when-the-shadow-stub-is-already-gone",
+           ["exclude", "remove", "{repo}"],
+           # Hand-deleted wiring is reported, not fatal — the entry still leaves the list.
+           world=dict(_BOB, **excludes(".bob", '{"excludes": [{"path": "{repo/}", '
+                                               '"wired": {"bob_rules_stub": true}}]}\n')),
+           expect=["shadow stub already gone", "re-included."]),
+        ex("remove-does-not-match-a-dotdot-entry", ["exclude", "remove", "{repo}"],
+           # `_same` compares `str(Path(stored))`, which KEEPS `..` — `Path` is not
+           # `os.path.normpath`. A port built on `path.normalize` collapses it, matches, and
+           # unwires a repo the reference left alone. That is the whole difference this cell
+           # exists for, and it is invisible in every other one.
+           world=dict(_CLAUDE, **excludes(
+               ".claude", '{"excludes": [{"path": "{repo/}/../repo"}]}\n')),
+           expect=["was not excluded"]),
+        ex("remove-a-case-differing-entry", ["exclude", "remove", "{repo}"],
+           # `os.path.normcase` folds case on Windows and is the identity on POSIX, so this
+           # cell asserts OPPOSITE outcomes on the two platforms and both are real: a
+           # Windows user's `C:\Repo` and `C:\repo` are one folder, a Linux user's are two.
+           # Written this way rather than skipped because a port that dropped the fold would
+           # be green on POSIX either way — this is the platform where it is observable.
+           world=dict(_CLAUDE, **excludes(
+               ".claude", '{"excludes": [{"path": "{sb/}/REPO"}]}\n')),
+           expect=["re-included."] if sys.platform == "win32" else ["was not excluded"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
 # the runner
 # --------------------------------------------------------------------------------------
 
@@ -776,12 +945,15 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     return problems
 
 
-def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int) -> int:
-    print(f"[harness-golden] {len(matrix)} cells · ref={' '.join(ref)} · new={' '.join(new)}")
+def compare(ref: dict, new: dict, matrix: list[dict], limit: int) -> int:
+    """`ref` and `new` map a cell's `bin` ("hook"/"cli") to the command that answers it."""
+    shown = " · ".join(f"new[{k}]={' '.join(v)}" for k, v in sorted(new.items()))
+    print(f"[harness-golden] {len(matrix)} cells · ref={' '.join(ref['hook'])} · {shown}")
     failures: list[str] = []
     for i, cell in enumerate(matrix, 1):
         cid = cell["id"]
-        a, b = run_cell(ref, cell), run_cell(new, cell)
+        which = cell.get("bin", "hook")
+        a, b = run_cell(ref[which], cell), run_cell(new[which], cell)
         if isinstance(a, str) or isinstance(b, str):
             failures.append(f"  {cid}: CLI failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                             f"\n    new: {b if isinstance(b, str) else 'ok'}")
@@ -829,8 +1001,12 @@ def main(argv=None) -> int:
     ap.add_argument("--ref", default=None,
                     help="reference CLI (default: this repo's rituals/harness.py)")
     ap.add_argument("--new", default=None,
-                    help="candidate CLI. Omitted: compare ref against itself, which "
-                         "self-checks determinism.")
+                    help="candidate CLI for the four HOOK verbs. Omitted: compare ref "
+                         "against itself, which self-checks determinism.")
+    ap.add_argument("--new-cli", default=None,
+                    help="candidate CLI for the non-hook verbs. The Node side is two "
+                         "binaries where harness.py is one; supplying --new without this "
+                         "while a selected cell needs it is refused, not defaulted.")
     ap.add_argument("--only", default=None,
                     help="comma-separated verbs or cell-id prefixes to keep. For a PARTIAL "
                          "port, and for iteration. Refuses an empty selection rather than "
@@ -840,7 +1016,6 @@ def main(argv=None) -> int:
 
     ref = _resolve_cli(golden._split(args.ref)) if args.ref else [
         sys.executable, str(ROOT / "rituals" / "harness.py")]
-    new = _resolve_cli(golden._split(args.new)) if args.new else ref
     matrix = cells()
     if args.only:
         keep = [p.strip() for p in args.only.split(",") if p.strip()]
@@ -849,7 +1024,22 @@ def main(argv=None) -> int:
             print(f"[harness-golden] --only {','.join(keep)} selected 0 cells — nothing "
                   f"would be compared, which is not a pass.")
             return 2
-    return compare(ref, new, matrix, args.limit)
+
+    # The reference answers every verb from one binary; the candidate may not. A cell whose
+    # binary was not supplied would silently compare the reference against ITSELF and pass,
+    # which reads exactly like a ported verb — the same failure mode as `--only` matching
+    # nothing, and refused the same way.
+    new = {"hook": _resolve_cli(golden._split(args.new)) if args.new else ref,
+           "cli": _resolve_cli(golden._split(args.new_cli)) if args.new_cli else ref}
+    if args.new and not args.new_cli:
+        needs = sorted({c["id"] for c in matrix if c.get("bin", "hook") == "cli"})
+        if needs:
+            print(f"[harness-golden] --new was given but --new-cli was not, and "
+                  f"{len(needs)} selected cell(s) are answered by the non-hook binary "
+                  f"({needs[0]}, ...). They would have been compared against the reference "
+                  f"itself, which always passes. Pass --new-cli, or --only the hook verbs.")
+            return 2
+    return compare({"hook": ref, "cli": ref}, new, matrix, args.limit)
 
 
 if __name__ == "__main__":
