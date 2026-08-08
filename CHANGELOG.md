@@ -9,6 +9,29 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's eleventh piece, and the first that is not the builder: the four hooks your
+  install runs every session have a Node twin.** `context` (the one that injects your repo's
+  docs at session start), `git-gate` and `rule-gate` (the two that make the host ask before a
+  commit or a memory write), and `learn` (the one that distils a session into memory) all now
+  run from `node bin/geneseed-hook.mjs` as well as from `python rituals/harness.py`.
+  **Nothing about your installs changes yet.** Emitted hooks still call Python, and building a
+  Claude/Bob install still needs a Python on your machine. Wiring the new twin in is a
+  separate step, deliberately: an install's hooks are the part that fails *silently* when it
+  is wrong, so it moves once and with the evidence in hand.
+  What is in hand: 93 side-by-side checks covering both, comparing everything either one can
+  be observed doing — what it prints, what it warns, the exit code it returns, and every file
+  it writes. Discovery with and without a `context.json`, globs, `extend`, the
+  project-bypasses-global stand-down, sovereign-repo exclusions, malformed payloads, memory
+  dedup, transcripts, per-agent lessons and `--consolidate`.
+- **Fixed on the way: a distilled memory containing an accent or an em dash could be
+  corrupted as it was stored.** `learn` read the model CLI's reply using the console's legacy
+  code page on Windows rather than UTF-8, and the mangled text was then written into your
+  memory store — so the damage outlived the run. It now reads UTF-8 on both paths.
+- **Changed: a `context.json` with a syntax error now names the file and tells you to fix it,
+  instead of quoting the JSON parser's own message.** The old message came straight from
+  Python's decoder, and no second implementation can reproduce it — the two engines disagree
+  about both the wording and where the error is. An unreadable (as opposed to invalid) file is
+  now reported separately, which it never was.
 - **The port's tenth piece: every install mode now works from `node bin/geneseed.mjs`,
   including the four that install hooks.** `claude`, `claude-global`, `bob` and `bob-global`
   were the last four on Python, and they were last because of one honest problem: a hook is

@@ -452,6 +452,57 @@ renders it as the name in parentheses.
   implementations speak so their stderr can be compared. The four earlier kinds —
   fresh-sandbox, flag-never-varied, deliberately-cleared-env, empty-precondition — each
   needed a different fix, and so did this one.
+- **The runtime port starts with the four HOOK verbs, and with a gate rather than with
+  code.** `context`, `git-gate`, `rule-gate` and `learn` are the four commands an emitted
+  `settings.json` actually invokes, and they now have a Node twin:
+  [`js/hooks.mjs`](js/hooks.mjs) behind [`bin/geneseed-hook.mjs`](bin/geneseed-hook.mjs), a
+  **second binary** rather than a subcommand of the generator driver — `learn` must spawn
+  whatever `$GENESEED_LLM` names, and `bin/geneseed.mjs` is under a hard `child_process`
+  ban that is half the proof it is not a passthrough. The hook entry loads none of the
+  ~11,600 lines a Python `harness context` pulls in through `harness.py`'s
+  fourteen-submodule splice, which is the same reason the Python originals already refuse
+  to import `build` for the marker filenames they need.
+  **A cell is not an emit here, and that is the phase's first design question.** A verb's
+  observable surface is stdout, stderr, the **exit code** and whatever it wrote, so
+  [`tests/harness_golden.py`](tests/harness_golden.py) compares all four across 93 seeded
+  worlds — reusing `golden.py`'s `cell_env`, `_normalise`, `_snapshot` and `_split` rather
+  than growing a second set of rules about sandboxes and CRLF. `cwd` is an **input** to
+  three of the four (discovery, the sovereign bypass, and learn's memory search all read
+  it), so every cell runs from inside its own sandbox — which is why the harness resolves a
+  repo-relative CLI path once, up front.
+- **A comparison alone would have been the wrong gate for these four**, and more obviously
+  than for the generator: a hook must never break a tool call, so every unreadable payload,
+  missing file, malformed user config and bypass exits 0 with **no output at all**. Two
+  implementations that both stopped gating would agree in every such cell forever. Each
+  cell therefore also states, absolutely, what the *reference* must do — `expect`,
+  `expect_absent` (the direction `expect` cannot express, and the only way to gate a filter
+  like `EXCLUDE_DIRS` whose whole job is leaving things out), `expect_silent` and
+  `expect_files` — and a cell that has stopped exercising what it names is reported as
+  **VACUOUS** rather than banked as a pass.
+- **One line could not be ported, and it was rewritten on both sides instead.** A malformed
+  `context.json` used to be reported by quoting the decoder's own exception. Python's
+  `json` and V8 disagree on the wording *and* the offset for every common typo — a trailing
+  comma points at the comma in one and at the character after it in the other, and V8's
+  `Unexpected token 'x'` carries no offset at all — measured across twenty malformed
+  documents. Both now print the file and the fix, following the precedent already set for a
+  malformed `settings.json`, and the read failure is split out from the syntax error
+  because they were never the same problem. `learn` also gained `encoding="utf-8"` on the
+  model CLI's pipe: a bare `text=True` decodes the reply with the console code page, and
+  the mojibake is *written to the memory store*, so it outlives the process.
+- **Nothing bakes the Node hook entry into a shim yet, and that is the phase boundary.**
+  `bin/geneseed.mjs` still writes `<python> <checkout>/rituals/harness.py` and still refuses
+  the four Claude-shaped emits with exit 4 when it cannot discover a Python, because a
+  Geneseed install has more Python in it than these four verbs. The acceptance harness is
+  what keeps the port from being dead code in the meantime — it executes
+  `bin/geneseed-hook.mjs` as a real process against the Python one, which is the lesson from
+  a stage that sat complete and uncalled in `js/settings.mjs` for two phases and was then
+  briefed as unported.
+  **Adding a module that legitimately spawns opened a door the driver's own gate cannot see
+  through**: `test_the_driver_imports_no_child_process_module` greps `bin/geneseed.mjs`'s
+  source, and one `import` of `js/hooks.mjs` would put `child_process` in the driver's
+  process with that source still clean. `tests/test_hook_cli_parity.py` walks the driver's
+  transitive relative imports instead — the same assertion, one level out, added because of
+  this phase.
 
 ## 🚫 Explicitly out of scope
 
