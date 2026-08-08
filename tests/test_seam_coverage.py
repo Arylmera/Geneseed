@@ -1,20 +1,26 @@
 """Which emits actually cross the Node seam — measured, and pinned against prose.
 
 The spec, DESIGN.md, CHANGELOG.md, `js/emit.mjs`'s header and `_build_emit.py`'s comments
-all said "all nine emits cross that seam" for two phases. Eight do. `emit_opencode_global`
-spawns Node ZERO times: its render half is inline Python, there is no matching job kind in
-`js/emit.mjs`'s `KINDS`, and `tests/test_emit_boundary.py` has no cell for it — so the one
-gate that could have contradicted the sentence had nothing to say about that mode at all.
+all said "all nine emits cross that seam" for two phases while eight did.
+`emit_opencode_global` spawned Node ZERO times: its render half was inline Python, there
+was no matching job kind in `js/emit.mjs`'s `KINDS`, and `tests/test_emit_boundary.py` had
+no cell for it — so the one gate that could have contradicted the sentence had nothing to
+say about that mode at all.
 
-Nothing observed the claim, so nothing caught it. This file is the observation. Three
-distinct failures it refuses, each of which really can happen:
+Nothing observed the claim, so nothing caught it. This file is the observation, and P3c is
+what it made expensive to fake: flipping `SEAM["opencode-global"]` to 1 fails four of the
+five tests below until the port and its cells exist. The sentence is now true and now
+measured, which are two different things.
+
+Three distinct failures it refuses, each of which really can happen:
 
   * **Prose drifting from reality again.** `SEAM` below is the measured table; a mode that
     gains or loses a seam fails here until the table (and the docs quoting it) are updated.
   * **A ported emit with no boundary cell.** Crossing the seam without a cell means the two
     runtimes are never compared for that mode — exactly the hole `opencode-global` would
-    have fallen into the day someone ported it. An emit may be uncrossed, or crossed and
-    celled; crossed and uncelled is refused.
+    have fallen into the day someone ported it, and the hole this gate made it fall out of
+    instead. An emit may be uncrossed, or crossed and celled; crossed and uncelled is
+    refused.
   * **A silent fallback.** `js_render_available()` returning False makes every emit run the
     Python body with no notice, by design — the whole claim of the port is that the two are
     indistinguishable. The cost, recorded in the spec, is that on such a machine both sides
@@ -27,6 +33,7 @@ import ast
 import contextlib
 import io
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -48,14 +55,14 @@ NODE = shutil.which("node")
 # produced by spying on `_build_core.run_node` through one emit of each mode, and the
 # dynamic test below re-measures a representative of every distinct value.
 #
-# `opencode-global` is the 0, and it is a DEBT rather than a decision: its render half is
-# assembly of units that already exist in `js/opencode.mjs` and `js/emit.mjs`, but porting
-# a whole render half is a phase, not a rider on the P3b driver flip. Changing this 0 to a
-# 1 is a two-line edit here and a required new cell in test_emit_boundary.CELLS.
+# `opencode-global` was the 0 and became a 1 at P3c. Flipping it is a two-line edit here
+# and a required new cell in test_emit_boundary.CELLS — which was the point of writing the
+# table down: the debt could not be paid quietly, and it could not be CLAIMED paid without
+# the cells. Four of this file's five tests fail on the flip alone.
 SEAM = {
     "files": 1,
     "opencode": 1,
-    "opencode-global": 0,
+    "opencode-global": 1,
     "claude": 1,
     "claude-global": 1,
     "bob": 1,
@@ -192,10 +199,17 @@ class SeamCoverageTests(unittest.TestCase):
                         f"pass while proving nothing. Update SEAM if it was ported.")
 
     def test_no_emit_is_uncelled_and_unported_without_saying_so(self):
-        """The debt is named in code, not only in a spec someone has to remember to read."""
+        """The debt is named in code, not only in a spec someone has to remember to read.
+
+        It is empty since P3c, and the assertion is kept rather than deleted: an emit
+        DROPPING back to zero is the failure it now guards. That is not hypothetical — a
+        dispatcher whose `js_render_available()` branch was removed, or a new emit added
+        without one, lands here and nowhere else, because the fallback to the Python body
+        is silent by design and every parity gate for that mode would go on comparing
+        Python against Python and passing."""
         unported = sorted(m for m, c in SEAM.items() if not c)
         self.assertEqual(
-            unported, ["opencode-global"],
+            unported, [],
             "the set of emits with no Node seam changed. That is either a phase landing "
             "(update this list, DESIGN.md and js/emit.mjs's header) or a dispatcher lost "
             "— which would silently move an emit back onto the Python body.")
@@ -219,13 +233,22 @@ class SeamCoverageTests(unittest.TestCase):
 
     def test_every_job_kind_the_child_offers_is_driven(self):
         """A kind in `js/emit.mjs`'s KINDS that no emit sends is dead code the boundary
-        gate cannot reach; a kind an emit sends that KINDS lacks is a crash at emit time."""
+        gate cannot reach; a kind an emit sends that KINDS lacks is a crash at emit time.
+
+        The key pattern is anchored and accepts a QUOTED key, which the first version did
+        not: it took everything before the first `:` and kept it only if `.isidentifier()`
+        answered True. `opencode-global` is not a Python identifier and cannot be a bare
+        JS one either, so the P3c kind would have been read as offering nothing while the
+        generator sent it — the gate failing for a reason that has nothing to do with what
+        it measures. A gate is code, and so is its normaliser; this is the fourth phase
+        that sentence has had to be written down."""
         src = (ROOT / "js" / "emit.mjs").read_text(encoding="utf-8")
         block = src.split("const KINDS = {", 1)[1].split("\n};", 1)[0]
-        offered = {line.split(":")[0].strip()
-                   for line in block.splitlines() if ":" in line and not
-                   line.strip().startswith("//")}
-        offered = {k for k in offered if k.isidentifier()}
+        # `  key:` / `  'key':` / `  "key":` at the block's own indentation — never a
+        # `foo: bar` pair inside a nested object literal, which is why it is anchored.
+        key_re = re.compile(r"""^  (?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$]*))\s*:""")
+        offered = {next(g for g in m.groups() if g is not None)
+                   for m in (key_re.match(line) for line in block.splitlines()) if m}
 
         sent = set()
         for mod in ("_build_render", "_build_emit", "_build_global"):

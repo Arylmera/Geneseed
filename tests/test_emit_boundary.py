@@ -31,6 +31,7 @@ Run from the Geneseed root:  python -m unittest discover -s tests
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -284,6 +285,71 @@ def _claude_commented_settings(out: Path, home: Path) -> None:
         '{\n  // my own settings, hand-annotated\n  "model": "opus"\n}\n', encoding="utf-8")
 
 
+# ------------------------------------------------------------ the opencode-global emit
+# The ninth emit, and the last to cross (P3c). Its target is neither `--out` nor a
+# subdirectory of it: `_opencode_config_dir()` resolves $XDG_CONFIG_HOME/opencode, which
+# `golden.cell_env` points into the sandbox's home. `--out` is passed to this emit ONLY as
+# the legacy bundle a memory/notebook store is migrated from, and nothing is written there
+# — so a fixture that plants nothing at `--out` cannot tell the two apart.
+
+def _oc_cfg(home: Path) -> Path:
+    """The dir `_build_core._opencode_config_dir()` resolves to inside a cell's sandbox.
+
+    Spelled here rather than imported so a fixture cannot accidentally CALL the resolver:
+    it is an `_OWNED` name, and the whole P3c boundary decision is that the child never
+    learns how the target was derived."""
+    return home / ".config" / "opencode"
+
+
+def _oc_global_user_owns(out: Path, home: Path) -> None:
+    """A global OpenCode config dir the user got to first — the claim-on-create arm no
+    re-emit reaches, because a re-emit's collisions are all in the prior manifest.
+
+    `agents/reviewer.md` collides with a Geneseed spec and is in no manifest, so it must
+    be kept, warned about, and left out of `owned`; `wiki.jsonc` and `excludes.json` are
+    seeded once and never overwritten. This is `claude/user-owns-files` at a different
+    root, and the roots are the point: every path in this emit is built from `<cfg>`,
+    which arrives in the job rather than being resolved on the far side."""
+    cfg = _oc_cfg(home)
+    (cfg / "agents").mkdir(parents=True, exist_ok=True)
+    (cfg / "agents" / "reviewer.md").write_text(
+        "---\ndescription: mine\n---\n\nmy own reviewer\n", encoding="utf-8")
+    (cfg / "wiki.jsonc").write_text('{"wikis": [{"name": "Brain"}]}\n', encoding="utf-8")
+    (cfg / "excludes.json").write_text('{"excludes": ["C:/work/secret"]}\n', encoding="utf-8")
+
+
+def _oc_global_user_edits(out: Path, home: Path) -> None:
+    """The seeded stores, CHANGED between the two emits.
+
+    `memory/README.md` and `notebook/README.md` come FROM src, so emit two rewriting them
+    produces the very bytes emit one wrote and deleting the store's "already populated"
+    guard is invisible. Only an edit can tell "kept the store" from "re-seeded it"."""
+    cfg = _oc_cfg(home)
+    (cfg / "memory" / "README.md").write_text("the agent rewrote the store's charter\n",
+                                              encoding="utf-8")
+    (cfg / "notebook" / "README.md").write_text("the agent rewrote its own charter\n",
+                                                encoding="utf-8")
+    (cfg / "user-rules.md").write_text("# User rules\n\n## R1 — mine\n", encoding="utf-8")
+    (cfg / "PROFILE.md").write_text("# Your profile\n\nmine\n", encoding="utf-8")
+
+
+def _oc_global_commented_jsonc(out: Path, home: Path) -> None:
+    """A commented `opencode.jsonc` in the GLOBAL config dir.
+
+    `opencode/commented-jsonc` does not cover this and could not: that cell's target is
+    `<root>/opencode.jsonc`, a different file under a different root, reached from a
+    different wire half. What both cells exist for is the same hazard — `mergeOpencodeJson`
+    is IDEMPOTENT, so an emit that wired twice (the child merging, then Python merging
+    again because the payload lost its `cfgName` signal) leaves a byte-identical tree. The
+    refusal warning printed a second time is the only trace, and a commented file is the
+    only fixture that makes it print at all."""
+    cfg = _oc_cfg(home)
+    cfg.mkdir(parents=True, exist_ok=True)
+    (cfg / "opencode.jsonc").write_text(
+        '{\n  // hand-annotated, do not clobber\n  "$schema": '
+        '"https://opencode.ai/config.json"\n}\n', encoding="utf-8")
+
+
 def _opencode_commented_jsonc(out: Path, home: Path) -> None:
     """A commented `opencode.jsonc`, which `_opencode_target` prefers over the `.json`.
 
@@ -378,6 +444,36 @@ CELLS = [
      "prepare": {1: _claude_commented_settings}},
     {"id": "opencode/commented-jsonc", "emit": "opencode", "theme": "neutral", "repeat": 2,
      "prepare": {1: _opencode_commented_jsonc}},
+    # The NINTH emit, which had no cell at all until P3c and therefore no comparison: its
+    # golden cells ran Python against Python and proved determinism, not parity. Six cells,
+    # because six of its branches are unreachable from the eight modes already here — the
+    # config dir as target, `--out` as a pure migration source, the lean laws beside
+    # AGENT.md rather than under a marker dir, claim-on-create in a dir the user co-owns
+    # wholesale, and its own commented-`.jsonc`.
+    {"id": "opencode-global/neutral/full", "emit": "opencode-global", "theme": "neutral",
+     "repeat": 2},
+    # Lean, under a second theme. `_ship_lean_laws` writes the standalone laws file under
+    # <cfg> with NO marker-dir prefix — this is the emit where the lean pointer resolves
+    # bare because AGENT.md and the laws dir are siblings (`laws_prefix=''`, passed by
+    # omission, where `_claude_render_py` computes one). The theme also renames the
+    # branded theme FILE (themes/geneseed-<name>.json), which is `owned` and therefore in
+    # the byte-compared manifest.
+    {"id": "opencode-global/imperial/lean", "emit": "opencode-global", "theme": "imperial",
+     "footprint": "lean"},
+    # The env-gated writers, whose `owned` entries are computed `relative_to(<cfg>)` — a
+    # base this emit builds from the job rather than from a repo root.
+    {"id": "opencode-global/primary+commands", "emit": "opencode-global", "theme": "neutral",
+     "env": {"GENESEED_PRIMARY": "1", "GENESEED_COMMANDS": "1"}},
+    # `--out` is the LEGACY BUNDLE, not the target. Reuses the claude fixture: it plants
+    # stores at `--out`, which for this emit is a directory nothing is ever written into,
+    # so a port that derived the migration source from <cfg> (where it would find the
+    # empty destination and fall through to seeding) passes every other cell.
+    {"id": "opencode-global/legacy-stores", "emit": "opencode-global", "theme": "neutral",
+     "prepare": {1: _legacy_stores}},
+    {"id": "opencode-global/user-owns-files", "emit": "opencode-global", "theme": "neutral",
+     "repeat": 2, "prepare": {1: _oc_global_user_owns, 2: _oc_global_user_edits}},
+    {"id": "opencode-global/commented-jsonc", "emit": "opencode-global", "theme": "neutral",
+     "repeat": 2, "prepare": {1: _oc_global_commented_jsonc}},
 ]
 
 
@@ -601,6 +697,26 @@ class EmitBoundaryTests(unittest.TestCase):
             "out/.claude/settings.local.json"],
             "the user's comment was destroyed; the whole point of the branch is that this "
             "file is left exactly as it was")
+
+        # The SAME hazard at the ninth emit's own call site (P3c). Two cells rather than
+        # one because the two wire halves target different files under different roots:
+        # `<root>/opencode.jsonc` for the per-repo emit, `<cfg>/opencode.jsonc` for the
+        # global one. A single cell would leave the other half's double-wire invisible,
+        # which is exactly what idempotence guarantees.
+        oc_global = _run_side(next(c for c in CELLS
+                                   if c["id"] == "opencode-global/commented-jsonc"), js=True)
+        self.assertEqual(
+            oc_global["stdout"].count(b"has comments \xe2\x80\x94 not rewriting it"), 1,
+            "expected exactly one commented-jsonc warning from the global emit. TWO means "
+            "opencode.json was merged twice in one run — the child wiring it and Python "
+            "wiring it again, which is what a `cfgName` missing from the payload produces "
+            "and the only place in the matrix where that leaves a trace at all.")
+        self.assertIn(b"// hand-annotated",
+                      oc_global["files"]["home/.config/opencode/opencode.jsonc"],
+                      "the user's annotated global opencode.jsonc was rewritten")
+        self.assertNotIn("home/.config/opencode/opencode.json", oc_global["files"],
+                         "a second config file was created beside the .jsonc the merge "
+                         "chose — `_opencode_target` prefers the .jsonc when it exists")
 
         jsonc = got["opencode/commented-jsonc"]
         self.assertIn(b"comments", jsonc["stdout"],
@@ -876,6 +992,117 @@ class EmitBoundaryTests(unittest.TestCase):
                       got["copilot/global"]["files"]
                       .get("home/.copilot/copilot-instructions.md", b""))
 
+    def test_the_opencode_global_cells_reach_the_branches_they_name(self):
+        """The same guard, for the ninth emit — the one that had no cells at all.
+
+        Two claims here that no other mode can express. The first is that `--out` is not
+        the target: this emit writes exclusively into `<cfg>`, and `--out` is only the
+        legacy bundle a store is migrated from. The second is the manifest's SHAPE — this
+        is the one emit whose manifest carries no `managed` key and no `scope`, which is
+        why its payload needs `cfgName` and nothing else. If it ever grows a `managed` the
+        wire contract changes, and this is where that shows up."""
+        got = {c["id"]: _run_side(c, js=True) for c in CELLS
+               if c["id"].startswith("opencode-global/")}
+        CFG = "home/.config/opencode"
+
+        base = got["opencode-global/neutral/full"]
+        self.assertEqual(base["exit"], 0, base["stderr"][-400:].decode("utf-8", "replace"))
+        self.assertIn(f"{CFG}/AGENT.md", base["files"],
+                      "nothing landed in the resolved config dir — `cfgDir` did not reach "
+                      "the child, or the child resolved its own and wrote elsewhere")
+        # `--out` is passed on every invocation and is never written to. Stated as an
+        # absence because that is the whole asymmetry: with the two coincident (the shape
+        # every other opencode cell has) a port that confused them would pass.
+        stray = sorted(k for k in base["files"] if k.startswith("out/"))
+        self.assertEqual(stray, [],
+                         f"the emit wrote {stray} under --out. `out` is the legacy "
+                         f"migration source for this emit, never a target.")
+        manifest = json.loads(base["files"][f"{CFG}/.geneseed-manifest.json"])
+        self.assertNotIn("managed", manifest,
+                         "the opencode-global manifest grew a `managed` claim set. It is "
+                         "the one manifest without one, which is why the wire half returns "
+                         "only `cfgName` — a claim to record would have to travel too.")
+        self.assertNotIn("scope", manifest)
+        self.assertIn("themes/geneseed-neutral.json", manifest["owned"])
+        self.assertIn("command/ponytail.md", manifest["owned"],
+                      "the always-on /ponytail command is not owned — its `owned` entry "
+                      "is computed relative to <cfg>, the base this emit gets from the job")
+        # `agentPath` crossed the seam decided, and it is ABSOLUTE: the global emit points
+        # `instructions` at <cfg>/AGENT.md, not at a repo-relative path.
+        self.assertIn(b"<HOME>/.config/opencode/AGENT.md",
+                      base["files"][f"{CFG}/opencode.json"],
+                      "opencode.json does not point at the absolute <cfg>/AGENT.md")
+        # The capability de-link, in both directions. `CAPABILITY_LINK_RE` is surgical: it
+        # takes `[name](agents/x.md)` down to `name` and leaves the FOLDER pointers
+        # `](agents/)` and `](skills/)` alone. Asserting only the first half would pass
+        # just as well for a blanket removal of every `agents/` mention, which would gut
+        # the preamble; the second is what says the strip stopped where it was told to.
+        agent_md = base["files"][f"{CFG}/AGENT.md"]
+        survived = re.findall(rb"\]\((?:[A-Za-z0-9_.-]+/)*(?:agents|skills)/"
+                              rb"[A-Za-z0-9_-]+\.md\)", agent_md)
+        self.assertEqual(survived[:3], [],
+                         f"{len(survived)} capability link(s) survived the de-link — "
+                         f"OpenCode catalogues agents and skills natively, so the per-row "
+                         f"spec links go (the portable bundle keeps all 74)")
+        self.assertIn(b"](skills/)", agent_md,
+                      "the folder pointers went too — the de-link over-reached, and the "
+                      "regex it uses is `_OWNED` precisely so a doctor test can redirect "
+                      "it to the pre-fix form and watch this")
+
+        lean = got["opencode-global/imperial/lean"]
+        self.assertIn(f"{CFG}/laws/universal.md", lean["files"],
+                      "the lean footprint shipped no standalone laws file under <cfg>")
+        self.assertIn(b"`laws/universal.md`", lean["files"][f"{CFG}/AGENT.md"],
+                      "the lean pointer is not BARE. AGENT.md and the laws dir are "
+                      "siblings here, so this emit passes no laws_prefix at all — the one "
+                      "arrangement where a prefix would break every pointer")
+        self.assertIn("laws/universal.md",
+                      json.loads(lean["files"][f"{CFG}/.geneseed-manifest.json"])["owned"],
+                      "the lean laws were written but not CLAIMED — a switch back to full "
+                      "would leave them behind, and claiming them is half of what "
+                      "_ship_lean_laws does")
+        self.assertIn(f"{CFG}/themes/geneseed-imperial.json", lean["files"])
+
+        extras = got["opencode-global/primary+commands"]
+        self.assertIn(f"{CFG}/agents/orchestrator.md", extras["files"],
+                      "GENESEED_PRIMARY did not reach the child — the env-gated writers "
+                      "are unreachable and this cell tests nothing")
+        self.assertIn("agents/orchestrator.md",
+                      json.loads(extras["files"][f"{CFG}/.geneseed-manifest.json"])["owned"],
+                      "the primary agent was written but not owned relative to <cfg>")
+
+        stores = got["opencode-global/legacy-stores"]
+        self.assertIn(b"migrated memory/ -> memory/", stores["stdout"],
+                      "the memory store was not migrated from --out. Deriving the legacy "
+                      "source from <cfg> instead finds the empty destination, falls "
+                      "through to seeding, and passes every other cell in this file.")
+        self.assertIn(b"migrated notebook/", stores["stdout"])
+        self.assertIn(f"{CFG}/memory/__pycache__/stale.pyc", stores["files"],
+                      "the migration dropped a __pycache__ entry — this walk keeps "
+                      "everything, unlike the one behind source_fingerprint")
+        self.assertNotIn(f"{CFG}/memory/README.md", stores["files"],
+                         "the store was SEEDED as well as migrated — the two are "
+                         "exclusive, and only a populated legacy bundle can tell")
+
+        mine = got["opencode-global/user-owns-files"]
+        self.assertIn(b"kept your existing agents/reviewer.md", mine["stderr"],
+                      "claim-on-create did not fire for a colliding user agent")
+        self.assertIn(b"my own reviewer", mine["files"][f"{CFG}/agents/reviewer.md"])
+        owned = json.loads(mine["files"][f"{CFG}/.geneseed-manifest.json"])["owned"]
+        self.assertNotIn("agents/reviewer.md", owned,
+                         "Geneseed claimed an agent it found already there — uninstall "
+                         "would then delete the user's file")
+        for rel, needle in (("wiki.jsonc", b"Brain"),
+                            ("excludes.json", b"C:/work/secret"),
+                            ("memory/README.md", b"rewrote the store's charter"),
+                            ("notebook/README.md", b"rewrote its own charter"),
+                            ("user-rules.md", b"R1"),
+                            ("PROFILE.md", b"mine")):
+            self.assertIn(needle, mine["files"].get(f"{CFG}/{rel}", b""),
+                          f"{rel} was overwritten by the re-emit — it is seeded once and "
+                          f"never re-emitted, and a cell that did not CHANGE it first "
+                          f"could not tell the difference")
+
     def test_the_protocol_owns_stdout(self):
         """The child's real stdout carries exactly one JSON document — no progress line,
         no stray library print, nothing before or after it.
@@ -915,10 +1142,12 @@ class EmitBoundaryTests(unittest.TestCase):
         source tree with one referenced spec removed, because the real `src/` is complete
         and no bundle-emitting cell can construct this.
 
-        Both job kinds are checked, because the message carries a `context=` the CALLER
-        chooses — `theme '<name>'` for the bundle, `claude-<scope>` for the six
-        Claude-shaped emits. A port that hardcoded one of them would diverge on a path no
-        cell can reach, since every cell renders a complete source."""
+        All three job kinds are checked, because the message carries a `context=` the
+        CALLER chooses — `theme '<name>'` for the bundle, `claude-<scope>` for the six
+        Claude-shaped emits, and the literal `opencode-global` for the ninth. A port that
+        hardcoded one of them would diverge on a path no cell can reach, since every cell
+        renders a complete source. Three spellings is also why hardcoding LOOKS safe: two
+        are computed from an argument and the third is a constant."""
         with tempfile.TemporaryDirectory(prefix="geneseed-incomplete-") as td_s:
             td = Path(td_s)
             src = td / "src"
@@ -986,6 +1215,37 @@ class EmitBoundaryTests(unittest.TestCase):
             self.assertNotIn("error", payload2)
             self.assertFalse(cfg_dir.exists(),
                              "the claude job created <cfg> before refusing")
+
+            # And through the ninth job kind, whose `context=` is a literal rather than
+            # anything derived from the call — and whose <cfg> must also stay untouched,
+            # because this emit renders into a dir it SHARES with the user's own OpenCode
+            # config. A refusal that had already mkdir'd it would be leaving debris in
+            # somebody's real config dir.
+            err3 = io.StringIO()
+            with mock.patch.object(_build_core, "SRC", src), \
+                 contextlib.redirect_stderr(err3), \
+                 self.assertRaises(SystemExit) as py_exit3:
+                build.assert_source_complete(None, context="opencode-global")
+
+            oc_dir = td / "oc"
+            job3 = {"kind": "opencode-global",
+                    "cfg": {**_build_core.js_cfg(), "src": str(src),
+                            "primaryAgentSrc": str(build.PRIMARY_AGENT_SRC)},
+                    "theme": "neutral", "cfgDir": str(oc_dir), "out": None,
+                    "footprint": "full", "nativeCatalog": True, "oldOwned": [],
+                    "agentPath": (oc_dir / "AGENT.md").as_posix()}
+            job_file.write_text(json.dumps(job3), encoding="utf-8")
+            proc3 = subprocess.run([NODE, str(ROOT / "js" / "emit.mjs"), str(job_file)],
+                                   cwd=str(ROOT), capture_output=True, **_NO_WINDOW)
+            payload3 = json.loads(proc3.stdout)
+
+            self.assertIn("opencode-global", err3.getvalue())         # the fixture bites
+            self.assertFalse(payload3["ok"])
+            self.assertEqual(payload3["exit"], py_exit3.exception.code)
+            self.assertEqual(payload3["stderr"], err3.getvalue())
+            self.assertNotIn("error", payload3)
+            self.assertFalse(oc_dir.exists(),
+                             "the opencode-global job created <cfg> before refusing")
 
 
 if __name__ == "__main__":
