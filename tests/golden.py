@@ -434,8 +434,11 @@ def main(argv=None) -> int:
                          "comparing. `--idempotent` compares a generator against ITSELF, so "
                          "it can only prove a re-emit is self-consistent — the re-emit path "
                          "is otherwise never compared ACROSS implementations, and it is the "
-                         "path that reads the previous manifest, prunes, and rewrites it. "
-                         "`--repeat 2 --new <other>` is that comparison.")
+                         "path that reads the previous manifest, claims on create, and "
+                         "merges into files that already exist. It does NOT reach the "
+                         "prune's deletion path: the configuration is fixed, so `owned` is "
+                         "the same on every pass and `old_owned - owned` is always empty — "
+                         "that is `--deletion`'s job and measured to be only its job.")
     ap.add_argument("--emits", default=None,
                     help="comma-separated --emit modes to keep (default: all nine). For a "
                          "PARTIAL port: the Node driver crosses one emit at a time, so "

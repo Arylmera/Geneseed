@@ -109,5 +109,60 @@ class DeletionMatrixCoverageTests(unittest.TestCase):
             self.assertEqual(cell["emit"], before["emit"])
 
 
+class FlagWiringTests(unittest.TestCase):
+    """The narrowing flags have to REACH `compare`, and nothing else can tell you they did.
+
+    `--repeat 2` degrades silently: if `main` stops threading it through, both sides simply
+    run once each and the comparison still passes — it has quietly become the plain parity
+    run while still printing a header that says otherwise. A mutation that dropped the
+    wiring left the whole 63-cell gate green, which is why this exists.
+
+    `--emits` has the same shape one step over: an unrecognised value that silently selected
+    everything would report a far wider run as the narrow one it was asked for.
+
+    Both are checked by intercepting `compare` rather than by emitting, so they cost nothing
+    and cannot themselves be defeated by an emit that happens to look right.
+    """
+
+    def _capture(self, argv):
+        seen = {}
+
+        def fake_compare(ref, new, quick, limit, ref_repeat=1, new_repeat=1, matrix=None):
+            seen.update(ref=ref, new=new, ref_repeat=ref_repeat,
+                        new_repeat=new_repeat, matrix=matrix)
+            return 0
+
+        real, golden.compare = golden.compare, fake_compare
+        try:
+            rc = golden.main(argv)
+        finally:
+            golden.compare = real
+        return rc, seen
+
+    def test_repeat_reaches_both_sides_of_the_comparison(self):
+        rc, seen = self._capture(["--quick", "--repeat", "2",
+                                  "--new", "node bin/geneseed.mjs"])
+        self.assertEqual(rc, 0)
+        self.assertEqual((seen["ref_repeat"], seen["new_repeat"]), (2, 2),
+                         "--repeat did not reach compare: the run silently degraded to a "
+                         "single emit per side, which is the plain parity gate wearing the "
+                         "re-emit gate's name")
+        self.assertNotEqual(seen["ref"], seen["new"],
+                            "--new did not reach compare either")
+
+    def test_repeat_defaults_to_one_and_refuses_zero(self):
+        _, seen = self._capture(["--quick"])
+        self.assertEqual((seen["ref_repeat"], seen["new_repeat"]), (1, 1))
+        rc, _ = self._capture(["--quick", "--repeat", "0"])
+        self.assertEqual(rc, 2, "--repeat 0 would compare nothing and must be refused")
+
+    def test_emits_narrows_the_matrix_and_refuses_an_unknown_mode(self):
+        _, seen = self._capture(["--emits", "files"])
+        self.assertEqual({c["emit"] for c in seen["matrix"]}, {"files"})
+        self.assertTrue(seen["matrix"], "--emits files selected nothing")
+        rc, _ = self._capture(["--emits", "nosuchemit"])
+        self.assertEqual(rc, 2, "an unknown --emits value must refuse, not select nothing")
+
+
 if __name__ == "__main__":
     unittest.main()

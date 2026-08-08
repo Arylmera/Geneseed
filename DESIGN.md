@@ -332,12 +332,30 @@ renders it as the name in parentheses.
   `main()` rather than replacing it.** `build.py` is also the `import build` facade that 19
   `rituals/` modules read 55 distinct names from, and roughly eleven sites spawn it as a
   subprocess; none of them flip, because flipping them would make Node mandatory for the
-  *Python* runtime and kill the silent `js_render_available()` fallback. Only `--emit files`
-  crosses so far — it is the one emit whose Python dispatcher hands the whole emit to Node
-  and returns, while the other eight keep PRE, PRUNE, MANIFEST and their summary line in the
-  Python driver body. An emit that has not crossed **refuses with exit 3** instead of
-  producing a partial tree, and `tests/golden.py --emits` narrows the matrix to what has;
-  deleting that flag is how the phase ends.
+  *Python* runtime and kill the silent `js_render_available()` fallback. `--emit files` and
+  `--emit opencode` cross so far: the first is the one emit whose Python dispatcher hands
+  the whole emit to Node and returns, and the second is the first whose **driver body** —
+  PRE (the manifest read), PRUNE, the atomic MANIFEST write, the summary line — had to be
+  ported beside the RENDER/WIRE half that already ran there. An emit that has not crossed
+  **refuses with exit 3** instead of producing a partial tree, and `tests/golden.py --emits`
+  narrows the matrix to what has; deleting that flag is how the phase ends.
+  **A fresh sandbox cannot reach a driver body's more interesting half.** Every one of
+  golden's cells emits into an empty tree, so `old_owned` is `[]`, the PRE branch never
+  parses a manifest and the prune never has anything to delete — the code most likely to be
+  wrong is invisible to the gate that is otherwise this port's acceptance test. Two gates
+  answer that: `golden.py --repeat N` emits N times into the same sandbox on **both** sides,
+  which is the re-emit path compared ACROSS implementations (`--idempotent` compares a
+  generator against itself and can only prove self-consistency), and the `--root` axis gets
+  a hand-written cell because `_argv` never passes the flag — `out == root` in all 259 cells,
+  so the instruction-path prefix `opencode.json` records is otherwise never exercised.
+  **Three gates for a driver body, and each reaches something the other two cannot** —
+  measured by deleting the prune and watching which one goes red. A fresh cell covers the
+  first emit; `--repeat` covers reading a manifest and merging into files that already
+  exist; only `--deletion` reaches the prune's deletion path, because it is the only one
+  that changes the configuration between emits and so the only one where `old_owned - owned`
+  is non-empty. A narrowing flag also has to be *proven wired*: `--repeat` degrades silently
+  into the plain parity run if `main` stops threading it through, so
+  `tests/test_golden_sandbox.py` intercepts `compare` and asserts the value arrived.
   **The boundary rule inverts here.** Every phase since the seam became a process has asked
   which values the child may resolve and which the parent must decide and send — the answer
   for `cfgDir` being that a child resolving it would render into the developer's real config
