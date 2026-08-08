@@ -35,7 +35,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import contextlib
+import io
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -466,6 +469,95 @@ class EmitBoundaryTests(unittest.TestCase):
                               f"differ.{hint}\n  first: {k} at byte {at}\n"
                               f"  python: {a[max(0, at - 40):at + 40]!r}\n"
                               f"  node:   {b[max(0, at - 40):at + 40]!r}")
+
+    def test_python_verifies_what_node_wired(self):
+        """The VERIFY stage is the phase's load-bearing claim, and nothing observed it.
+
+        WIRE moved into the Node child; `_settings_integrity_check` did not, because it runs
+        after MANIFEST and MANIFEST is Python. The argument for letting two implementations
+        of the wiring layer coexist rests on that: every Claude-shaped emit ends with PYTHON
+        re-reading the settings file NODE wrote and checking it against the claims NODE
+        returned. A mutation deleting the call proved the argument was unwatched — the whole
+        suite stayed green. Three reasons it could: the return value is discarded, the
+        function only speaks when file and manifest disagree, and the boundary comparison
+        runs this stage in Python on BOTH sides so anything it printed would cancel out.
+
+        So this test does not compare runtimes. It asserts the crossing itself:
+
+        1. the emit really calls it, with `expect='present'` and the file WIRE chose;
+        2. on a healthy Node-wired install it finds NOTHING — which is the real content of
+           "Python can verify Node's work". Python matches a recorded claim against the file
+           by whole-dict equality, so if Node's `managed.settings_hooks` differed from what
+           Node actually wrote in any way at all — a key order, a nesting, a retyped value
+           surviving the JSON round trip — every group would report as missing;
+        3. and it is not silent by construction: excise one wired group from the file and
+           it names exactly that group.
+
+        The `claude/commented-settings` cell is why (3) needs its own arrangement rather
+        than a fixture: when the merge bails on a commented file it lowers the CLAIM as well
+        as skipping the write, so claim and file stay trivially consistent and the checker
+        says nothing even in the state it exists to catch."""
+        import build
+        td = Path(tempfile.mkdtemp(prefix="geneseed-verify-"))
+        self.addCleanup(shutil.rmtree, td, ignore_errors=True)
+        home, repo = td / "home", td / "repo"
+        repo.mkdir(parents=True)
+        saved = dict(os.environ)
+        self.addCleanup(lambda: (os.environ.clear(), os.environ.update(saved)))
+        os.environ["GENESEED_HOME"] = str(home / ".geneseed")
+
+        seen = []
+        real = build._settings_integrity_check
+
+        def spy(path, managed, expect="present"):
+            seen.append((Path(path).name, expect))
+            return real(path, managed, expect)
+
+        cfg = repo / ".claude"
+        # `_build_global`'s binding, not `_build_settings`'s: build.py's splice copies the
+        # function object into each submodule's namespace, so patching the definition site
+        # would leave the call site pointing at the original and the spy would see nothing.
+        with mock.patch.object(build._build_global, "_settings_integrity_check", spy), \
+                contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            build.emit_claude("neutral", out=repo, root=repo)
+
+        self.assertEqual(
+            seen, [("settings.local.json", "present")],
+            "the emit did not run its VERIFY stage exactly once against the file WIRE "
+            "chose. Deleting that call is invisible to every other test in the suite.")
+
+        managed = json.loads(
+            (cfg / build.GLOBAL_MANIFEST).read_text(encoding="utf-8"))["managed"]
+        settings_path = cfg / managed["settings_file"]
+        self.assertTrue(managed.get("settings_hooks"),
+                        "no hook groups were claimed — (2) below would be vacuous")
+
+        clean = real(settings_path, managed, expect="present")
+        self.assertEqual(
+            clean, [],
+            f"Python cannot verify what Node wired: {clean}. The claims came back over "
+            f"JSON and are matched against the file by whole-dict equality, so this fails "
+            f"the moment the two implementations disagree about the SHAPE of a hook group, "
+            f"not just its content.")
+
+        # (3) The checker is not silent by construction.
+        loaded = json.loads(settings_path.read_text(encoding="utf-8"))
+        victim = managed["settings_hooks"][0]
+        loaded["hooks"][victim["event"]] = [
+            g for g in loaded["hooks"][victim["event"]] if g != victim["group"]]
+        settings_path.write_text(json.dumps(loaded, indent=2), encoding="utf-8")
+        # The checker prints every finding as a loud `[geneseed] WARN:` line; here that is
+        # the expected outcome, so it is captured rather than left on the test's stderr.
+        with contextlib.redirect_stderr(io.StringIO()) as warned:
+            problems = real(settings_path, managed, expect="present")
+        self.assertIn("WARN", warned.getvalue(),
+                      "the finding was returned but never printed — the emit discards the "
+                      "return value, so a silent checker is a checker nobody hears")
+        self.assertTrue(
+            any("recorded hook group missing" in p for p in problems),
+            f"excising a wired group produced {problems!r} — the check that is supposed to "
+            f"catch a divergence between the two implementations cannot see one at all")
 
     def test_the_wire_cells_reach_the_branches_they_name(self):
         """The three P3b cells, each of which exists for one wiring branch.

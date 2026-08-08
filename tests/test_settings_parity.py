@@ -578,27 +578,63 @@ def _norm_streams(text: str, tmp: Path, n: int) -> str:
     return text
 
 
+# The one externally-consumed name this gate deliberately does not drive, and why.
+#
+# `_hook_runner_entry` returns the interpreter and entry point the shim bakes. It has no
+# JS twin ON PURPOSE: the child cannot compute either value — its own `process.execPath` is
+# node while the hooks it wires are Python — so the Node side takes them as ARGUMENTS
+# (`hookShimBody(runner, entry, platform)`) and the driver sends what this function
+# returns. There is nothing to compare: a parity cell would feed both sides the same two
+# strings and assert they came back equal. What the values must BE is checked where it is
+# observable instead — `tests/test_emit_boundary.py` compares the shim body the Node child
+# actually wrote against the one Python wrote, and asserts it names the Python interpreter.
+_NO_TWIN_BY_DESIGN = {"_hook_runner_entry"}
+
+
 def _consumed_outside_the_unit() -> set:
     """Every `_build_settings` name that some OTHER module calls, measured with `ast`.
 
-    Two populations, and P3b needs both straight: the emit tree crosses in eleven times
-    (nine from `_emit_claude_core`, two `_merge_opencode_json`), and the RUNTIME reaches
-    eleven names — ten of them in `rituals/_harness_mcp.py`, two in
-    `_harness_exclude.py` (both shared with mcp), one in `_harness_build.py`."""
+    TWO SPELLINGS, and the first version of this function only counted one. The runtime
+    reaches these names as ATTRIBUTES (`build._read_jsonc`, `_build_emit._wire_claude_...`),
+    but the emit tree reaches them as BARE NAMES, because `build.py` splices every submodule
+    into one shared namespace. So an attribute-only scan measured the eleven runtime names
+    and *zero* of the emit tree's eleven crossings — while the docstring claimed both. A new
+    bare call added in `_build_global.py` would have shipped ungated, which is precisely the
+    failure this gate exists to prevent, one module over from where it was looking.
+
+    A bare `Name` load counts only when the module does not bind that name itself, which is
+    what keeps a local variable or a same-named helper out of the count."""
     import ast
     names = set()
     tree = ast.parse((ROOT / "_build_settings.py").read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.FunctionDef):
             names.add(node.name)
+
     consumed = set()
     for p in list(ROOT.glob("_build_*.py")) + list((ROOT / "rituals").glob("*.py")):
         if p.name == "_build_settings.py":
             continue
-        for node in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
+        tree = ast.parse(p.read_text(encoding="utf-8"))
+        bound = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                bound.add(node.name)
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                for a in node.names:
+                    bound.add(a.asname or a.name.split(".")[0])
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    for sub in ast.walk(target):
+                        if isinstance(sub, ast.Name):
+                            bound.add(sub.id)
+        for node in ast.walk(tree):
             if isinstance(node, ast.Attribute) and node.attr in names:
                 consumed.add(node.attr)
-    return consumed
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) \
+                    and node.id in names and node.id not in bound:
+                consumed.add(node.id)
+    return consumed - _NO_TWIN_BY_DESIGN
 
 
 class SettingsMatrixTests(unittest.TestCase):
