@@ -302,6 +302,48 @@ class NodeDriverSurface(unittest.TestCase):
                 "the node driver wrote to the DEFAULT config dir as well as the relocated "
                 "one")
 
+    def test_a_global_copilot_emit_warns_about_registered_project_installs(self):
+        """A two-step sequence the matrix cannot express, and therefore never runs.
+
+        `_warn_copilot_global_over_project` reads the install registry, so it only speaks
+        when a PROJECT copilot install is already on record. Every golden cell emits into a
+        fresh sandbox whose registry is empty, so `_project_survivors` returns `[]` and the
+        warning is UNREACHABLE in all 259 of them — including its whole
+        `registryRoots`/`projectSurvivors` read path, which is where the prune-on-read that
+        rewrites `installs.json` lives.
+
+        So this drives the real sequence: register a project install, then emit globally,
+        and require the two CLIs to agree on what they say about it.
+        """
+        with tempfile.TemporaryDirectory() as tmp_s:
+            said = {}
+            for side, gen in (("py", [sys.executable, "build.py"]),
+                              ("node", [NODE, str(CLI)])):
+                sb = Path(tmp_s) / side
+                home, repo, cfgdir = sb / "home", sb / "repo", sb / "copilot-cfg"
+                home.mkdir(parents=True)
+                env = golden.cell_env(home)
+                env["COPILOT_CONFIG_DIR"] = str(cfgdir)
+                for argv in (["--emit", "copilot", "--out", str(repo)],
+                             ["--emit", "copilot-global", "--out", str(sb / "legacy")]):
+                    r = subprocess.run(
+                        gen + ["--theme", "neutral", "--footprint", "lean", *argv],
+                        cwd=str(ROOT), env=env, capture_output=True, text=True,
+                        encoding="utf-8")
+                    self.assertEqual(r.returncode, 0,
+                                     f"{side} {argv[1]} failed: {(r.stderr or r.stdout)[:300]}")
+                said[side] = golden._normalise(
+                    r.stderr.encode("utf-8", "replace"),
+                    [("<HOME>", home), ("<OUT>", repo), ("<REPO>", ROOT)])
+
+            self.assertIn(b"project Copilot install(s) already exist", said["py"],
+                          "the project emit did not register, so the global emit had "
+                          "nothing to warn about and this cell tested nothing")
+            self.assertEqual(said["py"], said["node"],
+                             "the two drivers disagree about the stacking warning:\n"
+                             f"  python: {said['py'][:300]!r}\n"
+                             f"  node:   {said['node'][:300]!r}")
+
     def test_the_footprint_default_is_the_flags_not_the_functions(self):
         """build.py:354's flag defaults to `lean`; every emit SIGNATURE defaults to `full`.
 

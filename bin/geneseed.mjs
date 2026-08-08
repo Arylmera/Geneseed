@@ -37,7 +37,9 @@ import {
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { build, emitOpencodeRender, emitOpencodeGlobalRender } from '../js/emit.mjs';
+import {
+  build, emitOpencodeRender, emitOpencodeGlobalRender, emitClaudeRender,
+} from '../js/emit.mjs';
 import { writeText, parseJson, jsonDumpsIndent } from '../js/lib/pyfs.mjs';
 
 /** `_build_core.ROOT` — the checkout, from this script's own location (bin/..). */
@@ -53,14 +55,22 @@ const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global'
 /**
  * The emits this driver can run end to end.
  *
- * `files` is the only one whose Python dispatcher hands the WHOLE emit to Node and
- * returns (`_build_render.py:821-825`). The other eight keep PRE (the manifest read),
- * PRUNE, the atomic MANIFEST write and their summary line in the Python driver body —
- * ~460 LOC across four entry points — and cross only RENDER and WIRE. Porting those
- * bodies is the rest of P4, not a hidden branch of this one: an emit that is not here
- * REFUSES rather than silently producing a partial tree.
+ * An emit that is NOT here refuses with exit 3 rather than silently producing a partial
+ * tree, and `tests/golden.py --emits` narrows the acceptance matrix to this set — deleting
+ * that flag is how the phase ends.
+ *
+ * The four still missing are `claude`, `claude-global`, `bob` and `bob-global`, and they
+ * are missing for one shared reason rather than for want of typing. All four write
+ * `settings.json` hooks, so they reach `hookPrefix`, which needs the two machine-absolute
+ * values `_build_settings._hook_runner_entry()` returns: `sys.executable` and the harness
+ * entry point. **A Node driver has no `sys.executable`** — the hooks it would be wiring are
+ * Python, and `process.execPath` is node. That is the one place the port's "no Python
+ * needed" promise meets the fact that the runtime it wires has not crossed, and it is a
+ * decision rather than a translation. The two Copilot emits ride the same shared engine and
+ * do NOT reach it (`js/emit.mjs:1166` gates the whole settings path behind `!isCopilot`),
+ * which is exactly why they could cross first and isolate that question.
  */
-const PORTED = new Set(['files', 'opencode', 'opencode-global']);
+const PORTED = new Set(['files', 'opencode', 'opencode-global', 'copilot', 'copilot-global']);
 
 /** `_build_global.GLOBAL_MANIFEST`. */
 const GLOBAL_MANIFEST = '.geneseed-manifest.json';
@@ -241,6 +251,20 @@ function opencodeConfigDir() {
 }
 
 /**
+ * `_build_core._copilot_config_dir` — `~/.copilot`, relocatable via `$COPILOT_CONFIG_DIR`.
+ *
+ * Geneseed's own knob, mirroring `$BOB_CONFIG_DIR`: Copilot documents no such variable, but
+ * tests, doctor and locked-down setups still need to re-point the target. Like every
+ * relocation variable it is CLEARED by `golden.cell_env`, so no cell can observe whether
+ * this driver honours it — see `test_the_relocation_var_moves_the_global_target`.
+ */
+function copilotConfigDir() {
+  const env = process.env.COPILOT_CONFIG_DIR;
+  if (env) return pyResolve(env);
+  return pyResolve(path.join(os.homedir(), '.copilot'));
+}
+
+/**
  * `_build_render._rel_under` — POSIX path of `out` relative to `root`, or '' when they are
  * the same directory OR when `out` is not under `root` at all.
  *
@@ -319,25 +343,111 @@ function pruneOwned(oc, oldOwned, owned) {
  * registry is compared byte-for-byte by `tests/golden.py` (XDG is redirected into the
  * sandbox), so a differently-cased entry is a failing cell.
  */
-function registryRecord(dir) {
+function registryPath() {
+  const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  return path.join(base, 'geneseed', 'installs.json');
+}
+
+function registryLoad() {
   try {
-    let root;
-    try { root = realpathSync.native(dir); } catch { root = path.resolve(dir); }
-    const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-    const file = path.join(base, 'geneseed', 'installs.json');
-    let cur = [];
-    try {
-      const data = parseJson(readFileSync(file, 'utf8'));
-      if (Array.isArray(data)) cur = data.map(String);
-    } catch { cur = []; }
-    if (cur.includes(root)) return;
+    const data = parseJson(readFileSync(registryPath(), 'utf8'));
+    return Array.isArray(data) ? data.map(String) : [];
+  } catch { return []; }
+}
+
+function registrySave(items) {
+  try {
+    const file = registryPath();
     mkdirSync(path.dirname(file), { recursive: true });
     const tmp = `${file}.tmp`;
     // `jsonDumpsIndent` for the same reason as the manifest: these are absolute paths, and
     // a machine whose username carries an accent writes one here.
-    writeText(tmp, `${jsonDumpsIndent([...cur, root])}\n`);
+    writeText(tmp, `${jsonDumpsIndent(items)}\n`);
     renameSync(tmp, file);
+  } catch { /* best-effort: a registry hiccup must never break a deploy */ }
+}
+
+function registryRecord(dir) {
+  try {
+    let root;
+    try { root = realpathSync.native(dir); } catch { root = path.resolve(dir); }
+    const cur = registryLoad();
+    if (!cur.includes(root)) registrySave([...cur, root]);
   } catch { /* a registry hiccup must never fail a build */ }
+}
+
+function isDir(p) {
+  try { return statSync(p).isDirectory(); } catch { return false; }
+}
+
+/**
+ * `_install_registry.roots()` — live registered deploy roots, pruning the file as it reads.
+ *
+ * The prune is a WRITE, and reproducing it matters: `installs.json` is compared byte-for-byte,
+ * so a read that failed to drop a dead row would leave the two implementations holding
+ * different registries. The snapshot is taken once on purpose (its own comment says why):
+ * comparing `kept` against a SECOND read could clobber a root a concurrent `record()`
+ * appended between the two.
+ */
+function registryRoots() {
+  const original = registryLoad();
+  const out = [];
+  const kept = [];
+  const seen = new Set();
+  for (const s of original) {
+    const root = expanduser(s);
+    let key;
+    try { key = existsSync(root) ? realpathSync.native(root) : root; } catch { key = root; }
+    if (seen.has(key)) continue;
+    if (isDir(root) && isFile(path.join(root, '.geneseed-emit'))) {
+      seen.add(key);
+      kept.push(root);
+      out.push(root);
+    }
+  }
+  if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {
+    registrySave(kept);
+  }
+  return out;
+}
+
+/**
+ * `_build_global._project_survivors` — registered per-repo PROJECT installs of `emitName`.
+ *
+ * Each candidate root's own `.geneseed-emit` marker is read and compared to the literal
+ * emit name; an unreadable marker is skipped, never raised.
+ */
+function projectSurvivors(emitName) {
+  const out = [];
+  for (const root of registryRoots()) {
+    let marker;
+    try {
+      marker = readFileSync(path.join(root, '.geneseed-emit'), 'utf8').trim();
+    } catch { continue; }
+    if (marker === emitName) out.push(root);
+  }
+  return out;
+}
+
+/**
+ * `_build_global._warn_copilot_global_over_project` — purely informational.
+ *
+ * Copilot documents no exclude or shadow mechanism, so a global preamble and a project
+ * one simply stack. UNREACHABLE from every golden cell: each emits into a fresh sandbox
+ * whose registry is empty, so `projectSurvivors` is always `[]` and this never prints.
+ * Reaching it needs a project emit registered BEFORE a global one in the same sandbox.
+ */
+function warnCopilotGlobalOverProject() {
+  const survivors = projectSurvivors('copilot');
+  if (!survivors.length) return;
+  process.stderr.write(
+    `[geneseed] WARN: ${survivors.length} project Copilot install(s) already exist — `
+    + 'emitting GLOBAL now means BOTH preambles load together in those repos '
+    + '(doubled context): Copilot stacks ~/.copilot/copilot-instructions.md on top '
+    + "of a repo's own AGENTS.md. Review and remove what you don't want:\n");
+  for (const root of survivors) {
+    process.stderr.write(`  - ${root}  ->  harness uninstall --target "${root}"\n`);
+  }
 }
 
 /**
@@ -460,6 +570,103 @@ function emitOpencodeGlobal(cfg, args, out) {
 }
 
 /**
+ * `_build_global._emit_claude_core` — the shared engine behind six emits.
+ *
+ * Only the two Copilot ones run through it so far, and that is a deliberate split rather
+ * than an arbitrary stopping point: `js/emit.mjs:1166` gates the entire settings/hook path
+ * behind `if (!isCopilot)`, so a Copilot emit never reaches `hookPrefix` and therefore never
+ * needs `hookOpts` — the pair of machine-absolute values (`sys.executable` and the harness
+ * entry point) that a Node driver has no way to produce. Copilot crossing first isolates
+ * this driver body from that question entirely.
+ *
+ * `hookOpts` is consequently OMITTED rather than passed as `{}` or `null`. If a future
+ * change ever routed a Copilot emit into the hook path, `hookPrefix()` would receive
+ * `undefined`, hit its own default and throw the error it was built to throw — where `null`
+ * would raise an unrelated TypeError and `{}` would bake the literal string `"undefined"`
+ * into the shim and silently kill every hook in the install. Fail loud, on purpose.
+ */
+function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out }) {
+  const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
+  let oldOwned = [];
+  let oldManaged = {};
+  if (existsSync(manifestPath)) {
+    try {
+      const data = parseJson(readFileSync(manifestPath, 'utf8'));
+      oldOwned = data.owned || [];
+      oldManaged = (data.managed && typeof data.managed === 'object'
+        && !Array.isArray(data.managed)) ? data.managed : {};
+    } catch { oldOwned = []; oldManaged = {}; }
+  }
+  const isCopilot = host === 'copilot';
+
+  // RENDER + WIRE in one child's worth of work. `preambleExclude` is null for every host
+  // but Claude — `_PREAMBLE_CONFIG_DIR` has exactly one key, `CLAUDE.md` — so neither
+  // Copilot carrier filename (copilot-instructions.md, AGENTS.md) resolves to one.
+  const rendered = emitClaudeRender(cfg, {
+    theme: args.theme, cfgDir, claudeMd, scope, host,
+    out: out === null ? null : out,
+    footprint: args.footprint, nativeCatalog: NATIVE_CATALOG[host] ?? false,
+    oldOwned, oldManaged, preambleExclude: null,
+  });
+  const { owned, stats, memStatus, nbStatus, managed } = rendered;
+
+  pruneOwned(cfgDir, oldOwned, owned);
+
+  writeManifestAtomic(manifestPath, {
+    _comment: "Files owned by Geneseed's Claude emit. Do not edit; removed on "
+      + 're-emit. The memory and notebook stores are NOT listed — never '
+      + 'deleted. `managed` records the CLAUDE.md block + settings.json '
+      + 'hooks so uninstall removes exactly those.',
+    owned: [...owned].sort(),
+    managed,
+    scope,
+  });
+
+  // VERIFY — Python re-reads the settings file and matches it against the recorded claims.
+  // Skipped for Copilot, which writes no settings file (`_emit_claude_core:827`), which is
+  // the other half of why Copilot is the pair that could cross first.
+  if (!isCopilot) {
+    throw new Error('the VERIFY stage has not crossed to the Node driver: '
+      + `--emit for host '${host}' must stay on python build.py`);
+  }
+  return {
+    nAgents: stats.nAgents,
+    nSkills: stats.nSkills,
+    nHooks: (managed.settings_hooks || []).length,
+    memStatus,
+    nbStatus,
+  };
+}
+
+/** `_build_global.emit_copilot` — per-repo: AGENTS.md at the repo root + a `.github/` layer. */
+function emitCopilot(cfg, args, out) {
+  const root = args.root ? resolveOut(args.root) : out;
+  const cfgDir = path.join(root, '.github');
+  const r = emitClaudeCore(cfg, args, {
+    cfgDir, claudeMd: path.join(root, 'AGENTS.md'), scope: 'project', host: 'copilot', out,
+  });
+  process.stdout.write(`[geneseed] copilot (folder) -> ${root}: AGENTS.md + .github/ `
+    + `(${r.nAgents} agents (.agent.md), ${r.nSkills} skills), ${r.memStatus}, `
+    + `${r.nbStatus}. No settings.json/hooks (Copilot has none).\n`);
+  return cfgDir;
+}
+
+/** `_build_global.emit_copilot_global` — into Copilot's personal config dir (~/.copilot). */
+function emitCopilotGlobal(cfg, args, out) {
+  const cfgDir = copilotConfigDir();
+  warnCopilotGlobalOverProject();
+  const r = emitClaudeCore(cfg, args, {
+    cfgDir, claudeMd: path.join(cfgDir, 'copilot-instructions.md'),
+    scope: 'global', host: 'copilot', out,
+  });
+  process.stdout.write(`[geneseed] copilot-global -> ${cfgDir}: ${r.nAgents} agents (.agent.md), `
+    + `${r.nSkills} skills, copilot-instructions.md, ${r.memStatus}, ${r.nbStatus}. `
+    + 'No settings.json/hooks (Copilot has no hook mechanism — memory rides the '
+    + "preamble's instructions); MCP servers go in mcp-config.json.\n");
+  return cfgDir;
+}
+
+/**
  * build.py:437-466 — the POST stage, which writes markers and records the install and
  * wires NOTHING. `test_the_post_emit_stage_wires_nothing` classifies that stage on the
  * Python side; this is the same stage on this side, and it stays after the dispatch for
@@ -515,6 +722,12 @@ function main(argv) {
     emitOpencode(cfg, args, out);
   } else if (args.emit === 'opencode-global') {
     markerDir = emitOpencodeGlobal(cfg, args, out);
+  } else if (args.emit === 'copilot') {
+    // The PROJECT emits keep their markers in `out`, not in the host config dir the emit
+    // wrote to (build.py:435-436) — `.github/` is the layer, `out` is the install.
+    emitCopilot(cfg, args, out);
+  } else if (args.emit === 'copilot-global') {
+    markerDir = emitCopilotGlobal(cfg, args, out);
   } else {
     // `nativeCatalog: false` is build.py:421's three-positional-argument call reproduced:
     // `build(args.theme, out, args.footprint)` leaves `native_catalog` at its signature
