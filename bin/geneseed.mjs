@@ -30,12 +30,15 @@
  * that reproduced the signature default would emit a different harness in every cell while
  * every gate that calls the functions directly stayed green.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import {
+  existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync,
+  statSync, unlinkSync,
+} from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { build } from '../js/emit.mjs';
-import { writeText } from '../js/lib/pyfs.mjs';
+import { build, emitOpencodeRender } from '../js/emit.mjs';
+import { writeText, parseJson } from '../js/lib/pyfs.mjs';
 
 /** `_build_core.ROOT` — the checkout, from this script's own location (bin/..). */
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -57,7 +60,20 @@ const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global'
  * bodies is the rest of P4, not a hidden branch of this one: an emit that is not here
  * REFUSES rather than silently producing a partial tree.
  */
-const PORTED = new Set(['files']);
+const PORTED = new Set(['files', 'opencode']);
+
+/** `_build_global.GLOBAL_MANIFEST`. */
+const GLOBAL_MANIFEST = '.geneseed-manifest.json';
+/** `_build_emit.PRIMARY_AGENT_SRC`. */
+const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orchestrator.md');
+/**
+ * `_build_global.HOSTS[host]['native_catalog']` — does the host catalogue skills and agents
+ * to the model itself? A DECISION the driver takes and sends, never something the render
+ * half re-derives: `emit_opencode` passes `host_catalogs_natively('opencode')`, which is
+ * `true`, where the plain `files` bundle passes `false`. Getting this wrong collapses (or
+ * fails to collapse) AGENT.md's capability tables in every cell.
+ */
+const NATIVE_CATALOG = { opencode: true, claude: true, bob: false, copilot: false };
 
 /** `_build_render.posture_names()` / `mode_names()` — discovered, never hardcoded, so a
  *  new posture file appears in both CLIs' choices with no code change. */
@@ -172,6 +188,156 @@ function makeCfg(args) {
 }
 
 /**
+ * `_build_render._rel_under` — POSIX path of `out` relative to `root`, or '' when they are
+ * the same directory OR when `out` is not under `root` at all.
+ *
+ * `Path.relative_to` RAISES for a non-descendant; `path.relative` happily walks up with
+ * `..`. Reproducing the raise is the whole content of this function: a `..` prefix here
+ * would be written into `opencode.json`'s instruction path.
+ */
+function relUnder(out, root) {
+  const rel = path.relative(root, out);
+  if (rel === '' || rel === '.') return '';
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return '';
+  return rel.split(path.sep).join('/');
+}
+
+/**
+ * `_build_global._write_manifest_atomic` — temp + rename, so a torn manifest can never make
+ * the next emit treat every owned file as the user's own.
+ *
+ * `writeText`, not `writeFileSync`: Python writes this through `Path.write_text`, so the
+ * whole document is CRLF on Windows. `json.dumps(..., indent=2)` switches Python's
+ * separators to `(',', ': ')`, which is exactly `JSON.stringify(v, null, 2)`.
+ */
+function writeManifestAtomic(file, data) {
+  const tmp = `${file}.tmp`;
+  writeText(tmp, `${JSON.stringify(data, null, 2)}\n`);
+  renameSync(tmp, file);
+}
+
+function isFile(p) {
+  try { return statSync(p).isFile(); } catch { return false; }
+}
+
+/**
+ * Write-before-delete: remove only what this layer owned before and no longer produces.
+ *
+ * Runs AFTER the whole current set is on disk, so a live file is never momentarily absent
+ * part-way through an emit. A pre-existing file that was never in the manifest is the
+ * user's and is not reachable from here at all.
+ */
+function pruneOwned(oc, oldOwned, owned) {
+  const now = new Set(owned);
+  const failed = [];
+  for (const rel of [...new Set(oldOwned)].filter((r) => !now.has(r)).sort()) {
+    const victim = path.join(oc, rel);
+    try {
+      if (isFile(victim)) {
+        unlinkSync(victim);
+        const parent = path.dirname(victim);
+        if (parent !== oc && readdirSync(parent).length === 0) rmdirSync(parent);
+      }
+    } catch (e) {
+      // Deliberately divergent and deliberately unreachable in the gates: `str(OSError)`
+      // ("[Errno 13] Permission denied: ...") and a Node error message ("EACCES: ...") can
+      // never agree, and no cell drives a real filesystem failure through this text.
+      failed.push(`${rel} (${e.message})`);
+    }
+  }
+  if (failed.length) {
+    process.stderr.write('[geneseed] WARN: could not remove stale owned file(s): '
+      + `${failed.join(', ')}\n`);
+  }
+}
+
+/**
+ * `_install_registry.record` — idempotent, best-effort, and it must NEVER raise into a build.
+ *
+ * `realpathSync` rather than `path.resolve`, because Python's `Path.resolve()` returns the
+ * filesystem's own casing and follows links; `path.resolve` only makes a path absolute. The
+ * registry is compared byte-for-byte by `tests/golden.py` (XDG is redirected into the
+ * sandbox), so a differently-cased entry is a failing cell.
+ */
+function registryRecord(dir) {
+  try {
+    let root;
+    try { root = realpathSync.native(dir); } catch { root = path.resolve(dir); }
+    const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+    const file = path.join(base, 'geneseed', 'installs.json');
+    let cur = [];
+    try {
+      const data = parseJson(readFileSync(file, 'utf8'));
+      if (Array.isArray(data)) cur = data.map(String);
+    } catch { cur = []; }
+    if (cur.includes(root)) return;
+    mkdirSync(path.dirname(file), { recursive: true });
+    const tmp = `${file}.tmp`;
+    writeText(tmp, `${JSON.stringify([...cur, root], null, 2)}\n`);
+    renameSync(tmp, file);
+  } catch { /* a registry hiccup must never fail a build */ }
+}
+
+/**
+ * `_build_emit.emit_opencode` — the driver body, which is what this phase actually ports.
+ *
+ * RENDER and WIRE already ran in Node before P4; what lived only in Python was the stage
+ * either side of them: reading the previous manifest (PRE), pruning what this layer no
+ * longer owns, writing the manifest atomically, and the summary line. All five stages now
+ * run in one process, in the order `test_emit_phase_order.py` pins for the Python twin:
+ * RENDER -> WIRE -> PRUNE -> MANIFEST -> VERIFY (opencode has no VERIFY; it writes no
+ * settings file of its own).
+ */
+function emitOpencode(cfg, args, out) {
+  const root = args.root ? resolveOut(args.root) : out;
+  const oc = path.join(root, '.opencode');
+  const manifestPath = path.join(oc, GLOBAL_MANIFEST);
+
+  // PRE. A missing manifest reads as "owned nothing before", which is what makes the first
+  // re-emit after an upgrade treat already-existing files as the user's (claim-on-create)
+  // rather than deleting them. The prune set is then empty by construction.
+  const manifestExisted = existsSync(manifestPath);
+  let oldOwned = [];
+  if (manifestExisted) {
+    try {
+      const m = parseJson(readFileSync(manifestPath, 'utf8'));
+      oldOwned = (m && m.owned) || [];
+    } catch { oldOwned = []; }
+  }
+
+  const agentPathRel = relUnder(out, root);
+  const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';
+
+  // RENDER + WIRE, one call. `primaryAgentSrc` lives in `_build_emit` and only this job
+  // needs it, so the caller adds it rather than `makeCfg` reaching across.
+  const rendered = emitOpencodeRender(
+    { ...cfg, primaryAgentSrc: PRIMARY_AGENT_SRC },
+    {
+      theme: args.theme, out, root, footprint: args.footprint,
+      nativeCatalog: NATIVE_CATALOG.opencode, oldOwned, manifestExisted, agentPath,
+    });
+  const { owned, stats, cfgName } = rendered;
+
+  pruneOwned(oc, oldOwned, owned);
+
+  writeManifestAtomic(manifestPath, {
+    _comment: 'Files owned by Geneseed\'s per-repo OpenCode emit (--emit opencode). '
+      + 'Do not edit; removed on re-emit. A pre-existing file not in this '
+      + 'list is yours and is never touched.',
+    owned: [...owned].sort(),
+    scope: 'project',
+  });
+
+  const extras = [...(stats.primary ? ['primary agent'] : []),
+    ...(stats.nCommands ? [`${stats.nCommands} command(s)`] : [])];
+  const extra = extras.length ? ` + ${extras.join(', ')}` : '';
+  process.stdout.write(`[geneseed] opencode layer: ${stats.nAgents} subagents, `
+    + `${stats.nSkills} skills, ${stats.nPlugins} plugin(s), `
+    + `${stats.nWorkflows} workflow file(s), ${cfgName} (instructions: ${agentPath})`
+    + `${extra}\n`);
+}
+
+/**
  * build.py:437-466 — the POST stage, which writes markers and records the install and
  * wires NOTHING. `test_the_post_emit_stage_wires_nothing` classifies that stage on the
  * Python side; this is the same stage on this side, and it stays after the dispatch for
@@ -219,16 +385,21 @@ function main(argv) {
   const out = resolveOut(args.out);
   const cfg = makeCfg(args);
 
-  // `nativeCatalog: false` is build.py:421's three-positional-argument call reproduced:
-  // `build(args.theme, out, args.footprint)` leaves `native_catalog` at its signature
-  // default. It is the one signature default this driver DOES inherit, and it is inherited
-  // because the Python CLI inherits it too.
-  build(cfg, args.theme, out, { footprint: args.footprint, nativeCatalog: false });
+  if (args.emit === 'opencode') {
+    emitOpencode(cfg, args, out);
+  } else {
+    // `nativeCatalog: false` is build.py:421's three-positional-argument call reproduced:
+    // `build(args.theme, out, args.footprint)` leaves `native_catalog` at its signature
+    // default. It is the one signature default this driver DOES inherit, and it is
+    // inherited because the Python CLI inherits it too.
+    build(cfg, args.theme, out, { footprint: args.footprint, nativeCatalog: false });
+  }
 
-  // `files` is not one of the four per-repo HOST emits, so no install-registry row — the
-  // allow-list at build.py:461 exists precisely so a plain `--emit files` dev build never
-  // pollutes the registry.
   writeMarkers(out, args.emit, args.footprint);
+  // An ALLOW-LIST, not "everything that is not global": a plain `--emit files` dev build —
+  // the default — must never pollute the registry, and only the four per-repo host emits
+  // are ones `_EMIT_HOST_SCOPE` can map back to a row. Records `out`, where the marker is.
+  if (['opencode', 'claude', 'bob', 'copilot'].includes(args.emit)) registryRecord(out);
   return 0;
 }
 

@@ -429,6 +429,13 @@ def main(argv=None) -> int:
                          "the write-before-delete prune's deletion path, because both of "
                          "its emits share one configuration and `old_owned - owned` is "
                          "therefore always empty. Uses --ref alone; --new is ignored.")
+    ap.add_argument("--repeat", type=int, default=1, metavar="N",
+                    help="emit N times into the same sandbox on BOTH sides before "
+                         "comparing. `--idempotent` compares a generator against ITSELF, so "
+                         "it can only prove a re-emit is self-consistent — the re-emit path "
+                         "is otherwise never compared ACROSS implementations, and it is the "
+                         "path that reads the previous manifest, prunes, and rewrites it. "
+                         "`--repeat 2 --new <other>` is that comparison.")
     ap.add_argument("--emits", default=None,
                     help="comma-separated --emit modes to keep (default: all nine). For a "
                          "PARTIAL port: the Node driver crosses one emit at a time, so "
@@ -471,8 +478,12 @@ def main(argv=None) -> int:
         m = _keep(cells(args.quick))
         return 2 if m is None else compare(ref, ref, args.quick, args.limit,
                                            ref_repeat=1, new_repeat=2, matrix=m)
+    if args.repeat < 1:
+        print(f"[golden] --repeat must be at least 1, got {args.repeat}")
+        return 2
     m = _keep(cells(args.quick))
-    return 2 if m is None else compare(ref, new, args.quick, args.limit, matrix=m)
+    return 2 if m is None else compare(ref, new, args.quick, args.limit, matrix=m,
+                                       ref_repeat=args.repeat, new_repeat=args.repeat)
 
 
 if __name__ == "__main__":

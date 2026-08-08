@@ -173,6 +173,52 @@ class NodeDriverSurface(unittest.TestCase):
             self.assertIn("python build.py", r.stderr,
                           f"{flag}'s refusal must name the command that does work")
 
+    def test_a_bundle_in_a_subfolder_matches_python(self):
+        """The `--root` axis, which the acceptance matrix cannot reach.
+
+        `golden._argv` builds `--theme/--emit/--footprint/--out` plus an optional
+        `--posture`/`--mode` and NOTHING else, so `out == root` in all 259 cells and
+        `_rel_under` returns `''` every time. The instruction-path prefix that
+        `opencode.json` records — the whole reason the flag exists — is therefore
+        INDISTINGUISHABLE to the gate that is otherwise this port's acceptance test.
+
+        This is P2e's `--out is not the target` finding in its general form: a fixture that
+        omits `--root` passes even when the port derived one value from the other. Written
+        by hand because the alternative is a fourth axis on a 259-cell matrix to prove one
+        string.
+        """
+        with tempfile.TemporaryDirectory() as tmp_s:
+            snaps = {}
+            for side, gen in (("py", [sys.executable, "build.py"]),
+                              ("node", [NODE, str(CLI)])):
+                sb = Path(tmp_s) / side
+                home, repo = sb / "home", sb / "repo"
+                home.mkdir(parents=True)
+                out = repo / "Harness"
+                r = subprocess.run(
+                    gen + ["--theme", "neutral", "--emit", "opencode", "--footprint", "lean",
+                           "--out", str(out), "--root", str(repo)],
+                    cwd=str(ROOT), env=golden.cell_env(home), capture_output=True,
+                    text=True, encoding="utf-8")
+                self.assertEqual(r.returncode, 0,
+                                 f"{side} generator failed: {(r.stderr or r.stdout)[:400]}")
+                roots = [("<HOME>", home), ("<OUT>", out), ("<REPO>", ROOT)]
+                snap = golden._snapshot(sb, roots)
+                snap["<stdout>"] = golden._normalise(r.stdout.encode("utf-8", "replace"), roots)
+                snaps[side] = snap
+
+            a, b = snaps["py"], snaps["node"]
+            self.assertEqual(sorted(a), sorted(b),
+                             f"only in python: {sorted(set(a) - set(b))[:8]} · "
+                             f"only in node: {sorted(set(b) - set(a))[:8]}")
+            differing = sorted(k for k in a if a[k] != b[k])
+            self.assertEqual(differing, [], f"differing under --root: {differing[:8]}")
+            # The guard: if this cell ever stops exercising the prefix, it has silently
+            # become a duplicate of a golden cell and proves nothing.
+            self.assertIn(b"Harness/AGENT.md", b["<stdout>"],
+                          "the emit no longer reports a prefixed instruction path, so this "
+                          "cell is no longer testing --root")
+
     def test_the_footprint_default_is_the_flags_not_the_functions(self):
         """build.py:354's flag defaults to `lean`; every emit SIGNATURE defaults to `full`.
 
