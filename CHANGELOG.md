@@ -10,17 +10,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Added
 - **The port's eighth piece: `--emit opencode-global` renders through Node too, and now
-  *every* emit does — this time counted rather than claimed.** It was the one mode still
-  running Python, which the previous entry corrected the record about; it now takes the
-  same path as the other eight, so the same promise applies: same files, same console
-  output, same exit code, and no Node means nothing changes at all.
+  *every* emit does — counted this time, not claimed.** It was the one mode still on
+  Python, which the entry below corrects the record about; it now takes the same path as
+  the other eight, so the same promise applies: same files, same console output, same exit
+  code, and no Node means nothing changes at all.
   What is worth knowing is what it took to say "every" honestly. The test that counts the
-  modes refuses one that crosses without a comparison behind it, so this mode — which had
-  never been compared between the two runtimes at all, only against itself — arrived with
-  six new cases: a global config dir you already keep your own agents in, the stores edited
-  between two builds (the only way to tell "kept your memory" from "re-seeded it"), the
-  lean footprint's standalone laws file, an `opencode.jsonc` you have commented, a legacy
-  harness to migrate a store from, and the opt-in primary agent and slash commands.
+  modes refuses one that crosses with no comparison behind it — and this mode had never
+  been compared between the two runtimes at all, only against itself. So it arrived with
+  six new cases: a plain install and the rebuild over it; the lean footprint's standalone
+  laws file; the opt-in primary agent and slash commands; an old harness to carry a memory
+  store over from; a config dir you already keep your own agents, wiki and exclude list in,
+  with the stores then edited between the two builds — the only way a byte comparison can
+  tell "kept your memory" from "re-seeded it"; and an `opencode.jsonc` you have commented.
   One thing that reads like a detail and is not: `--out` is **not** where this emit writes.
   It renders into your OpenCode config dir and takes `--out` only as an old bundle to carry
   a memory or notebook store over from. Every earlier test left those two the same

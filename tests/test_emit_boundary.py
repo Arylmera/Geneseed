@@ -340,9 +340,11 @@ def _oc_global_commented_jsonc(out: Path, home: Path) -> None:
     `<root>/opencode.jsonc`, a different file under a different root, reached from a
     different wire half. What both cells exist for is the same hazard — `mergeOpencodeJson`
     is IDEMPOTENT, so an emit that wired twice (the child merging, then Python merging
-    again because the payload lost its `cfgName` signal) leaves a byte-identical tree. The
-    refusal warning printed a second time is the only trace, and a commented file is the
-    only fixture that makes it print at all."""
+    again because the payload lost its `cfgName` signal) leaves a byte-identical TREE. The
+    refusal warning printed a second time is the only trace anywhere, and a commented file
+    is the only fixture that makes it print at all — which is why this cell is load-bearing
+    twice over: the count below names the double wire, and the run's stdout diverges from
+    the `GENESEED_NO_JS` side that warns once, so the main comparison catches it too."""
     cfg = _oc_cfg(home)
     cfg.mkdir(parents=True, exist_ok=True)
     (cfg / "opencode.jsonc").write_text(

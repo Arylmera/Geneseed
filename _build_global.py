@@ -296,10 +296,15 @@ def _opencode_global_wire(rendered: dict, cfg: Path, agent_path: str) -> str:
 
     Same shape as `_build_emit._opencode_wire`, and for the same reason: one spawn per
     emit means this stage cannot dispatch on its own, so the payload carrying `cfgName` IS
-    the signal that Node already wired. Losing that signal is invisible to every byte
-    comparison — `_merge_opencode_json` is idempotent, so a second merge produces the same
-    tree — and the only trace is that a commented `.jsonc` prints its refusal twice. That
-    is what `opencode-global/commented-jsonc` exists for."""
+    the signal that Node already wired.
+
+    Losing that signal leaves the TREE byte-identical — `_merge_opencode_json` is
+    idempotent, so a second merge writes the same bytes — and the only trace anywhere is
+    the refusal warning printed twice, which none of the 14 other opencode-global states
+    makes print at all. Measured rather than reasoned: dropping `cfgName` from the payload
+    fails exactly two assertions, both fed by `opencode-global/commented-jsonc`, and
+    neither is a file. The boundary gate sees it as a STDOUT divergence (Node's side warns
+    twice, `GENESEED_NO_JS` once) and the wire-cell guard counts the warnings directly."""
     cfg_name = rendered.get("cfgName")
     if cfg_name is not None:
         return cfg_name
@@ -332,10 +337,11 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     `cfg` overrides the target dir (default: the resolved OpenCode config dir) — used
     by `harness.py diff` to render an 'expected' copy into a temp dir for comparison.
 
-    Unlike every other manifest this one carries NO `managed` key and no `scope`: the one
-    file this emit wires, opencode.json, is never unwired by any teardown path, so there
-    is no claim to record. That is why the payload needs `cfgName` and nothing else, and
-    why there is no VERIFY stage here."""
+    This is the only manifest carrying NEITHER a `managed` claim set nor a `scope` (the
+    Claude engine writes both; `emit_opencode` writes `scope`): the one file this emit
+    wires, opencode.json, is never unwired by any teardown path, so there is no claim to
+    record. That is why the payload needs `cfgName` and nothing else, and why there is no
+    VERIFY stage here — nothing was claimed, so there is nothing to re-read and match."""
     cfg = cfg or _build_core._opencode_config_dir()
 
     # Files this layer owned on a previous run — read now, but pruned only AFTER the new
