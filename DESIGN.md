@@ -328,6 +328,37 @@ renders it as the name in parentheses.
   writes — a write through the facade cannot be restored reliably, and a redirect that
   silently outlives its test poisons every later read. A bare `SRC` left in a submodule
   raises `NameError` rather than quietly reading a stale copy; that noise is the point.
+- **There is a second driver: [`bin/geneseed.mjs`](bin/geneseed.mjs), and it is ADDED beside
+  `main()` rather than replacing it.** `build.py` is also the `import build` facade that 19
+  `rituals/` modules read 55 distinct names from, and roughly eleven sites spawn it as a
+  subprocess; none of them flip, because flipping them would make Node mandatory for the
+  *Python* runtime and kill the silent `js_render_available()` fallback. Only `--emit files`
+  crosses so far — it is the one emit whose Python dispatcher hands the whole emit to Node
+  and returns, while the other eight keep PRE, PRUNE, MANIFEST and their summary line in the
+  Python driver body. An emit that has not crossed **refuses with exit 3** instead of
+  producing a partial tree, and `tests/golden.py --emits` narrows the matrix to what has;
+  deleting that flag is how the phase ends.
+  **The boundary rule inverts here.** Every phase since the seam became a process has asked
+  which values the child may resolve and which the parent must decide and send — the answer
+  for `cfgDir` being that a child resolving it would render into the developer's real config
+  dir. A Node driver is the *parent*, so the values a child must never resolve are exactly
+  the ones it must originate: `ROOT` and the paths under it come from the script's own
+  location. Two `cfg` keys are deliberately **absent**, and their absence is load-bearing:
+  `js_cfg()` always sends `structure` and `capabilityLinkRe` because the Python originals are
+  module names tests mutate, but this driver has no Python module to mutate — so
+  `js/render.mjs`'s `cfg.structure ?? STRUCTURE` and `js/emit.mjs`'s `capabilityLinkRe`
+  fallback take their right-hand branches for the first time since they were written. They
+  were unreachable, not untested. A second driver is what reached them.
+  **A byte gate cannot tell two implementations from one**, so the driver owes a process
+  observation and not another matrix: a `bin/geneseed.mjs` whose whole body was
+  `spawnSync('python', ['build.py', ...argv])` passes every golden cell perfectly, because it
+  *is* the Python CLI. `tests/test_node_cli_parity.py` refuses that from both sides — running
+  with every interpreter removed from PATH catches a spawn a source read would miss in a
+  disabled branch, and a source check catches the absolute-path spawn no PATH change can
+  observe. Each half is the only one that catches its own mutation, which is why they are two
+  tests. The markers go through `pyfs.writeText`, never `writeFileSync`: `Path.write_text`
+  opens in text mode with `newline=None`, so a marker written with a bare LF differs from
+  Python's on Windows in every cell.
 
 ## 🚫 Explicitly out of scope
 

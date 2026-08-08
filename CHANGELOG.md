@@ -9,6 +9,23 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's ninth piece, and the first one you can run without Python: `node
+  bin/geneseed.mjs` builds the bundle.** Everything before this rendered *inside* a build
+  that Python started; this is a second front door. `node bin/geneseed.mjs --theme imperial`
+  produces the same bundle, the same console output and the same exit code as `python
+  build.py --theme imperial` — verified byte-for-byte over every theme, both footprints, all
+  five postures and both modes.
+  **Only the plain bundle (`--emit files`) works this way so far.** The other eight emit
+  modes still need Python, and asking the Node driver for one tells you so and stops, rather
+  than writing half a harness. Nothing about the Python command changes: it is still the one
+  the wizard, the web console, doctor and upgrade all use, and it stays that way until every
+  mode has crossed.
+  Two flags are deliberately *not* coming to the Node side. `--sync-themes` edits this
+  repository's own theme files — maintainer tooling, not something an installed copy should
+  carry — and `--validate-only` needs the Python doctor to do its second half. Both say so
+  and point you at `python build.py`.
+  There is no `package.json` and no published package yet; that is a later phase. What
+  exists today is a runnable script in the checkout.
 - **The port's eighth piece: `--emit opencode-global` renders through Node too, and now
   *every* emit does — counted this time, not claimed.** It was the one mode still on
   Python, which the entry below corrects the record about; it now takes the same path as
