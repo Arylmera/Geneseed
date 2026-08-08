@@ -332,13 +332,28 @@ renders it as the name in parentheses.
   `main()` rather than replacing it.** `build.py` is also the `import build` facade that 19
   `rituals/` modules read 55 distinct names from, and roughly eleven sites spawn it as a
   subprocess; none of them flip, because flipping them would make Node mandatory for the
-  *Python* runtime and kill the silent `js_render_available()` fallback. `--emit files` and
-  `--emit opencode` cross so far: the first is the one emit whose Python dispatcher hands
-  the whole emit to Node and returns, and the second is the first whose **driver body** —
-  PRE (the manifest read), PRUNE, the atomic MANIFEST write, the summary line — had to be
-  ported beside the RENDER/WIRE half that already ran there. An emit that has not crossed
-  **refuses with exit 3** instead of producing a partial tree, and `tests/golden.py --emits`
-  narrows the matrix to what has; deleting that flag is how the phase ends.
+  *Python* runtime and kill the silent `js_render_available()` fallback. Three emits cross so
+  far, each adding one thing: `--emit files` is the one whose Python dispatcher hands the
+  whole emit to Node and returns; `--emit opencode` is the first whose **driver body** — PRE
+  (the manifest read), PRUNE, the atomic MANIFEST write, the summary line — had to be ported
+  beside the RENDER/WIRE half that already ran there; and `--emit opencode-global` is the
+  first **global** target, which is where the inverted boundary rule stops being theory. The
+  host config-dir resolvers are exactly the values a render child must never resolve, so the
+  driver originates them — `pyResolve` reproducing `Path.resolve(strict=False)`, because
+  `realpathSync` throws on the normal case where nobody has created the config dir yet. An
+  emit that has not crossed **refuses with exit 3** instead of producing a partial tree, and
+  `tests/golden.py --emits` narrows the matrix to what has; deleting that flag is how the
+  phase ends.
+  **Two hazards here are invisible to a byte comparison for opposite reasons.**
+  `json.dumps` defaults to `ensure_ascii=True` where `JSON.stringify` does not — a
+  difference the matrix catches in the manifest (its comment carries an em dash) and cannot
+  catch in `installs.json`, whose paths are ASCII in every cell and are not on a machine
+  with an accented user name. And `$OPENCODE_CONFIG_DIR` is *deliberately cleared* by
+  `golden.cell_env`, because leaving a relocation variable set would send ~126 global cells
+  into the developer's real install — so a driver that ignored it would be byte-identical in
+  all 259 cells while writing to the wrong directory on every machine that exports it. Both
+  get a hand-written cell asserting the target, and a mutation confirms each is the only
+  thing that catches its own bug.
   **A fresh sandbox cannot reach a driver body's more interesting half.** Every one of
   golden's cells emits into an empty tree, so `old_owned` is `[]`, the PRE branch never
   parses a manifest and the prune never has anything to delete — the code most likely to be

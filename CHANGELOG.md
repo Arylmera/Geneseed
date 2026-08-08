@@ -15,14 +15,16 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   produces the same bundle, the same console output and the same exit code as `python
   build.py --theme imperial` — verified byte-for-byte over every theme, both footprints, all
   five postures and both modes.
-  **The plain bundle (`--emit files`) and the per-repo OpenCode layer (`--emit opencode`)
-  work this way so far**, including the parts that only happen on your *second* build: the
-  Node driver reads the previous manifest, removes what the layer no longer owns, and
-  rewrites the manifest exactly as Python does. The other seven emit modes still need
-  Python, and asking the Node driver for one tells you so and stops, rather than writing
-  half a harness. Nothing about the Python command changes: it is still the one the wizard,
-  the web console, doctor and upgrade all use, and it stays that way until every mode has
-  crossed.
+  **Three modes work this way so far** — the plain bundle (`--emit files`), the per-repo
+  OpenCode layer (`--emit opencode`) and the global OpenCode install
+  (`--emit opencode-global`) — including the parts that only happen on your *second* build:
+  the Node driver reads the previous manifest, removes what the layer no longer owns, and
+  rewrites the manifest exactly as Python does. `$OPENCODE_CONFIG_DIR` relocates the global
+  target on the Node side too, so keeping your harness in a git-tracked folder works
+  unchanged. The other six modes still need Python, and asking the Node driver for one tells
+  you so and stops, rather than writing half a harness. Nothing about the Python command
+  changes: it is still the one the wizard, the web console, doctor and upgrade all use, and
+  it stays that way until every mode has crossed.
   Two flags are deliberately *not* coming to the Node side. `--sync-themes` edits this
   repository's own theme files — maintainer tooling, not something an installed copy should
   carry — and `--validate-only` needs the Python doctor to do its second half. Both say so
