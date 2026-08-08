@@ -219,6 +219,57 @@ class NodeDriverSurface(unittest.TestCase):
                           "the emit no longer reports a prefixed instruction path, so this "
                           "cell is no longer testing --root")
 
+    def test_a_non_ascii_target_path_matches_python(self):
+        """`json.dumps` defaults to `ensure_ascii=True`; `JSON.stringify` does not.
+
+        Every JSON document this driver writes has to escape non-ASCII the way Python does.
+        The manifest writer got this wrong for a whole phase and no cell could tell: the
+        only manifest being written was the per-repo OpenCode one, whose `_comment` is pure
+        ASCII. It surfaced only when `opencode-global` — whose comment carries an em dash —
+        crossed.
+
+        `installs.json` is the same hazard still unexercised: it holds absolute PATHS, which
+        are ASCII in every golden cell and are not ASCII on a machine whose user name has an
+        accent. So this cell puts a non-ASCII character in the target path and compares the
+        registry, rather than waiting for the next emit to make it observable by accident.
+        """
+        with tempfile.TemporaryDirectory() as tmp_s:
+            snaps, raw = {}, {}
+            for side, gen in (("py", [sys.executable, "build.py"]),
+                              ("node", [NODE, str(CLI)])):
+                sb = Path(tmp_s) / side
+                home, repo = sb / "home", sb / "dépôt-café"
+                home.mkdir(parents=True)
+                r = subprocess.run(
+                    gen + ["--theme", "neutral", "--emit", "opencode", "--footprint", "lean",
+                           "--out", str(repo)],
+                    cwd=str(ROOT), env=golden.cell_env(home), capture_output=True,
+                    text=True, encoding="utf-8")
+                self.assertEqual(r.returncode, 0,
+                                 f"{side} generator failed: {(r.stderr or r.stdout)[:400]}")
+                # The RAW registry, kept before normalisation: `_normalise` blanks the
+                # sandbox root in its escaped spelling too (that is the fix this cell
+                # prompted), so the escaping is invisible in the snapshot by design.
+                reg = home / ".config" / "geneseed" / "installs.json"
+                raw[side] = reg.read_bytes() if reg.is_file() else None
+                snaps[side] = golden._snapshot(
+                    sb, [("<HOME>", home), ("<OUT>", repo), ("<REPO>", ROOT)])
+
+            self.assertIsNotNone(raw["py"], "no install registry was written, so this cell "
+                                            "proves nothing about how one is encoded")
+            self.assertIn(b"d\\u00e9p\\u00f4t", raw["py"],
+                          "python stopped escaping non-ASCII in the registry — the "
+                          "behaviour this cell exists to hold the port against has changed")
+            self.assertIn(b"d\\u00e9p\\u00f4t", raw["node"] or b"",
+                          "the node driver wrote the path unescaped where python escapes it")
+
+            a, b = snaps["py"], snaps["node"]
+            self.assertEqual(sorted(a), sorted(b),
+                             f"only in python: {sorted(set(a) - set(b))[:8]} · "
+                             f"only in node: {sorted(set(b) - set(a))[:8]}")
+            differing = sorted(k for k in a if a[k] != b[k])
+            self.assertEqual(differing, [], f"differing under a non-ASCII path: {differing[:8]}")
+
     def test_the_footprint_default_is_the_flags_not_the_functions(self):
         """build.py:354's flag defaults to `lean`; every emit SIGNATURE defaults to `full`.
 

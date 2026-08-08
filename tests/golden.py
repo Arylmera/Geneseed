@@ -60,6 +60,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import hashlib
+import json
 import os
 import re
 import shlex
@@ -161,16 +162,32 @@ def _argv(cell: dict, out: Path) -> list[str]:
 
 def _normalise(data: bytes, roots: list[tuple[str, Path]]) -> bytes:
     """Blank out the sandbox roots so two runs in two different temp dirs compare equal.
-    Each root is replaced in all three spellings a generator might emit it in — native
-    separators, forward slashes, and JSON-escaped backslashes — because settings.json
-    and the manifest carry paths through json.dumps while markdown carries them raw."""
+
+    Each root is replaced in every spelling a generator might emit it in — native
+    separators, forward slashes, and JSON-escaped backslashes — because settings.json and
+    the manifest carry paths through json.dumps while markdown carries them raw.
+
+    The `\\uXXXX` spellings are the fourth and fifth, and they were missing. `json.dumps`
+    defaults to `ensure_ascii=True`, so a path containing any non-ASCII character reaches
+    the file as `d\\u00e9p\\u00f4t` and NONE of the first three spellings match it — the
+    sandbox root then survives normalisation and every such cell reports a difference that
+    is only the temp dir. Nothing had noticed because every path in the matrix is ASCII;
+    the cell that put an accent in `--out` is what found it. A gate is code, and so is its
+    normaliser."""
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
         return data  # binary: compare raw
     for tag, path in roots:
         s = str(path)
-        for spelling in (s, s.replace("\\", "/"), s.replace("\\", "\\\\")):
+        slash = s.replace("\\", "/")
+        spellings = [s, slash, s.replace("\\", "\\\\")]
+        # json.dumps(...)[1:-1] is exactly what the path looks like INSIDE a JSON string:
+        # backslashes doubled and every non-ASCII character escaped.
+        spellings += [json.dumps(s)[1:-1], json.dumps(slash)[1:-1]]
+        # Longest first: the escaped spelling of a path with no non-ASCII is identical to
+        # the doubled-backslash one, and replacing a prefix form first would strand the rest.
+        for spelling in sorted(set(spellings), key=len, reverse=True):
             text = text.replace(spelling, tag)
     return text.encode("utf-8")
 

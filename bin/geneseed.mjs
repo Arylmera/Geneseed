@@ -37,8 +37,8 @@ import {
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { build, emitOpencodeRender } from '../js/emit.mjs';
-import { writeText, parseJson } from '../js/lib/pyfs.mjs';
+import { build, emitOpencodeRender, emitOpencodeGlobalRender } from '../js/emit.mjs';
+import { writeText, parseJson, jsonDumpsIndent } from '../js/lib/pyfs.mjs';
 
 /** `_build_core.ROOT` — the checkout, from this script's own location (bin/..). */
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -60,7 +60,7 @@ const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global'
  * bodies is the rest of P4, not a hidden branch of this one: an emit that is not here
  * REFUSES rather than silently producing a partial tree.
  */
-const PORTED = new Set(['files', 'opencode']);
+const PORTED = new Set(['files', 'opencode', 'opencode-global']);
 
 /** `_build_global.GLOBAL_MANIFEST`. */
 const GLOBAL_MANIFEST = '.geneseed-manifest.json';
@@ -188,6 +188,59 @@ function makeCfg(args) {
 }
 
 /**
+ * `Path.expanduser()` — a LEADING `~` only, and `~` alone counts.
+ *
+ * Deliberately not a general tilde expansion: Python does not expand `~user` on Windows the
+ * way a shell would, and every caller here feeds it a config-dir env var.
+ */
+function expanduser(p) {
+  if (p === '~') return os.homedir();
+  if (p.startsWith('~/') || p.startsWith('~\\')) return path.join(os.homedir(), p.slice(2));
+  return p;
+}
+
+/**
+ * `Path.resolve()` — absolute, symlinks followed, and the filesystem's OWN casing.
+ *
+ * `path.resolve` does none of the last two and `realpathSync` THROWS on a path that does not
+ * exist yet, which is the normal case here: the first `--emit opencode-global` on a machine
+ * resolves a config dir nobody has created. Python's `resolve(strict=False)` canonicalises
+ * the part that exists and appends the rest verbatim, so that is what this reproduces.
+ * It matters because the resolved directory is printed on stdout and compared byte-for-byte.
+ */
+function pyResolve(p) {
+  let cur = path.resolve(expanduser(p));
+  const tail = [];
+  for (;;) {
+    try {
+      return tail.length ? path.join(realpathSync.native(cur), ...tail) : realpathSync.native(cur);
+    } catch {
+      const parent = path.dirname(cur);
+      if (parent === cur) return path.resolve(expanduser(p));  // nothing on this path exists
+      tail.unshift(path.basename(cur));
+      cur = parent;
+    }
+  }
+}
+
+/**
+ * `_build_core._opencode_config_dir` — and the four resolvers like it are the reason this
+ * driver exists rather than a child doing the work.
+ *
+ * P3c's rule was "the child must never resolve this": a render child that did would write
+ * 135 files into the developer's real `~/.config/opencode`. This file is the PARENT, so the
+ * rule inverts — resolving it here is exactly the job. Precedence is the env var (which
+ * relocates the whole dir), then `$XDG_CONFIG_HOME/opencode`, then `~/.config/opencode`.
+ */
+function opencodeConfigDir() {
+  const env = process.env.OPENCODE_CONFIG_DIR;
+  if (env) return pyResolve(env);
+  const xdg = process.env.XDG_CONFIG_HOME;
+  const base = xdg ? expanduser(xdg) : path.join(os.homedir(), '.config');
+  return pyResolve(path.join(base, 'opencode'));
+}
+
+/**
  * `_build_render._rel_under` — POSIX path of `out` relative to `root`, or '' when they are
  * the same directory OR when `out` is not under `root` at all.
  *
@@ -207,12 +260,19 @@ function relUnder(out, root) {
  * the next emit treat every owned file as the user's own.
  *
  * `writeText`, not `writeFileSync`: Python writes this through `Path.write_text`, so the
- * whole document is CRLF on Windows. `json.dumps(..., indent=2)` switches Python's
- * separators to `(',', ': ')`, which is exactly `JSON.stringify(v, null, 2)`.
+ * whole document is CRLF on Windows.
+ *
+ * `jsonDumpsIndent`, not `JSON.stringify`: `json.dumps` defaults to `ensure_ascii=True` and
+ * escapes every non-ASCII character, where `JSON.stringify` emits it raw. This was
+ * `JSON.stringify` for a whole phase and nothing caught it, because the only manifest being
+ * written was the per-repo OpenCode one and its `_comment` is pure ASCII. The
+ * `opencode-global` comment contains an em dash, and that is the character that finally
+ * made the difference observable — a helper that is wrong everywhere but tellable in only
+ * one place.
  */
 function writeManifestAtomic(file, data) {
   const tmp = `${file}.tmp`;
-  writeText(tmp, `${JSON.stringify(data, null, 2)}\n`);
+  writeText(tmp, `${jsonDumpsIndent(data)}\n`);
   renameSync(tmp, file);
 }
 
@@ -273,7 +333,9 @@ function registryRecord(dir) {
     if (cur.includes(root)) return;
     mkdirSync(path.dirname(file), { recursive: true });
     const tmp = `${file}.tmp`;
-    writeText(tmp, `${JSON.stringify([...cur, root], null, 2)}\n`);
+    // `jsonDumpsIndent` for the same reason as the manifest: these are absolute paths, and
+    // a machine whose username carries an accent writes one here.
+    writeText(tmp, `${jsonDumpsIndent([...cur, root])}\n`);
     renameSync(tmp, file);
   } catch { /* a registry hiccup must never fail a build */ }
 }
@@ -338,6 +400,66 @@ function emitOpencode(cfg, args, out) {
 }
 
 /**
+ * `_build_global.emit_opencode_global` — the driver body for the "everything global, zero
+ * per-repo" deployment.
+ *
+ * Shaped like `emitOpencode` and differing in four measured ways, each of which is a value
+ * this driver decides rather than the child re-deriving it:
+ *   - the target is the RESOLVED config dir, not `--out`;
+ *   - `out` is passed through unchanged and is the LEGACY BUNDLE a memory store is migrated
+ *     from — not the target, not the config dir's parent, not derivable from anything the
+ *     child holds;
+ *   - `agentPath` is ABSOLUTE here (`<cfg>/AGENT.md` as POSIX), where the per-repo emit
+ *     sends a path relative to the project root;
+ *   - the manifest carries no `scope` and no `managed` claim set, because the one file this
+ *     emit wires is never unwired by any teardown — so there is nothing to record and no
+ *     VERIFY stage to re-read it.
+ */
+function emitOpencodeGlobal(cfg, args, out) {
+  const cfgDir = opencodeConfigDir();
+  const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
+
+  let oldOwned = [];
+  if (existsSync(manifestPath)) {
+    try {
+      const m = parseJson(readFileSync(manifestPath, 'utf8'));
+      oldOwned = (m && m.owned) || [];
+    } catch { oldOwned = []; }
+  }
+
+  const agentPath = path.join(cfgDir, 'AGENT.md').split(path.sep).join('/');
+
+  const rendered = emitOpencodeGlobalRender(
+    { ...cfg, primaryAgentSrc: PRIMARY_AGENT_SRC },
+    {
+      theme: args.theme, cfgDir, out: out === null ? null : out,
+      footprint: args.footprint, nativeCatalog: NATIVE_CATALOG.opencode,
+      oldOwned, agentPath,
+    });
+  const { owned, stats, memStatus, nbStatus, cfgName } = rendered;
+
+  pruneOwned(cfgDir, oldOwned, owned);
+
+  writeManifestAtomic(manifestPath, {
+    _comment: 'Files owned by Geneseed\'s --emit opencode-global. '
+      + 'Do not edit; removed on re-emit. The memory and notebook '
+      + 'stores are NOT listed — they are never deleted.',
+    owned: [...owned].sort(),
+  });
+
+  const extras = [...(stats.primary ? ['primary agent'] : []),
+    ...(stats.nCommands ? [`${stats.nCommands} command(s)`] : [])];
+  const extra = extras.length ? ` + ${extras.join(', ')}` : '';
+  process.stdout.write(`[geneseed] opencode-global -> ${cfgDir}: ${stats.nAgents} subagents, `
+    + `${stats.nSkills} skills, ${stats.nPlugins} plugin(s), `
+    + `${stats.nWorkflows} workflow file(s), AGENT.md, ${memStatus}, ${nbStatus}, `
+    + `${cfgName} (no context.json)${extra}. `
+    + 'The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to '
+    + 'override.\n');
+  return cfgDir;
+}
+
+/**
  * build.py:437-466 — the POST stage, which writes markers and records the install and
  * wires NOTHING. `test_the_post_emit_stage_wires_nothing` classifies that stage on the
  * Python side; this is the same stage on this side, and it stays after the dispatch for
@@ -385,8 +507,14 @@ function main(argv) {
   const out = resolveOut(args.out);
   const cfg = makeCfg(args);
 
+  // The marker directory is the emit's TARGET, which for a global emit is the config dir it
+  // just rendered into and not `--out` at all — so the emit returns it rather than the
+  // caller guessing (build.py:427-436 re-resolves; returning it keeps one resolution).
+  let markerDir = out;
   if (args.emit === 'opencode') {
     emitOpencode(cfg, args, out);
+  } else if (args.emit === 'opencode-global') {
+    markerDir = emitOpencodeGlobal(cfg, args, out);
   } else {
     // `nativeCatalog: false` is build.py:421's three-positional-argument call reproduced:
     // `build(args.theme, out, args.footprint)` leaves `native_catalog` at its signature
@@ -395,11 +523,21 @@ function main(argv) {
     build(cfg, args.theme, out, { footprint: args.footprint, nativeCatalog: false });
   }
 
-  writeMarkers(out, args.emit, args.footprint);
+  writeMarkers(markerDir, args.emit, args.footprint);
+  // build() drops a .geneseed-theme in `out` for the emits that call it; the global emits
+  // render into the config dir WITHOUT calling build(), so the theme is recorded here.
+  // Deliberately not written for the claude/bob/copilot PROJECT emits — they carry none,
+  // and `_harness_setup._installed_defaults` detects those by an AGENT.md sigil scan
+  // instead. Writing one for them would change the emitted tree.
+  if (args.emit.endsWith('-global')) {
+    try {
+      writeText(path.join(markerDir, '.geneseed-theme'), `${args.theme}\n`);
+    } catch { /* best-effort, as build.py:449-452 */ }
+  }
   // An ALLOW-LIST, not "everything that is not global": a plain `--emit files` dev build —
   // the default — must never pollute the registry, and only the four per-repo host emits
   // are ones `_EMIT_HOST_SCOPE` can map back to a row. Records `out`, where the marker is.
-  if (['opencode', 'claude', 'bob', 'copilot'].includes(args.emit)) registryRecord(out);
+  if (['opencode', 'claude', 'bob', 'copilot'].includes(args.emit)) registryRecord(markerDir);
   return 0;
 }
 
