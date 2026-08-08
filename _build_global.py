@@ -156,51 +156,33 @@ def _ship_lean_laws(items, theme, cfg: Path, owned: list) -> None:
             owned.append(rel)
 
 
-def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | None = None,
-                         footprint: str = "full") -> None:
-    """Render the harness straight into OpenCode's GLOBAL config dir — the
-    "everything global, zero per-repo" deployment (GLOBAL-HARNESS-SPEC.md).
+def _opencode_global_render_py(theme_name: str, cfg: Path, out: Path | None,
+                               footprint: str, native_catalog: bool,
+                               old_owned: list) -> dict:
+    """RENDER — everything `emit_opencode_global` writes that Geneseed owns WHOLESALE,
+    and the reference implementation of `js/emit.mjs`'s `opencode-global` job.
 
-    Self-contained: it writes ONLY into <cfg> and builds NO sibling Harness bundle.
-    AGENT.md is rendered straight to <cfg>/AGENT.md, and the memory store lives at
-    <cfg>/<memory|anamnesis> (migrated once from a legacy Harness if present, else
-    seeded). Point the learn plugin at it with GENESEED_HARNESS=<cfg>.
+    Split out at P3c, which is the whole of that phase's structural work: unlike
+    `emit_opencode` and `_emit_claude_core` this emit had NO `_render_py`/`_wire_py` pair
+    to port into — it was one 137-line body with the merge in the middle of it. The split
+    is what gives the seam a single Python body to be the reference for, and what leaves
+    `tests/test_emit_phase_order.py` a statement sequence to walk: `run_node` classifies as
+    RENDER, so an emit whose two dispatch statements were folded into one would be
+    perfectly monotone, would render, would manifest, and would wire nothing the gate can
+    see.
 
-    The target dir is shared with the user's own OpenCode config, so it is NEVER
-    wiped. A `.geneseed-manifest.json` tracks exactly the files this layer owns
-    (AGENT.md, agents/, skills/, plugins/ — NOT memory or notebook); on re-emit,
-    files we previously wrote but no longer produce are removed, and the user's own
-    agents/skills/plugins (and the memory + notebook stores) are left untouched.
+    The manifest is deliberately NOT read here — the caller reads it, prunes against it
+    and writes it, so one process owns that file and `old_owned` arrives as an argument
+    the way `emit_opencode`'s does.
 
-    Writes: <cfg>/AGENT.md, <cfg>/agents/*.md, <cfg>/skills/<name>/SKILL.md,
-    <cfg>/plugins/*.js (single copy — kills the double-injection), the memory and
-    notebook stores, a one-time empty wiki.jsonc (machine-level, user-owned, never
-    overwritten or pruned), and merges <cfg>/opencode.json to point `instructions`
-    at the absolute <cfg>/AGENT.md. It does NOT write context.json — project docs
-    are auto-discovered by the context plugin. `out`, if given, is only a migration source for an
-    existing memory store (the legacy bundle location); nothing is built there.
-    `cfg` overrides the target dir (default: the resolved OpenCode config dir) — used
-    by `harness.py diff` to render an 'expected' copy into a temp dir for comparison."""
-    cfg = cfg or _build_core._opencode_config_dir()
+    `out` is NOT the target and is not `<cfg>`'s parent either: it is the LEGACY BUNDLE
+    `_global_memory` / `_global_notebook` migrate a store from, and nothing is written
+    there. The CLI's `--out` defaults to a directory this emit never touches."""
     # laws_prefix='' — the standalone laws dir sits beside AGENT.md in <cfg>, so the
     # lean pointer's relative `laws/universal.md` resolves with no prefix.
-    theme, items = render_all(theme_name, footprint,
-                              native_catalog=host_catalogs_natively("opencode"))
+    theme, items = render_all(theme_name, footprint, native_catalog=native_catalog)
     assert_source_complete(items, context="opencode-global")
     cfg.mkdir(parents=True, exist_ok=True)
-
-    # Files this layer owned on a previous run — read now, but pruned only AFTER the new
-    # set is fully written (below). Write-before-delete: a failed or partial write can
-    # never remove a still-needed file, so a re-emit can only improve the install, never
-    # degrade it. (With assert_source_complete above, an incomplete source aborts before
-    # this point and never touches the existing bundle.)
-    manifest_path = cfg / GLOBAL_MANIFEST
-    old_owned: list[str] = []
-    if manifest_path.exists():
-        try:
-            old_owned = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", [])
-        except (json.JSONDecodeError, OSError):
-            old_owned = []
 
     owned: list[str] = []
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
@@ -253,12 +235,139 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
     if footprint == "lean":
         _ship_lean_laws(items, theme, cfg, owned)
 
+    return {"owned": owned,
+            "stats": {"nAgents": n_agents, "nSkills": n_skills, "nPlugins": n_plugins,
+                      "nWorkflows": n_workflows, "nCommands": len(commands),
+                      "primary": bool(primary)},
+            "memStatus": mem_status, "nbStatus": nb_status}
+
+
+def _opencode_global_render(theme_name: str, cfg: Path, out: Path | None, footprint: str,
+                            native_catalog: bool, old_owned: list,
+                            agent_path: str) -> dict:
+    """RENDER — one spawn into Node when there is one, the Python body otherwise.
+
+    The ninth and last emit to cross. Until P3c this mode spawned Node ZERO times while
+    four documents said all nine crossed; golden covered it, but with no seam to cross it
+    compared Python against Python there and proved determinism, not parity.
+
+    Three values arrive DECIDED rather than re-derived, and each is a boundary question
+    asked rather than assumed:
+
+    * `cfg` — the target dir, resolved by the entry point from `_opencode_config_dir`,
+      which is `_OWNED` precisely because the suite and `harness diff` redirect it at a
+      sandbox. A child that resolved it would write into the developer's real install.
+      Fourth instance of the rule (`STRUCTURE` P2d, `CAPABILITY_LINK_RE` P2e,
+      `_PREAMBLE_CONFIG_DIR` P3b): **send the decision, never the resolver.**
+    * `native_catalog` — `HOSTS['opencode']['native_catalog']`; the registry stays Python.
+    * `agent_path` — WIRE's one input, `Path.as_posix()` on the Python side by design,
+      exactly as `_opencode_render`'s is.
+
+    `out` is passed through unchanged and is neither of the above: it is the legacy bundle
+    to migrate a store from, not the target and not derivable from `cfg`.
+
+    The spawn runs the WIRE half too — one child per emit is the contract. The wiring
+    still gets its own statement at the call site (`_opencode_global_wire` below)."""
+    if _build_core.js_render_available():
+        return _build_core.run_node({
+            "kind": "opencode-global",
+            "cfg": {**_build_core.js_cfg(), "primaryAgentSrc": str(PRIMARY_AGENT_SRC)},
+            "theme": theme_name, "cfgDir": str(cfg),
+            "out": str(out) if out is not None else None,
+            "footprint": footprint, "nativeCatalog": native_catalog,
+            "oldOwned": old_owned, "agentPath": agent_path})
+    return _opencode_global_render_py(theme_name, cfg, out, footprint, native_catalog,
+                                      old_owned)
+
+
+def _opencode_global_wire_py(cfg: Path, agent_path: str) -> str:
+    """WIRE — the one file of this emit the user co-owns. Returns the target's BASENAME,
+    which is all the caller consumes (`opencode.json` or the `.jsonc` sibling when that is
+    what is on disk). Reference implementation of the `opencode-global` job's wire half.
+
+    Note the target: `<cfg>/opencode.json`, NOT `<root>/opencode.json`. Same merge as
+    `_opencode_wire_py`, a different file under a different root — which is why the
+    commented-`.jsonc` boundary cell had to be written twice."""
+    return _merge_opencode_json(cfg / "opencode.json", agent_path).name
+
+
+def _opencode_global_wire(rendered: dict, cfg: Path, agent_path: str) -> str:
+    """WIRE — already done by the child that rendered, or run here against Python.
+
+    Same shape as `_build_emit._opencode_wire`, and for the same reason: one spawn per
+    emit means this stage cannot dispatch on its own, so the payload carrying `cfgName` IS
+    the signal that Node already wired. Losing that signal is invisible to every byte
+    comparison — `_merge_opencode_json` is idempotent, so a second merge produces the same
+    tree — and the only trace is that a commented `.jsonc` prints its refusal twice. That
+    is what `opencode-global/commented-jsonc` exists for."""
+    cfg_name = rendered.get("cfgName")
+    if cfg_name is not None:
+        return cfg_name
+    return _opencode_global_wire_py(cfg, agent_path)
+
+
+def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | None = None,
+                         footprint: str = "full") -> None:
+    """Render the harness straight into OpenCode's GLOBAL config dir — the
+    "everything global, zero per-repo" deployment (GLOBAL-HARNESS-SPEC.md).
+
+    Self-contained: it writes ONLY into <cfg> and builds NO sibling Harness bundle.
+    AGENT.md is rendered straight to <cfg>/AGENT.md, and the memory store lives at
+    <cfg>/<memory|anamnesis> (migrated once from a legacy Harness if present, else
+    seeded). Point the learn plugin at it with GENESEED_HARNESS=<cfg>.
+
+    The target dir is shared with the user's own OpenCode config, so it is NEVER
+    wiped. A `.geneseed-manifest.json` tracks exactly the files this layer owns
+    (AGENT.md, agents/, skills/, plugins/ — NOT memory or notebook); on re-emit,
+    files we previously wrote but no longer produce are removed, and the user's own
+    agents/skills/plugins (and the memory + notebook stores) are left untouched.
+
+    Writes: <cfg>/AGENT.md, <cfg>/agents/*.md, <cfg>/skills/<name>/SKILL.md,
+    <cfg>/plugins/*.js (single copy — kills the double-injection), the memory and
+    notebook stores, a one-time empty wiki.jsonc (machine-level, user-owned, never
+    overwritten or pruned), and merges <cfg>/opencode.json to point `instructions`
+    at the absolute <cfg>/AGENT.md. It does NOT write context.json — project docs
+    are auto-discovered by the context plugin. `out`, if given, is only a migration source for an
+    existing memory store (the legacy bundle location); nothing is built there.
+    `cfg` overrides the target dir (default: the resolved OpenCode config dir) — used
+    by `harness.py diff` to render an 'expected' copy into a temp dir for comparison.
+
+    Unlike every other manifest this one carries NO `managed` key and no `scope`: the one
+    file this emit wires, opencode.json, is never unwired by any teardown path, so there
+    is no claim to record. That is why the payload needs `cfgName` and nothing else, and
+    why there is no VERIFY stage here."""
+    cfg = cfg or _build_core._opencode_config_dir()
+
+    # Files this layer owned on a previous run — read now, but pruned only AFTER the new
+    # set is fully written (below). Write-before-delete: a failed or partial write can
+    # never remove a still-needed file, so a re-emit can only improve the install, never
+    # degrade it. (RENDER's assert_source_complete aborts an incomplete source before it
+    # has written anything, so the existing bundle is never touched by a refused emit.)
+    manifest_path = cfg / GLOBAL_MANIFEST
+    old_owned: list[str] = []
+    if manifest_path.exists():
+        try:
+            old_owned = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", [])
+        except (json.JSONDecodeError, OSError):
+            old_owned = []
+
+    # WIRE's one input, computed before the seam and sent into it (see the dispatcher).
+    agent_path = (cfg / "AGENT.md").as_posix()
+
+    # ---- RENDER* -> WIRE* -> PRUNE -> MANIFEST ------------------------------------
+    # The order is load-bearing; see `_emit_claude_core` for the argument. This emit has
+    # no VERIFY: it writes no settings file, so there is nothing to re-read.
+    render = _opencode_global_render(theme_name, cfg, out, footprint,
+                                     host_catalogs_natively("opencode"), old_owned,
+                                     agent_path)
+    owned: list[str] = render["owned"]
+    stats = render["stats"]
+    mem_status, nb_status = render["memStatus"], render["nbStatus"]
+
     # WIRE — the last render is now behind us, so this is the first stage that touches a
-    # file the user co-owns (see _emit_claude_core for the five-stage order and why it is
-    # load-bearing). The merge used to run one statement earlier, ahead of the lean laws;
-    # opencode.json is never in `owned` and the laws never read it, so the swap is
-    # byte-inert — it just puts this emit on the same contract as the other eight.
-    cfg_name = _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix()).name
+    # file the user co-owns. Performed by the render child when there was one; by
+    # `_opencode_global_wire_py` otherwise.
+    cfg_name = _opencode_global_wire(render, cfg, agent_path)
 
     # Now that the whole current set is on disk, remove only what we owned before but
     # no longer produce (a removed agent/skill, a disabled primary/command). Everything
@@ -287,10 +396,12 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
                     "stores are NOT listed — they are never deleted.",
         "owned": sorted(owned)})
 
-    extras = (["primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
+    extras = (["primary agent"] if stats["primary"] else []) + \
+             ([f"{stats['nCommands']} command(s)"] if stats["nCommands"] else [])
     extra = (" + " + ", ".join(extras)) if extras else ""
-    print(f"[geneseed] opencode-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
-          f"{n_plugins} plugin(s), {n_workflows} workflow file(s), AGENT.md, {mem_status}, {nb_status}, "
+    print(f"[geneseed] opencode-global -> {cfg}: {stats['nAgents']} subagents, "
+          f"{stats['nSkills']} skills, {stats['nPlugins']} plugin(s), "
+          f"{stats['nWorkflows']} workflow file(s), AGENT.md, {mem_status}, {nb_status}, "
           f"{cfg_name} (no context.json){extra}. "
           f"The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.")
 

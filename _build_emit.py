@@ -779,9 +779,9 @@ def emit_opencode(theme_name: str, out: Path, root: Path | None = None,
     # tidy. opencode.json is never in `owned`, so the merge commutes with the prune and
     # the manifest — it used to sit after both. Byte-inert, and moving it is what lets
     # a single seam separate "files Geneseed writes wholesale" from "files the user
-    # co-owns" in eight of the nine emits. The ninth, `emit_opencode_global`, has no
-    # seam at all: measured, it spawns Node zero times, so its own `_merge_opencode_json`
-    # is still Python. `tests/test_seam_coverage.py` pins that count.
+    # co-owns" in all nine emits since P3c. `emit_opencode_global` is the ninth and merges
+    # the same file under a different root, through its own `_opencode_global_wire_py`;
+    # `tests/test_seam_coverage.py` pins the measured spawn count of every mode.
     cfg_name = _opencode_wire(render, root, agent_path)
 
     # Write-before-delete: only now that the whole current set is on disk do we remove

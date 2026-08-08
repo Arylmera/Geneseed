@@ -4,16 +4,16 @@
  * `js/render.mjs` renders, `js/native.mjs` and `js/opencode.mjs` write the host-native
  * layers, `js/settings.mjs` edits the files the user co-owns; this module is the piece that
  * turns them into an install on disk and the CLI that a `build.py` emit spawns. It is a
- * translation of `_build_render.build` plus BOTH halves of `_build_emit.emit_opencode` and
- * `_build_global._emit_claude_core` — the last of which is the shared engine behind six
- * emits, so the three job kinds below cover EIGHT of the nine.
+ * translation of `_build_render.build` plus BOTH halves of `_build_emit.emit_opencode`,
+ * `_build_global.emit_opencode_global` and `_build_global._emit_claude_core` — the last of
+ * which is the shared engine behind six emits, so the four job kinds below cover all NINE.
  *
- * THE NINTH IS `emit_opencode_global`, AND IT HAS NO SEAM. Measured by counting spawns per
- * mode, not read off a docstring: `files 1, opencode 1, opencode-global 0, claude 1,
- * claude-global 1, bob 1, bob-global 1, copilot 1, copilot-global 1`. Its render half is
- * still 100 lines of inline Python with no job kind here and no cell in
- * `tests/test_emit_boundary.py`; `tests/test_seam_coverage.py` pins the count so the
- * "all nine" this header used to claim cannot come back without a cell behind it.
+ * "ALL NINE" IS A MEASUREMENT HERE, NOT A CLAIM. It was a claim for two phases and it was
+ * false: `emit_opencode_global` spawned Node zero times while four documents said it did,
+ * because it was the one mode with no boundary cell able to contradict them.
+ * `tests/test_seam_coverage.py` now counts `run_node` invocations per mode and pins the
+ * table, and it refuses a mode that crosses without a cell in `tests/test_emit_boundary.py`
+ * — so the sentence above cannot come back without the observation behind it.
  *
  * THE HANDOFF. Python drives, one spawn per emit:
  *
@@ -747,7 +747,7 @@ export function emitOpencodeRender(cfg, job) {
 }
 
 // ---------------------------------------------------------------------------
-// _emit_claude_core — the RENDER stage only
+// The global-store helpers, shared by the `opencode-global` and `claude` jobs
 // ---------------------------------------------------------------------------
 
 /**
@@ -853,6 +853,121 @@ function shipLeanLaws(items, theme, cfgDir, owned) {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// emit_opencode_global — the ninth, and the last emit to cross
+// ---------------------------------------------------------------------------
+
+/**
+ * BOTH halves of `_build_global.emit_opencode_global`, the "everything global, zero
+ * per-repo" OpenCode deployment. PRUNE and MANIFEST stay in Python; there is no VERIFY,
+ * because this emit writes no settings file.
+ *
+ * ASSEMBLY, NOT TRANSLATION. Every unit it needs was already here — 58 of the 65 functions
+ * in its Python closure, counted with `ast` rather than by name-mapping, which is how the
+ * scout that produced this list first reported `_posture_body` and `_mode_body` as missing
+ * when both are `registerBody` in `js/render.mjs`. What is new is the assembly and the
+ * three values that had to be decided on the Python side.
+ *
+ * `cfgDir` IS THE FIRST OF THEM AND THE REASON THE OTHERS WERE ASKED ABOUT.
+ * `_build_core._opencode_config_dir` is an `_OWNED` name — the suite and `harness diff`
+ * both redirect it at a sandbox — so resolving it here would render 135 files into the
+ * developer's real `~/.config/opencode`. Python's entry point resolves it once, before
+ * anything else, and sends the answer. Fourth phase running (`STRUCTURE` at P2d,
+ * `capabilityLinkRe` at P2e, `_PREAMBLE_CONFIG_DIR` at P3b): send the decision, never the
+ * resolver.
+ *
+ * `out` IS NOT THE TARGET, and with the default nobody can tell. `emit_opencode_global`
+ * writes into `<cfg>` and takes `out` ONLY as the legacy bundle to migrate a memory or
+ * notebook store from; the CLI's `--out` defaults to a directory this emit never writes a
+ * byte into. A port that derived the legacy source from `<cfg>` would pass every cell that
+ * leaves them coincident — the `claude/bundle-in-subfolder` finding at a third call site.
+ *
+ * `agentPath` travels for the same reason `emitOpencodeRender`'s does: it is WIRE's one
+ * input, and `Path.as_posix()` is the Python side's spelling of it.
+ */
+export function emitOpencodeGlobalRender(cfg, job) {
+  const {
+    theme: themeName, cfgDir, out, footprint, nativeCatalog, oldOwned, agentPath,
+  } = job;
+
+  // No `lawsPrefix`: the standalone laws dir sits beside AGENT.md in <cfg>, so the lean
+  // pointer's relative `laws/universal.md` resolves with no prefix.
+  const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog });
+  assertSourceComplete(cfg, 'opencode-global');
+  mkdirSync(cfgDir, { recursive: true });
+
+  const owned = [];
+  const agentText = items.find((i) => i.rel === 'AGENT.md' && i.text !== null)?.text ?? null;
+  if (agentText !== null) {
+    // OpenCode loads agents/skills natively, so drop AGENT.md's per-row spec links to
+    // plain names. Memory links stay RELATIVE: in the global layout AGENT.md and the
+    // store are siblings, so `memory/` resolves from AGENT.md's own location and stays
+    // hermetic — no absolute path a doctor check would flag as an escape.
+    writeText(path.join(cfgDir, 'AGENT.md'), stripCapabilityLinks(cfg, agentText));
+    owned.push('AGENT.md');
+  }
+
+  ensureAgentOverridesStub(cfg, cfgDir);
+  const overrides = loadAgentOverrides(cfgDir);
+
+  // `manifestExisted` is deliberately not passed — the Python does not pass it either, so
+  // the pre-manifest header line is unreachable from this emit on both sides.
+  const { nAgents, nSkills, written } = writeNativeLayer(
+    items, path.join(cfgDir, 'agents'), path.join(cfgDir, 'skills'), overrides,
+    { host: 'opencode', oldOwned, cfg: cfgDir, theme, src: cfg.src });
+  for (const p of written) owned.push(relPosix(cfgDir, p));
+
+  const primary = writePrimaryAgent(cfg, path.join(cfgDir, 'agents'), overrides);
+  if (primary) owned.push(relPosix(cfgDir, primary));
+
+  const commands = writeCommandLayer(cfg, items, path.join(cfgDir, 'command'));
+  commands.push(writePonytailCommand(path.join(cfgDir, 'command')));   // always-on /ponytail
+  for (const p of commands) owned.push(relPosix(cfgDir, p));
+
+  owned.push(relPosix(cfgDir, writeTheme(path.join(cfgDir, 'themes'), themeName, theme)));
+  for (const p of writeColorThemes(cfg, path.join(cfgDir, 'themes'))) {
+    owned.push(relPosix(cfgDir, p));
+  }
+
+  const nPlugins = copyPlugins(cfg, path.join(cfgDir, 'plugins'), owned);
+  const nWorkflows = copyWorkflows(cfg, path.join(cfgDir, 'workflows'), owned);
+
+  const memStatus = globalMemory(cfgDir, items, out, cfg.src);
+  ensureMemoryIndex(path.join(cfgDir, 'memory'));
+  const nbStatus = globalNotebook(cfgDir, items, out, cfg.src);
+  ensureNotebookIndex(path.join(cfgDir, 'notebook'));
+  ensureWikiStub(cfgDir);
+  ensureRulesStub(cfgDir);
+  ensureProfileStub(cfgDir);
+  ensureExcludesStub(cfgDir);
+
+  writeVersion(cfg, cfgDir);
+  owned.push(VERSION_MARKER);
+
+  if (footprint === 'lean') shipLeanLaws(items, theme, cfgDir, owned);
+
+  // WIRE — the one file of this emit the user co-owns, and the last render is now behind
+  // us. Inlined the way `emitOpencodeRender`'s is (one call, the same merge, the same
+  // file name), while the Python side keeps it a separate `_opencode_global_wire_py`:
+  // that split is what `tests/test_emit_phase_order.py` walks, and it walks the Python.
+  const cfgName = path.basename(mergeOpencodeJson(path.join(cfgDir, 'opencode.json'),
+    agentPath));
+
+  return {
+    owned,
+    stats: {
+      nAgents, nSkills, nPlugins, nWorkflows, nCommands: commands.length, primary: !!primary,
+    },
+    memStatus,
+    nbStatus,
+    cfgName,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// _emit_claude_core — both halves
+// ---------------------------------------------------------------------------
 
 /**
  * The RENDER half of `_build_global._emit_claude_core`: everything up to (not including)
@@ -1111,6 +1226,7 @@ const KINDS = {
     return {};
   },
   opencode: emitOpencodeRender,
+  'opencode-global': emitOpencodeGlobalRender,
   claude: emitClaudeRender,
 };
 

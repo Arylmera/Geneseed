@@ -74,9 +74,16 @@ PHASE_NAME = {RENDER: "RENDER", WIRE: "WIRE", PRUNE: "PRUNE",
 # to walk is the Python reference's. Splicing the dispatcher AND its `_py` sibling is what
 # keeps `_claude_wire_py`'s own internal order (managed block, then the settings merge,
 # then the excludes) under the gate instead of behind one opaque call.
+# `_opencode_global_render` / `_wire` and their `_py` siblings joined at P3c. That emit had
+# no such pair at all — one 137-line body with the merge in the middle — so the pair was
+# CREATED rather than moved, and creating it is the phase's structural work: without two
+# dispatch statements this walker sees one `run_node`, classifies it RENDER, and reports a
+# monotone emit that wires nothing.
 DELEGATES = ("_emit_claude_core", "_opencode_render", "_opencode_render_py",
              "_claude_render", "_claude_render_py",
-             "_opencode_wire", "_opencode_wire_py", "_claude_wire", "_claude_wire_py")
+             "_opencode_global_render", "_opencode_global_render_py",
+             "_opencode_wire", "_opencode_wire_py", "_claude_wire", "_claude_wire_py",
+             "_opencode_global_wire", "_opencode_global_wire_py")
 
 # Explicitly classified calls, by the phase they belong to.
 PHASE = {
@@ -91,13 +98,14 @@ PHASE = {
     "ensure_profile_stub": RENDER, "ensure_excludes_stub": RENDER,
     "ensure_agent_overrides_stub": RENDER, "ensure_context_stub": RENDER,
     "ensure_bundle_gitignore": RENDER,
-    # The seam itself: one spawn, in the eight emits that have one (`emit_opencode_global`
-    # has none — `tests/test_seam_coverage.py` measures and pins that). RENDER is the phase
+    # The seam itself: one spawn per emit, in all nine since P3c — measured and pinned by
+    # `tests/test_seam_coverage.py`, never asserted from prose. RENDER is the phase
     # this call OPENS, and since P3b it is no longer the only one the child runs: the same
     # spawn performs the WIRE half. That half is classified one statement later, at
-    # `_claude_wire` / `_opencode_wire`, where the Python reference implementation performs
-    # it — which is the whole reason those dispatchers are separate functions and separate
-    # statements rather than folded into their render siblings.
+    # `_claude_wire` / `_opencode_wire` / `_opencode_global_wire`, where the Python
+    # reference implementation performs it — which is the whole reason those dispatchers are
+    # separate functions and separate statements rather than folded into their render
+    # siblings.
     #
     # Classifying this as a RENDER..WIRE span instead was tried and is wrong: the
     # dispatchers are spliced, so a span would put a WIRE *before* the `_claude_render_py`
