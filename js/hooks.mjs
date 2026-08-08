@@ -13,10 +13,11 @@
  * submodules into one namespace at import time, so a Python `harness context` loads
  * ~11,600 lines and the generator behind them. This module loads none of that, and that is
  * deliberate rather than incidental: the Python originals already refuse to import `build`
- * for the marker filenames they need ("literals keep the hook dependency-free"), and the
- * same rule is why `opencodeConfigDir` below is six lines here instead of an import from
- * `bin/geneseed.mjs` — which could not be imported anyway, since its last statement runs
- * the generator.
+ * for the marker filenames they need ("literals keep the hook dependency-free"), and
+ * `bin/geneseed.mjs` could not be imported anyway, since its last statement runs the
+ * generator. What that rule does NOT license is a second copy of a shared resolver under a
+ * different name — see the primitives section below, where P5d found one that had silently
+ * diverged from its twin.
  *
  * THE CONTRACT EVERY VERB HOLDS. Exit 0 on every path, and signal through stdout. A hook
  * that fails is a tool call that fails, so an unreadable payload, a missing file, a
@@ -34,18 +35,35 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readText, writeText, jsonDumpsCompact, normcase, comparePaths, pyPrint, pyPrintErr }
-  from './lib/pyfs.mjs';
+import { readText, writeText, jsonDumpsCompact, normcase, comparePaths, pyPathStr, pyPrint,
+  pyPrintErr } from './lib/pyfs.mjs';
+// `harness status` reports the memory store, and `bin/geneseed-cli.mjs` cannot import THIS
+// module to find it: the CLI is under a hard transitive `child_process` ban and `learn`
+// spawns. So the resolver has one owner in `js/hosts.mjs` rather than a second copy — and
+// with it went this file's private `opencodeConfigDir`, whose only caller it was.
+import { resolveMemoryDir } from './hosts.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 // ---- Python path and text primitives -------------------------------------------------
-// Small, and each one is here because a JS-idiomatic equivalent differs observably. They
-// are NOT in js/lib/pyfs.mjs: that module is the generator's, imported by the driver this
-// one must stay independent of, and duplicating four helpers is cheaper than coupling a
-// hook to the emitter. (`readText`/`writeText`/`normcase` DO come from there — they are
-// already the single owner of the CRLF and case-folding rules, and a second copy of those
-// is how the two halves start disagreeing about a newline.)
+// Small, and each one is here because a JS-idiomatic equivalent differs observably.
+//
+// THE RULE, CORRECTED IN P5d. It used to read "duplicating four helpers is cheaper than
+// coupling a hook to the emitter", with `readText`/`writeText`/`normcase` as the stated
+// exceptions. That is the wrong line, and `pyStrPath` is what proved it: it was a second
+// implementation of `str(Path(p))` under a different NAME from `js/lib/pyfs.mjs`'s
+// `pyPathStr`, and the two disagreed. P5c found that `path.normalize` collapses `a/../b`
+// where `PurePath` keeps it, fixed `pyPathStr`, and gated it with a 25-path corpus — and
+// none of that reached this file, because a corpus finds what it is pointed at and nothing
+// named `pyStrPath` was. The consequence was live: `sovereignBypass` compares an
+// `excludes.json` entry against cwd, so a hand-edited `..` entry made the NODE hook stand
+// down for a repo Python still gates. `context/bypass-does-not-match-a-dotdot-entry` is
+// the cell.
+//
+// So the line is not "duplicate rather than couple" — it is "one owner for anything that
+// reproduces a language primitive, wherever it is used". `pyfs.mjs` carries no
+// `child_process` and costs nothing at hook latency. What stays local is what is genuinely
+// only the hook's (`fnmatch`, the transcript readers, `pyOsError`'s errno table).
 
 /** `Path.expanduser()` — a LEADING `~` only, as Python does it. */
 function expanduser(p) {
@@ -75,21 +93,6 @@ function pyResolve(p) {
       cur = parent;
     }
   }
-}
-
-/**
- * `str(Path(p))` — separators folded to the platform's own, `//` collapsed, a trailing
- * one dropped. NOT `path.resolve`: a relative path stays relative, which is what the two
- * string comparisons below depend on.
- */
-function pyStrPath(p) {
-  const n = path.normalize(p);
-  // A root's separator is part of it, not a trailing one: `str(Path("C:/"))` is `C:\`,
-  // and `str(Path("C:/x/"))` is `C:\x`. Comparing the NORMALISED string to its own root is
-  // what tells the two apart — `path.parse('C:').root` is `''`, so stripping first and
-  // asking afterwards gets `C:\` wrong.
-  if (n === path.parse(n).root) return n;
-  return /[\\/]$/.test(n) ? n.replace(/[\\/]+$/, '') : n;
 }
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
@@ -207,23 +210,6 @@ function readStdin() {
 const out = pyPrint;
 const err = pyPrintErr;
 
-/**
- * `_build_core._opencode_config_dir`, duplicated rather than imported.
- *
- * `learn`'s memory resolver reaches for it as a last fallback, and it is the one place
- * these verbs need something the generator also knows. Importing `bin/geneseed.mjs` would
- * RUN the generator (its last statement is `main(...)`), and importing the emit layer
- * would pull the whole render core into a hook. Six lines, with the Python original named
- * so the two can be diffed.
- */
-function opencodeConfigDir() {
-  const env = process.env.OPENCODE_CONFIG_DIR;
-  if (env) return pyResolve(env);
-  const xdg = process.env.XDG_CONFIG_HOME;
-  const base = xdg ? expanduser(xdg) : path.join(os.homedir(), '.config');
-  return pyResolve(path.join(base, 'opencode'));
-}
-
 // ======================================================================================
 // context — project-context discovery (Rule XVIII)
 // ======================================================================================
@@ -285,7 +271,7 @@ export function sovereignBypass(root) {
     if (typeof raw !== 'string' || !raw.trim()) continue;
     // `.rstrip("\\/")` AFTER normcase, exactly as the Python orders it, so the separator
     // test below cannot be fooled by a trailing slash in the user's file.
-    const base = normcase(pyStrPath(expanduser(raw.trim()))).replace(/[\\/]+$/, '');
+    const base = normcase(pyPathStr(expanduser(raw.trim()))).replace(/[\\/]+$/, '');
     if (cwd === base || cwd.startsWith(base + path.sep)) return true;
   }
   return false;
@@ -376,7 +362,7 @@ export function resolveContextSets(root) {
   if (env && isFile(env)) {
     // `Path(env)`, and the label is printed — so the separators are folded exactly the
     // way `str(Path(...))` folds them, or the source line differs by every slash in it.
-    manifest = pyStrPath(env);
+    manifest = pyPathStr(env);
   } else {
     for (const cand of [path.join(root, '.harness', 'context.json'),
       path.join(root, 'context.json')]) {
@@ -595,7 +581,6 @@ export function cmdRuleGate(args) {
 // learn — distil notes/transcripts into deduped memory entries
 // ======================================================================================
 
-const MEMORY_DIR_NAMES = ['memory', 'anamnesis'];
 const FRONTMATTER_RE = /^\s*---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
 const FILE_SEP_RE = /^---FILE---[^\S\n]*$/m;
 const AGENT_NAME_RE = /^[a-z][a-z0-9-]{1,40}$/;
@@ -717,34 +702,9 @@ function readNotes(raw) {
   return raw;
 }
 
-/**
- * `_resolve_memory_dir` — where learn dedups and indexes.
- *
- * Precedence: `--memory` > `$GENESEED_MEMORY` > a `memory/` (or `anamnesis/`) beside cwd
- * or under `./Harness` > `$GENESEED_HARNESS/memory` > the OpenCode GLOBAL config dir's
- * store. The last two matter for the recommended opencode-global install, whose store
- * lives in `~/.config/opencode` rather than beside any repo. null => stdout-only.
- */
-export function resolveMemoryDir(explicit) {
-  if (explicit) {
-    const p = pyStrPath(explicit);
-    return isDir(p) ? p : null;
-  }
-  const env = process.env.GENESEED_MEMORY;
-  if (env && isDir(env)) return pyStrPath(env);
-  const cwd = process.cwd();
-  const bases = [cwd, path.join(cwd, 'Harness')];
-  const gh = process.env.GENESEED_HARNESS;
-  if (gh) bases.push(expanduser(gh));
-  try { bases.push(opencodeConfigDir()); } catch { /* best-effort, as the Python */ }
-  for (const base of bases) {
-    for (const name of MEMORY_DIR_NAMES) {
-      const cand = path.join(base, name);
-      if (isDir(cand)) return cand;
-    }
-  }
-  return null;
-}
+// `resolveMemoryDir` moved to `js/hosts.mjs` in P5d — see the import at the top of this
+// file. Re-exported here so the hook entry's own import list does not change.
+export { resolveMemoryDir };
 
 /** `_frontmatter` — leading YAML-ish frontmatter as a flat map, plus the body. */
 function frontmatter(md) {
@@ -937,7 +897,7 @@ export function cmdLearn(args) {
 
   // The Stop/SubagentStop hook always passes `--memory <cfg>/memory`; inside an excluded
   // folder the global install must not learn.
-  if (args.memory && sovereignBypass(path.dirname(pyStrPath(args.memory)))) return 0;
+  if (args.memory && sovereignBypass(path.dirname(pyPathStr(args.memory)))) return 0;
 
   const raw = args.file ? readText(args.file) : readStdin();
   let notes = readNotes(raw);

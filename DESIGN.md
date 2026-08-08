@@ -539,6 +539,47 @@ renders it as the name in parentheses.
   process with that source still clean. `tests/test_hook_cli_parity.py` walks the driver's
   transitive relative imports instead — the same assertion, one level out, added because of
   this phase.
+- **`status` and `version` cross, and the phase's method is a CORPUS beside the matrix.**
+  [`js/status.mjs`](js/status.mjs) answers both from `bin/geneseed-cli.mjs`. Two structural
+  things came with them.
+  **A closure walk counts what the callee COMPUTES; the caller consumes a fraction of it.**
+  An `ast` walk puts `status` at 527 LOC across 7 modules — `_tui_inventory` returns every
+  agent and skill with its body, purpose, source and lifecycle badge, and `_status_data`
+  reads three `len()`s off it. So the `SKILL_CLASS`/`LAW_CLASS`/`ENTITY_STATUSES` taxonomy
+  the TUI owns is in the walk and is not in the port, and neither are `_installed_defaults`'
+  posture and mode detectors. The exception names the rule: `_footprint_of_dir`'s return
+  value is unused too, and it is ported, because an unrecognised marker makes it WARN on a
+  stream the matrix compares.
+  **The fixture cannot FENCE OFF `_build_core.ROOT`, and that is a ninth kind of coverage
+  hole** — the inverse of the eight before it, which were all about what a fixture cannot
+  reach. `status` counts by rendering the real `src/`, and both `_installed_defaults` and
+  `version`'s fallback walk `ROOT/"Harness"`. No env var moves ROOT, every path under it is
+  derived at import, and the `_OWNED` redirect the suite uses is an in-process write — so
+  neither implementation can be pointed at a fixture tree, and copying the checkout into the
+  sandbox would copy the same `src/` back in. The counts are therefore gated by comparison
+  and asserted only by SHAPE (`expect_re`, new this phase); a cell naming `17 agents` rots
+  with the next content change and one naming a fingerprint rots every commit, which
+  `test_no_cell_hardcodes_a_source_fingerprint` refuses.
+  **The colour branch is unreachable from any cell, and the answer was neither of the two
+  the handoff offered.** `_color_enabled()` is `sys.stdout.isatty()`, every harness captures
+  through a pipe, so deleting every escape code would be byte-identical across the whole
+  matrix — ship it ungated or drop it and regress a real terminal. `_status_lines` is
+  documented pure, so [`tests/test_status_panel_parity.py`](tests/test_status_panel_parity.py)
+  calls it directly on both sides over a corpus of dashboards × colour × ASCII, and the tty
+  question never arises. Three more cell-unreachable functions ride along for the same
+  reason — `_version_verdict`'s up-to-date branch, `_manifest_is_claude` (only consulted for
+  a candidate ordered *after* the unfenceable `ROOT/"Harness"`), and `_accent_for`'s
+  fallback — plus `pyLen`/`pyLjust`, because a reproduction of a language primitive needs a
+  corpus rather than a cell.
+  **And the corpus found a live defect in shipped code.** `js/hooks.mjs` carried its own
+  `str(Path(p))` as `pyStrPath`, built on `path.normalize`; P5c had already found that
+  `normalize` collapses `a/../b` where `PurePath` keeps it, fixed `js/lib/pyfs.mjs`'s
+  `pyPathStr`, and gated it with a 25-path corpus — which never reached the twin, because a
+  corpus finds what it is pointed at and a different NAME was enough to hide it. The
+  consequence was live on the bypass path: a hand-edited `..` entry in `excludes.json` made
+  the Node hook stand down for a repo Python still gates.
+  `context/sovereign-bypass-does-not-match-a-dotdot-entry` is the cell, and the hook path
+  now has one owner for the primitive instead of two.
 - **The first NON-hook verb crosses, and it needed a third binary rather than a row in an
   existing table.** `harness exclude add|remove|list` — the sovereign-repo exclusions —
   is now [`js/excludes.mjs`](js/excludes.mjs) behind

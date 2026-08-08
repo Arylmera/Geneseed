@@ -36,7 +36,6 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
 import {
   build, emitOpencodeRender, emitOpencodeGlobalRender, emitClaudeRender,
 } from '../js/emit.mjs';
@@ -50,11 +49,10 @@ import {
   copilotConfigDir,
 } from '../js/hosts.mjs';
 
-/** `_build_core.ROOT` — the checkout, from this script's own location (bin/..). */
-const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const SRC = path.join(ROOT, 'src');
-const CONFIG = path.join(ROOT, 'harness.config.json');
-const THEMES = path.join(ROOT, 'themes');
+// P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
+// status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
+// same cfg. golden.py's 259 cells all build one, which is what made the move safe.
+import { ROOT, SRC, CONFIG, THEMES, makeCfg } from '../js/checkout.mjs';
 
 /** The nine `--emit` choices, in build.py:337-338's order. */
 const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
@@ -174,24 +172,6 @@ function choice(flag, value, allowed) {
 function die(code, msg) {
   process.stderr.write(`geneseed: error: ${msg}\n`);
   process.exit(code);
-}
-
-/**
- * `_build_core.js_cfg()`, originated rather than received — see the module header for the
- * two keys it deliberately omits.
- */
-function makeCfg(args) {
-  return {
-    root: ROOT,
-    src: SRC,
-    themes: THEMES,
-    config: CONFIG,
-    colorThemes: path.join(THEMES, 'opencode'),
-    pluginSrc: path.join(ROOT, 'adapters', 'opencode', 'plugins'),
-    workflowSrc: path.join(ROOT, 'adapters', 'opencode', 'workflows'),
-    posture: args.posture,
-    mode: args.mode,
-  };
 }
 
 /**

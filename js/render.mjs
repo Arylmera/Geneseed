@@ -87,7 +87,17 @@ export function loadTheme(cfg, name) {
     const available = readdirSync(cfg.themes)
       .filter((f) => f.endsWith('.json') && !f.startsWith('_'))
       .map((f) => f.slice(0, -5)).sort().join(', ');
-    throw new Error(`[geneseed] unknown theme '${name}'. available: ${available}`);
+    // `sys.exit(<str>)` — the message on stderr, exit 1 — spelled the way
+    // `assertSourceComplete` spells it: written at the raise site, and the throw carries
+    // only the marker. It reads as an unreachable nicety under `bin/geneseed.mjs`, whose
+    // `--theme` is validated against `choices` before anything renders. It is NOT
+    // unreachable under `harness status`, which takes its theme from a `.geneseed-theme`
+    // marker — an unvalidated file in a user's install. A bare `throw` there printed a Node
+    // stack trace where Python printed one line, and the acceptance matrix is what said so.
+    process.stderr.write(`[geneseed] unknown theme '${name}'. available: ${available}\n`);
+    const e = new Error(`unknown theme '${name}'`);
+    e.exitCode = 1;
+    throw e;
   }
   // parseJson, not JSON.parse: one rule for every JSON the generator reads, so a numeric
   // theme value keeps the int/float distinction Python's `str()` and `repr()` render

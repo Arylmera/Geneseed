@@ -9,6 +9,23 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's fourteenth piece: `geneseed status` and `geneseed version` have Node twins.**
+  The install dashboard — theme, install mode, how many agents/skills/laws you have, where
+  your memory store is and how many facts are in it, and whether the installed build matches
+  the source — and the fingerprint comparison behind it now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. The panel is
+  compared line for line, in colour and in plain ASCII, against the Python one.
+  **Colour still works on a real terminal**, and that took a different kind of test to
+  prove. Every side-by-side check captures output through a pipe, and a pipe is never a
+  terminal, so the coloured panel is invisible to all of them — a version that quietly
+  dropped every escape code would have looked perfect. The panel renderer is called directly
+  instead, on both sides, over a list of made-up dashboards, which also covers three other
+  things no ordinary check can reach.
+  **A real bug came out of it, in something already shipped.** The Node hook had its own
+  private copy of a path helper, under a different name from the shared one, and the two had
+  drifted: an exclusion entry written by hand with a `..` in it would make the Node hook go
+  quiet for a repository the Python one still watches. There is now one copy, and a check
+  for exactly that entry.
 - **The port's thirteenth piece, and the first command that is not a hook: `geneseed exclude`
   has a Node twin.** `exclude add`, `exclude remove` and `exclude list` — the sovereign-repo
   exclusions, the folders where your global install goes quiet — now run from

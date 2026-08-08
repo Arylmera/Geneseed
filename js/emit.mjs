@@ -361,7 +361,7 @@ function relPosix(base, p) {
  * Two sorts of the same files, two different orders, and only one of them is observable
  * in the output; reproducing the wrong one changes the fingerprint of every install.
  */
-function sourceFingerprint(cfg) {
+export function sourceFingerprint(cfg) {
   const h = createHash('sha256');
   const files = [];
   for (const r of [cfg.src, cfg.themes, cfg.pluginSrc, cfg.workflowSrc]) {
@@ -375,6 +375,27 @@ function sourceFingerprint(cfg) {
     h.update(Buffer.from([0]));
   }
   return h.digest('hex').slice(0, 12);
+}
+
+/**
+ * `_build_render.read_version` — the FINGERPRINT token, which is a different name and a
+ * different value from `read_release_version` right below it. `harness version` and the
+ * status panel both compare this one against `sourceFingerprint`.
+ *
+ * `txt.split()[0] if txt else None`: a marker that is empty or whitespace-only reads as no
+ * version at all, so the caller's candidate walk carries on past it rather than stopping.
+ */
+export function readVersion(dir) {
+  let txt;
+  try {
+    txt = readText(path.join(dir, VERSION_MARKER)).trim();
+  } catch {
+    return null;
+  }
+  // `str.split()` with no argument splits on runs of whitespace AND drops the leading
+  // empties; `String.split(/\s+/)` does not, so an indented marker would yield ''.
+  const first = txt.split(/\s+/).filter(Boolean)[0];
+  return first === undefined ? null : first;
 }
 
 /** `_build_render.read_release_version`. */

@@ -63,7 +63,9 @@ every knob a cell depends on is stated by the cell instead of inherited from the
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -114,7 +116,6 @@ TRANSCRIPT = (
 def _payload(**kw) -> str:
     """A hook payload as the host writes it. Spelled out rather than json.dumps-ed so the
     cell shows the literal bytes the gate parses."""
-    import json
     return json.dumps(kw)
 
 
@@ -134,6 +135,12 @@ def cells() -> list[dict]:
         expect_absent substrings the reference must NOT print — the direction `expect`
                       cannot express, and the only way to gate a filter (EXCLUDE_DIRS, a
                       manifest replacing discovery) whose whole job is leaving things out
+        expect_re     regexes the reference's output must MATCH. For the values a cell
+                      cannot name without rotting: `status` counts the real `src/` tree
+                      (see the status section on why no fixture can redirect it), so the
+                      only honest absolute assertion is the SHAPE — `[1-9]\\d* agents` says
+                      the line is still there and still counting something, and the byte
+                      comparison is what gates the numbers themselves.
         expect_silent the reference must print NOTHING on stdout
         expect_files  paths that must exist in the sandbox afterwards
 
@@ -146,7 +153,7 @@ def cells() -> list[dict]:
     and every one of them was caught by its own `expect` rather than by review.
     """
     return (_context_cells() + _git_gate_cells() + _rule_gate_cells() + _learn_cells()
-            + _exclude_cells())
+            + _exclude_cells() + _status_cells() + _version_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -336,6 +343,18 @@ def _context_cells() -> list[dict]:
                 # `{repo}` is `<sb>/repo`; `<sb>/rep` must not swallow it. A `startswith`
                 # without the separator would, and both implementations would agree.
                 "cfg/excludes.json": '{"excludes": [{"path": "{sb/}/rep"}]}\n'}),
+            steps=[{"argv": ["context", "--root", "{cfg}"], "cwd": "repo"}],
+            expect=["PROJECT CONTEXT"]),
+        ctx(id="context/sovereign-bypass-does-not-match-a-dotdot-entry",
+            # The hook-side twin of `exclude/remove-does-not-match-a-dotdot-entry`, and it
+            # found a live defect rather than confirming one. `sovereign_bypass` compares
+            # `str(Path(entry).expanduser())`, which KEEPS `..`; `js/hooks.mjs` had its own
+            # `str(Path(...))` under the name `pyStrPath`, built on `path.normalize`, which
+            # collapses it. So a hand-edited entry made the NODE hook stand down for a repo
+            # Python still gates — and no cell saw it, because P5c's 25-path corpus was
+            # pointed at `pyPathStr` and a different NAME is all it took to hide the twin.
+            world=dict(_DOCS_WORLD, **{
+                "cfg/excludes.json": '{"excludes": [{"path": "{repo/}/../repo"}]}\n'}),
             steps=[{"argv": ["context", "--root", "{cfg}"], "cwd": "repo"}],
             expect=["PROJECT CONTEXT"]),
         ctx(id="context/sovereign-malformed-degrades-to-off",
@@ -845,6 +864,214 @@ def _exclude_cells() -> list[dict]:
 
 
 # --------------------------------------------------------------------------------------
+# status + version  —  and the ONE thing this fixture cannot fence off
+# --------------------------------------------------------------------------------------
+#
+# Every other cell in this file is hermetic. These two verbs are not, and the reason is
+# structural rather than an oversight:
+#
+#   * `_status_data` -> `_tui_inventory(theme)` -> `build.render_all(theme)` renders the
+#     WHOLE of `<checkout>/src` to count agents, skills and laws, and
+#     `build.source_fingerprint()` hashes `src/ themes/ adapters/` for the version row.
+#   * `_installed_defaults()` and `cmd_version`'s fallback chain both walk
+#     `ROOT / "Harness"` and `ROOT.parent / "Harness"` — the checkout's own bundle
+#     locations, not the sandbox's.
+#
+# `golden.cell_env` redirects HOME/XDG/APPDATA and clears the relocation vars; none of that
+# reaches ROOT. It CANNOT: `_build_core.ROOT` is `Path(__file__).resolve().parent`, every
+# path under it is derived at import, there is no env override (`$GENESEED_ROOT` is
+# `harness context`'s doc-discovery root, a different name for a different job), and the
+# `_OWNED` redirect that tests use is an in-process write. The Node side derives the same
+# ROOT from `import.meta.url`. So a fixture cannot point EITHER implementation at a
+# fixture tree, and copying the checkout into the sandbox would buy nothing — its `src/`
+# content is the live one, so the counts and the fingerprint would not change.
+#
+# Two consequences, both deliberate:
+#
+#   1. The counts and the fingerprint are gated by COMPARISON (both sides render the same
+#      tree at the same instant, so equality is a real assertion about the counting code)
+#      and absolutely only by SHAPE, via `expect_re`. A cell naming `17 agents` rots the
+#      next time content lands; a cell naming a literal fingerprint rots every commit, and
+#      `test_no_cell_hardcodes_a_source_fingerprint` refuses one.
+#   2. Every cell seeds a marker in the FIRST candidate the walk visits, so the
+#      unfenceable ones are never reached for any value the panel prints. What that leaves
+#      out is recorded rather than hidden: `Harness/` is gitignored, so a "no install
+#      anywhere" cell would report this developer's real install here and "(none found)" on
+#      a fresh clone. `_manifest_is_claude` is worse — it is only reached for a candidate
+#      with no known host, and `ROOT / "Harness"` is ordered AHEAD of the sandbox's own
+#      `Harness/`, so it is unreachable from any cell on a checkout that has one.
+#      `_accent_for`'s cyan fallback and `_version_verdict`'s "up to date" are unreachable
+#      for their own reasons (an unknown theme is refused upstream; "up to date" needs a
+#      marker holding a fingerprint no cell can know). All four are gated as PURE
+#      FUNCTIONS over a corpus instead — `tests/test_status_panel_parity.py`.
+#
+# Cost, measured rather than assumed: 0.14 s per invocation for either verb. `render_all`
+# is a text render, not an emit — it does not spawn Node on the Python side.
+
+_STAMP = "deadbeef1234 (built 2020-01-01) [release 0.1]\n"
+_OTHER_STAMP = "0123456789ab (built 2020-01-01) [release 0.1]\n"
+
+# The theme sigil is read from the theme file rather than pasted, for the reason P5b's
+# sniff markers are read from `build`: a copy of a value under test silently stops being
+# the value under test. cyberpunk's accent (magenta) differs from neutral's default cyan,
+# so the accent row proves the sigil path is what detected the theme.
+_SIGIL_THEME = "cyberpunk"
+_SIGIL = json.loads((ROOT / "themes" / f"{_SIGIL_THEME}.json").read_text(
+    encoding="utf-8"))["LOADED_SIGIL"]
+
+_FACT = "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n"
+
+# A global OpenCode install, as `_installed_defaults` recognises one: the emit marker is
+# what it prefers, and the OpenCode config dir is the first candidate it visits.
+_OC = "home/.config/opencode"
+_INSTALL_OC = {f"{_OC}/.geneseed-emit": "opencode-global\n",
+               f"{_OC}/.geneseed-theme": "imperial\n",
+               f"{_OC}/.geneseed-version": _STAMP,
+               f"{_OC}/AGENT.md": "# deployed\n"}
+
+
+def _status_cells() -> list[dict]:
+    def st(name, world, **kw):
+        return dict(id=f"status/{name}", bin="cli", world=dict({"repo/.keep": ""}, **world),
+                    steps=[{"argv": ["status"], "cwd": "repo"}], **kw)
+
+    # The count line is the one row no cell may name literally — see the section header.
+    counts = r"components   [1-9]\d* agents · [1-9]\d* skills · [1-9]\d* laws"
+    ascii_counts = r"components   [1-9]\d* agents - [1-9]\d* skills - [1-9]\d* laws"
+
+    return [
+        st("an-opencode-global-install",
+           dict(_INSTALL_OC, **{"repo/memory/one.md": _FACT, "repo/memory/two.md": _FACT}),
+           expect=["theme        imperial  (accent: yellow)",
+                   "install      opencode-global",
+                   "(2 facts)",
+                   "installed build differs from the current source",
+                   "AGENT.md", "(present)"],
+           expect_re=[counts]),
+        st("agent-md-missing-is-called-out",
+           {k: v for k, v in _INSTALL_OC.items() if not k.endswith("AGENT.md")},
+           expect=["AGENT.md", "(MISSING)"], expect_re=[counts]),
+        st("a-non-opencode-emit-hides-the-agent-md-row",
+           # Seeded in the CLAUDE config dir, and the OpenCode one is left absent: the emit
+           # marker names a host whose panel has no AGENT.md row at all.
+           {"home/.claude/.geneseed-emit": "claude-global\n",
+            "home/.claude/.geneseed-theme": "neutral\n",
+            "home/.claude/.geneseed-version": _STAMP},
+           expect=["install      claude-global", "theme        neutral  (accent: cyan)"],
+           expect_absent=["AGENT.md"], expect_re=[counts]),
+        st("theme-detected-from-the-agent-md-sigil",
+           # No `.geneseed-theme`: the manifest supplies the emit (a known host dir names
+           # its own), and the theme comes from matching a theme's LOADED_SIGIL in the
+           # deployed AGENT.md — the only detection path a per-repo install ever has.
+           {f"{_OC}/.geneseed-manifest.json": '{"owned": []}\n',
+            f"{_OC}/.geneseed-version": _STAMP,
+            f"{_OC}/AGENT.md": f"# deployed\n\n{_SIGIL}\n"},
+           expect=[f"theme        {_SIGIL_THEME}  (accent: magenta)",
+                   "install      opencode-global"],
+           expect_re=[counts]),
+        st("a-bogus-theme-marker-refuses-like-the-generator",
+           # An unknown theme is not a fallback anywhere — `effective_theme` refuses and
+           # the process dies. The exit code is part of the compared surface, and this is
+           # the only cell in either harness that reaches that refusal: golden.py's cells
+           # take `--theme` from the driver's own `choices`.
+           dict(_INSTALL_OC, **{f"{_OC}/.geneseed-theme": "nosuchtheme\n"}),
+           expect=["unknown theme 'nosuchtheme'", "available:"],
+           expect_silent=True),
+        st("a-bogus-footprint-marker-warns-on-stderr",
+           # `_footprint_of_dir`'s return value is NOT consumed by the panel — `status`
+           # reads only `theme` and `emit` out of `_installed_defaults`. Its WARN is, on
+           # the other stream. A closure measured by what the caller consumes would have
+           # dropped this function; the observation is what keeps it.
+           dict(_INSTALL_OC, **{f"{_OC}/.geneseed-footprint": "enormous\n"}),
+           expect=["holds unknown footprint 'enormous'", "reading it as 'full'",
+                   "Known: lean, full"],
+           expect_re=[counts]),
+        st("posture-and-mode-in-the-carrier-change-nothing",
+           # The positive control for a deliberate omission: `_installed_defaults` also
+           # detects posture and mode, and the panel prints neither. This carrier says
+           # `**Peer**` and `**Direct**`; a port that skipped both must still be
+           # byte-identical, and this cell is what says so out loud.
+           dict(_INSTALL_OC, **{f"{_OC}/AGENT.md":
+                                "# deployed\n\n## Posture\n\n**Peer** — ...\n\n"
+                                "## Mode\n\n**Direct** — ...\n"}),
+           expect_absent=["posture", "Posture", "mode", "Mode"],
+           expect_re=[counts]),
+        st("no-memory-store-found",
+           # `_resolve_memory_dir(None)` walks cwd, cwd/Harness, $GENESEED_HARNESS, then
+           # the OpenCode config dir — which is seeded here WITHOUT a memory folder, so
+           # the last fallback misses too.
+           _INSTALL_OC,
+           expect=["memory       (not found)", "(0 facts)"], expect_re=[counts]),
+        st("a-directory-named-like-a-fact-is-not-counted",
+           # `_memory_facts` skips a path whose `read_text` raises — a directory called
+           # `notes.md` is matched by `glob("*.md")` and is not a fact. One fact survives,
+           # so the singular is gated in the same cell.
+           dict(_INSTALL_OC, **{"repo/memory/real.md": _FACT,
+                                "repo/memory/notes.md/inner.txt": "not a fact\n"}),
+           expect=["(1 fact)"], expect_absent=["(1 facts)"], expect_re=[counts]),
+        st("memory-index-and-readme-are-not-facts",
+           dict(_INSTALL_OC, **{"repo/memory/MEMORY.md": "# index\n",
+                                "repo/memory/README.md": "# readme\n",
+                                "repo/memory/real.md": _FACT}),
+           expect=["(1 fact)"], expect_re=[counts]),
+        st("the-ascii-overlay-swaps-every-glyph",
+           # $GENESEED_TUI_ASCII is an env overlay, so unlike the ANSI branch this one IS
+           # reachable through a pipe. Both halves need a cell; the other half is every
+           # cell above.
+           dict(_INSTALL_OC, **{"repo/memory/one.md": _FACT}),
+           env={"GENESEED_TUI_ASCII": "1"},
+           expect=["* Geneseed - status", "+-", "|  theme"],
+           expect_absent=["─", "◆", "·", "│"],
+           expect_re=[ascii_counts]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
+# version
+# --------------------------------------------------------------------------------------
+
+def _version_cells() -> list[dict]:
+    def ve(name, argv, world, **kw):
+        return dict(id=f"version/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **world),
+                    steps=[{"argv": argv, "cwd": "repo"}], **kw)
+
+    return [
+        ve("an-explicit-target", ["version", "--target", "{sb}/inst"],
+           {"inst/.geneseed-version": _STAMP},
+           expect=["[version] source:", "[version] installed: deadbeef1234",
+                   "installed build differs from the current source"]),
+        ve("no-target-uses-the-opencode-config-dir", ["version"],
+           {f"{_OC}/.geneseed-version": _STAMP},
+           expect=["installed: deadbeef1234", "<HOME>"]),
+        ve("a-target-with-no-marker-falls-back-to-another-host",
+           ["version", "--target", "{sb}/ghost"],
+           # The fallback chain in order: opencode (absent), claude, bob, copilot, then the
+           # bundle paths. Seeding claude keeps the walk inside the sandbox — the bundle
+           # paths under ROOT are the ones no fixture can fence off.
+           {"home/.claude/.geneseed-version": _OTHER_STAMP},
+           expect=["installed: 0123456789ab"]),
+        ve("a-relative-target-is-resolved-against-cwd", ["version", "--target", "."],
+           {"repo/.geneseed-version": _STAMP},
+           # `Path(args.target).expanduser().resolve()` — what is printed is the absolute
+           # path, never the dot.
+           expect=["installed: deadbeef1234"], expect_absent=["   (.)"]),
+        ve("a-tilde-target-is-expanded", ["version", "--target", "~"],
+           # `Path(target).expanduser()`. The sandbox redirects HOME, so `~` is a real
+           # seedable directory here — and a port that dropped the expansion would look for
+           # a literal `~` folder and fall through to the next candidate instead.
+           {"home/.geneseed-version": _STAMP},
+           expect=["installed: deadbeef1234", "<HOME>"]),
+        ve("an-empty-marker-is-not-a-version", ["version"],
+           # `txt.split()[0] if txt else None` — a whitespace-only marker reads as absent,
+           # so the walk carries on to the next candidate instead of stopping on it.
+           {f"{_OC}/.geneseed-version": "   \n",
+            "home/.claude/.geneseed-version": _OTHER_STAMP},
+           expect=["installed: 0123456789ab"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
 # the runner
 # --------------------------------------------------------------------------------------
 
@@ -935,6 +1162,10 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
         if unwanted in text:
             problems.append(f"the reference now prints {unwanted!r}, which this cell "
                             f"exists to prove it leaves out")
+    for pat in cell.get("expect_re", ()):
+        if not re.search(pat, text):
+            problems.append(f"the reference's output no longer matches {pat!r} — this "
+                            f"cell has stopped exercising what it names")
     if cell.get("expect_silent") and snap["<stdout>"].strip():
         problems.append("the reference printed on stdout, but this cell exists to prove "
                         f"it stays silent: {snap['<stdout>'][:160]!r}")

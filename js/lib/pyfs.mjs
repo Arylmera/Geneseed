@@ -419,6 +419,23 @@ export const pyPrint = (s) => process.stdout.write(xlate(s));
 export const pyPrintErr = (s) => process.stderr.write(xlate(s));
 
 /**
+ * `len(s)` — CODE POINTS, where `String.length` counts UTF-16 units.
+ *
+ * They differ on every astral character: `len("𝔊")` is 1 and `"𝔊".length` is 2. Only
+ * matters where a length becomes layout, which is exactly what the status panel does with
+ * it — a theme name or a memory path outside the BMP would shear the frame by one column
+ * per character under `.length`.
+ */
+export const pyLen = (s) => [...s].length;
+
+/**
+ * `str.ljust(width)` — pad with spaces to `width` CODE POINTS, never truncate.
+ *
+ * `String.padEnd` counts UTF-16 units, so it is `pyLen`'s difference again, one call later.
+ */
+export const pyLjust = (s, width) => s + ' '.repeat(Math.max(0, width - pyLen(s)));
+
+/**
  * `str(PurePath(s))` — separators normalised to the platform's, `.` components dropped,
  * duplicate separators collapsed, a trailing one removed.
  *

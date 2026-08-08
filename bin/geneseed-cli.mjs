@@ -40,6 +40,7 @@
  * tables from ever answering the same verb twice, since the shim bakes only one of them.
  */
 import { cmdExclude } from '../js/excludes.mjs';
+import { cmdStatus, cmdVersion } from '../js/status.mjs';
 
 const VERBS = {
   exclude: {
@@ -50,6 +51,18 @@ const VERBS = {
       { name: 'action', choices: ['add', 'remove', 'list'] },
       { name: 'path', optional: true },
     ],
+  },
+  status: {
+    fn: cmdStatus,
+    positionals: [],
+  },
+  version: {
+    fn: cmdVersion,
+    positionals: [],
+    // `--target <dir>`. The first OPTION any verb here takes, so `parse` grew a table for
+    // them rather than a special case: argparse accepts `--target X` and `--target=X`
+    // alike, and an option with no value is its own error.
+    options: { '--target': 'target' },
   },
 };
 
@@ -73,7 +86,22 @@ function die(code, msg) {
 function parse(spec, argv) {
   const args = {};
   for (const p of spec.positionals) args[p.name] = null;
-  const rest = [...argv];
+  for (const name of Object.values(spec.options ?? {})) args[name] = null;
+
+  // Options first, in one pass, so an interleaved `version --target X` leaves only
+  // positionals behind — argparse does not care about the order and neither may this.
+  const rest = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    const tok = argv[i];
+    const eq = tok.indexOf('=');
+    const flag = eq > 0 ? tok.slice(0, eq) : tok;
+    const dest = (spec.options ?? {})[flag];
+    if (dest === undefined) { rest.push(tok); continue; }
+    const value = eq > 0 ? tok.slice(eq + 1) : argv[i += 1];
+    if (value === undefined) return { error: `argument ${flag}: expected one argument` };
+    args[dest] = value;
+  }
+
   for (const p of spec.positionals) {
     const tok = rest.shift();
     if (tok === undefined) {
@@ -113,7 +141,20 @@ function main(argv) {
   }
   const parsed = parse(spec, argv.slice(1));
   if (parsed.error) return die(2, parsed.error);
-  return spec.fn(parsed.args);
+  try {
+    return spec.fn(parsed.args);
+  } catch (e) {
+    // `e.exitCode` is the generator's existing marker for a DELIBERATE refusal that has
+    // already explained itself on stderr — `js/emit.mjs:1289` reads the same flag, and it is
+    // `sys.exit(<message>)` on the Python side. Anything without it is a crash and keeps its
+    // stack: Python prints a traceback for an unhandled exception, and turning one into a
+    // tidy one-liner here would hide a bug behind a refusal's clothing.
+    //
+    // No verb needed this until `status`, which renders — and renders at a theme read out
+    // of a marker file rather than off a validated flag.
+    if (e && e.exitCode) return e.exitCode;
+    throw e;
+  }
 }
 
 process.exitCode = main(process.argv.slice(2));

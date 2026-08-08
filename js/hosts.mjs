@@ -13,9 +13,12 @@
  * of those resolve a global config dir. A move that changed one of these by a character
  * fails ~126 cells, not zero.
  */
-import { realpathSync } from 'node:fs';
+import { realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { pyPathStr } from './lib/pyfs.mjs';
+
+const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
 export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
@@ -125,3 +128,42 @@ export const HOSTS = [
   { host: 'bob', configDir: bobConfigDir },
   { host: 'copilot', configDir: copilotConfigDir },
 ];
+
+/** `_harness_learn.MEMORY_DIR_NAMES` — the neutral name and the imperial theme's. */
+const MEMORY_DIR_NAMES = ['memory', 'anamnesis'];
+
+/**
+ * `_harness_learn._resolve_memory_dir` — where `learn` dedups and indexes, and what
+ * `status` reports on its memory row.
+ *
+ * Precedence: `--memory` > `$GENESEED_MEMORY` > a `memory/` (or `anamnesis/`) beside cwd or
+ * under `./Harness` > `$GENESEED_HARNESS/memory` > the OpenCode GLOBAL config dir's store.
+ * The last two matter for the recommended opencode-global install, whose store lives in
+ * `~/.config/opencode` rather than beside any repo. null => stdout-only.
+ *
+ * HERE rather than in `js/hooks.mjs`, where it was written, because P5d gave it a second
+ * caller that cannot import that file: `bin/geneseed-cli.mjs` is under a transitive
+ * `child_process` ban and `learn` spawns the model CLI. This module is the one both can
+ * reach, and it already owns the `opencodeConfigDir` the last fallback needs — so the move
+ * DELETED a duplicate resolver rather than adding a shared one.
+ */
+export function resolveMemoryDir(explicit) {
+  if (explicit) {
+    const p = pyPathStr(explicit);
+    return isDir(p) ? p : null;
+  }
+  const env = process.env.GENESEED_MEMORY;
+  if (env && isDir(env)) return pyPathStr(env);
+  const cwd = process.cwd();
+  const bases = [cwd, path.join(cwd, 'Harness')];
+  const gh = process.env.GENESEED_HARNESS;
+  if (gh) bases.push(expanduser(gh));
+  try { bases.push(opencodeConfigDir()); } catch { /* best-effort, as the Python */ }
+  for (const base of bases) {
+    for (const name of MEMORY_DIR_NAMES) {
+      const cand = path.join(base, name);
+      if (isDir(cand)) return cand;
+    }
+  }
+  return null;
+}

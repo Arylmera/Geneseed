@@ -286,14 +286,21 @@ def cell_env(home: Path) -> dict:
     GENESEED_STACK_GLOBAL takes a different excludes branch), so inheriting them makes
     the same matrix mean something different on each machine. Cleared by PREFIX, not by
     name, so a knob added later is neutralised by default rather than quietly joining the
-    inherited set."""
+    inherited set.
+
+    NO_COLOR and TERM are cleared for a THIRD reason, and it is pre-emptive. Nothing reads
+    them today: `_color_enabled()` is `sys.stdout.isatty() and NO_COLOR is None and TERM !=
+    "dumb"`, every cell captures stdout through a pipe, and `and` short-circuits on the
+    first term — so the two are never even looked up. They are cleared so that the day the
+    ANSI branch is made reachable (a pty, a `--color` flag) the matrix does not silently
+    become machine-dependent on the developer's own shell."""
     env = dict(os.environ, HOME=str(home), USERPROFILE=str(home),
                XDG_CONFIG_HOME=str(home / ".config"),
                APPDATA=str(home / "AppData" / "Roaming"),
                LOCALAPPDATA=str(home / "AppData" / "Local"),
                GENESEED_HOME=str(home / ".geneseed"),
                PYTHONUTF8="1")
-    for var in RELOCATION_VARS:
+    for var in (*RELOCATION_VARS, "NO_COLOR", "TERM"):
         env.pop(var, None)
     for var in [k for k in env if k.startswith("GENESEED_") and k != "GENESEED_HOME"]:
         env.pop(var, None)

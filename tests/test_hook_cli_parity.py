@@ -201,10 +201,34 @@ class TheAcceptanceHarnessIsNotVacuous(unittest.TestCase):
         """A cell with no absolute assertion is compared and nothing more — and these four
         verbs are SILENT on almost every path by design, so two implementations that both
         stopped working would agree in every such cell, forever."""
+        kinds = ("expect", "expect_absent", "expect_re", "expect_silent", "expect_files")
         naked = [c["id"] for c in harness_golden.cells()
-                 if not (c.get("expect") or c.get("expect_absent")
-                         or c.get("expect_silent") or c.get("expect_files"))]
+                 if not any(c.get(k) for k in kinds)]
         self.assertFalse(naked, f"cells with no expectation at all: {naked}")
+        # Second instance of this list, so it stops being prose: the checker must run every
+        # kind the cells are allowed to declare. A kind added to `cells()` and forgotten in
+        # `check_expectations` would be a silently ignored assertion.
+        import inspect
+        body = inspect.getsource(harness_golden.check_expectations)
+        for kind in kinds:
+            self.assertIn(f'"{kind}"', body,
+                          f"cells may declare {kind} but the vacuity checker never reads it")
+
+    def test_no_cell_hardcodes_a_source_fingerprint(self):
+        """`build.source_fingerprint()` hashes the whole source tree, so it changes with
+        every commit. A cell may compare it — both sides compute it from the same tree at
+        the same instant — but a cell that NAMES one is green until the next commit and
+        then reports a port regression that is nothing of the kind. The seeded stamps are
+        `deadbeef1234` / `0123456789ab`, which are 12 hex digits by design: this refuses a
+        fingerprint the harness did not itself write."""
+        seeded = {"deadbeef1234", "0123456789ab"}
+        pat = re.compile(r"\b[0-9a-f]{12}\b")
+        for c in harness_golden.cells():
+            for field in ("expect", "expect_absent", "expect_re"):
+                for s in c.get(field, ()):
+                    bad = set(pat.findall(s)) - seeded
+                    self.assertFalse(bad, f"{c['id']} names {bad}, which looks like a live "
+                                          f"source fingerprint rather than a seeded one")
 
     def test_cell_ids_are_unique(self):
         ids = [c["id"] for c in harness_golden.cells()]
@@ -225,10 +249,11 @@ class TheAcceptanceHarnessIsNotVacuous(unittest.TestCase):
                 "made/it.md": b""}
         self.assertFalse(harness_golden.check_expectations(
             {"expect": ["hello"], "expect_absent": ["goodbye"],
-             "expect_files": ["made/it.md"]}, snap))
+             "expect_re": [r"hello \w+"], "expect_files": ["made/it.md"]}, snap))
         for kind, cell in (
                 ("expect", {"expect": ["absent phrase"]}),
                 ("expect_absent", {"expect_absent": ["hello"]}),
+                ("expect_re", {"expect_re": [r"hello \d+ world"]}),
                 ("expect_silent", {"expect_silent": True}),
                 ("expect_files", {"expect_files": ["never/written.md"]})):
             with self.subTest(kind=kind):
