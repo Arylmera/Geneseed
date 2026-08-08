@@ -9,6 +9,30 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's seventh piece: the code that edits *your* config files is now the code that
+  runs when you build with Node.** The twin added last time was proven and unused; it is
+  wired in now, so a build merges your `settings.json` / `settings.local.json` hooks, the
+  managed block in your `CLAUDE.md`, and your `opencode.json` in the same Node process that
+  renders. As with the six pieces before it, you should not be able to tell: same files,
+  same console output, same exit code, and no Node means nothing changes at all.
+  Two things stay on the Python side, and both are deliberate. The **check that runs after
+  every build** — the one that re-reads your settings file and warns if the hooks did not
+  actually land — now verifies Node's work from the other implementation, on every build,
+  which is a stronger guarantee than either half could give alone. And the **hook shim**
+  still points at Python and `harness.py`, because the hooks themselves are still Python:
+  no already-installed harness has its shim rewritten, and nothing you have deployed
+  changes. That last one used to be invisible to every test — the shim is deliberately
+  excluded from the byte comparison so a version-to-version run is not drowned in noise —
+  so the boundary test now compares it directly.
+  Newly watched, because nothing reached them before: a `settings.local.json` you have
+  added comments to (left untouched, and it says so), an `opencode.jsonc` likewise, and an
+  install that has accumulated more than one recorded exclude — where the *order* they are
+  recorded in is part of the file and one entry was never enough to notice.
+- **A count in these notes and in DESIGN.md was wrong for two releases: `--emit
+  opencode-global` never rendered through Node.** "Every emit now renders through Node" was
+  eight of the nine. That mode still runs the Python, exactly as it always has, so nothing
+  about it has changed or broken — but the sentence claiming otherwise has, and there is now
+  a test that counts the modes instead of trusting the prose.
 - **The port's sixth piece: the layer that edits *your* config files now has a Node twin
   too — proven, not yet wired in.** Nothing about your builds changes with this; the new
   code is not called yet. What changes is that the merging into `settings.json`, the
@@ -26,9 +50,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   every time. It now builds one configuration, builds a different one on top, and checks
   the result matches a fresh build of the second — which catches both a clean-up that
   leaves stale files behind and one that deletes files the new build still needs.
-- **The port's fifth piece: every emit now renders through Node when you have it —
-  Claude, Bob and Copilot included, per-repo and global.** Before this, only `build` and
-  `--emit opencode` did; the other six went on running the Python. As with the last four
+- **The port's fifth piece: eight of the nine emits now render through Node when you have
+  it — Claude, Bob and Copilot included, per-repo and global.** Before this, only `build`
+  and `--emit opencode` did; six more moved here. (This entry originally said "every emit"
+  and "the other six"; it was seven that remained, and `--emit opencode-global` is the one
+  still on Python. Corrected in the seventh piece above.) As with the last four
   pieces, the whole point is that you cannot tell: same files, same console output, same
   exit code. No Node, or `GENESEED_NO_JS=1`, and nothing changes at all.
   What is worth knowing is what the new tests now watch, because these emits touch files

@@ -595,9 +595,20 @@ def _claude_wire(rendered: dict, cfg: Path, claude_md: Path, scope: str, host: s
 
     This stage cannot dispatch on its own: one spawn per emit is the contract, so when
     Node ran, it wired inside the SAME child and the claim set came back in the payload.
-    `managed is not None` is the test rather than a truthiness one — a Copilot emit with
-    no preamble legitimately produces `{}`, and `if managed:` would then re-run the whole
-    stage in Python against a tree Node had already wired. (`pyTruthy`, fourth phase.)"""
+
+    `is not None` rather than a truthiness test, and the distinction is UNOBSERVABLE today
+    — measured, not assumed. The first draft of this docstring claimed a Copilot emit could
+    produce `{}`; it cannot. Every shape was checked: copilot (project and global) records
+    `claude_md`, bob-global records `settings_file` + `settings_hooks`, and everything else
+    records more, because `claude_md_text` is None only when AGENT.md renders to None and
+    `assert_source_complete` refuses that source before this runs. So `if managed:` behaves
+    identically and the mutation stays green.
+
+    The spelling stays `is not None` anyway, because it does not DEPEND on that fact. A
+    host that legitimately wires nothing — the next Copilot-shaped one — would silently
+    re-run this whole stage in Python against a tree Node had already wired, and the two
+    passes are idempotent enough that nothing would report it. Recorded here rather than
+    left to look load-bearing, the way `themed_rel` and `lstripNewlines` are."""
     managed = rendered.get("managed")
     if managed is not None:
         return managed

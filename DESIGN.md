@@ -136,9 +136,9 @@ renders it as the name in parentheses.
 - **`_build_settings.py` is the half of the emit that edits files you co-own** — the
   `settings.json` / `opencode.json` merges, JSONC parsing, the hook shim and the managed
   CLAUDE.md block. It is a separate module because every function in it reconciles
-  Geneseed's claim with content Geneseed did not write, and because nine of its ten entry
-  points are driven by the *runtime* as well as by an emit (`rituals/_harness_mcp.py` uses
-  them for deactivate, remerge, reactivate and uninstall; so do `exclude` and `mcp`).
+  Geneseed's claim with content Geneseed did not write, and because eleven of its names are
+  driven by the *runtime* as well as by an emit (`rituals/_harness_mcp.py` uses ten of them
+  for deactivate, remerge, reactivate and uninstall; `exclude` and `doctor` use the rest).
   Its dependency closure points one way only: nothing in it calls into `_build_render` or
   `_build_emit`. Keep it that way — that closure is what makes it a unit.
 - **Every emit runs five stages in one order: `RENDER* → WIRE* → PRUNE → MANIFEST →
@@ -146,10 +146,17 @@ renders it as the name in parentheses.
   reconciling files you co-own; PRUNE removes what the previous manifest owned and this
   emit no longer produces; MANIFEST records both; VERIFY re-reads the merge to confirm it
   stuck. WIRE must precede MANIFEST because wiring is what fills the `managed` record the
-  manifest stores, and no RENDER may follow a WIRE because the render half is the half
-  that leaves Python. `tests/test_emit_phase_order.py` fails the build if any of the nine
-  emits drifts out of that order, or if a new file-mutating routine in `_build_settings`
-  is called from an emit without being classified.
+  manifest stores, and no RENDER may follow a WIRE because a render writes wholesale a file
+  a wire has just reconciled. `tests/test_emit_phase_order.py` fails the build if any of the
+  nine emits drifts out of that order, or if a new file-mutating routine in
+  `_build_settings` is called from an emit without being classified. Now that RENDER and
+  WIRE happen in the *same* child, the render and wire dispatchers stay two separate
+  functions and two separate statements on purpose — that shape is the only thing left for
+  the walker to check, and a gate refuses an emit whose sequence has lost its WIRE.
+  `build.py`'s `main()` is classified too, as the one stage no per-emit gate can see: it
+  writes the `.geneseed-emit` / `-footprint` / `-theme` markers and the install-registry
+  record *after* every emit returns, and nothing that reconciles a file you co-own may run
+  there, because there is no manifest to record the claim and no teardown able to undo it.
 - **The render core has a Node twin: [`js/render.mjs`](js/render.mjs).** It is a
   translation of `_build_render.py`'s pure pipeline, byte-identical by test rather than by
   intent — `tests/test_render_parity.py` renders both over every theme × footprint ×
@@ -210,10 +217,15 @@ renders it as the name in parentheses.
   second `--idempotent`. The one thing it forgives is named per cell: the agent's own
   memory and notebook seeds are written **once** and never re-rendered, so they keep the
   pre-switch vocabulary by design — and a cell whose carve-out excuses nothing fails too.
-- **All nine emits now cross that seam.** The last of the render half is
-  `_emit_claude_core`, the shared engine behind six of the nine — Claude, Bob and Copilot
-  at both scopes — so until it moved, two thirds of the matrix compared Python against
-  Python. Three things in it are not translations. `_ship_lean_laws` is the render that
+- **Eight of the nine emits cross that seam** — and this bullet said *nine* for two phases
+  before anyone counted. `emit_opencode_global` spawns Node **zero** times: its render half
+  is still inline Python, `js/emit.mjs` offers no job kind for it, and
+  `tests/test_emit_boundary.py` has no cell for it either, which is why nothing contradicted
+  the sentence. `tests/test_seam_coverage.py` now measures the spawn count of every mode and
+  fails if the table drifts, so the claim can only be restored by a cell that earns it.
+  The largest of the eight is `_emit_claude_core`, the shared engine behind six — Claude,
+  Bob and Copilot at both scopes — so until it moved, two thirds of the matrix compared
+  Python against Python. Three things in it are not translations. `_ship_lean_laws` is the render that
   used to run *after* a wiring stage, and it does two jobs: it writes the standalone laws
   file and it **claims** it, so a later switch back to the full footprint prunes it.
   `_global_memory` / `_global_notebook` copy arbitrary **user** files in from a legacy
@@ -230,8 +242,8 @@ renders it as the name in parentheses.
   the only way a byte comparison can tell "kept your store" from "re-seeded it".
 - **The wiring layer has a Node twin as well: [`js/settings.mjs`](js/settings.mjs)** — the
   JSONC reader, the `opencode.json` and `settings.json` merges, the hook shim, the
-  managed-block machinery and the settings integrity check. Nothing imports it yet; it is
-  proven before it is wired, the way every piece before it was. It is the last unit to
+  managed-block machinery and the settings integrity check. It was proven before it was
+  wired, the way every piece before it was; the emit now drives it. It was the last unit to
   cross because it is the one the **runtime** drives too: eleven of its names have a
   consumer outside the emit tree, ten of them in `rituals/_harness_mcp.py`, which is what
   actually pins it — remerge, deactivate, reactivate, uninstall and `exclude` all edit a
@@ -247,6 +259,28 @@ renders it as the name in parentheses.
   makes every byte comparable, both platform branches included. What stays unproven is
   which values a Node driver will pass, and that is one line at a future call site rather
   than anything in the body.
+- **The wiring half now runs inside the render child, and two stages deliberately do not.**
+  The same spawn that renders an emit also merges your `settings(.local).json`, your
+  CLAUDE.md managed block and your `opencode.json`. `_settings_integrity_check` stays in
+  Python because VERIFY runs *after* MANIFEST and MANIFEST is Python — which turns out to be
+  worth keeping rather than merely unavoidable. It never writes, so every Claude-shaped emit
+  now ends with Python re-reading the settings file Node just wrote and checking it against
+  the claims Node just returned. Two implementations of this layer coexist while the runtime
+  is Python, and that check is what makes them **interoperate** on a real file rather than
+  merely resemble each other under a parity harness; `tests/test_harness.py`'s uninstall
+  tests do the same across a whole lifecycle, wiring through Node and unwiring through
+  Python. `emit_opencode_global`'s own `opencode.json` merge also stays in Python, for the
+  duller reason that it has no child to join.
+  **The hook shim keeps baking the Python interpreter and `rituals/harness.py`** even though
+  Node writes the file, because the hooks it launches are still Python; `process.execPath`
+  becomes the right answer the day the hooks cross, not the day the driver does. So no
+  already-emitted install's shim changes. That substitution used to be invisible to every
+  gate — golden filters the shim out by name so a cross-revision run is not drowned in
+  noise, and `doctor`'s check only fires once the baked path stops existing — so the
+  boundary gate now compares the shim body between the two runtimes directly.
+  **`hookPrefix` throws rather than defaulting.** Left undefined, the runner and entry point
+  were baked as the literal string `"undefined"`, killing every hook in the install, and the
+  hooks report success on every path by design.
 - **Python and JavaScript disagree about JSON, in two ways that reach emitted bytes.**
   `json.dumps` escapes non-ASCII and `JSON.stringify` does not, which is 44–50
   `description:` lines per theme; and `json.loads` distinguishes `20` from `1.0` where
