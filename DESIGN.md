@@ -344,6 +344,19 @@ renders it as the name in parentheses.
   emit that has not crossed **refuses with exit 3** instead of producing a partial tree, and
   `tests/golden.py --emits` narrows the matrix to what has; deleting that flag is how the
   phase ends.
+  **The Copilot pair crossed next, and which two was the decision.** All six remaining emits
+  share one engine (`_emit_claude_core`), so porting the engine looks like it should get all
+  six at once. Four of them write `settings.json` hooks, so they reach `hookPrefix`, which
+  needs the two machine-absolute values `_hook_runner_entry()` returns — `sys.executable`
+  and the harness entry point. **A Node driver has no `sys.executable`**: the hooks it would
+  be wiring are Python and `process.execPath` is node. `js/emit.mjs` gates the whole
+  settings path behind `!isCopilot` and skips VERIFY for the same host, so the Copilot pair
+  rides the shared engine without touching either — which buys the entire driver body
+  (manifest-with-`managed`, prune, atomic write) while leaving the interpreter question
+  isolated and labelled rather than answered in passing. `hookOpts` is consequently
+  **omitted** rather than sent as `{}` or `null`: omitted, a stray call throws the error
+  P3b built for it; `null` raises an unrelated `TypeError`; `{}` bakes the literal string
+  `"undefined"` into the shim and silently kills every hook in the install.
   **Two hazards here are invisible to a byte comparison for opposite reasons.**
   `json.dumps` defaults to `ensure_ascii=True` where `JSON.stringify` does not — a
   difference the matrix catches in the manifest (its comment carries an em dash) and cannot
