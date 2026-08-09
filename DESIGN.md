@@ -837,6 +837,46 @@ renders it as the name in parentheses.
   this verb's refusal from a shell runs the whole wizard and rebuilds your live install. The
   cells are safe — `subprocess.run(input=…)` is a real pipe — but a gate on `isatty` cannot
   be checked with a redirect.
+- **The web console's HTTP shell crosses, and it needed a third acceptance harness.**
+  `tests/golden.py` compares the tree a generator writes; `tests/harness_golden.py` compares
+  one verb invocation on stdout/stderr/exit/files. An endpoint writes nothing and never
+  exits, so [`tests/web_golden.py`](tests/web_golden.py) asks a different question: one
+  seeded world, one **sequence of requests** against a freshly started server, compared on
+  the status line, the response body as bytes, the five headers the handler *chooses*, the
+  daemon record, and the server's own streams. **Both sides are real processes**, started on
+  an ephemeral port and stopped in a `finally` — a fixed 4747 would collide with the
+  developer's own daemon. The connection is **reused across a cell's requests**, which is
+  what makes `do_POST`'s drain-before-routing observable at all; a harness opening a fresh
+  socket per request would leave `protocol_version = "HTTP/1.1"` untested.
+  **Cells for the shell, corpus for the functions.** All 136 tests in `tests/test_web.py`
+  call `api_X(state)` in process, and none of them can see any of `_web_server.py` — not the
+  routing, the CSRF check, the DNS-rebinding guard, the status conventions, gzip negotiation,
+  keep-alive, or the token injected into `index.html` per request. That is the 654 lines the
+  new harness exists for.
+  **`_send_json` is `jsonDumpsCompact`, exactly** — "compact" there means *no indent*, not
+  *no spaces*, and Python's default separators are `(', ', ': ')`. So all 29 paths share one
+  serialiser and no new helper. Its `bareInts` flag states the one condition: a response
+  body's numbers are computed here rather than parsed from JSON, and Python types every one
+  of them `int`, which both languages render identically.
+  **A compressed body is the one thing that cannot be compared as bytes.** The gzip member
+  header carries a clock and an OS byte the two runtimes spell differently — and, measured
+  after a small payload matched by luck, **the DEFLATE streams differ too**: 753 bytes
+  against 751 for the same 1.5 kB input at the same level. That is the zlib build each
+  runtime links, which neither implementation chose. So the body is inflated and compared,
+  with the compressed length normalised to a tag so its presence stays gated. A destamp
+  cannot reach inside one either: the injected token compresses to a different length every
+  run, and the reference differed from *itself* until the gzip cells moved to a payload
+  carrying no per-run value.
+  **Fourteen mutations, twelve fire, and both survivors were findings.** One was a cell
+  asking the wrong question — a forged `Host` sent *with* a valid token cannot tell
+  host-first from token-first, since both answer `forbidden host`; only a request failing
+  **both** checks can. The other is honest: two mutations that stop draining the POST body
+  both survive, because Node's parser owns the message boundary where Python's handler reads
+  a raw socket. The branch is **indistinguishable on this runtime, not unreachable**, and it
+  stays. A third mutation found the gate itself: with no daemon record, the teardown raised
+  while parsing a port out of `""` — in a `finally`, *before* the kill — so a failed cell
+  ended the run and orphaned one server per cell, which is the exact failure the teardown
+  exists to prevent.
 
 ## 🚫 Explicitly out of scope
 
