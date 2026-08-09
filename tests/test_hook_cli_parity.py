@@ -450,16 +450,57 @@ class TheHookEntryIsNotAPassthrough(unittest.TestCase):
 #: the job wedges on `running` forever), POSIX gets that in-process through a process group, and
 #: Node has no Windows equivalent at all. That one IS a machine primitive.
 #:
-#: THE `entry` COLUMN EXISTS BECAUSE THIS MODULE IS NOT ON THE CLI'S GRAPH YET. `web` becomes a
-#: verb in P6h; until then `bin/geneseed-cli.mjs` cannot reach `js/web/`, so a single walk from
-#: the CLI would fail on a declared-but-unreachable row. The `cli` rows keep the transitive walk
-#: and its EQUALITY — which is now also what proves the job runner is not reachable from the CLI
-#: — and the `web` rows are gated by a directory scan instead, for the reason
-#: `test_the_web_module_tree_spawns_only_from_the_declared_module` states: the web graph
-#: transitively reaches three modules that legitimately spawn for other entries, so an equality
-#: over it would have to re-declare their decisions in a second place. P6h moves this row's
-#: entry from `web` to `cli`, at which point the transitive walk starts demanding it.
+#: THE `entry` COLUMN, AND P6h FLIPPED THE ROW IT WAS INVENTED FOR. It existed because
+#: `js/web/` was not on `bin/geneseed-cli.mjs`'s import graph: a single transitive walk from the
+#: CLI would have failed on a declared-but-unreachable row, so `cli` rows kept the walk and its
+#: EQUALITY while `web` rows were gated by a directory scan. `web` is a CLI verb now, the CLI
+#: statically imports `js/web/server.mjs`, and both web rows are `cli` — so the walk demands
+#: them and the dynamic no-python-on-PATH refutations cover them too.
+#:
+#: THE COLUMN STAYS EVEN THOUGH EVERY ROW NOW READS `cli`. It is half of a partition: the
+#: directory scan below asserts that the set of `js/web/*.mjs` importing `child_process` is
+#: exactly the set of `web/`-prefixed rows here, whatever entry each declares. Deleting the
+#: column would collapse the two gates into one and leave a future module reachable from
+#: neither.
+#:
+#: ---------------------------------------------------------------------------------------
+#: P6h ADDED `web/server.mjs`, WHOSE THREE SPAWNS ARE THREE DIFFERENT ARGUMENTS.
+#:
+#:   * `_spawn_detached` — `node bin/geneseed-cli.mjs web --daemon-internal …`. The daemon must
+#:     OUTLIVE its launcher: `geneseed web start` prints a URL and returns to the shell, and the
+#:     server it started has to still be there. A thread, a worker or an in-process `serve()`
+#:     all die with the launcher, so there is no in-process equivalent by construction. Like the
+#:     job runner it re-executes THIS PROGRAM, named as `process.execPath` + this repo's own
+#:     CLI, and `tests/test_web_daemon.py` asserts the argv holds no `python`/`harness.py`.
+#:   * `_npm_build` — `npm install` / `npm run build`. There is no npm library. NO TEST REACHES
+#:     IT: `web/dist/index.html` is tracked, so `buildPlan` answers `serve` in every checkout a
+#:     cell can build; `tests/test_web_daemon.py` re-derives that from `git ls-files` rather
+#:     than trusting the comment.
+#:   * `webbrowser.open` — the desktop's URL opener (`start` / `open` / `xdg-open`). A MACHINE
+#:     PRIMITIVE in the class of `java -version`: it asks the OS to do something for the user
+#:     and does none of this program's work. Declining it would have been a silent regression
+#:     in the one verb whose job is to put a UI on screen.
+#: ---------------------------------------------------------------------------------------
+#: AND P6h HIT THE THING P6g PREDICTED, FROM THE OTHER SIDE. Putting `js/web/` on the CLI's
+#: graph pulled `js/hooks.mjs` onto it too — `js/web/api.mjs` imports `frontmatter` and
+#: `js/web/actions.mjs` imports `memoryDropIndex`, both of which live in the module that also
+#: owns the `$GENESEED_LLM` spawn. P6g wrote the general form of this ("a reachability gate over
+#: a shared graph re-asks every decision that graph already contains") about a walk from
+#: `js/web/server.mjs`; the same graph reached from the CLI produces the same collision.
+#:
+#: SO THE ROW DELEGATES RATHER THAN RESTATES. `js/hooks.mjs`' one spawn is already asserted
+#: argv-for-argv by `TheHookEntryIsNotAPassthrough.test_the_only_spawn_is_the_model_cli`, and
+#: copying those literals here would put one module's decision in two places — which is exactly
+#: what P6g refused when it declined to walk the web graph. `gated_by` names the test instead,
+#: the equality below still demands the row (so a NEW spawning module on the CLI's graph is
+#: still a failure), and `test_the_cli_spawns_only_what_the_allow_list_declares` checks that the
+#: named test exists rather than re-deriving what it proves.
 _ALLOWED_SPAWNS = {
+    "hooks.mjs": {
+        "entry": "cli",
+        "gated_by": "TheHookEntryIsNotAPassthrough.test_the_only_spawn_is_the_model_cli",
+        "what": "`$GENESEED_LLM` — the model CLI `learn` shells out to",
+    },
     "doctor.mjs": {
         "entry": "cli",
         "binding": "{ spawnSync }", "calls": 1, "what": "`node --check <plugin>`",
@@ -473,8 +514,31 @@ _ALLOWED_SPAWNS = {
         # the skip.
         "literals": ["spawnSync(java, ['-version']", "const java = pyWhich('java');"],
     },
+    "web/server.mjs": {
+        "entry": "cli",
+        "binding": "{ spawn, spawnSync }", "calls": 1, "spawnCalls": 2,
+        "what": "`node bin/geneseed-cli.mjs web --daemon-internal …` (the detached daemon), "
+                "`npm install` / `npm run build`, and the desktop's URL opener",
+        "literals": [
+            # The daemon launcher, named the same way the job runner's is: the running
+            # interpreter by absolute path, and this repo's own CLI. No spelling of `python`
+            # can reach this argv.
+            "const cmd = [process.execPath, join(ROOT, 'bin', 'geneseed-cli.mjs'), 'web',",
+            "detached: true, windowsHide: true, stdio: ['ignore', out, out],",
+            # npm's, with the PATH lookup named for the reason doctor's and setup's are: the
+            # reference SKIPS to `no-npm` when `shutil.which` misses, and a hardcoded binary
+            # cannot reproduce the skip.
+            "const plan = buildPlan(dist, webDir, pyWhich('npm'), "
+            "Boolean(process.stdin.isTTY));",
+            "const r = spawnSync(win ? `\"${npm}\"` : npm, step, {",
+            # The URL opener, all three platforms spelled out — a fourth branch reaching for
+            # anything else would be a GUI dependency rather than a machine primitive.
+            "? [process.env.COMSPEC || 'cmd.exe', ['/d', '/s', '/c', `start \"\" \"${url}\"`],",
+            "(process.platform === 'darwin' ? ['open', [url], {}] : ['xdg-open', [url], {}]);",
+        ],
+    },
     "web/jobs.mjs": {
-        "entry": "web",
+        "entry": "cli",
         "binding": "{ spawn, spawnSync }", "calls": 1, "spawnCalls": 1,
         "what": "`node bin/geneseed-cli.mjs <verb>` (the job) and `taskkill /T` (its cancel)",
         # The INTERPRETER is named as `process.execPath`, which is the running binary by
@@ -530,10 +594,10 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
         """STATIC, and transitive — a source grep on the entry alone cannot see an import one
         module deep, which is the hole P5a had to close for the generator driver.
 
-        FILTERED BY `entry` SINCE P6g, and the filter is the assertion: `js/web/jobs.mjs`
-        spawns, and this equality is what proves it is NOT on the CLI's graph. When P6h gives
-        `web` a verb the row moves to `entry: "cli"` and this test starts demanding it — which
-        is the point at which the job runner's spawn becomes the CLI's problem too.
+        FILTERED BY `entry` SINCE P6g, and P6h is when the filter started demanding rather
+        than excusing: `web` is a CLI verb, `bin/geneseed-cli.mjs` statically imports
+        `js/web/server.mjs`, and both web rows are `cli` — so this equality now covers the
+        daemon launcher and the job runner as well as `node --check` and `java -version`.
         """
         allowed = sorted(ROOT / "js" / rel for rel, spec in _ALLOWED_SPAWNS.items()
                          if spec["entry"] == "cli")
@@ -567,19 +631,28 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
 
         A TRANSITIVE WALK FROM `js/web/server.mjs` WOULD PROVE THE WRONG THING. That graph
         reaches `js/doctor.mjs`, `js/setup.mjs` and `js/hooks.mjs` — three modules that
-        legitimately spawn, two of them declared above for a DIFFERENT entry and the third
-        (the model CLI `learn` shells out to) gated in `js/hooks.mjs`'s own parity test. An
+        legitimately spawn, two of them declared above for the CLI entry and the third (the
+        model CLI `learn` shells out to) gated in `js/hooks.mjs`'s own parity test. An
         equality over that graph would either fail or have to re-declare all three here, which
         would put one module's decision in two files.
+
+        KEYED ON THE `web/` PREFIX SINCE P6h, not on the `entry` column. Both web rows are
+        `entry: "cli"` now that the CLI imports them; filtering on the entry would have made
+        this equality `{...} == set()` and passed only by asserting nothing. The prefix is
+        what the directory scan is actually about — every spawning file under `js/web/` has a
+        row — and the entry column stays for the CLI walk above, which asks a different
+        question about the same rows.
         """
         declared = {f"web/{p.name}" for p in (ROOT / "js" / "web").glob("*.mjs")
                     if re.search(r"^\s*import\s.*'node:child_process'",
                                  p.read_text(encoding="utf-8"), re.M)}
         self.assertEqual(
-            declared, {rel for rel, spec in _ALLOWED_SPAWNS.items() if spec["entry"] == "web"},
+            declared, {rel for rel in _ALLOWED_SPAWNS if rel.startswith("web/")},
             "a module under js/web/ starts a process without a row in _ALLOWED_SPAWNS — the "
             "web daemon is the one place in this port allowed to spawn THIS PROGRAM, and the "
             "argument for each argv belongs in the table")
+        self.assertTrue(declared, "the scan found no spawning module under js/web/, so this "
+                                  "equality is vacuous")
         for p in (ROOT / "js" / "web").glob("*.mjs"):
             text = p.read_text(encoding="utf-8")
             for banned in ("'child_process'", '"child_process"'):
@@ -597,6 +670,16 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
         """
         for rel, spec in sorted(_ALLOWED_SPAWNS.items()):
             with self.subTest(module=rel):
+                # A DELEGATED ROW names the test that owns its argv instead of repeating the
+                # literals. Checked rather than trusted: a `gated_by` pointing at a test that
+                # no longer exists would be a row asserting nothing at all.
+                if "gated_by" in spec:
+                    cls, meth = spec["gated_by"].split(".")
+                    self.assertTrue(
+                        hasattr(globals().get(cls), meth),
+                        f"js/{rel} delegates its argv assertion to {spec['gated_by']}, "
+                        f"which is not in this module — the delegation is the whole gate")
+                    continue
                 text = (ROOT / "js" / rel).read_text(encoding="utf-8")
                 imports = re.findall(r"import\s+(.+?)\s+from\s+'node:child_process'", text)
                 self.assertEqual(imports, [spec["binding"]],

@@ -84,8 +84,28 @@ export function ask(prompt, dflt = '') {
   // `input()` writes its prompt to stdout with no newline — nothing for `pyPrint` to
   // translate, and it must NOT gain one.
   process.stdout.write(`${prompt}${suffix}: `);
-  const ans = readLine().trim();
+  // `?? ''` because `readLine` reports EOF-with-nothing-read as null since P6h; `_ask`
+  // catches `EOFError` and returns the default, which is what the empty string produces
+  // here through `|| dflt`. The two routes to one answer are the docblock's own point.
+  const ans = (readLine() ?? '').trim();
   return ans || dflt;
+}
+
+/**
+ * `input(prompt)` with EOF told apart from an empty line — `null` where Python RAISES.
+ *
+ * `ask` above cannot express that difference and does not need to: its EOF and its empty
+ * answer both mean "take the default". `_web_server.serve`'s npm prompt is the first
+ * caller where they differ, and they differ dangerously — `""` is in its accepted set, so
+ * a port that read EOF as an empty line would answer YES to "run npm install now?" on
+ * every non-interactive run. The reference catches `(EOFError, KeyboardInterrupt)` and
+ * answers "n"; this returns null so the caller can.
+ *
+ * No `.trim()`: `input()` does not strip, and both callers strip for themselves.
+ */
+export function promptLine(prompt) {
+  process.stdout.write(prompt);
+  return readLine();
 }
 
 /**
@@ -102,13 +122,18 @@ export function ask(prompt, dflt = '') {
 function readLine() {
   const buf = Buffer.alloc(1);
   const bytes = [];
+  let eof = false;
   for (;;) {
     let n = 0;
-    try { n = readSync(0, buf, 0, 1, null); } catch { break; }
-    if (n === 0) break;
+    try { n = readSync(0, buf, 0, 1, null); } catch { eof = true; break; }
+    if (n === 0) { eof = true; break; }
     if (buf[0] === 0x0a) break;
     if (buf[0] !== 0x0d) bytes.push(buf[0]);
   }
+  // NULL ONLY FOR THE EMPTY EOF, which is the one case `input()` raises on. A partial line
+  // with no trailing newline is not EOF to Python — it returns the characters — and the
+  // `bytes.length` test is what keeps that arm returning a string here too.
+  if (eof && bytes.length === 0) return null;
   return Buffer.from(bytes).toString('utf8');
 }
 

@@ -25,23 +25,34 @@
  * call sites in a factory. A Python float would be the counter-example — `1.0` against
  * JS's `1` — and the byte gate over every endpoint body is what would catch one.
  *
- * WHAT IS DELIBERATELY NOT HERE. The API functions (P6b-P6f), the job manager (P6g), and
- * the `web` VERB with its daemon lifecycle, browser open and npm build (P6h). No call
- * site reaches this file yet: `bin/geneseed-cli.mjs` carries no `web` verb, so the only
- * caller is the acceptance harness, which runs it as a module. `NOT_PORTED` below is what
- * keeps that partial state loud instead of plausible.
+ * P6h FINISHED IT, and the file grew a second half rather than a second module. The
+ * reference keeps the handler and the daemon lifecycle in ONE file under a
+ * `# ---- daemon mode` banner, and splitting them here would have made `serve()` (which
+ * needs `npmBuild`) and the launcher (which needs `readDaemon`) import each other. So
+ * `_probe`, `_live_daemon`, `_spawn_detached`, `start|stop|status|restart_daemon`,
+ * `_npm_build` and `cmd_web` all live below, and `bin/geneseed-cli.mjs` is finally a
+ * caller — which is what put this tree on the CLI's import graph and moved
+ * `js/web/jobs.mjs`'s spawn row to `entry: "cli"`.
+ *
+ * WHAT IS STILL NOT HERE. `/api/install` (`api_install_toggle`, 293 lines of tree-move
+ * engine — P6i) and `/api/pick-folder` (declined, a GUI dialog). `NOT_PORTED_POST` and
+ * `DECLINED_POST` below are what keep that partial state loud instead of plausible.
  */
+import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, statSync, unlinkSync, chmodSync, mkdirSync } from 'node:fs';
-import { createServer } from 'node:http';
+import {
+  existsSync, readFileSync, statSync, unlinkSync, chmodSync, mkdirSync, openSync,
+} from 'node:fs';
+import { createServer, request as httpRequest } from 'node:http';
 import { join, resolve as pathResolve, extname, basename, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 import { GLOBAL_MANIFEST, pyResolve } from '../hosts.mjs';
 import {
-  jsonDumpsCompact, parseJson, pyInt, pyPrint, pyStr, pyTruthy, pyUnquote, writeText,
+  jsonDumpsCompact, parseJson, pyInt, pyPrint, pyStr, pyTruthy, pyUnquote, pyWhich, writeText,
 } from '../lib/pyfs.mjs';
+import { promptLine } from '../setup.mjs';
 import { NotFound, PREFIX_ROUTES, STATE_ROUTES, webState } from './api.mjs';
 import {
   apiDeployCmd, apiExcludesMutate, apiInstallCmd, apiMcpToggle, apiMemoryDelete, apiProfileSave,
@@ -109,10 +120,9 @@ export const NOT_PORTED = new Set([]);
 export const NOT_PORTED_PREFIXES = [];
 
 /**
- * The POSTs that have not crossed YET. P6h empties the first; the second has its own due date.
+ * The POST that has not crossed YET — one row since P6h took `/api/restart`.
  *
- * `/api/restart` hands off to a detached `web restart`, which is the daemon lifecycle P6h
- * owns. `/api/install` is `api_install_toggle` — 27 endpoint lines over 293 lines of
+ * `/api/install` is `api_install_toggle` — 27 endpoint lines over 293 lines of
  * unported all-or-nothing tree moves with rollback, a stash layout and a host fork; see
  * `js/web/actions.mjs`'s header for the measurement and why a web phase is the wrong place
  * for it.
@@ -121,7 +131,7 @@ export const NOT_PORTED_PREFIXES = [];
  * It stays for the reason the GET pair above stays.
  */
 export const NOT_PORTED_POST = new Set([
-  '/api/restart', '/api/install',
+  '/api/install',
 ]);
 export const NOT_PORTED_POST_PREFIXES = [];
 
@@ -220,7 +230,8 @@ export const PORTED_INLINE = ['/api/ping', '/api/docs', '/api/docs/page/',
  * it lie about the five routes it currently describes exactly, so these dispatch beside the
  * table and `tests/test_web_jobs.py` reads them out of `PORTED_POST_INLINE` instead.
  */
-export const PORTED_POST_INLINE = ['/api/shutdown', '/api/jobs/', '/api/actions/'];
+export const PORTED_POST_INLINE = ['/api/shutdown', '/api/restart', '/api/jobs/',
+  '/api/actions/'];
 
 function notPorted(path) {
   return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));
@@ -373,6 +384,25 @@ export function makeHandler(state, jm, token, dist, holder = null) {
         holder.srv.closeAllConnections();
       });
       return sendJson(res, { stopping: true }, 200, ae);
+    }
+    if (path === '/api/restart') {
+      // THE ONE ROUTE IN THIS FILE NO TEST MAY REACH, and it is declared rather than probed.
+      // `requestRestart` spawns a DETACHED `web restart`, which stops whatever daemon the
+      // record names and starts a fresh one that outlives the caller. Every way of asking it
+      // a question runs it: `tests/web_golden.py` would have its own server stopped and a
+      // replacement orphaned into a sandbox about to be deleted, and
+      // `tests/test_web_server.py`'s dispatcher probe runs in the DEVELOPER'S environment,
+      // where the replacement would bind 4747 and serve the checkout forever. That is the
+      // same reasoning P6g used to ban a job cell that starts real work, one step further:
+      // there the child was merely orphaned, here it is a second daemon.
+      //
+      // So the gate is `tests/test_web_daemon.py`, which reads both implementations and
+      // asserts they dispatch this path to `request_restart(state.theme)` and answer the
+      // same body. Rule 7 says a declaration is not a dispatcher — this is the one route
+      // where probing the dispatcher costs more than the assurance is worth, and saying so
+      // beats a silently missing probe.
+      requestRestart(state.theme);
+      return sendJson(res, { restarting: true }, 200, ae);
     }
     const route = POST_ROUTES.get(path);
     if (route !== undefined) {
@@ -604,6 +634,259 @@ export function clearDaemon(target) {
   } catch { /* already gone */ }
 }
 
+// ---- daemon mode -----------------------------------------------------------
+//
+// `geneseed web start|stop|status|restart`. The reference's own banner explains the design
+// — the running server records pid/port/token/url in a small JSON file and control is over
+// HTTP, so nothing here needs OS process-kill semantics, only a localhost request with the
+// token. Two things about the TWIN, neither of which is in that banner:
+//
+//   * `_probe` and `_post_shutdown` are `urllib.request.urlopen` with a timeout, which is
+//     synchronous. Node has no synchronous HTTP client, so every function below that
+//     reaches one is `async` and `cmdWeb` awaits it — which is why `bin/geneseed-cli.mjs`
+//     awaits its dispatch. Nothing about the ORDER of the reference's steps changes.
+//   * `agent: false` on both requests. Node's global agent has kept sockets alive by
+//     default since v19, and a pooled idle socket keeps the event loop referenced — a
+//     `web status` that answered correctly would then hang for the keep-alive timeout
+//     instead of exiting. Python's `urlopen` opens and closes a connection per call.
+
+/** `f"{url}/api/ping"` answered 200 — the cheap liveness probe both `status` and the
+ *  launcher's wait loop are built on. Every failure mode is False, as the reference's
+ *  `(URLError, OSError, ValueError)` catch is. */
+export function probe(url, timeout = 1.5) {
+  return new Promise((done) => {
+    let settled = false;
+    const finish = (v) => { if (!settled) { settled = true; done(v); } };
+    let req;
+    try {
+      req = httpRequest(`${url}/api/ping`, { method: 'GET', agent: false }, (res) => {
+        res.resume();          // drain, or the socket never closes
+        finish(res.statusCode === 200);
+      });
+    } catch {
+      return finish(false);    // a malformed url is `ValueError` there and a throw here
+    }
+    req.setTimeout(Math.round(timeout * 1000), () => { req.destroy(); finish(false); });
+    req.on('error', () => finish(false));
+    req.end();
+    return undefined;
+  });
+}
+
+/** The token-carrying POST `geneseed web stop` and the in-page Stop button both send. */
+export function postShutdown(url, token, timeout = 3.0) {
+  return new Promise((done) => {
+    let settled = false;
+    const finish = (v) => { if (!settled) { settled = true; done(v); } };
+    let req;
+    try {
+      req = httpRequest(`${url}/api/shutdown`, {
+        method: 'POST',
+        agent: false,
+        headers: { 'X-Geneseed-Token': token, 'Content-Type': 'application/json' },
+      }, (res) => {
+        res.resume();
+        finish(res.statusCode === 200);
+      });
+    } catch {
+      return finish(false);
+    }
+    req.setTimeout(Math.round(timeout * 1000), () => { req.destroy(); finish(false); });
+    req.on('error', () => finish(false));
+    req.end('{}');
+    return undefined;
+  });
+}
+
+/**
+ * The record ONLY if a server is answering; otherwise the stale file is deleted.
+ *
+ * The deletion is the part a port drops, and it is what stops a machine that crashed with
+ * a daemon running from re-probing a dead URL on every `status` forever. Both of its arms
+ * are gated by a `harness_golden` cell — a record whose url nothing answers, and a record
+ * carrying no url at all, which skips the probe and still clears.
+ */
+export async function liveDaemon(target) {
+  const st = readDaemon(target);
+  if (st && pyTruthy(st.url) && await probe(st.url)) return st;
+  if (pyTruthy(st)) clearDaemon(target);
+  return null;
+}
+
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
+
+/** `st.get(k)` rendered as Python renders it — a missing key prints `None`, not
+ *  `undefined`. Only reachable through a hand-edited record, and one character of
+ *  divergence in a message is still a divergence. */
+const none = (v) => (v === undefined || v === null ? 'None' : String(v));
+
+/**
+ * `_spawn_detached` — the daemon launcher, and the second `_ALLOWED_SPAWNS` entry this
+ * module owns.
+ *
+ * WHY THERE IS NO IN-PROCESS EQUIVALENT: the whole contract is that the server OUTLIVES
+ * the process that started it. `geneseed web start` prints a URL and returns to the shell;
+ * the server it started must still be there. A thread, a `worker_thread` or an in-process
+ * `serve()` all die with the launcher.
+ *
+ * WHAT IT STARTS IS THIS PROGRAM, named as `process.execPath` + `bin/geneseed-cli.mjs` —
+ * the running interpreter by absolute path and this repo's own CLI. The reference names
+ * `sys.executable` + `rituals/harness.py`; each side re-executes ITSELF, which is what
+ * makes this not the passthrough the port exists to remove, and
+ * `tests/test_web_daemon.py` asserts the twin's argv contains no `python`, no `harness.py`
+ * and no `build.py` at all.
+ */
+function spawnDetached(webArgs, log) {
+  const cmd = [process.execPath, join(ROOT, 'bin', 'geneseed-cli.mjs'), 'web', ...webArgs];
+  let out = 'ignore';
+  try {
+    out = openSync(log, 'a');       // `open(log, "ab")`; DEVNULL on OSError, as there
+  } catch { /* the reference falls back to DEVNULL on exactly this failure */ }
+  const child = spawn(cmd[0], cmd.slice(1), {
+    // `DETACHED_PROCESS | NEW_PROCESS_GROUP` on Windows and `start_new_session` on POSIX
+    // are both `detached` here; `unref()` is what lets the launcher's event loop end while
+    // the child runs on, which is `Popen`'s default and Node's is not.
+    detached: true, windowsHide: true, stdio: ['ignore', out, out],
+  });
+  child.unref();
+}
+
+/** The `web` argv the launcher passes. Pure, and compared against `_daemon_args` by the
+ *  corpus: the binary differs per side by design, the FLAGS may not. */
+export function daemonArgs(port, theme) {
+  const args = ['--daemon-internal', '--port', String(port), '--no-browser'];
+  if (pyTruthy(theme)) args.push('--theme', theme);
+  return args;
+}
+
+/** The same for the out-of-band restart — `_restart_args`. */
+export function restartArgs(theme) {
+  const args = ['restart', '--no-browser'];
+  if (pyTruthy(theme)) args.push('--theme', theme);
+  return args;
+}
+
+/** `request_restart` — a detached `web restart`, so the new server survives the exit of
+ *  the very process asking for it. Called by POST `/api/restart`. */
+export function requestRestart(theme) {
+  const target = webState(theme).target;
+  spawnDetached(restartArgs(theme), join(target, '.geneseed-web.log'));
+}
+
+/**
+ * `webbrowser.open(url)`, which has no Node equivalent at all — there is no stdlib module
+ * that knows what a desktop's default browser is.
+ *
+ * IT IS A MACHINE PRIMITIVE, the same class as `taskkill` and `java -version` and the
+ * opposite of a passthrough: it asks the OS to open a URL and hands it nothing of this
+ * program's work. Declining it instead would have been a silent regression in the one verb
+ * whose job is to put a UI on screen — `geneseed web` would print an address and do
+ * nothing, and no cell would say so because every cell passes `--no-browser`.
+ *
+ * The reference swallows every failure here (`contextlib.suppress(Exception)` in two call
+ * sites and a bare `except` in the third), and so does this.
+ */
+function openUrl(url) {
+  const [file, args, extra] = process.platform === 'win32'
+    // `start` is a cmd BUILTIN, not a program. The empty `""` is its title argument —
+    // without it `start "http://…"` treats the quoted URL as the window title and opens
+    // nothing. Verbatim args because Node would otherwise re-quote the whole string.
+    ? [process.env.COMSPEC || 'cmd.exe', ['/d', '/s', '/c', `start "" "${url}"`],
+      { windowsVerbatimArguments: true }]
+    : (process.platform === 'darwin' ? ['open', [url], {}] : ['xdg-open', [url], {}]);
+  try {
+    spawn(file, args, { detached: true, stdio: 'ignore', windowsHide: true, ...extra }).unref();
+  } catch { /* the reference suppresses every exception from this call too */ }
+}
+
+export async function startDaemon(theme, port, openBrowser = true) {
+  const { target } = webState(theme);
+  const st = await liveDaemon(target);
+  if (st) {
+    pyPrint(`[web] already running on ${st.url}  (pid ${none(st.pid)})\n`);
+    if (openBrowser) openUrl(st.url);
+    return 0;
+  }
+  clearDaemon(target);
+  const log = join(target, '.geneseed-web.log');
+  spawnDetached(daemonArgs(port, theme), log);
+  // `for _ in range(60): ... time.sleep(0.2)` — twelve seconds for the child to bind and
+  // write its record. The probe timeout is the reference's shorter 0.5 here, not 1.5.
+  for (let i = 0; i < 60; i += 1) {
+    const rec = readDaemon(target);
+    // eslint-disable-next-line no-await-in-loop
+    if (rec && pyTruthy(rec.url) && await probe(rec.url, 0.5)) {
+      pyPrint(`[web] Geneseed UI on ${rec.url}  (theme: ${none(rec.theme)}, `
+        + `pid ${none(rec.pid)})\n`);
+      pyPrint('[web] running in the background — `geneseed web stop` to stop it.\n');
+      if (openBrowser) openUrl(rec.url);
+      return 0;
+    }
+    // eslint-disable-next-line no-await-in-loop
+    await sleep(200);
+  }
+  pyPrint('[web] daemon did not come up in time — check the log:\n');
+  pyPrint(`      ${log}\n`);
+  return 1;
+}
+
+export async function stopDaemon(theme = null) {
+  const { target } = webState(theme);
+  const st = readDaemon(target);
+  if (!pyTruthy(st) || !pyTruthy(st.url)) {
+    // NO `clearDaemon` HERE, and the asymmetry with `liveDaemon` is the reference's. A
+    // record that names no url is left exactly where it is; `web status` on the same file
+    // deletes it. Both directions are cells, because a port that unified them would delete
+    // a file the reference keeps and stdout would look identical.
+    pyPrint('[web] no running server recorded.\n');
+    return 0;
+  }
+  if (await postShutdown(st.url, pyTruthy(st.token) ? st.token : '')) {
+    clearDaemon(target);
+    pyPrint(`[web] stopped (pid ${none(st.pid)}).\n`);
+    return 0;
+  }
+  clearDaemon(target);
+  pyPrint('[web] no live server (cleared a stale record).\n');
+  return 0;
+}
+
+export async function statusDaemon(theme = null) {
+  const { target } = webState(theme);
+  const st = await liveDaemon(target);
+  if (st) {
+    pyPrint(`[web] running on ${st.url}  (theme: ${none(st.theme)}, pid ${none(st.pid)})\n`);
+    return 0;
+  }
+  // EXIT 1, which is the verb's whole contract for a script. The snapshot's `<exit>`
+  // column is what gates it.
+  pyPrint('[web] not running.\n');
+  return 1;
+}
+
+export async function restartDaemon(theme = null, port = 4747, openBrowser = true,
+  onlyIfRunning = false) {
+  const { target } = webState(theme);
+  const st = readDaemon(target);
+  const live = (await liveDaemon(target)) !== null;
+  if (onlyIfRunning && !live) return 0;
+  const usePort = (st && pyTruthy(st.port) ? st.port : null) || port;
+  let open = openBrowser;
+  if (live) {
+    // A live daemon means a tab is already open on this (preserved) port and will
+    // reconnect on its own — the reference's `ponytail:` note, kept.
+    open = false;
+    await stopDaemon(theme);
+    for (let i = 0; i < 50; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      if (!await probe(`http://127.0.0.1:${usePort}`, 0.2)) break;
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(100);
+    }
+  }
+  return startDaemon(theme, usePort, open);
+}
+
 // ---- serve -----------------------------------------------------------------
 
 /**
@@ -611,6 +894,12 @@ export function clearDaemon(target) {
  * verb because it decides whether a server starts at all, and because it is the second
  * interactive prompt in this port — `interactive` is an ARGUMENT, which is what makes it
  * gateable by a corpus rather than only by a cell.
+ *
+ * P6h GAVE IT BOTH KINDS OF GATE AND FOUND THE CLAIM ABOVE HAD NEVER BEEN PAID. It had a
+ * Python unit test (`tests/test_web.py`) and nothing cross-implementation until now: the
+ * corpus in `tests/test_pure_function_parity.py` covers all five answers, and two
+ * `harness_golden` cells cover the two arms that TERMINATE — which are also the only two
+ * that let a `web` cell exist at all, since every other arm of `serve` binds a socket.
  */
 export function buildPlan(dist, webDir, npm, interactive) {
   if (isFile(join(dist, 'index.html'))) return 'serve';
@@ -620,8 +909,80 @@ export function buildPlan(dist, webDir, npm, interactive) {
   return 'ask';
 }
 
-export function serve({ theme = null, port = 4747, daemon = false } = {}) {
+/**
+ * `npm install` then `npm run build` in `web/`, streams inherited — the third spawn this
+ * module declares, and the one NO test reaches.
+ *
+ * THAT IS A DECLARED PARTITION, not an omission. `web/dist/index.html` is TRACKED (asserted
+ * by `tests/test_web_daemon.py` against `git ls-files`, so the claim cannot rot), which
+ * means `buildPlan` answers `serve` in every checkout a cell can build and the `ask` arm is
+ * reachable only from a partial checkout on an interactive terminal. There is no npm
+ * library to call instead; a Node twin that reimplemented `npm install` is not a thing that
+ * exists.
+ *
+ * `shell` ON WINDOWS, and it is required rather than stylistic: `pyWhich('npm')` resolves
+ * to `npm.CMD` through PATHEXT, and Node refuses to `spawn` a `.cmd` directly. The path is
+ * quoted because Node wraps the whole command in one more pair and `cmd /s` strips only
+ * the outermost — `C:\Program Files\…` would otherwise split at the space.
+ */
+export function npmBuild(npm, webDir) {
+  const win = process.platform === 'win32';
+  for (const step of [['install'], ['run', 'build']]) {
+    pyPrint(`[web] npm ${step.join(' ')} ...\n`);
+    const r = spawnSync(win ? `"${npm}"` : npm, step, {
+      cwd: webDir, stdio: 'inherit', shell: win,
+    });
+    const code = r.status === null || r.status === undefined ? 1 : r.status;
+    if (code) {
+      pyPrint(`[web] npm ${step.join(' ')} failed (exit ${code}).\n`);
+      return code;
+    }
+  }
+  return 0;
+}
+
+export async function serve({ theme = null, port = 4747, openBrowser = true,
+  daemon = false } = {}) {
   const dist = join(ROOT, 'web', 'dist');
+  const webDir = join(ROOT, 'web');
+  const manual = '        cd web && npm install && npm run build';
+  // `sys.stdin.isatty()`. `process.stdin.isTTY` is `undefined` rather than false on a pipe,
+  // which is the same trap `cmdSetup` documents.
+  const plan = buildPlan(dist, webDir, pyWhich('npm'), Boolean(process.stdin.isTTY));
+  if (plan === 'no-source') {
+    pyPrint(`[web] web/ sources are missing from ${ROOT}.\n`);
+    pyPrint('      Run `geneseed upgrade` to fetch them (twice on installs whose\n');
+    pyPrint('      updater predates web/ in the sync list).\n');
+    return 1;
+  }
+  if (plan === 'no-npm') {
+    pyPrint('[web] web/dist is missing and npm was not found. Install Node.js,\n');
+    pyPrint('      then build the UI:\n');
+    pyPrint(`${manual}\n`);
+    return 1;
+  }
+  if (plan === 'no-tty') {
+    pyPrint('[web] web/dist is missing. Build the UI first:\n');
+    pyPrint(`${manual}\n`);
+    return 1;
+  }
+  if (plan === 'ask') {
+    // `except (EOFError, KeyboardInterrupt): answer = "n"`. EOF is the arm that matters and
+    // it is the one a naive port gets backwards: `input()` RAISES at EOF, so the reference
+    // reads it as "no", while a read that returned `''` would fall into the empty-answer
+    // arm and start an npm install nobody asked for. `promptLine` returns null for exactly
+    // that case — see its docblock in js/setup.mjs.
+    const line = promptLine('[web] UI not built — run npm install && npm run build now? [Y/n] ');
+    const answer = line === null ? 'n' : line;
+    if (['', 'y', 'yes'].includes(answer.trim().toLowerCase())) {
+      const code = npmBuild(pyWhich('npm'), webDir);
+      if (code) return code;
+    } else {
+      pyPrint('[web] skipped. Build the UI manually:\n');
+      pyPrint(`${manual}\n`);
+      return 0;
+    }
+  }
   const state = webState(theme);
   if (!existsSync(join(state.target, GLOBAL_MANIFEST))) {
     pyPrint(`[web] no deployed harness at ${state.target}.\n`);
@@ -652,6 +1013,16 @@ export function serve({ theme = null, port = 4747, daemon = false } = {}) {
       }
       pyPrint(`[web] Geneseed UI on ${url}  (theme: ${state.theme})\n`);
       pyPrint(daemon ? '[web] daemon ready.\n' : '[web] Ctrl-C to stop.\n');
+      if (openBrowser) openUrl(url);
+      // `except KeyboardInterrupt: print("\n[web] stopped.")` around `serve_forever`. Node
+      // kills on SIGINT by default, which would skip the message AND the record cleanup in
+      // the `finally` below — a foreground `--daemon-internal` server stopped with Ctrl-C
+      // would leave a record pointing at a dead port.
+      process.on('SIGINT', () => {
+        pyPrint('\n[web] stopped.\n');
+        srv.close();
+        srv.closeAllConnections();
+      });
       srv.on('close', () => {
         if (daemon) {
           const st = readDaemon(state.target);
@@ -663,23 +1034,49 @@ export function serve({ theme = null, port = 4747, daemon = false } = {}) {
   });
 }
 
+/**
+ * `cmd_web` — the verb `bin/geneseed-cli.mjs` dispatches to, and the reason this module is
+ * on the CLI's import graph at all (which is what moved `js/web/jobs.mjs`'s
+ * `_ALLOWED_SPAWNS` row from `entry: "web"` to `entry: "cli"`).
+ *
+ * The reference's `cmd_web` does `import web` INSIDE the function; the ESM equivalent would
+ * be a dynamic `import()`, and it is deliberately NOT used — a static import is what lets
+ * `test_the_cli_reaches_child_process_only_where_it_is_declared` walk the CLI's graph and
+ * find the two spawning modules under `js/web/`. The cost is parsing the web tree on every
+ * CLI invocation; `bin/geneseed-cli.mjs` is user-invoked and carries no latency budget (the
+ * hook entry, which does, is a different binary for exactly this reason).
+ */
+export async function cmdWeb(args) {
+  // `--port` is `type=int` on the reference, and `bin/geneseed-cli.mjs`'s `ints` column
+  // refuses a non-integer before this runs — so `pyInt` cannot be null here.
+  const port = args.port === null ? 4747 : pyInt(args.port);
+  const openBrowser = !args.noBrowser;
+  if (args.action === 'start') return startDaemon(args.theme, port, openBrowser);
+  if (args.action === 'stop') return stopDaemon(args.theme);
+  if (args.action === 'restart') return restartDaemon(args.theme, port, openBrowser);
+  if (args.action === 'status') return statusDaemon(args.theme);
+  return serve({ theme: args.theme, port, openBrowser, daemon: args.daemonInternal });
+}
+
 // ---- entry -----------------------------------------------------------------
 //
-// A module entry, not a `bin/` binary and not a `geneseed-cli.mjs` verb. Wiring `web`
-// into the CLI's verb table is P6h's, and doing it early would fire
-// `test_the_matrix_covers_every_verb_it_claims` — which demands a cell group per verb in
-// `tests/harness_golden.py`, where a server cell does not belong. The acceptance harness
-// takes both sides' commands as arguments, so it needs no binary here.
+// KEPT AFTER P6h, and it is not a duplicate of the verb above. `tests/web_golden.py` drove
+// this module directly for all of P6a–P6g, and its 95 cells are what license the MOVE: the
+// same matrix now runs against `node bin/geneseed-cli.mjs web` as well, and a byte gate
+// that passed against one command proves nothing about the other until it is re-aimed. The
+// module entry is also what a debugging session reaches for when the CLI's argument layer
+// is the thing under suspicion.
 
 async function main(argv) {
   let theme = null;
   let port = 4747;
   let daemon = false;
+  let openBrowser = true;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--theme') { theme = argv[i + 1]; i += 1; } else if (argv[i] === '--port') { port = pyInt(String(argv[i + 1])) ?? 4747; i += 1; } else if (argv[i] === '--daemon-internal') daemon = true;
-    else if (argv[i] === '--no-browser') { /* the only supported mode until P6h */ }
+    else if (argv[i] === '--no-browser') openBrowser = false;
   }
-  return serve({ theme, port, daemon });
+  return serve({ theme, port, openBrowser, daemon });
 }
 
 if (process.argv[1] && pyResolve(process.argv[1]) === pyResolve(fileURLToPath(import.meta.url))) {

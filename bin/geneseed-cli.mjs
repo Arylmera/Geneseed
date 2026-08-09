@@ -36,16 +36,23 @@
  *
  * THE VERB SET IS SMALL AND REFUSES THE REST BY NAME, exactly as the hook entry does.
  * `harness.py` has 24 subparsers (25 invocable names — `update` aliases `upgrade`); this
- * file carries one. `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two
+ * file carries twelve. `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two
  * tables from ever answering the same verb twice, since the shim bakes only one of them.
+ *
+ * P6h MADE THE DISPATCH ASYNCHRONOUS and put `js/web/` on this entry's import graph. Both
+ * are noted where they happen (`main`'s `await`, and the `web` row below); the consequence
+ * for the file as a whole is that its transitive imports now reach two modules that spawn,
+ * which `_ALLOWED_SPAWNS` in `tests/test_hook_cli_parity.py` declares argv by argv.
  */
 import { cmdDiff } from '../js/diff.mjs';
 import { cmdDoctor } from '../js/doctor.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
+import { pyInt } from '../js/lib/pyfs.mjs';
 import { cmdSetup } from '../js/setup.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
 import { cmdUninstall } from '../js/uninstall.mjs';
+import { cmdWeb } from '../js/web/server.mjs';
 
 const VERBS = {
   exclude: {
@@ -135,6 +142,26 @@ const VERBS = {
     // so the only argument surface it has is the absence of one.
     positionals: [],
   },
+  web: {
+    fn: cmdWeb,
+    // The first verb with an OPTIONAL positional carrying `choices` — `nargs="?"` with a
+    // `choices` list, so an absent action is the foreground server and a wrong one is
+    // refused. `parse` already had both halves; this is the first row that uses them
+    // together, and the order matters: an optional positional that skipped its `choices`
+    // check would make `geneseed web stpo` start a server instead of refusing.
+    positionals: [{ name: 'action', optional: true,
+      choices: ['start', 'stop', 'restart', 'status'] }],
+    options: { '--theme': 'theme', '--port': 'port' },
+    // argparse dests: `no_browser` and `daemon_internal`, camelCase here so the two tables
+    // read against each other. `--daemon-internal` is `help=argparse.SUPPRESS` on the
+    // reference — hidden, not absent, and `tests/web_golden.py` passes it 95 times a run.
+    flags: { '--no-browser': 'noBrowser', '--daemon-internal': 'daemonInternal' },
+    // `type=int`. The FIRST typed option in this table, and it is here rather than skipped
+    // because the failure it prevents is silent: `pyInt('abc')` is null, and a `?? 4747`
+    // fallback would bind the default port while the operator believes they asked for
+    // another. argparse refuses, so this refuses.
+    ints: ['--port'],
+  },
 };
 
 function die(code, msg) {
@@ -203,6 +230,12 @@ function parse(spec, argv) {
     if (dest === undefined) { rest.push(tok); continue; }
     const value = eq > 0 ? tok.slice(eq + 1) : argv[i += 1];
     if (value === undefined) return { error: `argument ${flag}: expected one argument` };
+    // `type=int`. argparse's own wording, minus the usage block it prints around it — the
+    // same rule the rest of this parser follows. The VALUE stays a string in `args`; the
+    // command converts, and this is what guarantees the conversion cannot fail there.
+    if ((spec.ints ?? []).includes(flag) && pyInt(value) === null) {
+      return { error: `argument ${flag}: invalid int value: '${value}'` };
+    }
     args[dest] = value;
     seen.add(flag);
   }
@@ -236,7 +269,7 @@ function parse(spec, argv) {
   return { args };
 }
 
-function main(argv) {
+async function main(argv) {
   // `geneseed exclude list | head` closes stdout early. Python exits quietly through
   // BrokenPipeError; the Node equivalent is an EPIPE that would otherwise be an unhandled
   // 'error' event and a stack trace.
@@ -257,7 +290,12 @@ function main(argv) {
   const parsed = parse(spec, argv.slice(1));
   if (parsed.error) return die(2, parsed.error);
   try {
-    return spec.fn(parsed.args);
+    // `await`, since P6h. `cmdWeb` is the first verb whose body is asynchronous — Node has
+    // no synchronous HTTP client, so `_probe` and `_post_shutdown` cannot be — and without
+    // it `process.exitCode` would be assigned a PENDING PROMISE, which Node coerces to 0
+    // and prints nothing about. `web status` would then report "not running" and exit 0.
+    // Awaiting a number is a no-op for the ten synchronous verbs.
+    return await spec.fn(parsed.args);
   } catch (e) {
     // `e.exitCode` is the generator's existing marker for a DELIBERATE refusal that has
     // already explained itself on stderr — `js/emit.mjs:1289` reads the same flag, and it is
@@ -272,4 +310,4 @@ function main(argv) {
   }
 }
 
-process.exitCode = main(process.argv.slice(2));
+process.exitCode = await main(process.argv.slice(2));

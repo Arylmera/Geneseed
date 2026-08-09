@@ -780,6 +780,50 @@ def _which_cases(tmp: Path) -> list[dict]:
     )]
 
 
+def _web_daemon_cases(tmp: Path) -> list[dict]:
+    """P6h's three pure functions, and each is here for a reason a cell cannot cover.
+
+    `_build_plan` decides whether `serve()` binds a socket at all, so three of its five
+    answers can only be reached by a run that then blocks forever — `serve` and `ask` — or by
+    a machine without npm. Two of them are `harness_golden` cells (`no-source`, and whichever
+    of `no-npm`/`no-tty` this machine produces); all five are here.
+
+    `_daemon_args` and `_restart_args` are the argv the daemon is LAUNCHED with. The binary
+    differs per side by design — each re-executes itself — but the flags may not, and nothing
+    else can compare them: no cell may start a daemon (see the `web` group's banner in
+    `tests/harness_golden.py`), so a twin that dropped `--daemon-internal` would start a
+    server that never writes a record, and every observation of it would be the same
+    twelve-second timeout the reference produces when the child genuinely fails.
+    """
+    cases = []
+    built, bare, nosrc = tmp / "web-built", tmp / "web-bare", tmp / "web-nosrc"
+    for d in (built, bare, nosrc):
+        (d / "dist").mkdir(parents=True, exist_ok=True)
+    (built / "dist" / "index.html").write_text("<html>", encoding="utf-8")
+    for d in (built, bare):
+        (d / "package.json").write_text("{}", encoding="utf-8")
+    # (dist, webDir, npm, interactive) -> the five answers, in the order the reference tests
+    # them. `serve` first, because a built dist short-circuits every question below it.
+    for dist, web_dir, npm, tty in (
+        (built / "dist", built, "npm", True),      # serve
+        (built / "dist", built, None, False),      # serve — dist wins over both
+        (nosrc / "dist", nosrc, "npm", True),      # no-source
+        (bare / "dist", bare, None, True),         # no-npm
+        (bare / "dist", bare, "", True),           # no-npm — `not npm` is falsy, not None
+        (bare / "dist", bare, "npm", False),       # no-tty
+        (bare / "dist", bare, "npm", True),        # ask
+    ):
+        cases.append({"fn": "build_plan", "args": [str(dist), str(web_dir), npm, tty]})
+    for port, theme in ((4747, None), (4747, "imperial"), (0, None), (65535, "néutral"),
+                        # An EMPTY theme is falsy in both languages, so the flag is dropped
+                        # rather than passed empty — which would reach the child as
+                        # `--theme` with the next flag as its value.
+                        (4747, "")):
+        cases.append({"fn": "daemon_args", "args": [port, theme]})
+        cases.append({"fn": "restart_args", "args": [theme]})
+    return cases
+
+
 def _run(cmd: list[str], cases: list[dict], ascii_mode: bool) -> list:
     with tempfile.TemporaryDirectory() as td:
         job = Path(td) / "job.json"
@@ -870,6 +914,17 @@ def _wizard_jobs() -> list[tuple[str, list[dict], str]]:
         ("ask-unterminated", [{"fn": "ask", "args": ["Last", "d"]},
                               {"fn": "ask", "args": ["Then", "d"]}],
          "no-newline"),
+        # P6h's reader, and the ONE thing it does that `ask` above cannot: EOF told apart
+        # from an empty line. `_web_server.serve`'s npm prompt accepts `""` as YES, so a
+        # port that returned the empty string at EOF would start an `npm install` nobody
+        # asked for; the reference's `except EOFError` answers "n". Three reads: an answer,
+        # an EMPTY LINE (which must NOT be null), and then EOF (which must).
+        ("prompt-line", [
+            {"fn": "prompt_line",
+             "args": ["[web] UI not built — run npm install && npm run build now? [Y/n] "]},
+            {"fn": "prompt_line", "args": ["empty> "]},
+            {"fn": "prompt_line", "args": ["at-eof> "]},
+        ], "y\n\n"),
         ("confirm", [{"fn": "confirm", "args": ["Yes default", True]},
                      {"fn": "confirm", "args": ["No default", False]},
                      {"fn": "confirm", "args": ["Yes default", True]},
@@ -1122,7 +1177,8 @@ class ThePureFunctionsAgreeOnEveryInputNoCellCanBuild(unittest.TestCase):
     def setUpClass(cls):
         cls._tmp = tempfile.TemporaryDirectory()
         tmp = Path(cls._tmp.name)
-        cls.cases = _cases() + _manifest_cases(tmp) + _which_cases(tmp)
+        cls.cases = (_cases() + _manifest_cases(tmp) + _which_cases(tmp)
+                     + _web_daemon_cases(tmp))
         cls.out = {}
         for ascii_mode in (False, True):
             cls.out[ascii_mode] = (
@@ -1170,6 +1226,35 @@ class ThePureFunctionsAgreeOnEveryInputNoCellCanBuild(unittest.TestCase):
         self.assertIn("* Geneseed - status", ascii_panel[0])
         self.assertNotIn("◆", "".join(ascii_panel))
         self.assertEqual(self.out[True][1][0], ascii_panel)
+
+    def test_the_web_daemon_corpus_reaches_every_answer_it_claims(self):
+        """The positive control for P6h's three, and it is the shape a green mutation keeps
+        asking for: an equality between two functions that both returned one constant would
+        satisfy `test_every_case_agrees_in_both_glyph_modes` forever.
+
+        `_build_plan` has five answers and only two are reachable from a cell, so naming all
+        five here is what makes the corpus the gate for the other three. The argv pair is
+        checked for the FLAG that decides everything — a daemon started without
+        `--daemon-internal` writes no record, and `start` then reports a twelve-second
+        timeout for a server that is in fact running.
+        """
+        ref, new = self.out[False]
+        pick = lambda fn: [a for c, a in zip(self.cases, ref) if c["fn"] == fn]  # noqa: E731
+        plans = pick("build_plan")
+        self.assertEqual(set(plans), {"serve", "no-source", "no-npm", "no-tty", "ask"},
+                         "the build-plan corpus does not reach all five answers, so it "
+                         "cannot tell _build_plan from a constant")
+        self.assertEqual(plans, [b for c, b in zip(self.cases, new)
+                                 if c["fn"] == "build_plan"])
+        daemon = pick("daemon_args")
+        self.assertIn(["--daemon-internal", "--port", "4747", "--no-browser"], daemon)
+        self.assertIn(["--daemon-internal", "--port", "4747", "--no-browser",
+                       "--theme", "imperial"], daemon)
+        self.assertIn(["restart", "--no-browser"], pick("restart_args"))
+        # The empty theme reaches BOTH builders and is dropped by both — the case that would
+        # otherwise send `--theme` with the next token as its value.
+        self.assertEqual(daemon.count(["--daemon-internal", "--port", "4747",
+                                       "--no-browser"]), 2)
 
     def test_the_fence_corpus_actually_varies_the_fence(self):
         """The positive control for `fence_for`, and it needs one for a specific reason.

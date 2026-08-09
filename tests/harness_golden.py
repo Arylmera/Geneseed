@@ -179,7 +179,7 @@ def cells() -> list[dict]:
             + _exclude_cells() + _status_cells() + _version_cells()
             + _build_cells() + _prompt_cells() + _theme_cells()
             + _diff_cells() + _rebuild_all_cells() + _doctor_cells()
-            + _uninstall_cells() + _setup_cells())
+            + _uninstall_cells() + _setup_cells() + _web_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -2606,6 +2606,115 @@ def _setup_cells() -> list[dict]:
            expect_absent=["pirate", "Install mode", "Footprint"],
            expect_files=[f"{_OC}/.geneseed-theme", f"{_OC}/AGENT.md"],
            expect_silent=True),
+    ]
+
+
+# --------------------------------------------------------------------------------------
+# web  —  the verb whose whole job is to START A SERVER, gated on the parts that DO NOT
+# --------------------------------------------------------------------------------------
+#
+# WHAT BELONGS HERE, AND THE ANSWER IS NARROWER THAN THE VERB. `geneseed web` has five
+# shapes: the foreground server, and `start|stop|restart|status`. Three of them end with a
+# process still running — the foreground server never returns, `start` leaves a DETACHED
+# daemon behind, and `restart` with nothing running is `start`. This harness runs a cell
+# with `subprocess.run`, snapshots the sandbox and then leaves a
+# `tempfile.TemporaryDirectory` context.
+#
+# SO THE TEARDOWN IS THE CONSTRAINT, AND IT WAS READ BEFORE THESE CELLS WERE WRITTEN.
+# `run_cell` has no `finally` for a process: `TemporaryDirectory.__exit__` is `shutil.rmtree`
+# with `ignore_cleanup_errors=False`, so on Windows a surviving daemon holding
+# `<target>/.geneseed-web.log` open makes the CLEANUP RAISE — and that exception replaces
+# whatever the cell was about to report, exactly the failure `web_golden._stop` documents
+# for itself. A `start` cell would therefore have to be a two-step start/stop, and its
+# second step failing for ANY reason (a slow bind, a port race, a child that refused) would
+# both hide the finding and orphan a daemon serving the developer's own checkout on this
+# machine. `web_golden.py` already runs a REAL server for every one of its 95 cells, with a
+# `finally: _stop(...)` that never raises and a `--port 0` bind — so the server lifecycle is
+# gated where the harness for it exists, and this group takes the actions that TERMINATE.
+#
+# WHICH IS NOT A GAP, BECAUSE OF WHAT THOSE ACTIONS CONTAIN. `status` and `stop` are the two
+# consumers of `_probe`, `read_daemon`, `_live_daemon` and `clear_daemon` — the whole
+# stale-record protocol, which is where every daemon-control bug this verb has ever had
+# lived. And a `checkout` fixture reaches `_build_plan`'s two refusal arms, which run
+# BEFORE any socket is bound and so terminate on their own.
+#
+# THE STALE RECORD POINTS AT PORT 1 ON PURPOSE. `_probe` and `_post_shutdown` both open a
+# real TCP connection to whatever the record names, so a cell that named a plausible port
+# could reach a server that is not this test's — the developer's own daemon lives on 4747.
+# Port 1 refuses instantly on loopback and is not a port anything binds.
+
+_DEAD_URL = "http://127.0.0.1:1"
+_STALE_RECORD = ('{"pid": 1, "port": 1, "url": "' + _DEAD_URL + '", "token": "seeded", '
+                 '"theme": "neutral", "started": 0}')
+_RECORD = f"{_OC}/.geneseed-web.json"
+
+
+def _web_cells() -> list[dict]:
+    def wb(name, argv, world=None, **kw):
+        return dict(id=f"web/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    steps=[{"argv": argv, "cwd": "repo"}], **kw)
+
+    return [
+        wb("status-with-no-daemon-recorded", ["web", "status"],
+           # `status_daemon` returns 1 here, which is the whole point of the verb for a
+           # script — and the exit code is a snapshot column, so a port that printed the
+           # right line and returned 0 fails this cell rather than passing it.
+           expect=["[web] not running."],
+           expect_absent=["running on"]),
+        wb("stop-with-no-daemon-recorded", ["web", "stop"],
+           # The OTHER exit code: nothing to stop is a SUCCESS, so `geneseed web stop` in a
+           # teardown script does not fail a pipeline.
+           expect=["[web] no running server recorded."],
+           expect_absent=["cleared a stale record"]),
+        wb("status-clears-a-record-nothing-answers", ["web", "status"],
+           {_RECORD: _STALE_RECORD},
+           # `_live_daemon`: probe first, and DELETE the record when the probe misses. The
+           # deletion is the assertion — a port that reported "not running" off the failed
+           # probe and left the file would look identical on stdout and would leave every
+           # later `status` re-probing a dead URL forever.
+           expect=["[web] not running."],
+           expect_absent=[_DEAD_URL],
+           expect_absent_files=[_RECORD]),
+        wb("stop-clears-a-record-nothing-answers", ["web", "stop"],
+           {_RECORD: _STALE_RECORD},
+           # `_post_shutdown` fails, and the SECOND `clear_daemon` — the one after the POST
+           # — is what runs. Different line, different code path, same file gone.
+           expect=["[web] no live server (cleared a stale record)."],
+           expect_absent=["[web] stopped", "no running server recorded"],
+           expect_absent_files=[_RECORD]),
+        wb("stop-keeps-a-record-that-names-no-url", ["web", "stop"],
+           {_RECORD: '{"pid": 1, "theme": "neutral"}'},
+           # `if not st or not st.get("url")` returns BEFORE any clear, so the malformed
+           # record SURVIVES — and that asymmetry with `status` below it is the reason both
+           # cells exist. A port that folded the two branches together would delete a record
+           # the reference keeps, which no comparison of stdout alone would show.
+           expect=["[web] no running server recorded."],
+           expect_files=[_RECORD]),
+        wb("status-drops-a-record-that-names-no-url", ["web", "status"],
+           {_RECORD: '{"pid": 1, "theme": "neutral"}'},
+           # `_live_daemon`'s second arm: truthy record, no url, so the probe is never
+           # attempted and `if st: clear_daemon(target)` fires. The same input as the cell
+           # above and the opposite effect on the file.
+           expect=["[web] not running."],
+           expect_absent_files=[_RECORD]),
+        wb("a-checkout-with-no-web-sources-refuses", ["web"],
+           # `_build_plan`'s FIRST arm, and the only one that terminates without depending on
+           # the machine: no `web/package.json` means the sources never arrived, whatever npm
+           # or a tty would have said. Reached before `WebState`, before any bind — which is
+           # what makes a foreground `web` cell possible at all.
+           checkout={"web/package.json": None, "web/dist/index.html": None},
+           expect=["[web] web/ sources are missing from", "geneseed upgrade"],
+           expect_absent=["Geneseed UI on"]),
+        wb("a-checkout-with-no-dist-refuses-and-names-the-manual-build", ["web"],
+           # dist gone, sources present: `no-npm` or `no-tty` depending on whether npm is on
+           # PATH, and the reference is asserted on what BOTH arms say — the arm itself is
+           # what the byte comparison gates, and it is also the one place this port compares
+           # `shutil.which("npm")` against `pyWhich('npm')` on a name that only resolves
+           # through PATHEXT on Windows.
+           checkout={"web/dist/index.html": None},
+           expect=["[web] web/dist is missing", "cd web && npm install && npm run build"],
+           expect_absent=["Geneseed UI on", "web/ sources are missing"]),
     ]
 
 

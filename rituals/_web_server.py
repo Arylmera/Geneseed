@@ -444,16 +444,35 @@ def _spawn_detached(web_args: "list[str]", log: Path) -> None:
     subprocess.Popen(cmd, **kwargs)
 
 
+def _daemon_args(port: int, theme: "str | None") -> "list[str]":
+    """The `web` argv `start_daemon` hands `_spawn_detached`. Split out as a pure
+    function because it is the one part of the daemon launch a test can compare
+    across implementations: the process it starts is a different binary on each
+    side, but the FLAGS it is started with must agree exactly — drop
+    `--daemon-internal` and no record is ever written, so `start` waits twelve
+    seconds and reports a daemon that is in fact running and unrecorded."""
+    args = ["--daemon-internal", "--port", str(port), "--no-browser"]
+    if theme:
+        args += ["--theme", theme]
+    return args
+
+
+def _restart_args(theme: "str | None") -> "list[str]":
+    """The same, for the out-of-band restart. `--no-browser` because a restart
+    always has a tab open on the port it preserves."""
+    args = ["restart", "--no-browser"]
+    if theme:
+        args += ["--theme", theme]
+    return args
+
+
 def request_restart(theme: "str | None") -> None:
     """Spawn a detached `web restart` that will stop this server and start a fresh
     one on the same port. Detached so it outlives the shutdown of the very process
     that called it — used by the in-page Restart button."""
     target = WebState(theme=theme).target
     log = target / ".geneseed-web.log"
-    args = ["restart", "--no-browser"]
-    if theme:
-        args += ["--theme", theme]
-    _spawn_detached(args, log)
+    _spawn_detached(_restart_args(theme), log)
 
 
 def start_daemon(theme: "str | None", port: int, open_browser: bool = True) -> int:
@@ -469,10 +488,7 @@ def start_daemon(theme: "str | None", port: int, open_browser: bool = True) -> i
         return 0
     clear_daemon(target)
     log = target / ".geneseed-web.log"
-    cmd = ["--daemon-internal", "--port", str(port), "--no-browser"]
-    if theme:
-        cmd += ["--theme", theme]
-    _spawn_detached(cmd, log)
+    _spawn_detached(_daemon_args(port, theme), log)
     # Wait for the child to bind and write its state (pid/port/url).
     for _ in range(60):
         st = read_daemon(target)

@@ -94,6 +94,15 @@ def run(fn: str, args: list):
         if fn == "slice_section":
             return list(web._slice_section(args[0], args[1]))
         return web._strip_harness_blocks(args[0], args[1])
+    if fn in ("build_plan", "daemon_args", "restart_args"):
+        # `_web_server`'s pure halves, reached through the facade for the reason the docs
+        # ones below are: the cross-module splice is the same one the server runs under.
+        import web  # noqa: PLC0415
+        if fn == "build_plan":
+            return web._build_plan(Path(args[0]), Path(args[1]), args[2], args[3])
+        if fn == "daemon_args":
+            return web._daemon_args(args[0], args[1])
+        return web._restart_args(args[0])
     if fn == "py_unquote":
         return urllib.parse.unquote(args[0])
     if fn == "minute_stamp":
@@ -105,6 +114,16 @@ def run(fn: str, args: list):
         return harness._setup_summary_lines(*args)
     # ---- the stdin readers. Their PROMPTS are stdout, which is why the wizard job is
     # compared as raw bytes rather than through `json.loads` — see the test's docstring.
+    if fn == "prompt_line":
+        # `input(prompt)`, with EOF told apart from an empty line — which is the whole
+        # difference `_web_server.serve`'s npm prompt branches on. Spelled as two calls
+        # because `input(prompt)` writes the prompt and then reads, which is what the twin
+        # does explicitly; `input()` alone would leave the prompt out of the compared stdout.
+        sys.stdout.write(args[0])
+        try:
+            return input()
+        except EOFError:
+            return None
     if fn == "ask":
         return harness._ask(*args)
     if fn == "confirm":

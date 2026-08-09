@@ -23,10 +23,11 @@ import { installedDefaults } from '../../js/installs.mjs';
 import { installAgentEntryOf } from '../../js/uninstall.mjs';
 import {
   ask, askChoice, collectSetupLines, confirm, javaMajorOk, modeOptions, postureOptions,
-  setupSummaryLines, themeOptions,
+  promptLine, setupSummaryLines, themeOptions,
 } from '../../js/setup.mjs';
 import { unifiedDiff, pySplitLines } from '../../js/lib/pydiff.mjs';
 import { stampMinute } from '../../js/web/api.mjs';
+import { buildPlan, daemonArgs, restartArgs } from '../../js/web/server.mjs';
 import {
   sliceSection, slugifyHeading, stripHarnessBlocks,
 } from '../../js/web/docs.mjs';
@@ -66,6 +67,9 @@ const FNS = {
   // Seconds in, as `st_mtime` is; `stampMinute` takes ms, as `mtimeMs` is.
   minute_stamp: (a) => stampMinute(a[0] * 1000),
   py_unquote: (a) => pyUnquote(a[0]),
+  build_plan: (a) => buildPlan(a[0], a[1], a[2], a[3]),
+  daemon_args: (a) => daemonArgs(a[0], a[1]),
+  restart_args: (a) => restartArgs(a[0]),
   slugify_heading: (a) => slugifyHeading(a[0]),
   // `tuple` on the reference side, a two-element list over JSON.
   slice_section: (a) => sliceSection(a[0], a[1]),
@@ -74,6 +78,7 @@ const FNS = {
   // The stdin readers. Their PROMPTS are stdout, which is why the wizard job is compared as
   // raw bytes rather than through a JSON parse — see the test's docstring.
   ask: (a) => ask(...a),
+  prompt_line: (a) => promptLine(a[0]),
   confirm: (a) => confirm(...a),
   ask_choice: (a) => askChoice(a[0], a[1], a[2]),
   collect_setup_lines: () => collectSetupLines(),
