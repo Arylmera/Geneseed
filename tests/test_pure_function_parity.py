@@ -511,6 +511,12 @@ def _which_cases(tmp: Path) -> list[dict]:
         ("zzhit", f"{a.as_posix()}{sep}{b}"),
         (str(a / "zzhit.cmd"), both),           # a path, not a name: checked as given
         ("nosuch/zzhit", both),
+        # The CURRENT DIRECTORY is not searched — true since 3.12, and the first draft of
+        # `pyWhich` reproduced the older behaviour. `geneseed`/`geneseed.cmd` is a real file
+        # at the repo root and `_run` runs both probes with `cwd=ROOT`, so a port that
+        # prepended `.` answers with it here and the reference answers None. Without this
+        # case that mutation is GREEN: every other case names a directory the cwd is not.
+        ("geneseed", str(a)),
         ("node", os.environ.get("PATH", "")),   # the one call the verb actually makes
     )]
 

@@ -1602,7 +1602,9 @@ def _rebuild_all_cells() -> list[dict]:
 #      the specific messages carry the rest.
 #   3. `--theme neutral` ON ALMOST EVERY CELL. With no `--theme` and no `--all`, doctor sweeps
 #      every theme it can see — 14 builds plus 14×5 emits, ~30s per side per cell. The
-#      one-theme scoping is itself gated, by seeding an install instead (see the last two).
+#      one-theme scoping is gated by seeding an INSTALL instead of by dropping the flag
+#      (`no-theme-scopes-to-the-installed-one`), and `--all` itself is gated nowhere here:
+#      `_themes_to_check` is pure and its three arms live in the corpus.
 #
 # `--no-bundle` wherever the plant is in `src/`, and the reason is not speed: a source edit
 # makes a fresh render differ from the COMMITTED bundle, so `_rendered_problems` would report
@@ -1643,7 +1645,13 @@ def _laws_jsx_with_a_reflowed_row() -> str:
     long for the width gets reflowed with a magic trailing comma, and a gate that only
     understood the one-line form silently lost it — leaving that law's Principle unguarded
     while `format:check` and doctor demanded contradictory formatting of the same file.
-    Nothing in the tree is currently reflowed, so this is the only thing that exercises it.
+
+    ONE ROW IN THE REAL FILE IS ALREADY REFLOWED (rule 6 — measured: the spanning pattern
+    finds 37 rows and a one-line pattern finds 36), so `a-clean-checkout-is-clean` gates the
+    tolerance today and the mutation that narrows the regex turns BOTH cells red. This cell
+    stays anyway, and for the reason the fence corpus stays: the clean cell's coverage is a
+    fact about CONTENT that a reformatting commit can take away, and a gate that depends on
+    which laws happened to be verbose is a gate that silently stops gating.
     """
     out, n = re.subn(r"(?m)^(\s*)1:\s*\[\s*((['\"]).*?\3)\s*,\s*((['\"]).*?\5)\s*,?\s*\]\s*,?\s*$",
                      lambda m: (f"{m.group(1)}1: [\n{m.group(1)}  {m.group(2)},\n"
