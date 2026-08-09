@@ -1406,6 +1406,17 @@ def _diff_cells() -> list[dict]:
            ("diff", "--out"), world=deployed(["AGENT.md"]),
            expect=["[diff] improvements file written: <HOME>", "improvements-<STAMP>.md"],
            expect_files=[f"{_OC}/improvements/improvements-<STAMP>.md"]),
+        df("a-bare---out-does-not-eat-the-next-flag", ("diff", "--out", "--full"),
+           # argparse consumes a token for a `nargs="?"` only if it does not LOOK like an
+           # option, so this is a bare `--out` followed by `--full` and not a report named
+           # `--full`. Added because the mutation that drops that guard was GREEN across
+           # every other cell here: `--out` is never followed by a flag in any of them, and
+           # `--out --full` is the only shape that can tell the two readings apart.
+           world=deployed(["AGENT.md"]),
+           expect=["improvements file written: <HOME>", "improvements-<STAMP>.md",
+                   "--- AGENT.md (source -> deployed)"],
+           expect_absent=["written: --full"],
+           expect_files=[f"{_OC}/improvements/improvements-<STAMP>.md"]),
         df("--out-and---full-together", ("diff", "--out", "rep.md", "--full"),
            world=deployed(["AGENT.md"]),
            # `--out` suppresses the hint AND `--full` still prints, which is the one
@@ -1517,6 +1528,24 @@ def _rebuild_all_cells() -> list[dict]:
             "repo/.geneseed-theme": "neutral\n"},
            expect=["opencode:project (", "emit=opencode "],
            expect_absent=["emit=claude "]),
+        rb("a-dead-registry-root-is-pruned-on-read",
+           # `_install_registry.roots()` REWRITES the file as it reads, dropping any root
+           # that no longer exists or has lost its `.geneseed-emit`. That prune has been
+           # ungated since it was written: `tests/golden.py`'s sandboxes start with an empty
+           # registry, so no generator cell can ever hold a DEAD row (P4b's fresh-sandbox
+           # hole). `rebuild-all` is the first verb that reads the registry rather than only
+           # appending to it, so this is the first cell that can see the prune at all — the
+           # mutation that disables it is green everywhere else.
+           #
+           # The surviving row is the cwd's own project install, re-recorded by its emit
+           # AFTER the prune — so this cell gates the read and the write in one file.
+           dict(_PROJECT_OC, **{
+               "repo/.geneseed-theme": "neutral\n",
+               "home/.config/geneseed/installs.json":
+                   '[\n  "{sb/}/gone",\n  "{sb/}/also-gone"\n]\n'}),
+           expect=["[rebuild-all] opencode:project ("],
+           expect_absent=["gone"],
+           expect_files=["home/.config/geneseed/installs.json"]),
         rb("a-disabled-install-is-skipped",
            # `.geneseed-disabled` beside the install makes the row `disabled`, and only
            # `active` rows are rebuilt. Without this cell "skipped" and "never detected" are

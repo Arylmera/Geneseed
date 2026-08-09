@@ -9,7 +9,7 @@
  * walk cannot see through a `subprocess`; this is the same blind spot pointed the other way —
  * it cannot see through the STANDARD LIBRARY either, and a stdlib call with no JS equivalent
  * is a port, not a call. `js/lib/pydiff.mjs` is where that went, and it is 273 lines against
- * this file's 317 — the module the walk described as the whole verb is not half of it.
+ * this file's 312 — the module the walk described as the whole verb is not half of it.
  *
  * THE SECOND thing the walk shows only as one name: `_diff_collect` runs a whole GLOBAL EMIT
  * into a temp dir. `build.HOSTS[host]["emit_global"]` is a `build.*` reference like any other
@@ -27,20 +27,21 @@
  *     there disagree when `autojunk` is switched off, so the corpus is not describing a
  *     constant).
  *   * **The timestamp.** `_write_improvements` names the file `improvements-%Y%m%d-%H%M%S.md`
- *     and stamps the report with `datetime.now()`, so the two implementations can never write
- *     the same bytes in the same second-boundary-crossing run. The cells therefore drive
- *     `--out <fixed path>`, which is the branch that takes the caller's name, and the default
- *     path's FORMAT is asserted absolutely by `expect_re` on one cell that lets it happen.
+ *     and stamps the report with `datetime.now()`, so the two implementations cannot write the
+ *     same bytes across a second boundary — and a cell runs them in sequence, so the boundary
+ *     is a coin flip. `harness_golden._STAMPS` normalises both spellings out of the snapshot,
+ *     which costs the FORMAT assertion and pays it back in
+ *     `test_the_improvements_filename_is_stamped_the_same_way_by_both` — absolute, per
+ *     implementation, because a comparison made tolerant of a value owes one somewhere else.
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { emitGlobalInto } from '../bin/geneseed.mjs';
-import { CONFIG } from './checkout.mjs';
 import { GLOBAL_MANIFEST, expanduser, opencodeConfigDir } from './hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, footprintOfDir, readJsonMaybe, readMaybe, themeOfDir,
+  EMIT_HOST_SCOPE, defaultTheme, footprintOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from './installs.mjs';
 import { unifiedDiff, pySplitLines } from './lib/pydiff.mjs';
 import { pyPrint, pyPrintErr, readText, writeText } from './lib/pyfs.mjs';
@@ -130,13 +131,9 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
 
   let themeName = theme;
   if (!themeName) themeName = themeOfDir(dir);
-  if (!themeName) {
-    // NOT `defaultTheme()`: the Python inlines this read rather than calling
-    // `_default_theme`, and the two differ — `_default_theme` treats a non-dict document as
-    // absent where `.get("theme", "neutral")` on a JSON list raises. Reproduced as written.
-    const doc = existsSync(CONFIG) ? readJsonMaybe(CONFIG) : null;
-    themeName = (doc && typeof doc === 'object' ? doc.theme ?? 'neutral' : 'neutral');
-  }
+  // The Python INLINES this read rather than calling `_default_theme`, and the two bodies
+  // are identical — so this calls the one owner instead of copying the body a third time.
+  if (!themeName) themeName = defaultTheme();
 
   let emitName = emit;
   if (!emitName) {

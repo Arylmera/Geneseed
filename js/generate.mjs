@@ -164,7 +164,7 @@ export function cmdRebuildAll() {
     const footprint = footprintOfDir(root);
     const posture = postureOfDir(root) || defaultPosture();
     const mode = modeOfDir(root) || defaultMode();
-    const out = scope === 'global' ? null : String(root);
+    const out = scope === 'global' ? null : root;
     const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode);
     const label = `${host}:${scope} (${root})`;
     pyPrint(`[rebuild-all] ${label}: theme=${theme} emit=${emit} footprint=${footprint} `
