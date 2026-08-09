@@ -744,6 +744,22 @@ def _wizard_jobs() -> list[tuple[str, list[dict], str]]:
             {"fn": "ask_choice", "args": ["Pick", opts, "gamma"]},
             {"fn": "ask_choice", "args": ["Pick", opts, "alpha"]},  # EOF -> the default
         ], "3\n\n9\ngamma\nnosuch\n0\n٢\n"),
+        # A menu whose KEYS are numerals, and it exists because a mutation asked for it: with
+        # the corpus above alone, matching keys BEFORE parsing an index is the same function
+        # — no numeric answer is also a key, so both orders agree on all eight cases. Here
+        # `2` is both, and Python resolves it as an INDEX (the key match lives in
+        # `except ValueError` and never sees a parseable answer), so the answer is the SECOND
+        # option and not the one named `2`. A green mutation is a question about the corpus
+        # of inputs before it is a question about the code.
+        ("ask-choice-numeric-keys", [
+            {"fn": "ask_choice", "args": ["Pick", [["2", "the key two"], ["1", "the key one"]],
+                                          "1"]},
+            # ...and the same menu answered `1`, which inverts the pair: index-first gives
+            # `2`->"1" and `1`->"2", key-first gives `2`->"2" and `1`->"1". Two cases that
+            # swap under the mutation and cannot both be right by accident.
+            {"fn": "ask_choice", "args": ["Pick", [["2", "the key two"], ["1", "the key one"]],
+                                          "1"]},
+        ], "2\n1\n"),
         # ---- and the wizard itself, four ways through it.
         ("wizard-defaults", [{"fn": "collect_setup_lines", "args": []}],
          "\n\n\n\n\n\n"),
@@ -914,6 +930,17 @@ class TheWizardAgreesOnEveryAnswerNoCellCanGive(unittest.TestCase):
             "beta",    # `٢` — a Unicode decimal is an index to `int`
             "alpha",   # EOF — the default
         ])
+
+    def test_a_numeric_key_is_resolved_as_an_index_and_not_as_a_key(self):
+        """The control for the numeric-key menu, and it names the answer rather than only
+        comparing: an index and a key that spell the same string are the ONE input that
+        separates the two fallback orders, and a corpus that merely contained it without
+        asserting the outcome would still pass if both implementations flipped together."""
+        out = self.runs["ask-choice-numeric-keys"][0].decode("utf-8")
+        chosen = json.loads(out[out.rindex('{"results"'):])["results"]
+        self.assertEqual(chosen, ["1", "2"],
+                         "`2` was resolved as the option NAMED 2 rather than as the second "
+                         "index, so the key match is running before the int parse")
 
     def test_the_summary_job_produces_rows_and_not_an_empty_list(self):
         """The positive control for `setup_summary_lines`, and for the three keys P5i added
