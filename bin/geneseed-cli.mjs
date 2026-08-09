@@ -44,6 +44,7 @@ import { cmdDoctor } from '../js/doctor.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
+import { cmdUninstall } from '../js/uninstall.mjs';
 
 const VERBS = {
   exclude: {
@@ -118,6 +119,14 @@ const VERBS = {
     // argparse's dest for `--no-bundle` is `no_bundle`; the JS keeps the Python dest in
     // camelCase so the two tables read against each other.
     flags: { '--all': 'all', '--no-bundle': 'noBundle' },
+  },
+  uninstall: {
+    fn: cmdUninstall,
+    positionals: [],
+    options: { '--target': 'target' },
+    // argparse's dest for `--archive-memory` is `archive_memory`; camelCase here, as
+    // `--no-bundle` above, so the two tables read against each other.
+    flags: { '--yes': 'yes', '--archive-memory': 'archiveMemory' },
   },
 };
 

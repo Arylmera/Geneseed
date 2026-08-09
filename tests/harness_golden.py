@@ -158,6 +158,13 @@ def cells() -> list[dict]:
                       comparison is what gates the numbers themselves.
         expect_silent the reference must print NOTHING on stdout
         expect_files  paths that must exist in the sandbox afterwards
+        expect_absent_files
+                      paths (files OR directories) that must NOT exist afterwards — the
+                      absolute half of a DELETION, added in P5h. Seed it in `world` and
+                      name it here and the cell states that the reference removed it;
+                      without it, two implementations that both stopped deleting compare
+                      equal. Directories are covered because the snapshot now carries a
+                      `<dirs>` column (see `run_cell`).
 
     Placeholders `{sb}` `{home}` `{repo}` `{cfg}` `{py}` `{llm}` are substituted in world
     contents, argv, stdin and env values once the sandbox exists — plus `{ck}`, the copied
@@ -171,7 +178,8 @@ def cells() -> list[dict]:
     return (_context_cells() + _git_gate_cells() + _rule_gate_cells() + _learn_cells()
             + _exclude_cells() + _status_cells() + _version_cells()
             + _build_cells() + _prompt_cells() + _theme_cells()
-            + _diff_cells() + _rebuild_all_cells() + _doctor_cells())
+            + _diff_cells() + _rebuild_all_cells() + _doctor_cells()
+            + _uninstall_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -2005,6 +2013,522 @@ def _doctor_cells() -> list[dict]:
 
 
 # --------------------------------------------------------------------------------------
+# uninstall
+# --------------------------------------------------------------------------------------
+# THE FIRST VERB THAT DELETES, and that changes what a cell has to say.
+#
+# Every cell before this group asserts what the reference PRODUCED. Here the contract runs
+# both ways, and the direction that matters is the one a comparison cannot reach: two
+# implementations that both stopped deleting agree perfectly, in every cell, forever. So each
+# removal cell states three things and not one —
+#
+#   * `expect_absent_files`   what went. The sixth expectation kind, added in P5h, and the
+#                             only one that can gate a deletion absolutely. It reads the
+#                             `<dirs>` column as well as the file keys, so an emptied husk
+#                             counts as "left behind".
+#   * `expect_files`          what SURVIVED. P5c's rule — an ownership gate needs a positive
+#                             control beside it — and here it is the whole difference between
+#                             a manifest-driven removal and an `rmtree`. Every cell that
+#                             seeds an owned file seeds an UNOWNED neighbour in the same
+#                             directory and names it here.
+#   * `expect` / `expect_absent`   what was said. The inventory and the preamble are the loud
+#                             half and the easy half; they are gated too, but they are not
+#                             what the group is for.
+#
+# NO CHECKOUT FIXTURE. P5g's `_copy_checkout` costs 0.31 s per cell per side and `uninstall`
+# reads `$HOME`, `$XDG_CONFIG_HOME` and the registry — all of which `golden.cell_env` already
+# redirects — so nothing here needs one. Measured before reaching for it, which is what the
+# fixture's own docblock asks.
+#
+# WHAT NO CELL REACHES, stated here rather than discovered later:
+#   * `_confirm`. `cmd_uninstall` only prompts when `sys.stdin.isatty()`, and the harness
+#     gives every cell a pipe. The branch BESIDE it — the non-interactive refusal — is gated,
+#     and its `expect` names the wording so the two cannot be confused.
+#   * The `failed` list. It needs an owned file that exists, is a file, and cannot be
+#     unlinked; nothing a cell can seed on either platform produces one. The INCOMPLETE
+#     REPORT it feeds is a different matter — see below, it is reachable and gated.
+#   * `memory="delete"`. `cmd_uninstall` passes `archive` or `keep` and no flag reaches the
+#     third disposition — deliberate, and the reason the destructive verb cannot lose a
+#     learned fact.
+#
+# AND THE FINDING THAT CAME OUT OF WRITING THE POSITIVE CONTROLS. `_owned_dirs_for` holds
+# that "existence, not emptiness, is the retry signal" for `agents`/`skills` (+ `.opencode`/
+# `laws`/`plugins`), so a user file that keeps one of those directories alive makes the whole
+# uninstall report INCOMPLETE and KEEPS the install markers — even though every owned file
+# went and nothing failed. The first draft of this group seeded its unowned neighbours inside
+# `skills/` and `agents/` and every removal cell came back INCOMPLETE. That is the
+# reference's behaviour, and the absolute half describes the reference rather than
+# adjudicating it, so it is gated in both directions instead of designed around: the
+# completion cells put their control where the sweep does not look, and
+# `a-user-file-under-a-watched-dir-reports-INCOMPLETE` states the other arm on purpose. It
+# also means the INCOMPLETE report the P5h brief expected to be unreachable is the
+# best-covered branch in the group.
+
+#: A hand-seeded Claude-style install. Small on purpose: the real emit's manifest lists 86
+#: owned files and the point of these cells is which of a KNOWN set survives, so the fixture
+#: names four and the assertions can name all four.
+_CLAUDE_HOOK_GROUP = {
+    "event": "PreToolUse",
+    "group": {"matcher": "Bash", "hooks": [{"type": "command", "command": "geneseed-hook git-gate"}]},
+}
+_USER_HOOK_GROUP = {"matcher": "Write", "hooks": [{"type": "command", "command": "my-own-linter"}]}
+
+_CLAUDE_MD = ("# My own notes\n\nProse I wrote myself.\n\n"
+              "<!-- BEGIN GENESEED -->\nthe managed block\n<!-- END GENESEED -->\n\n"
+              "Prose after the block.\n")
+
+
+def _claude_manifest(owned, **managed) -> str:
+    return json.dumps({
+        "owned": owned,
+        "managed": dict({"claude_md": {"rel": "CLAUDE.md"},
+                         "settings_file": "settings.json",
+                         "settings_hooks": [_CLAUDE_HOOK_GROUP],
+                         "settings_excludes": ["geneseed/**"]}, **managed),
+        "scope": "global",
+    }, indent=2) + "\n"
+
+
+def _uninstall_cells() -> list[dict]:
+    def un(name, argv=("uninstall", "--yes"), world=None, cwd="repo", **kw):
+        return dict(id=f"uninstall/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    steps=[{"argv": list(argv), "cwd": cwd}], **kw)
+
+    _CLAUDE = "home/.claude"
+
+    # A GLOBAL OpenCode install with one owned file, one owned file nested three deep, and
+    # two files the manifest does NOT claim. The controls sit OUTSIDE `agents`/`skills`/
+    # `plugins` so the sweep in `_owned_dirs_for` does not read them as leftovers — see the
+    # section header; a control inside one of those dirs is a different cell.
+    def oc_global(**extra):
+        return dict({
+            f"{_OC}/.geneseed-manifest.json": json.dumps(
+                {"owned": ["AGENT.md", "skills/vend/references/deep.md"]}, indent=2) + "\n",
+            f"{_OC}/.geneseed-emit": "opencode-global\n",
+            f"{_OC}/.geneseed-theme": "neutral\n",
+            f"{_OC}/.geneseed-version": _STAMP,
+            f"{_OC}/AGENT.md": "# deployed\n",
+            f"{_OC}/skills/vend/references/deep.md": "# nested owned\n",
+            f"{_OC}/MY-OWN.md": "# my own file, unowned\n",
+            f"{_OC}/prompts/mine.md": "# my own prompt, unowned\n",
+            f"{_OC}/opencode.json": json.dumps(
+                {"$schema": "https://opencode.ai/config.json",
+                 "instructions": ["{home/}/.config/opencode/AGENT.md", "./MY-OWN.md"],
+                 "theme": "mine"}, indent=2) + "\n",
+        }, **extra)
+
+    def claude_global(**extra):
+        return dict({
+            f"{_CLAUDE}/.geneseed-manifest.json": _claude_manifest(
+                ["CLAUDE.md", "agents/advocate.md"]),
+            f"{_CLAUDE}/.geneseed-emit": "claude-global\n",
+            f"{_CLAUDE}/.geneseed-theme": "neutral\n",
+            f"{_CLAUDE}/CLAUDE.md": _CLAUDE_MD,
+            f"{_CLAUDE}/agents/advocate.md": "# owned agent\n",
+            f"{_CLAUDE}/PROFILE.md": "# my own profile, unowned\n",
+            f"{_CLAUDE}/settings.json": json.dumps(
+                {"hooks": {"PreToolUse": [_CLAUDE_HOOK_GROUP["group"], _USER_HOOK_GROUP]},
+                 "claudeMdExcludes": ["geneseed/**", "mine/**"],
+                 "model": "opus"}, indent=2) + "\n",
+        }, **extra)
+
+    # A per-repo OpenCode install: the `.opencode/` layer carries a manifest, the portable
+    # bundle dirs sit beside it at the repo root, and both a hand-added agent and a
+    # user-owned stub are seeded to prove the two are treated differently.
+    #
+    # This shape reports INCOMPLETE and that is not an accident of the fixture: `.opencode/`
+    # is itself one of the dirs `_owned_dirs_for` watches, so ANY user-owned file left under
+    # it — `context.json` is one the emit deliberately does not claim — keeps the whole
+    # install marked retry-worthy. The completion arm needs a layer that empties, which is
+    # `a-layer-that-empties-completely-finishes` below.
+    def oc_project(**extra):
+        return dict({
+            "repo/.opencode/.geneseed-manifest.json": json.dumps(
+                {"owned": ["agents/advocate.md"]}, indent=2) + "\n",
+            "repo/.opencode/agents/advocate.md": "# owned agent\n",
+            "repo/.opencode/agents/mine.md": "# my own agent, unowned\n",
+            "repo/.opencode/context.json": '{"eager": []}\n',
+            "repo/.geneseed-emit": "opencode\n",
+            "repo/.geneseed-theme": "neutral\n",
+            "repo/AGENT.md": "# deployed\n",
+            "repo/laws/universal.md": "# law\n",
+            "repo/agents/advocate.md": "# bundle agent\n",
+            "repo/skills/wayfinder/SKILL.md": "# bundle skill\n",
+            "repo/README.md": "# my repo, untouched\n",
+            "repo/opencode.json": json.dumps(
+                {"instructions": ["AGENT.md", "./MY-OWN.md"]}, indent=2) + "\n",
+        }, **extra)
+
+    return [
+        # ---- resolve ------------------------------------------------------------------
+        un("no-target-falls-back-to-the-opencode-global-dir", world=oc_global(),
+           # Rule 5, and the default a user with no flags gets. The cwd carries no project
+           # install, so the resolve walks past it to the OpenCode global config dir.
+           expect=["[uninstall] target: <HOME>", "(opencode:global)",
+                   "[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and "
+                   "the opencode.json instructions entry.",
+                   "[uninstall] done — removed 2 file(s); opencode.json updated where "
+                   "needed; memory/notebook kept in place. Start a new session to apply."],
+           expect_files=[f"{_OC}/MY-OWN.md", f"{_OC}/prompts/mine.md",
+                         f"{_OC}/opencode.json"],
+           expect_absent_files=[f"{_OC}/AGENT.md", f"{_OC}/.geneseed-manifest.json",
+                                f"{_OC}/.geneseed-emit", f"{_OC}/.geneseed-theme",
+                                f"{_OC}/.geneseed-version",
+                                f"{_OC}/skills/vend/references/deep.md",
+                                # The ancestor climb: three husks, none of which any cell
+                                # could see before the `<dirs>` column existed.
+                                f"{_OC}/skills/vend/references", f"{_OC}/skills/vend",
+                                f"{_OC}/skills"]),
+        un("a-user-file-under-a-watched-dir-reports-INCOMPLETE",
+           # The other arm of the finding in the section header, and the positive control
+           # for the ancestor climb in one cell. `skills/mine/` holds nothing the manifest
+           # claims, so the prune must stop at it — which leaves `skills/` standing, which
+           # `_owned_dirs_for` reads as a leftover. Every owned file went and nothing
+           # failed, and the verb still reports INCOMPLETE and KEEPS the markers so the
+           # operator can retry. A port that pruned by NAME rather than by emptiness deletes
+           # the user's skill and reports `done` — it fails on all four observations.
+           world=oc_global(**{f"{_OC}/skills/mine/SKILL.md": "# my own skill, unowned\n"}),
+           expect=["[uninstall] INCOMPLETE — removed 2 file(s), but 1 item(s) survived "
+                   "(see the WARN above); the install marker was kept — retry "
+                   "`harness uninstall` once they're removable.",
+                   "[uninstall] WARN: could not fully remove the install — still present: "
+                   "<HOME>"],
+           expect_files=[f"{_OC}/skills/mine/SKILL.md"],
+           # AND THE MARKERS ARE GONE ANYWAY, which the message says they are not.
+           # `_install_uninstall`'s survivors gate guards the ROOT markers at step 3 — but
+           # for a GLOBAL install `root` IS the config dir, so `_uninstall_global` has
+           # already unlinked the manifest and all four markers at step 1, on its OWN gate,
+           # which is `failed` and not `survivors`. The two signals are different and only
+           # one of them reaches the deletion. Found by this cell's `expect_files`, which
+           # was written asserting the promise and failed against the reference.
+           expect_absent_files=[f"{_OC}/skills/vend", f"{_OC}/.geneseed-manifest.json",
+                                f"{_OC}/.geneseed-emit", f"{_OC}/.geneseed-theme"]),
+        dict(id="uninstall/the-retry-the-INCOMPLETE-message-promises-bounces-off", bin="cli",
+             # The consequence, stated as behaviour rather than as a comment. The first step
+             # reports INCOMPLETE and tells the operator to retry; the second finds no
+             # install at all, because step 1 removed the only thing `_install_state` keys
+             # on. Both implementations must agree on it — this cell exists to make sure a
+             # port cannot quietly "fix" the reference and diverge, and to make the fix
+             # visible the day someone takes it (the cell fails loudly on both sides).
+             world=dict({"repo/.keep": ""}, **oc_global(
+                 **{f"{_OC}/skills/mine/SKILL.md": "# my own skill, unowned\n"})),
+             steps=[{"argv": ["uninstall", "--yes"], "cwd": "repo"},
+                    {"argv": ["uninstall", "--yes"], "cwd": "repo"}],
+             expect=["[uninstall] no opencode:global Geneseed install at <HOME>",
+                     "(no .geneseed-manifest.json)."],
+             expect_files=[f"{_OC}/skills/mine/SKILL.md"],
+             expect_silent=True),
+        un("--target-a-global-config-dir-beats-the-marker-name",
+           ("uninstall", "--yes", "--target", "{home}/.claude"), world=claude_global(),
+           # THE precedence cell. `~/.claude` is NAMED like a project marker and is the
+           # global install, never `claude:project` rooted at `$HOME` — so rule 1 is checked
+           # before rule 2. A resolver with the two swapped reports `claude:project` here.
+           expect=["[uninstall] target: <HOME>", "(claude:global)"],
+           expect_absent=["claude:project"]),
+        un("--target-a-project-marker-dir",
+           ("uninstall", "--yes", "--target", "{repo}/.opencode"), world=oc_project(),
+           # Rule 2: the marker dir itself, root is its PARENT — which is why the target
+           # line names the repo and not `.opencode`.
+           expect=["[uninstall] target: <SB>", "(opencode:project)"],
+           expect_absent=["/.opencode ("]),
+        un("--target-a-repo-carrying-a-project-install",
+           ("uninstall", "--yes", "--target", "{repo}"), world=oc_project(),
+           expect=["(opencode:project)",
+                   "[uninstall] removes: AGENT.md, .opencode/, laws/, agents/, skills/, and "
+                   "the opencode.json instructions entry."]),
+        un("an-unrecognised-target-is-refused",
+           ("uninstall", "--yes", "--target", "{repo}/nowhere"),
+           expect=["[uninstall] no Geneseed install detected at <SB>",
+                   "[uninstall] pass --target <repo> for a project install "
+                   "(.opencode/.claude/.bob/.github) or --target <config dir> for a "
+                   "global one."],
+           expect_silent=True),
+        un("a-bare-non-geneseed-claude-dir-does-not-hijack-the-resolve",
+           # Very common, and the reason `_project_qualifies` exists at all: a `.claude/`
+           # with neither a manifest nor an emit marker naming claude:project is NOT a
+           # Geneseed install, so the resolve must walk past it to the global default. A
+           # port that qualified on the marker dir alone would "uninstall" the user's repo.
+           world=dict(oc_global(), **{"repo/.claude/settings.json": '{"model": "opus"}\n'}),
+           expect=["(opencode:global)"],
+           expect_absent=["claude:project"],
+           expect_files=["repo/.claude/settings.json"]),
+        un("the-cwd-project-install-beats-the-global-default",
+           # Rule 5's first half. Both installs exist; the cwd's wins, and the global one is
+           # left entirely alone — which `expect_files` is what states.
+           world=dict(oc_project(), **oc_global()),
+           expect=["(opencode:project)"],
+           expect_files=[f"{_OC}/AGENT.md", f"{_OC}/.geneseed-manifest.json"]),
+
+        # ---- the absent gate ------------------------------------------------------------
+        un("no-install-at-the-resolved-target",
+           # `_install_state` says 'absent' and nothing is touched. Exit 1, and `<exit>` is a
+           # compared column, so a port that returned 0 fails even with the words right.
+           expect=["[uninstall] no opencode:global Geneseed install at <HOME>",
+                   "(no .geneseed-manifest.json)."],
+           expect_silent=True),
+        un("a-project-scope-refusal-names-the-marker-dir",
+           ("uninstall", "--yes", "--target", "{repo}"),
+           # The `where` clause, which only a non-opencode PROJECT scope reaches. The root
+           # qualifies through its `.geneseed-emit` (the pre-manifest legacy fallback) and
+           # then has no manifest under `.claude/` to reverse.
+           world={"repo/.claude/.keep": "", "repo/.geneseed-emit": "claude\n"},
+           expect=["[uninstall] no claude:project Geneseed install at <SB>",
+                   "(no .geneseed-manifest.json under .claude/)."],
+           expect_silent=True),
+
+        # ---- the confirmation gate ------------------------------------------------------
+        un("refuses-without---yes-when-stdin-is-not-a-tty",
+           ("uninstall",), world=oc_global(),
+           # The branch BESIDE `_confirm`, which no cell can reach. Everything is still
+           # there afterwards, and saying so is the point: a port that removed first and
+           # refused second would print the same three lines.
+           expect=["[uninstall] refusing to proceed without --yes (non-interactive).",
+                   "[uninstall] target: <HOME>"],
+           expect_files=[f"{_OC}/AGENT.md", f"{_OC}/.geneseed-manifest.json",
+                         f"{_OC}/skills/vend/references/deep.md"]),
+
+        # ---- the four preamble arms -----------------------------------------------------
+        un("a-claude-install-names-its-carrier-and-its-settings",
+           ("uninstall", "--yes", "--target", "{home}/.claude"), world=claude_global(),
+           expect=["[uninstall] removes: agents/, skills/, markers, the CLAUDE.md managed "
+                   "block, and Geneseed's settings.json hooks/excludes (your own "
+                   "keys/hooks are kept)."]),
+        un("a-bob-install-names-AGENTS-md-rather-than-CLAUDE-md",
+           # The `agentFile` column, and the only thing that varies between this cell and
+           # the one above. A port that hardcoded `CLAUDE.md` in the message passes there.
+           ("uninstall", "--yes", "--target", "{home}/.bob"),
+           world={"home/.bob/.geneseed-manifest.json": _claude_manifest(["AGENTS.md"]),
+                  "home/.bob/AGENTS.md": _CLAUDE_MD},
+           expect=["(bob:global)", "the AGENTS.md managed block"],
+           expect_absent=["the CLAUDE.md managed block"]),
+        un("a-copilot-install-has-no-settings-to-unwire",
+           ("uninstall", "--yes", "--target", "{repo}"),
+           world={"repo/.github/.geneseed-manifest.json": _claude_manifest(
+                      ["copilot-instructions.md"]),
+                  "repo/.github/copilot-instructions.md": _CLAUDE_MD,
+                  "repo/.github/workflows/ci.yml": "# my own workflow\n"},
+           expect=["(copilot:project)",
+                   "[uninstall] removes: agents/, skills/, markers, and the AGENTS.md "
+                   "managed block (Copilot has no settings.json/hooks to unwire; your own "
+                   ".github files are kept)."],
+           # The claim the message makes, gated: the user's own `.github` content survives.
+           expect_files=["repo/.github/workflows/ci.yml"]),
+
+        # ---- the settings unwiring ------------------------------------------------------
+        un("the-recorded-hook-group-goes-and-the-users-does-not",
+           ("uninstall", "--yes", "--target", "{home}/.claude"), world=claude_global(),
+           # `_unwire_claude_settings` removes EXACTLY the recorded groups. The seeded
+           # settings.json holds Geneseed's group, the user's group, and two keys neither
+           # side owns — and the byte comparison of the rewritten file is what gates the
+           # rest. Named here so the cell is not vacuous if the file stops being rewritten.
+           expect=["[uninstall] done — removed 2 file(s); settings.json updated where "
+                   "needed"],
+           expect_files=[f"{_CLAUDE}/settings.json", f"{_CLAUDE}/PROFILE.md"]),
+        un("the-claude-md-managed-block-is-excised-and-the-prose-kept",
+           ("uninstall", "--yes", "--target", "{home}/.claude"),
+           # CLAUDE.md is in `owned`, and it is STILL not deleted: the reversal unlinks it
+           # as an owned file and `_managed_block_remove` then finds nothing — so what this
+           # actually proves is the ORDER. A port that excised before unlinking leaves the
+           # same absence; a port that skipped the unlink leaves the prose. Both are stated.
+           world=claude_global(),
+           expect_absent_files=[f"{_CLAUDE}/CLAUDE.md"],
+           expect_files=[f"{_CLAUDE}/settings.json"]),
+        un("prose-around-the-block-survives-when-the-carrier-is-not-owned",
+           ("uninstall", "--yes", "--target", "{home}/.claude"),
+           # The excision arm proper: CLAUDE.md is NOT in `owned`, so the only thing that
+           # touches it is `_managed_block_remove`, which keeps the user's prose. This is
+           # the cell the one above cannot be.
+           world=dict(claude_global(), **{
+               f"{_CLAUDE}/.geneseed-manifest.json": _claude_manifest(["agents/advocate.md"]),
+           }),
+           expect=["[uninstall] done — removed 1 file(s)"],
+           expect_files=[f"{_CLAUDE}/CLAUDE.md"],
+           expect_absent_files=[f"{_CLAUDE}/agents/advocate.md"]),
+        un("a-carrier-that-is-only-the-block-is-removed-entirely",
+           ("uninstall", "--yes", "--target", "{home}/.claude"),
+           # `_managed_block_remove`'s last line: an excision that leaves the file empty
+           # deletes it. Nothing else in this port reaches that branch.
+           world=dict(claude_global(), **{
+               f"{_CLAUDE}/.geneseed-manifest.json": _claude_manifest(["agents/advocate.md"]),
+               f"{_CLAUDE}/CLAUDE.md":
+                   "<!-- BEGIN GENESEED -->\nthe managed block\n<!-- END GENESEED -->\n",
+           }),
+           expect_absent_files=[f"{_CLAUDE}/CLAUDE.md"],
+           expect_files=[f"{_CLAUDE}/PROFILE.md"]),
+
+        # ---- the opencode.json unmerge --------------------------------------------------
+        un("the-instructions-entry-goes-and-every-other-key-stays", world=oc_global(),
+           # A global install wires the ABSOLUTE posix path, which is what the seeded
+           # `instructions` carries. `./MY-OWN.md`, `$schema` and `theme` are the control:
+           # the unmerge rewrites the file and must leave all three.
+           expect=["opencode.json updated where needed"],
+           expect_files=[f"{_OC}/opencode.json"]),
+        un("a-commented-jsonc-is-not-rewritten-and-says-so",
+           # Rewriting it would drop the comments, so the user is told to do it by hand and
+           # the file is left byte-for-byte alone. `_opencode_target` prefers the sibling
+           # `.jsonc`, which is why seeding one beside the `.json` is what reaches this.
+           world=oc_global(**{
+               f"{_OC}/opencode.jsonc":
+                   '{\n  // my own comment\n  "instructions": '
+                   '["{home/}/.config/opencode/AGENT.md"]\n}\n',
+           }),
+           expect=["[uninstall] opencode.jsonc has comments — not rewriting it. Remove this "
+                   'from its "instructions" by hand: '],
+           expect_files=[f"{_OC}/opencode.jsonc"]),
+        un("the-project-entry-is-read-off-the-live-config-before-AGENT-md-goes",
+           ("uninstall", "--yes", "--target", "{repo}"),
+           # `_install_agent_entry` reads the wire BEFORE the deletion, and it reads the
+           # RECORDED spelling rather than assuming the canonical one — so a bundle sub-dir
+           # layout round-trips. A port that hardcoded `AGENT.md` leaves this entry wired.
+           world=oc_project(**{
+               "repo/opencode.json": json.dumps(
+                   {"instructions": ["bundle/AGENT.md", "./MY-OWN.md"]}, indent=2) + "\n",
+           }),
+           expect=["opencode.json updated where needed"],
+           expect_files=["repo/opencode.json"]),
+
+        # ---- the opencode project reversal ----------------------------------------------
+        un("a-manifest-unlinks-the-layer-file-by-file",
+           ("uninstall", "--yes", "--target", "{repo}"), world=oc_project(),
+           # `.opencode/` prefers its manifest: exactly the listed files go, so a hand-added
+           # agent and the user-owned `context.json` stub both survive — and the directory
+           # therefore survives with them. The bundle dirs beside it go WHOLE regardless,
+           # because the plain build step wipes and rewrites them every run.
+           expect=["[uninstall] INCOMPLETE — removed 5 file(s)"],
+           expect_files=["repo/.opencode/agents/mine.md", "repo/.opencode/context.json",
+                         "repo/README.md",
+                         # The markers are KEPT with the layer, which is the survivors gate
+                         # doing its job — `.geneseed-emit` is an OpenCode project install's
+                         # ONLY qualifying signal, so dropping it would strand the leftovers.
+                         "repo/.geneseed-emit"],
+           expect_absent_files=["repo/.opencode/agents/advocate.md",
+                                "repo/.opencode/.geneseed-manifest.json",
+                                "repo/AGENT.md", "repo/laws", "repo/agents",
+                                "repo/skills/wayfinder/SKILL.md", "repo/skills"]),
+        un("a-layer-that-empties-completely-finishes",
+           ("uninstall", "--yes", "--target", "{repo}"),
+           # The completion arm of the pair above: nothing unowned is left under
+           # `.opencode/`, so the manifest goes, the dir is rmdir'd, the survivors sweep
+           # finds nothing and the ROOT markers finally drop. This is the only cell in the
+           # group where `.geneseed-emit` is asserted absent for a PROJECT install, and it
+           # is what the registry self-prunes the row by.
+           world={k: v for k, v in oc_project().items()
+                  if k not in ("repo/.opencode/agents/mine.md",
+                               "repo/.opencode/context.json")},
+           expect=["[uninstall] done — removed 5 file(s)"],
+           expect_files=["repo/README.md", "repo/opencode.json"],
+           expect_absent_files=["repo/.opencode", "repo/.geneseed-emit",
+                                "repo/.geneseed-theme"]),
+        un("a-manifest-less-layer-is-deleted-whole",
+           ("uninstall", "--yes", "--target", "{repo}"),
+           # The legacy fallback, for an install from before the write-before-delete rework.
+           # With no manifest there is nothing to be selective WITH, so the hand-added agent
+           # goes too — which is the behaviour, and is why the cell above exists beside it.
+           world={k: v for k, v in oc_project().items()
+                  if k != "repo/.opencode/.geneseed-manifest.json"},
+           expect=["[uninstall] done — removed 5 file(s)"],
+           expect_files=["repo/README.md"],
+           expect_absent_files=["repo/.opencode", "repo/.opencode/agents/mine.md"]),
+        un("an-emptied-marker-dir-does-not-linger-as-a-husk",
+           ("uninstall", "--yes", "--target", "{repo}"),
+           # `_install_uninstall` step 4. `.claude/` held nothing but Geneseed's files, so
+           # the repo is left with no trace of it at all — invisible to every cell in this
+           # harness until the `<dirs>` column landed.
+           world={"repo/.claude/.geneseed-manifest.json": _claude_manifest(
+                      ["agents/advocate.md"]),
+                  "repo/.claude/agents/advocate.md": "# owned\n",
+                  "repo/.geneseed-emit": "claude\n"},
+           expect=["(claude:project)"],
+           expect_absent_files=["repo/.claude", "repo/.claude/agents",
+                                "repo/.geneseed-emit"]),
+        un("a-marker-dir-with-a-user-file-in-it-stays",
+           ("uninstall", "--yes", "--target", "{repo}"),
+           # The positive control for the husk cell above, and the only thing that separates
+           # "tidied an empty dir" from "removed the directory".
+           world={"repo/.claude/.geneseed-manifest.json": _claude_manifest(
+                      ["agents/advocate.md"]),
+                  "repo/.claude/agents/advocate.md": "# owned\n",
+                  "repo/.claude/settings.local.json": '{"model": "opus"}\n',
+                  "repo/.geneseed-emit": "claude\n"},
+           expect=["(claude:project)"],
+           expect_files=["repo/.claude/settings.local.json"]),
+
+        # ---- the runtime stores ---------------------------------------------------------
+        un("memory-and-notebook-are-kept-in-place-by-default",
+           world=oc_global(**{f"{_OC}/memory/fact.md": _FACT,
+                              f"{_OC}/notebook/note.md": "# note\n"}),
+           expect=["[uninstall] memory/ and notebook/ are kept in place (never deleted "
+                   "here) — --archive-memory sets both aside.",
+                   "memory/notebook kept in place"],
+           expect_files=[f"{_OC}/memory/fact.md", f"{_OC}/notebook/note.md"]),
+        un("--archive-memory-moves-both-aside-and-deletes-neither",
+           ("uninstall", "--yes", "--archive-memory"),
+           world=oc_global(**{f"{_OC}/memory/fact.md": _FACT,
+                              f"{_OC}/notebook/note.md": "# note\n"}),
+           # The timestamp in the archive path is normalised out (`_STAMPS`) — the two sides
+           # run seconds apart. What is compared is that both moved the same bytes into a
+           # sibling dir of the same shape; what is asserted absolutely is that the original
+           # is gone and the copy is there, which is the only pair that says "moved".
+           expect=["[uninstall] memory + notebook: will be ARCHIVED to a sibling "
+                   "archived-<name>/<timestamp>/ (never deleted)",
+                   "memory/notebook archived -> <HOME>"],
+           expect_files=[f"{_OC}/archived-memory/<STAMP>/fact.md",
+                         f"{_OC}/archived-notebook/<STAMP>/note.md"],
+           expect_absent_files=[f"{_OC}/memory", f"{_OC}/notebook"]),
+        un("with-no-stores-the-sentence-ends-differently",
+           # `stores` empty: the line ends in a full stop and the ARCHIVED line never
+           # prints. One `if` with two observable halves, and `expect_absent` is the only
+           # thing that can state the second.
+           world=oc_global(), argv=("uninstall", "--yes", "--archive-memory"),
+           expect=["[uninstall] memory/ and notebook/ are kept in place (never deleted "
+                   "here)."],
+           expect_absent=["--archive-memory sets both aside", "will be ARCHIVED"]),
+
+        # ---- the surviving-install inventory --------------------------------------------
+        un("a-global-uninstall-lists-the-project-installs-that-remain",
+           world=dict(oc_global(), **{
+               "home/.config/geneseed/installs.json": '["{sb/}/other"]',
+               "other/.geneseed-emit": "opencode\n",
+               "other/.opencode/.keep": "",
+           }),
+           # Informational, never a cascade: a global uninstall cannot touch a project
+           # install, and the survivor is still there afterwards to prove it.
+           expect=["[uninstall] 1 project install(s) remain — the global removal does not "
+                   "affect them (each is self-contained):",
+                   "(opencode:project) — remove with: harness uninstall --target"],
+           expect_files=["other/.geneseed-emit"]),
+        un("the-just-removed-root-is-not-listed-as-its-own-survivor",
+           # A global install that is ALSO registered — a stale legacy row. It is excluded
+           # by resolved path, and with nothing else on record the whole block is silent.
+           world=dict(oc_global(), **{
+               "home/.config/geneseed/installs.json": '["{home/}/.config/opencode"]',
+           }),
+           expect=["[uninstall] done — removed 2 file(s)"],
+           expect_absent=["project install(s) remain"]),
+        un("a-global-uninstall-with-nothing-registered-is-silent", world=oc_global(),
+           expect=["[uninstall] done — removed 2 file(s)"],
+           expect_absent=["project install(s) remain"]),
+        un("a-project-uninstall-names-the-other-host-at-the-same-root",
+           ("uninstall", "--yes", "--target", "{repo}/.opencode"),
+           # A repo can carry `.opencode/` and `.claude/` side by side and only the resolved
+           # one is removed, so the operator is told there is more to do. The Claude install
+           # surviving intact is the same sentence stated as files.
+           world=dict(oc_project(), **{
+               "repo/.claude/.geneseed-manifest.json": _claude_manifest(["CLAUDE.md"]),
+               "repo/.claude/CLAUDE.md": _CLAUDE_MD,
+           }),
+           expect=["[uninstall] also found claude:project here — run `harness uninstall` "
+                   "again to remove it."],
+           expect_files=["repo/.claude/.geneseed-manifest.json", "repo/.claude/CLAUDE.md"]),
+        un("a-project-uninstall-with-no-other-host-says-nothing",
+           ("uninstall", "--yes", "--target", "{repo}/.opencode"), world=oc_project(),
+           expect=["(opencode:project)"],
+           expect_absent=["also found"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
 # the runner
 # --------------------------------------------------------------------------------------
 
@@ -2027,6 +2551,11 @@ def _doctor_cells() -> list[dict]:
 _STAMPS = (
     (re.compile(r"improvements-\d{8}-\d{6}\.md"), "improvements-<STAMP>.md"),
     (re.compile(r"captured: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"), "captured: <STAMP>"),
+    # `_archive_store` names the snapshot after the SECOND it ran in, and the two sides run
+    # seconds apart — so an un-destamped archive is one directory only in ref and another
+    # only in new, in the `<dirs>` column and in every key beneath it. Both separators:
+    # the path is POSIX in a snapshot key and `str(Path)` on stdout, which is `\` here.
+    (re.compile(r"(archived-(?:memory|notebook)[\\/])\d{8}-\d{6}"), r"\1<STAMP>"),
 )
 
 
@@ -2227,6 +2756,23 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
         # ref and another only in new. See `_STAMPS`.
         snap = {_destamp(k.encode("utf-8")).decode("utf-8"): _destamp(v)
                 for k, v in golden._snapshot(sb, roots).items()}
+        # THE DIRECTORY COLUMN, added in P5h for the first verb that DELETES.
+        #
+        # `golden._snapshot` walks FILES, so an empty directory is invisible: a port that
+        # removed a directory's contents and left the husk, or removed a directory the
+        # reference leaves in place, was byte-identical in all 219 cells. That was a
+        # standing hole (`cmdTheme`'s statement order sits in it too) and `uninstall` is
+        # where it stops being theoretical — "did it clean up after itself" is literally
+        # the verb, and the empty-ancestor prune is one of its four moving parts.
+        #
+        # A single pseudo-file rather than a sixth expectation kind for the COMPARISON
+        # half: one entry closes the hole for every cell in the matrix at once, including
+        # the ones written before it existed, where a per-cell assertion would only cover
+        # the cells that remembered to declare it. The absolute half is a different axis
+        # and is `expect_absent_files`.
+        snap["<dirs>"] = "\n".join(sorted(
+            _destamp(p.relative_to(sb).as_posix().encode("utf-8")).decode("utf-8")
+            for p in sb.rglob("*") if p.is_dir())).encode("utf-8")
         snap["<stdout>"] = _destamp(
             golden._normalise(proc.stdout.encode("utf-8", "replace"), roots))
         snap["<stderr>"] = _destamp(
@@ -2270,6 +2816,33 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
         if want not in snap:
             problems.append(f"the reference did not write {want} — this cell cannot tell "
                             f"whether the candidate does")
+    # The absolute half of a DELETION, and the sixth kind. `expect_files` says the
+    # reference wrote something; nothing said the reference REMOVED something, and for
+    # `uninstall` that is the whole contract. A cross-implementation comparison is blind
+    # to a defect both sides share (P4e/M43) — two implementations that both stopped
+    # deleting agree perfectly — and the seeded world makes that concrete: every one of
+    # these paths EXISTS before the verb runs, so a passing `expect_absent_files` is a
+    # statement about the verb rather than about the fixture. Directories count, which is
+    # why it reads `<dirs>` as well as the file keys: a husk left behind is exactly the
+    # failure the column above was added for, and P5c's rule applies in both directions —
+    # an ownership gate needs its positive control, so a cell naming a deleted path names
+    # a surviving neighbour in `expect_files` beside it.
+    #
+    # AND THE COLUMN IS REQUIRED, not optional. A snapshot with no `<dirs>` makes every
+    # directory in `expect_absent_files` pass trivially — the fixture would stop recording
+    # husks and thirty-five cells would stay green while the half of the verb they were
+    # written for went unobserved. Same shape as P5g's M30, which is why it is a stated
+    # failure rather than an `if "<dirs>" in snap`.
+    want_absent = cell.get("expect_absent_files", ())
+    if want_absent and "<dirs>" not in snap:
+        problems.append("the snapshot carries no <dirs> column, so every directory named "
+                        "in expect_absent_files would pass without being looked at")
+        return problems
+    kept = set(snap["<dirs>"].decode("utf-8").split("\n")) if want_absent else set()
+    for unwanted in want_absent:
+        if unwanted in snap or unwanted in kept:
+            problems.append(f"the reference left {unwanted} behind, and this cell exists "
+                            f"to prove it removes it")
     return problems
 
 

@@ -62,6 +62,15 @@ def run(fn: str, args: list):
         return harness.build._validate_is_vendored(Path(args[0]))
     if fn == "py_which":
         return shutil.which(args[0], path=args[1])
+    if fn == "py_is_absolute":
+        return Path(args[0]).is_absolute()
+    if fn == "install_agent_entry_of":
+        # `_install_agent_entry`'s project arm, minus the file read: the whole decision is
+        # which `instructions` entry it picks, and the list is the input.
+        for e in args[0]:
+            if isinstance(e, str) and not Path(e).is_absolute() and Path(e).name == "AGENT.md":
+                return e
+        return "AGENT.md"
     raise SystemExit(f"pure_probe: unknown fn {fn!r}")
 
 

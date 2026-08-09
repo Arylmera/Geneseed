@@ -18,7 +18,7 @@ import path from 'node:path';
 import os from 'node:os';
 
 import { expanduser } from './hosts.mjs';
-import { writeText, parseJson, jsonDumpsIndent } from './lib/pyfs.mjs';
+import { writeText, parseJson, jsonDumpsIndent, pyPathStr } from './lib/pyfs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
@@ -80,7 +80,14 @@ export function registryRoots() {
   const kept = [];
   const seen = new Set();
   for (const s of original) {
-    const root = expanduser(s);
+    // `Path(s).expanduser()`, and `pyPathStr` is the `str()` around it — which is where the
+    // NORMALISATION happens. Python turns `C:/x/other` into `C:\x\other` before it is
+    // compared, kept, returned and printed, so a registry entry spelled with forward slashes
+    // (routine: every tool that writes one from Git Bash) makes Python rewrite the file and
+    // print a backslash path while a raw `expanduser` prints the entry verbatim and leaves
+    // installs.json alone. Invisible to every cell before P5h, because `rebuild-all`'s
+    // registry cells seed native spellings; `uninstall`'s inventory prints the root.
+    const root = pyPathStr(expanduser(s));
     let key;
     try { key = existsSync(root) ? realpathSync.native(root) : root; } catch { key = root; }
     if (seen.has(key)) continue;

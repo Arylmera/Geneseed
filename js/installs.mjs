@@ -179,7 +179,7 @@ export const modeOfDir = (d) => leadOfDir(d, discoverNames('modes', 'direct'));
 // ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------
 
 /** `_harness_mcp._claude_read_manifest`. */
-function claudeReadManifest(cfgDir) {
+export function claudeReadManifest(cfgDir) {
   const data = readJsonMaybe(path.join(cfgDir, GLOBAL_MANIFEST));
   return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
 }
@@ -210,7 +210,7 @@ export function emitHostScopeOf(root) {
 }
 
 /** `_harness_mcp.DISABLED_STASH` — a sibling dir whose presence means "disabled". */
-const DISABLED_STASH = '.geneseed-disabled';
+export const DISABLED_STASH = '.geneseed-disabled';
 
 /**
  * `_harness_mcp._claude_cfg` — where a Claude-STYLE install keeps its manifest.
@@ -247,7 +247,7 @@ export function installState(root, host = 'opencode', scope = 'global') {
 }
 
 /** `_harness_mcp._registered_targets` — (host, scope, root) for every registered root. */
-function registeredTargets() {
+export function registeredTargets() {
   const out = [];
   for (const root of registryRoots()) {
     const hs = emitHostScopeOf(root);

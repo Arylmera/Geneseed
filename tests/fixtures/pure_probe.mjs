@@ -16,7 +16,8 @@ import { cmpKey } from '../../js/diff.mjs';
 import { descBlockProblem, isVendoredPath, validateIsVendored } from '../../js/native.mjs';
 import { proseMirrorProblems, romanToInt, themesToCheck } from '../../js/doctor.mjs';
 import { pyCapitalize } from '../../js/installs.mjs';
-import { pyLen, pyLjust, pyWhich } from '../../js/lib/pyfs.mjs';
+import { pyIsAbsolute, pyLen, pyLjust, pyWhich } from '../../js/lib/pyfs.mjs';
+import { installAgentEntryOf } from '../../js/uninstall.mjs';
 import { unifiedDiff, pySplitLines } from '../../js/lib/pydiff.mjs';
 
 const FNS = {
@@ -43,6 +44,8 @@ const FNS = {
   is_vendored_path: (a) => isVendoredPath(a[0]),
   validate_is_vendored: (a) => validateIsVendored(a[0]),
   py_which: (a) => pyWhich(a[0], a[1]),
+  py_is_absolute: (a) => pyIsAbsolute(a[0]),
+  install_agent_entry_of: (a) => installAgentEntryOf(a[0]),
 };
 
 const job = JSON.parse(readFileSync(process.argv[2], 'utf8'));

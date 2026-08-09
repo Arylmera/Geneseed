@@ -39,15 +39,12 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { emitGlobalInto } from '../bin/geneseed.mjs';
-import { GLOBAL_MANIFEST, expanduser, opencodeConfigDir } from './hosts.mjs';
+import { GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir } from './hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, footprintOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from './installs.mjs';
 import { unifiedDiff, pySplitLines } from './lib/pydiff.mjs';
 import { pyPrint, pyPrintErr, readText, writeText } from './lib/pyfs.mjs';
-
-/** `build.VERSION_MARKER`. */
-const VERSION_MARKER = '.geneseed-version';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 

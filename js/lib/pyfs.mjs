@@ -546,6 +546,44 @@ export function pyWhich(cmd, searchPath = null) {
   return null;
 }
 
+/**
+ * `pathlib.Path(s).is_absolute()`, which is NOT `path.isAbsolute(s)` on Windows.
+ *
+ * MEASURED against CPython 3.13, and the two disagree on exactly one shape: a ROOTLESS
+ * absolute path. `/x/AGENT.md` and `\x\AGENT.md` are `True` to `path.isAbsolute` and `False`
+ * to Python, which requires a DRIVE (`C:/x`) or a UNC root (`//server/share/x`) before it
+ * calls a Windows path absolute. `C:x/AGENT.md` — a drive-RELATIVE path — is False to both.
+ * On POSIX the two rules coincide and this is `s.startsWith('/')`.
+ *
+ * Written in P5h for `installAgentEntry`, which filters an OpenCode config's `instructions`
+ * for the entries that are NOT absolute in order to tell a project install's relative
+ * `…/AGENT.md` from a global install's absolute one. A hand-edited config naming
+ * `/repo/AGENT.md` is the reachable input: Python keeps that entry and Node would have
+ * skipped it and fallen through to the literal `AGENT.md`, unwiring nothing.
+ *
+ * ONE OWNER, and the five pre-existing `path.isAbsolute` calls in `js/` were READ rather than
+ * assumed to be copies. Three cannot reach the divergence — `js/doctor.mjs` and
+ * `bin/geneseed.mjs` test the output of `path.relative`, which is never rootless-absolute,
+ * and `js/emit.mjs`'s `safePriorDirName` is `&&`-guarded by `basename(p) === p` immediately
+ * after. The two in `js/hooks.mjs` (a context entry's `path`) DO carry the same hazard and
+ * are deliberately not repointed here: that is the hook entry's shipped behaviour, no
+ * `context` cell varies it, and changing it in this phase would be an ungated edit to a verb
+ * that crossed three phases ago. Recorded in the spec's "Still owed" with this reproduction.
+ *
+ * Gated by a corpus in `tests/test_pure_function_parity.py`: no cell can vary the shape.
+ */
+export function pyIsAbsolute(s) {
+  if (process.platform !== 'win32') return s.startsWith('/');
+  // Python is absolute iff the path has a DRIVE (or UNC share) *and* a root — `C:x` has the
+  // drive and no root, `/x` has the root and no drive, and neither is absolute. In
+  // `path.parse` terms that is exactly "the root is longer than a bare separator AND ends in
+  // one": `C:` for `C:x`, `\` for `\x`, `C:\` for `C:\x`, `\\srv\share\` for a UNC path.
+  // The first draft tested `root !== '\\'`, which called `C:x` absolute; the corpus caught
+  // it on the two drive-relative cases and nothing else would have.
+  const root = path.parse(s).root;
+  return root.length > 1 && /[\\/]$/.test(root);
+}
+
 export function pyPathStr(s) {
   const raw = path.parse(s).root;
   // Each separator individually, never `replace(/[\\/]+/g, sep)`: a UNC root's LEADING pair

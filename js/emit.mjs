@@ -81,12 +81,10 @@ import {
   mergeOpencodeJson, mergeClaudeSettings, wireClaudeExcludes, unwireClaudeExcludes,
   unwireClaudeSettings, managedBlockWrite, managedBlockRemove,
 } from './settings.mjs';
+import { VERSION_MARKER } from './hosts.mjs';
 import {
   writeText, readText, copyFile, jsonDumpsIndent, parseJson, pyAscii, pyTruthy,
 } from './lib/pyfs.mjs';
-
-/** `_build_core.VERSION_MARKER`. */
-const VERSION_MARKER = '.geneseed-version';
 /** `_build_render.SRC_DIRS_MARKER`. */
 const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
 /** `_build_render.OWNED_SRC_DIRS` — wiped and regenerated each run. */

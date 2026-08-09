@@ -201,7 +201,8 @@ class TheAcceptanceHarnessIsNotVacuous(unittest.TestCase):
         """A cell with no absolute assertion is compared and nothing more — and these four
         verbs are SILENT on almost every path by design, so two implementations that both
         stopped working would agree in every such cell, forever."""
-        kinds = ("expect", "expect_absent", "expect_re", "expect_silent", "expect_files")
+        kinds = ("expect", "expect_absent", "expect_re", "expect_silent", "expect_files",
+                 "expect_absent_files")
         naked = [c["id"] for c in harness_golden.cells()
                  if not any(c.get(k) for k in kinds)]
         self.assertFalse(naked, f"cells with no expectation at all: {naked}")
@@ -246,19 +247,34 @@ class TheAcceptanceHarnessIsNotVacuous(unittest.TestCase):
         test separate from a test of what it narrows.
         """
         snap = {"<stdout>": b"hello world", "<stderr>": b"", "<exit>": b"0",
-                "made/it.md": b""}
+                "made/it.md": b"", "<dirs>": b"made\nmade/husk"}
         self.assertFalse(harness_golden.check_expectations(
             {"expect": ["hello"], "expect_absent": ["goodbye"],
-             "expect_re": [r"hello \w+"], "expect_files": ["made/it.md"]}, snap))
+             "expect_re": [r"hello \w+"], "expect_files": ["made/it.md"],
+             "expect_absent_files": ["made/gone.md", "made/gone"]}, snap))
         for kind, cell in (
                 ("expect", {"expect": ["absent phrase"]}),
                 ("expect_absent", {"expect_absent": ["hello"]}),
                 ("expect_re", {"expect_re": [r"hello \d+ world"]}),
                 ("expect_silent", {"expect_silent": True}),
-                ("expect_files", {"expect_files": ["never/written.md"]})):
+                ("expect_files", {"expect_files": ["never/written.md"]}),
+                # Both halves of the sixth kind: a surviving FILE and a surviving
+                # DIRECTORY. The second is the one the `<dirs>` column exists for — with
+                # `check_expectations` reading only `snap`, an empty husk is invisible and
+                # this sub-case is the only thing that says so.
+                ("expect_absent_files", {"expect_absent_files": ["made/it.md"]}),
+                ("expect_absent_files/dir", {"expect_absent_files": ["made/husk"]})):
             with self.subTest(kind=kind):
                 self.assertTrue(harness_golden.check_expectations(cell, snap),
                                 f"{kind} was violated and the checker said nothing")
+        # And the column the directory half depends on must be REQUIRED. Without this, a
+        # fixture that stopped recording directories leaves every husk assertion passing on
+        # an empty set — the cells stay green and observe half of what they claim.
+        self.assertTrue(
+            harness_golden.check_expectations(
+                {"expect_absent_files": ["made/husk"]},
+                {k: v for k, v in snap.items() if k != "<dirs>"}),
+            "a snapshot with no <dirs> column let a directory assertion pass unexamined")
 
     def test_a_missing_candidate_binary_refuses_rather_than_comparing_ref_to_itself(self):
         """DECLARING the two-binary split and WIRING it are two properties.
@@ -520,6 +536,55 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
                              f"doctor failed with python off PATH:\n{r.stdout[-2000:]}\n"
                              f"{r.stderr[-2000:]}")
             self.assertIn("[doctor] ok — 1 theme(s) clean", r.stdout)
+
+    def test_uninstall_removes_an_install_with_no_python_on_path(self):
+        """The first verb that DELETES, refuted the same way — and the refutation matters
+        more here than for any verb before it.
+
+        `run(['python', 'harness.py', 'uninstall', '--yes'])` is byte-identical to a real
+        port in all 35 cells of the matrix, because the reference is what it would be
+        running. It is also the shape with the worst failure mode: a passthrough that dies
+        with ENOENT on a machine with no python leaves the install half-removed and the
+        operator told it succeeded. With PATH stripped there is nothing for such a call to
+        find, so the files going is proof the Node code removed them.
+
+        Asserted on the FILESYSTEM rather than on stdout: the whole verb is what is left
+        behind, and a passthrough that printed the right words while deleting nothing is
+        exactly what the cells cannot see either.
+        """
+        stripped, dropped = _path_without_python()
+        self.assertTrue(dropped, "PATH held no python at all, so this run proves nothing")
+        with tempfile.TemporaryDirectory() as tmp_s:
+            tmp = Path(tmp_s)
+            home, repo = tmp / "home", tmp / "repo"
+            cfg = home / ".claude"
+            (cfg / "agents").mkdir(parents=True)
+            repo.mkdir()
+            (cfg / ".geneseed-manifest.json").write_text(
+                json.dumps({"owned": ["agents/advocate.md"],
+                            "managed": {"settings_file": "settings.json"}}),
+                encoding="utf-8")
+            (cfg / "agents" / "advocate.md").write_text("# owned\n", encoding="utf-8")
+            (cfg / "PROFILE.md").write_text("# mine\n", encoding="utf-8")
+            env = golden.cell_env(home)
+            env["PATH"] = stripped
+
+            r = run_cli(["uninstall", "--yes", "--target", str(cfg)], env=env, cwd=repo)
+            self.assertEqual(r.returncode, 0,
+                             f"uninstall failed with python off PATH:\n{r.stdout[-1500:]}\n"
+                             f"{r.stderr[-1500:]}")
+            self.assertFalse((cfg / "agents" / "advocate.md").exists(),
+                             "the owned file survived with python off PATH — the verb is "
+                             "driving the Python CLI rather than being a second "
+                             "implementation")
+            self.assertFalse((cfg / ".geneseed-manifest.json").exists(),
+                             "the manifest survived, so nothing completed")
+            # The positive control, in the test that proves the deletion happened at all: an
+            # implementation that met the two assertions above with an `rmtree` would meet
+            # them and take the user's own file with it.
+            self.assertTrue((cfg / "PROFILE.md").exists(),
+                            "an unowned file was deleted — this removed by directory, not "
+                            "by manifest")
 
 
 @unittest.skipIf(NODE is None, "node is not on PATH")

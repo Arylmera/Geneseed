@@ -178,6 +178,10 @@ def _cases() -> list[dict]:
     for rel in _VENDORED_CORPUS:
         cases.append({"fn": "is_vendored_path", "args": [rel]})
         cases.append({"fn": "validate_is_vendored", "args": [rel]})
+    for s in _IS_ABSOLUTE_CORPUS:
+        cases.append({"fn": "py_is_absolute", "args": [s]})
+    for instr in _AGENT_ENTRY_CORPUS:
+        cases.append({"fn": "install_agent_entry_of", "args": [instr]})
     return cases
 
 
@@ -354,6 +358,46 @@ _SPLITLINES_CORPUS = (
     "a\x0bb", "a\x0cb", "a\x1cb", "a\x1db", "a\x1eb", "a\x85b",
     "trailing spaces   \nnext",
     "\U0001D50A\n\U0001D50A",
+)
+
+
+# --------------------------------------------------------------------------------------
+# P5h — `Path.is_absolute()`, and the entry it chooses
+# --------------------------------------------------------------------------------------
+#
+# P5c's rule for a language primitive, third time: reproduce one, gate it with a CORPUS.
+# `path.isAbsolute` is NOT `Path.is_absolute` on Windows — a ROOTLESS `/x/AGENT.md` is
+# absolute to Node and relative to Python, which requires a drive or a UNC root. A cell CAN
+# seed such an entry, but the answer only differs on one platform inside one branch whose
+# other observable effect is nothing at all, so the shape belongs here.
+#
+# `install_agent_entry_of` is the caller, driven beside it: which entry `uninstall` unwires
+# is the decision, and it is a first-match walk over a list the corpus can hand it whole.
+_IS_ABSOLUTE_CORPUS = (
+    "AGENT.md", "sub/AGENT.md", "./AGENT.md", "",
+    "/x/AGENT.md",                  # rootless posix — Python False, path.isAbsolute true
+    "\\x\\AGENT.md",                # rootless windows — same split
+    "C:/x/AGENT.md", "C:\\x\\AGENT.md",
+    "C:x/AGENT.md",                 # drive-RELATIVE: False to both, and easy to get wrong
+    "//srv/share/AGENT.md", "\\\\srv\\share\\AGENT.md",
+    "~/AGENT.md",                   # expanduser is a different function; this is literal
+    "/", "\\", "C:", "C:/",
+)
+
+_AGENT_ENTRY_CORPUS = (
+    ["AGENT.md"],
+    ["bundle/AGENT.md"],
+    ["./AGENT.md"],
+    [],
+    ["notes.md"],                                   # nothing matches -> the fallback
+    ["C:/x/AGENT.md"],                              # absolute -> skipped on both sides
+    ["/repo/AGENT.md"],                             # THE divergence, as the caller sees it
+    ["/repo/AGENT.md", "bundle/AGENT.md"],          # ...and first-match makes it observable
+    ["C:/x/AGENT.md", "bundle/AGENT.md"],
+    ["agents/AGENT.md", "bundle/AGENT.md"],         # first match wins, not the shortest
+    ["AGENT.MD"],                                   # case-sensitive comparison on both
+    [None, 42, "bundle/AGENT.md"],                  # the isinstance guard
+    ["AGENT.md/"],                                  # a trailing separator still names it
 )
 
 
@@ -688,6 +732,33 @@ class ThePureFunctionsAgreeOnEveryInputNoCellCanBuild(unittest.TestCase):
                       c["args"][0].encode("utf-16-le")) // 2]
         self.assertTrue(astral, "no case in this corpus distinguishes code points from "
                                 "UTF-16 units, so the pyLen gate is vacuous")
+
+    def test_the_is_absolute_corpus_reaches_the_rootless_shape(self):
+        """`pyIsAbsolute` exists for ONE disagreement: a rootless `/x` or `\\x`, which
+        `path.isAbsolute` calls absolute and `Path.is_absolute` does not. A corpus without
+        one is an equality between two spellings of the same rule — and on POSIX the two
+        rules genuinely coincide, so this asserts the SHAPE is present rather than that the
+        answers differ on this machine."""
+        cases = [c["args"][0] for c in self.cases if c["fn"] == "py_is_absolute"]
+        rootless = [s for s in cases
+                    if s[:1] in ("/", "\\") and not s.startswith(("//", "\\\\"))]
+        self.assertTrue(rootless, "no case in this corpus is a ROOTLESS absolute path, so "
+                                  "the pyIsAbsolute gate cannot tell the two rules apart")
+        drive_rel = [s for s in cases if re.match(r"^[A-Za-z]:[^\\/]", s)]
+        self.assertTrue(drive_rel, "no case is drive-RELATIVE (`C:x`), which is the shape a "
+                                   "naive `parse().root !== ''` rule gets wrong")
+
+    def test_the_agent_entry_corpus_can_see_the_absolute_rule_it_depends_on(self):
+        """`installAgentEntryOf` SKIPS an absolute entry, so a corpus whose lists hold only
+        relative ones exercises the first-match walk and never the predicate. At least one
+        case must pair a rootless-absolute entry with a relative one, which is the only
+        shape where the two `is_absolute` rules return different ENTRIES."""
+        lists = [c["args"][0] for c in self.cases if c["fn"] == "install_agent_entry_of"]
+        both = [ls for ls in lists
+                if any(isinstance(e, str) and e[:1] in ("/", "\\") for e in ls)
+                and any(isinstance(e, str) and e[:1] not in ("/", "\\") for e in ls)]
+        self.assertTrue(both, "no case pairs a rootless-absolute entry with a relative one, "
+                              "so this corpus cannot see which rule the walk applied")
 
 
 if __name__ == "__main__":

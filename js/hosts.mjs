@@ -24,6 +24,14 @@ const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return 
 export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
 
 /**
+ * `_build_core.VERSION_MARKER`. Third caller, so it moves here — `js/emit.mjs` and
+ * `js/diff.mjs` each had a private const of their own and `js/uninstall.mjs` would have made
+ * a third copy of a value whose whole job is being the same string everywhere. Same
+ * arithmetic that put `GLOBAL_MANIFEST` above it.
+ */
+export const VERSION_MARKER = '.geneseed-version';
+
+/**
  * `Path.expanduser()` — a LEADING `~` only, and `~` alone counts.
  *
  * Deliberately not a general tilde expansion: Python does not expand `~user` on Windows the
@@ -127,12 +135,18 @@ export function bobConfigDir() {
  * manifest" — both are the same `.opencode`/`.claude`/`.bob`/`.github` value the Python reads
  * out of `build.HOSTS[host]["project_marker"]`, so it belongs beside the config dir rather
  * than in a second table in `js/installs.mjs`.
+ *
+ * `agentFile` joined in P5h, and for one caller: `cmd_uninstall` names the managed block's
+ * carrier in its "removes:" preamble (`the CLAUDE.md managed block`, `the AGENTS.md managed
+ * block`). It is a column and not a literal in the message for the reason every other column
+ * here is one — Bob and Copilot both answer `AGENTS.md` while Claude answers `CLAUDE.md`, and
+ * a host added later must not need the message edited to stay true.
  */
 export const HOSTS = [
-  { host: 'opencode', configDir: opencodeConfigDir, projectMarker: '.opencode' },
-  { host: 'claude', configDir: claudeConfigDir, projectMarker: '.claude' },
-  { host: 'bob', configDir: bobConfigDir, projectMarker: '.bob' },
-  { host: 'copilot', configDir: copilotConfigDir, projectMarker: '.github' },
+  { host: 'opencode', configDir: opencodeConfigDir, projectMarker: '.opencode', agentFile: 'AGENT.md' },
+  { host: 'claude', configDir: claudeConfigDir, projectMarker: '.claude', agentFile: 'CLAUDE.md' },
+  { host: 'bob', configDir: bobConfigDir, projectMarker: '.bob', agentFile: 'AGENTS.md' },
+  { host: 'copilot', configDir: copilotConfigDir, projectMarker: '.github', agentFile: 'AGENTS.md' },
 ];
 
 /**
