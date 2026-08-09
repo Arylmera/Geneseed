@@ -744,6 +744,40 @@ renders it as the name in parentheses.
   indistinguishable), and one of the mutations is aimed at the FIXTURE: with `_copy_checkout`
   planting nothing, a planted-fault cell does not go red, it goes *vacuous* — which is the
   absolute half of a cell doing its job one layer further out than it ever has.
+- **`uninstall` crosses** as [`js/uninstall.mjs`](js/uninstall.mjs), and it is the first verb
+  in the port that **deletes**. **Fourteen of the 24 subcommands are now Node**; of the ten
+  left, `setup`/`menu`/`home` are P5's and the rest belong to P6–P10.
+  **A deletion needs the gate to prove what SURVIVED.** Every cell before this one asserts
+  what the reference produced, and a cross-implementation comparison is structurally blind to
+  two ports that both stopped deleting — they agree perfectly, forever. So every removal cell
+  seeds an *unowned* neighbour beside the owned files and names it in `expect_files`: the
+  difference between a manifest-driven removal and an `rmtree` is a positive control, not a
+  comment. P5c's ownership rule, one phase on and pointed the other way.
+  **The snapshot learned to see a directory.** `golden._snapshot` walks *files*, so an empty
+  husk was invisible in all 219 cells — and the ancestor-climb prune (`skills/<name>/…`, the
+  nested vendored layout) is a quarter of this verb. A `<dirs>` column in `run_cell` closes it
+  for the whole matrix at once, including the cells written before it existed; `cmdTheme`'s
+  statement order was sitting in the same hole. The *absolute* half is a different axis and is
+  the sixth expectation kind, **`expect_absent_files`**, which fails loudly if the column is
+  missing rather than letting every husk assertion pass unexamined.
+  **The reference's INCOMPLETE message promises a retry that cannot happen.** `uninstall` warns
+  that "the install marker was KEPT so you can retry" whenever a directory survives — but for a
+  *global* install the per-host reversal has already dropped the manifest and all four markers,
+  because it gates on its own `failed` list while the survivors sweep gates on `survivors`. Two
+  signals, one deletion, and only one of them reaches it: the promised retry reports *no
+  install at all*. Found by an `expect_files` written to assert the promise, and recorded as a
+  two-step cell both implementations must agree on rather than quietly fixed on one side.
+  **And a user's own file makes a clean uninstall report INCOMPLETE.** `_owned_dirs_for` holds
+  that *existence*, not emptiness, is the retry signal for `agents`/`skills`/`.opencode`, so any
+  file the manifest does not claim under one of them keeps the whole install marked
+  retry-worthy. The first draft of the cells put their positive controls inside those
+  directories and every removal cell came back INCOMPLETE — which is how the behaviour was
+  found. Both arms are now gated deliberately.
+  **`pyIsAbsolute` joins `pyfs` as a single owner.** `path.isAbsolute` calls a *rootless*
+  `/x/AGENT.md` absolute and `Path.is_absolute` does not — Python wants a drive or a UNC root —
+  and that decides which `opencode.json` `instructions` entry `uninstall` unwires. Corpus-gated
+  for the reason P5c gave, and the corpus earned its place immediately: the first draft called a
+  drive-*relative* `C:x` absolute and only the two drive-relative cases said so.
 
 ## 🚫 Explicitly out of scope
 

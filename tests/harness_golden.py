@@ -2103,8 +2103,14 @@ def _uninstall_cells() -> list[dict]:
     # section header; a control inside one of those dirs is a different cell.
     def oc_global(**extra):
         return dict({
+            # `agents/gone.md` is owned and NOT seeded, which is what makes `removed` a count
+            # of UNLINKS rather than of manifest entries. Free: it adds nothing to the count,
+            # so no other assertion in the group moves — and without it the mutation that
+            # increments before the `isFile` guard is green across all 35 cells, because
+            # every other manifest here lists only files that exist.
             f"{_OC}/.geneseed-manifest.json": json.dumps(
-                {"owned": ["AGENT.md", "skills/vend/references/deep.md"]}, indent=2) + "\n",
+                {"owned": ["AGENT.md", "agents/gone.md",
+                           "skills/vend/references/deep.md"]}, indent=2) + "\n",
             f"{_OC}/.geneseed-emit": "opencode-global\n",
             f"{_OC}/.geneseed-theme": "neutral\n",
             f"{_OC}/.geneseed-version": _STAMP,
@@ -2488,16 +2494,24 @@ def _uninstall_cells() -> list[dict]:
         # ---- the surviving-install inventory --------------------------------------------
         un("a-global-uninstall-lists-the-project-installs-that-remain",
            world=dict(oc_global(), **{
-               "home/.config/geneseed/installs.json": '["{sb/}/other"]',
+               "home/.config/geneseed/installs.json":
+                   '["{sb/}/other", "{sb/}/other-global"]',
                "other/.geneseed-emit": "opencode\n",
                "other/.opencode/.keep": "",
+               # A registered GLOBAL row that SURVIVES the read, which is the only thing
+               # that makes the `scope != "project"` filter observable: the removed root's
+               # own row prunes itself away when its marker goes, so a cell with only that
+               # one cannot tell a filter from an empty list. Named in `expect_absent`
+               # because "this row is excluded" is a claim only an absence can make.
+               "other-global/.geneseed-emit": "opencode-global\n",
            }),
            # Informational, never a cascade: a global uninstall cannot touch a project
            # install, and the survivor is still there afterwards to prove it.
            expect=["[uninstall] 1 project install(s) remain — the global removal does not "
                    "affect them (each is self-contained):",
                    "(opencode:project) — remove with: harness uninstall --target"],
-           expect_files=["other/.geneseed-emit"]),
+           expect_absent=["other-global", "(opencode:global) — remove with"],
+           expect_files=["other/.geneseed-emit", "other-global/.geneseed-emit"]),
         un("the-just-removed-root-is-not-listed-as-its-own-survivor",
            # A global install that is ALSO registered — a stale legacy row. It is excluded
            # by resolved path, and with nothing else on record the whole block is silent.
