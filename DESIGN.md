@@ -877,6 +877,71 @@ renders it as the name in parentheses.
   while parsing a port out of `""` — in a `finally`, *before* the kill — so a failed cell
   ended the run and orphaned one server per cell, which is the exact failure the teardown
   exists to prevent.
+- **Eight web read endpoints cross, and six of them were a JSON face over work already
+  done.** `/api/overview`, `/api/themes`, `/api/doctor`, `/api/diff`, `/api/installs`,
+  `/api/excludes`, `/api/setup` and `/api/profile` now answer from
+  [`js/web/api.mjs`](js/web/api.mjs) as well as from `rituals/_web_*.py`. **No subcommand
+  crosses here and the count stays fifteen** — `web` the verb is P6h's, and until then the
+  only caller of this code is the acceptance harness. `api_setup` is `statusData()` plus
+  four fields; `api_diff` is `diffCollect()` reshaped; `api_excludes` is
+  `excludesSnapshot()` unmodified; `api_installs` is a row per `installTargets()` entry
+  through five detectors P5d and P5f had already ported. That is the same discovery every
+  P5 sub-phase made, one layer up.
+  **One parameter had to grow: `doctorCollect({groups})`.** `js/doctor.mjs` already carried
+  a `ran(check, label, probs)` whose label went nowhere, with a docblock saying it stayed
+  because it is the one place each check is named. `/api/doctor` renders one card per
+  check, so this is the phase that fills it. `on_progress=` is still absent and still P7's.
+  **The inventory stays the counting half, deliberately.** `state.inventory` is every agent
+  and skill with its body, purpose, source path, lifecycle badge and taxonomy class, and
+  `api_overview` reads three `len()`s off it. The badge and the class come from the ~111
+  lines of TUI taxonomy P7 owns and no P6b endpoint consumes either, so `specNames` is the
+  file-*selection* half of `_spec_entries` and P6c grows it by adding the read — not by
+  writing a second selector.
+  **`python` is the first field in this port with no honest twin.** `api_setup` reports the
+  interpreter running the daemon; a Node daemon has none, and answering with Node's version
+  under a key named `python` would be a lie the About page prints. It answers `null`. The
+  harness normalises the field on both sides — and, because the value is four bytes wider
+  on one of them, the `Content-Length` it moves, tagged the same way a compressed body's
+  length already was. A comparison made tolerant of a value owes an absolute assertion
+  about that value somewhere else, so `tests/test_web_server.py` now carries **both**
+  halves: that the reference reports `sys.version`, and that the Node daemon reports
+  `null` rather than something version-shaped that would slip through the same pattern.
+  **The clock needed a corpus, because the cell cannot see it.** `build_time` and
+  `checked_at` are both `%Y-%m-%d %H:%M` sampled while the cell runs, and the two sides run
+  seconds apart — so the harness normalises them, which means a twin formatting in UTC, or
+  padding wrong, would compare equal in every web cell. The stamp is a pure function of an
+  epoch second and the local zone, so it is gated in
+  [`tests/test_pure_function_parity.py`](tests/test_pure_function_parity.py) over five
+  instants chosen for what they break: single-digit month/day/hour/minute, both sides of a
+  UTC date rollover, a DST transition, and a fractional second.
+  **Two gates, two findings, and neither came from review.** The harness's own self-check
+  refused two cells before a line of the port existed: one named a `version_verdict` that
+  is only reachable when the checkout has no committed bundle, and one seeded a Windows
+  path inside a JSON string, where the backslashes made `\U` an invalid escape — the
+  reference then swallowed the parse error and returned the empty stub, which reads exactly
+  like a working exclusion list. And the first parity run found a real port bug in
+  `js/installs.mjs`: `readMaybe` was a bare `readFileSync` where `Path.read_text` opens in
+  TEXT mode and folds `\r\n` to `\n`. Every caller until now read a single-line marker and
+  trimmed it, so five phases never noticed; `/api/profile` is the first consumer that hands
+  the whole decoded text back out, and it failed on both the text and the sha256 of it.
+  Fixed at `readMaybe` rather than at the new call site — the four multi-line readers in
+  `installs.mjs` and `uninstall.mjs` all mirror a Python `read_text` too, and were wrong in
+  the same way.
+  **And the route table became a partition, cross-checked against the source.**
+  `tests/web_golden.py` compares the routes that ARE ported, one cell at a time; it is
+  structurally blind to a path the reference answers and the Node daemon declares nowhere,
+  which the SPA fallback would then serve as an HTML 200 where the client expects JSON. So
+  `tests/test_web_server.py` reads the reference's routes out of `_web_server.py` with
+  `ast`, asks the Node modules for their own, and requires ported ∪ unported to equal it —
+  **split by verb**, because five paths answer both with different bodies and porting
+  `/api/excludes`' GET must not take its unported POST out of the list with it.
+  **Fourteen mutations, and the one that survived was about that partition.** Collapsing
+  the two unported lists back into one — a single line, and the whole reason they are two —
+  left both sets exactly as declared and both tests green, while POST `/api/excludes`
+  began answering a plausible 404 instead of the 501 that says "unported". **A gate on a
+  declaration is not a gate on the dispatcher.** The fix drives the real handler over
+  `node:http`, one probe per branch of the partition, with a ported route beside them as
+  the control — without which every 501 in the list is vacuous.
 
 ## 🚫 Explicitly out of scope
 
