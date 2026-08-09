@@ -714,7 +714,7 @@ renders it as the name in parentheses.
   **0.31 s** against a `doctor` run of ~2.1 s — a seventh of the cell, so it is one copy per
   cell per side and the obvious optimisation (one copy per cell *group*, planted and reverted)
   is refused: it would buy that seventh back by making the cells order-dependent, which nothing
-  in this harness has ever been. Twenty-seven cells, one planted fault per check.
+  in this harness has ever been. Thirty cells, one planted fault per check.
   **The fixture's own blind spot was the check it was built for.** `Harness/` is *gitignored*,
   so a copy of the tracked set has no committed bundle at all and `_rendered_problems` returns
   on its first line — every "rendered bundle in sync" a clean cell prints was a sentence about
@@ -740,6 +740,10 @@ renders it as the name in parentheses.
   sees no output; this port writes at the raise site, which is identical for every caller that
   lets the throw propagate and wrong for exactly this one. `renderedProblems` buffers stderr
   and replays it only if the render returns.
+  **36 mutations, 34 fire.** The two survivors are classified (one unreachable, one
+  indistinguishable), and one of the mutations is aimed at the FIXTURE: with `_copy_checkout`
+  planting nothing, a planted-fault cell does not go red, it goes *vacuous* — which is the
+  absolute half of a cell doing its job one layer further out than it ever has.
 
 ## 🚫 Explicitly out of scope
 

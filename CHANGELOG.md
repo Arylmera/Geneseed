@@ -20,7 +20,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   `[doctor] ok` when all fifteen of its checks find nothing, so two versions that had both
   stopped checking would agree perfectly. Ten of the fifteen read the checkout itself, which
   no sandboxed test could write to. So each test now gets its own copy of the checkout, breaks
-  exactly one thing in it, and runs both versions from that copy — 27 checks, one planted
+  exactly one thing in it, and runs both versions from that copy — 30 checks, one planted
   fault at a time.
 
 - **The port's sixteenth piece: `geneseed diff` and `geneseed rebuild-all` have Node twins.**
