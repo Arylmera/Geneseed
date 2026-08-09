@@ -11,8 +11,11 @@ import { readFileSync } from 'node:fs';
 import {
   accentFor, defaultTheme, manifestIsClaude, statusLines, versionVerdict,
 } from '../../js/status.mjs';
-import { fenceFor } from '../../js/generate.mjs';
+import { fenceFor, setupBuildArgs } from '../../js/generate.mjs';
+import { cmpKey } from '../../js/diff.mjs';
+import { pyCapitalize } from '../../js/installs.mjs';
 import { pyLen, pyLjust } from '../../js/lib/pyfs.mjs';
+import { unifiedDiff, pySplitLines } from '../../js/lib/pydiff.mjs';
 
 const FNS = {
   version_verdict: (a) => versionVerdict(a[0], a[1]),
@@ -23,6 +26,13 @@ const FNS = {
   py_len: (a) => pyLen(a[0]),
   py_ljust: (a) => pyLjust(a[0], a[1]),
   fence_for: (a) => fenceFor(a[0]),
+  unified_diff: (a) => unifiedDiff(a[0], a[1], {
+    fromfile: 'source/f', tofile: 'deployed/f', lineterm: '',
+  }),
+  py_split_lines: (a) => pySplitLines(a[0]),
+  cmp_key: (a) => cmpKey(a[0], a[1]),
+  py_capitalize: (a) => pyCapitalize(a[0]),
+  setup_build_args: (a) => setupBuildArgs(...a),
 };
 
 const job = JSON.parse(readFileSync(process.argv[2], 'utf8'));

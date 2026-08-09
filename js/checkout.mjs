@@ -22,6 +22,7 @@
  * over 259 cells and compares the tree byte-for-byte, and every one of them builds a cfg
  * from these paths. A depth error or a renamed key fails 259 cells, not zero.
  */
+import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,6 +43,28 @@ export const CONFIG = path.join(ROOT, 'harness.config.json');
 export const THEMES = path.join(ROOT, 'themes');
 export const PLUGIN_SRC = path.join(ROOT, 'adapters', 'opencode', 'plugins');
 export const WORKFLOW_SRC = path.join(ROOT, 'adapters', 'opencode', 'workflows');
+
+/**
+ * `_build_render.posture_names()` / `mode_names()` — discovered, never hardcoded, so a new
+ * posture file appears in both CLIs' choices with no code change.
+ *
+ * P5f moved this here from `bin/geneseed.mjs`, which had the only caller until
+ * `js/installs.mjs` needed the same two lists: `_posture_of_dir` scans a deployed carrier for
+ * `**<Name>**` and has to be scanning for the SAME names the driver's `--posture` accepts.
+ * Two discoveries of one directory is precisely the shape that lets a new posture file be
+ * buildable and undetectable.
+ */
+export function discoverNames(dir, first) {
+  let names = [];
+  try {
+    names = readdirSync(path.join(SRC, dir))
+      .filter((f) => f.endsWith('.md') && path.basename(f, '.md').toLowerCase() !== 'readme')
+      .map((f) => path.basename(f, '.md'))
+      .sort();
+  } catch { /* missing dir — fall through to the single default below */ }
+  names.sort((a, b) => (a !== first) - (b !== first) || (a < b ? -1 : a > b ? 1 : 0));
+  return names.length ? names : [first];
+}
 
 /**
  * `_build_core.js_cfg()`, originated rather than received.

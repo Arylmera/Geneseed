@@ -39,8 +39,9 @@
  * file carries one. `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two
  * tables from ever answering the same verb twice, since the shim bakes only one of them.
  */
+import { cmdDiff } from '../js/diff.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
-import { cmdBuild, cmdPrompt, cmdTheme } from '../js/generate.mjs';
+import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
 
 const VERBS = {
@@ -91,6 +92,21 @@ const VERBS = {
       '--transparent-only': 'transparentOnly' },
     mutex: [['--solid-only', '--transparent-only']],
   },
+  diff: {
+    fn: cmdDiff,
+    positionals: [],
+    options: { '--target': 'target', '--theme': 'theme' },
+    flags: { '--full': 'full' },
+    // The first `nargs="?"` in this table. `--out` bare is argparse's `const=True` — "the
+    // default timestamped path" — and `--out FILE` is the string, so `cmd_diff` branches on
+    // `args.out is True`. A verb-table entry that made it a plain option would refuse the
+    // bare form, and one that made it a flag would drop the filename.
+    optValue: { '--out': 'out' },
+  },
+  'rebuild-all': {
+    fn: cmdRebuildAll,
+    positionals: [],
+  },
 };
 
 function die(code, msg) {
@@ -114,6 +130,9 @@ function parse(spec, argv) {
   const args = {};
   for (const p of spec.positionals) args[p.name] = null;
   for (const name of Object.values(spec.options ?? {})) args[name] = null;
+  // `nargs="?"` with `default=None` — the same default as a plain option, and a different
+  // value when the flag is present with nothing after it (`const=True`).
+  for (const name of Object.values(spec.optValue ?? {})) args[name] = null;
   // `action="store_true"` defaults to False, not None — the difference matters because
   // `cmd_theme` branches on truthiness and `_resolve_themes_dir` reads `--global` with a
   // `getattr(args, "global_dir", False)`.
@@ -133,6 +152,23 @@ function parse(spec, argv) {
       if (eq > 0) return { error: `argument ${flag}: ignored explicit argument '${tok.slice(eq + 1)}'` };
       args[switchDest] = true;
       seen.add(flag);
+      continue;
+    }
+    const optDest = (spec.optValue ?? {})[flag];
+    if (optDest !== undefined) {
+      seen.add(flag);
+      if (eq > 0) { args[optDest] = tok.slice(eq + 1); continue; }
+      // argparse consumes the next token for a `nargs="?"` only if it does not LOOK like an
+      // option — so `diff --out --full` is a bare `--out` followed by `--full`, not an
+      // improvements file named `--full`. A lone `-` is a value in argparse and is treated
+      // as one here, matching the positional rule below.
+      const next = argv[i + 1];
+      if (next === undefined || (next.startsWith('-') && next !== '-')) {
+        args[optDest] = true;
+        continue;
+      }
+      args[optDest] = next;
+      i += 1;
       continue;
     }
     const dest = (spec.options ?? {})[flag];

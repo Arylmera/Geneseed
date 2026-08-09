@@ -161,7 +161,8 @@ def cells() -> list[dict]:
     """
     return (_context_cells() + _git_gate_cells() + _rule_gate_cells() + _learn_cells()
             + _exclude_cells() + _status_cells() + _version_cells()
-            + _build_cells() + _prompt_cells() + _theme_cells())
+            + _build_cells() + _prompt_cells() + _theme_cells()
+            + _diff_cells() + _rebuild_all_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -1290,8 +1291,289 @@ def _theme_cells() -> list[dict]:
 
 
 # --------------------------------------------------------------------------------------
+# diff  —  and what a cell can and cannot say about a DIFF
+# --------------------------------------------------------------------------------------
+#
+# Every cell here renders an 'expected' copy of the live `src/` into a temp dir and compares
+# it against a deployed tree the cell seeded. Three consequences follow, and the third is the
+# one that decides how these are written.
+#
+#   1. THEY ARE SLOW. One cell is one full global emit per side. That is the verb, not the
+#      fixture: `_diff_collect` cannot answer without rendering.
+#   2. THEY REPORT A HUNDRED-ODD `missing` ROWS. The seeded manifest owns two or three files;
+#      the expected render owns ~119. Everything the fixture did not seed is legitimately
+#      "in source, not deployed", and those rows are a real assertion — a hundred paths that
+#      have to agree — as long as nothing names their COUNT, which content commits move.
+#   3. **NOTHING HERE CAN VARY THE DIFF ALGORITHM.** A cell produces a whole-file replacement
+#      or an append; it cannot produce the shapes where `difflib`'s choices differ from any
+#      other diff's — tie resolution, the longest-block recursion's alignment, and above all
+#      `autojunk`, which engages at 200 lines and rewrites the hunks of every real harness
+#      file. `js/lib/pydiff.mjs` is therefore gated as a corpus in
+#      `tests/test_pure_function_parity.py`, with the unreachability measured in BOTH
+#      directions: 28 of its cases change when `autojunk` is switched off, and all 176 are
+#      green here either way. That is the P5d rule applied to a stdlib port rather than to a
+#      panel — a cell runs the PROGRAM, a corpus runs the FUNCTION.
+#
+# `_cmp_key`'s reason for existing is cell-unreachable for a fourth, separate reason.
+# `.geneseed-version` IS an owned file, so the branch RUNS in every cell here; what it does —
+# suppress a difference that is only the build DATE — needs a deployed marker carrying the
+# CURRENT source fingerprint, which changes every commit and `test_no_cell_hardcodes_a_source_
+# fingerprint` refuses. Corpus, for the same reason.
+
+# A deployed global OpenCode install, as `_diff_collect` recognises one: a manifest (with no
+# `scope`, which is what the real opencode-global emit writes) and the files it claims.
+_DEPLOYED_AGENT = "# Deployed AGENT.md\n\nThis is a local edit that source does not have.\n"
+
+
+def _diff_cells() -> list[dict]:
+    def df(name, argv=("diff",), world=None, **kw):
+        return dict(id=f"diff/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    steps=[{"argv": list(argv), "cwd": "repo"}], **kw)
+
+    def deployed(owned, **extra):
+        return dict({f"{_OC}/.geneseed-manifest.json": json.dumps({"owned": owned}),
+                     f"{_OC}/.geneseed-theme": "neutral\n",
+                     f"{_OC}/AGENT.md": _DEPLOYED_AGENT}, **extra)
+
+    # The summary line's three counts all move with `src/`, so the shape is what a cell may
+    # assert; the byte comparison gates the numbers.
+    summary = r"\[diff\] 1 edited, \d+ added-in-deployed, [1-9]\d* missing-from-deployed"
+
+    return [
+        df("an-owned-file-edited-in-place", world=deployed(["AGENT.md"]),
+           expect=["[diff] deployed ", "(theme: neutral)",
+                   "~ AGENT.md   (edited in deployed — review to back-port)",
+                   "- .geneseed-version   (in source, not deployed — re-emit to add)",
+                   # An OpenCode-only artifact, and the positive control for the dialect
+                   # cell below: without a row that HAS it, that cell's absence is vacuous.
+                   "- workflows/council.js   (in source, not deployed — re-emit to add)",
+                   "Run with --full to see the line-level diffs"],
+           expect_re=[summary]),
+        # The unified diffs themselves. `--full` is the only path that prints a hunk header,
+        # and without this cell the entire diff payload is compared in no cell at all: the
+        # summary above names files and never a line.
+        df("--full-prints-the-unified-diffs", ("diff", "--full"),
+           world=deployed(["AGENT.md"]),
+           expect=["--- AGENT.md (source -> deployed)",
+                   "--- source/AGENT.md", "+++ deployed/AGENT.md",
+                   "+This is a local edit that source does not have."],
+           expect_re=[r"@@ -\d+,\d+ \+\d+,\d+ @@"],
+           # The hint is mutually exclusive with `--full`, and saying so is what keeps the
+           # cell above from being the only thing that decides which branch ran.
+           expect_absent=["Run with --full"]),
+        df("a-file-only-the-deployment-has",
+           # In the deployed manifest, rendered by nothing — the `added` arm, which is the
+           # one a back-port actually cares about.
+           world=deployed(["AGENT.md", "agents/mine.md"],
+                          **{f"{_OC}/agents/mine.md": "# my own agent\n"}),
+           expect=["+ agents/mine.md   (only in deployed — your addition)"]),
+        df("the-deployed-emit-marker-picks-the-dialect",
+           # A Claude install must not be diffed against an OpenCode-dialect render. With the
+           # marker present the expected tree carries no AGENT.md, so the same seeded file
+           # flips from `edited` to `added`, and the OpenCode-only `workflows/` and
+           # `plugins/` disappear from the missing list entirely.
+           world=deployed(["AGENT.md"], **{f"{_OC}/.geneseed-emit": "claude-global\n"}),
+           expect=["+ AGENT.md   (only in deployed — your addition)",
+                   "- skills/wayfinder/SKILL.md   (in source, not deployed — re-emit to add)"],
+           expect_absent=["~ AGENT.md", "workflows/council.js", "plugins/"]),
+        df("a-lean-marker-is-diffed-lean",
+           # `_footprint_of_dir`'s RETURN value, consumed here where `status` consumed only
+           # its WARN. The lean global emit is the only one that writes laws/universal.md, so
+           # this pair of cells is what says the footprint reached the render.
+           world=deployed(["AGENT.md"], **{f"{_OC}/.geneseed-footprint": "lean\n"}),
+           expect=["- laws/universal.md   (in source, not deployed — re-emit to add)"]),
+        df("the-default-footprint-is-not-lean", world=deployed(["AGENT.md"]),
+           expect_absent=["laws/universal.md"], expect_re=[summary]),
+        df("an-explicit-theme-overrides-the-marker",
+           ("diff", "--theme", _SIGIL_THEME), world=deployed(["AGENT.md"]),
+           expect=[f"(theme: {_SIGIL_THEME})"], expect_absent=["(theme: neutral)"]),
+        df("--out-writes-the-improvements-report",
+           ("diff", "--out", "rep.md"), world=deployed(["AGENT.md"]),
+           # The RAW argument is printed, not a resolved path — `Path(out_path).expanduser()`
+           # with no `.resolve()`. And `--out` suppresses the `--full` hint on its own, which
+           # is the `elif ... and not args.out` the cell above cannot separate from `--full`.
+           expect=["[diff] improvements file written: rep.md"],
+           expect_absent=["Run with --full"],
+           expect_files=["repo/rep.md"]),
+        df("a-bare---out-picks-the-default-timestamped-path",
+           # argparse's `nargs="?" const=True`: no value means "under the deployed install's
+           # improvements/". A verb table that made `--out` a plain option would refuse this
+           # form, and one that made it a flag would drop the filename in the cell above.
+           # The stamp itself is normalised out of both the path and the report — see
+           # `_STAMPS` — so what this compares is that both sides wrote ONE file, in that
+           # directory, with the same contents.
+           ("diff", "--out"), world=deployed(["AGENT.md"]),
+           expect=["[diff] improvements file written: <HOME>", "improvements-<STAMP>.md"],
+           expect_files=[f"{_OC}/improvements/improvements-<STAMP>.md"]),
+        df("--out-and---full-together", ("diff", "--out", "rep.md", "--full"),
+           world=deployed(["AGENT.md"]),
+           # `--out` suppresses the hint AND `--full` still prints, which is the one
+           # combination the `elif` makes non-obvious.
+           expect=["improvements file written: rep.md", "--- AGENT.md (source -> deployed)"],
+           expect_absent=["Run with --full"], expect_files=["repo/rep.md"]),
+        df("no-global-install-at-the-target",
+           # No manifest anywhere: the refusal, on stderr, with exit 1 — and `<exit>` is a
+           # compared column, so a port that returned 0 here fails even though the words match.
+           expect=["[diff] no global Geneseed install at ",
+                   "Pass --target, or run `--emit opencode-global` first."],
+           expect_silent=True),
+        df("a-project-scoped-manifest-is-refused-differently",
+           # The OTHER `files is None` arm. Both print nothing on stdout and exit 1, so
+           # without an `expect` naming the wording they are the same observation.
+           world={f"{_OC}/.geneseed-manifest.json":
+                  json.dumps({"owned": [], "scope": "project"})},
+           expect=["is a PROJECT install", "opencode-global/claude-global/bob-global/"],
+           expect_absent=["no global Geneseed install"],
+           expect_silent=True),
+        df("an-explicit-target-is-expanded-and-not-resolved",
+           # `Path(target).expanduser()` with NO `.resolve()`, which is the opposite of what
+           # `cmd_version` does with the same flag — and it is observable, because `target` is
+           # printed. `~` is a real seedable directory here because the sandbox redirects HOME.
+           ("diff", "--target", "~/inst"),
+           world={"home/inst/.geneseed-manifest.json": json.dumps({"owned": ["AGENT.md"]}),
+                  "home/inst/AGENT.md": _DEPLOYED_AGENT},
+           expect=["[diff] deployed <HOME>", "~ AGENT.md"],
+           expect_absent=["deployed ~/inst"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
+# rebuild-all  —  every active install, re-emitted in its own everything
+# --------------------------------------------------------------------------------------
+#
+# The most expensive cells in this file: each one runs a real emit per detected install, into
+# the sandbox, and `_snapshot` then compares every file of every rebuilt tree. That is also
+# what makes them worth their cost — a port that got the emit or the flags wrong for one
+# install rewrites ~119 files differently and fails on the tree, not only on the label line.
+#
+# THE LABEL LINE IS THE CELL'S REAL SUBJECT, though. It names theme, emit, footprint, posture
+# and mode, and all five are read back off the deployed install rather than defaulted. Each
+# is a separate way for a rebuild to quietly re-emit something its owner never chose, and the
+# `-detected-` cells below vary one at a time.
+#
+# The Python's `[rebuild-all]` lines used to arrive AFTER the generator output they introduce,
+# because `print()` block-buffers when stdout is not a terminal while the inherited child
+# writes straight through. That was the reference being wrong rather than the port — same
+# shape as P5e's CREATE_NO_WINDOW, in the same helper, found the same way. Fixed at
+# `_harness_core.run` (flush before an inheriting spawn), so these cells compare the order the
+# code was written to produce.
+
+_PROJECT_OC = {"repo/.opencode/.keep": "", "repo/.geneseed-emit": "opencode\n"}
+
+
+def _rebuild_all_cells() -> list[dict]:
+    def rb(name, world=None, **kw):
+        return dict(id=f"rebuild-all/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    steps=[{"argv": ["rebuild-all"], "cwd": "repo"}], **kw)
+
+    # A GLOBAL OpenCode install, as `_install_state` recognises one: the manifest is the
+    # marker, and its presence alone makes the row `active`.
+    glob_oc = {f"{_OC}/.geneseed-manifest.json": '{"owned": []}\n',
+               f"{_OC}/.geneseed-emit": "opencode-global\n"}
+
+    return [
+        rb("no-active-installs-detected",
+           # The empty answer, which must not be reached by CREATING a row: an absent install
+           # is skipped, never rebuilt into existence.
+           expect=["[rebuild-all] no active installs detected."]),
+        rb("a-global-opencode-install", glob_oc,
+           expect=["[rebuild-all] opencode:global (",
+                   "theme=neutral emit=opencode-global footprint=full posture=peer mode=direct",
+                   "[geneseed] opencode-global -> ",
+                   "[rebuild-all] rebuilt 1 install(s)."],
+           expect_files=[f"{_OC}/AGENT.md", f"{_OC}/.geneseed-version"]),
+        rb("a-per-repo-install-is-rebuilt-in-place",
+           dict(_PROJECT_OC, **{"repo/.geneseed-theme": "neutral\n"}),
+           expect=["[rebuild-all] opencode:project (", "emit=opencode",
+                   "[geneseed] opencode layer: "],
+           # The per-repo emit puts the bundle at the invocation root and the layer under
+           # `.opencode/` — `--out` and `--root` are BOTH the detected root, which is what
+           # `_setup_build_args` does for a non-global scope and what this pair asserts.
+           expect_files=["repo/AGENT.md", "repo/.opencode/agents/advocate.md"]),
+        rb("the-theme-and-footprint-are-read-back-off-the-install",
+           dict(glob_oc, **{f"{_OC}/.geneseed-theme": f"{_SIGIL_THEME}\n",
+                            f"{_OC}/.geneseed-footprint": "lean\n"}),
+           expect=[f"theme={_SIGIL_THEME} emit=opencode-global footprint=lean"],
+           expect_absent=["theme=neutral", "footprint=full"]),
+        rb("the-posture-and-mode-are-read-back-out-of-the-CARRIER",
+           # Neither is markered — both are detected from the `**<Name>**` lead the inlined
+           # section opens with. This is the debt P5d recorded against `_installed_defaults`,
+           # and it comes due here rather than in the wizard, because `cmd_rebuild_all` reads
+           # them per ROOT instead of through that function.
+           dict(glob_oc, **{f"{_OC}/.geneseed-theme": "neutral\n",
+                            f"{_OC}/AGENT.md":
+                            "# deployed\n\n## Posture\n\n**Artisan** — ...\n\n"
+                            "## Mode\n\n**Foreman** — ...\n"}),
+           expect=["posture=artisan mode=foreman"],
+           expect_absent=["posture=peer mode=direct"]),
+        rb("a-marker-naming-another-host-is-not-trusted",
+           # ONE `.geneseed-emit` per root, last deploy wins. Here the root marker says
+           # `claude` while the row being rebuilt is the OpenCode project one, so trusting it
+           # would re-emit an OpenCode install as a Claude one — turning a rebuild into a
+           # host change. The marker is dropped and `_DEFAULT_EMIT` supplies `opencode`.
+           {"repo/.opencode/.keep": "", "repo/.geneseed-emit": "claude\n",
+            "repo/.geneseed-theme": "neutral\n"},
+           expect=["opencode:project (", "emit=opencode "],
+           expect_absent=["emit=claude "]),
+        rb("a-disabled-install-is-skipped",
+           # `.geneseed-disabled` beside the install makes the row `disabled`, and only
+           # `active` rows are rebuilt. Without this cell "skipped" and "never detected" are
+           # the same observation.
+           dict(glob_oc, **{f"{_OC}/.geneseed-disabled/.keep": ""}),
+           expect=["[rebuild-all] no active installs detected."],
+           expect_absent=["opencode-global -> "]),
+        rb("one-broken-install-does-not-stop-the-rest",
+           # THE CELL THE DRIVER'S `die` HAD TO STOP CALLING `process.exit` FOR. The global
+           # install carries a theme no `themes/` file has, so its rebuild refuses with exit
+           # 2; the project install must still be rebuilt and the exit code must be 1.
+           dict(glob_oc, **{f"{_OC}/.geneseed-theme": "nosuchtheme\n",
+                            "repo/.opencode/.keep": "",
+                            "repo/.geneseed-emit": "opencode\n",
+                            "repo/.geneseed-theme": "neutral\n"}),
+           expect=["[rebuild-all] FAILED opencode:global",
+                   "1/2 install(s) failed",
+                   "[geneseed] opencode layer: "],
+           expect_files=["repo/AGENT.md", "repo/.opencode/agents/advocate.md"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
 # the runner
 # --------------------------------------------------------------------------------------
+
+#: The two spellings `harness diff --out` stamps with `datetime.now()`: the improvements
+#: FILENAME (`improvements-20260809-112314.md`) and the report's own `captured:` line.
+#:
+#: WHY THEY ARE BLANKED. A cell runs the reference and then the candidate, one after the
+#: other, and a second boundary between the two runs is a coin flip — the report differed by
+#: one second on the first `--out` cell ever written. That is not a divergence between two
+#: implementations, it is the clock, and a gate that reports it is a gate that gets ignored.
+#: Every other input this harness has is either seeded or redirected; the clock is the one it
+#: cannot fence off, so it is normalised instead of pretended away (`learn` stamps a DATE,
+#: which is why nothing needed this until now — a day boundary is not a coin flip).
+#:
+#: WHAT THAT COSTS, AND WHERE IT IS PAID BACK. With the digits gone no cell can assert that
+#: the two implementations agree on the FORMAT — `improvements-2026-08-09.md` would normalise
+#: to the same thing. So that assertion moves to where an absolute per-implementation check
+#: belongs: `test_the_improvements_filename_is_stamped_the_same_way_by_both` in
+#: `tests/test_hook_cli_parity.py` runs both binaries and matches each against the pattern.
+_STAMPS = (
+    (re.compile(r"improvements-\d{8}-\d{6}\.md"), "improvements-<STAMP>.md"),
+    (re.compile(r"captured: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"), "captured: <STAMP>"),
+)
+
+
+def _destamp(data: bytes) -> bytes:
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data
+    for pat, repl in _STAMPS:
+        text = pat.sub(repl, text)
+    return text.encode("utf-8")
+
 
 def _subst(value, repl: dict):
     """Placeholder substitution. `str.replace`, never `str.format` — half the stdin
@@ -1354,9 +1636,15 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
         # HOME before SB: home sits UNDER the sandbox, so normalising the sandbox first
         # would leave `<SB>/home` and the two tags would stop lining up.
         roots = [("<HOME>", home), ("<REPO>", ROOT), ("<SB>", sb)]
-        snap = golden._snapshot(sb, roots)
-        snap["<stdout>"] = golden._normalise(proc.stdout.encode("utf-8", "replace"), roots)
-        snap["<stderr>"] = golden._normalise(proc.stderr.encode("utf-8", "replace"), roots)
+        # The clock, out of the KEYS as well as the contents: a bare `--out` names the file
+        # after the second it ran in, so an un-destamped key is reported as one file only in
+        # ref and another only in new. See `_STAMPS`.
+        snap = {_destamp(k.encode("utf-8")).decode("utf-8"): _destamp(v)
+                for k, v in golden._snapshot(sb, roots).items()}
+        snap["<stdout>"] = _destamp(
+            golden._normalise(proc.stdout.encode("utf-8", "replace"), roots))
+        snap["<stderr>"] = _destamp(
+            golden._normalise(proc.stderr.encode("utf-8", "replace"), roots))
         snap["<exit>"] = str(proc.returncode).encode()
         return snap
 

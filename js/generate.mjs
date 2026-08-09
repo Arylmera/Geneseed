@@ -33,6 +33,10 @@ import path from 'node:path';
 import { main as driverMain } from '../bin/geneseed.mjs';
 import { makeCfg } from './checkout.mjs';
 import { opencodeConfigDir, pyResolve } from './hosts.mjs';
+import {
+  EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, footprintOfDir, installState,
+  installTargets, modeOfDir, postureOfDir, readMaybe, themeOfDir,
+} from './installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from './opencode.mjs';
 import { renderAll } from './render.mjs';
 import {
@@ -82,6 +86,102 @@ const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return 
  */
 export function cmdBuild(args) {
   return driverMain(args.theme ? ['--theme', args.theme] : []);
+}
+
+// --------------------------------------------------------------------------------------
+// rebuild-all
+// --------------------------------------------------------------------------------------
+
+/**
+ * `_harness_setup._setup_build_args` — the generator argv for one selection. Pure.
+ *
+ * The elision rules are not symmetric and the Python says why: `footprint` is ALWAYS passed,
+ * because omitting it when it matched the generator's default silently coupled the answer to
+ * whatever that default happened to be — the moment the default moved, picking the old one
+ * produced the new one. `posture` and `mode` still elide at theirs, and neither has moved.
+ */
+export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
+  posture = 'peer', mode = 'direct') {
+  const argv = ['--theme', theme, '--emit', emit];
+  if (!['opencode-global', 'claude-global', 'bob-global', 'copilot-global'].includes(emit)) {
+    if (out) argv.push('--out', out);
+    if (root) argv.push('--root', root);
+  }
+  if (footprint) argv.push('--footprint', footprint);
+  if (posture && posture !== 'peer') argv.push('--posture', posture);
+  if (mode && mode !== 'direct') argv.push('--mode', mode);
+  return argv;
+}
+
+/**
+ * `_harness_build._DEFAULT_EMIT` — the emit to use for an install carrying NO marker.
+ *
+ * A pre-marker install still has a (host, scope), which is what the walk found it by, so it
+ * is rebuilt in its own mode rather than defaulted to OpenCode.
+ */
+const DEFAULT_EMIT = new Map([
+  ['opencode global', 'opencode-global'], ['opencode project', 'opencode'],
+  ['claude global', 'claude-global'], ['claude project', 'claude'],
+  ['bob global', 'bob-global'], ['bob project', 'bob'],
+  ['copilot global', 'copilot-global'], ['copilot project', 'copilot'],
+]);
+
+/**
+ * `_harness_build.cmd_rebuild_all` — re-emit every ACTIVE install in place, best-effort.
+ *
+ * WHY THIS IS THE VERB THAT MADE THE DRIVER'S `die` A THROW. The Python spawns one
+ * `build.py` per install and reads its return code, so "continue past a failure" is what a
+ * subprocess gives you for nothing. Calling `main` in-process — the route P5e established for
+ * `build`, and the only one the `child_process` ban leaves — makes a `process.exit` inside
+ * the generator's flag parser end the whole loop instead of one install. So `die` throws and
+ * `main` converts, and `rebuild-all/one-broken-install-does-not-stop-the-rest` is the cell
+ * that fails if either half is undone.
+ *
+ * FIVE VALUES ARE READ BACK OFF EACH INSTALL, not defaulted. Theme and emit and footprint
+ * come from markers; posture and mode are detected from the `**<Name>**` lead in the
+ * deployed carrier's prose, because they were never markered. A rebuild that defaulted any
+ * of them would silently re-emit an install into something its owner did not choose — which
+ * is the same failure mode `_footprint_of_dir`'s WARN exists to prevent, at a larger scale.
+ *
+ * THE MARKER IS TRUSTED ONLY FOR ITS OWN HOST. There is one `.geneseed-emit` per root and the
+ * last deploy wins, so in a dual-host repo (`.opencode/` and `.claude/` in one cwd) the other
+ * host's row would otherwise rebuild with the WRONG emit — turning a Claude install into an
+ * OpenCode one. `rebuild-all/a-dual-host-repo-rebuilds-each-row-in-its-own-emit` is the cell.
+ */
+export function cmdRebuildAll() {
+  const targets = installTargets().filter(([h, s, r]) => installState(r, h, s) === 'active');
+  if (!targets.length) {
+    pyPrint('[rebuild-all] no active installs detected.\n');
+    return 0;
+  }
+  const failures = [];
+  for (const [host, scope, root] of targets) {
+    const raw = readMaybe(path.join(root, '.geneseed-emit'));
+    let marker = raw === null ? '' : raw.trim();
+    if (marker && (EMIT_HOST_SCOPE.get(marker) ?? ['', ''])[0] !== host) marker = '';
+    const emit = marker || DEFAULT_EMIT.get(`${host} ${scope}`) || 'opencode-global';
+    const theme = themeOfDir(root) || defaultTheme();
+    const footprint = footprintOfDir(root);
+    const posture = postureOfDir(root) || defaultPosture();
+    const mode = modeOfDir(root) || defaultMode();
+    const out = scope === 'global' ? null : String(root);
+    const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode);
+    const label = `${host}:${scope} (${root})`;
+    pyPrint(`[rebuild-all] ${label}: theme=${theme} emit=${emit} footprint=${footprint} `
+      + `posture=${posture} mode=${mode}\n`);
+    const rc = driverMain(argv);
+    if (rc !== 0) {
+      failures.push(label);
+      pyPrintErr(`[rebuild-all] FAILED ${label} (exit ${rc})\n`);
+    }
+  }
+  if (failures.length) {
+    pyPrintErr(`[rebuild-all] ${failures.length}/${targets.length} install(s) failed: `
+      + `${failures.join(', ')}\n`);
+    return 1;
+  }
+  pyPrint(`[rebuild-all] rebuilt ${targets.length} install(s).\n`);
+  return 0;
 }
 
 // --------------------------------------------------------------------------------------

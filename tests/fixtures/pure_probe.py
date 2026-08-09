@@ -8,6 +8,7 @@ monkeypatching, and running a second process is the same thing the real CLI does
 """
 from __future__ import annotations
 
+import difflib
 import json
 import sys
 from pathlib import Path
@@ -18,6 +19,17 @@ import harness  # noqa: E402
 
 
 def run(fn: str, args: list):
+    if fn == "unified_diff":
+        return list(difflib.unified_diff(args[0], args[1], fromfile="source/f",
+                                         tofile="deployed/f", lineterm=""))
+    if fn == "py_split_lines":
+        return args[0].splitlines()
+    if fn == "cmp_key":
+        return harness._cmp_key(args[0], args[1])
+    if fn == "py_capitalize":
+        return args[0].capitalize()
+    if fn == "setup_build_args":
+        return harness._setup_build_args(*args)
     if fn == "version_verdict":
         return harness._version_verdict(*args)
     if fn == "status_lines":

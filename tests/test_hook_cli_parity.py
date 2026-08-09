@@ -648,6 +648,18 @@ class TheEntryRefusesRatherThanNoOps(unittest.TestCase):
         thousands of newlines, against a Python side that writes it through `sys.stdout` and
         translates every one. Prose generalises for free and gates do not — the second
         instance is where this becomes a table.
+
+        **P5f adds `build`, and that row is what the table was owed.** The generator's own
+        print sites — ~25 of them across the driver, `js/emit.mjs`, `js/settings.mjs`,
+        `js/opencode.mjs`, `js/native.mjs` and `js/render.mjs` — write raw `\\n`, and no gate
+        could see it: `tests/golden.py` captures with `text=True` for the same reason this
+        test exists, and P5e measured the gap at 104 bytes against 105 for a plain
+        `--emit files` and left it recorded because there was nothing to gate it with. There
+        is now, because `harness build` calls the driver's `main` in-process. The fix is
+        `withPyNewlines` around that `main` rather than 25 calls to `pyPrint`, and the reason
+        is in its docblock: those modules are also the body of the `GENESEED_NO_JS` seam
+        child, whose output a PYTHON parent re-prints — translating at the site would
+        translate twice on the path golden drives 259 times.
         """
         with tempfile.TemporaryDirectory() as tmp_s:
             tmp = Path(tmp_s)
@@ -655,7 +667,8 @@ class TheEntryRefusesRatherThanNoOps(unittest.TestCase):
             (tmp / "README.md").write_text("# bytes\n", encoding="utf-8")
             env = golden.cell_env(tmp / "home")
             for entry, argv in ((HOOK_CLI, ["context", "--root", str(tmp)]),
-                                (HARNESS_CLI, ["prompt"])):
+                                (HARNESS_CLI, ["prompt"]),
+                                (HARNESS_CLI, ["build"])):
                 with self.subTest(entry=entry.name, verb=argv[0]):
                     raw = {}
                     for side, cmd in (("py", [sys.executable, str(HARNESS_PY)]),
@@ -680,6 +693,42 @@ class TheEntryRefusesRatherThanNoOps(unittest.TestCase):
                         f"{raw['node'].count(chr(13).encode() + chr(10).encode())} CRLF\n"
                         f"  python tail: {raw['py'][-80:]!r}\n"
                         f"  node tail:   {raw['node'][-80:]!r}")
+
+    def test_the_improvements_filename_is_stamped_the_same_way_by_both(self):
+        """The assertion `harness_golden` gave up to stop being flaky.
+
+        `diff --out` names its file after `datetime.now()` to the SECOND, and a cell runs the
+        reference and then the candidate — so a second boundary between the two runs reported
+        a difference that was only the clock. `harness_golden._STAMPS` normalises both the
+        filename and the report's `captured:` line out of the comparison, which buys
+        stability and costs exactly one thing: with the digits gone, no cell can say the two
+        implementations agree on the FORMAT. `improvements-2026-08-09.md` would normalise to
+        the same `<STAMP>`.
+
+        So the format is asserted here instead, absolutely and per implementation — the shape
+        P5c's ownership gate uses for the same reason: a comparison that has been made
+        tolerant of a value needs an absolute assertion about that value somewhere else.
+        """
+        pattern = re.compile(r"^improvements-\d{8}-\d{6}\.md$")
+        for name, cmd in (("python", [sys.executable, str(HARNESS_PY)]),
+                          ("node", [NODE, str(HARNESS_CLI)])):
+            with self.subTest(impl=name), tempfile.TemporaryDirectory() as tmp_s:
+                tmp = Path(tmp_s)
+                cfg = tmp / "home" / ".config" / "opencode"
+                cfg.mkdir(parents=True)
+                (cfg / ".geneseed-manifest.json").write_text(
+                    json.dumps({"owned": ["AGENT.md"]}), encoding="utf-8")
+                (cfg / ".geneseed-theme").write_text("neutral\n", encoding="utf-8")
+                (cfg / "AGENT.md").write_text("# local\n", encoding="utf-8")
+                r = subprocess.run(cmd + ["diff", "--out"], cwd=str(tmp),
+                                   env=golden.cell_env(tmp / "home"),
+                                   capture_output=True, text=True, encoding="utf-8")
+                self.assertEqual(r.returncode, 0, r.stderr[:400])
+                written = sorted(p.name for p in (cfg / "improvements").glob("*"))
+                self.assertEqual(len(written), 1,
+                                 f"{name} wrote {written} instead of one report")
+                self.assertRegex(written[0], pattern,
+                                 f"{name} stamps the improvements filename differently")
 
     def test_an_emitted_hook_command_shape_runs_through_the_shell(self):
         """End-to-end, through `sh`/`cmd.exe`, with the `|| exit 0` a real emitted command

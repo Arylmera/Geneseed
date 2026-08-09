@@ -35,25 +35,29 @@ import {
   statSync, unlinkSync,
 } from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
   build, emitOpencodeRender, emitOpencodeGlobalRender, emitClaudeRender,
 } from '../js/emit.mjs';
 import { settingsIntegrityCheck } from '../js/settings.mjs';
-import { writeText, parseJson, jsonDumpsIndent } from '../js/lib/pyfs.mjs';
+import { writeText, parseJson, jsonDumpsIndent, withPyNewlines } from '../js/lib/pyfs.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
 // find a global install, and a resolver that decides WHERE a driver writes is the last thing
 // that should exist twice. golden.py's 259 cells are what made the move safe to attempt.
 import {
-  GLOBAL_MANIFEST, expanduser, pyResolve, opencodeConfigDir, claudeConfigDir, bobConfigDir,
+  GLOBAL_MANIFEST, pyResolve, opencodeConfigDir, claudeConfigDir, bobConfigDir,
   copilotConfigDir,
 } from '../js/hosts.mjs';
 
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
 // same cfg. golden.py's 259 cells all build one, which is what made the move safe.
-import { ROOT, SRC, CONFIG, THEMES, makeCfg } from '../js/checkout.mjs';
+import { ROOT, CONFIG, THEMES, discoverNames, makeCfg } from '../js/checkout.mjs';
+
+// P5f moved these, for the same arithmetic a third time: `harness rebuild-all` reads the
+// registry to find every install it must re-emit, and a CLI verb may not reach into a driver
+// for a reader. See js/registry.mjs.
+import { registryRecord, registryRoots } from '../js/registry.mjs';
 
 /** The nine `--emit` choices, in build.py:337-338's order. */
 const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
@@ -80,20 +84,6 @@ const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orc
  * fails to collapse) AGENT.md's capability tables in every cell.
  */
 const NATIVE_CATALOG = { opencode: true, claude: true, bob: false, copilot: false };
-
-/** `_build_render.posture_names()` / `mode_names()` — discovered, never hardcoded, so a
- *  new posture file appears in both CLIs' choices with no code change. */
-function discoverNames(dir, first) {
-  let names = [];
-  try {
-    names = readdirSync(path.join(SRC, dir))
-      .filter((f) => f.endsWith('.md') && path.basename(f, '.md').toLowerCase() !== 'readme')
-      .map((f) => path.basename(f, '.md'))
-      .sort();
-  } catch { /* missing dir — fall through to the single default below */ }
-  names.sort((a, b) => (a !== first) - (b !== first) || (a < b ? -1 : a > b ? 1 : 0));
-  return names.length ? names : [first];
-}
 
 /** `_build_render.resolve_out` — absolute, or relative to the CURRENT WORKING DIRECTORY
  *  (not to ROOT), so the harness renders straight into any repository. */
@@ -170,9 +160,36 @@ function choice(flag, value, allowed) {
   }
 }
 
+/**
+ * argparse's error exit — a THROW since P5f, where it used to be `process.exit(code)`.
+ *
+ * `harness rebuild-all` re-emits every active install and its whole contract is "continue
+ * past a failure so one broken install never blocks the rest". The Python gets that for free:
+ * each rebuild is a SUBPROCESS, and a child that exits 2 hands back a return code. Here the
+ * driver is a module in the same process, so `process.exit` would take the loop, the CLI and
+ * every remaining install with it — the one place where importing rather than spawning is not
+ * transparent, and it turns a per-install failure into a total one.
+ *
+ * The marker is `exitCode`, the SAME one `assertSourceComplete` and `effectiveTheme` already
+ * use, and the first draft of this used a second name so that only `die` would be converted
+ * — on the argument that an incomplete source should keep its stack. That draft was wrong,
+ * and `rebuild-all/one-broken-install-does-not-stop-the-rest` is what said so: a
+ * `.geneseed-theme` naming a theme that does not exist makes `effectiveTheme` refuse, and
+ * with only `die` converted the refusal propagated out of the loop and the remaining
+ * installs were never rebuilt. `main` is standing in for a PROCESS, and a process boundary
+ * turns every deliberate refusal into an exit code — the narrower rule was a distinction
+ * with no principle behind it.
+ *
+ * One behaviour improves as a side effect, and it is worth naming rather than discovering
+ * later: `process.exit` terminates without flushing a pending stdout write, so a refusal on
+ * a slow pipe could lose output it had already produced. Returning through `main` lets Node
+ * drain normally.
+ */
 function die(code, msg) {
   process.stderr.write(`geneseed: error: ${msg}\n`);
-  process.exit(code);
+  const e = new Error(msg);
+  e.exitCode = code;
+  throw e;
 }
 
 /**
@@ -330,80 +347,8 @@ function pruneOwned(oc, oldOwned, owned) {
   }
 }
 
-/**
- * `_install_registry.record` — idempotent, best-effort, and it must NEVER raise into a build.
- *
- * `realpathSync` rather than `path.resolve`, because Python's `Path.resolve()` returns the
- * filesystem's own casing and follows links; `path.resolve` only makes a path absolute. The
- * registry is compared byte-for-byte by `tests/golden.py` (XDG is redirected into the
- * sandbox), so a differently-cased entry is a failing cell.
- */
-function registryPath() {
-  const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-  return path.join(base, 'geneseed', 'installs.json');
-}
-
-function registryLoad() {
-  try {
-    const data = parseJson(readFileSync(registryPath(), 'utf8'));
-    return Array.isArray(data) ? data.map(String) : [];
-  } catch { return []; }
-}
-
-function registrySave(items) {
-  try {
-    const file = registryPath();
-    mkdirSync(path.dirname(file), { recursive: true });
-    const tmp = `${file}.tmp`;
-    // `jsonDumpsIndent` for the same reason as the manifest: these are absolute paths, and
-    // a machine whose username carries an accent writes one here.
-    writeText(tmp, `${jsonDumpsIndent(items)}\n`);
-    renameSync(tmp, file);
-  } catch { /* best-effort: a registry hiccup must never break a deploy */ }
-}
-
-function registryRecord(dir) {
-  try {
-    let root;
-    try { root = realpathSync.native(dir); } catch { root = path.resolve(dir); }
-    const cur = registryLoad();
-    if (!cur.includes(root)) registrySave([...cur, root]);
-  } catch { /* a registry hiccup must never fail a build */ }
-}
-
 function isDir(p) {
   try { return statSync(p).isDirectory(); } catch { return false; }
-}
-
-/**
- * `_install_registry.roots()` — live registered deploy roots, pruning the file as it reads.
- *
- * The prune is a WRITE, and reproducing it matters: `installs.json` is compared byte-for-byte,
- * so a read that failed to drop a dead row would leave the two implementations holding
- * different registries. The snapshot is taken once on purpose (its own comment says why):
- * comparing `kept` against a SECOND read could clobber a root a concurrent `record()`
- * appended between the two.
- */
-function registryRoots() {
-  const original = registryLoad();
-  const out = [];
-  const kept = [];
-  const seen = new Set();
-  for (const s of original) {
-    const root = expanduser(s);
-    let key;
-    try { key = existsSync(root) ? realpathSync.native(root) : root; } catch { key = root; }
-    if (seen.has(key)) continue;
-    if (isDir(root) && isFile(path.join(root, '.geneseed-emit'))) {
-      seen.add(key);
-      kept.push(root);
-      out.push(root);
-    }
-  }
-  if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {
-    registrySave(kept);
-  }
-  return out;
 }
 
 /**
@@ -521,7 +466,7 @@ function emitOpencode(cfg, args, out) {
  *     VERIFY stage to re-read it.
  */
 function emitOpencodeGlobal(cfg, args, out) {
-  const cfgDir = opencodeConfigDir();
+  const cfgDir = args.cfgDir ?? opencodeConfigDir();
   const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
 
   let oldOwned = [];
@@ -665,7 +610,7 @@ function emitCopilot(cfg, args, out) {
 
 /** `_build_global.emit_copilot_global` — into Copilot's personal config dir (~/.copilot). */
 function emitCopilotGlobal(cfg, args, out) {
-  const cfgDir = copilotConfigDir();
+  const cfgDir = args.cfgDir ?? copilotConfigDir();
   warnCopilotGlobalOverProject();
   const r = emitClaudeCore(cfg, args, {
     cfgDir, claudeMd: path.join(cfgDir, 'copilot-instructions.md'),
@@ -686,7 +631,7 @@ function emitCopilotGlobal(cfg, args, out) {
  * decided while nothing has been written, rather than behind a half-rendered config dir.
  */
 function emitClaudeGlobal(cfg, args, out) {
-  const cfgDir = claudeConfigDir();
+  const cfgDir = args.cfgDir ?? claudeConfigDir();
   const hookOpts = hookRunnerEntry();
   const r = emitClaudeCore(cfg, args, {
     cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'global', host: 'claude', out,
@@ -721,7 +666,7 @@ function emitClaude(cfg, args, out) {
  * as though the operator had already chosen it.
  */
 function emitBobGlobal(cfg, args, out) {
-  const cfgDir = bobConfigDir();
+  const cfgDir = args.cfgDir ?? bobConfigDir();
   const hookOpts = hookRunnerEntry();
   warnBobGlobalOverProject();
   const r = emitClaudeCore(cfg, args, {
@@ -770,6 +715,48 @@ function writeMarkers(markerDir, emit, footprint) {
 }
 
 /**
+ * `_build_global.HOSTS[host]['emit_global']` — the one column a CALLER outside the dispatch
+ * needs, and the reason it is a named export rather than a fifth branch in `main`.
+ *
+ * `harness diff` renders an 'expected' copy of a deployed install into a temp dir and
+ * compares it file by file. The Python spells that `HOSTS[host]["emit_global"](theme,
+ * out=..., cfg=<tmp>, footprint=...)`, where `cfg` overrides the target the emit would
+ * otherwise resolve. This is that call, and the override is threaded as `args.cfgDir` through
+ * the four `emit*Global` bodies rather than added to `parseArgs`: `build.py` has no
+ * `--cfg-dir` flag, and a flag on one driver and not the other is a divergence
+ * `tests/golden.py` compares 259 times and could never see, because it drives both from the
+ * same argv.
+ *
+ * WHICH SIDE OF THE BOUNDARY THIS SITS ON. P3c's rule was that a render CHILD must never
+ * resolve a config dir, because a child that did would write 135 files into the developer's
+ * real `~/.config/opencode`; P4a inverted it for the driver, which is the parent and must
+ * ORIGINATE what the child may not resolve. `diff` is a third position: it is a parent that
+ * needs the target to be somewhere other than where the resolver would put it, so it sends
+ * the value and the resolver is skipped entirely. An emit whose `cfgDir` came from anywhere
+ * but this argument would overwrite the live install `diff` is only reading.
+ */
+const GLOBAL_EMITS = {
+  opencode: emitOpencodeGlobal,
+  claude: emitClaudeGlobal,
+  bob: emitBobGlobal,
+  copilot: emitCopilotGlobal,
+};
+
+export function emitGlobalInto(host, { theme, out, cfgDir, footprint }) {
+  // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
+  // raising, because the host comes from a marker file a user can edit.
+  const emit = GLOBAL_EMITS[host] ?? GLOBAL_EMITS.opencode;
+  // The same funnel `main` installs, for the same reason and not because `diff` asked: this
+  // runs the whole render tree, whose ~25 print sites write raw `\n`. `diff` swallows the
+  // emit's STDOUT and lets its stderr through (the Python's `redirect_stdout` does exactly
+  // that), so an untranslated WARN from `warnBobGlobalOverProject` would reach the user's
+  // terminal with the wrong bytes on the one stream the caller deliberately does not hide.
+  return withPyNewlines(
+    () => emit(makeCfg(), { theme, footprint, root: null, cfgDir }, out),
+  );
+}
+
+/**
  * EXPORTED because `harness build` is a passthrough to this program.
  *
  * `_harness_build.cmd_build` is `run([sys.executable, BUILD, *extra]).returncode` — Python
@@ -780,6 +767,25 @@ function writeMarkers(markerDir, emit, footprint) {
  * CLI's argv.
  */
 export function main(argv) {
+  // `withPyNewlines` is what makes this driver's bytes Python's bytes on Windows, for every
+  // print site in the whole render tree at once — see its docblock for why a funnel and not
+  // 25 calls to `pyPrint`. It wraps the `catch` as well as `run`, because `die` writes its
+  // line on the way out.
+  return withPyNewlines(() => {
+    try {
+      return run(argv);
+    } catch (e) {
+      // Every DELIBERATE refusal becomes this process's exit code — `die`'s, and equally
+      // `assertSourceComplete`'s and `effectiveTheme`'s, which have already explained
+      // themselves on stderr. An unmarked throw is a crash and keeps its stack, because
+      // Python prints a traceback for one and dressing it as a tidy refusal would hide a bug.
+      if (e && e.exitCode !== undefined) return e.exitCode;
+      throw e;
+    }
+  });
+}
+
+function run(argv) {
   const args = parseArgs(argv, configDefaults());
 
   // Both refuse rather than silently doing something else. See docs/specs' P4 entry:

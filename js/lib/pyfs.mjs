@@ -419,6 +419,47 @@ export const pyPrint = (s) => process.stdout.write(xlate(s));
 export const pyPrintErr = (s) => process.stderr.write(xlate(s));
 
 /**
+ * The same rule applied to a whole CALL rather than to one string — `bin/geneseed.mjs`'s
+ * answer to the newline item P5e recorded and could not gate.
+ *
+ * WHY THE DRIVER NEEDS A FUNNEL WHERE EVERY OTHER CALLER NEEDS `pyPrint`. The generator
+ * prints from ~25 sites across `bin/geneseed.mjs`, `js/emit.mjs`, `js/settings.mjs`,
+ * `js/opencode.mjs`, `js/native.mjs` and `js/render.mjs`, and those modules are ALSO the
+ * body of the `GENESEED_NO_JS` seam child, whose `main` buffers both streams and hands them
+ * to a Python parent that re-prints them through `print()`. Converting those sites to
+ * `pyPrint` would translate once in Node and again in Python — `\r\r\n` on every line, on the
+ * path `tests/golden.py` drives 259 times. So the translation belongs to whichever process
+ * OWNS the stream, and the seam child does not own it. This wraps the driver's `main`, and
+ * only the driver's `main`.
+ *
+ * The item it closes: a plain `--emit files` handed its caller 104 bytes where `python
+ * build.py` handed over 105, and `tests/golden.py`'s `text=True` capture folds both to the
+ * same string. `test_the_two_entry_points_agree_on_stdout_BYTES` grew a `build` row (through
+ * `harness build`, which calls this `main` in-process) and a `rebuild-all` row, and those are
+ * what can see it.
+ *
+ * A Buffer chunk passes through untouched: `writeText` owns file bytes and nothing on this
+ * path writes binary to a stream, so translating one would be corrupting data rather than
+ * reproducing Python.
+ */
+export function withPyNewlines(fn) {
+  if (EOL === '\n') return fn();
+  const outW = process.stdout.write.bind(process.stdout);
+  const errW = process.stderr.write.bind(process.stderr);
+  const wrap = (real) => (chunk, ...rest) => real(
+    typeof chunk === 'string' ? xlate(chunk) : chunk, ...rest,
+  );
+  process.stdout.write = wrap(outW);
+  process.stderr.write = wrap(errW);
+  try {
+    return fn();
+  } finally {
+    process.stdout.write = outW;
+    process.stderr.write = errW;
+  }
+}
+
+/**
  * `len(s)` — CODE POINTS, where `String.length` counts UTF-16 units.
  *
  * They differ on every astral character: `len("𝔊")` is 1 and `"𝔊".length` is 2. Only

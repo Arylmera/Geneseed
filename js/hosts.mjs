@@ -113,20 +113,26 @@ export function bobConfigDir() {
 }
 
 /**
- * `_build_global.HOSTS`, reduced to the one column a non-emitting caller needs, and IN ITS
+ * `_build_global.HOSTS`, reduced to the two columns a non-emitting caller needs, and IN ITS
  * ORDER — opencode, claude, bob, copilot.
  *
  * An array rather than an object because the order is observable output, not an
  * implementation detail: `harness exclude add` walks it and prints one message per host, so
- * a reordering is a diff in stderr. (The rest of the registry — `emit_global`,
- * `native_catalog`, `project_marker` — stays Python; `bin/geneseed.mjs` receives those
- * decisions from its own dispatch rather than reading a table.)
+ * a reordering is a diff in stderr. (`emit_global` and `native_catalog` stay out;
+ * `bin/geneseed.mjs` receives those decisions from its own dispatch rather than reading a
+ * table.)
+ *
+ * `projectMarker` joined in P5f. `_install_targets` asks "does this cwd carry a project
+ * install of host H", and `_claude_cfg` asks "which subdir holds a project install's
+ * manifest" — both are the same `.opencode`/`.claude`/`.bob`/`.github` value the Python reads
+ * out of `build.HOSTS[host]["project_marker"]`, so it belongs beside the config dir rather
+ * than in a second table in `js/installs.mjs`.
  */
 export const HOSTS = [
-  { host: 'opencode', configDir: opencodeConfigDir },
-  { host: 'claude', configDir: claudeConfigDir },
-  { host: 'bob', configDir: bobConfigDir },
-  { host: 'copilot', configDir: copilotConfigDir },
+  { host: 'opencode', configDir: opencodeConfigDir, projectMarker: '.opencode' },
+  { host: 'claude', configDir: claudeConfigDir, projectMarker: '.claude' },
+  { host: 'bob', configDir: bobConfigDir, projectMarker: '.bob' },
+  { host: 'copilot', configDir: copilotConfigDir, projectMarker: '.github' },
 ];
 
 /** `_harness_learn.MEMORY_DIR_NAMES` — the neutral name and the imperial theme's. */
