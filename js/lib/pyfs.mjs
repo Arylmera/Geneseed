@@ -143,13 +143,24 @@ export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {
  * code point; the two disagree only above the BMP, which no settings.json key reaches. A
  * non-finite number throws rather than emitting `NaN`/`Infinity`: Python's encoder writes
  * those bare tokens, which is not valid JSON, and no caller here can produce one.
+ *
+ * `bareInts` admits a BARE JS number, reading it as a Python `int`. `pyStr` refuses one by
+ * default and is right to: a value that came out of `json.loads` carries the int/float
+ * distinction and a bare double has lost it. But P6's caller is `_send_json`, whose values
+ * are COMPUTED here — counts, a port, a pid, a unix second — and Python types every one of
+ * them `int`, which both languages render identically. The flag is where that claim is
+ * stated; the byte gate over every endpoint body is what would catch a float. A
+ * non-integral value still renders through `repr(float)`, which is the honest reading of
+ * `0.5`; only an INTEGRAL float (`1.0` against JS's `1`) is unrepresentable, and it is
+ * unrepresentable whatever this flag says.
  */
-export function jsonDumpsCompact(value, { sortKeys = false, ensureAscii = true } = {}) {
-  const text = compactImpl(value, sortKeys);
+export function jsonDumpsCompact(value, { sortKeys = false, ensureAscii = true,
+  bareInts = false } = {}) {
+  const text = compactImpl(value, sortKeys, bareInts);
   return ensureAscii ? escapeNonAscii(text) : text;
 }
 
-function compactImpl(v, sortKeys) {
+function compactImpl(v, sortKeys, bareInts) {
   if (v === null || v === undefined) return 'null';
   if (v === true) return 'true';
   if (v === false) return 'false';
@@ -160,12 +171,17 @@ function compactImpl(v, sortKeys) {
       throw new TypeError(`jsonDumpsCompact got ${n}; Python's encoder writes a bare `
         + 'NaN/Infinity token there, which is not JSON, and nothing here can produce one');
     }
+    if (bareInts && typeof v === 'number') {
+      return Number.isSafeInteger(n) ? String(n) : pyFloat(n);
+    }
     return pyStr(v);
   }
-  if (Array.isArray(v)) return `[${v.map((x) => compactImpl(x, sortKeys)).join(', ')}]`;
+  if (Array.isArray(v)) {
+    return `[${v.map((x) => compactImpl(x, sortKeys, bareInts)).join(', ')}]`;
+  }
   if (typeof v === 'object') {
     const keys = sortKeys ? Object.keys(v).sort() : Object.keys(v);
-    return `{${keys.map((k) => `${JSON.stringify(k)}: ${compactImpl(v[k], sortKeys)}`)
+    return `{${keys.map((k) => `${JSON.stringify(k)}: ${compactImpl(v[k], sortKeys, bareInts)}`)
       .join(', ')}}`;
   }
   throw new TypeError(`jsonDumpsCompact has no rendering for ${typeof v}`);
