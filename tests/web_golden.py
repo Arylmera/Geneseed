@@ -83,6 +83,7 @@ import argparse
 import gzip
 import http.client
 import json
+import os
 import re
 import socket
 import subprocess
@@ -122,6 +123,34 @@ _WEB_STAMPS = (
     # `tests/test_web_server.py`, which is the debt a tolerant comparison owes.
     (re.compile(r'"python": (?:"\d+\.\d+\.\d+[^"]*"|null)'), '"python": "<RUNTIME>"'),
 )
+
+
+# ---- P6e's two seeded inputs that are not files: a CLOCK and a PID ----------------------
+#
+# `_is_live(entry, now)` compares `now - entry["updated_at"]` against
+# `ACTIVITY_STALE_SECONDS` (1800) AND probes the writer's pid. Neither input is something a
+# request can carry, and both are the kind a destamp would ERASE rather than gate: normalise
+# `updated_at` and the live/stale split becomes invisible, which is P6b's lesson about the
+# clock applied one endpoint later.
+#
+# So they are SEEDED instead, and the seed is shared: `compare` samples one `now` per cell
+# and hands the SAME value to both sides, so the two runs read identical bytes off disk and
+# the comparison stays exact — no third destamp, and `updated_at` is compared as the number
+# it is.
+#
+# WHAT THIS CANNOT REACH, said out loud: the exact `<=` boundary. The server samples its own
+# `time.time()` when the request arrives, one to three seconds after the seed is written, so
+# an entry seeded at `now - 1800` is already past 1800 by the time it is read. The margins
+# below are wide on purpose (0 and 600 seconds live, 3600 stale) and the off-by-one in the
+# comparison operator is the one rule here no cell can gate.
+#
+# `_LIVE_PID` is this harness's OWN pid — alive for the whole run, and identical on both
+# sides because both runs happen in this process. `_DEAD_PID` is a positive integer no
+# operating system can have handed out: Linux caps `pid_max` at 4,194,304 and Windows pids
+# are DWORDs that never come near two billion. It is deliberately not 0 and not -1 — 0 hits
+# `_pid_alive`'s own `pid <= 0` guard before any syscall (which is its own seeded case), and
+# a negative would be `kill(-1)` on POSIX, which signals every process the user owns.
+_DEAD_PID = 2000000000
 
 
 def _web_destamp(data: bytes) -> bytes:
@@ -296,7 +325,343 @@ def cells() -> list[dict]:
     out += _read_cells(cell)
     out += _catalog_cells(cell)
     out += _docs_cells(cell)
+    out += _graph_cells(cell)
+    out += _activity_cells(cell)
     return out
+
+
+# The body of a deployed-only skill, which is the ONE arbitrary text `api_graph` will parse
+# that a cell gets to write. Everything else it reads is the checkout.
+#
+# `probe` has no counterpart in `src/`, so `src_body.get(node, e["body"])` takes its FALLBACK
+# arm and this text is what the edge walk sees — which makes it the corpus P6d would have
+# written as a corpus, run through the real endpoint instead. Each line is an axis:
+#
+#   * `[[wayfinder]]` twice — the `seen` de-duplication; `[[probe]]` — the `dst != src`
+#     guard; `[[nowhere]]` — a name not in `known`.
+#   * `[council](council.md)` and `[plan](../skills/plan.md)` — MDLINK_RE and its
+#     `rsplit("/", 1)[-1]`, which is why the second one resolves at all.
+#   * `Dictate III` / `dictate IV` — the THEMED law noun, and IGNORECASE on the noun.
+#     `Rule V` / `Law VI` — the canonical fallback pair, which under `imperial` is the only
+#     thing that makes them match and which a port keyed on the theme alone would drop.
+#   * `dictate vii` — IGNORECASE does NOT extend to the numeral: `m.group(1)` comes back
+#     `vii` and `law_nums` holds `VII`, so this one is dropped. The pair with `dictate IV`
+#     is what says so.
+#   * `DictateVIII` (no space), `Dictate ZZZ` (not a numeral), `Dictate MMM` (a well-formed
+#     numeral no law has) — three ways to be refused.
+#   * THE BOUNDARY. `\b` is UNICODE-aware in Python and ASCII-only in JS, so `eDictate` with
+#     an accent, a digit, a trailing `_` and a CJK character are four inputs where a literal
+#     `\b` in the port answers differently from the reference. All four must produce nothing.
+#   * THE SPACING. `\s` is not the same class in the two languages (P6d measured it):
+#     U+001C and U+0085 are whitespace to Python and not to JS, U+FEFF is the reverse. So
+#     XVIII/XIX/XXI must appear and XX must not.
+_GRAPH_PROBE_BODY = (
+    "---\nname: probe\n---\n\n> a probe\n\n"
+    "Wikilinks: [[wayfinder]] and [[wayfinder]] again, [[probe]] itself, [[nowhere]].\n"
+    "Markdown: [council](council.md) and [plan](../skills/plan.md) and [gone](gone.md).\n"
+    "Themed: Dictate III, dictate IV. Canonical: Rule V and Law VI.\n"
+    "Refused: dictate vii, DictateVIII, Dictate ZZZ, Dictate MMM.\n"
+    "Boundary: éDictate XIV, Dictate XVé, 3Dictate XVI, Dictate XVII_, "
+    "一Dictate XXII.\n"
+    "Spacing: Dictate XVIII, DictateXIX, Dictate﻿XX, DictateXXI.\n"
+)
+
+
+def _graph_cells(cell) -> list[dict]:
+    """P6e — `/api/graph`, whose two halves read two different inventories.
+
+    THE SUBTLETY IS THE WHOLE PHASE. Nodes come from `state.inventory` — the DEPLOYED set on
+    a deployed install — and edges are parsed from the SOURCE render's bodies, because
+    deploying a skill flattens its `[…](….md)` markup to prose. A port that walked one
+    inventory for both would answer a single-banded matrix on a deployed install and every
+    cell over an UNDEPLOYED one would still pass, since there the two inventories are the
+    same object. So the first cell deploys, and seeds a skill (`wayfinder`) whose deployed
+    body carries no links at all while its source body carries four.
+
+    AND THE LAW PATTERN IS THEME-DEPENDENT. `_law_ref_re` builds its alternation from the
+    theme's own word for a law, so `imperial` prose says "Dictate III" where `neutral` says
+    "Rule III". Measured: a hardcoded `Rule|Law` finds 46 references in the neutral render's
+    law bodies and ZERO in the imperial one. One cell per voice, or the edge set is gated
+    for one of the two and the other silently returns nodes with nothing between them.
+    """
+    return [
+        cell("graph/nodes-come-from-the-deployed-set-and-edges-from-the-source-render",
+             [_req(path="/api/graph")],
+             world=_full(**{
+                 # Two skills whose SOURCE bodies `wayfinder` links to. They are seeded here
+                 # only so those links have somewhere to land: `add_edge` drops a target
+                 # that is not in `known`, and `known` is the deployed set.
+                 f"{_OC}/skills/council/SKILL.md":
+                     "---\nname: council\n---\n\n> deployed council\n\nflat prose.\n",
+                 f"{_OC}/skills/plan/SKILL.md":
+                     "---\nname: plan\n---\n\n> deployed plan\n\nflat prose.\n",
+                 f"{_OC}/skills/probe/SKILL.md": _GRAPH_PROBE_BODY,
+             }),
+             expect=[
+                 # NODES: the deployed skills, and no agent — `mine` is deployed as both and
+                 # the skills loop writes the name map second, so it lands as a skill. The
+                 # deployed agent dir holds only `mine` and the `_`-prefixed template.
+                 '"nodes": [{"id": "I", "type": "law"}',
+                 '{"id": "council", "type": "skill"}, {"id": "mine", "type": "skill"}',
+                 '{"id": "probe", "type": "skill"}, {"id": "wayfinder", "type": "skill"}',
+                 # THE SEPARATOR. `wayfinder`'s DEPLOYED body is `> shipped\n\nb\n` — no
+                 # links, no law references. These four edges can only have come from the
+                 # source render, and a port reading the deployed body answers none of them.
+                 '{"source": "wayfinder", "target": "council"}',
+                 '{"source": "wayfinder", "target": "plan"}',
+                 '{"source": "wayfinder", "target": "II"}',
+                 # The OTHER arm: `mine` has no source counterpart, so its deployed body is
+                 # what gets walked — the `src_body.get(node, e["body"])` fallback.
+                 '{"source": "mine", "target": "wayfinder"}',
+                 # The probe body's positive axes, in walk order: wikilinks, then markdown
+                 # links, then law prose.
+                 '{"source": "probe", "target": "wayfinder"}, '
+                 '{"source": "probe", "target": "council"}, '
+                 '{"source": "probe", "target": "plan"}, '
+                 '{"source": "probe", "target": "III"}, '
+                 '{"source": "probe", "target": "IV"}, '
+                 '{"source": "probe", "target": "V"}, '
+                 '{"source": "probe", "target": "VI"}, '
+                 '{"source": "probe", "target": "XVIII"}, '
+                 '{"source": "probe", "target": "XIX"}, '
+                 '{"source": "probe", "target": "XXI"}',
+                 # Law-to-law, from the rendered law bodies under the IMPERIAL noun.
+                 '{"source": "XII", "target": "V"}',
+             ],
+             expect_absent=[
+                 # Every refusal in the probe body, named as the pair it would produce. The
+                 # bare numeral would be useless: other sources legitimately cite most of
+                 # these.
+                 '{"source": "probe", "target": "probe"}',
+                 '{"source": "probe", "target": "nowhere"}',
+                 '{"source": "probe", "target": "gone"}',
+                 '{"source": "probe", "target": "vii"}',
+                 '{"source": "probe", "target": "VII"}',
+                 '{"source": "probe", "target": "VIII"}',
+                 '{"source": "probe", "target": "MMM"}',
+                 '{"source": "probe", "target": "XIV"}',
+                 '{"source": "probe", "target": "XV"}',
+                 '{"source": "probe", "target": "XVI"}',
+                 '{"source": "probe", "target": "XVII"}',
+                 '{"source": "probe", "target": "XXII"}',
+                 '{"source": "probe", "target": "XX"}',
+                 # A second edge for the same pair — `seen` is what stops the duplicate
+                 # `[[wayfinder]]` from producing one.
+                 '{"source": "probe", "target": "wayfinder"}, '
+                 '{"source": "probe", "target": "wayfinder"}',
+                 # The deployed agent template, and the agent-typed `mine` the skills loop
+                 # overwrote.
+                 '"_template"', '{"id": "mine", "type": "agent"}',
+             ]),
+        cell("graph/the-law-noun-follows-the-theme-and-the-source-render-is-the-node-set",
+             [_req(path="/api/graph")], world={"repo/.keep": ""},
+             # The neutral voice, over the whole catalogue. Nothing is deployed, so
+             # `state.inventory` IS the source render and both halves read the same tree —
+             # which is exactly why this cell cannot stand alone and the deployed one above
+             # exists. What it adds is the second law noun: these edges come from prose that
+             # says "Rule N", and the cell above's come from prose that says "Dictate N".
+             expect=['{"id": "wayfinder", "type": "skill"}', '"type": "agent"',
+                     '{"source": "XII", "target": "V"}',
+                     '{"source": "wayfinder", "target": "council"}'],
+             expect_re=[r'"edges": \[\{"source": "[a-z][a-z0-9-]*", "target": ']),
+    ]
+
+
+# ---- the activity surface --------------------------------------------------------------
+#
+# One seeded world with every arm of `_is_live` and `_read_entry` in it. Written as raw JSON
+# TEXT rather than through `json.dumps`, because the placeholders (`{now}`, `{pid}`, …) are
+# numbers and would have to be strings to survive a dict — and because two of these files
+# are deliberately not JSON at all.
+def _act(sid: str, when: str, pid: str, extra: str = "") -> str:
+    return ('{"session_id": "%s", "updated_at": %s, "pid": %s%s}\n'
+            % (sid, when, pid, (", " + extra) if extra else ""))
+
+
+_ENRICHED = ('"agent": "wayfinder", "title": "hello", "cwd": "{repo/}", "status": "working", '
+             '"model": "opus", "phase": "edit", "turn_started_at": {now}, '
+             # `1.0` is the case the whole int/float apparatus exists for: Python's
+             # `json.loads` types it float and re-renders it `1.0`, and a Node twin that
+             # reached for `JSON.parse` would answer a bare `1`. `bareInts` cannot save it —
+             # only reading the file with `parseJson` can.
+             '"cost": 1.0, "tokens": 1200, "files": ["a.py"], '
+             '"todos": [{"text": "one", "done": false}], "blocked_on": null, "error": null')
+
+
+def _activity_world(**extra) -> dict:
+    return _installed(**{
+        # LIVE — the fully-enriched shape, and the newest.
+        f"{_OC}/activity/s-live.json": _act("s-live", "{now}", "{pid}", _ENRICHED),
+        f"{_OC}/activity/s-live.detail.json": json.dumps({
+            "session_id": "s-live-detail-leak", "pid": os.getpid(),
+            "timeline": [{"t": 1, "step": "read"}, {"t": 2, "step": "edit"}],
+            "files": ["a.py", "b.py", "c.py"],
+            "todos": [{"text": "one"}, {"text": "two"}],
+            "conversation": [{"role": "user", "text": "hello"},
+                             {"role": "assistant", "text": "hi"}]}) + "\n",
+        # A TIE on `updated_at`, which is the only thing that can tell a stable sort from an
+        # unstable one. `sorted(reverse=True)` keeps the glob order for equal keys, and the
+        # glob is sorted by name, so `s-live` must still come first.
+        f"{_OC}/activity/s-tie.json": _act("s-tie", "{now}", "{pid}"),
+        # LIVE but older — the ordering's positive control.
+        f"{_OC}/activity/s-older.json": _act("s-older", "{older}", "{pid}",
+                                             '"cost": 0.0, "tokens": 0'),
+        # LIVE through a pid written as a STRING. `int(pid)` accepts it; a port comparing
+        # types would prune a session that is running.
+        f"{_OC}/activity/s-strpid.json": _act("s-strpid", "{now}", '"{pid}"'),
+        # STALE — pid alive, clock old. Its DETAIL file must go with it.
+        f"{_OC}/activity/s-stale.json": _act("s-stale", "{stale}", "{pid}"),
+        f"{_OC}/activity/s-stale.detail.json": '{"timeline": []}\n',
+        # DEAD — clock fresh, writer gone. The other half of the `and`.
+        f"{_OC}/activity/s-dead.json": _act("s-dead", "{now}", "{deadpid}"),
+        # The three refusals INSIDE `_pid_alive`, before any syscall.
+        f"{_OC}/activity/s-zero.json": _act("s-zero", "{now}", "0"),
+        f"{_OC}/activity/s-nopid.json": '{"session_id": "s-nopid", "updated_at": {now}}\n',
+        f"{_OC}/activity/s-badpid.json": _act("s-badpid", "{now}", '"not-a-pid"'),
+        # SKIPPED, not pruned: `_read_entry` returns None and the loop `continue`s without
+        # unlinking. Two shapes — unparseable, and parseable but not a dict.
+        f"{_OC}/activity/s-garbage.json": "this is not json at all\n",
+        f"{_OC}/activity/s-notdict.json": "[1, 2, 3]\n",
+        # A v1 writer: no enrichment keys at all, and no session_id either, so the file STEM
+        # is what names it.
+        f"{_OC}/activity/s-min.json": '{"updated_at": {now}, "pid": {pid}}\n',
+        **extra,
+    })
+
+
+def _activity_cells(cell) -> list[dict]:
+    """P6e — `/api/activity` (GET) and `/api/activity/<sid>`.
+
+    NO CHECKOUT FIXTURE, and measured rather than assumed: `_activity_dir` is
+    `<target>/activity` and `_activity_flag` is `<target>/.geneseed-activity`, both inside
+    the sandbox, and nothing on this path renders a theme or reads `src/`.
+
+    THE ENDPOINT DELETES, which is new for the web layer and is why `expect_files` /
+    `expect_absent_files` arrive with this phase. `_activity_entries` unlinks every snapshot
+    it prunes so the directory self-cleans, and that is a side effect the RESPONSE is
+    completely silent about: two servers that both stopped unlinking answer identically
+    forever. P5h's three directions — what went, what survived, and the listing the snapshot
+    compares — are the gate.
+
+    THE POST HALF IS NOT PORTED. `/api/activity` answers both verbs, and `api_activity_toggle`
+    is a WRITE, so the path stays in `NOT_PORTED_POST` and the partition test keeps it honest.
+    That means the flag can only be READ here, never flipped, so the two flag arms are two
+    cells rather than two requests.
+    """
+    live = [f"home/.config/opencode/activity/{n}.json"
+            for n in ("s-live", "s-live.detail", "s-tie", "s-older", "s-strpid", "s-min",
+                      "s-garbage", "s-notdict")]
+    pruned = [f"home/.config/opencode/activity/{n}.json"
+              for n in ("s-stale", "s-stale.detail", "s-dead", "s-zero", "s-nopid",
+                        "s-badpid")]
+    return [
+        cell("activity/live-sessions-are-listed-newest-first-and-the-rest-are-pruned",
+             [_req(path="/api/activity")], world=_activity_world(),
+             expect=[
+                 # Absent flag file → `except OSError: return True`. The default every user
+                 # who has never toggled is on.
+                 '"enabled": true',
+                 '{"session_id": "s-live", "agent": "wayfinder", "title": "hello"',
+                 '"cost": 1.0, "tokens": 1200, "files": ["a.py"]',
+                 # The v1 defaults, spelled out: the enrichment keys the writer omitted come
+                 # back null/0 rather than missing, and the STEM names the session.
+                 '{"session_id": "s-min", "agent": null, "title": null, "cwd": null, '
+                 '"status": "idle",',
+                 '"cost": 0, "tokens": 0, "files": null, "todos": null',
+                 '{"session_id": "s-strpid"',
+             ],
+             expect_absent=[
+                 '"s-stale"', '"s-dead"', '"s-zero"', '"s-nopid"', '"s-badpid"',
+                 '"s-garbage"', '"s-notdict"',
+                 # The `.detail.json` filter. Without it the detail file parses as a
+                 # snapshot — it carries a pid and no clock of its own — and this leaks.
+                 's-live-detail-leak', '"s-live.detail"',
+             ],
+             # Newest first, and the tie broken by the glob order rather than by luck.
+             expect_re=[r'"s-live".*"s-tie".*"s-older"'],
+             expect_files=live, expect_absent_files=pruned),
+
+        cell("activity/a-flag-that-says-no-gates-the-surface-and-prunes-nothing",
+             [_req(path="/api/activity")],
+             world=_activity_world(**{f"{_OC}/.geneseed-activity": "  No \n"}),
+             # `raw not in ("off", "0", "false", "no")` after `.strip().lower()`, so this one
+             # value gates the strip, the lower AND a member of the tuple that is not the
+             # obvious "off". And the pruning is SHORT-CIRCUITED when the surface is off:
+             # every file the cell above deletes is still here, which is the behaviour and
+             # not an accident of ordering.
+             expect=['{"enabled": false, "activity": []}'],
+             expect_absent=['"s-live"'],
+             expect_files=live + pruned),
+
+        cell("activity/an-explicit-on-flag-reads-the-same-as-no-flag-at-all",
+             [_req(path="/api/activity")],
+             world=_installed(**{
+                 f"{_OC}/.geneseed-activity": "on\n",
+                 f"{_OC}/activity/s-one.json": _act("s-one", "{now}", "{pid}")}),
+             # The arm the two cells above cannot reach between them: the flag file EXISTS
+             # and is readable, and its content is not one of the four off words. A port that
+             # treated any flag file as "off" would pass both of them.
+             expect=['"enabled": true', '{"session_id": "s-one"']),
+
+        cell("activity/a-detail-request-merges-the-uncapped-lists-and-the-transcript",
+             [_req(path="/api/activity/s-live"), _req(path="/api/activity/s-titled"),
+              _req(path="/api/activity/s-baddetail"), _req(path="/api/activity/s-min"),
+              _req(path="/api/activity/s-stale"), _req(path="/api/activity/nope"),
+              _req(path="/api/activity/a%2Fb"),
+              _req(path="/api/activity/..%2F..%2Fleak")],
+             world=_activity_world(**{
+                 # A title but no detail file: the conversation falls back to the title as
+                 # the opening user turn.
+                 f"{_OC}/activity/s-titled.json":
+                     _act("s-titled", "{now}", "{pid}", '"title": "a titled session"'),
+                 # …and a detail file whose two lists are the WRONG TYPE. Both isinstance
+                 # guards fire, and the conversation still falls back.
+                 f"{_OC}/activity/s-titled.detail.json":
+                     '{"timeline": "not-a-list", "conversation": "not-a-list"}\n',
+                 # A detail file that is garbage: an empty timeline, and the SNAPSHOT's own
+                 # capped lists survive rather than being blanked.
+                 f"{_OC}/activity/s-baddetail.json":
+                     _act("s-baddetail", "{now}", "{pid}",
+                          '"files": ["only.py"], "todos": [{"text": "kept"}]'),
+                 f"{_OC}/activity/s-baddetail.detail.json": "}{\n",
+                 # The safe-name scheme's POSITIVE CONTROL: `a/b` sanitises to `a_b`, and
+                 # this is the file it must find. Without it the request 404s whether the
+                 # sanitiser ran or not, which is the shape of refusal cell P6c had to fix.
+                 f"{_OC}/activity/a_b.json": '{"updated_at": {now}, "pid": {pid}}\n',
+                 # And the traversal's target, which EXISTS and is a live entry: a port that
+                 # joined the raw sid would answer it.
+                 "home/.config/leak.json":
+                     _act("leak", "{now}", "{pid}", '"title": "LEAKED FROM OUTSIDE"'),
+             }),
+             expect=[
+                 '{"session": {"session_id": "s-live", "agent": "wayfinder"',
+                 # The detail file's UNCAPPED lists replace the snapshot's capped ones.
+                 '"files": ["a.py", "b.py", "c.py"], '
+                 '"todos": [{"text": "one"}, {"text": "two"}]',
+                 '"timeline": [{"t": 1, "step": "read"}, {"t": 2, "step": "edit"}]',
+                 '"conversation": [{"role": "user", "text": "hello"}, '
+                 '{"role": "assistant", "text": "hi"}]',
+                 # No detail file at all, and a title: the fallback transcript.
+                 '"timeline": [], "conversation": [{"role": "user", '
+                 '"text": "a titled session"}]',
+                 # Garbage detail: the snapshot's own lists are what come back.
+                 '"files": ["only.py"], "todos": [{"text": "kept"}]',
+                 # No title either — the fallback has nothing to fall back to.
+                 '{"session": {"session_id": "s-min"',
+                 '"timeline": [], "conversation": []}',
+                 # A stale session is a 404 here too: `_is_live` gates the detail as well as
+                 # the list, so a pruned id cannot be read back by name.
+                 '{"error": "not found: s-stale"}', "404 Not Found",
+                 '{"error": "not found: nope"}',
+                 # The sanitiser, proved by the file it FINDS.
+                 '{"session": {"session_id": "a_b"',
+                 '{"error": "not found: ../../leak"}',
+             ],
+             expect_absent=["LEAKED FROM OUTSIDE",
+                            # The capped spelling, which must have been replaced.
+                            '"files": ["a.py"], "todos": [{"text": "one", "done": false}]'],
+             ),
+    ]
 
 
 def _docs_cells(cell) -> list[dict]:
@@ -981,9 +1346,16 @@ def _stop(record: "dict | None", proc: subprocess.Popen) -> None:
             pass
 
 
-def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
-    """Start one server in a fresh sandbox, drive it, stop it, and snapshot everything."""
+def run_cell(cli: list[str], cell: dict, now: "int | None" = None) -> "dict[str, bytes] | str":
+    """Start one server in a fresh sandbox, drive it, stop it, and snapshot everything.
+
+    `now` is the cell's shared clock — see `_DEAD_PID`'s block. It is an ARGUMENT rather
+    than a `time.time()` call here precisely so the reference run and the candidate run seed
+    the same seconds; sampling it per side would make every activity body differ by the time
+    the first server took to start.
+    """
     faults = cell.get("checkout")
+    now = int(time.time()) if now is None else now
     with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as ctd:
         sb = Path(td)
         home, repo, cfg = sb / "home", sb / "repo", sb / "cfg"
@@ -993,6 +1365,10 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
         repl = {"{sb}": str(sb), "{home}": str(home), "{repo}": str(repo),
                 "{cfg}": str(cfg), "{py}": sys.executable, "{ck}": str(checkout)}
         repl = {**{k[:-1] + "/}": v.replace("\\", "/") for k, v in repl.items()}, **repl}
+        # Added AFTER the `{x/}` slash-variants above: these four are numbers, so a
+        # forward-slash spelling of one would be a placeholder nothing could ever use.
+        repl.update({"{now}": str(now), "{older}": str(now - 600), "{stale}": str(now - 3600),
+                     "{pid}": str(os.getpid()), "{deadpid}": str(_DEAD_PID)})
         if faults is not None:
             harness_golden._copy_checkout(checkout, harness_golden._subst(faults, repl))
             cli = harness_golden._repoint(cli, checkout)
@@ -1067,6 +1443,21 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     for pat in cell.get("expect_re", ()):
         if not re.search(pat, text):
             problems.append(f"the reference's answer no longer matches {pat!r}")
+    # P6e — the first endpoint that DELETES, so P5h's three gate directions arrive here:
+    # what went, what survived, and (through the snapshot the two sides compare) the
+    # directory listing. A cross-implementation compare cannot make either of the first two,
+    # because two servers that both stopped pruning agree perfectly; and `expect`/
+    # `expect_absent` above read only the RESPONSE, which is silent about a file the endpoint
+    # left behind. `_activity_entries` self-cleans as a side effect of a GET, and a side
+    # effect no assertion names is a side effect that can be deleted.
+    for rel in cell.get("expect_files", ()):
+        if rel not in snap:
+            problems.append(f"the reference no longer leaves {rel!r} behind — this cell "
+                            f"names it as a file the endpoint must NOT remove")
+    for rel in cell.get("expect_absent_files", ()):
+        if rel in snap:
+            problems.append(f"the reference now leaves {rel!r} behind, which this cell "
+                            f"exists to prove it prunes")
     if "<transport>" in snap:
         problems.append(f"the reference's connection failed: "
                         f"{snap['<transport>'].decode('utf-8', 'replace')}")
@@ -1087,7 +1478,9 @@ def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int) -> i
     failures: list[str] = []
     for i, cell in enumerate(matrix, 1):
         cid = cell["id"]
-        a, b = run_cell(ref, cell), run_cell(new, cell)
+        # One clock per CELL, shared by both sides — see `_DEAD_PID`'s block.
+        now = int(time.time())
+        a, b = run_cell(ref, cell, now), run_cell(new, cell, now)
         if isinstance(a, str) or isinstance(b, str):
             failures.append(f"  {cid}: server failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                             f"\n    new: {b if isinstance(b, str) else 'ok'}")

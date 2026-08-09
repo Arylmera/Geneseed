@@ -95,9 +95,9 @@ const CTYPES = {
  * is exactly the failure the 501 exists to prevent.
  */
 export const NOT_PORTED = new Set([
-  '/api/activity', '/api/graph', '/api/mcp', '/api/rules', '/api/jobs',
+  '/api/mcp', '/api/rules', '/api/jobs',
 ]);
-export const NOT_PORTED_PREFIXES = ['/api/activity/', '/api/jobs/'];
+export const NOT_PORTED_PREFIXES = ['/api/jobs/'];
 
 /** Every POST route but `/api/shutdown`, which is the shell's own. P6f-P6g empty this. */
 export const NOT_PORTED_POST = new Set([

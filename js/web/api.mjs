@@ -72,8 +72,10 @@ import {
 import { firstBlockquote } from '../native.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../setup.mjs';
 import { accentFor, statusData } from '../status.mjs';
-import { normcase, pyUnquote, readText } from '../lib/pyfs.mjs';
+import { normcase, pyStripSpace, pyUnquote, readText } from '../lib/pyfs.mjs';
 import { readJsonc } from '../settings.mjs';
+import { apiActivity, apiActivityDetail } from './activity.mjs';
+import { apiGraph } from './graph.mjs';
 
 /** `_web_core.NotFound` — a requested catalog section or item that does not exist. */
 export class NotFound extends Error {}
@@ -440,8 +442,8 @@ function flatName(name) {
   }
 }
 
-/** `_web_core.WIKILINK_RE`. */
-const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
+/** `_web_core.WIKILINK_RE`. Exported since P6e — `js/web/graph.mjs` is its second reader. */
+export const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
 
 /**
  * `_web_catalog._resolve_links` — `[[name]]` matched against known agent and skill names.
@@ -459,7 +461,9 @@ export function resolveLinks(state, body) {
   const links = [];
   const seen = new Set();
   for (const m of body.matchAll(WIKILINK_RE)) {
-    const label = m[1].trim();
+    // `pyStripSpace`, not `trim()` — P6d measured the two whitespace classes apart and P6e
+    // gave this regex a second reader, so the two call sites answer with one rule.
+    const label = pyStripSpace(m[1]);
     if (known.has(label) && !seen.has(label)) {
       seen.add(label);
       links.push({ label, type: known.get(label), name: label });
@@ -729,6 +733,11 @@ export const PREFIX_ROUTES = [
     if (parts.length < 5 || !parts[4]) throw new NotFound(p);
     return apiItem(state, parts[3], pyUnquote(parts[4]));
   }],
+  // P6e. The reference's own `path[len("/api/activity/"):]`, unquoted — the sid keeps
+  // whatever it carries and `api_activity_detail`'s safe-name scheme is what makes the
+  // lookup safe, rather than a check out here.
+  ['/api/activity/', (state, p) => apiActivityDetail(
+    state, pyUnquote(p.slice('/api/activity/'.length)))],
 ];
 
 /** `str.split(sep, maxsplit)` — at most `n` splits, the remainder kept whole. */
@@ -754,4 +763,9 @@ export const STATE_ROUTES = {
   '/api/excludes': apiExcludes,
   '/api/profile': apiProfile,
   '/api/diff': apiDiff,
+  '/api/graph': apiGraph,
+  // The GET half only. `/api/activity` answers both verbs and the POST is a WRITE, so the
+  // path is in this table AND still in `NOT_PORTED_POST` — which is exactly the split P6b
+  // built the two sets for.
+  '/api/activity': apiActivity,
 };
