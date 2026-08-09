@@ -37,10 +37,12 @@
  * `entry.get("cost") or 0` over a wrapper object is TRUE for a wrapped zero, where Python's
  * `0.0 or 0` is the int `0` — so `s-older`'s `"cost": 0.0` must come back `0` and not `0.0`.
  */
-import { readdirSync, statSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import { normcase, parseJson, pyInt, pyStripSpace, pyTruthy, readText } from '../lib/pyfs.mjs';
+import {
+  normcase, parseJson, pyInt, pyStripSpace, pyTruthy, readText, writeText,
+} from '../lib/pyfs.mjs';
 import { NotFound } from './api.mjs';
 
 /**
@@ -254,4 +256,29 @@ export function apiActivityDetail(state, sid) {
     conversation = [{ role: 'user', text: session.title }];
   }
   return { session, timeline, conversation };
+}
+
+/**
+ * `_web_activity.api_activity_toggle` — flip the runtime on/off flag.
+ *
+ * The OpenCode plugin reads this file on every event, so the change takes effect without
+ * restarting anything; writing `off` also makes the plugin clear its snapshots on its next
+ * event, while the reader gates the surface immediately.
+ *
+ * `bool(body.get("enabled", True))` DEFAULTS TO ON — an empty body enables, which is the
+ * arm a port spelled `body.enabled === true` inverts. And this is the one POST in P6f whose
+ * result is sent at 200 whatever `ok` says: the 409 convention is per-route in the
+ * reference, not a rule about the shape of the body.
+ */
+export function apiActivityToggle(state, body) {
+  const raw = (body && Object.hasOwn(body, 'enabled')) ? body.enabled : true;
+  const enabled = pyTruthy(raw);
+  const p = activityFlag(state);
+  try {
+    mkdirSync(path.dirname(p), { recursive: true });
+    writeText(p, enabled ? 'on' : 'off');
+  } catch (e) {
+    return { ok: false, error: String(e && e.message ? e.message : e) };
+  }
+  return { ok: true, enabled };
 }

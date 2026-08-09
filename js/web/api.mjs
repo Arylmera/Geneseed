@@ -72,9 +72,10 @@ import {
 import { firstBlockquote } from '../native.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../setup.mjs';
 import { accentFor, statusData } from '../status.mjs';
-import { normcase, pyStripSpace, pyUnquote, readText } from '../lib/pyfs.mjs';
+import { comparePaths, normcase, pyStripSpace, pyUnquote, readText } from '../lib/pyfs.mjs';
 import { readJsonc } from '../settings.mjs';
 import { apiActivity, apiActivityDetail } from './activity.mjs';
+import { apiMcp, apiRules } from './actions.mjs';
 import { apiGraph } from './graph.mjs';
 
 /** `_web_core.NotFound` — a requested catalog section or item that does not exist. */
@@ -159,10 +160,53 @@ export function webState(theme = null, target = null) {
   st.stampDoctor = (problems) => {
     st._doctor = { ok: !problems.length, problems, checked_at: stampMinute(Date.now()) };
   };
+  /**
+   * `WebState._detect_emit` — the CURRENT install's mode, from its `.geneseed-emit` marker:
+   * the ROOT first (where every emit writes it), then the data dir.
+   *
+   * P6b ported `refresh()` WITHOUT this, because nothing called `refresh()` yet and the
+   * constructor reads `installedDefaults()` instead. P6f is the phase with mutations, so
+   * `refresh()` finally runs — and the reference's `self.emit = self._detect_emit() or
+   * self.emit` line was missing here, which would have left `emit` stale after any write
+   * that re-themed or re-pointed the install. Restored with its caller.
+   */
+  st.detectEmit = () => {
+    for (const d of [st.root, st.target]) {
+      try {
+        const em = path.join(d, '.geneseed-emit');
+        if (isFile(em)) {
+          const v = pyStripSpace(readText(em));
+          if (v) return v;
+        }
+      } catch { /* as the Python's `except OSError: pass` */ }
+    }
+    return existsSync(path.join(st.root, 'CLAUDE.md')) ? 'claude-global' : 'opencode-global';
+  };
+  /**
+   * `WebState.select_view` — re-point the console at another detected install's data dir.
+   *
+   * `root` is the install ROOT the markers and sigils live at. It defaults to `target` and
+   * differs only for claude/bob/copilot PROJECT installs, where the data sits under
+   * `<repo>/.claude|.bob|.github` while `.geneseed-emit`/`-theme`/`-footprint` land at
+   * `<repo>/` — reading them from the data dir mis-detects the install as opencode/neutral,
+   * and a Diff or a Restore would then overwrite it in the wrong dialect.
+   */
+  st.selectView = (target, root = null) => {
+    st.target = target;
+    st.root = root || target;
+    st.theme = themeOfDir(st.root) || themeOfDir(st.target) || 'neutral';
+    st.emit = st.detectEmit();
+    st.footprint = footprintOfDir(st.root);
+    st.posture = postureOfDir(st.root) || 'peer';
+    st.mode = modeOfDir(st.root) || 'direct';
+    st._inv = null;
+    st._doctor = null;
+  };
   st.refresh = () => {
     st._inv = null;
     st._doctor = null;
     st.theme = themeOfDir(st.root) || themeOfDir(st.target) || st.theme;
+    st.emit = st.detectEmit() || st.emit;
     st.footprint = footprintOfDir(st.root);
     st.posture = postureOfDir(st.root) || 'peer';
     st.mode = modeOfDir(st.root) || 'direct';
@@ -210,10 +254,10 @@ export function specEntries(root, nested) {
   let names;
   try { names = readdirSync(root); } catch { return out; }
   const files = nested
-    ? names.sort().filter((n) => isDir(path.join(root, n)))
+    ? names.sort(comparePaths).filter((n) => isDir(path.join(root, n)))
       .map((n) => path.join(root, n, 'SKILL.md'))
-    : names.filter((n) => normcase(n).endsWith('.md') && !n.startsWith('_')).sort()
-      .map((n) => path.join(root, n));
+    : names.filter((n) => normcase(n).endsWith('.md') && !n.startsWith('_'))
+      .sort(comparePaths).map((n) => path.join(root, n));
   for (const p of files) {
     if (!isFile(p)) continue;
     const [fm, body] = frontmatter(readMaybe(p) ?? '');
@@ -261,12 +305,24 @@ export function inventoryFor(state) {
 const memoryDir = (state) => path.join(state.target, 'memory');
 const notebookDir = (state) => path.join(state.target, 'notebook');
 
-/** `pathlib.Path.glob("*.md")`, sorted, case-insensitive on Windows. */
+/**
+ * `sorted(pathlib.Path.glob("*.md"))` — matched, case-insensitive on Windows.
+ *
+ * `comparePaths` AND NOT A BARE `.sort()`, and this was a LIVE BUG until P6f's memory cells
+ * put an uppercase filename in the directory. `sorted()` over `Path` objects compares
+ * `_str_normcase`, so on Windows `MEMORY.md` sorts under `m` and lands after `a-fact.md`;
+ * JS's default comparator is UTF-16 code units, so `M` (0x4D) sorts before `a` (0x61) and
+ * the whole catalog came back in a different order. Every seeded memory and notebook file in
+ * P6b and P6c was lower-case, which is why nothing said so for three phases. The `normcase`
+ * in the filter beside it was already here for exactly this reason — the sort was the half
+ * that got missed.
+ */
 function globMd(dir) {
   if (!isDir(dir)) return [];
   let names;
   try { names = readdirSync(dir); } catch { return []; }
-  return names.filter((n) => normcase(n).endsWith('.md') && isFile(path.join(dir, n))).sort();
+  return names.filter((n) => normcase(n).endsWith('.md') && isFile(path.join(dir, n)))
+    .sort(comparePaths);
 }
 
 const stemOf = (name) => name.slice(0, name.length - path.extname(name).length);
@@ -385,7 +441,8 @@ export function wikiItems(state) {
       const fp = path.join(root, rel);
       let mds;
       if (isFile(fp) && path.extname(fp) === '.md') mds = [fp];
-      else if (isDir(fp)) mds = rglobMd(fp).sort().slice(0, WIKI_FILE_CAP);
+      // `sorted(fp.rglob("*.md"))[:cap]` — `comparePaths`, for the reason `globMd` carries.
+      else if (isDir(fp)) mds = rglobMd(fp).sort(comparePaths).slice(0, WIKI_FILE_CAP);
       else continue;
       for (const md of mds) {
         const r = path.relative(root, md).split(path.sep).join('/');
@@ -764,8 +821,10 @@ export const STATE_ROUTES = {
   '/api/profile': apiProfile,
   '/api/diff': apiDiff,
   '/api/graph': apiGraph,
-  // The GET half only. `/api/activity` answers both verbs and the POST is a WRITE, so the
-  // path is in this table AND still in `NOT_PORTED_POST` — which is exactly the split P6b
-  // built the two sets for.
   '/api/activity': apiActivity,
+  // P6f. `/api/rules` had to cross as a PAIR: `api_rules_mutate` splices `parse_rules`' line
+  // indices, and the fingerprint every mutation must send back is what this GET answers —
+  // so a Node daemon whose POST worked and whose GET 501'd would have no way to obtain one.
+  '/api/rules': apiRules,
+  '/api/mcp': apiMcp,
 };

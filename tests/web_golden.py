@@ -153,6 +153,29 @@ _WEB_STAMPS = (
 _DEAD_PID = 2000000000
 
 
+def _clock_repl(now: int) -> dict:
+    """P6f's DATES, derived from the cell's own shared clock rather than destamped.
+
+    `api_rules_promote` stamps two dates into the rule it writes: `promoted <today>` in the
+    provenance line, and `today + 30 days` as the trial expiry. Both are read from the
+    system clock INSIDE the server, so nothing a request carries can seed them — and a
+    destamp is exactly the wrong tool, because it would erase the one rule this endpoint
+    owns (a month of probation, not a week and not none) and leave two servers that both
+    wrote the wrong date agreeing forever. That is P6b's lesson about the clock, one phase
+    on: ask what the destamp would make invisible.
+
+    So the two dates are COMPUTED from `now` — the same second `run_cell` seeds both sides
+    with — and named in the cell's absolute expectations. The cross-implementation
+    comparison is untouched and still exact: both servers read the real clock seconds apart,
+    so they write the same date except across a midnight boundary, which this harness has in
+    common with `checked_at` and states rather than hides.
+    """
+    import datetime
+    today = datetime.date.fromtimestamp(now)
+    return {"{today}": today.isoformat(),
+            "{trial}": (today + datetime.timedelta(days=30)).isoformat()}
+
+
 def _web_destamp(data: bytes) -> bytes:
     try:
         text = data.decode("utf-8")
@@ -166,11 +189,28 @@ def _web_destamp(data: bytes) -> bytes:
 # ---- cells -----------------------------------------------------------------
 
 def _req(method="GET", path="/api/ping", headers=None, body=None, reconnect=False,
-         token=False):
-    """One request. `token=True` sends the running server's real CSRF token, which the
-    cell cannot know when it is written."""
+         token=False, from_body=None):
+    """One request.
+
+    `token=True` sends the running server's real CSRF token, which the cell cannot know
+    when it is written.
+
+    `from_body="fingerprint"` is P6f's sibling of that mechanism, and it exists for the
+    same reason one step further in: the fingerprint-guarded writes require the client to
+    send back a value the SERVER computed from the file on disk, so a cell cannot write it
+    down either. The named field is read out of the PREVIOUS response's JSON body and
+    substituted for `{FROM_BODY}` in this request's body — which makes the fingerprint arm
+    a TWO-REQUEST cell: GET the resource, then POST with what it answered.
+
+    AND THE SUBSTITUTED VALUE IS AN OBSERVATION, which is not decoration. If the field were
+    missing the substitution would quietly send an empty string, the endpoint would take
+    its STALE arm, and a cell written to gate the fresh arm would compare two 409s and look
+    green. `<rN sent>` puts the bytes that actually went on the wire into the snapshot, so
+    the two sides are compared on what they SENT as well as on what came back — and an
+    EMPTY substitution is reported as a vacuity finding rather than left to be discovered.
+    """
     return {"method": method, "path": path, "headers": dict(headers or {}),
-            "body": body, "reconnect": reconnect, "token": token}
+            "body": body, "reconnect": reconnect, "token": token, "from_body": from_body}
 
 
 def _an_asset() -> str:
@@ -327,6 +367,7 @@ def cells() -> list[dict]:
     out += _docs_cells(cell)
     out += _graph_cells(cell)
     out += _activity_cells(cell)
+    out += _mutate_cells(cell)
     return out
 
 
@@ -661,6 +702,692 @@ def _activity_cells(cell) -> list[dict]:
                             # The capped spelling, which must have been replaced.
                             '"files": ["a.py"], "todos": [{"text": "one", "done": false}]'],
              ),
+    ]
+
+
+# ---- P6f — the mutating endpoints ------------------------------------------------------
+#
+# THE FIRST WEB WRITES, and three things arrive with them.
+#
+# THE 409 CONVENTION. `ok: False` maps to 409 on five paths, and it covers two different
+# faults with one status: a STALE FINGERPRINT (an agent session edited the same file since
+# the client loaded it) and a MALFORMED BODY. Both are gated below, and the second is what
+# `_read_json_body` is for — a body that is not JSON must reach the endpoint as `{}` and be
+# refused by the endpoint's own validation, never as a 500 from a parse two frames down.
+# `POST /api/activity` is the counter-example that makes the convention gateable at all: it
+# answers 200 whatever `ok` says, so a port applying the rule uniformly fails there.
+#
+# THE FINGERPRINT ARM IS A TWO-REQUEST CELL, because the value is one the SERVER computed
+# and the cell cannot know. `from_body="fingerprint"` is the mechanism (see `_req`), and the
+# MISSING observation is what stops it from failing open.
+#
+# A WRITE CELL NEEDS THE FILE DIRECTIONS. `api_memory_delete` unlinks a fact AND rewrites
+# MEMORY.md, and P5h's three directions are all three needed: `expect_absent_files` for what
+# went, `expect_files` for what survived, and — because a listing cannot see a line inside a
+# file — a request that READS MEMORY.md back through `/api/item/memory/MEMORY`, which is the
+# only way an index line dropped or kept becomes a response byte.
+_RULES_TEXT = (
+    "# User rules\n"
+    "\n"
+    "## R1 — Always run the tests\n"
+    "(scope: project | source: a session | trial until: 2020-01-01)\n"
+    "Run the suite before you claim it works.\n"
+    "\n"
+    "## R2 — Prefer the stdlib\n"
+    "(scope: user)\n"
+    "Reach for a dependency last.\n"
+    "\n"
+    "## R3 — On probation\n"
+    "(trial until: 2999-01-01)\n"
+    "Not overdue yet.\n"
+    "\n"
+    # A DUPLICATE ID, and no metadata line under it — two axes in one block. The duplicate
+    # is the only thing that produces a `warnings` entry, and the missing `(…)` line is the
+    # arm where `_parse_rule_meta` returns `{}` and `k` does NOT advance, so the body starts
+    # on the line the metadata would have been.
+    "## R2 — a duplicate id\n"
+    "No metadata line at all.\n"
+)
+# sha256(_RULES_TEXT)[:16] — stated so the cells gate the digest and its TRUNCATION rather
+# than merely that some hex came back, and so a mutation cell can carry a CORRECT fingerprint
+# as a literal without a preceding GET.
+_RULES_FP = "a1927eeaa2b464c3"
+
+# `_memory_drop_index` drops every line carrying `(<name>.md)`. Two facts, so the surviving
+# line is a positive control: a port that rewrote the whole index, or truncated it, or
+# dropped nothing, each answers differently.
+_MEMORY_INDEX = ("# Memory\n\n- [a fact](a-fact.md) — the one being promoted\n"
+                 "- [another](another.md) — the one that must survive\n")
+
+
+def _rules_world(**extra) -> dict:
+    return _installed(**{f"{_OC}/user-rules.md": _RULES_TEXT, **extra})
+
+
+def _mem_world(**extra) -> dict:
+    return _installed(**{
+        f"{_OC}/memory/MEMORY.md": _MEMORY_INDEX,
+        f"{_OC}/memory/a-fact.md":
+            "---\nname: a-fact\ndescription: one fact\n---\n\nthe fact's body\n",
+        f"{_OC}/memory/another.md": "---\nname: another\n---\n\nsurvives\n",
+        **extra,
+    })
+
+
+# The OpenCode global install's MCP config, as `_mcp_config_for` resolves it and as
+# `api_mcp_toggle`'s allowlist spells it: `str(Path)`, so the platform separator and the
+# JSON-escaped root. See `run_cell`'s `{xJ}` block for why this cannot be `{home/}`.
+_OC_MCP = "{homeJ}{sepJ}.config{sepJ}opencode{sepJ}opencode.json"
+_CLAUDE_MCP = "{homeJ}{sepJ}.claude.json"
+
+
+def _mutate_cells(cell) -> list[dict]:
+    """P6f — every POST that owns its own path, plus the two GETs that came with them."""
+    return [
+        # ---- POST /api/activity — the cheapest of the nine ------------------------------
+        cell("toggle/the-activity-flag-is-written-read-back-and-defaults-on",
+             [_req("POST", path="/api/activity", body=b'{"enabled": false}', token=True),
+              _req(path="/api/activity"),
+              _req("POST", path="/api/activity", body=b'{"enabled": true}', token=True),
+              _req(path="/api/activity"),
+              _req("POST", path="/api/activity", body=b'{}', token=True)],
+             world=_installed(**{
+                 f"{_OC}/activity/s-one.json": _act("s-one", "{now}", "{pid}")}),
+             # FIVE requests over one connection, and each one is an axis. The pair of
+             # toggles is the flag written in both directions and READ BACK through the GET
+             # that follows it — a write nothing reads is a write no cell can see. The last
+             # request is `bool(body.get("enabled", True))`'s DEFAULT: an empty body enables,
+             # which is the arm a port spelled `body.enabled === true` inverts.
+             #
+             # AND THIS PATH ANSWERS 200 WHATEVER `ok` SAYS. Every other POST here maps
+             # `ok: false` to 409; this one does not, which is why the dispatcher carries the
+             # convention as a per-route COLUMN rather than as a rule about bodies.
+             expect=['{"ok": true, "enabled": false}', "200 OK",
+                     '{"enabled": false, "activity": []}',
+                     '{"ok": true, "enabled": true}',
+                     '{"session_id": "s-one"'],
+             expect_files=[f"{_OC}/.geneseed-activity",
+                           f"{_OC}/activity/s-one.json"]),
+
+        # ---- POST /api/excludes ---------------------------------------------------------
+        cell("excludes/an-add-and-a-remove-round-trip-through-every-global-install",
+             [_req("POST", path="/api/excludes", token=True,
+                   body=b'{"action": "add", "path": "{repo/}"}'),
+              _req(path="/api/excludes"),
+              _req("POST", path="/api/excludes", token=True,
+                   body=b'{"action": "remove", "path": "{repo/}"}'),
+              _req(path="/api/excludes")],
+             world=_installed(),
+             # `api_excludes_mutate` owns no exclusion logic — it validates the body and
+             # hands off to the same `exclude_add`/`exclude_remove` the CLI verb calls. So
+             # the cell's job is the round trip: the add lands in `excludes.json`, the GET in
+             # between proves it is READABLE (a write no read confirms is a write to
+             # nowhere), and the remove takes it out again. The final GET is the negative
+             # control the first one cannot be.
+             #
+             # `wired` is EMPTY for an OpenCode install and that is the reference's answer,
+             # not an omission: the per-host suppression `exclude_add` records is Claude's
+             # `claudeMdExcludes` and Bob's rules stub, and OpenCode has neither. P6b's
+             # `excludes/a-seeded-exclusion-is-listed-with-its-host` HAND-SEEDS
+             # `"wired": {"opencode": true}` into the file, which is a shape the engine never
+             # writes — so this is also the cell that says what a real add produces.
+             expect=['{"ok": true, "path": "<SB>', '"messages": []}', "200 OK",
+                     '"hosts": ["opencode"]', '"wired": {}',
+                     '{"excludes": [], "installs": [{'],
+             expect_files=[f"{_OC}/excludes.json"]),
+        cell("excludes/a-malformed-body-is-409-and-never-reaches-the-engine",
+             [_req("POST", path="/api/excludes", token=True, body=b"not json at all"),
+              _req("POST", path="/api/excludes", token=True,
+                   body=b'{"action": "nope", "path": "{repo/}"}'),
+              _req("POST", path="/api/excludes", token=True,
+                   body=b'{"action": "add", "path": "   "}'),
+              _req(path="/api/excludes")],
+             world=_installed(),
+             # THE `_read_json_body` GATE, which is what P6a's retained drain was for. A body
+             # that is not JSON must arrive at the endpoint as `{}` and be refused by its own
+             # validation — the SAME 409 body as a well-formed body with a bad action. A port
+             # that let the parse error escape answers 500 with a message the two runtimes
+             # word differently, and P5a's one un-portable line is the precedent for why that
+             # matters.
+             #
+             # The blank path is the third arm: `str(...).strip()` is what turns "   " into
+             # the empty string the guard rejects, and without it the path reaches
+             # `exclude_add`, which assumes a real one.
+             expect=["409 Conflict",
+                     '{"ok": false, "path": "", "messages": ["body must be '
+                     '{action: add|remove, path: <folder>}"]}'],
+             # Nothing was excluded, so no install grew a list. The direction the response
+             # cannot carry.
+             expect_absent=["500 Internal", '"ok": true'],
+             expect_absent_files=[f"{_OC}/excludes.json"]),
+
+        # ---- POST /api/view -------------------------------------------------------------
+        cell("view/selecting-a-detected-install-repoints-every-later-read",
+             [_req(path="/api/docs"),
+              _req("POST", path="/api/view", token=True,
+                   body=b'{"host": "claude", "path": "{repoJ}"}'),
+              _req(path="/api/docs"),
+              _req(path="/api/overview"),
+              _req(path="/api/catalog/agents"),
+              _req("POST", path="/api/view", token=True,
+                   body=b'{"host": "opencode", "path": "{repoJ}"}')],
+             world=_installed(**{
+                 # A Claude PROJECT install: the data dir is `<repo>/.claude` and the markers
+                 # land at `<repo>/` — which is the whole reason `_view_cfg` is host-driven,
+                 # and the case a port reading the bare root mis-detects as opencode/neutral.
+                 "repo/.claude/.geneseed-manifest.json": json.dumps({"owned": ["AGENT.md"]}),
+                 "repo/.claude/AGENT.md": "# Claude project AGENT.md\n",
+                 "repo/.claude/agents/only-here.md":
+                     "---\nname: only-here\n---\n\n> only in the project install\n\nb\n",
+                 "repo/.geneseed-emit": "claude\n",
+                 "repo/.geneseed-theme": "neutral\n",
+             }),
+             # THE CELL THAT PAYS P6d's DEBT. `_norm_harness` resolves the Docs selector's
+             # default from `state.emit`, and `state.emit` is exactly what a select_view
+             # moves — so the two `/api/docs` requests around the POST are the interaction
+             # neither phase could gate alone: opencode before, claude after, with nothing
+             # but the view change between them.
+             #
+             # The overview and the catalog afterwards are the second direction: the
+             # console's whole target moved, so the theme and the agent set now come from the
+             # project install's own dirs.
+             #
+             # And the last request is the allowlist: `(host, path)` is a PAIR, and `repo` is
+             # a real detected path — for `claude`, not for `opencode`. Pointing the same
+             # path at the wrong host must 404, which is what says the pair is the key rather
+             # than the path.
+             expect=['"harness": "opencode"',
+                     '{"ok": true, "target": "<SB>',
+                     '"theme": "neutral", "emit": "claude"}',
+                     '"harness": "claude"',
+                     '"name": "only-here"',
+                     '{"error": "not found: unknown install (host, path)"}',
+                     "404 Not Found"],
+             # The imperial global's own voice must be gone from the overview once the view
+             # has moved — otherwise "re-pointed" is indistinguishable from "answered ok and
+             # changed nothing".
+             expect_absent=['"theme": "imperial", "accent": "yellow"']),
+        cell("view/an-unknown-pair-and-a-malformed-body-are-both-404",
+             [_req("POST", path="/api/view", token=True,
+                   body=b'{"host": "vim", "path": "{repoJ}"}'),
+              _req("POST", path="/api/view", token=True, body=b"}{"),
+              _req(path="/api/overview")],
+             world=_installed(),
+             # `known.get((body.get("host") or "", body.get("path") or ""))` — an unknown
+             # host and an empty pair take the same arm, which is what `_read_json_body`
+             # returning `{}` buys: the malformed body is a 404 naming the install, not a 500
+             # naming a parser. The GET afterwards is what says nothing moved.
+             expect=['{"error": "not found: unknown install (host, path)"}', "404 Not Found",
+                     '"theme": "imperial"'],
+             expect_absent=["500 Internal"]),
+
+        # ---- POST /api/memory/delete ----------------------------------------------------
+        cell("memory/deleting-a-fact-drops-its-file-and-its-index-line",
+             [_req("POST", path="/api/memory/delete", token=True,
+                   body=b'{"name": "a-fact"}'),
+              _req(path="/api/item/memory/MEMORY"),
+              _req(path="/api/catalog/memory"),
+              _req("POST", path="/api/memory/delete", token=True,
+                   body=b'{"name": "a-fact"}')],
+             world=_mem_world(),
+             # ALL THREE OF P5h's DIRECTIONS, and the third one is the reason this cell has
+             # four requests. `expect_absent_files` says the fact went; `expect_files` says
+             # its neighbour and the index survived; but a directory listing cannot see a
+             # LINE, and `_memory_drop_index` rewrites MEMORY.md in place. So the index is
+             # read back through the catalog's own item route — the only way a dropped or
+             # kept index line becomes a response byte.
+             #
+             # The last request is the idempotence arm: a second delete of the same name is a
+             # 404, not a second success, and it is what says the first one really removed
+             # the file rather than merely reporting so.
+             expect=['{"deleted": "a-fact"}', "200 OK",
+                     "- [another](another.md)",
+                     '"name": "another", "title": "another"',
+                     '{"error": "not found: a-fact"}', "404 Not Found"],
+             expect_absent=["- [a fact](a-fact.md)", '"name": "a-fact"'],
+             # AND THE ORDER, absolutely — the reference sorts `Path` objects, whose
+             # comparison is case-FOLDED on Windows, so `MEMORY.md` files under `m` and comes
+             # last. This is the first cell in the whole port with an upper-case name in a
+             # catalog directory, and it found a live bug: the Node twin sorted with JS's
+             # default comparator (UTF-16 code units), which puts `M` before `a`. Naming the
+             # order here is what keeps the fix gated rather than incidental.
+             expect_re=[r'"name": "another".*"name": "MEMORY"'],
+             expect_files=[f"{_OC}/memory/MEMORY.md", f"{_OC}/memory/another.md"],
+             expect_absent_files=[f"{_OC}/memory/a-fact.md"]),
+        cell("memory/a-reserved-or-climbing-name-is-refused-and-touches-nothing",
+             [_req("POST", path="/api/memory/delete", token=True, body=b'{"name": "MEMORY"}'),
+              _req("POST", path="/api/memory/delete", token=True, body=b'{"name": "README"}'),
+              _req("POST", path="/api/memory/delete", token=True,
+                   body=b'{"name": "../../build"}'),
+              _req("POST", path="/api/memory/delete", token=True,
+                   body=b'{"name": "..\\\\..\\\\build"}'),
+              _req("POST", path="/api/memory/delete", token=True, body=b'{}'),
+              _req("POST", path="/api/memory/delete", token=True, body=b"not json")],
+             world=_mem_world(**{f"{_OC}/memory/README.md": "# how memory works\n"}),
+             # THE SECURITY BRANCH, and a refusal cell whose target does not exist proves
+             # nothing (P6c). So `MEMORY.md` and `README.md` are both REALLY THERE: the
+             # reserved-name clause is the only thing between this endpoint and deleting the
+             # index the agent reads at session start. Both separators are sent, because the
+             # reference tests them separately and `\\` is the one a POSIX-only port drops.
+             #
+             # The blank name and the unparseable body are the same arm from two directions,
+             # and the second is `_read_json_body` again: `{}` in, `not found: ` out — the
+             # message ends with a space and nothing after it, which is what says the name was
+             # empty rather than that the parse failed.
+             expect=['{"error": "not found: MEMORY"}', '{"error": "not found: README"}',
+                     '{"error": "not found: ../../build"}',
+                     '{"error": "not found: ..\\\\..\\\\build"}',
+                     '{"error": "not found: "}', "404 Not Found"],
+             expect_absent=["500 Internal"],
+             expect_files=[f"{_OC}/memory/MEMORY.md", f"{_OC}/memory/README.md",
+                           f"{_OC}/memory/a-fact.md", f"{_OC}/memory/another.md"]),
+
+        # ---- GET/POST /api/rules --------------------------------------------------------
+        cell("rules/the-page-payload-parses-blocks-metadata-and-the-budget",
+             [_req(path="/api/rules")], world=_rules_world(),
+             # The GET half, which had to cross with the POST: the mutation endpoint splices
+             # `parse_rules`' line indices, and the fingerprint the POST requires back is what
+             # this answers. Every field here is one of the parser's rules — the em-dash
+             # heading, the optional `(…)` metadata line with its `trial until` →
+             # `trial_until` key rewrite, the default scope for a block that declares none,
+             # the duplicate-id warning, and `overdue` as a STRING comparison against today
+             # (2020 is past, 2999 is not — neither ever flips).
+             expect=['"exists": true', f'"fingerprint": "{_RULES_FP}"',
+                     '{"id": 1, "title": "Always run the tests", "scope": "project", '
+                     '"source": "a session", "trial_until": "2020-01-01", '
+                     '"status": "trial", "overdue": true, '
+                     '"body": "Run the suite before you claim it works."}',
+                     '{"id": 2, "title": "Prefer the stdlib", "scope": "user", '
+                     '"source": "", "trial_until": "", "status": "active", '
+                     '"overdue": false',
+                     '"trial_until": "2999-01-01", "status": "trial", "overdue": false',
+                     '"title": "a duplicate id", "scope": "project"',
+                     '"body": "No metadata line at all."',
+                     '"warnings": ["duplicate rule id R2"]',
+                     '"stats": {"rules": 4, "lines": 16, "tokens": 82, '
+                     '"max_rules": 15, "max_tokens": 1500}']),
+        cell("rules/an-absent-file-reports-the-empty-shape-and-its-budget",
+             [_req(path="/api/rules")], world=_installed(),
+             # A REQUIRED field's emptiness, defined — the same debt P6b's profile cell pays:
+             # `fingerprint` is "" and not the sha256 of the empty string, and the budget is
+             # still reported so the meter has something to render.
+             expect=['{"exists": false,', '"rules": [], "warnings": [], "fingerprint": ""',
+                     '"stats": {"rules": 0, "lines": 0, "tokens": 0, "max_rules": 15']),
+        cell("rules/an-add-assigns-the-next-free-id-and-returns-a-fresh-fingerprint",
+             [_req(path="/api/rules"),
+              _req("POST", path="/api/rules", token=True, from_body="fingerprint",
+                   body=b'{"op": "add", "fingerprint": "{FROM_BODY}", '
+                        b'"title": "  Write   it  down ", "body": "  the new body.  ", '
+                        b'"scope": "nope", "source": " from  a  session ", '
+                        b'"trial_until": "2031-02-03"}'),
+              _req(path="/api/rules")],
+             world=_rules_world(),
+             # THE TWO-REQUEST FINGERPRINT CELL. The POST carries a value the GET before it
+             # produced, and the MISSING observation is what proves it carried the real one
+             # rather than an empty string that would have taken the 409 arm and looked green.
+             #
+             # `max(ids) + 1` is 4 and NOT 5, which is the whole point of seeding a duplicate
+             # R2: a port counting rules instead of maxing their ids answers 5 here.
+             #
+             # Every normalisation in `_rule_fields` is varied at once: the title's runs of
+             # whitespace collapse, the body is stripped, an unrecognised scope falls back to
+             # `project` (never to the raw value — a bogus scope must not reach the file), the
+             # source collapses too, and a well-formed trial date survives.
+             expect=[f'"fingerprint": "{_RULES_FP}"',
+                     '"op": "add", "id": 4,',
+                     '"title": "Write it down", "scope": "project", '
+                     '"source": "from a session", "trial_until": "2031-02-03", '
+                     '"status": "trial", "overdue": false, "body": "the new body."'],
+             expect_re=[r'\{"ok": true, "op": "add", "id": 4, "fingerprint": "[0-9a-f]{16}"\}'],
+             expect_absent=['"id": 5', '"scope": "nope"']),
+        cell("rules/an-update-splices-one-block-and-a-delete-swallows-its-separator",
+             [_req("POST", path="/api/rules", token=True,
+                   body=b'{"op": "update", "id": 2, "fingerprint": "' + _RULES_FP.encode()
+                        + b'", "title": "Renamed", "body": "Replaced text.", '
+                          b'"scope": "user"}'),
+              _req("POST", path="/api/rules", token=True, from_body="fingerprint",
+                   body=b'{"op": "delete", "id": 1, "fingerprint": "{FROM_BODY}"}'),
+              _req(path="/api/rules")],
+             world=_rules_world(),
+             # THE CHAIN IS THE CONTRACT. The delete's fingerprint comes from the UPDATE's own
+             # response, not from a re-fetch — which is what "returns the fresh fingerprint so
+             # the client can chain edits" means, and a port that answered a stale one would
+             # 409 on the second request.
+             #
+             # NO LEADING GET, and that is what makes `expect_absent` mean anything here.
+             # `_RULES_FP` is a literal this file already knows, so the cell's only read is
+             # the final one — a cell that fetched the rules first would carry "Prefer the
+             # stdlib" in its own transcript and could never say the update replaced it.
+             #
+             # The splice is line-anchored: R3 keeps every byte including its metadata line,
+             # while R2's block is replaced whole. The delete then swallows the ONE blank
+             # separator line before its block — without that, repeated deletes leave a
+             # growing run of blank lines in the user's file.
+             expect=['"op": "update", "id": 2', '"op": "delete", "id": 1',
+                     '"title": "Renamed", "scope": "user", "source": "", '
+                     '"trial_until": "", "status": "active", "overdue": false, '
+                     '"body": "Replaced text."',
+                     '"id": 3, "title": "On probation"',
+                     '"warnings": ["duplicate rule id R2"]'],
+             expect_absent=['"title": "Prefer the stdlib"', '"id": 1, "title": "Always run',
+                            "409 Conflict"]),
+        cell("rules/a-stale-fingerprint-is-409-and-never-clobbers",
+             [_req("POST", path="/api/rules", token=True,
+                   body=b'{"op": "add", "fingerprint": "deadbeefdeadbeef", '
+                        b'"title": "sneaked in", "body": "should never land"}'),
+              _req("POST", path="/api/rules", token=True,
+                   body=b'{"op": "delete", "id": 1, "fingerprint": ""}'),
+              _req(path="/api/rules")],
+             world=_rules_world(),
+             # THE OTHER HALF OF THE 409 CONVENTION. An agent session editing user-rules.md
+             # mid-flight is the case this exists for, and the empty fingerprint beside the
+             # wrong one is the arm a port defaulting `body.get("fingerprint", "")` to
+             # something else would let through — on an ABSENT file "" is the CORRECT
+             # fingerprint, so only a seeded file can tell the two apart.
+             expect=["409 Conflict",
+                     '{"ok": false, "error": "conflict", "detail": "user-rules.md changed '
+                     'since you loaded it \\u2014 reloading"}',
+                     f'"fingerprint": "{_RULES_FP}"'],
+             expect_absent=["sneaked in", "should never land", '"ok": true']),
+        cell("rules/every-unusable-mutation-names-its-own-fault",
+             [_req("POST", path="/api/rules", token=True, body=b'{"op": "nope"}'),
+              _req("POST", path="/api/rules", token=True, body=b"not json at all"),
+              _req("POST", path="/api/rules", token=True,
+                   body=b'{"op": "update", "id": "abc", "fingerprint": ""}'),
+              _req("POST", path="/api/rules", token=True,
+                   body=b'{"op": "update", "id": 99, "fingerprint": ""}'),
+              _req("POST", path="/api/rules", token=True,
+                   body=b'{"op": "add", "fingerprint": "", "title": "   ", "body": "b"}'),
+              _req("POST", path="/api/rules", token=True,
+                   body=b'{"op": "add", "fingerprint": "", "title": "t", "body": "  "}'),
+              _req("POST", path="/api/rules", token=True,
+                   body=b'{"op": "add", "fingerprint": "", "title": "t", "body": "b", '
+                        b'"trial_until": "next tuesday"}'),
+              _req(path="/api/rules")],
+             world=_installed(),
+             # THE FILE IS ABSENT ON PURPOSE, which is what makes seven refusals fit in one
+             # cell: `_rules_fingerprint("")` is "", so every request can carry the CORRECT
+             # fingerprint as a literal and reach the validation behind it. With a seeded file
+             # each would 409 first and six of the seven arms would be unreachable.
+             #
+             # The faults are three different statuses, and that is the point: an unknown op
+             # and an unusable id are 404s (`NotFound`), an unusable FIELD is a 500 carrying
+             # the ValueError's own message, and the unparseable body is the 404 that says
+             # `_read_json_body` handed the endpoint `{}`. A port that funnelled all of them
+             # into one status would pass a cell that only counted refusals.
+             expect=['{"error": "not found: rules op \'nope\'"}',
+                     '{"error": "not found: rules op None"}',
+                     '{"error": "not found: rule id"}',
+                     '{"error": "not found: rule R99"}',
+                     '{"error": "a rule needs a title"}', "500 Internal Server Error",
+                     '{"error": "a rule needs body text"}',
+                     '{"error": "trial until must be YYYY-MM-DD"}',
+                     '{"exists": false,'],
+             expect_absent=['"ok": true'],
+             expect_absent_files=[f"{_OC}/user-rules.md"]),
+        cell("rules/an-add-to-a-file-that-does-not-exist-seeds-the-heading",
+             [_req("POST", path="/api/rules", token=True,
+                   body=b'{"op": "add", "fingerprint": "", "title": "First", '
+                        b'"body": "the only rule."}'),
+              _req(path="/api/rules")],
+             world=_installed(),
+             # `if not text: text = "# User rules\\n"` — the seed the build normally writes,
+             # re-created here because the user deleted it. R1 rather than R4, because
+             # `max(..., default=0) + 1` is the other arm of the id assignment.
+             expect=['{"ok": true, "op": "add", "id": 1', '"exists": true',
+                     '{"id": 1, "title": "First", "scope": "project"',
+                     '"body": "the only rule."'],
+             expect_files=[f"{_OC}/user-rules.md"]),
+
+        # ---- POST /api/rules/promote ----------------------------------------------------
+        cell("promote/a-memory-fact-becomes-a-trial-rule-with-its-provenance",
+             [_req(path="/api/rules"),
+              _req("POST", path="/api/rules/promote", token=True, from_body="fingerprint",
+                   body=b'{"name": "a-fact", "fingerprint": "{FROM_BODY}", '
+                        b'"delete_memory": true}'),
+              _req(path="/api/rules"),
+              _req(path="/api/item/memory/MEMORY")],
+             world=_mem_world(**{f"{_OC}/user-rules.md": _RULES_TEXT}),
+             # THE DATES COME FROM THE CELL'S OWN SHARED CLOCK, not from a destamp — see
+             # `_clock_repl`. A month of probation is the rule this endpoint owns, and a
+             # destamp on the date would erase exactly it.
+             #
+             # The title and body are the fallback chain with no overrides in the request: the
+             # frontmatter `name`, then the memory body stripped. And `delete_memory` is
+             # opt-in and composes with `api_memory_delete` — the fact goes AND its index line
+             # goes with it, which the last request reads back.
+             expect=['{"ok": true, "op": "add", "id": 4',
+                     '"deleted_memory": "a-fact"',
+                     '"title": "a-fact", "scope": "project", '
+                     '"source": "memory a-fact, promoted {today}", '
+                     '"trial_until": "{trial}", "status": "trial", "overdue": false, '
+                     '"body": "the fact\'s body"',
+                     "- [another](another.md)"],
+             expect_absent=["- [a fact](a-fact.md)"],
+             expect_files=[f"{_OC}/memory/another.md"],
+             expect_absent_files=[f"{_OC}/memory/a-fact.md"]),
+        cell("promote/without-the-opt-in-the-fact-stays-and-a-bad-name-is-a-404",
+             [_req(path="/api/rules"),
+              _req("POST", path="/api/rules/promote", token=True, from_body="fingerprint",
+                   body=b'{"name": "a-fact", "fingerprint": "{FROM_BODY}", '
+                        b'"title": " an  override ", "body": "an override body", '
+                        b'"scope": "user"}'),
+              _req("POST", path="/api/rules/promote", token=True,
+                   body=b'{"name": "nope", "fingerprint": ""}'),
+              _req("POST", path="/api/rules/promote", token=True,
+                   body=b'{"name": "MEMORY", "fingerprint": ""}'),
+              _req("POST", path="/api/rules/promote", token=True, body=b'{}'),
+              _req(path="/api/catalog/memory"),
+              _req(path="/api/rules")],
+             world=_mem_world(**{f"{_OC}/user-rules.md": _RULES_TEXT}),
+             # The opt-in's negative half — `delete_memory` absent means the fact SURVIVES,
+             # which the catalog request confirms and which no `expect_absent` on the response
+             # could. And the three overrides are the other arm of every `or` in the body: a
+             # title, a body and a scope supplied by the client win over the frontmatter.
+             #
+             # `MEMORY` is the reserved name again, checked HERE and not only in
+             # `api_memory_delete` — promote resolves the source file itself, so the guard is
+             # duplicated in the reference and a port that reached for the delete endpoint's
+             # copy would leave this one open.
+             expect=['{"ok": true, "op": "add"',
+                     '"title": "an override", "scope": "user"',
+                     '"body": "an override body"',
+                     '{"error": "not found: nope"}', '{"error": "not found: MEMORY"}',
+                     '{"error": "not found: "}', "404 Not Found",
+                     '"name": "a-fact"'],
+             # The full three-name ordering, which the cell above can only show two of.
+             expect_re=[r'"name": "a-fact".*"name": "another".*"name": "MEMORY"'],
+             expect_files=[f"{_OC}/memory/a-fact.md", f"{_OC}/memory/MEMORY.md"]),
+        cell("promote/with-no-memory-store-at-all-the-endpoint-says-so",
+             [_req("POST", path="/api/rules/promote", token=True,
+                   body=b'{"name": "a-fact", "fingerprint": ""}'),
+              _req("POST", path="/api/memory/delete", token=True,
+                   body=b'{"name": "a-fact"}')],
+             world=_installed(),
+             # `if not d.is_dir(): raise NotFound("memory store")` — the arm before the name
+             # is even looked at, and it is worded differently from a missing FACT. Both
+             # endpoints carry it, so both are asked.
+             expect=['{"error": "not found: memory store"}', "404 Not Found"],
+             expect_absent=['{"error": "not found: a-fact"}']),
+
+        # ---- POST /api/profile ----------------------------------------------------------
+        cell("profile/a-save-round-trips-and-appends-the-missing-newline",
+             [_req(path="/api/profile"),
+              _req("POST", path="/api/profile", token=True, from_body="fingerprint",
+                   body=b'{"fingerprint": "{FROM_BODY}", '
+                        b'"text": "# Me\\n\\nI write Rust and Zig.\\n"}'),
+              _req(path="/api/profile"),
+              _req("POST", path="/api/profile", token=True, from_body="fingerprint",
+                   body=b'{"fingerprint": "{FROM_BODY}", "text": "no trailing newline"}'),
+              _req(path="/api/profile")],
+             world=_installed(**{f"{_OC}/PROFILE.md": "# Me\n\nI write Rust.\n"}),
+             # The whole file is written, not spliced — Profile has no structure. The two
+             # saves chain off each other's fingerprints, and the second one is the
+             # `if new and not new.endswith("\\n")` arm: the stored text gains a newline the
+             # client never sent, so the fingerprint the save RETURNS is the one of the text
+             # ON DISK. A port that hashed the request's text instead would answer a
+             # fingerprint the next save then 409s on — which is why the chain is the gate and
+             # not the response alone.
+             expect=['"fingerprint": "3557095f088da537"',
+                     '"text": "# Me\\n\\nI write Rust and Zig.\\n"',
+                     '"fingerprint": "bd32ddab00fa0410"',
+                     '"text": "no trailing newline\\n"',
+                     '"fingerprint": "b53299c6afe067dd"', "200 OK"],
+             expect_absent=["409 Conflict"],
+             expect_files=[f"{_OC}/PROFILE.md"]),
+        cell("profile/a-stale-fingerprint-is-409-and-a-malformed-body-is-not-a-500",
+             [_req("POST", path="/api/profile", token=True,
+                   body=b'{"fingerprint": "0000000000000000", "text": "clobbered"}'),
+              _req("POST", path="/api/profile", token=True, body=b"not json at all"),
+              _req(path="/api/profile")],
+             world=_installed(**{f"{_OC}/PROFILE.md": "# Me\n\nI write Rust.\n"}),
+             # Both 409 arms on one path: the wrong fingerprint, and the body that never
+             # parsed — which reaches the endpoint as `{}`, whose `fingerprint` is "" and is
+             # therefore stale against a file that exists. The GET afterwards is what says the
+             # file was never touched.
+             expect=["409 Conflict",
+                     '{"ok": false, "error": "conflict", "detail": "PROFILE.md changed '
+                     'since you loaded it \\u2014 reloading"}',
+                     '"text": "# Me\\n\\nI write Rust.\\n"'],
+             expect_absent=["clobbered", "500 Internal"]),
+        cell("profile/an-absent-file-is-created-by-a-save-with-the-empty-fingerprint",
+             [_req("POST", path="/api/profile", token=True,
+                   body=b'{"fingerprint": "", "text": "seeded by the editor"}'),
+              _req(path="/api/profile")],
+             world=_installed(),
+             # "" is the CORRECT fingerprint of a file that is not there, so the editor can
+             # re-create a PROFILE.md the user deleted. The cell above is what stops that from
+             # being read as "the guard does nothing".
+             expect=['{"ok": true, "path": "<HOME>', '"exists": true',
+                     '"text": "seeded by the editor\\n"'],
+             expect_files=[f"{_OC}/PROFILE.md"]),
+
+        # ---- GET/POST /api/mcp ----------------------------------------------------------
+        cell("mcp/one-target-per-active-install-lists-the-presets",
+             [_req(path="/api/mcp")], world=_installed(),
+             # The GET half. Only ACTIVE installs contribute a target — an absent or disabled
+             # one has no live config to wire — so the seeded OpenCode global is the one row
+             # here and the other three hosts are silent. Each preset carries its metadata and
+             # `absent` state, which is what the toggle then changes.
+             expect=['"label": "global config", "path": "<HOME>',
+                     '"host": "opencode"', '"exists": false, "commented": false',
+                     '{"name": "markitdown", "label": "MarkItDown"',
+                     '"preset": true, "state": "absent"}',
+                     '{"name": "gitlab", "label": "GitLab"',
+                     '"name": "gitlab-2"', '"name": "filesystem", "label": "Filesystem"',
+                     '"default": 0}'],
+             expect_absent=['"host": "claude"', '"host": "bob"', '"host": "copilot"']),
+        cell("mcp/a-user-defined-server-joins-the-presets-and-keeps-its-state",
+             [_req(path="/api/mcp")],
+             world=_installed(**{
+                 f"{_OC}/opencode.json": json.dumps({
+                     "$schema": "https://opencode.ai/config.json",
+                     "mcp": {"markitdown": {"type": "local", "command": ["uvx"],
+                                            "enabled": False},
+                             "mine-own": {"type": "local", "command": ["x"]}}}) + "\n"}),
+             # `_mcp_known_names` appends whatever is already in the config, so a server the
+             # user added by hand is visible and manageable rather than invisible — and
+             # `_mcp_meta` gives it the generic label. The disabled preset beside it is
+             # `_mcp_state`'s third value, which no other cell reaches: absent and enabled are
+             # the two a fresh config can produce.
+             expect=['"exists": true', '"name": "markitdown"', '"state": "disabled"',
+                     '{"name": "mine-own", "label": "mine-own", '
+                     '"desc": "User-defined MCP server (not a Harness preset).',
+                     '"preset": false, "state": "enabled"}']),
+        cell("mcp/toggling-a-preset-writes-it-flips-it-and-reports-each-state",
+             [_req("POST", path="/api/mcp", token=True,
+                   body=b'{"name": "markitdown", "path": "' + _OC_MCP.encode()
+                        + b'", "enabled": true}'),
+              _req(path="/api/mcp"),
+              _req("POST", path="/api/mcp", token=True,
+                   body=b'{"name": "markitdown", "path": "' + _OC_MCP.encode()
+                        + b'", "enabled": false}'),
+              _req(path="/api/mcp")],
+             world=_installed(),
+             # THE WRITE, and the file it creates is the point: OpenCode's config gets a
+             # `$schema` stamped onto it on first creation, the preset block lands verbatim
+             # under `mcp`, and the toggle-off is NON-destructive here (the entry stays with
+             # `enabled: false`) — which is the branch that differs from Claude's and the
+             # reason `api_mcp_toggle` is host-aware at all.
+             expect=['{"ok": true, "name": "markitdown", "state": "enabled"}', "200 OK",
+                     '"exists": true', '"name": "markitdown", "label": "MarkItDown"',
+                     '{"ok": true, "name": "markitdown", "state": "disabled"}'],
+             expect_files=[f"{_OC}/opencode.json"]),
+        cell("mcp/every-refusal-is-409-or-404-and-changes-no-file",
+             [_req("POST", path="/api/mcp", token=True,
+                   body=b'{"name": "nope", "path": "' + _OC_MCP.encode()
+                        + b'", "enabled": true}'),
+              _req("POST", path="/api/mcp", token=True,
+                   body=b'{"name": "gitlab", "path": "' + _OC_MCP.encode()
+                        + b'", "enabled": false}'),
+              _req("POST", path="/api/mcp", token=True,
+                   body=b'{"name": "markitdown", "path": "{repoJ}{sepJ}nowhere.json", '
+                        b'"enabled": true}'),
+              _req("POST", path="/api/mcp", token=True,
+                   body=b'{"path": "' + _OC_MCP.encode() + b'", "enabled": true}'),
+              _req("POST", path="/api/mcp", token=True, body=b"not json at all")],
+             world=_installed(),
+             # FOUR DIFFERENT REFUSALS AND TWO STATUSES. An unknown server name and a disable
+             # of something that was never configured are 409s from the endpoint's own
+             # `ok: False`; a path outside the detected allowlist and a request with no name
+             # at all are 404s from `NotFound` — and the allowlist is what stops this endpoint
+             # from writing JSON to an arbitrary file, since it takes a path straight from the
+             # body.
+             #
+             # The unparseable body is `_read_json_body` once more: `{}` has no name, so it
+             # takes the same 404 as the missing one, and the message names the path as
+             # `(none)` rather than blowing up on it.
+             expect=["409 Conflict",
+                     '{"ok": false, "error": "unknown server \'nope\'"}',
+                     '{"ok": false, "error": "\'gitlab\' is not configured"}',
+                     "404 Not Found", '{"error": "not found: mcp target <SB>',
+                     '{"error": "not found: mcp target (none)"}'],
+             expect_absent=["500 Internal", '"ok": true'],
+             expect_absent_files=[f"{_OC}/opencode.json"]),
+        cell("mcp/a-commented-jsonc-is-refused-rather-than-rewritten",
+             [_req(path="/api/mcp"),
+              _req("POST", path="/api/mcp", token=True,
+                   body=b'{"name": "markitdown", '
+                        b'"path": "{homeJ}{sepJ}.config{sepJ}opencode{sepJ}opencode.jsonc", '
+                        b'"enabled": true}')],
+             world=_installed(**{
+                 f"{_OC}/opencode.jsonc":
+                     '// my own comment, which a rewrite would drop\n'
+                     '{"$schema": "https://opencode.ai/config.json"}\n'}),
+             # `_mcp_commented` is the one guard whose whole purpose is to LOSE a feature
+             # rather than lose the user's comments, and a `.jsonc` sibling is also what
+             # `_opencode_target` prefers — so seeding it moves the GET's target too, which is
+             # why both requests are here. The comment must survive on disk, and the snapshot
+             # is what says so.
+             expect=['"commented": true',
+                     '{"ok": false, "error": "config holds comments \\u2014 edit it by hand '
+                     'to keep them"}', "409 Conflict"],
+             expect_files=[f"{_OC}/opencode.jsonc"]),
+        cell("mcp/a-claude-config-is-strict-json-and-an-unparseable-one-is-not-clobbered",
+             [_req(path="/api/mcp"),
+              _req("POST", path="/api/mcp", token=True,
+                   body=b'{"name": "markitdown", "path": "' + _CLAUDE_MCP.encode()
+                        + b'", "enabled": true}'),
+              _req(path="/api/mcp")],
+             world=_installed(**{
+                 "home/.claude/.geneseed-manifest.json": json.dumps({"owned": ["CLAUDE.md"]}),
+                 "home/.claude/CLAUDE.md": "# Claude\n",
+                 # NOT valid JSON, and deliberately shaped like the file it stands in for:
+                 # `~/.claude.json` holds projects and history far beyond MCP wiring, so a
+                 # comment-tolerant read followed by a rewrite would be data loss.
+                 "home/.claude.json": '{"projects": {"a": 1},}\n',
+             }),
+             # THE HOST FORK, and the case that made the reference parse strictly. Claude's
+             # config has no `enabled` flag, so the shapes differ — but the branch that
+             # matters here is the refusal: a file that does not parse is left exactly as it
+             # was. `expect_files` cannot see the CONTENT, so the snapshot's byte comparison
+             # is the direction that gates it, and the second GET is what says the server
+             # still lists the target rather than having crashed on it.
+             expect=['"host": "claude"', '"path": "<HOME>',
+                     '{"ok": false, "error": "couldn\'t parse this config \\u2014 edit it '
+                     'by hand to avoid data loss"}', "409 Conflict"],
+             expect_absent=["500 Internal"],
+             expect_files=["home/.claude.json"]),
     ]
 
 
@@ -1266,6 +1993,10 @@ def _wait_for_record(sb: Path, proc: subprocess.Popen, timeout: float = 30.0):
 def _drive(port: int, token: str, requests: list[dict]) -> dict:
     """Run a cell's request script over ONE connection and return its observations."""
     obs: dict[str, bytes] = {}
+    # The last response parsed as a JSON object, for `from_body`. `{}` whenever the body was
+    # not a JSON object, so a missing field substitutes empty rather than raising — and the
+    # MISSING observation below is what makes that loud instead of silently green.
+    last: dict = {}
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
     try:
         for i, r in enumerate(requests, 1):
@@ -1276,6 +2007,18 @@ def _drive(port: int, token: str, requests: list[dict]) -> dict:
             if r["token"]:
                 headers["X-Geneseed-Token"] = token
             body = r["body"]
+            if r.get("from_body") is not None and body is not None:
+                val = last.get(r["from_body"])
+                if val is None or val == "":
+                    # FAIL LOUD, and this is the whole failure mode `from_body` has. An
+                    # empty substitution sends a stale fingerprint, the endpoint takes its
+                    # 409 arm, and a cell written to gate the FRESH arm compares two 409s
+                    # and looks green. `check_expectations` refuses this key by name.
+                    obs[f"<r{i} from_body {r['from_body']} MISSING>"] = (
+                        b"the previous response carried no such field")
+                body = body.replace(b"{FROM_BODY}",
+                                    str("" if val is None else val).encode("utf-8"))
+                obs[f"<r{i} sent>"] = body
             if body is not None:
                 headers.setdefault("Content-Type", "application/json")
                 headers.setdefault("Content-Length", str(len(body)))
@@ -1307,11 +2050,40 @@ def _drive(port: int, token: str, requests: list[dict]) -> dict:
                 for k, v in resp.getheaders() if k.title() in _HEADERS
             ).encode()
             obs[f"<r{i} body>"] = body_out
+            try:
+                parsed = json.loads(body_out.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                parsed = None
+            last = parsed if isinstance(parsed, dict) else {}
     except (http.client.HTTPException, OSError) as e:
         obs["<transport>"] = f"{type(e).__name__}: {e}".encode()
     finally:
         conn.close()
     return obs
+
+
+def _subst_requests(requests: list[dict], repl: dict) -> list[dict]:
+    """`harness_golden._subst` over a request script, including its BYTES body.
+
+    P6f is the first phase whose requests carry sandbox paths — `api_select_view` and
+    `api_mcp_toggle` are keyed on the (host, path) pair of a DETECTED install, which is
+    what stops a body from steering a write to an arbitrary file, and a detected path is
+    `<sandbox>/home/.config/opencode`, which no cell can spell. `_subst` is str/list/dict
+    only, so the body is decoded, substituted and re-encoded here; a body that is not UTF-8
+    is left alone rather than being made into one that is.
+    """
+    out = []
+    for r in requests:
+        r = {**r, "path": harness_golden._subst(r["path"], repl),
+             "headers": harness_golden._subst(r["headers"], repl)}
+        if isinstance(r.get("body"), bytes):
+            try:
+                r["body"] = harness_golden._subst(
+                    r["body"].decode("utf-8"), repl).encode("utf-8")
+            except UnicodeDecodeError:
+                pass
+        out.append(r)
+    return out
 
 
 def _stop(record: "dict | None", proc: subprocess.Popen) -> None:
@@ -1369,6 +2141,18 @@ def run_cell(cli: list[str], cell: dict, now: "int | None" = None) -> "dict[str,
         # forward-slash spelling of one would be a placeholder nothing could ever use.
         repl.update({"{now}": str(now), "{older}": str(now - 600), "{stale}": str(now - 3600),
                      "{pid}": str(os.getpid()), "{deadpid}": str(_DEAD_PID)})
+        # JSON-ESCAPED variants, and P6f is the first phase that needs them. Three of its
+        # endpoints match the body's `path` against `str(Path)` EXACTLY — `api_select_view`,
+        # `api_mcp_toggle` and `api_install_toggle` all key on a (host, path) pair taken from
+        # a DETECTED install, which is the whole reason a bogus body can never reach a build
+        # argv or a tree move. So the forward-slash spelling cannot be used here, and a raw
+        # Windows path inside a JSON string is not valid JSON (`\U` is not an escape). These
+        # are the same values with their backslashes doubled, which is what `json.dumps`
+        # would write, plus the platform separator in the same spelling.
+        repl.update({k[:-1] + "J}": v.replace("\\", "\\\\")
+                     for k, v in list(repl.items()) if not k.endswith("/}")})
+        repl["{sepJ}"] = os.sep.replace("\\", "\\\\")
+        repl.update(_clock_repl(now))
         if faults is not None:
             harness_golden._copy_checkout(checkout, harness_golden._subst(faults, repl))
             cli = harness_golden._repoint(cli, checkout)
@@ -1388,7 +2172,8 @@ def run_cell(cli: list[str], cell: dict, now: "int | None" = None) -> "dict[str,
         try:
             record = _wait_for_record(sb, proc)
             if record is not None:
-                obs = _drive(record["port"], record.get("token", ""), cell["requests"])
+                obs = _drive(record["port"], record.get("token", ""),
+                             _subst_requests(cell["requests"], repl))
         finally:
             _stop(record, proc)
         if record is None:
@@ -1417,7 +2202,8 @@ def run_cell(cli: list[str], cell: dict, now: "int | None" = None) -> "dict[str,
         return snap
 
 
-def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
+def check_expectations(cell: dict, snap: "dict[str, bytes]",
+                       now: "int | None" = None) -> list[str]:
     """The absolute assertions, run against the REFERENCE side.
 
     Same discipline as `harness_golden.check_expectations`, and needed for the same reason:
@@ -1428,10 +2214,28 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     And, as there, it describes the reference; it never adjudicates it.
     """
     problems = []
+    # The same clock the world was seeded from — see `_clock_repl`. `{today}` and `{trial}`
+    # are the only placeholders an EXPECTATION carries, and they are substituted here rather
+    # than in `run_cell` because an expectation is never seeded into the sandbox.
+    clock = _clock_repl(int(time.time()) if now is None else now)
+    cell = {**cell, **{k: harness_golden._subst(cell.get(k) or [], clock)
+                       for k in ("expect", "expect_absent", "expect_re")}}
+    # RESPONSES ONLY. `<rN sent>` is a REQUEST, and folding it in here would let a cell's own
+    # request body satisfy its `expect` and trip its `expect_absent` — measured, not feared:
+    # the rules add cell sends `"scope": "nope"` precisely to prove the endpoint DROPS it,
+    # and reading the request back made the cell report the reference as answering it. The
+    # sent bytes stay in the snapshot, where they gate the two sides against each other,
+    # which is the question they exist to answer.
     text = b"\n".join(
         v for k, v in sorted(snap.items())
-        if k.startswith("<r") or k in ("<server stdout>", "<server stderr>")
+        if (k.startswith("<r") and not k.endswith(" sent>"))
+        or k in ("<server stdout>", "<server stderr>")
     ).decode("utf-8", "replace")
+    for k in sorted(snap):
+        if k.endswith("MISSING>"):
+            problems.append(f"{k[1:-1]} — a `from_body` request substituted an EMPTY value, "
+                            f"so it sent a stale fingerprint and this cell is gating the 409 "
+                            f"arm it was not written for")
     for want in cell.get("expect", ()):
         if want not in text:
             problems.append(f"the reference no longer answers {want!r} — this cell has "
@@ -1485,7 +2289,7 @@ def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int) -> i
             failures.append(f"  {cid}: server failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                             f"\n    new: {b if isinstance(b, str) else 'ok'}")
             continue
-        vacuous = check_expectations(cell, a)
+        vacuous = check_expectations(cell, a, now)
         if vacuous:
             failures.append(f"  {cid}: VACUOUS\n" + "\n".join(f"    {p}" for p in vacuous))
             continue

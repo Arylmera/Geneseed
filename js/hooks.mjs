@@ -788,6 +788,38 @@ function writeMemories(modelOutput, memDir, existing) {
 }
 
 /**
+ * `_harness_tui_views._memory_drop_index` — remove the index line(s) naming `<name>.md`.
+ *
+ * ITS PYTHON HOME IS THE TUI, and it is here because this is where its SIBLINGS' twins are:
+ * `appendAgentLesson` writes the index lines this deletes and `consolidateMemory` rebuilds
+ * them, so the three rules about MEMORY.md's format live together rather than one of them
+ * living beside a web endpoint. P7 ports the TUI's memory view onto this same function.
+ *
+ * The P6f plan asked whether P5's `learn` had already brought it across. It had not —
+ * nothing in `js/` referenced it — which is the third time a plan's "already ported" column
+ * was answered by reading rather than by trusting.
+ *
+ * SUBSTRING, NOT PARSE, exactly as the reference is: any line containing `(<name>.md)` goes,
+ * so a hand-written index in a different shape still loses its entry. And the file is only
+ * REWRITTEN when something actually changed, which keeps a delete of an unindexed fact from
+ * touching the user's mtime.
+ */
+export function memoryDropIndex(memDir, name) {
+  const idx = path.join(memDir, 'MEMORY.md');
+  let lines;
+  try {
+    lines = pySplitlines(readText(idx));
+  } catch {
+    return;                       // the reference's `except OSError: return`
+  }
+  const keep = lines.filter((ln) => !ln.includes(`(${name}.md)`));
+  if (keep.length === lines.length) return;
+  try {
+    writeText(idx, `${keep.join('\n')}\n`);
+  } catch { /* the reference swallows OSError here too */ }
+}
+
+/**
  * `consolidate_memory` — rebuild MEMORY.md from the fact files actually on disk: index
  * orphans, prune dead lines, report duplicate descriptions (never auto-merge — nuance is
  * the user's to keep).

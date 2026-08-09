@@ -39,8 +39,15 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 import { GLOBAL_MANIFEST, pyResolve } from '../hosts.mjs';
-import { jsonDumpsCompact, pyInt, pyPrint, pyUnquote, writeText } from '../lib/pyfs.mjs';
+import {
+  jsonDumpsCompact, parseJson, pyInt, pyPrint, pyStr, pyTruthy, pyUnquote, writeText,
+} from '../lib/pyfs.mjs';
 import { NotFound, PREFIX_ROUTES, STATE_ROUTES, webState } from './api.mjs';
+import {
+  apiExcludesMutate, apiMcpToggle, apiMemoryDelete, apiProfileSave, apiRulesMutate,
+  apiRulesPromote, apiSelectView,
+} from './actions.mjs';
+import { apiActivityToggle } from './activity.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
 
 export { webState };
@@ -95,17 +102,79 @@ const CTYPES = {
  * is exactly the failure the 501 exists to prevent.
  */
 export const NOT_PORTED = new Set([
-  '/api/mcp', '/api/rules', '/api/jobs',
+  '/api/jobs',
 ]);
 export const NOT_PORTED_PREFIXES = ['/api/jobs/'];
 
-/** Every POST route but `/api/shutdown`, which is the shell's own. P6f-P6g empty this. */
+/**
+ * The POSTs that have not crossed YET. P6g and P6h empty this.
+ *
+ * `/api/restart` hands off to a detached `web restart`, which is the daemon lifecycle P6h
+ * owns. `/api/install` is `api_install_toggle` — 27 endpoint lines over 293 lines of
+ * unported all-or-nothing tree moves with rollback, a stash layout and a host fork; see
+ * `js/web/actions.mjs`'s header for the measurement and why a web phase is the wrong place
+ * for it.
+ */
 export const NOT_PORTED_POST = new Set([
-  '/api/restart', '/api/pick-folder', '/api/mcp', '/api/install', '/api/excludes',
-  '/api/view', '/api/activity', '/api/memory/delete', '/api/rules', '/api/rules/promote',
-  '/api/profile',
+  '/api/restart', '/api/install',
 ]);
 export const NOT_PORTED_POST_PREFIXES = ['/api/jobs/', '/api/actions/'];
+
+/**
+ * The POSTs that will NEVER cross, which is a different claim from the set above.
+ *
+ * `/api/pick-folder` opens an OS-NATIVE folder chooser on the daemon host — `osascript` on
+ * macOS, a one-shot `tkinter` subprocess elsewhere. There is no Node twin that is not a new
+ * GUI dependency, and reaching for one would also be a sixth `_ALLOWED_SPAWNS` row for a
+ * modal dialog. The UI already falls back to its editable path field when this endpoint
+ * fails, which is what a 501 gives it.
+ *
+ * SEPARATE FROM `NOT_PORTED_POST` ON PURPOSE. That set is a to-do list every later phase
+ * shrinks, and folding a permanent decline into it would make the list wrong in the one
+ * direction nobody checks: a phase that emptied it would have to either port a GUI dialog
+ * or quietly delete a declaration. Both sets are unioned into the partition the reference's
+ * routes are cross-checked against, so neither can drift.
+ */
+export const DECLINED_POST = new Set([
+  '/api/pick-folder',
+]);
+
+/**
+ * The POSTs P6f answers — and this table IS the dispatch, not a declaration beside it.
+ *
+ * M23's lesson, applied one verb over: `test_the_declared_partition_is_the_one_the_dispatcher_uses`
+ * exists because a hand-kept list can agree with the reference while the running handler
+ * does something else. `doPost` looks routes up HERE, and `PORTED_POST` is this table's own
+ * keys, so the two cannot drift — the same reason `STATE_ROUTES` is a table on the GET side.
+ *
+ * THE SECOND COLUMN IS THE 409 CONVENTION, and it is a column because it is not uniform.
+ * `ok: false` means the write did not happen — a stale fingerprint, a body that never
+ * parsed, nothing to remove — and the client must re-fetch rather than retry, which is what
+ * 409 says and 200 does not. Five routes map it. `/api/activity` does NOT: its flag write
+ * answers 200 whatever `ok` says, and a port that unified the rule would be wrong exactly
+ * there. `/api/memory/delete` carries no `ok` at all — it deletes, or it raises `NotFound`
+ * and the outer catch answers 404 — so it is `false` here for a third reason again.
+ *
+ * `NotFound` IS NOT CAUGHT PER ROUTE. The reference wraps six of these calls in their own
+ * `except NotFound` AND wraps the whole of `_post_routes` in another inside `do_POST`. The
+ * inner six are redundant — every one produces the same `{"error": "not found: …"}` at 404
+ * — so the twin keeps the outer one only, in `handler`, where `do_POST`'s is.
+ */
+const POST_ROUTES = new Map([
+  ['/api/mcp', [apiMcpToggle, true]],
+  ['/api/excludes', [apiExcludesMutate, true]],
+  ['/api/view', [apiSelectView, true]],
+  ['/api/activity', [apiActivityToggle, false]],
+  // `(self._read_json_body().get("name") or "")` — the SHELL resolves the name, and the
+  // endpoint takes a bare slug rather than a body.
+  ['/api/memory/delete',
+    [(state, b) => apiMemoryDelete(state, pyTruthy(b.name) ? pyStr(b.name) : ''), false]],
+  ['/api/rules', [apiRulesMutate, true]],
+  ['/api/rules/promote', [apiRulesPromote, true]],
+  ['/api/profile', [apiProfileSave, true]],
+]);
+
+export const PORTED_POST = [...POST_ROUTES.keys()];
 
 /**
  * The GET paths the dispatcher answers OUTSIDE the two tables, declared so the partition
@@ -123,8 +192,35 @@ function notPorted(path) {
 }
 
 function notPortedPost(path) {
-  return NOT_PORTED_POST.has(path)
+  return NOT_PORTED_POST.has(path) || DECLINED_POST.has(path)
     || NOT_PORTED_POST_PREFIXES.some((p) => path.startsWith(p));
+}
+
+/**
+ * `Handler._read_json_body` — the drained body as a dict, `{}` for ANYTHING else.
+ *
+ * P6a retained the drain with a note that it was measured indistinguishable and stayed
+ * because "`_read_json_body` needs the bytes from P6f on". This is that caller.
+ *
+ * `{}` AND NEVER A RAISE is the contract, and it is what makes a malformed body a 409 or a
+ * 404 from the endpoint's own validation rather than a 500 from a parser. That matters
+ * beyond tidiness: P5a's one un-portable line is a `json` error message, because CPython
+ * and V8 word them differently AND report different offsets — so a 500 carrying a parse
+ * error is a response the two implementations can never agree on.
+ *
+ * `parseJson`, not `JSON.parse`: a body value can be written straight into a user's file
+ * (`api_profile_save`'s `text`, `api_rules_mutate`'s `title`) and `str(1.0)` is `"1.0"`
+ * where `String(1)` is `"1"`. A non-object body — a bare list, a number, `null` — takes the
+ * same `{}` arm as garbage, because `isinstance(obj, dict)` is what the reference asks.
+ */
+function readJsonBody(buf) {
+  let obj;
+  try {
+    obj = parseJson((buf && buf.length ? buf : Buffer.from('{}')).toString('utf-8'));
+  } catch {
+    return {};
+  }
+  return (obj !== null && typeof obj === 'object' && obj.constructor === Object) ? obj : {};
 }
 
 // ---- the request handler ---------------------------------------------------
@@ -230,6 +326,12 @@ export function makeHandler(state, token, dist, holder = null) {
       });
       return sendJson(res, { stopping: true }, 200, ae);
     }
+    const route = POST_ROUTES.get(path);
+    if (route !== undefined) {
+      const [fn, okIs409] = route;
+      const obj = fn(state, readJsonBody(body));
+      return sendJson(res, obj, (okIs409 && !pyTruthy(obj.ok)) ? 409 : 200, ae);
+    }
     if (notPortedPost(path)) {
       return sendJson(res, { error: `not ported yet: ${path}` }, 501, ae);
     }
@@ -277,6 +379,14 @@ export function makeHandler(state, token, dist, holder = null) {
           try {
             return doPost(req, res, path, ae, buf);
           } catch (e) {
+            // `do_POST`'s own two-armed catch, and P6f is the phase that needs the first
+            // arm: `api_mcp_toggle`, `api_select_view`, `api_memory_delete`,
+            // `api_rules_mutate` and `api_rules_promote` all raise `NotFound` for an
+            // unknown target, and the reference answers 404. The 500 arm below it is what
+            // carries `_rule_fields`' ValueError message, which is a 500 there too.
+            if (e instanceof NotFound) {
+              return sendJson(res, { error: `not found: ${e.message}` }, 404, ae);
+            }
             return sendJson(res, { error: String(e && e.message ? e.message : e) }, 500, ae);
           }
         });

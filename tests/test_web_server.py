@@ -242,12 +242,14 @@ def _node_routes() -> dict:
     src = (
         "import {PREFIX_ROUTES, STATE_ROUTES} from './js/web/api.mjs';"
         "import {NOT_PORTED_KINDS, PORTED_KINDS} from './js/web/docs.mjs';"
-        "import {NOT_PORTED, NOT_PORTED_PREFIXES, NOT_PORTED_POST,"
-        "  NOT_PORTED_POST_PREFIXES, PORTED_INLINE} from './js/web/server.mjs';"
+        "import {NOT_PORTED, NOT_PORTED_PREFIXES, NOT_PORTED_POST, DECLINED_POST,"
+        "  NOT_PORTED_POST_PREFIXES, PORTED_INLINE, PORTED_POST} from './js/web/server.mjs';"
         "process.stdout.write(JSON.stringify({"
         "  ported: [...Object.keys(STATE_ROUTES), ...PREFIX_ROUTES.map((r) => r[0]),"
         "           ...PORTED_INLINE],"
         "  unportedGet: [...NOT_PORTED, ...NOT_PORTED_PREFIXES],"
+        "  portedPost: [...PORTED_POST],"
+        "  declinedPost: [...DECLINED_POST],"
         "  unportedPost: [...NOT_PORTED_POST, ...NOT_PORTED_POST_PREFIXES],"
         "  portedKinds: PORTED_KINDS, unportedKinds: [...NOT_PORTED_KINDS]}));"
     )
@@ -286,10 +288,19 @@ class TheTwoRouteTablesAgree(unittest.TestCase):
     def test_every_post_route_is_either_ported_or_declared_unported(self):
         _ref_get, ref_post = _reference_routes()
         js = _node_routes()
-        # `/api/shutdown` is the only POST the shell itself owns (P6a).
-        covered = {"/api/shutdown"} | set(js["unportedPost"])
+        # `/api/shutdown` is the only POST the shell itself owns (P6a). Since P6f the
+        # partition has FOUR parts, not two, and the third is the point: `declinedPost` is
+        # a route that will never cross (`/api/pick-folder` is an OS-native folder dialog),
+        # which is a different claim from `unportedPost`'s "not yet". Folding them would
+        # make the to-do list wrong in the one direction nobody checks — a later phase
+        # emptying it would have to either port a GUI dialog or quietly delete a row.
+        covered = ({"/api/shutdown"} | set(js["portedPost"]) | set(js["declinedPost"])
+                   | set(js["unportedPost"]))
         self.assertEqual(ref_post, covered,
                          "the POST partition has drifted from the reference's routes")
+        self.assertEqual(set(js["portedPost"]) & set(js["unportedPost"]), set())
+        self.assertEqual(set(js["portedPost"]) & set(js["declinedPost"]), set())
+        self.assertEqual(set(js["unportedPost"]) & set(js["declinedPost"]), set())
 
     def test_the_declared_partition_is_the_one_the_dispatcher_uses(self):
         """The assertion the two tests above cannot make, and a mutation is why it exists.
@@ -305,6 +316,14 @@ class TheTwoRouteTablesAgree(unittest.TestCase):
         naming the status the dispatcher must actually produce. `tests/web_golden.py`
         cannot ask this — it compares two implementations, and no cell may hold a 501
         against the reference's real body.
+
+        P6f RE-AIMED IT, because the probe it was built on crossed. POST `/api/excludes` is
+        no longer unported, and with all five dual-verb paths answering both verbs there is
+        no path left where a ported GET shares its path with an unported POST — which was
+        the shape that made a collapse observable. `declinedGet` is the replacement and it
+        asks the collapse question from the other side: `/api/pick-folder` is declared in a
+        POST-only set, so a GET to it must fall through to the SPA. Collapse the POST sets
+        into `notPorted` and it answers 501 instead, which is what this refuses.
         """
         src = r"""
 import {createServer} from 'node:http';
@@ -318,9 +337,12 @@ srv.listen(0, '127.0.0.1', async () => {
     headers: tok ? {'X-Geneseed-Token': tok, 'Content-Type': 'application/json'} : {},
     body: method === 'POST' ? '{}' : undefined})).status;
   const out = {
-    unportedGet: await hit('GET', '/api/mcp'),
+    unportedGet: await hit('GET', '/api/jobs'),
     portedGet: await hit('GET', '/api/profile'),
-    unportedPost: await hit('POST', '/api/excludes', 'tok'),
+    portedPost: await hit('POST', '/api/excludes', 'tok'),
+    unportedPost: await hit('POST', '/api/install', 'tok'),
+    declinedPost: await hit('POST', '/api/pick-folder', 'tok'),
+    declinedGet: await hit('GET', '/api/pick-folder'),
     unportedPostPrefix: await hit('POST', '/api/actions/build', 'tok'),
     docsMenu: await hit('GET', '/api/docs'),
     portedKind: await hit('GET', '/api/docs/page/glossary'),
@@ -342,9 +364,18 @@ srv.listen(0, '127.0.0.1', async () => {
         self.assertEqual(got["unportedGet"], 501, "an unported GET must say so")
         self.assertEqual(got["portedGet"], 200, "a ported GET must answer — the control, "
                                                 "without which every 501 below is vacuous")
+        self.assertEqual(got["portedPost"], 409,
+                         "a ported POST must answer, and an empty body is the 409 arm of "
+                         "the convention — the control for the two 501s below")
         self.assertEqual(got["unportedPost"], 501,
-                         "POST /api/excludes is unported even though its GET has crossed; "
-                         "a 404 here means the two lists have been collapsed into one")
+                         "POST /api/install has not crossed and must say so")
+        self.assertEqual(got["declinedPost"], 501,
+                         "POST /api/pick-folder never crosses and must say so — a 404 here "
+                         "means DECLINED_POST is declared but not dispatched on")
+        self.assertNotEqual(got["declinedGet"], 501,
+                            "GET /api/pick-folder must fall through to the SPA: the POST "
+                            "sets must not be consulted on a GET, which is what collapsing "
+                            "them back into NOT_PORTED would do")
         self.assertEqual(got["unportedPostPrefix"], 501, "the POST prefixes too")
         self.assertEqual(got["shellPost"], 200, "the shell's own POST still answers")
         # P6d's two inline routes and the KIND partition inside the second of them. The
@@ -385,12 +416,20 @@ srv.listen(0, '127.0.0.1', async () => {
     def test_a_ported_route_is_never_also_declared_unported(self):
         js = _node_routes()
         self.assertEqual(set(js["ported"]) & set(js["unportedGet"]), set())
-        # The five dual-verb paths are why the two unported sets exist separately: a GET
-        # that has crossed must not take its own POST out of the unported list with it.
-        self.assertTrue(set(js["ported"]) & set(js["unportedPost"]),
-                        "no ported GET shares a path with an unported POST — either the "
-                        "dual-verb paths have all crossed, in which case delete this "
-                        "assertion, or the split has been collapsed back into one set")
+        # THE OLD ASSERTION HERE HAS BEEN RETIRED, on its own instruction. It required some
+        # ported GET to share its path with an unported POST — the shape that made a
+        # collapse of the two sets observable — and said "either the dual-verb paths have
+        # all crossed, in which case delete this assertion, or the split has been collapsed
+        # back into one set". P6f is the phase where the first arm became true: all five
+        # answer both verbs now. The collapse question moved to the DISPATCHER probe above,
+        # where `declinedGet` asks it from the GET side instead.
+        #
+        # What still belongs here is the other direction, and it is new: a POST-only
+        # declaration must never appear in the GET partition, or the GET dispatcher would
+        # 501 a path the SPA owns.
+        self.assertEqual(
+            (set(js["unportedPost"]) | set(js["declinedPost"])) & set(js["ported"]), set(),
+            "a POST declaration has leaked into the ported GET table")
 
 
 class TheSetupSnapshotNamesItsOwnRuntime(unittest.TestCase):
