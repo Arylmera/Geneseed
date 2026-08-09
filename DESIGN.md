@@ -778,6 +778,11 @@ renders it as the name in parentheses.
   and that decides which `opencode.json` `instructions` entry `uninstall` unwires. Corpus-gated
   for the reason P5c gave, and the corpus earned its place immediately: the first draft called a
   drive-*relative* `C:x` absolute and only the two drive-relative cases said so.
+  **33 mutations, 30 fire.** All three survivors are the same shape — an arm with no caller in
+  *this* binary — and two of the reds only fired after a FIXTURE changed: a green mutation is a
+  question about the corpus of inputs before it is a question about the code. The control had to
+  be re-chosen too; the first one shared mechanism with half the mutations and reported four
+  over-reaches that were nothing of the kind.
 
 ## 🚫 Explicitly out of scope
 
