@@ -39,8 +39,9 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 import { GLOBAL_MANIFEST, pyResolve } from '../hosts.mjs';
-import { jsonDumpsCompact, pyInt, pyPrint, writeText } from '../lib/pyfs.mjs';
+import { jsonDumpsCompact, pyInt, pyPrint, pyUnquote, writeText } from '../lib/pyfs.mjs';
 import { NotFound, PREFIX_ROUTES, STATE_ROUTES, webState } from './api.mjs';
+import { apiDocs, apiDocsPage } from './docs.mjs';
 
 export { webState };
 
@@ -94,9 +95,9 @@ const CTYPES = {
  * is exactly the failure the 501 exists to prevent.
  */
 export const NOT_PORTED = new Set([
-  '/api/activity', '/api/graph', '/api/mcp', '/api/rules', '/api/docs', '/api/jobs',
+  '/api/activity', '/api/graph', '/api/mcp', '/api/rules', '/api/jobs',
 ]);
-export const NOT_PORTED_PREFIXES = ['/api/activity/', '/api/docs/page/', '/api/jobs/'];
+export const NOT_PORTED_PREFIXES = ['/api/activity/', '/api/jobs/'];
 
 /** Every POST route but `/api/shutdown`, which is the shell's own. P6f-P6g empty this. */
 export const NOT_PORTED_POST = new Set([
@@ -105,6 +106,17 @@ export const NOT_PORTED_POST = new Set([
   '/api/profile',
 ]);
 export const NOT_PORTED_POST_PREFIXES = ['/api/jobs/', '/api/actions/'];
+
+/**
+ * The GET paths the dispatcher answers OUTSIDE the two tables, declared so the partition
+ * cross-check can see them: `/api/ping` is the shell's own, and the two Docs routes take
+ * the `?harness=` query param, which a `(state)` table entry has no way to receive.
+ *
+ * A declaration is not a dispatcher — M23 — so
+ * `test_the_declared_partition_is_the_one_the_dispatcher_uses` probes all three against
+ * the running handler as well.
+ */
+export const PORTED_INLINE = ['/api/ping', '/api/docs', '/api/docs/page/'];
 
 function notPorted(path) {
   return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));
@@ -177,6 +189,20 @@ export function makeHandler(state, token, dist, holder = null) {
     if (path === '/api/ping') return sendJson(res, { ok: true, theme: state.theme }, 200, ae);
     for (const [prefix, handler] of PREFIX_ROUTES) {
       if (path.startsWith(prefix)) return sendJson(res, handler(state, path), 200, ae);
+    }
+    if (path === '/api/docs') {
+      return sendJson(res, apiDocs(state, harnessParam(req.url)), 200, ae);
+    }
+    if (path.startsWith('/api/docs/page/')) {
+      const pid = pyUnquote(path.slice('/api/docs/page/'.length));
+      try {
+        return sendJson(res, apiDocsPage(state, pid, harnessParam(req.url)), 200, ae);
+      } catch (e) {
+        // A kind P6d does not answer says so, rather than falling through to the
+        // `NotFound` at the bottom of `apiDocsPage` and claiming the page is missing.
+        if (e && e.notPorted) return sendJson(res, { error: e.message }, 501, ae);
+        throw e;
+      }
     }
     if (notPorted(path)) {
       return sendJson(res, { error: `not ported yet: ${path}` }, 501, ae);
@@ -260,6 +286,28 @@ export function makeHandler(state, token, dist, holder = null) {
       return sendJson(res, { error: String(e && e.message ? e.message : e) }, 500, ae);
     }
   };
+}
+
+/**
+ * `Handler._harness` — the `?harness=` query param, `null` when absent.
+ *
+ * `urllib.parse.parse_qs` with its defaults, reproduced only as far as this one caller
+ * needs and no further: pairs split on `&` then `=`, values unquoted with `+` meaning a
+ * space, and a BLANK value dropped (`keep_blank_values=False`), so `?harness=` resolves to
+ * the installed default rather than to the empty string. The first occurrence wins,
+ * because `parse_qs` returns a list and the reference takes `[0]`.
+ */
+function harnessParam(url) {
+  const at = (url || '').indexOf('?');
+  if (at < 0) return null;
+  for (const pair of url.slice(at + 1).split('&')) {
+    if (!pair) continue;
+    const eq = pair.indexOf('=');
+    const k = pyUnquote((eq < 0 ? pair : pair.slice(0, eq)).replace(/\+/g, ' '));
+    const v = eq < 0 ? '' : pyUnquote(pair.slice(eq + 1).replace(/\+/g, ' '));
+    if (k === 'harness' && v !== '') return v;
+  }
+  return null;
 }
 
 function readBody(req, length, done) {

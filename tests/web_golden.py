@@ -295,7 +295,91 @@ def cells() -> list[dict]:
     ]
     out += _read_cells(cell)
     out += _catalog_cells(cell)
+    out += _docs_cells(cell)
     return out
+
+
+def _docs_cells(cell) -> list[dict]:
+    """P6d — `/api/docs` and `/api/docs/page/<id>`, and the `?harness=` selector.
+
+    THE QUERY PARAM IS THE ONLY INPUT THESE ENDPOINTS HAVE that is not the checkout, so it
+    is the only thing a cell can vary — and every filtering rule in `_web_docs.py` is
+    downstream of it. P6a skipped the param because nothing called it; this is the phase
+    that does, and the cells send it in all four shapes the reference distinguishes
+    (a valid value, the other valid value, an unknown one, and blank).
+
+    TWO KINDS ARE NOT PORTED AND HAVE NO CELL, deliberately, for the reason the shell's
+    `NOT_PORTED` set has none: a cell holding a 501 against the reference's real body would
+    fail, and one holding two 501s would be waiting to go stale.
+    `tests/test_web_server.py` cross-checks the kind partition instead.
+    """
+    # A markdown page that SLICES: its anchor names a section of SETUP.md, and a successful
+    # slice drops the anchor so the client does not also scroll.
+    sliced = "/api/docs/page/autostart"
+    # A concept page whose body carries `{N_AGENTS}` — the count substitution.
+    counted = "/api/docs/page/agents"
+    # A concept page carrying INLINE `<!--harness:X-->` blocks, one per host.
+    tagged = "/api/docs/page/model"
+    return [
+        cell("docs/the-menu-is-filtered-to-the-active-harness",
+             [_req(path="/api/docs?harness=opencode"),
+              _req(path="/api/docs?harness=claude")], world=_full(),
+             # Two requests over one connection, because the pair is the gate: each names a
+             # page the other must not carry. A single request could not tell filtering
+             # from a menu that happens to list everything.
+             expect=['"harness": "opencode"', '"harness": "claude"',
+                     '"id": "adapters-opencode"', '"id": "adapters-claude-code"',
+                     '"label": "Language servers"']),
+        cell("docs/an-unknown-or-blank-selector-falls-back-to-the-install",
+             [_req(path="/api/docs?harness=vim"), _req(path="/api/docs?harness="),
+              _req(path="/api/docs")],
+             world=_installed(**{f"{_OC}/.geneseed-emit": "claude-global\n"}),
+             # `_norm_harness` has one fallback and three ways to reach it. The install is
+             # seeded CLAUDE so the fallback is distinguishable from the `opencode`
+             # default — with an OpenCode emit all three answers would be right by
+             # accident. `keep_blank_values=False` is why the empty one falls back too.
+             expect=['"harness": "claude"'],
+             expect_absent=['"harness": "vim"', '"harness": "opencode"']),
+        cell("docs/a-sliced-page-is-trimmed-to-its-section-and-drops-the-anchor",
+             [_req(path=sliced)], world=_full(),
+             # `slice: true` + `anchor` — the body starts AT the heading and stops before
+             # the next one of equal-or-lesser depth, and `anchor` comes back null because
+             # the heading is already at the top.
+             # The heading carries an emoji, which the slug strips and the body keeps — so
+             # the cell names the marker and the words separately rather than pasting a
+             # surrogate pair. That the anchor MATCHED at all is what the emoji proves.
+             expect=['"kind": "markdown"', '"source": "SETUP.md"', '"anchor": null',
+                     '"body": "## ', 'Start the web UI at login'],
+             expect_absent=['"anchor": "start-the-web-ui-at-login"']),
+        cell("docs/a-concept-page-substitutes-the-live-counts",
+             [_req(path=counted)], world=_full(),
+             # `{N_AGENTS}` is replaced from the SAME inventory the rail counts, so the
+             # prose cannot drift from it. The token must be gone and a number in its
+             # place — naming the number would tie the cell to `src/`.
+             expect=['"kind": "concept"', '"link": {"hash": "#/section/agents"'],
+             expect_absent=["{N_AGENTS}", "{N_PLUGINS}"],
+             expect_re=[r'"body": "\d+ capability specialists']),
+        cell("docs/an-inline-harness-block-is-stripped-per-host",
+             [_req(path=f"{tagged}?harness=opencode"),
+              _req(path=f"{tagged}?harness=claude")], world=_full(),
+             # The other granularity: a span INSIDE a shared body, wrapped in HTML-comment
+             # markers that are invisible to a GitHub reader of the same prose. Each
+             # request must carry its own host's sentence and neither must carry a marker.
+             expect=["On OpenCode,", "On Claude Code, three settings.json"],
+             expect_absent=["<!--harness:", "<!--/harness-->"]),
+        cell("docs/the-glossary-follows-the-deployed-theme",
+             [_req(path="/api/docs/page/glossary")], world=_full(),
+             # The themed column reads the DEPLOYED theme's JSON, so the same key answers
+             # differently from the neutral one — which is the whole point of the page and
+             # the reason the seeded install is `imperial` rather than `neutral`.
+             expect=['"kind": "glossary"', '"theme": "imperial"',
+                     '"label": "Rule (Law)", "neutral": "Rule", "themed": "Dictate"',
+                     # An un-themed term: the same word in both columns, lower-cased.
+                     '"label": "Posture", "neutral": "posture", "themed": "posture"']),
+        cell("docs/an-unknown-page-is-a-404",
+             [_req(path="/api/docs/page/nope")], world=_full(),
+             expect=['{"error": "not found: nope"}', "404 Not Found"]),
+    ]
 
 
 # A deployed install with something in every section, plus a wiki vault outside it. `mine`

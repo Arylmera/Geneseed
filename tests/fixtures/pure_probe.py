@@ -84,6 +84,16 @@ def run(fn: str, args: list):
         return harness._mode_options()
     if fn == "installed_defaults":
         return harness._installed_defaults()
+    if fn in ("slugify_heading", "slice_section", "strip_harness_blocks"):
+        # `_web_docs`'s pure halves, reached through the facade so the cross-module
+        # splice is the same one the server runs under. Imported lazily: `web` pulls
+        # `build` in with it and every other case here is cheaper without that.
+        import web  # noqa: PLC0415
+        if fn == "slugify_heading":
+            return web._slugify_heading(args[0])
+        if fn == "slice_section":
+            return list(web._slice_section(args[0], args[1]))
+        return web._strip_harness_blocks(args[0], args[1])
     if fn == "py_unquote":
         return urllib.parse.unquote(args[0])
     if fn == "minute_stamp":

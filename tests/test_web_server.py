@@ -241,12 +241,15 @@ def _node_routes() -> dict:
     """
     src = (
         "import {PREFIX_ROUTES, STATE_ROUTES} from './js/web/api.mjs';"
-        "import {NOT_PORTED, NOT_PORTED_PREFIXES, NOT_PORTED_POST, NOT_PORTED_POST_PREFIXES}"
-        "  from './js/web/server.mjs';"
+        "import {NOT_PORTED_KINDS, PORTED_KINDS} from './js/web/docs.mjs';"
+        "import {NOT_PORTED, NOT_PORTED_PREFIXES, NOT_PORTED_POST,"
+        "  NOT_PORTED_POST_PREFIXES, PORTED_INLINE} from './js/web/server.mjs';"
         "process.stdout.write(JSON.stringify({"
-        "  ported: [...Object.keys(STATE_ROUTES), ...PREFIX_ROUTES.map((r) => r[0])],"
+        "  ported: [...Object.keys(STATE_ROUTES), ...PREFIX_ROUTES.map((r) => r[0]),"
+        "           ...PORTED_INLINE],"
         "  unportedGet: [...NOT_PORTED, ...NOT_PORTED_PREFIXES],"
-        "  unportedPost: [...NOT_PORTED_POST, ...NOT_PORTED_POST_PREFIXES]}));"
+        "  unportedPost: [...NOT_PORTED_POST, ...NOT_PORTED_POST_PREFIXES],"
+        "  portedKinds: PORTED_KINDS, unportedKinds: [...NOT_PORTED_KINDS]}));"
     )
     r = subprocess.run([shutil.which("node") or "node", "--input-type=module",
                         "-e", src], cwd=str(ROOT), capture_output=True, text=True,
@@ -273,8 +276,7 @@ class TheTwoRouteTablesAgree(unittest.TestCase):
     def test_every_get_route_is_either_ported_or_declared_unported(self):
         ref_get, _ref_post = _reference_routes()
         js = _node_routes()
-        # `/api/ping` is the shell's own and is answered outside the table on both sides.
-        covered = {"/api/ping"} | set(js["ported"]) | set(js["unportedGet"])
+        covered = set(js["ported"]) | set(js["unportedGet"])
         self.assertEqual(ref_get - covered, set(),
                          "the reference answers GET paths the Node daemon neither ports "
                          "nor declares unported — each would fall through to the SPA")
@@ -320,6 +322,11 @@ srv.listen(0, '127.0.0.1', async () => {
     portedGet: await hit('GET', '/api/profile'),
     unportedPost: await hit('POST', '/api/excludes', 'tok'),
     unportedPostPrefix: await hit('POST', '/api/actions/build', 'tok'),
+    docsMenu: await hit('GET', '/api/docs'),
+    portedKind: await hit('GET', '/api/docs/page/glossary'),
+    unportedKind: await hit('GET', '/api/docs/page/cli'),
+    // LAST, always: this one stops the server, and every probe after it would fail with
+    // an ECONNRESET that reads like a routing bug.
     shellPost: await hit('POST', '/api/shutdown', 'tok'),
   };
   process.stdout.write(JSON.stringify(out));
@@ -340,6 +347,40 @@ srv.listen(0, '127.0.0.1', async () => {
                          "a 404 here means the two lists have been collapsed into one")
         self.assertEqual(got["unportedPostPrefix"], 501, "the POST prefixes too")
         self.assertEqual(got["shellPost"], 200, "the shell's own POST still answers")
+        # P6d's two inline routes and the KIND partition inside the second of them. The
+        # ported kind beside the unported one is the same control the ported GET is above:
+        # a 501 for `cli` means nothing unless `glossary` answers.
+        self.assertEqual(got["docsMenu"], 200)
+        self.assertEqual(got["portedKind"], 200)
+        self.assertEqual(got["unportedKind"], 501,
+                         "a docs KIND that has not crossed must say so — falling through "
+                         "to the NotFound at the bottom would report the page missing")
+
+    def test_every_docs_kind_is_either_ported_or_declared_unported(self):
+        """The route partition, one level in.
+
+        `api_docs_page` dispatches on five KINDS and P6d crosses three: `cli` walks
+        `harness.build_argparser()` (24 subparsers and 43 `add_argument` calls, none of
+        which a Node twin can introspect) and `about` shells out through
+        `_update._origin_display`, which is P8's. Both are declared rather than left to
+        fall out of the chain — and the set is cross-checked here so a SIXTH kind added to
+        the reference cannot quietly answer "page not found".
+        """
+        src = (ROOT / "rituals" / "_web_docs.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        kinds = set()
+        for fn in ast.walk(tree):
+            if not (isinstance(fn, ast.FunctionDef) and fn.name == "api_docs_page"):
+                continue
+            for node in ast.walk(fn):
+                if (isinstance(node, ast.Compare) and isinstance(node.left, ast.Name)
+                        and node.left.id == "kind"):
+                    kinds.update(c.value for c in node.comparators
+                                 if isinstance(c, ast.Constant))
+        self.assertTrue(kinds, "no kinds found — the ast reader has gone stale")
+        js = _node_routes()
+        self.assertEqual(kinds, set(js["portedKinds"]) | set(js["unportedKinds"]))
+        self.assertEqual(set(js["portedKinds"]) & set(js["unportedKinds"]), set())
 
     def test_a_ported_route_is_never_also_declared_unported(self):
         js = _node_routes()

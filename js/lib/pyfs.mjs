@@ -720,3 +720,27 @@ export function pyUnquote(s) {
   }
   return res;
 }
+
+/**
+ * Python's `\s` for a `str` pattern, as a character-class BODY — measured, not recalled.
+ *
+ * The two languages' whitespace classes are nearly the same and the difference had been
+ * carried as a standing item reading "differing from JS `\s` only at U+FEFF". That was
+ * incomplete in both directions, and a corpus over `slugifyHeading` is what found it:
+ *
+ *     python \s = js \s  -  U+FEFF  +  U+001C..U+001F  +  U+0085
+ *
+ * JavaScript counts the byte-order mark as whitespace and Python does not; Python counts
+ * the four C0 information separators and the NEL, and JavaScript does not. Neither shows
+ * up in a docs heading anyone has written — which is exactly why it took a corpus rather
+ * than a cell, and why it is spelled out here rather than approximated with `\s`.
+ */
+export const PY_SPACE = '\t\n\v\f\r \u001c-\u001f\u0085\u00a0\u1680'
+  + '\u2000-\u200a\u2028\u2029\u202f\u205f\u3000';
+
+const PY_STRIP_RE = new RegExp(`^[${PY_SPACE}]+|[${PY_SPACE}]+$`, 'g');
+
+/** `str.strip()` — Python's whitespace set, which `String.trim()`'s is not. */
+export function pyStripSpace(s) {
+  return s.replace(PY_STRIP_RE, '');
+}

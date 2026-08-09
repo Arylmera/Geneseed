@@ -27,6 +27,9 @@ import {
 } from '../../js/setup.mjs';
 import { unifiedDiff, pySplitLines } from '../../js/lib/pydiff.mjs';
 import { stampMinute } from '../../js/web/api.mjs';
+import {
+  sliceSection, slugifyHeading, stripHarnessBlocks,
+} from '../../js/web/docs.mjs';
 
 const FNS = {
   version_verdict: (a) => versionVerdict(a[0], a[1]),
@@ -63,6 +66,10 @@ const FNS = {
   // Seconds in, as `st_mtime` is; `stampMinute` takes ms, as `mtimeMs` is.
   minute_stamp: (a) => stampMinute(a[0] * 1000),
   py_unquote: (a) => pyUnquote(a[0]),
+  slugify_heading: (a) => slugifyHeading(a[0]),
+  // `tuple` on the reference side, a two-element list over JSON.
+  slice_section: (a) => sliceSection(a[0], a[1]),
+  strip_harness_blocks: (a) => stripHarnessBlocks(a[0], a[1]),
   setup_summary_lines: (a) => setupSummaryLines(...a),
   // The stdin readers. Their PROMPTS are stdout, which is why the wizard job is compared as
   // raw bytes rather than through a JSON parse — see the test's docstring.

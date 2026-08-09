@@ -197,7 +197,106 @@ def _cases() -> list[dict]:
         cases.append({"fn": "minute_stamp", "args": [ts]})
     for s in _UNQUOTE_CORPUS:
         cases.append({"fn": "py_unquote", "args": [s]})
+    for s in _SLUG_CORPUS:
+        cases.append({"fn": "slugify_heading", "args": [s]})
+    for body, anchor in _SLICE_CORPUS:
+        cases.append({"fn": "slice_section", "args": [body, anchor]})
+    for body in _HARNESS_BLOCK_CORPUS:
+        for host in ("opencode", "claude"):
+            cases.append({"fn": "strip_harness_blocks", "args": [body, host]})
     return cases
+
+
+# P6d — the Docs page's pure string work. A CORPUS and not cells: `api_docs_page` reaches
+# `_slugify_heading` and `_slice_section` through exactly two real pages in `docs/web/`,
+# so a cell varies one heading and one anchor and nothing else. Every interesting input is
+# one nobody has written a docs page for yet.
+#
+# The slug rules must match the frontend's `slug()` character for character, because a
+# registry `anchor` is written against a heading and compared to the id the renderer
+# assigns. The corpus below is the punctuation classes that differ: an emoji (the real
+# case — `SETUP.md`'s headings carry them), an apostrophe, a colon, an ampersand, digits,
+# a doubled space, and leading and trailing dashes. The last four are the WHITESPACE
+# entries: Python's whitespace class is UNICODE on a str pattern, so U+00A0 matches on
+# both. The two sets DO differ at U+FEFF (JS matches, Python does not) and at the C0
+# separators U+001C-U+001F (Python matches, JS does not) - measured here, because
+# neither is a realistic docs heading and assuming is how the first draft got it wrong.
+_SLUG_CORPUS = [
+    "Start the web UI at login",
+    "🔌 Start the web UI at login",
+    "What's in a name?",
+    "Rules: the short version",
+    "Agents & Skills",
+    "Section 2 — the second one",
+    "  leading and trailing  ",
+    "--already--dashed--",
+    "ALL CAPS HEADING",
+    "one nbsp inside",
+    "日本語の見出し",
+    "###",
+    "",
+    "one nbsp inside",
+    "a﻿bom inside",
+    "aseparator inside",
+    "tab	andvtab",
+]
+
+_SLICE_BODY = (
+    "intro before any heading\n"
+    "\n"
+    "# Top level\n"
+    "\n"
+    "the h1 intro paragraph\n"
+    "\n"
+    "## First section\n"
+    "\n"
+    "first body\n"
+    "\n"
+    "```\n"
+    "# not a heading, it is in a fence\n"
+    "## nor this\n"
+    "```\n"
+    "\n"
+    "### Deeper\n"
+    "\n"
+    "deeper body\n"
+    "\n"
+    "## Second section\n"
+    "\n"
+    "second body\n"
+    "\n"
+    "\n"
+)
+
+# Each anchor names a different rule: an H1 slice stops at the FIRST H2 (`max(level, 2)`),
+# so it captures the intro instead of the whole file; an H2 slice swallows the fence and
+# the H3 under it and stops at the next H2; an H3 slice stops at the next heading of
+# equal-or-lesser depth; a missing anchor returns the ORIGINAL body with ok=False; and the
+# trailing blank lines are popped before the single `\n` is re-appended.
+_SLICE_CORPUS = [
+    (_SLICE_BODY, "top-level"),
+    (_SLICE_BODY, "first-section"),
+    (_SLICE_BODY, "deeper"),
+    (_SLICE_BODY, "second-section"),
+    (_SLICE_BODY, "no-such-anchor"),
+    (_SLICE_BODY, ""),
+    ("no headings at all\n", "anything"),
+]
+
+# `_strip_harness_blocks` FAILS OPEN on a malformed marker — and no cell can reach that
+# arm, because every page in `docs/web/` is balanced and a unit test keeps it that way.
+# So the unbalanced, nested and dangling shapes live here, beside the well-formed one and
+# the in-fence one (a marker inside ``` is example text, not a marker).
+_HARNESS_BLOCK_CORPUS = [
+    "shared\n<!--harness:opencode-->\nonly OC\n<!--/harness-->\nshared again\n",
+    "shared\n  <!--  harness:claude  -->  \nspaced marker\n  <!-- /harness -->  \ntail\n",
+    "<!--harness:opencode-->\nno close\n",
+    "<!--harness:opencode-->\na\n<!--harness:claude-->\nnested\n<!--/harness-->\n",
+    "<!--/harness-->\nclose with no open\n",
+    "```\n<!--harness:opencode-->\nin a fence\n<!--/harness-->\n```\nafter\n",
+    "no markers here at all\n",
+    "<!--harness:claude-->\nclaude only\n<!--/harness-->",
+]
 
 
 # P6c — `urllib.parse.unquote`, a language primitive reproduced, so a corpus and not a cell
