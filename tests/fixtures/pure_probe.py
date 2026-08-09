@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -46,6 +47,21 @@ def run(fn: str, args: list):
         return args[0].ljust(args[1])
     if fn == "fence_for":
         return harness._fence_for(args[0])
+    if fn == "themes_to_check":
+        return harness._themes_to_check(*args)
+    if fn == "roman_to_int":
+        return harness._roman_to_int(args[0])
+    if fn == "desc_block_problem":
+        return harness.build._desc_block_problem(args[0])
+    if fn == "prose_mirror_problems":
+        # `skill_stems` is a SET on this side and a Set on the other; JSON carries a list.
+        return harness._prose_mirror_problems(args[0], args[1], args[2], set(args[3]), args[4])
+    if fn == "is_vendored_path":
+        return harness.build.is_vendored_path(Path(args[0]))
+    if fn == "validate_is_vendored":
+        return harness.build._validate_is_vendored(Path(args[0]))
+    if fn == "py_which":
+        return shutil.which(args[0], path=args[1])
     raise SystemExit(f"pure_probe: unknown fn {fn!r}")
 
 

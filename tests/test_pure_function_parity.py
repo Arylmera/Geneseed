@@ -167,7 +167,144 @@ def _cases() -> list[dict]:
         cases.append({"fn": "py_capitalize", "args": [s]})
     for args in _BUILD_ARGS_CORPUS:
         cases.append({"fn": "setup_build_args", "args": args})
+    for args in _THEMES_TO_CHECK_CORPUS:
+        cases.append({"fn": "themes_to_check", "args": args})
+    for s in _ROMAN_CORPUS:
+        cases.append({"fn": "roman_to_int", "args": [s]})
+    for s in _DESC_BLOCK_CORPUS:
+        cases.append({"fn": "desc_block_problem", "args": [s]})
+    for args in _PROSE_MIRROR_CORPUS:
+        cases.append({"fn": "prose_mirror_problems", "args": args})
+    for rel in _VENDORED_CORPUS:
+        cases.append({"fn": "is_vendored_path", "args": [rel]})
+        cases.append({"fn": "validate_is_vendored", "args": [rel]})
     return cases
+
+
+# --------------------------------------------------------------------------------------
+# P5g — doctor's pure halves
+# --------------------------------------------------------------------------------------
+#
+# `doctor` is gated cell-first, by one planted fault per check in a copied checkout. Five
+# things that copy cannot reach land here instead, each for a reason already named in this
+# loop, and one of them is new.
+#
+#   * `_themes_to_check` is REACHABLE BUT UNAFFORDABLE. `--all` sweeps every theme, and a
+#     theme is one build plus five emits: 14 of those is ~30 s per side per cell against the
+#     2 s a scoped run costs. The matrix would take longer than the rest of the suite to
+#     assert one list. Pure over four arguments, so it is free here.
+#   * `_roman_to_int`'s zero return is UNREACHABLE. Its only caller feeds it numerals matched
+#     by `^### \{\{LAW\}\} ([IVXLCDM]+)`, so a character outside the value map cannot arrive —
+#     and subtractive notation is exercised by the real laws, which is why the corpus carries
+#     both.
+#   * `_desc_block_problem` has five arms and a cell can only plant a spec that renders. Two
+#     arms are cell-covered (`agents/advocate.md` in two shapes); the other three need a spec
+#     that is empty, title-less, or ends at its title — and a spec in any of those shapes also
+#     changes what the EMIT writes, so the cell would be measuring two things.
+#   * `_prose_mirror_problems` is documented pure by its own docstring, and the arms that
+#     matter read `rituals/_web_core.py` and `SHIPPED.md`. Planting drift in those means
+#     hand-writing a copy of a 200 KB module in a cell.
+#   * `shutil.which` is P5c's rule for a language primitive: reproduce one, gate it with a
+#     CORPUS. A cell observes exactly one answer — whatever this machine's PATH says about
+#     `node` — and the whole reason the port has its own lookup is the OTHER answer, where
+#     `doctor` skips `node --check` entirely.
+
+# `_themes_to_check(theme, all_themes, detected, available)`. `--all` and the two
+# fall-through arms — a fresh clone with nothing installed, and a detected theme `themes/` no
+# longer has (a user's install predating a theme rename).
+_AVAIL = ["cyberpunk", "imperial", "neutral"]
+_THEMES_TO_CHECK_CORPUS = (
+    ["neutral", False, None, _AVAIL],
+    ["neutral", True, "imperial", _AVAIL],          # explicit --theme beats --all
+    ["zzz-not-a-theme", False, "imperial", _AVAIL],  # unvalidated here, refused downstream
+    [None, False, "imperial", _AVAIL],
+    [None, True, "imperial", _AVAIL],
+    [None, False, None, _AVAIL],                    # fresh clone -> full sweep
+    [None, False, "gone-in-a-rename", _AVAIL],      # detected but unknown -> full sweep
+    [None, False, "imperial", []],
+    [None, False, "imperial", ["imperial"]],
+    ["", False, "imperial", _AVAIL],                # "" is falsy in both languages
+    [None, False, "", _AVAIL],
+)
+
+# `_roman_to_int`. The subtractive pairs the real laws use, the boundary the ledger keys on,
+# and the unparseable inputs its `return 0` exists for and nothing can deliver.
+_ROMAN_CORPUS = (
+    "I", "II", "III", "IV", "V", "IX", "X", "XIV", "XIX", "XX", "XXXVII", "XL", "XLIX",
+    "L", "XC", "C", "CD", "D", "CM", "M", "MMXXVI",
+    "i", "iv", "xxxvii",           # `.upper()` first
+    "", "IIII", "VV", "IL",        # malformed but in-alphabet: arithmetic, not validation
+    "A", "X1", "IVX", " IV", "IV ", "١٤",
+)
+
+# `_desc_block_problem`. The three arms no cell can plant without also changing the emit.
+_DESC_BLOCK_CORPUS = (
+    "",
+    "   \n\n  \n",
+    "<!-- authoring note -->\n",
+    "<!-- note -->\n# Title\n\n> Purpose.\n",
+    "# Title\n",
+    "# Title\n\n\n",
+    "# Title\n\n>\n",
+    "# Title\n\n>   \n",
+    "# Title\n\n>>> \n",
+    "# Title\n\n> Purpose.\n",
+    "  # Indented title\n\n> Purpose.\n",
+    "Prose first.\n\n# Title\n\n> Purpose.\n",
+    "# Title\n\nProse.\n\n> Purpose only later.\n",
+    "# Title\n\n```\n> not a blockquote, a code sample\n```\n",
+    "# Title\n> Purpose on the very next line.\n",
+    "\U0001D50A Title\n\n> Purpose.\n",
+    "# Title\n\n> Purpose with an apostrophe' and a \"quote\".\n",
+)
+
+# `_prose_mirror_problems(readme, web, counts, skill_stems, shipped)`. Pure over five inputs,
+# and the two mirrors that live in Python source (`_web_core`) and in SHIPPED.md are the ones
+# a cell would have to hand-write a module to plant.
+_COUNTS = {"laws": 37, "agents": 17, "skills": 47}
+_README_OK = ("Geneseed ships 37 universal laws.\n"
+              "| **🤖 Agents** (17) | one per capability |\n"
+              "| **🛠 Skills** (47) | workflows: alpha · beta · gamma |\n")
+_PROSE_MIRROR_CORPUS = (
+    [_README_OK, "", _COUNTS, ["alpha", "beta", "gamma"], ""],
+    [_README_OK.replace("37 universal", "36 universal"), "", _COUNTS,
+     ["alpha", "beta", "gamma"], ""],
+    [_README_OK.replace("(17)", "(16)").replace("(47)", "(48)"), "", _COUNTS,
+     ["alpha", "beta", "gamma"], ""],
+    # A dropped name the (N) count alone cannot see, and a name with no spec behind it.
+    [_README_OK, "", _COUNTS, ["alpha", "beta", "gamma", "delta"], ""],
+    [_README_OK, "", _COUNTS, ["alpha", "beta"], ""],
+    # No `workflows:` marker at all: the enumeration arm must not run on a reworded row.
+    [_README_OK.replace("workflows:", "playbooks:"), "", _COUNTS, ["alpha"], ""],
+    # The `_web_core` prose, in both spellings of the law line.
+    ["", "onboarding: 37 universal laws and 17 capability specialists", _COUNTS, [], ""],
+    ["", "onboarding: 36 universal Rules and 18 capability specialists", _COUNTS, [], ""],
+    # The curated-subset arm: N against the wikilinks it introduces, not against the total.
+    ["", "3 repeatable workflows the agent can invoke by name — [[a]], [[b]], [[c]] — each "
+     "a playbook under", _COUNTS, [], ""],
+    ["", "4 repeatable workflows the agent can invoke by name — [[a]], [[b]] — each "
+     "a playbook under", _COUNTS, [], ""],
+    # `re.S`: the wikilink list spans lines in the real file.
+    ["", "2 repeatable workflows the agent can invoke by name —\n[[a]],\n[[b]]\n— a "
+     "playbook under", _COUNTS, [], ""],
+    # SHIPPED.md's capability row, which had drifted 1 law and 6 skills behind with no gate.
+    ["", "", _COUNTS, [], "Every row below is present: 37 laws, 17 agents, 47 skills.\n"],
+    ["", "", _COUNTS, [], "Every row below is present: 36 laws, 17 agents, 41 skills.\n"],
+    ["", "", _COUNTS, [], "no capability row here at all"],
+)
+
+# `is_vendored_path` against `_validate_is_vendored` — the same question at two depths, and
+# the pair exists because doctor asks it of a bundle and of a per-repo native layer in the
+# same run. Every cell exercises exactly the two real shapes; these are the edges.
+_VENDORED_CORPUS = (
+    "skills/token-report/SKILL.md", "skills/token-report", "skills/brainstorm.md",
+    ".claude/skills/token-report/SKILL.md", ".bob/skills/daydream/x/y.md",
+    ".github/skills/react-view-transitions/README.md",
+    "skills/not-vendored/SKILL.md", "agents/skills/token-report/SKILL.md",
+    "skills", "skills/token-report/", "a/b/c.md", "",
+    # A FILE named `skills` with a vendored-looking sibling — the `parts[:-1]` boundary.
+    "token-report/skills", "skills/token-report/nested/skills/daydream/deep.md",
+)
 
 
 # `_setup_build_args`'s three elision rules, one case per rule and per side of it. Reachable
@@ -340,6 +477,44 @@ def _manifest_cases(tmp: Path) -> list[dict]:
     return cases
 
 
+def _which_cases(tmp: Path) -> list[dict]:
+    """`shutil.which` reads the filesystem, so its corpus is a seeded PATH.
+
+    Every case passes `path=` explicitly. Inheriting the machine's is the one thing that
+    would make this untestable: the answer would be whatever is installed on the runner.
+    """
+    a, b = tmp / "whichA", tmp / "whichB"
+    for d in (a, b):
+        d.mkdir(parents=True, exist_ok=True)
+    # Windows finds `zzhit` through PATHEXT; POSIX needs the name as spelled and the exec bit.
+    for d, names in ((a, ("zzhit.cmd", "zzhit")), (b, ("zzhit.cmd", "zzhit", "zzonly"))):
+        for n in names:
+            p = d / n
+            p.write_text("", encoding="utf-8")
+            p.chmod(0o755)
+    (a / "zzdir").mkdir(exist_ok=True)          # a DIRECTORY with a command's name
+    (a / "zznotexec").write_text("", encoding="utf-8")
+    (a / "zznotexec").chmod(0o644)
+    sep = os.pathsep
+    both = f"{a}{sep}{b}"
+    return [{"fn": "py_which", "args": [cmd, p]} for cmd, p in (
+        ("zzhit", str(a)),
+        ("zzhit.cmd", str(a)),                  # already spelled: PATHEXT is not appended
+        ("zzonly", both),                       # second entry wins only because the first misses
+        ("zzonly", str(a)),                     # ...and misses entirely when it is absent
+        ("zzdir", str(a)),                      # a directory is never the answer
+        ("zznotexec", str(a)),                  # POSIX: no exec bit. Windows: found.
+        ("zzmissing", both),
+        ("zzhit", ""),                          # an empty PATH is one empty entry, not none
+        ("zzhit", f"{sep}{a}"),                 # a leading empty entry is searched, as `.`
+        ("zzhit", f"{a}{sep}{a}"),              # deduped by normcase
+        ("zzhit", f"{a.as_posix()}{sep}{b}"),
+        (str(a / "zzhit.cmd"), both),           # a path, not a name: checked as given
+        ("nosuch/zzhit", both),
+        ("node", os.environ.get("PATH", "")),   # the one call the verb actually makes
+    )]
+
+
 def _run(cmd: list[str], cases: list[dict], ascii_mode: bool) -> list:
     with tempfile.TemporaryDirectory() as td:
         job = Path(td) / "job.json"
@@ -364,7 +539,7 @@ class ThePureFunctionsAgreeOnEveryInputNoCellCanBuild(unittest.TestCase):
     def setUpClass(cls):
         cls._tmp = tempfile.TemporaryDirectory()
         tmp = Path(cls._tmp.name)
-        cls.cases = _cases() + _manifest_cases(tmp)
+        cls.cases = _cases() + _manifest_cases(tmp) + _which_cases(tmp)
         cls.out = {}
         for ascii_mode in (False, True):
             cls.out[ascii_mode] = (

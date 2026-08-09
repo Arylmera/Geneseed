@@ -73,6 +73,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -134,9 +135,16 @@ def cells() -> list[dict]:
                       The REFERENCE is one command for every cell — `rituals/harness.py`
                       answers all 24 subcommands — so only the candidate side splits.
         world         {relative path: text} seeded into the sandbox before the run
-        steps         [{argv, stdin, cwd}] — more than one runs them in order into the
+        checkout      {relative path: text or None} planted into a fresh COPY of the
+                      tracked checkout, which this cell's CLI is then run FROM. `{}` is a
+                      clean copy and is not the same as omitting the key — omitting it
+                      runs against the real checkout, as every other cell does. See
+                      `_copy_checkout` for why a verb that reads `ROOT` needs this.
+        steps         [{argv, stdin, cwd, seed}] — more than one runs them in order into the
                       SAME sandbox, and only the LAST step's streams are compared (the
-                      others' effects survive in the tree, which is the point)
+                      others' effects survive in the tree, which is the point). `seed` is a
+                      world fragment written just BEFORE that step, for the files an earlier
+                      step produces and this one must find changed.
         env           overlay on golden.cell_env — the knobs this cell depends on
         expect        substrings the REFERENCE must print on stdout+stderr
         expect_absent substrings the reference must NOT print — the direction `expect`
@@ -152,7 +160,8 @@ def cells() -> list[dict]:
         expect_files  paths that must exist in the sandbox afterwards
 
     Placeholders `{sb}` `{home}` `{repo}` `{cfg}` `{py}` `{llm}` are substituted in world
-    contents, argv, stdin and env values once the sandbox exists. Each path one also has a
+    contents, argv, stdin and env values once the sandbox exists — plus `{ck}`, the copied
+    checkout, for the cells that have one. Each path one also has a
     `{sb/}` form spelling the same path with forward slashes, and JSON contexts MUST use
     it: a Windows sandbox root inside a JSON string literal is `C:\\Users\\...`, whose `\\U`
     is an invalid escape, so the document fails to parse and the cell silently tests the
@@ -162,7 +171,7 @@ def cells() -> list[dict]:
     return (_context_cells() + _git_gate_cells() + _rule_gate_cells() + _learn_cells()
             + _exclude_cells() + _status_cells() + _version_cells()
             + _build_cells() + _prompt_cells() + _theme_cells()
-            + _diff_cells() + _rebuild_all_cells())
+            + _diff_cells() + _rebuild_all_cells() + _doctor_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -1569,6 +1578,425 @@ def _rebuild_all_cells() -> list[dict]:
 
 
 # --------------------------------------------------------------------------------------
+# doctor  —  one planted fault per check, in a checkout of this cell's own
+# --------------------------------------------------------------------------------------
+#
+# `doctor` runs fifteen `_*_problems` checks and prints `[doctor] ok — …` when every one of
+# them finds nothing. That is P4e's SILENT-ON-SUCCESS hole promoted from one stage to a whole
+# verb: delete any single check and a clean run is byte-identical, in every cell, forever. So
+# a comparison alone cannot tell this port from a stub, and the gate is ONE PLANTED FAULT PER
+# CHECK — not a preference, the only thing that distinguishes the two.
+#
+# Ten of the fifteen read the CHECKOUT, which no cell could write (P5d's cannot-FENCE-OFF
+# hole, applied to two thirds of a verb). `_copy_checkout` is what closed that; read its
+# docblock for the cost model. Everything below follows from three properties of it:
+#
+#   1. A CLEAN COPY IS THE FIXTURE'S OWN POSITIVE CONTROL. `a-clean-checkout-is-clean` asserts
+#      `[doctor] ok — `. A copy that dropped a directory would make some check report a fault
+#      nothing planted — which reads exactly like a port bug — and that cell is what fails
+#      first when it happens.
+#   2. EVERY CELL NAMES ITS PROBLEM COUNT. `[doctor] N problem(s)` is asserted verbatim
+#      wherever N is stable, so a plant that started tripping a SECOND check is reported
+#      rather than absorbed. Where N moves with the content of `src/` (a theme key missing
+#      from every other theme; a law with no ledger row) the count is asserted as a shape and
+#      the specific messages carry the rest.
+#   3. `--theme neutral` ON ALMOST EVERY CELL. With no `--theme` and no `--all`, doctor sweeps
+#      every theme it can see — 14 builds plus 14×5 emits, ~30s per side per cell. The
+#      one-theme scoping is itself gated, by seeding an install instead (see the last two).
+#
+# `--no-bundle` wherever the plant is in `src/`, and the reason is not speed: a source edit
+# makes a fresh render differ from the COMMITTED bundle, so `_rendered_problems` would report
+# every affected file as stale on top of the fault the cell is about. The two bundle cells
+# plant in `Harness/` instead, where nothing else looks.
+
+#: A law-ledger row, patched out of the real page. `_law_meta_problems` reads
+#: `web/src/pages/Laws.jsx`, so the fault has to be planted in a copy of the real file —
+#: hand-writing one would have to enumerate every law, and the count moves with `src/`.
+_LAWS_JSX = (ROOT / "web" / "src" / "pages" / "Laws.jsx").read_text(encoding="utf-8")
+
+#: registry.json with one row nothing in `src/` provides. Read and re-serialised rather than
+#: hand-written for the same reason.
+_REGISTRY = json.loads((ROOT / "registry.json").read_text(encoding="utf-8"))
+
+
+def _registry_with_orphan() -> str:
+    doc = json.loads(json.dumps(_REGISTRY))
+    doc.setdefault("entities", {})["skills/zzz-doctor"] = {
+        "status": "invented", "version": "one", "owner": "", "added": "yesterday",
+        "last_verified": "",
+    }
+    return json.dumps(doc, indent=2) + "\n"
+
+
+def _registry_with(row) -> str:
+    """One EXISTING row replaced. The orphan above cannot reach the field checks — those run
+    only over `expected & entities`, and an invented key is in neither."""
+    doc = json.loads(json.dumps(_REGISTRY))
+    doc["entities"]["agents/advocate"] = row
+    return json.dumps(doc, indent=2) + "\n"
+
+
+def _laws_jsx_with_a_reflowed_row() -> str:
+    """Rule 1's row wrapped across four lines, as a prettier with a print-width limit does.
+
+    The `_LAW_META_ROW` regex spans newlines on purpose and the docstring says why: a row too
+    long for the width gets reflowed with a magic trailing comma, and a gate that only
+    understood the one-line form silently lost it — leaving that law's Principle unguarded
+    while `format:check` and doctor demanded contradictory formatting of the same file.
+    Nothing in the tree is currently reflowed, so this is the only thing that exercises it.
+    """
+    out, n = re.subn(r"(?m)^(\s*)1:\s*\[\s*((['\"]).*?\3)\s*,\s*((['\"]).*?\5)\s*,?\s*\]\s*,?\s*$",
+                     lambda m: (f"{m.group(1)}1: [\n{m.group(1)}  {m.group(2)},\n"
+                                f"{m.group(1)}  {m.group(4)},\n{m.group(1)}],"),
+                     _LAWS_JSX, count=1)
+    if n != 1:
+        raise RuntimeError("Laws.jsx no longer has a one-line `1: [...]` row — the doctor "
+                           "cell that reflows it cannot be built")
+    return out
+
+
+def _laws_jsx_with_unknown_class() -> str:
+    """Rule 1's class replaced with one `LAW_CLASSES` does not carry — exactly one problem,
+    because an unknown class short-circuits the LAW_CLASS comparison for the same row."""
+    out, n = re.subn(r"(?m)^(\s*1:\s*\[\s*)(['\"])[a-z]+\2", r"\1'nosuchclass'", _LAWS_JSX,
+                     count=1)
+    if not n:
+        raise RuntimeError("Laws.jsx no longer has a `1: ['<class>', …]` row — the doctor "
+                           "cell that plants an unknown class cannot be built")
+    return out
+
+
+def _colour_theme_with_a_bad_hex() -> str:
+    """A REAL colour theme, renamed, with one role's value corrupted.
+
+    Hand-writing a minimal one does not work and the reason is worth stating: the
+    opencode-global emit reads the same files (`_write_color_themes` -> `palette[role]`) and
+    runs BEFORE the check does, so a palette that is missing a role — or missing entirely —
+    kills the emit with a KeyError instead of reaching `_color_theme_problems`. Two of that
+    check's three arms are therefore unreachable from any cell, and it is doctor's own
+    ordering that makes them so: the consumer is stricter than the gate. The third arm — a
+    value present but not `#rrggbb` — passes straight through the emit and is the one a cell
+    can see.
+    """
+    spec = json.loads((ROOT / "themes" / "opencode" / "nord.json").read_text(encoding="utf-8"))
+    spec["name"] = "zzz-doctor"
+    spec["palette"][sorted(spec["palette"])[0]] = "not-a-hex"
+    return json.dumps(spec, indent=2)
+
+
+def _np(rel: str) -> str:
+    """A bundle-relative path as `_check_build` prints it — `str(Path)`, so the platform's
+    own separator. Every other harness path in this file is POSIX because the code that
+    prints it went through `as_posix()`; this one did not, and a hardcoded `/` here would
+    make every emit-scan cell vacuous on Windows."""
+    return str(Path(rel))
+
+
+#: A spec in the shape `_desc_block_problem` demands: title, then a one-line `>` purpose.
+_GOOD_SPEC = "# Zzz Doctor\n\n> A planted spec, for the doctor cells.\n\nBody.\n"
+
+#: A bundle `_rendered_problems` will find INCOMPLETE. `Harness/` is gitignored, so a copy of
+#: the tracked set has no committed bundle at all and the check returns `[]` on its very first
+#: line — which is why every clean cell above says "rendered bundle in sync" without anything
+#: having been compared. `--bundle` is what points it at a tree a cell owns.
+_PARTIAL_BUNDLE = {"bundle/.geneseed-theme": "neutral\n",
+                   "bundle/memory/README.md": "# Not what src renders\n",
+                   "bundle/memory/.gitignore": "not the seeded ignore file\n",
+                   "bundle/notebook/README.md": "# The agent rewrote this, which is allowed\n"}
+
+#: A hook shim pointing at a file that is not there — the one checkout-reading check that is
+#: NOT in the checkout, because `_hook_shim_path()` is under `$GENESEED_HOME`, which
+#: `golden.cell_env` redirects. Both spellings are seeded: `_shim_rel` picks `.cmd` on
+#: Windows and the bare name elsewhere, and a cell that seeded only one would silently pass
+#: on the other platform.
+_BROKEN_SHIM = '@echo off\r\n"{sb/}/nosuchpython.exe" "{sb/}/nosuchharness.py" %*\r\n'
+_SHIM_WORLD = {"home/.geneseed/bin/geneseed-hook.cmd": _BROKEN_SHIM,
+               "home/.geneseed/bin/geneseed-hook": _BROKEN_SHIM}
+
+
+def _doctor_cells() -> list[dict]:
+    def dr(name, argv=("doctor", "--theme", "neutral"), checkout=None, world=None,
+           steps=None, **kw):
+        return dict(id=f"doctor/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    checkout=dict(checkout or {}),
+                    steps=steps or [{"argv": list(argv), "cwd": "repo"}], **kw)
+
+    src_only = ("doctor", "--theme", "neutral", "--no-bundle")
+
+    def built(argv, seed=None):
+        """Render a real bundle into `bp/Harness` first, then run doctor against it. The
+        only honest source of a bundle a fresh render AGREES with — and `seed` is how a cell
+        varies one of the markers that build just wrote."""
+        return [{"argv": ["build"], "cwd": "bp"},
+                {"argv": list(argv), "cwd": "repo", "seed": seed or {}}]
+
+    return [
+        # ------------------------------------------------------------------ the control
+        dr("a-clean-checkout-is-clean",
+           expect=["[doctor] ok — 1 theme(s) clean", "rendered bundle in sync"],
+           expect_absent=["problem(s)"]),
+
+        # ------------------------------------------- the three emit-scanning checks at once
+        # One source fault, three labels. `_check_build` scans the `files` build,
+        # `_global_emit_problems` the opencode-global pair, `_claude_bob_emit_problems` the
+        # three per-repo native layers — and each stamps its own label, so this single cell
+        # says all three ran. Deleting any one of them removes its lines from the output.
+        dr("an-unresolved-token-and-a-dead-link-reach-every-emit-scan", src_only,
+           {"src/memory/README.md":
+            "# Memory\n\nA planted {{NOPE}} token and a [dead link](./nowhere.md).\n"},
+           expect=[f"[neutral] unresolved token {{{{NOPE}}}} in {_np('memory/README.md')}",
+                   f"[neutral] dead link './nowhere.md' in {_np('memory/README.md')}",
+                   f"[neutral global/lean] unresolved token {{{{NOPE}}}} in "
+                   f"{_np('memory/README.md')}",
+                   f"[neutral global/full] dead link './nowhere.md' in "
+                   f"{_np('memory/README.md')}",
+                   # The per-repo layers nest one level deeper, under each host's own dir —
+                   # the shape `build._validate_is_vendored` exists for, and the only thing
+                   # that says `_claude_bob_emit_problems` scanned the ROOT and not the
+                   # bundle inside it.
+                   f"[neutral claude] dead link './nowhere.md' in "
+                   f"{_np('.claude/memory/README.md')}",
+                   f"[neutral bob] unresolved token {{{{NOPE}}}} in "
+                   f"{_np('.bob/memory/README.md')}",
+                   f"[neutral copilot] dead link './nowhere.md' in "
+                   f"{_np('.github/memory/README.md')}",
+                   "tip: dead links to skills mean your source is incomplete"],
+           expect_re=[r"\[doctor\] 12 problem\(s\) across 1 theme\(s\)"]),
+        # The hermeticity arm — the invariant that lets a bundle be copied into any repo.
+        # A link that RESOLVES and leaves the bundle is a different message from a dead one,
+        # and only this cell separates them. `../../../..` rather than a plausible-looking
+        # `../../README.md`: the check is `exists() and not within(out)`, so a target that is
+        # merely absent is a DEAD link — the first draft of this cell asserted the escape and
+        # got the other message, in every one of the six labels.
+        dr("a-link-that-escapes-the-bundle-is-not-a-dead-link", src_only,
+           {"src/memory/README.md":
+            "# Memory\n\nAn [escape](../../../..) and an [absolute](/etc/passwd) and a "
+            "[home](~/x.md).\n"},
+           expect=[f"non-hermetic link '../../../..' escapes the bundle in "
+                   f"{_np('memory/README.md')}",
+                   f"non-hermetic absolute link '/etc/passwd' in {_np('memory/README.md')}",
+                   f"non-hermetic absolute link '~/x.md' in {_np('memory/README.md')}"],
+           expect_absent=["dead link"]),
+
+        # ------------------------------------------------------------------- the bundle
+        # `Harness/` is GITIGNORED. A copy of the tracked set therefore has no committed
+        # bundle, `_rendered_problems` returns on `bundle.is_dir()`, and every "rendered
+        # bundle in sync" above is a sentence about nothing. That is this fixture's own
+        # blind spot — what the copy makes UNREACHABLE — and `--bundle` is what closes it.
+        dr("a-seeded-bundle-is-stale-and-incomplete",
+           ("doctor", "--theme", "neutral", "--bundle", "{sb}/bundle"),
+           world=_PARTIAL_BUNDLE,
+           expect=["[rendered] bundle/memory/README.md stale (differs from a fresh render) "
+                   "— rebuild",
+                   # A file the render COPIES rather than renders takes the other message,
+                   # from the other comparison (`read_bytes`, not text).
+                   "[rendered] bundle/memory/.gitignore stale — rebuild",
+                   "[rendered] bundle/AGENT.md missing — rebuild the bundle"],
+           # Seed-once and agent-owned after the first build: a rewrite is not drift. The
+           # only way to gate a carve-out is to assert what it leaves OUT.
+           expect_absent=["bundle/notebook/README.md stale"],
+           expect_re=[r"\[doctor\] \d\d problem\(s\) across 1 theme\(s\)"]),
+        dr("a-bundle-that-a-build-just-wrote-is-in-sync", world={"bp/.keep": ""},
+           steps=built(("doctor", "--theme", "neutral", "--bundle", "{sb}/bp/Harness")),
+           expect=["[doctor] ok — 1 theme(s) clean"],
+           expect_absent=["[rendered]"]),
+        dr("the-bundles-own-emit-marker-picks-the-dialect", world={"bp/.keep": ""},
+           steps=built(("doctor", "--theme", "neutral", "--bundle", "{sb}/bp/Harness"),
+                       {"bp/Harness/.geneseed-emit": "claude-global\n"}),
+           # The same in-sync bundle as above, with one marker rewritten between the build
+           # and the check. A host that catalogues capabilities to the model itself gets
+           # AGENT.md's tables collapsed to a pointer, so the portable file the build wrote
+           # is legitimately not what a claude-global render produces — and reading the
+           # marker is the only thing that stops every OpenCode install reporting AGENT.md
+           # stale forever.
+           expect=["[rendered] Harness/AGENT.md stale (differs from a fresh render) "
+                   "— rebuild"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("a-bundle-whose-theme-marker-names-no-theme",
+           ("doctor", "--theme", "neutral", "--bundle", "{sb}/bundle"),
+           world={"bundle/.geneseed-theme": "nosuchtheme\n"},
+           expect=["[rendered] cannot render theme 'nosuchtheme' for bundle/"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("--no-bundle-does-not-look-at-the-bundle-at-all",
+           ("doctor", "--theme", "neutral", "--no-bundle", "--bundle", "{sb}/bundle"),
+           world=_PARTIAL_BUNDLE,
+           expect=["[doctor] ok — 1 theme(s) clean"],
+           expect_absent=["[rendered]"]),
+
+        # ------------------------------------------------------------------ theme parity
+        # A key one theme defines and no other does. The count is every OTHER theme, which
+        # moves with `themes/`, so the shape carries it and two named messages carry the rest.
+        dr("a-key-one-theme-defines-and-the-others-do-not", src_only,
+           {"themes/cyberpunk.json": json.dumps(
+               dict(json.loads((ROOT / "themes" / "cyberpunk.json").read_text(
+                   encoding="utf-8")), ZZZ_PLANTED="x"), indent=2)},
+           expect=["[themes] 'neutral' missing key {ZZZ_PLANTED} (defined in another theme)",
+                   "  tip: a theme is missing a key another theme defines"],
+           expect_absent=["[themes] 'cyberpunk' missing key"],
+           expect_re=[r"\[doctor\] 1[0-9] problem\(s\) across 1 theme\(s\)"]),
+
+        # ------------------------------------------------------------------ colour themes
+        dr("a-palette-role-that-is-not-six-hex-digits", src_only,
+           {"themes/opencode/zzz-doctor.json": _colour_theme_with_a_bad_hex()},
+           expect=["[colors] 'zzz-doctor' role 'accent' is not #rrggbb hex: 'not-a-hex'"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+
+        # ------------------------------------------------------------------ authoring
+        dr("a-spec-with-no-purpose-blockquote", src_only,
+           {"src/agents/advocate.md": "# Advocate\n\nProse, and never a blockquote.\n"},
+           expect=["[authoring] agents/advocate.md has no '>' purpose line "
+                   "(its OpenCode description would render empty)"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("a-purpose-blockquote-that-is-not-the-first-block", src_only,
+           # `_first_blockquote` finds it, so the cell above stays silent; only
+           # `_desc_block_problem` sees that the FIRST block is prose.
+           {"src/agents/advocate.md":
+            "# Advocate\n\nProse first.\n\n> and the purpose line only later.\n"},
+           expect=["[authoring] agents/advocate.md: first block after the title is not a "
+                   "'>' blockquote: 'Prose first.' — desc_of() would silently extract the "
+                   "wrong description"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("the-learn-prompt-literal-is-gone-from-the-plugin", src_only,
+           {"adapters/opencode/plugins/geneseed-learn.js": "// nothing to extract\n"},
+           expect=["[authoring] LEARN_PROMPT_HEAD literal not found in geneseed-learn.js "
+                   "— harness.py would fall back (single source broken)"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("the-loaded-copy-follows-the-plugin-rather-than-a-constant", src_only,
+           {"adapters/opencode/plugins/geneseed-learn.js":
+            "const LEARN_PROMPT_HEAD = `something else entirely`\n"},
+           # THE DRIFT ARM IS UNREACHABLE, AND ASSERTING THAT IS THE POINT. Both the loaded
+           # copy and the checked literal come from this one file through the same regex, so
+           # a reference that reads it can never disagree with itself. What the cell gates is
+           # a port that hardcoded the prompt instead of extracting it: that copy WOULD
+           # differ from the planted literal, print the drift line, and fail the comparison.
+           # A silent reference is the assertion; `expect_absent` is the only way to say it.
+           expect=["[doctor] ok — 1 theme(s) clean"],
+           expect_absent=["LEARN_PROMPT_HEAD drifted", "literal not found"]),
+        dr("a-plugin-that-does-not-parse", src_only,
+           {"adapters/opencode/plugins/geneseed-learn.js":
+            "const LEARN_PROMPT_HEAD = `x`\nfunction ( {\n"},
+           # The message ends with `node --check`'s LAST stderr line, which is its version
+           # banner rather than the syntax error — faithful, surprising, and the same `node`
+           # answers both sides, so it is a constant here rather than a second opinion. The
+           # version itself is deliberately not named: it moves with the machine.
+           expect=["[authoring] node --check failed for geneseed-learn.js: "],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+
+        # ------------------------------------------------------- registry / counts / prose
+        dr("a-registry-row-no-spec-provides", src_only,
+           {"registry.json": _registry_with_orphan()},
+           expect=["[authoring] registry.json lists 'skills/zzz-doctor' but no such entity "
+                   "exists"],
+           # The orphan does NOT reach the field checks below — those run over
+           # `expected & entities` and an invented key is in neither, which is why the two
+           # cells that follow exist rather than one cell doing both.
+           expect_absent=[".status ", ".version "],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("a-registry-row-with-four-malformed-fields", src_only,
+           {"registry.json": _registry_with(
+               {"status": "invented", "version": "one", "owner": "  ",
+                "added": "yesterday", "last_verified": ""})},
+           expect=["[authoring] registry.json['agents/advocate'].status 'invented' is not one "
+                   "of ['experimental', 'approved', 'deprecated']",
+                   "[authoring] registry.json['agents/advocate'].version 'one' is not a "
+                   "semver (N.N.N)",
+                   "[authoring] registry.json['agents/advocate'] has no owner",
+                   "[authoring] registry.json['agents/advocate'].added 'yesterday' is not an "
+                   "ISO date (YYYY-MM-DD) or empty"],
+           # `last_verified` is empty and that is ALLOWED — nothing writes it yet. The
+           # absence is the assertion; without it the four above could be one blanket rule.
+           expect_absent=[".last_verified"],
+           expect_re=[r"\[doctor\] 4 problem\(s\) across 1 theme\(s\)"]),
+        dr("a-registry-row-that-is-not-an-object", src_only,
+           {"registry.json": _registry_with("approved")},
+           expect=["[authoring] registry.json['agents/advocate'] is not an object"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("a-registry-with-no-entities-object", src_only,
+           {"registry.json": '{"version": 1}\n'},
+           # The early return: one message and none of the per-row work below it.
+           expect=["[authoring] registry.json has no 'entities' object"],
+           expect_absent=["has no row in registry.json"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("a-spec-that-nothing-else-knows-about", src_only,
+           # One new file, and it is missing from four separate registers at once — the
+           # AGENT.md table, SKILL_CLASS, registry.json and the README's own enumeration.
+           # Each message is a different check saying so.
+           {"src/skills/zzz-doctor.md": _GOOD_SPEC},
+           expect=["[authoring] skills/zzz-doctor.md exists but the AGENT.md table omits it",
+                   "[authoring] skills/zzz-doctor.md has no category in SKILL_CLASS "
+                   "(_harness_tui.py)",
+                   "[authoring] skills/zzz-doctor has no row in registry.json",
+                   "[authoring] README skills list omits 'zzz-doctor'"],
+           expect_re=[r"\[authoring\] README skills badge says \d+ but src has \d+"]),
+        dr("a-committed-credential", src_only,
+           {"src/memory/README.md":
+            "# Memory\n\nA planted AKIAIOSFODNN7EXAMPLE, which must never ship.\n"},
+           expect=["[authoring] possible AWS access key id in src/memory/README.md:3 — a "
+                   "credential must never be committed"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("a-vendored-skill-pinned-to-a-moving-branch", src_only,
+           {"src/skills/react-view-transitions/VENDOR.md":
+            "# Vendor\n\n**Upstream:** https://example.invalid/x\n\n**Commit:** main\n\n"
+            "**License:** MIT\n"},
+           expect=["[authoring] skills/react-view-transitions/VENDOR.md pins 'main', a "
+                   "moving branch — record the commit sha instead"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("a-vendored-skill-with-no-VENDOR-md", src_only,
+           {"src/skills/react-view-transitions/VENDOR.md": None},
+           expect=["[authoring] skills/react-view-transitions/ has no VENDOR.md — its "
+                   "upstream, pinned commit and license are unrecorded"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("the-web-laws-ledger-has-no-LAW_META-literal", src_only,
+           {"web/src/pages/Laws.jsx": "export default function Laws() { return null }\n"},
+           expect=["[authoring] LAW_META literal not found in web/src/pages/Laws.jsx — the "
+                   "web Laws ledger's Principle column would have no gate"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("a-law-row-classed-as-something-that-is-not-a-class", src_only,
+           {"web/src/pages/Laws.jsx": _laws_jsx_with_unknown_class()},
+           expect=["[authoring] LAW_META[1] class 'nosuchclass' is not a known class "
+                   "['security', 'process', 'verify', 'craft', 'context', 'comms']"],
+           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        dr("a-law-row-a-prettier-has-reflowed-still-counts", src_only,
+           {"web/src/pages/Laws.jsx": _laws_jsx_with_a_reflowed_row()},
+           # SILENCE is the assertion. A regex that stopped spanning newlines reads the
+           # reflowed row as absent and reports rule I as having none, so the cell that gates
+           # the tolerance is the one where the reference says nothing at all.
+           expect=["[doctor] ok — 1 theme(s) clean"],
+           expect_absent=["LAW_META"]),
+
+        # ------------------------------------------------------------------ the hook shim
+        # The one checkout-reading check that a cell could always have planted: the shim
+        # lives under `$GENESEED_HOME`, which `golden.cell_env` redirects.
+        dict(id="doctor/a-shim-pointing-at-a-file-that-is-not-there", bin="cli",
+             checkout={}, world=dict({"repo/.keep": ""}, **_SHIM_WORLD),
+             steps=[{"argv": ["doctor", "--theme", "neutral", "--no-bundle"], "cwd": "repo"}],
+             expect=["which does not exist — every hook in every install was dead",
+                     "This run's own emit has refreshed it; no further action needed."],
+             expect_re=[r"\[doctor\] 2 problem\(s\) across 1 theme\(s\)"]),
+
+        # ------------------------------------------------------------------ theme scoping
+        # No `--theme` and no `--all`: the sweep scopes to the theme THIS host installed,
+        # which `_installed_defaults` reads out of the redirected HOME. Without the seeded
+        # install the same command sweeps all 14.
+        dict(id="doctor/no-theme-scopes-to-the-installed-one", bin="cli", checkout={},
+             world={"repo/.keep": "", f"{_OC}/.geneseed-theme": f"{_SIGIL_THEME}\n",
+                    f"{_OC}/.geneseed-manifest.json": _MANIFEST},
+             steps=[{"argv": ["doctor", "--no-bundle"], "cwd": "repo"}],
+             expect=["[doctor] ok — 1 theme(s) clean",
+                     f"(scoped to installed theme '{_SIGIL_THEME}'; run with --all to sweep "
+                     f"every theme)"]),
+        dr("an-explicit-theme-is-not-announced-as-scoped", src_only,
+           expect=["[doctor] ok — 1 theme(s) clean"],
+           expect_absent=["scoped to installed theme"]),
+        dr("an-unknown-theme-is-refused-by-the-generator",
+           ("doctor", "--theme", "nosuchtheme", "--no-bundle"),
+           expect=["[nosuchtheme] build failed"],
+           expect_re=[r"\[doctor\] [1-9]\d* problem\(s\) across 1 theme\(s\)"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
 # the runner
 # --------------------------------------------------------------------------------------
 
@@ -1625,6 +2053,110 @@ def _seed(sandbox: Path, world: dict, repl: dict) -> None:
         p.write_text(_subst(text, repl), encoding="utf-8")
 
 
+_TRACKED: "list[str] | None" = None
+
+
+def _tracked_files() -> list[str]:
+    """The checkout's file set, as `git` describes it, cached for the run.
+
+    An `rsync`-style filter would be a second, hand-maintained answer to that question, and
+    a directory it forgot would make a doctor check report a fault the fixture never
+    planted — which reads exactly like a port bug. Refuses an empty answer rather than
+    quietly copying nothing: every planted-fault cell would then pass against a clean
+    copy of an empty tree.
+
+    `--cached --others --exclude-standard`: the WORKING TREE, not HEAD. Committed files plus
+    the ones git can see and has not been told to ignore. A plain `git ls-files` was the
+    first draft and it made the gate unusable for the phase it was written for — `js/doctor.mjs`
+    is untracked until it is committed, so every one of these cells reported the candidate
+    crashing on ERR_MODULE_NOT_FOUND rather than comparing anything. Ignored paths stay out,
+    which is what keeps `node_modules/` and the built `Harness/` from being copied 26 times.
+    """
+    global _TRACKED
+    if _TRACKED is None:
+        r = subprocess.run(["git", "ls-files", "-z", "--cached", "--others",
+                            "--exclude-standard"], cwd=str(ROOT), capture_output=True)
+        names = [n for n in r.stdout.decode("utf-8").split("\0") if n]
+        if r.returncode != 0 or not names:
+            raise RuntimeError(f"git ls-files listed nothing in {ROOT} (rc={r.returncode}) "
+                               f"— the checkout fixture cannot be built")
+        # A `.gitignore` that grew a line covering `js/` or `src/` would silently shrink the
+        # copy, and the clean cell would then report faults nothing planted. Cheap assertion,
+        # placed where the answer is produced rather than where it is consumed.
+        for needed in ("build.py", "rituals/harness.py", "bin/geneseed-cli.mjs",
+                       "src/AGENT.md.tmpl", "registry.json", "web/src/pages/Laws.jsx"):
+            if needed not in names:
+                raise RuntimeError(f"the checkout fixture's file list is missing {needed} "
+                                   f"— every doctor cell would measure that instead")
+        _TRACKED = names
+    return _TRACKED
+
+
+def _copy_checkout(dst: Path, faults: dict) -> None:
+    """A private checkout for one run of one cell, with `faults` planted in it.
+
+    WHY THIS EXISTS. `doctor` is fifteen checks and ten of them read the CHECKOUT —
+    `themes/`, `src/`, `web/`, `README.md`, `registry.json`, the committed bundle. `ROOT` is
+    `Path(__file__).resolve().parent.parent` on one side and `import.meta.url`'s directory
+    on the other, and `golden.cell_env` moves HOME/XDG/APPDATA and clears every `GENESEED_*`
+    knob without moving either. So no cell could plant a fault in two thirds of the verb,
+    and `doctor` prints `[doctor] ok — …` when every check finds nothing: delete any single
+    check and a clean cell is byte-identical. The gate had to become ONE PLANTED FAULT PER
+    CHECK, and this is what makes planting one possible — both implementations derive
+    `ROOT` from their own file's location, so a copy has its own `ROOT` and the two move
+    together.
+
+    ONE COPY PER CELL PER SIDE, MEASURED RATHER THAN ASSUMED. 511 tracked files / 5.2 MB /
+    0.31 s against a `doctor` run of ~2.1 s; the copy is a seventh of the cell and the
+    obvious alternative — one copy per cell GROUP, planted and reverted between runs — buys
+    that seventh back by making the cells ORDER-DEPENDENT, which nothing in this harness has
+    ever been. A hardlink copy measured 0.16 s and was not worth the footgun: a plant that
+    forgot to unlink first would edit the real checkout through the link.
+
+    IT LIVES OUTSIDE THE SNAPSHOTTED SANDBOX. `golden._snapshot` walks every file under
+    `sb`; a copy in there would put 511 files into each side's snapshot, and the reference
+    side would additionally grow the `__pycache__` its own interpreter writes — every cell
+    would report hundreds of differences that are only the fixture. The cost is that nothing
+    here observes a write INTO the checkout, which is the same blind spot the real `doctor`
+    runs under (it emits into `tempfile` and touches the tree only through the interpreter).
+
+    A fault of `None` DELETES the file — the only way to gate the branches that report an
+    absent one.
+    """
+    for rel in _tracked_files():
+        src = ROOT / rel
+        if not src.is_file():
+            continue          # a submodule or a path git knows and the disk does not
+        d = dst / rel
+        d.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, d)
+    for rel, text in faults.items():
+        p = dst / rel
+        if text is None:
+            p.unlink(missing_ok=True)
+            continue
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+
+
+def _repoint(cli: list[str], checkout: Path) -> list[str]:
+    """Re-aim an already-resolved CLI at the copied checkout.
+
+    `_resolve_cli` turned `rituals/harness.py` and `bin/geneseed-cli.mjs` into absolute paths
+    under the real ROOT, which is the whole point of it. A checkout cell needs the same
+    command answered by the copy, and both sides are addressed identically — the reference is
+    a script path and so is the candidate, so one rule repoints either.
+    """
+    out = []
+    for tok in cli:
+        p = Path(tok)
+        try:
+            out.append(str(checkout / p.relative_to(ROOT)) if p.is_absolute() else tok)
+        except ValueError:
+            out.append(tok)
+    return out
+
+
 def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
     """Run one cell's steps in a fresh sandbox and snapshot what it left.
 
@@ -1637,17 +2169,23 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
     breaks a tool call) and `learn` passes the model's code through. A port that returned
     1 where Python returns 0 would be invisible without it.
     """
-    with tempfile.TemporaryDirectory() as td:
+    faults = cell.get("checkout")
+    with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as ctd:
         sb = Path(td)
         home, repo, cfg = sb / "home", sb / "repo", sb / "cfg"
         for d in (home, repo, cfg):
             d.mkdir(parents=True, exist_ok=True)
+        checkout = Path(ctd) / "checkout" if faults is not None else ROOT
         repl = {"{sb}": str(sb), "{home}": str(home), "{repo}": str(repo),
-                "{cfg}": str(cfg), "{py}": sys.executable, "{llm}": str(FAKE_LLM)}
+                "{cfg}": str(cfg), "{py}": sys.executable, "{llm}": str(FAKE_LLM),
+                "{ck}": str(checkout)}
         # The forward-slash spellings, for anything that lands inside a JSON string. Added
         # BEFORE the native ones would match — `{sb}` is not a substring of `{sb/}`, so the
         # two never collide, but the posix keys are listed first to keep that obvious.
         repl = {**{k[:-1] + "/}": v.replace("\\", "/") for k, v in repl.items()}, **repl}
+        if faults is not None:
+            _copy_checkout(checkout, _subst(faults, repl))
+            cli = _repoint(cli, checkout)
         _seed(sb, cell.get("world") or {}, repl)
 
         env = golden.cell_env(home)
@@ -1655,6 +2193,12 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
 
         proc = None
         for step in cell["steps"]:
+            # `seed` writes into the sandbox BETWEEN steps, which `world` cannot: it seeds
+            # once, before the first. The doctor cells need it because the only honest way to
+            # get a bundle that a fresh render AGREES with is to have a step build one, and
+            # the markers a cell wants to vary (`.geneseed-emit`, `.geneseed-footprint`) are
+            # written by that same build.
+            _seed(sb, step.get("seed") or {}, repl)
             cwd = sb / step.get("cwd", ".")
             # encoding="utf-8" and never a bare text=True: the CLIs force UTF-8 on both
             # streams whatever the console code page is, and decoding that as cp1252 turns
@@ -1664,7 +2208,12 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
                                   capture_output=True, text=True, encoding="utf-8")
         # HOME before SB: home sits UNDER the sandbox, so normalising the sandbox first
         # would leave `<SB>/home` and the two tags would stop lining up.
-        roots = [("<HOME>", home), ("<REPO>", ROOT), ("<SB>", sb)]
+        #
+        # The copied checkout answers to `<REPO>` too, and deliberately: it IS the repo for
+        # a checkout cell, its path differs between the two sides (each gets its own copy),
+        # and a message naming it must normalise to what the same message would say from the
+        # real tree.
+        roots = [("<HOME>", home), ("<REPO>", checkout), ("<REPO>", ROOT), ("<SB>", sb)]
         # The clock, out of the KEYS as well as the contents: a bare `--out` names the file
         # after the second it ran in, so an un-destamped key is reported as one file only in
         # ref and another only in new. See `_STAMPS`.
