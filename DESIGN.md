@@ -705,6 +705,41 @@ renders it as the name in parentheses.
   does not exist yet: copy the checkout into the sandbox, plant one fault, and run *both*
   binaries from the copy so their two `ROOT`s move together. That is the next phase's first
   design decision rather than a corner of this one.
+- **`doctor` crosses** as [`js/doctor.mjs`](js/doctor.mjs), and the fixture came first.
+  **Thirteen of the 24 subcommands are now Node.**
+  **The copy-the-checkout fixture, measured rather than feared.** `_copy_checkout` in
+  [`tests/harness_golden.py`](tests/harness_golden.py) gives each cell its own copy of the
+  working tree (`git ls-files --cached --others --exclude-standard`), plants one fault in it,
+  and runs *both* binaries from the copy so the two `ROOT`s move together. 511 files, 5.2 MB,
+  **0.31 s** against a `doctor` run of ~2.1 s — a seventh of the cell, so it is one copy per
+  cell per side and the obvious optimisation (one copy per cell *group*, planted and reverted)
+  is refused: it would buy that seventh back by making the cells order-dependent, which nothing
+  in this harness has ever been. Twenty-seven cells, one planted fault per check.
+  **The fixture's own blind spot was the check it was built for.** `Harness/` is *gitignored*,
+  so a copy of the tracked set has no committed bundle at all and `_rendered_problems` returns
+  on its first line — every "rendered bundle in sync" a clean cell prints was a sentence about
+  nothing. `--bundle` and a seeded tree close it, and a two-step cell (`build`, then `doctor`
+  against what it wrote) is the only honest source of a bundle a fresh render *agrees* with.
+  **A `git ls-files` fixture cannot see the file you are writing.** The first draft copied the
+  *tracked* set, so every cell reported the candidate dying on `ERR_MODULE_NOT_FOUND`:
+  `js/doctor.mjs` was untracked until it was committed. The fixture mirrors the working tree
+  now, ignored paths excluded, which is also what keeps `node_modules/` out of 27 copies.
+  **The `child_process` ban became an allow-list, on the condition its own docstring named.**
+  `_authoring_problems` runs `node --check` over the OpenCode plugins and there is no
+  in-process equivalent — `vm.Script` compiles as a *script* and every plugin is ESM, which
+  `node --check` accepts through module-syntax detection. That is the opposite of `build`,
+  whose spawn existed only because `build.py` is a different *program*. So the gate now asserts
+  the property it used to infer: one binding, one call site, an argv that is `node --check`,
+  and a dynamic run of `doctor` with **no python anywhere on PATH**.
+  **Two of a check's three arms are unreachable because doctor's own consumer is stricter than
+  its gate.** A colour theme missing a palette role kills the opencode-global emit — which runs
+  *first* — with a `KeyError`, so `_color_theme_problems` never reports it. Only the arm the
+  emit passes through (a value present and not `#rrggbb`) can be planted.
+  **And the first caller in the port that CATCHES a refusal found what that costs.**
+  `sys.exit(msg)` attaches its message to the *exception*, so a Python caller that catches it
+  sees no output; this port writes at the raise site, which is identical for every caller that
+  lets the throw propagate and wrong for exactly this one. `renderedProblems` buffers stderr
+  and replays it only if the render returns.
 
 ## 🚫 Explicitly out of scope
 

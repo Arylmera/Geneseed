@@ -9,6 +9,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's seventeenth piece: `geneseed doctor` has a Node twin.** Thirteen of the
+  harness's 24 commands now run from `node bin/geneseed-cli.mjs` as well as from
+  `python rituals/harness.py`: the one that validates the build — unresolved tokens, dead
+  links, links that escape the bundle, theme-key parity, colour palettes, the authoring gates
+  on every spec, the credential sweep, the vendored-skill pins, the count mirrors in the
+  README and the web pages, the hook shim, and whether a committed bundle still matches a
+  fresh render of the source.
+  **Checking it was harder than porting it, and that is the news.** `doctor` prints
+  `[doctor] ok` when all fifteen of its checks find nothing, so two versions that had both
+  stopped checking would agree perfectly. Ten of the fifteen read the checkout itself, which
+  no sandboxed test could write to. So each test now gets its own copy of the checkout, breaks
+  exactly one thing in it, and runs both versions from that copy — 27 checks, one planted
+  fault at a time.
+
 - **The port's sixteenth piece: `geneseed diff` and `geneseed rebuild-all` have Node twins.**
   Twelve of the harness's 24 commands now run from `node bin/geneseed-cli.mjs` as well as from
   `python rituals/harness.py`: the drift report that shows what your deployed harness has that
