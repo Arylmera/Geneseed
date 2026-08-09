@@ -1097,6 +1097,40 @@ renders it as the name in parentheses.
   reach, because closing it needs a job whose output is still in flight and the cheap way to
   get one writes a file whose NAME carries a clock. **A destamp that only reaches inside files
   leaves the filename as an ungateable axis.**
+- **The `web` VERB crosses — sixteen of 24 subcommands — and the TEARDOWN decided which cells
+  exist.** [`js/web/server.mjs`](js/web/server.mjs) grows the daemon lifecycle in one file, as
+  the reference keeps it: `_probe`, `_live_daemon`, `_spawn_detached`, `start|stop|status|
+  restart`, `_build_plan`'s consumer, `_npm_build`, the browser open, `cmd_web`, and the last
+  POST — `/api/restart`. `bin/geneseed-cli.mjs` finally imports the web tree, which is what
+  makes the CLI's spawn walk cover the job runner too.
+  **Three of the verb's five shapes end with a process still running**, and
+  `harness_golden.run_cell` has no `finally` for one: it leaves a `TemporaryDirectory`, whose
+  `rmtree` RAISES when a surviving daemon holds the log file open — so a failed `start` cell
+  would both hide its own finding and orphan a server on the developer's machine. The cell
+  group therefore takes the eight actions that TERMINATE (the whole stale-record protocol,
+  and the two `_build_plan` arms that refuse before a socket is bound), and the real-server
+  lifecycle stays in `web_golden`, whose teardown never raises. **Read the teardown before
+  deciding what a cell may do**, not after.
+  **The byte gate is what licenses the MOVE, and a passing run proves nothing until a
+  mutation says so.** All 95 `web_golden` cells now run through
+  `node bin/geneseed-cli.mjs web` as well as through the module — and two mutations in the
+  CLI's own dispatch turn the first run red while leaving the second green, which is the only
+  way to show the matrix is connected to the moved code rather than to where it used to live.
+  **A byte gate cannot tell two implementations from one, and it cannot tell two ENTRIES from
+  one either.**
+  **Putting the web tree on the CLI's graph pulled a third spawning module onto it**, through
+  a frontmatter parser and a memory helper that happen to live beside the `$GENESEED_LLM`
+  spawn. That is P6g's "a reachability gate over a shared graph re-asks every decision that
+  graph already contains", arriving from the other side — and the row DELEGATES to the test
+  that already owns that argv rather than copying its literals into a second file.
+  **`/api/restart` is the one route in this port that no test may reach**: every way of asking
+  it a question spawns a detached daemon — in the acceptance harness's sandbox, or in the
+  developer's own environment where it would bind 4747 and serve the checkout forever. It is
+  declared and read from both sources instead, and the reason is written where the route is.
+  **And EOF is not an empty line.** The npm prompt accepts `""` as yes, so a reader that
+  returned the empty string at end-of-file would answer YES to "run npm install now?" on
+  every non-interactive run; the reference's `input()` raises there. The byte reader now
+  reports that case as null, gated by a stdin-seeded corpus.
 
 ## 🚫 Explicitly out of scope
 
