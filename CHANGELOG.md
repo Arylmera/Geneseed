@@ -9,6 +9,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's fifteenth piece: `geneseed build`, `geneseed prompt` and `geneseed theme`
+  have Node twins.** Ten of the harness's 24 commands now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`: rendering the
+  bundle, writing the self-contained install prompt, and creating a custom OpenCode colour
+  theme. 23 new side-by-side checks compare everything either one can be observed doing —
+  for `build` that includes the whole rendered tree, file for file.
+  **`build` does not start a second program.** The Python version runs the builder as a
+  separate process; the Node one calls it directly, because it is already part of the same
+  program. Nothing about the bundle you get changes.
+  **Three commands deliberately did not move.** `sync-self` is an alias for `update`, which
+  the self-update work replaces outright rather than translating. `link` and `unlink` put
+  `geneseed` on your PATH, and that is exactly what installing from npm will do for you — so
+  they belong with the packaging work, not here. They keep working as they always have.
+
 - **The port's fourteenth piece: `geneseed status` and `geneseed version` have Node twins.**
   The install dashboard — theme, install mode, how many agents/skills/laws you have, where
   your memory store is and how many facts are in it, and whether the installed build matches
@@ -345,6 +359,16 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   file is never regenerated.
 
 ### Fixed
+- **On Windows, `geneseed build > log.txt` wrote an empty log.** Anything the harness ran as
+  a child process — the builder behind `build` and `rebuild-all`, and the same builder behind
+  the web UI's "build all" — had its output silently thrown away whenever the harness's own
+  output was redirected to a file or a pipe rather than going straight to a terminal. In a
+  terminal it looked fine, which is why it survived: the flag that suppresses console
+  pop-ups also hands the child a fresh hidden console to print into when nobody has asked
+  for the output to be piped. It is now applied only when the harness is capturing the child
+  itself, which is the case it was added for; console pop-ups are still suppressed there.
+  Found by the Node port — the same command printed the builder's summary line on one side
+  and nothing on the other.
 - **The golden acceptance harness could render into your real install.** `tests/golden.py`
   runs the generator over 259 cells, ~126 of which are `*-global` emits whose whole job is
   to write into a host's global config dir, and it sandboxes them by redirecting `HOME`

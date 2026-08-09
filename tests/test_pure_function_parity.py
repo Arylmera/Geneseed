@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""The status panel, gated as a CORPUS — because no cell can reach half of it.
+"""The pure functions no cell can reach, gated as a CORPUS.
+
+RENAMED IN P5e, from `test_status_panel_parity` / `status_probe`. It was named for the
+panel when the panel was all it held; P5d already put `pyLen`/`pyLjust` in it and P5e adds
+`fenceFor` from `js/generate.mjs`, so a probe named `status_probe` importing the generator's
+CLI module would be a name claiming something other than what exists — which is the class of
+defect this port keeps finding. The MECHANISM is deliberately not duplicated: one corpus
+gate, extended, rather than a second one per module.
 
 WHY THIS FILE EXISTS. `tests/harness_golden.py` compares two CLIs by running them, and a
 process's stdout is a pipe. `_color_enabled()` is `sys.stdout.isatty() and NO_COLOR is None
@@ -25,6 +32,15 @@ And `pyLen`/`pyLjust`, because they reproduce a language primitive and P5c's rul
 is a corpus rather than a cell: `len()` counts code points where `String.length` counts
 UTF-16 units, and the panel turns both into column widths.
 
+P5e adds `fenceFor` (`_harness_build._fence_for`), unreachable for a fifth distinct reason:
+it is reachable in every `prompt` cell but never VARIES in one. Measured over the whole
+rendered tree, the longest backtick run in any source text is 3, so `max(4, longest + 1)`
+returns 4 for all 96 files and a port that hardcoded four backticks is byte-identical across
+the matrix. Varying it needs a file in `src/`, and `src/` is the tree no fixture can
+redirect. That the branch is dead is a claim about CONTENT, so it is re-derived here rather
+than trusted — `test_the_fence_corpus_still_describes_the_real_tree` fails the day a source
+file grows a four-backtick run, at which point a cell becomes possible and should be written.
+
 The ASCII overlay gets a corpus too even though a cell CAN reach it, for a reason specific
 to it: `_TUI_ASCII` is read at import time on the Python side and at call time on the Node
 one, so the two probes run once per setting rather than switching inside a process.
@@ -37,6 +53,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -48,8 +65,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import golden  # noqa: E402
 
 ROOT = golden.ROOT
-PY_PROBE = ROOT / "tests" / "fixtures" / "status_probe.py"
-JS_PROBE = ROOT / "tests" / "fixtures" / "status_probe.mjs"
+PY_PROBE = ROOT / "tests" / "fixtures" / "pure_probe.py"
+JS_PROBE = ROOT / "tests" / "fixtures" / "pure_probe.mjs"
 
 # A status dict as `_status_data` returns one. Every field the panel reads, and nothing it
 # does not — the panel is pure, so the corpus is its whole input.
@@ -118,7 +135,32 @@ def _cases() -> list[dict]:
         cases.append({"fn": "py_len", "args": [s]})
         cases.append({"fn": "py_ljust", "args": [s, 6]})
         cases.append({"fn": "py_ljust", "args": [s, 1]})
+    for s in _FENCE_CORPUS:
+        cases.append({"fn": "fence_for", "args": [s]})
     return cases
+
+
+# `_fence_for`'s whole job is picking a fence longer than the longest run INSIDE the text,
+# and the live tree only ever exercises "shorter than four". Every case beyond the first two
+# is a shape `src/` does not currently contain and a user's repo might after one commit.
+_FENCE_CORPUS = (
+    "",                        # no backticks at all — the `max(4, 0 + 1)` floor
+    "a ``` fenced ``` block",  # the tree's real maximum: 3, so still 4
+    "````",                    # exactly at the floor — the first case that must return 5
+    "`````",
+    "a " + "`" * 12 + " b",
+    "`" * 3 + "\n" + "`" * 7 + "\n" + "`" * 2,   # the longest run is not the first
+    "``` a ``` b ```",         # several runs of the same length
+    "`",
+    # A run at the very END of the string: an off-by-one in the loop's bookkeeping shows
+    # here and nowhere else, because there is no following character to reset the count on.
+    "trailing " + "`" * 6,
+    "`" * 6 + " leading",
+    # Astral characters around the run. The Python iterates CHARACTERS and this port
+    # iterates code UNITS — identical for counting backticks, and this is the case that
+    # says so rather than leaving it argued in a comment.
+    "\U0001D50A\U0001D50A" + "`" * 5 + "\U0001D50A",
+)
 
 
 def _manifest_cases(tmp: Path) -> list[dict]:
@@ -170,7 +212,7 @@ def _run(cmd: list[str], cases: list[dict], ascii_mode: bool) -> list:
 
 
 @unittest.skipIf(shutil.which("node") is None, "node is not on PATH")
-class TheStatusPanelAgreesOnEveryInputNoCellCanBuild(unittest.TestCase):
+class ThePureFunctionsAgreeOnEveryInputNoCellCanBuild(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -224,6 +266,45 @@ class TheStatusPanelAgreesOnEveryInputNoCellCanBuild(unittest.TestCase):
         self.assertIn("* Geneseed - status", ascii_panel[0])
         self.assertNotIn("◆", "".join(ascii_panel))
         self.assertEqual(self.out[True][1][0], ascii_panel)
+
+    def test_the_fence_corpus_actually_varies_the_fence(self):
+        """The positive control for `fence_for`, and it needs one for a specific reason.
+
+        The whole point of these cases is that the LIVE tree never leaves the floor, so a
+        corpus whose every case also returned four backticks would be an equality between
+        two constants — green forever, and green on a port that hardcoded the floor. This
+        asserts the corpus reaches past it, and names both arms.
+        """
+        ref, new = self.out[False]
+        fences = [a for case, a in zip(self.cases, ref) if case["fn"] == "fence_for"]
+        self.assertEqual(fences, [b for case, b in zip(self.cases, new)
+                                  if case["fn"] == "fence_for"])
+        self.assertIn("`" * 4, fences, "no case exercises the max(4, ...) floor")
+        self.assertTrue(any(len(f) > 4 for f in fences),
+                        "every case returned the floor — this corpus cannot tell "
+                        "`_fence_for` from a hardcoded four backticks")
+        self.assertEqual(max(len(f) for f in fences), 13)   # the 12-run case, + 1
+
+    def test_the_fence_corpus_still_describes_the_real_tree(self):
+        """`js/generate.mjs` states that no CELL can vary the fence, and that is a claim
+        about the CONTENT of `src/` rather than about the code — so it is re-derived here
+        instead of trusted. The day a source file grows a four-backtick run the claim stops
+        holding, a `prompt` cell becomes able to cover the branch, and this fails to say so.
+        """
+        sys.path.insert(0, str(ROOT))
+        import build  # noqa: PLC0415  (the checkout's own generator, not a dependency)
+        _, items = build.render_all("neutral")
+        longest, where = 0, None
+        for rel, text, _src in items:
+            if text is None:
+                continue
+            for m in re.finditer(r"`+", text):
+                if len(m.group()) > longest:
+                    longest, where = len(m.group()), rel
+        self.assertLess(longest, 4,
+                        f"{where} now holds a run of {longest} backticks, so `_fence_for` "
+                        f"no longer always returns the floor and the matrix CAN cover it — "
+                        f"write the prompt cell and relax this test")
 
     def test_the_corpus_separates_code_points_from_utf16_units(self):
         """`len()` is the reason this corpus has astral characters in it, and a corpus

@@ -564,7 +564,7 @@ renders it as the name in parentheses.
   the handoff offered.** `_color_enabled()` is `sys.stdout.isatty()`, every harness captures
   through a pipe, so deleting every escape code would be byte-identical across the whole
   matrix — ship it ungated or drop it and regress a real terminal. `_status_lines` is
-  documented pure, so [`tests/test_status_panel_parity.py`](tests/test_status_panel_parity.py)
+  documented pure, so [`tests/test_pure_function_parity.py`](tests/test_pure_function_parity.py)
   calls it directly on both sides over a corpus of dashboards × colour × ASCII, and the tty
   question never arises. Three more cell-unreachable functions ride along for the same
   reason — `_version_verdict`'s up-to-date branch, `_manifest_is_claude` (only consulted for
@@ -614,6 +614,51 @@ renders it as the name in parentheses.
   web server is a later phase, so until then both exist — held byte-equal by the matrix, and
   atomic (temp + rename) on both sides, so a concurrent pair loses an edit rather than
   tearing the file.
+- **`build`, `prompt` and `theme` cross — the generator's own CLI face —** as
+  [`js/generate.mjs`](js/generate.mjs). **Ten of the 24 subcommands are now Node.** Three
+  things are worth recording, and the first is about measurement rather than code.
+  **A closure walk cannot see through a `subprocess`, and `build` is nothing but one.**
+  `cmd_build` measures three lines because the work is `run([sys.executable, BUILD])`. Its
+  Node twin does **not** reproduce that shape: `bin/geneseed-cli.mjs` is under a transitive
+  `child_process` ban, and spawning `node bin/geneseed.mjs` would be a Node CLI starting a
+  second Node process to do work it can do in its own. So `bin/geneseed.mjs`'s `main` is
+  exported and called directly, and the auto-run at its foot grew an entry guard — Python
+  needs a second process because `build.py` is a different *program*; here it is a module.
+  Both ways of getting the guard wrong are gated: stuck false makes the driver a silent
+  no-op and fails all 259 golden cells, stuck true runs the generator on the CLI's argv and
+  fails the three `build/*` cells.
+  **The cells found a live Windows bug in the reference, and the first draft of them encoded
+  it.** `harness build` printed nothing where the Node twin printed the generator's summary,
+  so the cells were written `expect_silent=True` — asserting what *is* rather than what
+  *should be*. `_harness_core.run` folded `CREATE_NO_WINDOW` into every spawn, and with all
+  three streams inherited `subprocess` never sets `STARTF_USESTDHANDLES`, so the child got a
+  fresh hidden console and **everything it printed was discarded whenever the parent's stdout
+  was not a terminal**: `geneseed build > log.txt` wrote an empty log, and the web UI's
+  "build all" job logged the harness's lines and none of the generator's. The flag now
+  applies only when the caller redirects — which is when it was ever needed, and the doctor's
+  per-theme sweep (the case its comment named) captures, so the Doctor page stays flash-free.
+  Fixed at the shared `run()` rather than reproduced, following the precedent set for
+  `learn`'s cp1252 pipe.
+  **A function can be reachable in every cell and still never VARY in one.** `_fence_for`
+  picks a backtick fence longer than the longest run inside a rendered file; measured over
+  the whole tree, the longest run in any source text is 3, so it returns the four-backtick
+  floor for all 96 files and a port that hardcoded four is byte-identical across the matrix.
+  That is a fifth distinct reason for the corpus gate, and it is a claim about *content*, so
+  `test_the_fence_corpus_still_describes_the_real_tree` re-derives it and fails the day a
+  source file grows a four-backtick run — at which point a cell becomes writable and should
+  be written. The corpus file is renamed to
+  [`tests/test_pure_function_parity.py`](tests/test_pure_function_parity.py) with it: it was
+  named for the status panel when the panel was all it held.
+  **Three of the six verbs the phase was scoped around did not cross, each for a measured
+  reason.** `sync-self` is a five-line alias whose body is `_update.sync_self` → `upgrade()`,
+  i.e. `git pull` + rebuild, which the self-update phase deletes rather than ports.
+  `link` and `unlink` install the `geneseed` front door on PATH, and that is three blockers
+  at once: `_win_user_path` drives **PowerShell** to edit the persistent user PATH, which the
+  CLI's `child_process` ban forbids; the shim they write names `sys.executable` plus
+  `rituals/harness.py`, so a byte-equal Node twin would have to rediscover a Python
+  interpreter using the discovery the shim flip deleted; and a shim naming
+  `bin/geneseed-cli.mjs` instead would answer three of the 24 verbs. The npm `bin` map is
+  what replaces them, so they belong to the publish phase and not to this one.
 
 ## 🚫 Explicitly out of scope
 

@@ -36,6 +36,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import {
   build, emitOpencodeRender, emitOpencodeGlobalRender, emitClaudeRender,
 } from '../js/emit.mjs';
@@ -768,7 +769,17 @@ function writeMarkers(markerDir, emit, footprint) {
   } catch { /* best-effort, exactly as build.py:444-445 — a marker hiccup never fails a build */ }
 }
 
-function main(argv) {
+/**
+ * EXPORTED because `harness build` is a passthrough to this program.
+ *
+ * `_harness_build.cmd_build` is `run([sys.executable, BUILD, *extra]).returncode` — Python
+ * needs a second process because `build.py` is a different PROGRAM. Here it is a module in
+ * the same one, and `bin/geneseed-cli.mjs` is under a transitive `child_process` ban, so
+ * `js/generate.mjs` calls this directly. The export is what makes the auto-run below need a
+ * guard: without one, importing this file to reach `main` would RUN the generator with the
+ * CLI's argv.
+ */
+export function main(argv) {
   const args = parseArgs(argv, configDefaults());
 
   // Both refuse rather than silently doing something else. See docs/specs' P4 entry:
@@ -847,4 +858,26 @@ function main(argv) {
   return 0;
 }
 
-process.exitCode = main(process.argv.slice(2));
+/**
+ * Run only when this file IS the entry point, not when `js/generate.mjs` imports it.
+ *
+ * `import.meta.main` would say this in one word and is Node 24; the spec's `engines` floor
+ * is still open and this machine runs v22, the same reason `js/emit.mjs` avoids it. So the
+ * check is the manual one, through `realpathSync` because `process.argv[1]` is whatever the
+ * caller typed and `import.meta.url` is always the resolved file — an `npx`-generated shim
+ * or a `geneseed link` symlink makes those differ as strings while naming the same file.
+ *
+ * BOTH ways of getting this wrong are gated, which is why it is a guard and not a comment:
+ * stuck FALSE makes `node bin/geneseed.mjs` a silent no-op and fails all 259 golden cells;
+ * stuck TRUE makes the driver run on the CLI's argv and fails the three `build/*` cells.
+ */
+const entry = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync.native(process.argv[1]) === realpathSync.native(fileURLToPath(import.meta.url));
+  } catch {
+    return path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  }
+})();
+
+if (entry) process.exitCode = main(process.argv.slice(2));

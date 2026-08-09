@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reference half of the status corpus probe — see tests/test_status_panel_parity.py.
+"""Reference half of the pure-function corpus probe — see tests/test_pure_function_parity.py.
 
 Reads a JSON job `{"cases": [{"fn": ..., "args": [...]}, ...]}` from argv[1] and writes
 `{"results": [...]}` to stdout as UTF-8. One process per environment, because
@@ -32,7 +32,9 @@ def run(fn: str, args: list):
         return len(args[0])
     if fn == "py_ljust":
         return args[0].ljust(args[1])
-    raise SystemExit(f"status_probe: unknown fn {fn!r}")
+    if fn == "fence_for":
+        return harness._fence_for(args[0])
+    raise SystemExit(f"pure_probe: unknown fn {fn!r}")
 
 
 def main() -> int:

@@ -153,7 +153,8 @@ def cells() -> list[dict]:
     and every one of them was caught by its own `expect` rather than by review.
     """
     return (_context_cells() + _git_gate_cells() + _rule_gate_cells() + _learn_cells()
-            + _exclude_cells() + _status_cells() + _version_cells())
+            + _exclude_cells() + _status_cells() + _version_cells()
+            + _build_cells() + _prompt_cells() + _theme_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -903,7 +904,7 @@ def _exclude_cells() -> list[dict]:
 #      `_accent_for`'s cyan fallback and `_version_verdict`'s "up to date" are unreachable
 #      for their own reasons (an unknown theme is refused upstream; "up to date" needs a
 #      marker holding a fingerprint no cell can know). All four are gated as PURE
-#      FUNCTIONS over a corpus instead — `tests/test_status_panel_parity.py`.
+#      FUNCTIONS over a corpus instead — `tests/test_pure_function_parity.py`.
 #
 # Cost, measured rather than assumed: 0.14 s per invocation for either verb. `render_all`
 # is a text render, not an emit — it does not spawn Node on the Python side.
@@ -1068,6 +1069,216 @@ def _version_cells() -> list[dict]:
            {f"{_OC}/.geneseed-version": "   \n",
             "home/.claude/.geneseed-version": _OTHER_STAMP},
            expect=["installed: 0123456789ab"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
+# build  —  the verb whose whole observable contract is the TREE
+# --------------------------------------------------------------------------------------
+#
+# `cmd_build` is three lines: `run([sys.executable, BUILD, *extra]).returncode`. A closure
+# walk stops there, and what it cannot see is that the generator's own summary line is this
+# verb's entire stdout — inherited from a child process rather than printed here.
+#
+# THESE CELLS FOUND A LIVE BUG IN THE REFERENCE, and the first draft of them ENCODED it.
+# `harness build` printed zero bytes where `node bin/geneseed-cli.mjs build` printed the
+# summary, so the cells were written `expect_silent=True` — an absolute assertion that the
+# reference stays quiet, which is exactly the shape of "the fixture asserts what IS rather
+# than what SHOULD be". `_harness_core.run` folded CREATE_NO_WINDOW into every spawn, and
+# with all three streams inherited Python does not set `STARTF_USESTDHANDLES`, so the child
+# got a fresh hidden console and everything it printed was discarded whenever the parent's
+# stdout was not a terminal. Fixed at the shared `run()` rather than reproduced, following
+# P5a's precedent for `learn`'s cp1252 pipe; these cells now assert the line.
+#
+# What makes them hermetic at all is that `build.py`'s `--out` defaults to the RELATIVE
+# `"Harness"` and `cmd_build` passes no `cwd=`, so the bundle lands under the invocation's
+# cwd. `cwd="repo"` therefore puts the whole tree inside the sandbox, where `_snapshot` sees
+# it — the one verb here whose unfenceable dependency (`src/`) is read but never WRITTEN
+# anywhere the fixture cannot reach.
+
+def _build_cells() -> list[dict]:
+    def bd(name, argv, cwd="repo", world=None, **kw):
+        return dict(id=f"build/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    steps=[{"argv": argv, "cwd": cwd}], **kw)
+
+    # The bundle's own marker files, which every emit writes. Named rather than a single
+    # AGENT.md so a port that rendered the tree but skipped the markers fails the ABSOLUTE
+    # half too, not only the comparison.
+    made = ["repo/Harness/AGENT.md", "repo/Harness/.geneseed-emit",
+            "repo/Harness/.geneseed-theme", "repo/Harness/.geneseed-version"]
+
+    return [
+        bd("the-default-theme", ["build"], expect_files=made,
+           # The count rots with the next file added to src/; the shape is what this cell
+           # can honestly assert, and the comparison gates the number.
+           expect_re=[r"\[geneseed\] built theme 'neutral' -> .*Harness \([1-9]\d* files\)"]),
+        # A theme the config default is not, so the rendered bytes differ from the cell
+        # above and a port that ignored `--theme` fails the comparison rather than only
+        # this cell. `harness.py`'s own `--theme` carries no `choices` — it forwards the
+        # string to the generator, which is where the validation lives.
+        bd("an-explicit-theme", ["build", "--theme", _SIGIL_THEME],
+           expect_files=made, expect=[f"built theme '{_SIGIL_THEME}'"],
+           expect_absent=["built theme 'neutral'"]),
+        # `--out` is relative and no `cwd=` is passed, so the bundle follows the INVOCATION,
+        # not the checkout. A port that resolved the destination against its own ROOT would
+        # write outside the sandbox and leave this cell with nothing to snapshot — which is
+        # also the only reason the two cells above are hermetic.
+        bd("the-bundle-follows-cwd-not-the-checkout", ["build"], cwd="repo/nested",
+           world={"repo/nested/.keep": ""},
+           expect_files=["repo/nested/Harness/AGENT.md"],
+           expect=["nested"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
+# prompt
+# --------------------------------------------------------------------------------------
+#
+# `build_prompt` wraps every rendered file in a backtick fence from `_fence_for`, and that
+# helper's real arm is UNREACHABLE from any cell here. Measured over the whole rendered
+# tree: the longest backtick run in any source text is 3, so `max(4, longest + 1)` picks 4
+# every time, for all 96 files. A port that hardcoded four backticks is byte-identical
+# across every cell below — and a cell cannot fix that, because reaching the other arm
+# needs a file in `src/` and `src/` is the tree no fixture can redirect (see the status
+# section). `_fence_for` is therefore gated as a pure function over a corpus, in
+# `tests/test_pure_function_parity.py`, and the unreachability is measured in both
+# directions rather than argued.
+
+def _prompt_cells() -> list[dict]:
+    def pr(name, argv, **kw):
+        return dict(id=f"prompt/{name}", bin="cli", world={"repo/.keep": ""},
+                    steps=[{"argv": argv, "cwd": "repo"}], **kw)
+
+    return [
+        pr("to-stdout", ["prompt"],
+           expect=["# Geneseed Harness — install prompt (theme: neutral)",
+                   "### `AGENT.md`"],
+           # The count rots with the next content change; the SHAPE is what this cell can
+           # honestly assert absolutely, and the byte comparison gates the number.
+           expect_re=[r"## Files \([1-9]\d* text files\)"]),
+        # `args.theme or "neutral"` — the default is a literal in `cmd_prompt`, NOT the
+        # config's theme, so this pair also proves the fallback is not read from the config.
+        pr("an-explicit-theme", ["prompt", "--theme", _SIGIL_THEME],
+           expect=[f"install prompt (theme: {_SIGIL_THEME})"],
+           expect_absent=["theme: neutral"]),
+        pr("--out-writes-a-file-and-prints-one-line", ["prompt", "--out", "p.md"],
+           expect=["[prompt] wrote p.md (neutral)"],
+           # The document goes to the FILE, not to stdout: `sys.stdout.write` is the else
+           # branch. Without this a port that wrote both would pass on `expect` alone.
+           expect_absent=["### `AGENT.md`"],
+           expect_files=["repo/p.md"]),
+        pr("--out-creates-missing-parents", ["prompt", "--out", "deep/er/p.md"],
+           expect=["[prompt] wrote deep/er/p.md"], expect_files=["repo/deep/er/p.md"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
+# theme
+# --------------------------------------------------------------------------------------
+
+_PALETTE_MIN = json.dumps({"palette": {"accent": "#112233"}})
+
+
+def _theme_cells() -> list[dict]:
+    def th(name, argv, world=None, **kw):
+        return dict(id=f"theme/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    steps=[{"argv": argv, "cwd": "repo"}], **kw)
+
+    oc_themes = f"{_OC}/themes"
+    return [
+        # ---- where it writes ----
+        th("from-a-shipped-theme-writes-both-flavours",
+           ["theme", "mine", "--from", "tokyonight"],
+           expect=["[theme] wrote geneseed-mine.json, geneseed-mine-transparent.json",
+                   "/theme geneseed-mine  (or /theme geneseed-mine-transparent)"],
+           expect_files=[f"{oc_themes}/geneseed-mine.json",
+                         f"{oc_themes}/geneseed-mine-transparent.json"]),
+        th("a-repo-opencode-dir-wins-over-the-global-one",
+           ["theme", "mine", "--from", "tokyonight"],
+           world={"repo/.opencode/.keep": ""},
+           expect_files=["repo/.opencode/themes/geneseed-mine.json"]),
+        th("--global-overrides-a-repo-opencode-dir",
+           ["theme", "mine", "--from", "tokyonight", "--global"],
+           # The repo dir EXISTS and is still not chosen — without seeding it this cell
+           # would pass on an implementation that never checked for one.
+           world={"repo/.opencode/.keep": ""},
+           expect_files=[f"{oc_themes}/geneseed-mine.json"]),
+        th("an-explicit-dir-wins-over-both",
+           ["theme", "mine", "--from", "tokyonight", "--dir", "{sb}/picked"],
+           world={"repo/.opencode/.keep": ""},
+           expect_files=["picked/geneseed-mine.json"]),
+        th("an-explicit-dir-is-created",
+           ["theme", "mine", "--from", "tokyonight", "--dir", "{sb}/a/b/c"],
+           expect_files=["a/b/c/geneseed-mine.json"]),
+
+        # ---- the name ----
+        th("the-geneseed-prefix-is-not-doubled",
+           ["theme", "geneseed-mine", "--from", "tokyonight"],
+           expect=["wrote geneseed-mine.json"],
+           expect_absent=["geneseed-geneseed-mine"]),
+
+        # ---- the flavours ----
+        th("--solid-only-writes-one-file",
+           ["theme", "mine", "--from", "tokyonight", "--solid-only"],
+           expect=["[theme] wrote geneseed-mine.json to"],
+           # The trailing hint is suppressed too, and it is the only observable difference
+           # between this and `--transparent-only` on stdout.
+           expect_absent=["(or /theme geneseed-mine-transparent)"],
+           expect_files=[f"{oc_themes}/geneseed-mine.json"]),
+        th("--transparent-only-writes-the-other-one",
+           ["theme", "mine", "--from", "tokyonight", "--transparent-only"],
+           expect=["[theme] wrote geneseed-mine-transparent.json to",
+                   "(or /theme geneseed-mine-transparent)"],
+           expect_files=[f"{oc_themes}/geneseed-mine-transparent.json"]),
+
+        # ---- the palette ----
+        th("--palette-overlays-the-shipped-one",
+           ["theme", "mine", "--from", "tokyonight", "--palette", "{sb}/p.json"],
+           world={"p.json": _PALETTE_MIN},
+           # `pal.update(...)` — the overlay replaces one role and keeps the rest, so the
+           # file must contain BOTH the override and a role only tokyonight supplied.
+           expect_files=[f"{oc_themes}/geneseed-mine.json"]),
+        th("--palette-accepts-a-bare-role-map",
+           ["theme", "mine", "--from", "tokyonight", "--palette", "{sb}/bare.json"],
+           # `raw.get("palette", raw)` — a document with no "palette" key IS the map.
+           world={"bare.json": json.dumps({"accent": "#445566"})},
+           expect_files=[f"{oc_themes}/geneseed-mine.json"]),
+
+        # ---- the refusals: SystemExit, one line on stderr, exit 1 ----
+        th("no-palette-at-all-refuses", ["theme", "mine"],
+           expect=["[theme] need a palette: pass --from <shipped> and/or --palette"]),
+        th("an-unknown-shipped-theme-refuses-and-lists-what-there-is",
+           ["theme", "mine", "--from", "nosuch"],
+           expect=["[theme] no shipped theme 'nosuch'. available: ", "tokyonight"]),
+        th("a-palette-missing-roles-refuses-and-names-them-sorted",
+           ["theme", "mine", "--palette", "{sb}/p.json"],
+           world={"p.json": _PALETTE_MIN},
+           # `sorted(_PALETTE_ROLES - set(pal))` — the ORDER is observable, and a port that
+           # iterated a JS object's insertion order instead would differ here.
+           expect=["[theme] palette missing role(s): addBg, bg,"]),
+        th("a-non-hex-value-refuses-with-a-python-repr",
+           ["theme", "mine", "--from", "tokyonight", "--palette", "{sb}/p.json"],
+           # `f"{r}={pal[r]!r}"` — Python's repr, so a string is SINGLE-quoted and an int
+           # carries no quotes at all. Both shapes in one cell because a port reaching for
+           # JSON.stringify gets the string wrong and the number right.
+           world={"p.json": json.dumps({"palette": {"accent": "112233", "bg": 7}})},
+           expect=["[theme] non-#rrggbb value(s): ", "accent='112233'", "bg=7"]),
+        th("a-three-digit-hex-is-not-a-hex", ["theme", "mine", "--from", "tokyonight",
+                                              "--palette", "{sb}/p.json"],
+           # `^#[0-9a-fA-F]{6}$` — anchored at both ends, so neither a short value nor a
+           # long one passes, and the uppercase pair below proves the class is not narrowed.
+           world={"p.json": json.dumps({"palette": {"accent": "#123",
+                                                    "bg": "#1122334"}})},
+           expect=["non-#rrggbb value(s): ", "accent='#123'", "bg='#1122334'"]),
+        th("uppercase-hex-is-accepted",
+           ["theme", "mine", "--from", "tokyonight", "--palette", "{sb}/p.json"],
+           world={"p.json": json.dumps({"palette": {"accent": "#AABBCC"}})},
+           # The positive control for the two refusals above: without it they pass on an
+           # implementation that rejects every value it is given.
+           expect=["[theme] wrote geneseed-mine.json"],
+           expect_files=[f"{oc_themes}/geneseed-mine.json"]),
     ]
 
 

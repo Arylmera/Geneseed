@@ -40,6 +40,7 @@
  * tables from ever answering the same verb twice, since the shim bakes only one of them.
  */
 import { cmdExclude } from '../js/excludes.mjs';
+import { cmdBuild, cmdPrompt, cmdTheme } from '../js/generate.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
 
 const VERBS = {
@@ -64,6 +65,32 @@ const VERBS = {
     // alike, and an option with no value is its own error.
     options: { '--target': 'target' },
   },
+  build: {
+    fn: cmdBuild,
+    positionals: [],
+    // No `choices` here, deliberately: `harness.py`'s own `--theme` carries none and hands
+    // the string to the generator, which is where the theme list actually lives.
+    options: { '--theme': 'theme' },
+  },
+  prompt: {
+    fn: cmdPrompt,
+    positionals: [],
+    options: { '--theme': 'theme', '--out': 'out' },
+  },
+  theme: {
+    fn: cmdTheme,
+    positionals: [{ name: 'name' }],
+    // argparse `dest=` differs from the flag spelling for two of these, and the JS keeps
+    // the Python dest in camelCase so the two tables read against each other.
+    options: {
+      '--from': 'fromTheme', '--palette': 'palette', '--dir': 'dir',
+    },
+    // The first verb with flags that take NO value, and the first with a mutually
+    // exclusive group. Both are argparse features rather than new behaviour.
+    flags: { '--global': 'globalDir', '--solid-only': 'solidOnly',
+      '--transparent-only': 'transparentOnly' },
+    mutex: [['--solid-only', '--transparent-only']],
+  },
 };
 
 function die(code, msg) {
@@ -87,19 +114,43 @@ function parse(spec, argv) {
   const args = {};
   for (const p of spec.positionals) args[p.name] = null;
   for (const name of Object.values(spec.options ?? {})) args[name] = null;
+  // `action="store_true"` defaults to False, not None — the difference matters because
+  // `cmd_theme` branches on truthiness and `_resolve_themes_dir` reads `--global` with a
+  // `getattr(args, "global_dir", False)`.
+  for (const name of Object.values(spec.flags ?? {})) args[name] = false;
 
   // Options first, in one pass, so an interleaved `version --target X` leaves only
   // positionals behind — argparse does not care about the order and neither may this.
   const rest = [];
+  const seen = new Set();
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];
     const eq = tok.indexOf('=');
     const flag = eq > 0 ? tok.slice(0, eq) : tok;
+    const switchDest = (spec.flags ?? {})[flag];
+    if (switchDest !== undefined) {
+      // A store_true takes no value, so `--global=x` is an error rather than a truthy set.
+      if (eq > 0) return { error: `argument ${flag}: ignored explicit argument '${tok.slice(eq + 1)}'` };
+      args[switchDest] = true;
+      seen.add(flag);
+      continue;
+    }
     const dest = (spec.options ?? {})[flag];
     if (dest === undefined) { rest.push(tok); continue; }
     const value = eq > 0 ? tok.slice(eq + 1) : argv[i += 1];
     if (value === undefined) return { error: `argument ${flag}: expected one argument` };
     args[dest] = value;
+    seen.add(flag);
+  }
+
+  // `add_mutually_exclusive_group()`. Reproduced as a REFUSAL rather than left out: the
+  // wording is not argparse's (see the docblock above), but "refuses" and "silently takes
+  // the first one" are different behaviours and only the wording is out of scope.
+  for (const group of spec.mutex ?? []) {
+    const given = group.filter((f) => seen.has(f));
+    if (given.length > 1) {
+      return { error: `argument ${given[1]}: not allowed with argument ${given[0]}` };
+    }
   }
 
   for (const p of spec.positionals) {

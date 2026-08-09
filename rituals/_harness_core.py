@@ -117,7 +117,29 @@ NO_WINDOW: dict = (
 
 
 def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
-    if NO_WINDOW and "creationflags" not in kw:
+    """`subprocess.run` with the no-console-flash flag — but ONLY when the caller is
+    redirecting the child's streams.
+
+    "while still allowing piped stdout/stderr" above is true exactly when the caller
+    PIPES. `subprocess` sets `STARTF_USESTDHANDLES` only if at least one stream is
+    redirected; with all three left inherited, CREATE_NO_WINDOW gives the child a fresh
+    hidden console instead of the parent's handles and **everything it prints is
+    discarded**. Measured, not reasoned about: `geneseed build > log.txt` wrote an empty
+    log on Windows while the same command in a terminal worked, because a terminal parent
+    has a console for the child to inherit and a redirected one does not.
+
+    That made every inheriting call site silently lossy — `build`, `rebuild-all`, and the
+    web's "build all" job, whose log showed the harness's own lines and none of the
+    generator's. The flag stays where it was actually needed: the doctor's per-theme sweep
+    captures, so the Doctor page is still flash-free.
+
+    Found by the npx port (P5e) — `harness build` printed nothing where `node
+    bin/geneseed-cli.mjs build` printed the generator's summary line, and asking which of
+    the two was right is a different question from asking what the code does.
+    """
+    redirected = (kw.get("capture_output")
+                  or kw.get("stdout") is not None or kw.get("stderr") is not None)
+    if NO_WINDOW and redirected and "creationflags" not in kw:
         kw.update(NO_WINDOW)
     return subprocess.run(cmd, **kw)
 

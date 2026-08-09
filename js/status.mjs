@@ -36,7 +36,7 @@
  * `accentFor`'s cyan fallback (an unknown theme is refused upstream by `effectiveTheme`),
  * and the whole ANSI half of `statusLines` (`_color_enabled` is `sys.stdout.isatty()`, and
  * every harness captures stdout through a pipe). All four are PURE FUNCTIONS of their
- * arguments, so all four are gated as a corpus in `tests/test_status_panel_parity.py`
+ * arguments, so all four are gated as a corpus in `tests/test_pure_function_parity.py`
  * instead — which is a third answer to the colour question the P5c handoff posed as a
  * choice between shipping it ungated and not shipping it.
  */

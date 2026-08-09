@@ -584,6 +584,40 @@ class TheEntryRefusesRatherThanNoOps(unittest.TestCase):
         self.assertEqual(r.returncode, 2, r.stderr[:200])
         self.assertFalse(r.stdout)
 
+    def test_two_mutually_exclusive_theme_flags_refuse_on_both_sides(self):
+        """`add_mutually_exclusive_group()` is behaviour, even though its WORDING is not
+        reproduced — and the two are separable, which is why this is a hand-written gate
+        rather than a cell.
+
+        A cell would compare argparse's usage block against `bin/geneseed-cli.mjs`'s one
+        line and fail on text neither side promises. What both sides DO promise is the
+        refusal itself: `harness theme x --solid-only --transparent-only` is an error, not a
+        silent pick of whichever flag the parser saw first. Asserted absolutely against BOTH
+        implementations, with the reference as its own positive control — without that half
+        it would pass on a parser that rejects every theme invocation.
+        """
+        argv = ["theme", "mine", "--from", "tokyonight",
+                "--solid-only", "--transparent-only"]
+        for label, cmd in (("python", [sys.executable, str(HARNESS_PY)]),
+                           ("node", [NODE, str(HARNESS_CLI)])):
+            with self.subTest(side=label):
+                r = subprocess.run(cmd + argv, capture_output=True, text=True,
+                                   encoding="utf-8", cwd=str(ROOT),
+                                   env=golden.cell_env(Path(tempfile.gettempdir())))
+                self.assertEqual(r.returncode, 2,
+                                 f"{label} accepted both flavour flags: {r.stdout[:200]}")
+                self.assertFalse(r.stdout, f"{label} printed on stdout while refusing")
+
+        # The positive control: ONE of the flags is accepted, so the refusal above is about
+        # the pair and not about the verb.
+        with tempfile.TemporaryDirectory() as td:
+            r = subprocess.run([NODE, str(HARNESS_CLI), "theme", "mine", "--from",
+                                "tokyonight", "--solid-only", "--dir", td],
+                               capture_output=True, text=True, encoding="utf-8",
+                               cwd=str(ROOT), env=golden.cell_env(Path(td)))
+            self.assertEqual(r.returncode, 0, r.stderr[:300])
+            self.assertTrue((Path(td) / "geneseed-mine.json").is_file())
+
     def test_the_two_entry_points_agree_on_stdout_BYTES(self):
         """The one difference the 103-cell matrix structurally cannot see.
 
@@ -603,35 +637,49 @@ class TheEntryRefusesRatherThanNoOps(unittest.TestCase):
         It went unobservable and harmless while nothing baked the Node entry into a shim.
         P5b's flip makes it the bytes a real host reads on a real user's machine, which is
         why it is fixed and gated here rather than carried on the known-differences list.
+
+        A TABLE over both candidate binaries since P5e, not one `context` run, and the
+        second row is the one that needed adding rather than generalising. The CLI's verbs
+        were covered only TRANSITIVELY — `js/excludes.mjs` and `js/status.mjs` call the same
+        `pyPrint` the hooks do, so a mutation of the shared helper fails this test through
+        the hook row (P5c/M11). What that cannot see is a CLI module reaching for
+        `process.stdout.write` directly, which leaves the hook row green. `prompt` is the
+        verb that makes it matter: its stdout is the entire rendered tree, ~400 KB with
+        thousands of newlines, against a Python side that writes it through `sys.stdout` and
+        translates every one. Prose generalises for free and gates do not — the second
+        instance is where this becomes a table.
         """
         with tempfile.TemporaryDirectory() as tmp_s:
             tmp = Path(tmp_s)
             (tmp / "home").mkdir()
             (tmp / "README.md").write_text("# bytes\n", encoding="utf-8")
             env = golden.cell_env(tmp / "home")
-            argv = ["context", "--root", str(tmp)]
-            raw = {}
-            for side, cmd in (("py", [sys.executable, str(HARNESS_PY)]),
-                              ("node", [NODE, str(HOOK_CLI)])):
-                # No text=, no encoding=: bytes, so the decoder cannot fold the difference.
-                raw[side] = subprocess.run(cmd + argv, cwd=str(tmp), env=env,
-                                           capture_output=True).stdout
+            for entry, argv in ((HOOK_CLI, ["context", "--root", str(tmp)]),
+                                (HARNESS_CLI, ["prompt"])):
+                with self.subTest(entry=entry.name, verb=argv[0]):
+                    raw = {}
+                    for side, cmd in (("py", [sys.executable, str(HARNESS_PY)]),
+                                      ("node", [NODE, str(entry)])):
+                        # No text=, no encoding=: bytes, so the decoder cannot fold it.
+                        raw[side] = subprocess.run(cmd + argv, cwd=str(tmp), env=env,
+                                                   capture_output=True).stdout
 
-            self.assertTrue(raw["py"], "the python reference printed nothing, so this cell "
-                                       "would pass on two silent implementations")
-            self.assertEqual(
-                raw["py"].count(b"\n"), raw["node"].count(b"\n"),
-                "the two entry points printed a different number of lines, so the byte "
-                "comparison below would be about content rather than newlines")
-            self.assertEqual(
-                raw["py"], raw["node"],
-                "the two hook entry points hand their host different BYTES:\n"
-                f"  python: {len(raw['py'])} bytes, "
-                f"{raw['py'].count(chr(13).encode() + chr(10).encode())} CRLF\n"
-                f"  node:   {len(raw['node'])} bytes, "
-                f"{raw['node'].count(chr(13).encode() + chr(10).encode())} CRLF\n"
-                f"  python tail: {raw['py'][-80:]!r}\n"
-                f"  node tail:   {raw['node'][-80:]!r}")
+                    self.assertTrue(raw["py"],
+                                    "the python reference printed nothing, so this row "
+                                    "would pass on two silent implementations")
+                    self.assertEqual(
+                        raw["py"].count(b"\n"), raw["node"].count(b"\n"),
+                        "the two entry points printed a different number of lines, so the "
+                        "byte comparison below would be about content, not newlines")
+                    self.assertEqual(
+                        raw["py"], raw["node"],
+                        f"{entry.name} hands its caller different BYTES than the python:\n"
+                        f"  python: {len(raw['py'])} bytes, "
+                        f"{raw['py'].count(chr(13).encode() + chr(10).encode())} CRLF\n"
+                        f"  node:   {len(raw['node'])} bytes, "
+                        f"{raw['node'].count(chr(13).encode() + chr(10).encode())} CRLF\n"
+                        f"  python tail: {raw['py'][-80:]!r}\n"
+                        f"  node tail:   {raw['node'][-80:]!r}")
 
     def test_an_emitted_hook_command_shape_runs_through_the_shell(self):
         """End-to-end, through `sh`/`cmd.exe`, with the `|| exit 0` a real emitted command

@@ -152,7 +152,17 @@ export function writeTheme(themesDir, themeName, theme) {
 }
 
 /** `_build_emit._color_theme_json`. */
-function colorThemeJson(palette, transparent) {
+/**
+ * `_build_emit._PALETTE_ROLES` — every role some slot reads, as a set.
+ *
+ * Derived from `SLOT_ROLE` rather than listed, exactly as the Python derives it from
+ * `_SLOT_ROLE.values()`: a second literal list would be a second thing to keep in agreement,
+ * and `harness theme` prints the roles a user's palette is MISSING, so a drift between the
+ * two would refuse a complete palette or accept an incomplete one.
+ */
+export const PALETTE_ROLES = new Set(Object.values(SLOT_ROLE));
+
+export function colorThemeJson(palette, transparent) {
   const t = {};
   for (const [slot, role] of Object.entries(SLOT_ROLE)) {
     if (transparent && TRANSPARENT_NONE.has(slot)) {
