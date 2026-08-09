@@ -13,6 +13,7 @@ import difflib
 import json
 import shutil
 import sys
+import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rituals"))
@@ -83,6 +84,8 @@ def run(fn: str, args: list):
         return harness._mode_options()
     if fn == "installed_defaults":
         return harness._installed_defaults()
+    if fn == "py_unquote":
+        return urllib.parse.unquote(args[0])
     if fn == "minute_stamp":
         # `_web_overview.api_overview`'s `build_time`, spelled as the reference spells it:
         # a NAIVE `fromtimestamp`, which is local time. `stamp_doctor`'s `checked_at` is

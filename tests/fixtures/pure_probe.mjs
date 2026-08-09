@@ -16,7 +16,9 @@ import { cmpKey } from '../../js/diff.mjs';
 import { descBlockProblem, isVendoredPath, validateIsVendored } from '../../js/native.mjs';
 import { proseMirrorProblems, romanToInt, themesToCheck } from '../../js/doctor.mjs';
 import { pyCapitalize } from '../../js/installs.mjs';
-import { pyInt, pyIsAbsolute, pyLen, pyLjust, pyWhich } from '../../js/lib/pyfs.mjs';
+import {
+  pyInt, pyIsAbsolute, pyLen, pyLjust, pyUnquote, pyWhich,
+} from '../../js/lib/pyfs.mjs';
 import { installedDefaults } from '../../js/installs.mjs';
 import { installAgentEntryOf } from '../../js/uninstall.mjs';
 import {
@@ -60,6 +62,7 @@ const FNS = {
   installed_defaults: () => installedDefaults(),
   // Seconds in, as `st_mtime` is; `stampMinute` takes ms, as `mtimeMs` is.
   minute_stamp: (a) => stampMinute(a[0] * 1000),
+  py_unquote: (a) => pyUnquote(a[0]),
   setup_summary_lines: (a) => setupSummaryLines(...a),
   // The stdin readers. Their PROMPTS are stdout, which is why the wizard job is compared as
   // raw bytes rather than through a JSON parse — see the test's docstring.

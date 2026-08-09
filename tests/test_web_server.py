@@ -240,11 +240,11 @@ def _node_routes() -> dict:
     object the server actually dispatches on would gate nothing.
     """
     src = (
-        "import {STATE_ROUTES} from './js/web/api.mjs';"
+        "import {PREFIX_ROUTES, STATE_ROUTES} from './js/web/api.mjs';"
         "import {NOT_PORTED, NOT_PORTED_PREFIXES, NOT_PORTED_POST, NOT_PORTED_POST_PREFIXES}"
         "  from './js/web/server.mjs';"
         "process.stdout.write(JSON.stringify({"
-        "  ported: Object.keys(STATE_ROUTES),"
+        "  ported: [...Object.keys(STATE_ROUTES), ...PREFIX_ROUTES.map((r) => r[0])],"
         "  unportedGet: [...NOT_PORTED, ...NOT_PORTED_PREFIXES],"
         "  unportedPost: [...NOT_PORTED_POST, ...NOT_PORTED_POST_PREFIXES]}));"
     )

@@ -294,7 +294,202 @@ def cells() -> list[dict]:
              expect=['{"stopping": true}', "200 OK"]),
     ]
     out += _read_cells(cell)
+    out += _catalog_cells(cell)
     return out
+
+
+# A deployed install with something in every section, plus a wiki vault outside it. `mine`
+# is BOTH an agent and a skill on purpose: `_resolve_links` builds one name→type map with
+# the agents first and the skills second, so a name in both resolves as a skill — the kind
+# of thing a port reproduces by accident in the other order.
+def _full(**extra) -> dict:
+    return _installed(**{
+        f"{_OC}/agents/mine.md":
+            "---\nname: mine\nmode: all\n---\n\n> my own agent\n\n"
+            "Body with a [[wayfinder]] link and a [[mine]] self-link.\n",
+        # `_*` is the template convention `_spec_entries` skips.
+        f"{_OC}/agents/_template.md": "> not an agent\n",
+        f"{_OC}/skills/mine/SKILL.md": "---\nname: mine\n---\n\n> my own skill\n\nbody\n",
+        # A name the shipped catalogue knows, so `klass` and `status` come from
+        # SKILL_CLASS and registry.json rather than from the personal fallback.
+        f"{_OC}/skills/wayfinder/SKILL.md": "---\nname: wayfinder\n---\n\n> shipped\n\nb\n",
+        # `_spec_desc`'s two FALLBACKS, which exist for the vendored skill folders: they
+        # ride in verbatim with no blockquote and would otherwise show a blank Purpose.
+        # Without these two the blockquote arm is the only one any cell reaches.
+        f"{_OC}/skills/no-quote/SKILL.md":
+            "---\nname: no-quote\ndescription:  from   the frontmatter \n---\n\nbody\n",
+        f"{_OC}/skills/no-desc/SKILL.md":
+            "---\nname: no-desc\n---\n\n# A heading first\n\nThe first prose paragraph\nwins.\n",
+        f"{_OC}/memory/a-fact.md":
+            "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n",
+        f"{_OC}/notebook/scratch.md": "# scratch\n",
+        f"{_OC}/context.json": '{"context": [{"path": "README.md", "load": "eager"}]}\n',
+        f"{_OC}/wiki.jsonc": json.dumps({"wikis": [
+            {"name": "vault", "path": "{sb/}/vault",
+             "entries": [{"path": "notes", "description": "my notes"},
+                         {"path": "notes/private", "load": "exclude"}]}]}),
+        "vault/notes/one.md": "# One\n\nlinks to [[mine]].\n",
+        "vault/notes/two.md": "# Two\n",
+        "vault/notes/private/secret.md": "# Secret\n",
+        **extra,
+    })
+
+
+def _catalog_cells(cell) -> list[dict]:
+    """P6c — `/api/catalog/<section>`, `/api/item/<type>/<name>` and the wiki reader.
+
+    THE FIRST ENDPOINTS THAT PARSE THE PATH, and the first that raise. Everything in P6b
+    was a literal key in a table; here the section, the type and the name come out of the
+    URL, which brings three things no earlier cell could reach: `urllib.parse.unquote`,
+    the `NotFound` → 404 convention, and `_flat_name`'s traversal refusal — a GET needs no
+    token, so before that check the name was an arbitrary-file read.
+    """
+    return [
+        # ---- /api/catalog/<section> ----------------------------------------------------
+        cell("catalog/an-undeployed-target-lists-the-source-render",
+             [_req(path="/api/catalog/agents")], world={"repo/.keep": ""},
+             # `state.inventory`'s fallback arm, read through the catalog rather than
+             # counted: names, purposes and lifecycle badges of the agents `src/` renders.
+             expect=['"section": "agents"', '"status": "approved"'],
+             expect_re=[r'"items": \[\{"name": "[a-z][a-z0-9-]*", "title":']),
+        cell("catalog/a-deployed-install-lists-what-is-installed",
+             [_req(path="/api/catalog/agents")], world=_full(),
+             # One agent, and the `_`-prefixed template beside it that must not appear.
+             expect=['{"name": "mine", "title": "mine", "desc": "my own agent"',
+                     '"status": "personal"'],
+             expect_absent=["_template"]),
+        cell("catalog/a-skill-carries-its-class-and-its-lifecycle-status",
+             [_req(path="/api/catalog/skills")], world=_full(),
+             # The two arms of the taxonomy in one body: a skill the registry knows
+             # (approved, class from SKILL_CLASS) and one it does not (personal, and
+             # `klass` personal too — filing it under the "build" fallback would claim a
+             # Geneseed taxonomy slot it was never given).
+             expect=['"name": "mine"', '"klass": "personal", "status": "personal"',
+                     '"name": "wayfinder"', '"klass": "design", "status": "approved"',
+                     # `_spec_desc`'s other two arms: the frontmatter `description`, with
+                     # its whitespace collapsed by `" ".join(desc.split())`, and the first
+                     # PROSE paragraph — the heading above it is skipped.
+                     '"name": "no-quote", "title": "no-quote", '
+                     '"desc": "from the frontmatter"',
+                     '"name": "no-desc", "title": "no-desc", '
+                     '"desc": "The first prose paragraph wins."']),
+        cell("catalog/laws-are-numbered-titled-and-classed",
+             [_req(path="/api/catalog/laws")], world=_full(),
+             # Laws come from the RENDER even on a deployed install — once deployed they
+             # live inside AGENT.md rather than as files — so this is also what says the
+             # deployed arm replaces two of the three and not all three.
+             expect=['"section": "laws"',
+                     '{"name": "I", "title": "Rule I \\u2014 Arcana Sigillata',
+                     '"klass": "security"', '"klass": "context"']),
+        cell("catalog/memory-notebook-and-config-list-what-is-there",
+             [_req(path="/api/catalog/memory"), _req(path="/api/catalog/notebook"),
+              _req(path="/api/catalog/config")], world=_full(),
+             # Three sections in one cell: their bodies are small and they share a shape.
+             # `title`/`desc` come from the fact's frontmatter, which is the first thing
+             # in this port to consume `frontmatter`'s second owner.
+             expect=['"name": "a-fact", "title": "a-fact", "desc": "one fact"',
+                     '"name": "scratch", "title": "scratch", "desc": ""',
+                     '"name": "context.json", "title": "Project context"',
+                     '"name": "wiki.jsonc", "title": "Wiki manifest"']),
+        cell("catalog/the-wiki-walks-the-manifest-and-honours-its-excludes",
+             [_req(path="/api/catalog/wiki")], world=_full(),
+             # The vault is OUTSIDE the install, reached through `wiki.jsonc`. An entry
+             # marked `load: exclude` is dropped, and the cell names the file it drops —
+             # an exclusion gate with no positive control is a gate on nothing.
+             expect=['"name": "vault:notes/one.md", "title": "one"',
+                     '"desc": "notes/one.md"', '"group": "vault"',
+                     '"name": "vault:notes/two.md"'],
+             expect_absent=["secret"]),
+        cell("catalog/the-wiki-manifest-tolerates-comments",
+             [_req(path="/api/catalog/wiki"),
+              _req(path="/api/item/config/wiki.jsonc")],
+             world=_full(**{f"{_OC}/wiki.jsonc":
+                            "// my vaults\n" + json.dumps({"wikis": [
+                                {"name": "vault", "path": "{sb/}/vault",
+                                 "entries": [{"path": "notes/two.md",
+                                              "description": "just one"}]}]}) + "\n"}),
+             # `wiki.jsonc` is `.jsonc` because it is HAND-MAINTAINED, and the reference
+             # reads it through the comment-tolerant loader. Every other manifest this
+             # phase seeds is plain JSON, so without this cell a port using `JSON.parse`
+             # would list nothing and answer an empty `manifest` — both of which read as
+             # "the user has no wikis" rather than as a parse failure. The second request
+             # is what says the CONFIG item goes through the same loader.
+             expect=['"name": "vault:notes/two.md"', '"desc": "just one"',
+                     '"manifest": {"kind": "wiki", "wikis": [{"name": "vault"']),
+        cell("catalog/an-unknown-section-is-a-404",
+             [_req(path="/api/catalog/nope")], world=_full(),
+             # The `NotFound` → 404 convention, first exercised here. `SECTIONS` is a
+             # closed list and the message carries what was asked for.
+             expect=['{"error": "not found: nope"}', "404 Not Found"]),
+
+        # ---- /api/item/<type>/<name> ---------------------------------------------------
+        cell("item/an-agent-carries-its-body-and-its-resolved-links",
+             [_req(path="/api/item/agent/mine")], world=_full(),
+             # `[[mine]]` is both an agent and a skill here, and resolves as a SKILL:
+             # `_resolve_links` writes agents into the name map first and skills second.
+             # A port that built the map in the other order answers `"type": "agent"` and
+             # nothing else in the body moves.
+             expect=['"type": "agent", "name": "mine"',
+                     '"body": "> my own agent\\n\\nBody with a [[wayfinder]] link',
+                     '"links": [{"label": "wayfinder", "type": "skill", "name": '
+                     '"wayfinder"}, {"label": "mine", "type": "skill", "name": "mine"}]']),
+        cell("item/a-law-is-fetched-by-its-numeral",
+             [_req(path="/api/item/law/XVIII")], world=_full(),
+             expect=['"type": "law", "name": "XVIII"',
+                     '"title": "Rule XVIII \\u2014', '"klass": "context"',
+                     '"links": []']),
+        cell("item/a-config-manifest-is-parsed-and-fenced",
+             [_req(path="/api/item/config/context.json")], world=_full(),
+             # Two representations of the same file: the structured `manifest` the detail
+             # pane renders as cards, and the raw body inside a ```json fence.
+             expect=['"manifest": {"kind": "context", "context": '
+                     '[{"path": "README.md", "load": "eager"}]}',
+                     '"body": "```json\\n{\\"context\\"']),
+        cell("item/a-wiki-page-is-read-out-of-its-vault",
+             [_req(path="/api/item/wiki/vault:notes%2Fone.md")], world=_full(),
+             # `%2F` — the name carries a separator, so the URL must be unquoted before
+             # the vault lookup and the traversal check applies inside the vault instead
+             # of to the segment.
+             expect=['"type": "wiki", "name": "vault:notes/one.md", "title": "one"',
+                     '"body": "# One\\n\\nlinks to [[mine]].\\n"',
+                     '"links": [{"label": "mine", "type": "skill"']),
+        cell("item/a-wiki-page-outside-the-vault-is-a-404",
+             [_req(path="/api/item/wiki/vault:..%2F..%2Fbuild.py")], world=_full(),
+             # `_within(p, root)` after the join. A vault entry naming a path that climbs
+             # out is the whole reason the check is there, and a GET needs no token.
+             expect=['{"error": "not found: vault:../../build.py"}', "404 Not Found"],
+             expect_absent=["def main("]),
+        cell("item/a-flat-name-that-climbs-out-is-a-404",
+             [_req(path="/api/item/memory/..%2F..%2Fbuild"),
+              _req(path="/api/item/memory/a/b")], world=_full(),
+             # `_flat_name`: a separator, a `..` or a drive colon in the segment is
+             # someone steering the join outside the catalog dir. Its own cell, because
+             # it is a security branch and a corpus over the helper cannot see the route.
+             #
+             # The second request is what gates the router's `split("/", 4)` MAXSPLIT. An
+             # unbounded split would hand `api_item` the name `a` and answer
+             # `not found: a`; the reference keeps the remainder whole and answers
+             # `not found: a/b`, which is also what lets a wiki relpath survive the route.
+             expect=['{"error": "not found: ../../build"}', "404 Not Found",
+                     '{"error": "not found: a/b"}']),
+        cell("item/an-unknown-type-and-a-missing-name-are-both-404",
+             [_req(path="/api/item/nope/x"), _req(path="/api/item/")], world=_full(),
+             # The two ends of the parse: an unknown TYPE falls off `api_item`'s chain,
+             # and a path with no name at all is caught in the router before it can
+             # IndexError its way to a 500.
+             expect=['{"error": "not found: nope"}',
+                     '{"error": "not found: /api/item/"}']),
+        cell("item/a-percent-sequence-that-is-not-an-escape-stays-literal",
+             [_req(path="/api/item/memory/a%ZZfact"), _req(path="/api/item/memory/caf%C3%A9"),
+              _req(path="/api/item/memory/trailing%")], world=_full(),
+             # `urllib.parse.unquote` is NOT `decodeURIComponent`: an invalid escape and a
+             # trailing bare `%` are left alone where the JS builtin throws a URIError —
+             # which the shell would answer as a 500. The valid UTF-8 pair beside them is
+             # the positive control, without which "leaves everything alone" would pass.
+             expect=['{"error": "not found: a%ZZfact"}',
+                     '{"error": "not found: caf\\u00e9"}',
+                     '{"error": "not found: trailing%"}']),
+    ]
 
 
 def _read_cells(cell) -> list[dict]:

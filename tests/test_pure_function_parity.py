@@ -195,7 +195,32 @@ def _cases() -> list[dict]:
     cases.append({"fn": "mode_options", "args": []})
     for ts in _MINUTE_STAMP_CORPUS:
         cases.append({"fn": "minute_stamp", "args": [ts]})
+    for s in _UNQUOTE_CORPUS:
+        cases.append({"fn": "py_unquote", "args": [s]})
     return cases
+
+
+# P6c — `urllib.parse.unquote`, a language primitive reproduced, so a corpus and not a cell
+# (P5c's rule).
+#
+# The reason it exists at all is the third entry: `decodeURIComponent` THROWS a URIError on
+# a `%` that is not an escape, and the web shell would answer that as a 500 where the
+# reference answers a 404 naming the literal text. `/api/item/<type>/<name>` is the first
+# route whose name comes out of a URL, so this is the first phase that can be handed one.
+#
+# The list is ordered by what each input breaks: no `%` at all (the early return), a valid
+# pair in both cases, a multi-byte sequence that must be ACCUMULATED before decoding, the
+# non-escapes, a lone continuation byte and two truncated sequences (which is where
+# Python's maximal-subpart replacement and the JS decoder's could disagree — measured here
+# rather than assumed), `+` which `unquote` does NOT touch, a literal non-ASCII character
+# beside an escape (the `([\x00-\x7f]+)` split is what keeps them apart), and the
+# traversal string the item route actually receives.
+_UNQUOTE_CORPUS = [
+    "", "plain", "a+b", "%2F", "%2f", "%41%42", "caf%C3%A9", "%E2%9C%93",
+    "a%ZZfact", "trailing%", "a%", "%%41", "%2520", "%00",
+    "%80", "%C3", "%E2%82",
+    "déjà%20vu", "%C3%A9%ZZ", "..%2F..%2Fbuild", "vault:notes%2Fone.md",
+]
 
 
 # P6b — `%Y-%m-%d %H:%M`, which `api_overview`'s `build_time` and `stamp_doctor`'s

@@ -38,6 +38,9 @@ import { stripCapabilityLinks } from './emit.mjs';
 import { hostCatalogsNatively, pyResolve } from './hosts.mjs';
 import { EMIT_HOST_SCOPE, footprintOfDir, installedDefaults, themeFiles } from './installs.mjs';
 import {
+  ENTITY_STATUSES, LAW_CLASS, LAW_CLASSES, SKILL_CLASS,
+} from './inventory.mjs';
+import {
   VENDORED_SKILL_DIRS, descBlockProblem, firstBlockquote, isVendoredPath, validateIsVendored,
 } from './native.mjs';
 import { PALETTE_ROLES, colorThemeFiles } from './opencode.mjs';
@@ -378,51 +381,12 @@ function registryKeys() {
 const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/**
- * `_harness_tui.ENTITY_STATUSES` — the lifecycle statuses `registry.json` may carry.
- *
- * Three lines of data with ONE owner, and this is the copy, so the copy has to be gated:
- * `test_the_doctor_taxonomy_matches_the_python_source` re-derives all four tables from
- * `rituals/_harness_tui.py` and compares. That is the same arrangement `LAW_META` in
- * `web/src/pages/Laws.jsx` already lives under — a mirror plus the check that keeps it
- * honest — and it is the reason doctor's own messages still name `_harness_tui.py`: that
- * file is where a maintainer edits, and this is what follows it.
- */
-const ENTITY_STATUSES = ['experimental', 'approved', 'deprecated'];
-
-/** `_harness_tui.LAW_CLASSES` — the six governance classes a law may carry. */
-const LAW_CLASSES = ['security', 'process', 'verify', 'craft', 'context', 'comms'];
-
-/** `_harness_tui.LAW_CLASS` — each rule's class, keyed by Roman numeral. */
-const LAW_CLASS = {
-  I: 'security', II: 'process', III: 'verify', IV: 'security', V: 'craft',
-  VI: 'context', VII: 'verify', VIII: 'comms', IX: 'comms', X: 'comms',
-  XI: 'craft', XII: 'craft', XIII: 'craft', XIV: 'process', XV: 'process',
-  XVI: 'context', XVII: 'context', XVIII: 'context', XIX: 'context', XX: 'security',
-  XXI: 'process', XXII: 'security', XXIII: 'security', XXIV: 'craft', XXV: 'craft',
-  XXVI: 'craft', XXVII: 'verify', XXVIII: 'process', XXIX: 'comms', XXX: 'comms',
-  XXXI: 'comms', XXXII: 'craft', XXXIII: 'craft', XXXIV: 'verify', XXXV: 'verify',
-  XXXVI: 'security', XXXVII: 'process',
-};
-
-/** `_harness_tui.SKILL_CLASS` — each skill's category, keyed by file stem. */
-const SKILL_CLASS = {
-  brainstorm: 'design', clarify: 'design', plan: 'design', council: 'design',
-  workflow: 'design', 'parallel-agents': 'design', pipeline: 'design',
-  'codebase-design': 'design', 'domain-modeling': 'design', wayfinder: 'design',
-  tickets: 'design',
-  tdd: 'build', develop: 'build', refactor: 'build', debug: 'build', migrate: 'build',
-  'frontend-design': 'build', 'opencode-theme': 'build', prototype: 'build',
-  'forge-mcp': 'build',
-  'geneseed-code-review': 'review', 'fresh-eyes': 'review', 'gap-detector': 'review',
-  'roast-me': 'review', 'review-response': 'review', ponytail: 'review',
-  commit: 'ship', ship: 'ship', release: 'ship', handoff: 'ship', 'git-rescue': 'ship',
-  'repo-map': 'understand', 'git-archaeology': 'understand', decode: 'understand',
-  research: 'understand', ingest: 'understand', 'document-project': 'understand',
-  wiki: 'understand', prose: 'understand', geneseed: 'understand', rule: 'understand',
-  profile: 'understand', herdr: 'understand',
-  'crash-course': 'learn', drill: 'learn', feynman: 'learn', 'learning-path': 'learn',
-};
+// `ENTITY_STATUSES`, `LAW_CLASSES`, `LAW_CLASS` and `SKILL_CLASS` moved to
+// `js/inventory.mjs` in P6c — see the import above. They crossed HERE in P5g because
+// doctor's authoring gates are what validate them, and they belong where Python keeps
+// them (`_harness_tui`) now that the catalog reads them too. The gates below are
+// unchanged, which is what licensed the move: a copy would have stopped being the
+// value under test the first time one of them was edited.
 
 /**
  * `_harness_build._registry_problems` — `registry.json` describes exactly what `src/`

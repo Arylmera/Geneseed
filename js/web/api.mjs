@@ -1,6 +1,7 @@
 /**
- * The web console's read endpoints — P6b: `overview`, `themes`, `doctor`, `diff`,
- * `installs`, `excludes`, `setup`, `profile`, and the `WebState` all eight read from.
+ * The web console's read endpoints — P6b's `overview`, `themes`, `doctor`, `diff`,
+ * `installs`, `excludes`, `setup` and `profile`, P6c's `catalog`, `item` and `wiki_item`,
+ * and the `WebState` all eleven read from.
  *
  * WHAT WAS ACTUALLY NEW HERE, MEASURED BY READING `js/` RATHER THAN BY GREPPING A NAME.
  * The P6 handoff scored this group at "~430 LOC new against ~1,600 already ported" and
@@ -20,22 +21,22 @@
  * still absent, still P7's: nothing here passes it and adding it would be a claim no cell
  * can check.
  *
- * THE INVENTORY IS STILL THE COUNTING HALF, and deliberately. `state.inventory` is the
- * FULL record — every agent and skill with its body, purpose, source path, lifecycle
- * badge and taxonomy class — and `apiOverview` reads three `len()`s off it. The badge and
- * the class come from `SKILL_CLASS` / `entity_status` / `load_registry`, the ~111 LOC of
- * TUI taxonomy `js/status.mjs` names and P7 owns, and no P6b endpoint consumes either.
- * So `inventoryFor` returns three integers and `specNames` is the file-SELECTION half of
- * `_spec_entries`. P6c grows them by adding the READ, not by writing a second selector —
- * which is the mistake `inventoryCounts`' docblock warned about in the other direction.
+ * THE INVENTORY IS THE FULL RECORD SINCE P6c, AND THERE IS STILL ONE CLASSIFIER. P6b
+ * shipped `inventoryFor` as three integers, because `apiOverview` reads three `len()`s off
+ * `state.inventory` and the badges and taxonomy classes belonged to a phase that had not
+ * arrived. `api_catalog` consumes exactly those fields, so this is the phase that would
+ * have made the counting half and the reading half two classifiers. It did not:
+ * `tuiInventory` in `js/inventory.mjs` is the one walk, `js/status.mjs`'s `inventoryCounts`
+ * is three `length`s off it, and `specEntries` grew out of `specNames` by adding the READ
+ * rather than by being written beside it.
  *
- * THE ITEM LISTS ARE FULL, though only their LENGTH is consumed here. `memoryItems`,
- * `notebookItems`, `wikiItems` and `configItems` build the same records the reference
- * does, because the count is not separable from the work: `_memory_items` READS every
- * fact (an unreadable one raises, and the endpoint 500s — a variant that only counted
- * filenames would answer where the reference fails), and `_wiki_items` has to walk and
- * de-duplicate the whole manifest to know how many pages there are. Their fields are
- * unreachable from any P6b cell and P6c is what gates them.
+ * THE TAXONOMY WAS ALREADY PORTED, which the measurement found and the handoff did not.
+ * `js/status.mjs` said flatly that "the ~111 LOC of TUI taxonomy" was P7's; `LAW_CLASS`,
+ * `SKILL_CLASS`, `LAW_CLASSES` and `ENTITY_STATUSES` had in fact crossed in P5g inside
+ * `js/doctor.mjs`, because doctor's authoring gates are what validate them. P6c moved the
+ * four to `js/inventory.mjs` — where Python keeps them — rather than copying them, and
+ * doctor imports them back. Only `parse_laws`, `load_registry` and `entity_status` were
+ * genuinely new.
  *
  * `python` IS THE ONE FIELD WITH NO HONEST TWIN. `api_setup` reports
  * `sys.version.split()[0]` — the interpreter running the daemon. A Node daemon has none,
@@ -44,6 +45,12 @@
  * port. `tests/web_golden.py` normalises the field on both sides and
  * `tests/test_web_server.py` carries the absolute assertion about what the reference
  * puts there — the debt a tolerant comparison owes.
+ *
+ * P6c's ROUTES ARE THE FIRST THAT PARSE A PATH, which brings three things no earlier
+ * endpoint could reach: `pyUnquote` (NOT `decodeURIComponent`, which throws where the
+ * reference leaves a stray `%` alone), the `NotFound` → 404 convention, and `flatName`'s
+ * traversal refusal — a GET carries no token, so before that check the item route was an
+ * arbitrary-file read.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, statSync } from 'node:fs';
@@ -59,9 +66,14 @@ import {
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../installs.mjs';
 import { frontmatter } from '../hooks.mjs';
+import {
+  SKILL_CLASS, entityStatus, loadRegistry, tuiInventory,
+} from '../inventory.mjs';
+import { firstBlockquote } from '../native.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../setup.mjs';
-import { accentFor, inventoryCounts, statusData } from '../status.mjs';
-import { normcase } from '../lib/pyfs.mjs';
+import { accentFor, statusData } from '../status.mjs';
+import { normcase, pyUnquote, readText } from '../lib/pyfs.mjs';
+import { readJsonc } from '../settings.mjs';
 
 /** `_web_core.NotFound` — a requested catalog section or item that does not exist. */
 export class NotFound extends Error {}
@@ -162,39 +174,83 @@ export function deployed(state) {
 }
 
 /**
- * `_web_core._spec_entries`, reduced to the FILE SELECTION it starts with.
+ * `_web_core._spec_desc` — a deployed spec's one-line purpose.
  *
- * Agents are flat `<root>/<name>.md` (skipping `_*` templates); skills use OpenCode's
- * folder layout `<root>/<name>/SKILL.md`. `glob("*.md")` is case-INSENSITIVE on Windows,
- * as pathlib's is — `normcase` rather than a bare `endsWith`.
+ * The `> blockquote` convention every rendered skill and agent carries, then the
+ * frontmatter `description`, then the first prose paragraph. The fallbacks are for the
+ * VENDORED skill folders, which ride in verbatim with no blockquote and would otherwise
+ * show a blank Purpose cell.
  */
-export function specNames(root, nested) {
-  if (!isDir(root)) return [];
-  let names;
-  try { names = readdirSync(root); } catch { return []; }
-  if (nested) {
-    return names.filter((n) => isDir(path.join(root, n))
-      && isFile(path.join(root, n, 'SKILL.md')));
+export function specDesc(fm, body) {
+  const bq = firstBlockquote(body);
+  if (bq) return bq;
+  const desc = String(fm.has('description') ? fm.get('description') : '').trim();
+  if (desc) return desc.split(/\s+/).filter(Boolean).join(' ');
+  for (const para of body.split('\n\n')) {
+    const s = para.split(/\s+/).filter(Boolean).join(' ');
+    if (s && !(s.startsWith('#') || s.startsWith('---') || s.startsWith('<!--'))) return s;
   }
-  return names.filter((n) => normcase(n).endsWith('.md') && !n.startsWith('_')
-    && isFile(path.join(root, n)));
+  return '';
 }
 
 /**
- * `WebState.inventory`, reduced to the three counts `api_overview` reads off it.
+ * `_web_core._spec_entries` — agent/skill specs read straight off a DEPLOYED harness dir.
  *
- * The deployed arm replaces TWO of the three: agents and skills come from what is
- * installed at `target`, laws stay with the source render because once deployed they live
- * inside AGENT.md rather than as separate files.
+ * Agents are flat `<root>/<name>.md` (skipping `_*` templates); skills use OpenCode's
+ * folder layout `<root>/<name>/SKILL.md`. `glob("*.md")` is case-INSENSITIVE on Windows,
+ * as pathlib's is — `normcase` rather than a bare `endsWith`. The frontmatter is stripped
+ * because it is host plumbing rather than prose, which is what makes a deployed entry the
+ * same shape as a source-rendered one and every consumer indifferent to the origin.
  */
+export function specEntries(root, nested) {
+  const out = [];
+  if (!isDir(root)) return out;
+  let names;
+  try { names = readdirSync(root); } catch { return out; }
+  const files = nested
+    ? names.sort().filter((n) => isDir(path.join(root, n)))
+      .map((n) => path.join(root, n, 'SKILL.md'))
+    : names.filter((n) => normcase(n).endsWith('.md') && !n.startsWith('_')).sort()
+      .map((n) => path.join(root, n));
+  for (const p of files) {
+    if (!isFile(p)) continue;
+    const [fm, body] = frontmatter(readMaybe(p) ?? '');
+    const name = nested ? path.basename(path.dirname(p)) : path.basename(p, '.md');
+    out.push({ name, desc: specDesc(fm, body), body, source: pyResolve(p) });
+  }
+  out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return out;
+}
+
+/**
+ * `_web_core._deployed_inventory` — the agents and skills actually installed at
+ * `state.target`, not a fresh render of `src/`.
+ *
+ * Laws still come from the render: once deployed they live inside AGENT.md rather than as
+ * separate files, so the deployed arm replaces two of the three and not all three. A
+ * deployed spec file carries neither a category nor a lifecycle status, so each is tagged
+ * BY NAME from the same two sources the source render uses — and an entity the registry
+ * does not know reads "personal" for both, which is the honest answer rather than a
+ * borrowed one: filing it under the `build` fallback would claim a Geneseed taxonomy slot
+ * it was never given.
+ */
+export function deployedInventory(state) {
+  const render = tuiInventory(state.theme);
+  const registry = loadRegistry();
+  const skills = specEntries(path.join(state.target, 'skills'), true);
+  for (const e of skills) {
+    e.status = entityStatus(registry, `skills/${e.name}`);
+    e.klass = e.status === 'personal' ? 'personal'
+      : (Object.hasOwn(SKILL_CLASS, e.name) ? SKILL_CLASS[e.name] : 'build');
+  }
+  const agents = specEntries(path.join(state.target, 'agents'), false);
+  for (const e of agents) e.status = entityStatus(registry, `agents/${e.name}`);
+  return { agents, skills, laws: render.laws, theme: state.theme };
+}
+
+/** `WebState.inventory` — the deployed record when there is one, else the source render. */
 export function inventoryFor(state) {
-  const render = inventoryCounts(state.theme);
-  if (!deployed(state)) return render;
-  return {
-    agents: specNames(path.join(state.target, 'agents'), false).length,
-    skills: specNames(path.join(state.target, 'skills'), true).length,
-    laws: render.laws,
-  };
+  return deployed(state) ? deployedInventory(state) : tuiInventory(state.theme);
 }
 
 // ---- the catalog stores overview counts ---------------------------------------------------
@@ -268,15 +324,29 @@ function wikiManifest(state) {
   const cand = process.env.GENESEED_WIKI;
   const p = cand ? pyResolve(cand) : path.join(state.target, 'wiki.jsonc');
   if (!isFile(p)) return [];
-  const cfg = readJsonc(p);
-  const wikis = cfg && typeof cfg === 'object' ? cfg.wikis : null;
+  const cfg = mcpLoad(p);
+  const wikis = cfg.wikis;
   return Array.isArray(wikis) ? wikis : [];
 }
 
-/** `harness._mcp_load` for this one call site — the JSONC dict loader, `{}` on anything else. */
-function readJsonc(p) {
-  const doc = readJsonMaybe(p);
-  return doc && typeof doc === 'object' && !Array.isArray(doc) ? doc : {};
+/**
+ * `harness._mcp_load(path)` with no host — the COMMENT-TOLERANT dict loader, `{}` for a
+ * file that is missing, unreadable, unparseable, or not an object.
+ *
+ * Comment-tolerant is the whole point and the first draft of this got it wrong. The two
+ * files it reads are `wiki.jsonc` and `context.json`, and the first is `.jsonc` because it
+ * is HAND-MAINTAINED: a `//` in it parses on the reference and would have made
+ * `JSON.parse` return null here, so the wiki section would have silently listed nothing
+ * and the config item's `manifest` would have come back empty. The seeded manifests in
+ * `tests/web_golden.py` are plain JSON, so no cell had one — `catalog/…-tolerates-comments`
+ * is the cell that does now.
+ */
+function mcpLoad(p) {
+  if (!isFile(p)) return {};
+  let text;
+  try { text = readText(p); } catch { return {}; }
+  const [data] = readJsonc(text);
+  return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
 }
 
 /** Every `.md` under `dir`, recursively, POSIX-relative to it and sorted — `rglob("*.md")`. */
@@ -327,6 +397,161 @@ export function wikiItems(state) {
     }
   }
   return items;
+}
+
+/** `_web_catalog.api_wiki_item` — one page by `<wiki>:<relpath>`, never outside the vault. */
+export function apiWikiItem(state, name) {
+  const at = name.indexOf(':');
+  const wname = at < 0 ? name : name.slice(0, at);
+  const rel = (at < 0 ? '' : name.slice(at + 1))
+    .replace(/^\/+|\/+$/g, '').replace(/\\/g, '/');
+  for (const w of wikiManifest(state)) {
+    if (!w || typeof w !== 'object' || Array.isArray(w)) continue;
+    if (String(dget(w, 'name', null) || 'wiki') !== wname) continue;
+    const root = pyResolve(String(dget(w, 'path', null) || ''));
+    const p = pyResolve(path.join(root, rel));
+    if (rel && path.extname(p) === '.md' && within(p, root) && isFile(p)) {
+      const body = readMaybe(p) ?? '';
+      return { type: 'wiki', name, title: path.basename(p, '.md'), desc: '',
+        body, links: resolveLinks(state, body), source: p };
+    }
+  }
+  throw new NotFound(name);
+}
+
+/** `harness._within` — containment through `normcase`, segment-wise. */
+function within(child, parent) {
+  const c = normcase(child).split(/[\\/]/);
+  const p = normcase(parent).split(/[\\/]/);
+  return p.length <= c.length && p.every((seg, i) => c[i] === seg);
+}
+
+/**
+ * `_web_catalog._flat_name` — catalog names are flat basenames.
+ *
+ * A separator, a `..` or a drive colon in the URL segment is someone steering the join
+ * outside the catalog dir. A GET carries no token, so before this check the endpoint was
+ * an arbitrary-file read; it raises rather than resolving.
+ */
+function flatName(name) {
+  if (!name || name.includes('/') || name.includes('\\') || name.includes('..')
+      || name.includes(':')) {
+    throw new NotFound(name);
+  }
+}
+
+/** `_web_core.WIKILINK_RE`. */
+const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
+
+/**
+ * `_web_catalog._resolve_links` — `[[name]]` matched against known agent and skill names.
+ *
+ * AGENTS FIRST, SKILLS SECOND, into ONE map — so a name that is both resolves as a SKILL.
+ * That is not a preference, it is what the reference's two loops do in that order, and
+ * `item/an-agent-carries-its-body-and-its-resolved-links` is the cell that would catch the
+ * other order.
+ */
+export function resolveLinks(state, body) {
+  const inv = state.inventory;
+  const known = new Map();
+  for (const e of inv.agents) known.set(e.name, 'agent');
+  for (const e of inv.skills) known.set(e.name, 'skill');
+  const links = [];
+  const seen = new Set();
+  for (const m of body.matchAll(WIKILINK_RE)) {
+    const label = m[1].trim();
+    if (known.has(label) && !seen.has(label)) {
+      seen.add(label);
+      links.push({ label, type: known.get(label), name: label });
+    }
+  }
+  return links;
+}
+
+/**
+ * `_web_catalog._config_manifest` — a setup file parsed into the shape the detail pane
+ * renders as cards, or `null` so the caller falls back to the raw body.
+ */
+function configManifest(name, p) {
+  const cfg = mcpLoad(p);
+  if (name === 'wiki.jsonc') {
+    const wikis = cfg.wikis;
+    return { kind: 'wiki', wikis: Array.isArray(wikis) ? wikis : [] };
+  }
+  if (name === 'context.json') {
+    const ctx = cfg.context;
+    return { kind: 'context', context: Array.isArray(ctx) ? ctx : [] };
+  }
+  return null;
+}
+
+/** `_web_core.SECTIONS` — a closed list; anything else is a 404. */
+export const SECTIONS = ['agents', 'skills', 'laws', 'memory', 'notebook', 'wiki', 'config'];
+
+/** `_web_catalog.api_catalog`. */
+export function apiCatalog(state, section) {
+  if (!SECTIONS.includes(section)) throw new NotFound(section);
+  const inv = state.inventory;
+  let items;
+  if (section === 'agents') {
+    items = inv.agents.map((e) => ({ name: e.name, title: e.name, desc: e.desc,
+      source: e.source ?? null, status: e.status ?? 'unknown' }));
+  } else if (section === 'skills') {
+    items = inv.skills.map((e) => ({ name: e.name, title: e.name, desc: e.desc,
+      source: e.source ?? null, klass: e.klass ?? 'build', status: e.status ?? 'unknown' }));
+  } else if (section === 'laws') {
+    items = inv.laws.map((e) => ({ name: e.num, title: `Rule ${e.num} — ${e.title}`,
+      desc: '', klass: e.klass ?? 'craft' }));
+  } else if (section === 'memory') {
+    items = memoryItems(state);
+  } else if (section === 'notebook') {
+    items = notebookItems(state);
+  } else if (section === 'wiki') {
+    items = wikiItems(state);
+  } else {
+    items = configItems(state);
+  }
+  return { section, items };
+}
+
+/** `_web_catalog.api_item`. */
+export function apiItem(state, type, name) {
+  const inv = state.inventory;
+  if (type === 'agent' || type === 'skill') {
+    const e = (type === 'agent' ? inv.agents : inv.skills).find((x) => x.name === name);
+    if (!e) throw new NotFound(name);
+    const out = { type, name, title: name, desc: e.desc, body: e.body,
+      links: resolveLinks(state, e.body), source: e.source ?? null };
+    if (type === 'skill') out.klass = e.klass ?? 'build';
+    out.status = e.status ?? 'unknown';
+    return out;
+  }
+  if (type === 'law') {
+    const e = inv.laws.find((x) => x.num === name);
+    if (!e) throw new NotFound(name);
+    return { type, name, title: `Rule ${e.num} — ${e.title}`, desc: '', body: e.body,
+      links: [], klass: e.klass ?? 'craft' };
+  }
+  if (type === 'memory' || type === 'notebook') {
+    flatName(name);
+    const d = type === 'notebook' ? notebookDir(state) : memoryDir(state);
+    const p = path.join(d, `${name}.md`);
+    if (!isFile(p)) throw new NotFound(name);
+    const body = readMaybe(p) ?? '';
+    return { type, name, title: name, desc: '', body,
+      links: resolveLinks(state, body), source: pyResolve(p) };
+  }
+  if (type === 'wiki') return apiWikiItem(state, name);
+  if (type === 'config') {
+    flatName(name);
+    const p = path.join(state.target, name);
+    if (!isFile(p)) throw new NotFound(name);
+    const raw = readMaybe(p) ?? '';
+    const [title, desc] = CONFIG_META[name] ?? [name, ''];
+    return { type, name, title, desc, manifest: configManifest(name, p),
+      body: `\`\`\`json\n${raw}\n\`\`\``, links: [], source: pyResolve(p) };
+  }
+  throw new NotFound(type);
 }
 
 // ---- the eight endpoints -------------------------------------------------------------
@@ -464,9 +689,9 @@ export function apiOverview(state) {
     target: state.target,
     deployed: deployed(state),
     counts: {
-      agents: inv.agents,
-      skills: inv.skills,
-      laws: inv.laws,
+      agents: inv.agents.length,
+      skills: inv.skills.length,
+      laws: inv.laws.length,
       memory: memoryItems(state).length,
       notebook: notebookItems(state).length,
       wiki: wikiItems(state).length,
@@ -487,6 +712,39 @@ export function apiOverview(state) {
  * plus `NOT_PORTED` to equal it. On the second instance of anything, the gate becomes a
  * table cross-checked against the source of truth.
  */
+/**
+ * `_web_server.do_GET`'s prefix routes, the ported ones — path in, response out.
+ *
+ * `pyUnquote` and not `decodeURIComponent`: the JS builtin throws a `URIError` on a `%`
+ * that is not an escape, which the shell would answer as a 500 where the reference answers
+ * a 404 naming the literal text.
+ */
+export const PREFIX_ROUTES = [
+  ['/api/catalog/', (state, p) => apiCatalog(state, p.split('/').pop())],
+  // `path.split("/", 4)` — /api/item/<type>/<name>, and the NAME keeps its slashes so a
+  // wiki page's relpath survives. A missing name is a 404 here rather than an IndexError
+  // and a 500 two frames down.
+  ['/api/item/', (state, p) => {
+    const parts = splitN(p, '/', 4);
+    if (parts.length < 5 || !parts[4]) throw new NotFound(p);
+    return apiItem(state, parts[3], pyUnquote(parts[4]));
+  }],
+];
+
+/** `str.split(sep, maxsplit)` — at most `n` splits, the remainder kept whole. */
+function splitN(s, sep, n) {
+  const out = [];
+  let rest = s;
+  for (let i = 0; i < n; i += 1) {
+    const at = rest.indexOf(sep);
+    if (at < 0) break;
+    out.push(rest.slice(0, at));
+    rest = rest.slice(at + sep.length);
+  }
+  out.push(rest);
+  return out;
+}
+
 export const STATE_ROUTES = {
   '/api/overview': apiOverview,
   '/api/themes': apiThemes,

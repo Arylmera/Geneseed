@@ -667,3 +667,56 @@ export function pyPathStr(s) {
   if (!root) return tail || '.';
   return root + tail;
 }
+
+/**
+ * `urllib.parse.unquote(s)` — percent-decoding as Python does it, which is NOT
+ * `decodeURIComponent`.
+ *
+ * The whole difference is what happens to a sequence that is not an escape.
+ * `decodeURIComponent('a%ZZ')` throws a `URIError`, and so does a trailing bare `%`; the
+ * web shell would answer both as a 500 where the reference answers a 404 naming the
+ * literal text. `unquote` leaves them alone: CPython builds a table of every two-hex-digit
+ * pair in both cases and treats a `KeyError` as "this was not an escape", emitting `%` and
+ * the rest of the fragment verbatim.
+ *
+ * The outer split on `([\x00-\x7f]+)` is Python's too, and it is not decoration: only the
+ * ASCII runs are candidates for decoding, so a literal non-ASCII character already in the
+ * path is passed through rather than mixed into the byte buffer. Consecutive escapes ARE
+ * accumulated before decoding, which is what makes `%C3%A9` one `é` and not two
+ * replacement characters.
+ *
+ * `Buffer.toString('utf-8')` substitutes U+FFFD for an undecodable sequence, which is
+ * `errors='replace'`. The two decoders can disagree on HOW MANY replacement characters a
+ * truncated multi-byte sequence yields — Python's maximal-subpart rule against WHATWG's —
+ * and the corpus in `tests/test_pure_function_parity.py` is where that is measured rather
+ * than assumed.
+ */
+const HEX_PAIR = /^[0-9A-Fa-f]{2}$/;
+
+function unquoteToBytes(run) {
+  const bits = run.split('%');
+  if (bits.length === 1) return Buffer.from(run, 'latin1');
+  const out = [Buffer.from(bits[0], 'latin1')];
+  for (const item of bits.slice(1)) {
+    const pair = item.slice(0, 2);
+    if (HEX_PAIR.test(pair)) {
+      out.push(Buffer.from([parseInt(pair, 16)]), Buffer.from(item.slice(2), 'latin1'));
+    } else {
+      out.push(Buffer.from(`%${item}`, 'latin1'));
+    }
+  }
+  return Buffer.concat(out);
+}
+
+export function pyUnquote(s) {
+  if (!s.includes('%')) return s;
+  // `re.split` with ONE capture group alternates [gap, group, gap, group, …], so the ASCII
+  // runs are the odd indices on both sides.
+  const bits = s.split(/([\x00-\x7f]+)/);
+  let res = bits[0];
+  for (let i = 1; i < bits.length; i += 2) {
+    res += unquoteToBytes(bits[i]).toString('utf-8');
+    res += bits[i + 1] ?? '';
+  }
+  return res;
+}

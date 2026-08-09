@@ -40,7 +40,7 @@ import { gzipSync } from 'node:zlib';
 
 import { GLOBAL_MANIFEST, pyResolve } from '../hosts.mjs';
 import { jsonDumpsCompact, pyInt, pyPrint, writeText } from '../lib/pyfs.mjs';
-import { STATE_ROUTES, webState } from './api.mjs';
+import { NotFound, PREFIX_ROUTES, STATE_ROUTES, webState } from './api.mjs';
 
 export { webState };
 
@@ -96,8 +96,7 @@ const CTYPES = {
 export const NOT_PORTED = new Set([
   '/api/activity', '/api/graph', '/api/mcp', '/api/rules', '/api/docs', '/api/jobs',
 ]);
-export const NOT_PORTED_PREFIXES = ['/api/activity/', '/api/catalog/', '/api/item/',
-  '/api/docs/page/', '/api/jobs/'];
+export const NOT_PORTED_PREFIXES = ['/api/activity/', '/api/docs/page/', '/api/jobs/'];
 
 /** Every POST route but `/api/shutdown`, which is the shell's own. P6f-P6g empty this. */
 export const NOT_PORTED_POST = new Set([
@@ -176,6 +175,9 @@ export function makeHandler(state, token, dist, holder = null) {
     const route = STATE_ROUTES[path];
     if (route !== undefined) return sendJson(res, route(state), 200, ae);
     if (path === '/api/ping') return sendJson(res, { ok: true, theme: state.theme }, 200, ae);
+    for (const [prefix, handler] of PREFIX_ROUTES) {
+      if (path.startsWith(prefix)) return sendJson(res, handler(state, path), 200, ae);
+    }
     if (notPorted(path)) {
       return sendJson(res, { error: `not ported yet: ${path}` }, 501, ae);
     }
@@ -216,7 +218,18 @@ export function makeHandler(state, token, dist, holder = null) {
         if (!localHost(req.headers.host)) {
           return sendJson(res, { error: 'forbidden host' }, 403, ae);
         }
-        return doGet(req, res, path, ae);
+        try {
+          return doGet(req, res, path, ae);
+        } catch (e) {
+          // The `NotFound` → 404 convention, which P6c is the first phase to raise. It
+          // wraps the ROUTE DISPATCH and not each handler, exactly as the reference's
+          // `try` around `do_GET`'s body does — an endpoint several frames down raises and
+          // the shell decides the status. Anything else is still the outer 500.
+          if (e instanceof NotFound) {
+            return sendJson(res, { error: `not found: ${e.message}` }, 404, ae);
+          }
+          throw e;
+        }
       }
       if (req.method === 'POST') {
         // Drain the body BEFORE routing, as the reference does and for its stated

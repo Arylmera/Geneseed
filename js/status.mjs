@@ -50,8 +50,8 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
-import { THEMES, ROOT, SRC, makeCfg } from './checkout.mjs';
-import { renderAll } from './render.mjs';
+import { THEMES, ROOT, makeCfg } from './checkout.mjs';
+import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from './emit.mjs';
 import {
   claudeConfigDir, bobConfigDir, copilotConfigDir, opencodeConfigDir, pyResolve,
@@ -106,36 +106,21 @@ export function cmdVersion(args) {
 
 // ---- what the panel counts ---------------------------------------------------------------
 
-/** `_harness_tui.LAW_HEADING_RE`. */
-const LAW_HEADING_RE = /^###\s+\S+\s+([IVXLCDM]+)\s+[—-]\s+(.+?)\s*$/;
-
 /**
  * `_harness_tui._tui_inventory`, reduced to the three counts `_status_data` reads off it.
  *
- * NOT the full inventory: the bodies, purposes, source paths, lifecycle badges and skill/law
- * classes are P7's, and porting them here would be porting the TUI's taxonomy tables to
- * produce three integers. The classification itself is the Python's, unchanged — a two-part
- * relative path ending in `.md` and not starting with `_`, under `agents/` or `skills/`.
+ * THREE `length`s OFF THE REAL WALK SINCE P6c, and the change is the point. P5d shipped a
+ * counting-only twin — the bodies, purposes, source paths and taxonomy classes were P7's,
+ * and porting them to produce three integers would have been absurd — with a docblock
+ * warning that the two must not become two classifiers. `api_catalog` consumes exactly the
+ * fields the count threw away, so P6c is the phase that would have made them two. It did
+ * not: `tuiInventory` in `js/inventory.mjs` is the one walk, this is three `length`s off
+ * it, and the eleven `status` cells and the catalog cells now gate the same classifier
+ * from opposite ends.
  */
 export function inventoryCounts(themeName) {
-  const { items } = renderAll(makeCfg(), themeName);
-  let agents = 0;
-  let skills = 0;
-  let laws = 0;
-  for (const { text, src } of items) {
-    if (text === null) continue;
-    const parts = path.relative(SRC, src).split(path.sep);
-    if (parts.length === 2 && parts[1].endsWith('.md') && !parts[1].startsWith('_')) {
-      if (parts[0] === 'agents') agents += 1;
-      else if (parts[0] === 'skills') skills += 1;
-    }
-    if (parts[parts.length - 1] === 'universal.md') {
-      // `_parse_laws` splits on the heading and keeps every entry; the count is the number
-      // of headings, and a file with none yields none.
-      laws = text.split('\n').filter((line) => LAW_HEADING_RE.test(line)).length;
-    }
-  }
-  return { agents, skills, laws };
+  const inv = tuiInventory(themeName);
+  return { agents: inv.agents.length, skills: inv.skills.length, laws: inv.laws.length };
 }
 
 /**
