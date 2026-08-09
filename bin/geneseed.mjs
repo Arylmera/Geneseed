@@ -867,9 +867,14 @@ export function main(argv) {
  * caller typed and `import.meta.url` is always the resolved file — an `npx`-generated shim
  * or a `geneseed link` symlink makes those differ as strings while naming the same file.
  *
- * BOTH ways of getting this wrong are gated, which is why it is a guard and not a comment:
- * stuck FALSE makes `node bin/geneseed.mjs` a silent no-op and fails all 259 golden cells;
- * stuck TRUE makes the driver run on the CLI's argv and fails the three `build/*` cells.
+ * BOTH ways of getting this wrong are gated, which is why it is a guard and not a comment,
+ * and both were measured rather than argued:
+ *
+ *   * stuck FALSE — `node bin/geneseed.mjs` becomes a silent no-op: 259 golden cells.
+ *   * stuck TRUE — importing this file runs the generator on the IMPORTER's argv, so it is
+ *     not only `build` that breaks. `bin/geneseed-cli.mjs` reaches `js/generate.mjs` at
+ *     module load, so every CLI verb dies in the driver's flag parser: **62 of the 166
+ *     acceptance cells**, `exclude` and `status` and `version` among them.
  */
 const entry = (() => {
   if (!process.argv[1]) return false;

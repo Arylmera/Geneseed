@@ -240,9 +240,16 @@ export function loadUserPalette(args, cfg) {
 /**
  * `_harness_build.cmd_theme` — a user colour theme in both flavours, into the live dir.
  *
- * ORDER IS OBSERVABLE: the palette is validated BEFORE the destination is resolved and
- * before `mkdir`, so a refusal leaves no directory behind. `theme/an-explicit-dir-is-created`
- * is the positive control that the mkdir happens at all.
+ * The palette is validated BEFORE the destination is resolved and before `mkdir`, so a
+ * refusal leaves no directory behind — matching the Python's statement order.
+ *
+ * **THAT ORDER IS NOT OBSERVABLE, and the first draft of this comment claimed it was.**
+ * Swapping the two halves so a refusal creates the directory first is GREEN across all 166
+ * cells (M16), because `golden._snapshot` walks FILES and an empty directory leaves no file
+ * to compare. So the order is preserved because the reference has it, not because anything
+ * checks — INDISTINGUISHABLE rather than unreachable, and closing it would mean a sixth
+ * expectation kind (`expect_absent_files`) for one empty directory.
+ * `theme/an-explicit-dir-is-created` is the positive control that the `mkdir` happens at all.
  */
 export function cmdTheme(args) {
   const name = args.name;
