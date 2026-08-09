@@ -182,7 +182,72 @@ def _cases() -> list[dict]:
         cases.append({"fn": "py_is_absolute", "args": [s]})
     for instr in _AGENT_ENTRY_CORPUS:
         cases.append({"fn": "install_agent_entry_of", "args": [instr]})
+    for s in _PY_INT_CORPUS:
+        cases.append({"fn": "py_int", "args": [s]})
+    for s in _JAVA_BANNER_CORPUS:
+        cases.append({"fn": "java_major_ok", "args": [s]})
+    # The three option tables. Their INPUT is the checkout — `themes/*.json`,
+    # `src/postures/`, `src/modes/` — which is the tree no fixture can redirect (P5d), so
+    # they are read once and compared rather than driven over a corpus. That still catches
+    # every blurb, the neutral-first sort and the discovery order.
+    cases.append({"fn": "theme_options", "args": []})
+    cases.append({"fn": "posture_options", "args": []})
+    cases.append({"fn": "mode_options", "args": []})
     return cases
+
+
+# --------------------------------------------------------------------------------------
+# P5i — the wizard's pure halves
+# --------------------------------------------------------------------------------------
+
+#: `int(s)` against `Number(s)`, and every case here changes a wizard answer.
+#:
+#: `askChoice` branches three ways — an in-range index, a parsed out-of-range one, and an
+#: unparseable answer that is then matched against the option KEYS — and only `pyInt` tells
+#: the second from the third. `Number('')` is 0, `Number('0x2')` is 2 in hex, `Number('1_0')`
+#: is NaN and `Number('٣')` is NaN; `int` disagrees with all four.
+#:
+#: NOTHING HERE IS PADDED, and that is the corpus stating a contract rather than dodging a
+#: divergence: `int(' 1')` is 1 and `pyInt` does not strip, because both call sites run
+#: `str.strip()` before the value reaches it. A padded case would be testing `_ask`, which
+#: the wizard job drives for real.
+_PY_INT_CORPUS = (
+    "1", "5", "9", "10", "99", "0", "-1", "+3", "007",
+    "", "-", "+", "_", "1_0", "1_000", "_1", "1_", "1__0",
+    "1.0", "1e3", "0x2", "0b1", "1x", "x1", "neutral", "opencode-global",
+    # Unicode decimals. `int` takes any `Nd`; `Number` takes none of them, and JS's `\\d`
+    # would not have matched them either.
+    "٣", "٥٠", "٠٣", "۲", "１",
+    # `Nd` MIXED with an ASCII digit is accepted and is 13 — the scripts do not have to
+    # agree, only the category. A Roman numeral one is `Nl`, not `Nd`, and is refused.
+    "1٣", "Ⅰ",
+    # Past a 32-bit index, to say the parse is not `parseInt`'s. Deliberately inside 2^53:
+    # Python's int is arbitrary precision and a JS Number is not, and that divergence starts
+    # at 9007199254740993 — a menu index the wizard could not reach in any universe, and a
+    # case whose only content would be the limit of the return TYPE.
+    "2147483648",
+)
+
+#: `java -version` banners. The legacy `1.8.0` shape is the whole reason the function exists:
+#: it names major 1, which is never >= 21, where a naive "first number after the dot" reading
+#: makes it 8. The last two are the `re.search` failing rather than the comparison.
+_JAVA_BANNER_CORPUS = (
+    'openjdk version "21.0.2" 2024-01-16\nOpenJDK Runtime Environment\n',
+    'openjdk version "17.0.9" 2023-10-17\n',
+    'java version "1.8.0_401"\n',
+    'openjdk version "25-ea" 2025-09-16\n',
+    'openjdk version "21"\n',
+    'openjdk version "20.9.9"\n',
+    "",
+    "java is not recognized as an internal or external command\n",
+    'version "x"\n',
+    'VERSION "21"\n',
+    # `\\d` is Unicode-aware in Python and ASCII-only in JS without the flag, so a banner
+    # spelled in Arabic-Indic digits matches on one side and not the other unless the port
+    # says `\\p{Nd}`. No JVM prints this; matching Python where it costs nothing is cheaper
+    # than a comment explaining where it does not.
+    'openjdk version "٢١.0.2"\n',
+)
 
 
 # --------------------------------------------------------------------------------------
@@ -580,6 +645,297 @@ def _run(cmd: list[str], cases: list[dict], ascii_mode: bool) -> list:
             raise AssertionError(f"{cmd[0]} probe failed ({proc.returncode}):\n"
                                  f"{proc.stderr.decode('utf-8', 'replace')}")
         return json.loads(proc.stdout.decode("utf-8"))["results"]
+
+
+# --------------------------------------------------------------------------------------
+# P5i — the wizard, driven over a SEEDED FD
+# --------------------------------------------------------------------------------------
+#
+# `setup` refuses when `sys.stdin.isatty()` is false, so the acceptance matrix reaches the
+# refusal and nothing else. Everything the verb actually DOES is behind that gate, and most
+# of it reads stdin — which is why this corpus is a different shape from every other one in
+# this file:
+#
+#   * The probes are run with stdin REDIRECTED FROM A FILE, not with a string handed to a
+#     pure function. `ask` reads fd 0 a byte at a time and `input()` reads a line; neither
+#     can be exercised by passing an argument, and a corpus that faked the read would be
+#     gating a fake.
+#   * Their WHOLE STDOUT is compared, byte for byte, rather than parsed. The prompts, the
+#     numbered menus, the `(default)` marker, the `About to run:` plan and the returned
+#     selection are one string, so a port that got the menu right and the plan wrong fails
+#     here. It also puts the newline translation under the gate: `print()` writes CRLF on
+#     Windows and `process.stdout.write` writes LF, and every earlier probe comparison went
+#     through `json.loads`, which cannot see the difference — the transport-normalises hole
+#     P5b measured, closed for this one job.
+#
+# A SEEDED HOME, because `collect_setup_lines` calls `_installed_defaults`, which reads the
+# host config dirs. `golden.cell_env` is the same redirection every cell runs under, and the
+# seeded install is what makes the pre-selected defaults deterministic instead of whatever
+# this machine happens to have installed.
+#
+# WHAT IT STILL DOES NOT REACH, stated rather than left implicit: `_setup_lines` itself. It
+# spawns the generator and then the doctor, and both write real trees — the corpus stops at
+# `_collect_setup_lines`, which is the whole of the wizard's own behaviour, and the two
+# things past it (`setupBuildArgs`, `cmdDoctor`) are separately gated by their own corpus
+# entry and their own 219-cell verb.
+
+#: The install `installedDefaults` finds first — the OpenCode config dir under the seeded
+#: HOME. All five markers, so all five pickers pre-select a DEPLOYED value rather than a
+#: configured one, which is the debt P5i paid in `js/installs.mjs`.
+_WIZARD_INSTALL = {
+    # The manifest is what `_setup_summary_lines`' "a global install exists at" row keys on,
+    # and it is the ONE row in that function with behaviour rather than text in it — without
+    # this file the bundle and project cases are three identical shapes.
+    ".config/opencode/.geneseed-manifest.json": '{"owned": []}',
+    ".config/opencode/.geneseed-emit": "claude-global\n",
+    ".config/opencode/.geneseed-theme": "pirate\n",
+    ".config/opencode/.geneseed-footprint": "full\n",
+    ".config/opencode/AGENT.md": "# deployed\n\n**Artisan** — the posture lead\n\n"
+                                 "**Foreman** — the mode lead\n",
+}
+
+
+def _wizard_jobs() -> list[tuple[str, list[dict], str]]:
+    """(name, cases, stdin) — each one its own probe process, because stdin is consumed."""
+    opts = [["alpha", "the first"], ["beta", ""], ["gamma", "the third"]]
+    return [
+        # ---- the readers, alone, so a failure names the reader and not the wizard.
+        ("ask", [{"fn": "ask", "args": ["Name", "dflt"]},
+                 {"fn": "ask", "args": ["Bare", ""]},
+                 {"fn": "ask", "args": ["Spaces", "d"]},
+                 # ...and then EOF, twice: the branch a piped caller always takes. Python
+                 # raises EOFError and returns the default; the byte reader gets a 0.
+                 {"fn": "ask", "args": ["AtEof", "fallback"]},
+                 {"fn": "ask", "args": ["AtEofAgain", ""]}],
+         # The THIRD line is CRLF-terminated — what a Windows console sends. `input()` drops
+         # the `\r` through universal-newline decoding and the byte reader drops it
+         # explicitly, and the case is here to say the two agree. It is NOT the gate for that
+         # branch and the comment says so rather than implying it: `_ask` runs `.trim()`
+         # afterwards, which eats a stray `\r` either way, so the drop in `readLine` is a
+         # faithful mirror of the transport and is INDISTINGUISHABLE from omitting it. The
+         # measurement is recorded in the loop rather than dressed up as coverage.
+         "typed\n\n   padded   \r\n"),
+        # A last line with NO trailing newline is not EOF to either implementation — both
+        # return the characters — and the read AFTER it is.
+        ("ask-unterminated", [{"fn": "ask", "args": ["Last", "d"]},
+                              {"fn": "ask", "args": ["Then", "d"]}],
+         "no-newline"),
+        ("confirm", [{"fn": "confirm", "args": ["Yes default", True]},
+                     {"fn": "confirm", "args": ["No default", False]},
+                     {"fn": "confirm", "args": ["Yes default", True]},
+                     {"fn": "confirm", "args": ["No default", False]},
+                     {"fn": "confirm", "args": ["Yes default", True]},
+                     # `ans[0] == "y"` — only the FIRST character is read, so `yes` and
+                     # `yellow` are both yes and `nope` is no.
+                     {"fn": "confirm", "args": ["First char only", True]},
+                     {"fn": "confirm", "args": ["At eof", True]}],
+         "y\ny\nn\nn\nYES\nyellow\n"),
+        # ---- the menu, and its three fallback arms in order.
+        ("ask-choice", [
+            {"fn": "ask_choice", "args": ["Pick", opts, "beta"]},   # an in-range index
+            {"fn": "ask_choice", "args": ["Pick", opts, "beta"]},   # empty -> the default
+            {"fn": "ask_choice", "args": ["Pick", opts, "beta"]},   # out of range -> default
+            {"fn": "ask_choice", "args": ["Pick", opts, "beta"]},   # a KEY, not an index
+            {"fn": "ask_choice", "args": ["Pick", opts, "beta"]},   # an unknown key
+            # An answer that PARSES never reaches the key match, so a menu whose keys are
+            # numbers cannot be chosen by name. `0` is parseable and out of range.
+            {"fn": "ask_choice", "args": ["Pick", opts, "alpha"]},
+            # A Unicode decimal index — `int` takes it and `Number` does not.
+            {"fn": "ask_choice", "args": ["Pick", opts, "gamma"]},
+            {"fn": "ask_choice", "args": ["Pick", opts, "alpha"]},  # EOF -> the default
+        ], "3\n\n9\ngamma\nnosuch\n0\n٢\n"),
+        # ---- and the wizard itself, four ways through it.
+        ("wizard-defaults", [{"fn": "collect_setup_lines", "args": []}],
+         "\n\n\n\n\n\n"),
+        ("wizard-declined", [{"fn": "collect_setup_lines", "args": []}],
+         "\n\n\n\n\nn\n"),
+        # A PROJECT emit, which is the arm that asks a sixth question — and `out` and `root`
+        # are both set from the one answer.
+        ("wizard-project", [{"fn": "collect_setup_lines", "args": []}],
+         "1\n1\n1\n3\n1\n/tmp/somerepo\ny\n"),
+        # `files`, the other arm: one answer, `out` only, `root` left null.
+        ("wizard-files", [{"fn": "collect_setup_lines", "args": []}],
+         "neutral\nexpert\nforeman\n9\nfull\n\ny\n"),
+        # EOF before the first question. Every `_ask` returns its default, which is the
+        # PRE-SELECTED one — so this is the case that fails if `installedDefaults` stopped
+        # answering posture, mode or footprint.
+        ("wizard-eof", [{"fn": "collect_setup_lines", "args": []}], ""),
+    ]
+
+
+def _summary_cases(home: Path) -> list[dict]:
+    """`_setup_summary_lines`, over the five shapes its rows can take.
+
+    Not a wizard job — it reads no stdin — but it runs in the same seeded HOME, because
+    three of its rows name the OpenCode config dir and one branches on a manifest being
+    there. `lspPrereqs` really does run `java -version`; the answer is whatever this machine
+    gives, and both probes get the same one.
+    """
+    return [{"fn": "setup_summary_lines", "args": a} for a in (
+        # opencode-global with the AGENT.md present: the ok row, the platform hint, the LSP
+        # rows, the closing theme line.
+        ["pirate", "opencode-global", None, None, True],
+        # ...and with `ok` false, which is the only row that can say "build failed".
+        ["pirate", "opencode-global", None, None, False],
+        # A bundle: `resolveOut` against the probe's cwd, the "point your tool" row, AND the
+        # global-install warning — the row with real behaviour in it.
+        ["neutral", "files", "some/bundle", None, True],
+        # A project emit, which gets neither the hint nor the warning's absence: no LSP rows
+        # (not an `opencode` prefix), and the global warning still fires.
+        ["imperial", "claude", "repo", "repo", True],
+        # An `opencode` PROJECT emit — the prefix match, so the LSP rows come back.
+        ["cyberpunk", "opencode", "repo", "repo", True],
+        # `out` unset on a non-global emit falls back to the literal "Harness".
+        ["neutral", "bob", None, None, True],
+    )] + [{"fn": "installed_defaults", "args": []}]
+
+
+def _seed(home: Path, world: dict) -> None:
+    for rel, text in world.items():
+        p = home / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+
+
+def _run_seeded(cmd: list[str], cases: list[dict], home: Path, stdin: bytes) -> bytes:
+    """One probe process, stdin from a seeded FILE, WHOLE stdout returned as bytes.
+
+    A file rather than `input=`: the point is that fd 0 is a real readable descriptor the
+    reader can walk a byte at a time, which is what a terminal gives it. Nothing is decoded
+    on the way back, because the newline translation is part of what is being compared.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        job = Path(td) / "job.json"
+        job.write_text(json.dumps({"cases": cases}), encoding="utf-8")
+        answers = Path(td) / "answers.txt"
+        answers.write_bytes(stdin)
+        env = golden.cell_env(home)
+        with answers.open("rb") as fh:
+            proc = subprocess.run(cmd + [str(job)], stdin=fh, capture_output=True,
+                                  env=env, cwd=str(ROOT))
+        if proc.returncode != 0:
+            raise AssertionError(f"{cmd[0]} probe failed ({proc.returncode}):\n"
+                                 f"{proc.stderr.decode('utf-8', 'replace')}")
+        return proc.stdout
+
+
+@unittest.skipIf(shutil.which("node") is None, "node is not on PATH")
+class TheWizardAgreesOnEveryAnswerNoCellCanGive(unittest.TestCase):
+    """`setup`'s body, gated over a seeded fd — see the section header for why."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.home = Path(cls._tmp.name) / "home"
+        _seed(cls.home, _WIZARD_INSTALL)
+        cls.runs = {}
+        for name, cases, stdin in _wizard_jobs():
+            cls.runs[name] = (
+                _run_seeded([sys.executable, str(PY_PROBE)], cases, cls.home,
+                            stdin.encode("utf-8")),
+                _run_seeded(["node", str(JS_PROBE)], cases, cls.home,
+                            stdin.encode("utf-8")),
+            )
+        summary = _summary_cases(cls.home)
+        cls.runs["summary"] = (
+            _run_seeded([sys.executable, str(PY_PROBE)], summary, cls.home, b""),
+            _run_seeded(["node", str(JS_PROBE)], summary, cls.home, b""),
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_every_job_produces_the_same_bytes(self):
+        for name, (ref, new) in self.runs.items():
+            with self.subTest(job=name):
+                self.assertEqual(ref.decode("utf-8"), new.decode("utf-8"))
+                self.assertEqual(ref, new, "the two agree after decoding and not as BYTES, "
+                                           "so the difference is the newline translation")
+
+    def test_the_wizard_job_really_walks_the_wizard(self):
+        """The positive control, and this corpus needs one more than most: every assertion
+        above is an equality between two probes, and two probes that both printed nothing
+        and returned null would satisfy all of them.
+
+        It names the parts a silent port could not have produced — a menu line, the
+        `(default)` marker on the PRE-SELECTED deployed value, the plan, and the selection
+        itself — and it asserts the DEPLOYED defaults specifically, because those are what
+        `installedDefaults`' three new keys feed."""
+        out = self.runs["wizard-eof"][0].decode("utf-8")
+        self.assertIn("Geneseed setup — answer a few questions", out)
+        self.assertIn("1) neutral — plain professional voice", out)
+        # The seeded install's five markers, each pre-selected. Theme and footprint come off
+        # marker FILES, posture and mode are content-detected out of the carrier, and the
+        # emit marker says `claude-global` while the install sits in the OpenCode config dir
+        # — so a port that inferred the emit from the DIRECTORY answers `opencode-global`.
+        self.assertIn("pirate — high-seas crew   (default)", out)
+        self.assertIn("artisan — peer with toolsmith reflexes — terminal-first   (default)",
+                      out)
+        self.assertIn("foreman — triages tasks, spawns pipelines for substantial work   "
+                      "(default)", out)
+        self.assertIn("claude-global — Claude Code global config dir", out)
+        self.assertIn("full — Full — every law's complete text inlined", out)
+        self.assertIn("About to run:  python build.py --theme pirate --emit claude-global "
+                      "--footprint full --posture artisan --mode foreman", out)
+        self.assertIn('{"theme":"pirate","posture":"artisan","mode":"foreman",'
+                      '"emit":"claude-global"', out)
+        # And the two probes agree on all of it, which is the equality above restated at the
+        # one place a reader of this test can check by eye.
+        self.assertEqual(self.runs["wizard-eof"][1].decode("utf-8"), out)
+
+    def test_the_declined_wizard_returns_null_and_the_confirmed_one_does_not(self):
+        """`_collect_setup_lines` returns None when the confirm is declined, and that is the
+        difference between `[setup] cancelled` and a build. Two jobs differing in one
+        character of stdin — the `n` — must differ in exactly that."""
+        declined = self.runs["wizard-declined"][0].decode("utf-8")
+        accepted = self.runs["wizard-defaults"][0].decode("utf-8")
+        self.assertTrue(declined.endswith('{"results":[null]}'), declined[-60:])
+        self.assertFalse(accepted.endswith('{"results":[null]}'))
+        self.assertIn('"footprint":"full"}]}', accepted)
+
+    def test_the_choice_corpus_reaches_all_three_fallback_arms(self):
+        """The measurement behind `pyInt`, in both directions.
+
+        A menu answered only with digits and blanks never separates "parsed and out of
+        range" from "unparseable", and the key-match arm is unreachable when every answer
+        parses. This asserts that the corpus actually produced one of each — otherwise a
+        port that dropped the `int` entirely and matched keys first would be green."""
+        out = self.runs["ask-choice"][0].decode("utf-8")
+        tail = out[out.rindex('{"results"'):]
+        chosen = json.loads(tail)["results"]
+        self.assertEqual(chosen, [
+            "gamma",   # `3` — an in-range index
+            "beta",    # empty — the default
+            "beta",    # `9` — parsed, out of range
+            "gamma",   # `gamma` — unparseable, matched as a key
+            "beta",    # `nosuch` — unparseable, no key
+            "alpha",   # `0` — parsed, out of range, so the keys are NEVER consulted
+            "beta",    # `٢` — a Unicode decimal is an index to `int`
+            "alpha",   # EOF — the default
+        ])
+
+    def test_the_summary_job_produces_rows_and_not_an_empty_list(self):
+        """The positive control for `setup_summary_lines`, and for the three keys P5i added
+        to `installedDefaults` — the last case in that job is the detector itself."""
+        out = self.runs["summary"][0].decode("utf-8")
+        results = json.loads(out[out.rindex('{"results"'):])["results"]
+        self.assertEqual(len(results), 7)
+        self.assertEqual(results[0][0], ["ok", results[0][0][1]])
+        self.assertIn("AGENT.md written to", results[0][0][1])
+        self.assertEqual(results[1][0][0], "warn")
+        self.assertIn("build failed", results[1][0][1])
+        self.assertTrue(any(r[0] == "warn" and "a global install exists at" in r[1]
+                            for r in results[2]),
+                        "the bundle case did not reach the global-install warning, so that "
+                        "branch is not covered")
+        self.assertTrue(any("Java 21+ (jdtls)" in r[1] for r in results[4]),
+                        "the opencode PROJECT emit did not reach the LSP rows")
+        self.assertFalse(any("Java 21+ (jdtls)" in r[1] for r in results[3]),
+                         "a claude emit reached the LSP rows, which are opencode-only")
+        self.assertEqual(results[6], {"theme": "pirate", "posture": "artisan",
+                                      "mode": "foreman", "emit": "claude-global",
+                                      "footprint": "full"})
 
 
 @unittest.skipIf(shutil.which("node") is None, "node is not on PATH")

@@ -64,6 +64,36 @@ def run(fn: str, args: list):
         return shutil.which(args[0], path=args[1])
     if fn == "py_is_absolute":
         return Path(args[0]).is_absolute()
+    if fn == "py_int":
+        # `int(s)`, or None where it raises. The corpus never pads: `int` strips whitespace
+        # and `pyInt` deliberately does not, because both of its callers have already run
+        # `str.strip()` — see its docblock.
+        try:
+            return int(args[0])
+        except ValueError:
+            return None
+    if fn == "java_major_ok":
+        return harness._java_major_ok(*args)
+    if fn == "theme_options":
+        return harness._theme_options()
+    if fn == "posture_options":
+        return harness._posture_options()
+    if fn == "mode_options":
+        return harness._mode_options()
+    if fn == "installed_defaults":
+        return harness._installed_defaults()
+    if fn == "setup_summary_lines":
+        return harness._setup_summary_lines(*args)
+    # ---- the stdin readers. Their PROMPTS are stdout, which is why the wizard job is
+    # compared as raw bytes rather than through `json.loads` — see the test's docstring.
+    if fn == "ask":
+        return harness._ask(*args)
+    if fn == "confirm":
+        return harness._confirm(*args)
+    if fn == "ask_choice":
+        return harness._ask_choice(args[0], [tuple(o) for o in args[1]], args[2])
+    if fn == "collect_setup_lines":
+        return harness._collect_setup_lines()
     if fn == "install_agent_entry_of":
         # `_install_agent_entry`'s project arm, minus the file read: the whole decision is
         # which `instructions` entry it picks, and the list is the input.
@@ -77,7 +107,16 @@ def run(fn: str, args: list):
 def main() -> int:
     job = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     out = [run(c["fn"], c["args"]) for c in job["cases"]]
-    sys.stdout.buffer.write(json.dumps({"results": out}).encode("utf-8"))
+    # FLUSH BEFORE DROPPING TO `.buffer`. The wizard cases print through `sys.stdout`, whose
+    # TextIOWrapper buffers when stdout is a pipe; writing to the underlying binary buffer
+    # without flushing first puts the results document AHEAD of the prompts that produced it.
+    sys.stdout.flush()
+    # `separators` + `ensure_ascii=False` so this document is BYTE-identical to the Node
+    # probe's `JSON.stringify` — P5i's wizard job compares the probes' whole stdout rather
+    # than parsing it, which put the serialiser itself under the gate. `json.loads` on the
+    # reading side is indifferent to both.
+    sys.stdout.buffer.write(json.dumps({"results": out}, separators=(",", ":"),
+                                       ensure_ascii=False).encode("utf-8"))
     return 0
 
 

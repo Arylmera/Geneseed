@@ -179,7 +179,7 @@ def cells() -> list[dict]:
             + _exclude_cells() + _status_cells() + _version_cells()
             + _build_cells() + _prompt_cells() + _theme_cells()
             + _diff_cells() + _rebuild_all_cells() + _doctor_cells()
-            + _uninstall_cells())
+            + _uninstall_cells() + _setup_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -2539,6 +2539,73 @@ def _uninstall_cells() -> list[dict]:
            ("uninstall", "--yes", "--target", "{repo}/.opencode"), world=oc_project(),
            expect=["(opencode:project)"],
            expect_absent=["also found"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
+# setup
+#
+# THE SMALLEST CELL GROUP IN THE MATRIX, AND THAT IS THE FINDING. `cmd_setup` refuses when
+# `sys.stdin.isatty()` is false and every cell's stdin is a pipe, so the wizard behind it is
+# unreachable here in the way `_confirm` was in P5h — except that here it is not one branch,
+# it is the whole verb. What these three cells gate is the GATE: that the refusal happens,
+# that it happens BEFORE anything is read or written, and that a script of answers does not
+# get it to run anyway. Everything past it is gated as a stdin-seeded corpus in
+# `tests/test_pure_function_parity.py`, which can vary the answers a cell cannot.
+#
+# AND DO NOT SMOKE-TEST THIS WITH `< /dev/null`. On Windows the null device is a CHARACTER
+# device and the CRT's `_isatty` answers TRUE for one, so `python rituals/harness.py setup
+# < /dev/null` from Git Bash runs the ENTIRE WIZARD on the developer's own machine — it
+# EOF-defaults through all five questions and rebuilds the live global install. The cells are
+# safe because `subprocess.run(input=...)` is a real pipe; the shell one-liner is not. Found
+# the direct way.
+# --------------------------------------------------------------------------------------
+
+#: Both lines of the refusal, exactly as `cmd_setup` writes them in one `sys.stderr.write`.
+_SETUP_REFUSAL = ["[setup] needs an interactive terminal. Non-interactive? e.g.:",
+                  "  python build.py --emit opencode-global --theme neutral"]
+
+
+def _setup_cells() -> list[dict]:
+    def su(name, world=None, stdin="", **kw):
+        return dict(id=f"setup/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    steps=[{"argv": ["setup"], "cwd": "repo", "stdin": stdin}], **kw)
+
+    return [
+        su("refuses-without-an-interactive-terminal",
+           # The whole verb, from a cell's side of the pipe. `expect_silent` is not
+           # decoration: the refusal is on STDERR, and a port that printed it on stdout would
+           # be byte-identical to a shell that redirects one into the other.
+           expect=_SETUP_REFUSAL, expect_silent=True),
+        su("a-script-of-answers-on-stdin-is-not-consumed",
+           # THE cell for the TTY gate, and the only one that can fail differently from the
+           # one above. Seven answers is enough to drive the whole wizard to a confirmed
+           # build: five menus, `Proceed?`, and the doctor prompt. A port that dropped the
+           # isatty check does not merely print more — it EOF-defaults through the questions
+           # and EMITS, which is why the assertion is `expect_absent_files` on the two places
+           # a build could land rather than only `expect_absent` on the prompts.
+           stdin="1\n1\n1\n1\n1\ny\ny\n",
+           expect=_SETUP_REFUSAL,
+           expect_absent=["Geneseed setup", "Choose", "About to run:", "Proceed?"],
+           expect_silent=True,
+           expect_absent_files=[f"{_OC}/AGENT.md", "repo/Harness/AGENT.md",
+                                "repo/Harness"]),
+        su("the-refusal-precedes-every-detection",
+           # `_installed_defaults` reads these four markers and the wizard pre-selects the
+           # pickers from them, so a port that gathered first and refused second would name
+           # `pirate` on screen. Seeding a REAL install also makes the `expect_files` half
+           # meaningful: the refusal must leave the deployed tree exactly as it found it,
+           # which is the direction a comparison alone cannot state.
+           world={f"{_OC}/.geneseed-emit": "opencode-global\n",
+                  f"{_OC}/.geneseed-theme": "pirate\n",
+                  f"{_OC}/.geneseed-footprint": "full\n",
+                  f"{_OC}/AGENT.md": "# deployed\n"},
+           expect=_SETUP_REFUSAL,
+           # NOT `opencode-global` — the refusal's own second line names it.
+           expect_absent=["pirate", "Install mode", "Footprint"],
+           expect_files=[f"{_OC}/.geneseed-theme", f"{_OC}/AGENT.md"],
+           expect_silent=True),
     ]
 
 

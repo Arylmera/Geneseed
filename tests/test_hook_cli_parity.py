@@ -411,6 +411,30 @@ class TheHookEntryIsNotAPassthrough(unittest.TestCase):
                            "the import walk found no modules, so it proves nothing")
 
 
+#: Every module on `bin/geneseed-cli.mjs`'s import graph allowed to start a process, with the
+#: exact thing it may start. Adding a row is the decision; the two tests below are what make
+#: it stick, and the DYNAMIC halves (`test_doctor_validates_the_build_with_no_python_on_path`
+#: and its siblings) are what make it mean "does not shell back to Python".
+#:
+#: The criterion for a row is not "this verb spawns" — `build` spawns on the reference and is
+#: refused here — it is that there is NO in-process equivalent and the spawned thing is not
+#: this program. `node --check` compiles ESM in a way `vm.Script` cannot; `java -version`
+#: asks a foreign toolchain a question about itself.
+_ALLOWED_SPAWNS = {
+    "doctor.mjs": {
+        "binding": "{ spawnSync }", "calls": 1, "what": "`node --check <plugin>`",
+        "literals": ["spawnSync(node, ['--check', js]", "const node = pyWhich('node');"],
+    },
+    "setup.mjs": {
+        "binding": "{ spawnSync }", "calls": 1, "what": "`java -version`",
+        # The PATH lookup is named too, for the reason doctor's is: the reference skips the
+        # check entirely when `shutil.which` misses, and a hardcoded binary cannot reproduce
+        # the skip.
+        "literals": ["spawnSync(java, ['-version']", "const java = pyWhich('java');"],
+    },
+}
+
+
 @unittest.skipIf(NODE is None, "node is not on PATH")
 class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
     """`bin/geneseed-cli.mjs`, and P5g is the day this ban became an ALLOW-LIST.
@@ -434,12 +458,20 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
     the shape the hook entry has carried for `$GENESEED_LLM` since P5a, and
     `test_doctor_validates_the_build_with_no_python_on_path` below is the dynamic half —
     the one that would fail if the allow-list were used to shell back to `harness.py`.
+
+    AND IN P5i IT BECAME A TABLE, because `setup` is the second entry. `_lsp_prereqs` runs
+    `java -version` to decide whether OpenCode's `jdtls` has a JVM to talk to, which is a
+    PROBE of the machine and not a way to do this program's work — the same class as
+    `node --check` and the opposite of `build`'s spawn. This port's rule is that the second
+    instance of anything stops being a special case and becomes a table cross-checked against
+    the source of truth, so `_ALLOWED_SPAWNS` below carries the module, the binding, the call
+    count and the literal argv, and the two tests read it rather than naming one file.
     """
 
     def test_the_cli_reaches_child_process_only_where_it_is_declared(self):
         """STATIC, and transitive — a source grep on the entry alone cannot see an import one
         module deep, which is the hole P5a had to close for the generator driver."""
-        allowed = ROOT / "js" / "doctor.mjs"
+        allowed = [ROOT / "js" / rel for rel in sorted(_ALLOWED_SPAWNS)]
         seen, queue, importers = set(), [HARNESS_CLI], []
         while queue:
             f = queue.pop()
@@ -459,34 +491,35 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
         self.assertGreater(len(seen), 2,
                            "the import walk found almost nothing, so it proves nothing")
         self.assertEqual(
-            importers, [allowed],
+            sorted(importers), allowed,
             f"child_process is imported by {[str(p.relative_to(ROOT)) for p in importers]}; "
-            f"js/doctor.mjs is the only module on this entry allowed to, and only for "
-            f"`node --check`")
+            f"the allow-list on this entry is {sorted(_ALLOWED_SPAWNS)} and each one is "
+            f"declared with the exact argv it may start")
 
-    def test_the_cli_spawns_only_a_node_syntax_check(self):
-        """The half a module list cannot state: WHAT it spawns.
+    def test_the_cli_spawns_only_what_the_allow_list_declares(self):
+        """The half a module list cannot state: WHAT each one spawns.
 
         A `\\bspawnSync\\s*\\(` scan is deliberately anchored on the import binding rather than
         on the word — `js/hooks.mjs`'s twin of this test found three `SOME_RE.exec(...)` when
         it scanned for `exec` — and the argv is asserted literally, because a second call site
         that reused the binding to start an interpreter would satisfy a count alone.
         """
-        text = allowed_text = (ROOT / "js" / "doctor.mjs").read_text(encoding="utf-8")
-        imports = re.findall(r"import\s+(.+?)\s+from\s+'node:child_process'", text)
-        self.assertEqual(imports, ["{ spawnSync }"],
-                         f"js/doctor.mjs imports {imports} from child_process; exactly one "
-                         f"binding is allowed and it is spawnSync")
-        self.assertEqual(len(re.findall(r"(?<![.\w])spawnSync\s*\(", text)), 1,
-                         "js/doctor.mjs has more than one spawnSync call site; `node --check` "
-                         "is the only thing this verb may start")
-        self.assertIn("spawnSync(node, ['--check', js]", allowed_text,
-                      "the one spawn is no longer `node --check <plugin>` — a spawn that "
-                      "took its command from anywhere else would be the passthrough this "
-                      "entry exists not to be")
-        self.assertIn("const node = pyWhich('node');", allowed_text,
-                      "the spawned binary no longer comes from a PATH lookup, so the "
-                      "reference's skip-when-node-is-absent branch cannot be reproduced")
+        for rel, spec in sorted(_ALLOWED_SPAWNS.items()):
+            with self.subTest(module=rel):
+                text = (ROOT / "js" / rel).read_text(encoding="utf-8")
+                imports = re.findall(r"import\s+(.+?)\s+from\s+'node:child_process'", text)
+                self.assertEqual(imports, [spec["binding"]],
+                                 f"js/{rel} imports {imports} from child_process; exactly "
+                                 f"one binding is allowed and it is {spec['binding']}")
+                self.assertEqual(
+                    len(re.findall(r"(?<![.\w])spawnSync\s*\(", text)), spec["calls"],
+                    f"js/{rel} has {spec['calls']} declared spawnSync call site(s) and the "
+                    f"source no longer agrees; {spec['what']} is all this module may start")
+                for literal in spec["literals"]:
+                    self.assertIn(literal, text,
+                                  f"js/{rel} no longer spawns {spec['what']} the declared "
+                                  f"way — a spawn that took its command from anywhere else "
+                                  f"would be the passthrough this entry exists not to be")
 
     def test_exclude_reads_a_real_install_with_no_python_on_path(self):
         """DYNAMIC. A passthrough's `spawn('python', ...)` dies with ENOENT here; a second
