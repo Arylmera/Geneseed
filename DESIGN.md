@@ -980,6 +980,34 @@ renders it as the name in parentheses.
   `is_file()` refused first, and a refusal and a miss produce the same 404. **A containment
   cell whose target does not exist proves nothing.** Closed by seeding files that ARE there
   and naming, in each cell, the content that must not come back.
+- **The Docs pages cross for 57 of 59, and the two that do not are declared rather than
+  discovered.** [`js/web/docs.mjs`](js/web/docs.mjs) answers `/api/docs` and
+  `/api/docs/page/<id>` for the `markdown`, `concept` and `glossary` kinds — the harness-
+  block stripping, the slug rules, the section slicing, the live-count substitution and the
+  theme-aware glossary. **Still fifteen subcommands.** The measurement that scoped it is
+  the entry: `cli` walks `harness.build_argparser()`, **24 subparsers and 43
+  `add_argument` calls**, none of which a Node twin can introspect — reproducing it means
+  transcribing the whole CLI surface into a second table that would describe verbs
+  `bin/geneseed-cli.mjs` cannot run, and the real fix is to make that metadata data both
+  sides read, which is packaging work. `about` shells out through `_update._origin_display`,
+  which is P8's subject. Both answer 501, and the KIND partition is cross-checked against
+  the kinds the reference dispatches on — the same shape the route table took, and a table
+  rather than three `if`s so the gate reads what the dispatcher consults.
+  **`?harness=` finally has a caller**, and it is the only input these endpoints have that
+  is not the checkout — so it is the only thing a cell can vary, and every filtering rule
+  is gated by sending both hosts over one page.
+  **And a corpus found a divergence the port had been carrying as a footnote.** The slug
+  rules are compared against the frontend's, so they have to match character for character.
+  Python's `\s` on a `str` pattern is not JavaScript's, and the standing note read "differs
+  only at U+FEFF". Measured: `python \s = js \s − U+FEFF + U+001C..U+001F + U+0085`. A
+  heading carrying an information separator slugged differently on each side. `PY_SPACE`
+  in [`js/lib/pyfs.mjs`](js/lib/pyfs.mjs) is the measured set, and no cell could have found
+  it — nobody has written that heading.
+  **Twelve mutations, eleven fire, six of them on the corpus rather than a cell** — which
+  is what "a corpus phase" means in practice. The survivor is honest: dropping a blank
+  `?harness=` is `parse_qs`'s documented default and changes nothing observable, because
+  the empty string and a missing value reach the same fallback. Indistinguishable through
+  its one consumer, not unreachable, and kept for the reason the POST body drain was.
 
 ## 🚫 Explicitly out of scope
 

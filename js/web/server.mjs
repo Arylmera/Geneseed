@@ -296,6 +296,15 @@ export function makeHandler(state, token, dist, holder = null) {
  * space, and a BLANK value dropped (`keep_blank_values=False`), so `?harness=` resolves to
  * the installed default rather than to the empty string. The first occurrence wins,
  * because `parse_qs` returns a list and the reference takes `[0]`.
+ *
+ * THE BLANK-VALUE DROP IS INDISTINGUISHABLE HERE, measured rather than assumed: a
+ * mutation removing it survived, because `normHarness('')` and `normHarness(null)` both
+ * fall through to the installed default. It stays for the reason `parse_qs`' own default
+ * exists — the next parameter read through this function may be one whose empty string
+ * means something — and because a shell whose two implementations agreed only by accident
+ * is the kind of agreement that stops holding when a caller is added. UNREACHABLE is not
+ * the word: the branch runs on every `?harness=`, it simply cannot be observed to matter
+ * through the one consumer it has.
  */
 function harnessParam(url) {
   const at = (url || '').indexOf('?');
