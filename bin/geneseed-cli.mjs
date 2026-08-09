@@ -43,6 +43,7 @@ import { cmdDiff } from '../js/diff.mjs';
 import { cmdDoctor } from '../js/doctor.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
+import { cmdSetup } from '../js/setup.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
 import { cmdUninstall } from '../js/uninstall.mjs';
 
@@ -127,6 +128,12 @@ const VERBS = {
     // argparse's dest for `--archive-memory` is `archive_memory`; camelCase here, as
     // `--no-bundle` above, so the two tables read against each other.
     flags: { '--yes': 'yes', '--archive-memory': 'archiveMemory' },
+  },
+  setup: {
+    fn: cmdSetup,
+    // `su = sub.add_parser("setup")` and nothing else — the wizard asks rather than parses,
+    // so the only argument surface it has is the absence of one.
+    positionals: [],
   },
 };
 

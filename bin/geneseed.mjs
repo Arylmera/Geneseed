@@ -86,8 +86,14 @@ const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orc
 const NATIVE_CATALOG = { opencode: true, claude: true, bob: false, copilot: false };
 
 /** `_build_render.resolve_out` — absolute, or relative to the CURRENT WORKING DIRECTORY
- *  (not to ROOT), so the harness renders straight into any repository. */
-function resolveOut(raw) {
+ *  (not to ROOT), so the harness renders straight into any repository.
+ *
+ *  EXPORTED IN P5i because `js/setup.mjs` became its second caller: `_setup_summary_lines`
+ *  names the AGENT.md a bundle emit just wrote, and it names it by the same resolution the
+ *  emit used. Copying the one line would be a second owner of the rule that a bare `Harness`
+ *  follows the invocation and not the checkout — which is what
+ *  `build/the-bundle-follows-cwd-not-the-checkout` exists to gate. */
+export function resolveOut(raw) {
   return path.resolve(process.cwd(), raw);
 }
 

@@ -584,6 +584,62 @@ export function pyIsAbsolute(s) {
   return root.length > 1 && /[\\/]$/.test(root);
 }
 
+/**
+ * `int(s)` for a base-10 string — the VALUE, or null where Python raises `ValueError`.
+ *
+ * Null rather than a throw because both call sites branch on the failure rather than
+ * propagate it: `askChoice` falls through to matching the answer against the option KEYS,
+ * and `javaMajorOk` treats an unparseable major as "not new enough". Python spells the same
+ * two branches as `except ValueError`.
+ *
+ * Three things separate this from `Number(s)` and each one changes an answer:
+ *
+ *   * `Number('')` is 0 and `int('')` raises. So is `Number(' ')`, and `Number('0x10')` is
+ *     16 where `int('0x10')` raises — a wizard answer of `0x2` must fall through to the key
+ *     match, not select option 16.
+ *   * PEP 515 underscores: `int('1_0')` is 10, `Number('1_0')` is NaN. Leading, trailing and
+ *     doubled ones still raise, so the rule is "between digits" and not "strip them".
+ *   * `int()` accepts any Unicode decimal digit — `int('٣')` is 3 — and `Number('٣')` is NaN.
+ *     Every `Nd` block is exactly ten contiguous code points, so a digit's value is its
+ *     offset from the first `Nd` code point at or below it, which is what the walk finds.
+ *
+ * Surrounding whitespace is Python's to strip and both callers have already done it, so this
+ * does NOT strip: `int(' 1')` is 1, but reproducing that here would need Python's
+ * `str.isspace()` set, which is a separate standing item.
+ *
+ * Gated by a corpus in `tests/test_pure_function_parity.py` — a primitive reproduction gets
+ * one owner and a corpus, never a cell (P5c).
+ */
+export function pyInt(s) {
+  if (typeof s !== 'string' || s === '') return null;
+  let body = s;
+  let sign = 1;
+  if (body[0] === '+' || body[0] === '-') {
+    if (body[0] === '-') sign = -1;
+    body = body.slice(1);
+  }
+  const chars = [...body];
+  if (chars.length === 0) return null;
+  let value = 0n;
+  let prevWasDigit = false;
+  for (const ch of chars) {
+    if (ch === '_') {
+      // Only BETWEEN digits: a leading, trailing or doubled underscore is a ValueError.
+      if (!prevWasDigit) return null;
+      prevWasDigit = false;
+      continue;
+    }
+    if (!/^\p{Nd}$/u.test(ch)) return null;
+    const cp = ch.codePointAt(0);
+    let zero = cp;
+    while (zero > 0 && /^\p{Nd}$/u.test(String.fromCodePoint(zero - 1))) zero -= 1;
+    value = value * 10n + BigInt(cp - zero);
+    prevWasDigit = true;
+  }
+  if (!prevWasDigit) return null;   // a trailing underscore
+  return Number(sign === -1 ? -value : value);
+}
+
 export function pyPathStr(s) {
   const raw = path.parse(s).root;
   // Each separator individually, never `replace(/[\\/]+/g, sep)`: a UNC root's LEADING pair

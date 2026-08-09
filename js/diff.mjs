@@ -261,6 +261,29 @@ export function writeImprovements(target, theme, files, outPath = null) {
   return p;
 }
 
+/**
+ * `_harness_diff.export_improvements` — the drift report as a LIBRARY call, for the callers
+ * that want the artifact without the verb's printing.
+ *
+ * Returns `[path, files]`: `path` is null when nothing was written, and the two reasons are
+ * distinguishable in `files` — `null` is "no deployed global install to compare", `[]` is
+ * "an install, and no drift". `setup` is the caller and reads exactly that: it prints the
+ * path when there is one and says nothing when there is not.
+ *
+ * `_flush_export_notes`, its neighbour in the Python, is deliberately NOT here. Its two
+ * callers are `cmd_setup`'s curses arm and the re-exec inside `upgrade`/`bootstrap` — P7's
+ * and P8's — so porting it now would add a function with no caller in this binary, which is
+ * the keep-vs-delete criterion this port uses in the other direction.
+ */
+export function exportImprovements(target = null, theme = null, outPath = null) {
+  const collected = diffCollect({ target, theme });
+  // Python's `if not files` — null AND the empty list both return, which is why the caller
+  // gets `files` back rather than a bare path and can tell the two apart itself.
+  if (!collected.files || collected.files.length === 0) return [null, collected.files];
+  return [writeImprovements(collected.target, collected.theme, collected.files, outPath),
+    collected.files];
+}
+
 /** `_harness_diff.cmd_diff`. */
 export function cmdDiff(args) {
   const { target, theme, files } = diffCollect({ target: args.target, theme: args.theme });

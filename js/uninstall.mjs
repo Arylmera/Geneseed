@@ -39,11 +39,12 @@
  * `test_uninstall_removes_an_install_with_no_python_on_path` are what refute it.
  */
 import {
-  existsSync, mkdirSync, readdirSync, readSync, renameSync, rmSync, rmdirSync, statSync,
+  existsSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, statSync,
   unlinkSync,
 } from 'node:fs';
 import path from 'node:path';
 
+import { confirm } from './setup.mjs';
 import {
   claudeReadManifest, emitHostScopeOf, installKind, installState,
   registeredTargets, readMaybe, DISABLED_STASH,
@@ -622,32 +623,20 @@ export function printOtherHostHits(root, removedHost) {
 }
 
 /**
- * `_harness_setup._confirm`, and the only interactive read in this binary.
+ * `_harness_setup._confirm`, and the only interactive read this verb makes.
  *
- * UNREACHABLE FROM EVERY CELL, and stated here rather than discovered later: `cmdUninstall`
+ * MOVED TO `js/setup.mjs` IN P5i, where the Python's own owner is: `_confirm` lives in
+ * `_harness_setup` beside the `_ask` it is built on, and `setup` is its second caller. The
+ * body stayed here for one phase because a helper with one caller is not shared yet; the
+ * rule this port uses is that the SECOND owner is what moves it, and a byte gate is what
+ * licenses the move.
+ *
+ * UNREACHABLE FROM EVERY CELL, restated because moving it does not change that: `cmdUninstall`
  * only reaches it when stdin is a TTY, and the harness gives every cell a pipe. What the
  * cells DO gate is the branch beside it — the non-interactive refusal — which is why that one
- * has an `expect` naming its wording. `input()` raising `EOFError` returns the default, and a
- * TTY at EOF gives `read` a 0 here, which is the same answer.
- *
- * A byte at a time to the first newline: Node has no synchronous line read, and
- * `readFileSync(0)` would block for EOF rather than for Enter. Only ever runs on a TTY.
+ * has an `expect` naming its wording. It is now gated positively too, by the stdin-seeded
+ * corpus P5i added for the wizard.
  */
-function confirm(prompt, dflt = true) {
-  process.stdout.write(`${prompt} (${dflt ? 'Y/n' : 'y/N'}): `);
-  const buf = Buffer.alloc(1);
-  let line = '';
-  for (;;) {
-    let n = 0;
-    try { n = readSync(0, buf, 0, 1, null); } catch { break; }
-    if (n === 0) break;
-    const ch = buf.toString('utf8', 0, n);
-    if (ch === '\n') break;
-    if (ch !== '\r') line += ch;
-  }
-  const ans = line.trim().toLowerCase();
-  return ans === '' ? dflt : ans[0] === 'y';
-}
 
 /**
  * `_harness_mcp.cmd_uninstall`.

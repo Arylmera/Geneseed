@@ -10,14 +10,14 @@
  * Three callers of one detector is where a private helper becomes a module.
  *
  * WHAT THE MOVE DID NOT DO, and it is the P5f brief's second blind spot answered by
- * measurement. `installedDefaults` still omits posture and mode. The brief expected the debt
- * P5d recorded to come due here — it does not, because `cmd_rebuild_all` never calls
- * `_installed_defaults`: it calls `_posture_of_dir(root)` and `_mode_of_dir(root)` directly,
- * per install root, which is a different question from "what did this machine install". The
- * detectors are therefore ported and `installedDefaults` is unchanged, and
+ * measurement. `installedDefaults` still omitted posture and mode after P5f, because
+ * `cmd_rebuild_all` never calls `_installed_defaults`: it calls `_posture_of_dir(root)` and
+ * `_mode_of_dir(root)` directly, per install root, which is a different question from "what
+ * did this machine install". **P5i is where the debt came due** — `collectSetupLines`
+ * pre-selects three pickers off it — and the missing keys are now returned.
  * `status/posture-and-mode-in-the-carrier-change-nothing` stays exactly as valid as it was:
- * it is the positive control that the panel prints neither. The wizard (`setup`) is the
- * caller that will actually want them merged, and that is still a later phase.
+ * it is the positive control that the PANEL prints neither, and the panel reads two keys of
+ * the five whatever the other three hold.
  *
  * WHAT A CELL CANNOT REACH HERE. `installTargets` walks `process.cwd()` and the four host
  * config dirs, and both are fenceable — `golden.cell_env` redirects HOME/XDG and every cell
@@ -301,11 +301,18 @@ export function installTargets() {
 // ---- what this machine installed (`_harness_setup._installed_defaults`) --------------------
 
 /**
- * `_harness_setup._installed_defaults`, reduced to the two keys `status` prints — see the
- * module header for why posture and mode are still not here.
+ * `_harness_setup._installed_defaults` — all five keys, as of P5i.
+ *
+ * It carried only `theme` and `emit` for four phases because those are the two `status`
+ * prints and the two `doctor` reads, and the port's keep-vs-delete rule is "part of an
+ * asserted partition", not "the Python has it". `setup` is the caller the debt was recorded
+ * against: `collectSetupLines` pre-selects the posture, mode and footprint picker at
+ * `inst.posture` / `inst.mode` / `inst.footprint`, so a three-key answer would have silently
+ * pre-selected the CONFIGURED default over the DEPLOYED one on three of its five questions.
+ * Nothing in `status` or `doctor` moves: both read the keys they already read.
  */
 export function installedDefaults() {
-  const found = { theme: null, emit: null };
+  const found = { theme: null, posture: null, mode: null, emit: null, footprint: null };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
     try { candidates.push([configDir(), `${host}-global`]); } catch { /* as the Python */ }
@@ -314,7 +321,6 @@ export function installedDefaults() {
     path.join(process.cwd(), 'Harness')]) {
     candidates.push([p, null]);
   }
-  let footprintSeen = false;
   for (const [base, knownEmit] of candidates) {
     if (found.emit === null) {
       const em = path.join(base, '.geneseed-emit');
@@ -328,11 +334,13 @@ export function installedDefaults() {
       }
     }
     if (found.theme === null) found.theme = themeOfDir(base) ?? null;
-    // The footprint is detected for its WARN alone, and the Python guards the call the same
-    // way — `found["footprint"] is None`, so only the FIRST marker on the walk speaks.
-    if (!footprintSeen && isFile(path.join(base, '.geneseed-footprint'))) {
-      footprintOfDir(base);
-      footprintSeen = true;
+    if (found.posture === null) found.posture = postureOfDir(base) ?? null;
+    if (found.mode === null) found.mode = modeOfDir(base) ?? null;
+    // `found["footprint"] is None` in the Python, so only the FIRST marker on the walk
+    // speaks — and `footprintOfDir` never answers null, which is why a boolean stood in for
+    // the value while nothing read it.
+    if (found.footprint === null && isFile(path.join(base, '.geneseed-footprint'))) {
+      found.footprint = footprintOfDir(base);
     }
   }
   return found;
