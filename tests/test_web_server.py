@@ -387,6 +387,59 @@ srv.listen(0, '127.0.0.1', async () => {
                          "a docs KIND that has not crossed must say so — falling through "
                          "to the NotFound at the bottom would report the page missing")
 
+    def test_the_409_convention_is_per_route_and_matches_the_reference(self):
+        """The column no cell can gate, cross-checked against the source of truth.
+
+        `_post_routes` maps `ok: False` to 409 on five paths and NOT on `/api/activity`,
+        whose flag write is sent at 200 whatever it says. A port that unified the rule is
+        caught by four cells — but only in one direction. The reverse mutation, giving
+        `/api/activity` the 409 treatment, is INVISIBLE to `tests/web_golden.py`: every
+        toggle a cell can perform succeeds, and the failing arm needs the flag write to
+        raise, which the two runtimes word differently and no byte comparison can hold.
+
+        So the CONVENTION is read out of the reference by `ast` — a path is in the set when
+        its send carries a `200 if … else 409` conditional — and required to equal the Node
+        table's own second column. `POST_ROUTES` is the dispatch, so this is not a gate on a
+        declaration; it is a gate on the table `doPost` looks up.
+        """
+        tree = ast.parse((ROOT / "rituals" / "_web_server.py").read_text(encoding="utf-8"))
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "_post_routes")
+        conditional: set[str] = set()
+        path_now = None
+        for node in fn.body:
+            # Each route is `if path == "...": <body>`. Walking the body for an IfExp whose
+            # orelse is 409 is what says "this route maps ok to a status".
+            if not isinstance(node, ast.If):
+                continue
+            for cmp_ in ast.walk(node.test):
+                if (isinstance(cmp_, ast.Compare) and isinstance(cmp_.left, ast.Name)
+                        and cmp_.left.id == "path"
+                        and all(isinstance(o, ast.Eq) for o in cmp_.ops)):
+                    path_now = next((c.value for c in cmp_.comparators
+                                     if isinstance(c, ast.Constant)), None)
+            if path_now is None:
+                continue
+            for inner in ast.walk(node):
+                if (isinstance(inner, ast.IfExp) and isinstance(inner.orelse, ast.Constant)
+                        and inner.orelse.value == 409):
+                    conditional.add(path_now)
+            path_now = None
+        self.assertTrue(conditional, "no 409 conditionals found — the ast reader is stale")
+        src = ("import {POST_ROUTES_CONVENTION} from './js/web/server.mjs';"
+               "process.stdout.write(JSON.stringify(POST_ROUTES_CONVENTION));")
+        r = subprocess.run([shutil.which("node"), "--input-type=module", "-e", src],
+                           cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        js = json.loads(r.stdout)
+        ported = set(_node_routes()["portedPost"])
+        self.assertEqual(set(js), ported,
+                         "the convention column must name every ported POST and no other")
+        self.assertEqual({p for p, on in js.items() if on}, conditional & ported,
+                         "the 409 column has drifted from the reference's own conditionals "
+                         "— /api/activity answers 200 whatever `ok` says and the others do "
+                         "not, and no cell can gate the difference")
+
     def test_every_docs_kind_is_either_ported_or_declared_unported(self):
         """The route partition, one level in.
 

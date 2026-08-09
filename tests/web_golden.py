@@ -790,18 +790,29 @@ def _mutate_cells(cell) -> list[dict]:
               _req(path="/api/activity"),
               _req("POST", path="/api/activity", body=b'{"enabled": true}', token=True),
               _req(path="/api/activity"),
-              _req("POST", path="/api/activity", body=b'{}', token=True)],
+              _req("POST", path="/api/activity", body=b'{}', token=True),
+              _req("POST", path="/api/activity", body=b'{"enabled": 1}', token=True),
+              _req("POST", path="/api/activity", body=b'{"enabled": ""}', token=True)],
              world=_installed(**{
                  f"{_OC}/activity/s-one.json": _act("s-one", "{now}", "{pid}")}),
-             # FIVE requests over one connection, and each one is an axis. The pair of
+             # SEVEN requests over one connection, and each one is an axis. The pair of
              # toggles is the flag written in both directions and READ BACK through the GET
-             # that follows it — a write nothing reads is a write no cell can see. The last
-             # request is `bool(body.get("enabled", True))`'s DEFAULT: an empty body enables,
-             # which is the arm a port spelled `body.enabled === true` inverts.
+             # that follows it — a write nothing reads is a write no cell can see. The empty
+             # body is `bool(body.get("enabled", True))`'s DEFAULT: it enables.
+             #
+             # AND THE LAST TWO ARE `bool()` ITSELF, added because a mutation survived
+             # without them. `body.enabled === true` answers identically to `pyTruthy` for
+             # every JSON boolean, so three cells' worth of `true`/`false` could not tell the
+             # two apart — the survivor was a question about the CORPUS OF INPUTS, not about
+             # the code. `1` is truthy to Python and not `=== true`; `""` is falsy to both,
+             # which is what makes the pair a control rather than a single leading case.
              #
              # AND THIS PATH ANSWERS 200 WHATEVER `ok` SAYS. Every other POST here maps
              # `ok: false` to 409; this one does not, which is why the dispatcher carries the
-             # convention as a per-route COLUMN rather than as a rule about bodies.
+             # convention as a per-route COLUMN rather than as a rule about bodies. No cell
+             # can reach its `ok: false` arm (it needs the flag write to raise, and the two
+             # runtimes word an OSError differently), so the COLUMN itself is cross-checked
+             # against the reference by `ast` in `tests/test_web_server.py`.
              expect=['{"ok": true, "enabled": false}', "200 OK",
                      '{"enabled": false, "activity": []}',
                      '{"ok": true, "enabled": true}',

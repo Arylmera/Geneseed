@@ -177,6 +177,20 @@ const POST_ROUTES = new Map([
 export const PORTED_POST = [...POST_ROUTES.keys()];
 
 /**
+ * The 409 column, exported so it can be cross-checked against the reference's own `200 if
+ * res.get("ok") else 409` conditionals by `ast`.
+ *
+ * A MUTATION IS WHY THIS EXISTS. Giving `/api/activity` the 409 treatment survived the whole
+ * cell matrix: every toggle a cell can perform succeeds, and reaching the `ok: false` arm
+ * needs the flag write to raise — which the two runtimes word differently, so no byte
+ * comparison could hold it. The column is the thing under test and no cell can see it, so
+ * the gate reads it out of both implementations instead.
+ */
+export const POST_ROUTES_CONVENTION = Object.fromEntries(
+  [...POST_ROUTES].map(([p, [, okIs409]]) => [p, okIs409]),
+);
+
+/**
  * The GET paths the dispatcher answers OUTSIDE the two tables, declared so the partition
  * cross-check can see them: `/api/ping` is the shell's own, and the two Docs routes take
  * the `?harness=` query param, which a `(state)` table entry has no way to receive.
