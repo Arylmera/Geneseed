@@ -1063,6 +1063,40 @@ renders it as the name in parentheses.
   about the CORPUS OF INPUTS. One was closed by sending a truthy non-boolean; the other could
   not be closed by any cell, so the 409 column itself became the thing under test, read out of
   the reference by `ast` and compared against the table `doPost` dispatches on.
+- **The console runs BACKGROUND JOBS, and the port's one sanctioned spawn is argued rather
+  than assumed.** [`js/web/jobs.mjs`](js/web/jobs.mjs) answers the last two web paths —
+  **29 of 29, still fifteen subcommands** — and it is the only module in the port allowed to
+  start a copy of *this program*. **Isolation is the discriminator and it is a property of the
+  RUNTIME, not of the verb**: the reference's daemon is threaded, Node's server is
+  single-threaded and every ported `cmdX` is synchronous, so an in-process job would freeze the
+  poll the console depends on to watch it, and a `process.exit` in any callee would kill the
+  daemon instead of the job.
+  **Five of the eight actions cross and three are DECLARED**, because spawning
+  `python harness.py upgrade` for `update`, `link` and `unlink` would put Python back into a
+  "no Python needed" install for the operations that matter most. They answer **501, not the
+  404 an unknown action gets** — a real endpoint that has not crossed and a typo must not give
+  the same answer — and the two sets are cross-checked against `action_commands`' own keys by
+  `ast`.
+  **The `$ <argv>` echo line is the first value the byte gate is asked to be tolerant of by
+  CONSTRUCTION**: the reference starts `python harness.py doctor` and the twin starts
+  `node bin/geneseed-cli.mjs doctor`, and that difference *is* the port. It is normalised the
+  way a timestamp is destamped, and each side's argv head is then asserted absolutely — with
+  the TAIL compared literally — in a corpus, because a tolerant comparison owes an absolute
+  assertion on every side it is tolerant of.
+  **Python's text mode is two ports, not one**: a chunked pipe read needs a decoder that holds
+  a partial UTF-8 sequence across a boundary, and it needs universal-newline folding, or the
+  same job's output is CRLF on one side and LF on the other.
+  **A destamp that bites a prefix out of a value is worse than no destamp**: the daemon
+  record's `"started": <int>` was replaced as a literal, a job's `started` is a float whose
+  integer part is the same second, and the tail it left behind only appeared when the two
+  clocks happened to agree. Found by the ref-vs-ref self-check, before a line of the port
+  existed — along with a `Content-Length` rule that named ONE field by hand where it meant
+  "any normalised value whose width differs".
+  **Twenty-five mutations, twenty-three fire, two declared survivors** — one unobservable by
+  construction (the env variable whose reader is P8's) and one a real race the corpus cannot
+  reach, because closing it needs a job whose output is still in flight and the cheap way to
+  get one writes a file whose NAME carries a clock. **A destamp that only reaches inside files
+  leaves the filename as an ungateable axis.**
 
 ## 🚫 Explicitly out of scope
 
