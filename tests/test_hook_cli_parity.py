@@ -411,26 +411,84 @@ class TheHookEntryIsNotAPassthrough(unittest.TestCase):
                            "the import walk found no modules, so it proves nothing")
 
 
-#: Every module on `bin/geneseed-cli.mjs`'s import graph allowed to start a process, with the
-#: exact thing it may start. Adding a row is the decision; the two tests below are what make
-#: it stick, and the DYNAMIC halves (`test_doctor_validates_the_build_with_no_python_on_path`
-#: and its siblings) are what make it mean "does not shell back to Python".
+#: Every module allowed to start a process, with the exact thing it may start. Adding a row is
+#: the decision; the two tests below are what make it stick, and the DYNAMIC halves
+#: (`test_doctor_validates_the_build_with_no_python_on_path` and its siblings) are what make it
+#: mean "does not shell back to Python".
 #:
 #: The criterion for a row is not "this verb spawns" — `build` spawns on the reference and is
 #: refused here — it is that there is NO in-process equivalent and the spawned thing is not
 #: this program. `node --check` compiles ESM in a way `vm.Script` cannot; `java -version`
 #: asks a foreign toolchain a question about itself.
+#:
+#: ---------------------------------------------------------------------------------------
+#: P6g ADDED THE `entry` COLUMN, AND ITS ROW BREAKS THE CRITERION ON PURPOSE.
+#:
+#: `js/web/jobs.mjs` spawns `node bin/geneseed-cli.mjs <verb>` — THIS PROGRAM, which reads like
+#: the passthrough the whole port exists to remove. The argument is that ISOLATION is the
+#: discriminator and it is a property of the RUNTIME, not of the verb:
+#:
+#:   * The reference's daemon is THREADED. `JobManager.start` hands the run to a
+#:     `threading.Thread` and the HTTP server keeps answering from another. Node's server is
+#:     single-threaded and every ported `cmdX` is synchronous, so an in-process job blocks the
+#:     event loop for the whole run — and the console's only progress mechanism is
+#:     `web/src/api/jobs.js` polling `GET /api/jobs/<id>`. An in-process job would freeze the
+#:     poll that exists to watch it, which is worse than showing no progress: the UI could not
+#:     tell a running job from a hung daemon.
+#:   * A `process.exit` in ANY callee would kill the daemon instead of the job. `cmdRebuildAll`
+#:     already had to grow a throwing `die` for exactly that reason (P5f).
+#:   * The EXIT CODE is easier out of process, not harder: `_run` reads `p.returncode` and stops
+#:     the chain on the first non-zero. In-process that is a return value threaded through every
+#:     verb's error paths, several of which currently end at `process.exitCode`.
+#:   * `worker_threads` is the one alternative worth refuting: it restores concurrency but
+#:     re-imports the world per job, needs a message protocol for the stdout and exit code a
+#:     pipe gives for nothing, and isolates `process.exit` no better — in a worker it takes the
+#:     worker down mid-write, which is the same truncation with more machinery.
+#:
+#: `taskkill` is the second call site and a different argument: `cancel()` must kill the job's
+#: process TREE (killing only the direct child leaves ITS children holding the stdout pipe and
+#: the job wedges on `running` forever), POSIX gets that in-process through a process group, and
+#: Node has no Windows equivalent at all. That one IS a machine primitive.
+#:
+#: THE `entry` COLUMN EXISTS BECAUSE THIS MODULE IS NOT ON THE CLI'S GRAPH YET. `web` becomes a
+#: verb in P6h; until then `bin/geneseed-cli.mjs` cannot reach `js/web/`, so a single walk from
+#: the CLI would fail on a declared-but-unreachable row. The `cli` rows keep the transitive walk
+#: and its EQUALITY — which is now also what proves the job runner is not reachable from the CLI
+#: — and the `web` rows are gated by a directory scan instead, for the reason
+#: `test_the_web_module_tree_spawns_only_from_the_declared_module` states: the web graph
+#: transitively reaches three modules that legitimately spawn for other entries, so an equality
+#: over it would have to re-declare their decisions in a second place. P6h moves this row's
+#: entry from `web` to `cli`, at which point the transitive walk starts demanding it.
 _ALLOWED_SPAWNS = {
     "doctor.mjs": {
+        "entry": "cli",
         "binding": "{ spawnSync }", "calls": 1, "what": "`node --check <plugin>`",
         "literals": ["spawnSync(node, ['--check', js]", "const node = pyWhich('node');"],
     },
     "setup.mjs": {
+        "entry": "cli",
         "binding": "{ spawnSync }", "calls": 1, "what": "`java -version`",
         # The PATH lookup is named too, for the reason doctor's is: the reference skips the
         # check entirely when `shutil.which` misses, and a hardcoded binary cannot reproduce
         # the skip.
         "literals": ["spawnSync(java, ['-version']", "const java = pyWhich('java');"],
+    },
+    "web/jobs.mjs": {
+        "entry": "web",
+        "binding": "{ spawn, spawnSync }", "calls": 1, "spawnCalls": 1,
+        "what": "`node bin/geneseed-cli.mjs <verb>` (the job) and `taskkill /T` (its cancel)",
+        # The INTERPRETER is named as `process.execPath`, which is the running binary by
+        # absolute path — so stripping `node` off PATH cannot change what starts, and no
+        # spelling of `python` can reach this argv. The two entries it may name are the CLI and
+        # the generator driver, which is `build.py`'s twin; both are declared literally,
+        # because a spawn taking its command from anywhere else would be the passthrough.
+        "literals": [
+            "spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)]",
+            "const NODE = () => process.execPath;",
+            "const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');",
+            "const GEN = () => path.join(ROOT, 'bin', 'geneseed.mjs');",
+            "p = spawn(cmd[0], cmd.slice(1), {",
+        ],
     },
 }
 
@@ -470,8 +528,15 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
 
     def test_the_cli_reaches_child_process_only_where_it_is_declared(self):
         """STATIC, and transitive — a source grep on the entry alone cannot see an import one
-        module deep, which is the hole P5a had to close for the generator driver."""
-        allowed = [ROOT / "js" / rel for rel in sorted(_ALLOWED_SPAWNS)]
+        module deep, which is the hole P5a had to close for the generator driver.
+
+        FILTERED BY `entry` SINCE P6g, and the filter is the assertion: `js/web/jobs.mjs`
+        spawns, and this equality is what proves it is NOT on the CLI's graph. When P6h gives
+        `web` a verb the row moves to `entry: "cli"` and this test starts demanding it — which
+        is the point at which the job runner's spawn becomes the CLI's problem too.
+        """
+        allowed = sorted(ROOT / "js" / rel for rel, spec in _ALLOWED_SPAWNS.items()
+                         if spec["entry"] == "cli")
         seen, queue, importers = set(), [HARNESS_CLI], []
         while queue:
             f = queue.pop()
@@ -493,8 +558,34 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
         self.assertEqual(
             sorted(importers), allowed,
             f"child_process is imported by {[str(p.relative_to(ROOT)) for p in importers]}; "
-            f"the allow-list on this entry is {sorted(_ALLOWED_SPAWNS)} and each one is "
-            f"declared with the exact argv it may start")
+            f"the allow-list on this entry is "
+            f"{[str(p.relative_to(ROOT)) for p in allowed]} and each one is declared with "
+            f"the exact argv it may start")
+
+    def test_the_web_module_tree_spawns_only_from_the_declared_module(self):
+        """The other half, and P6g is the phase that needs it.
+
+        A TRANSITIVE WALK FROM `js/web/server.mjs` WOULD PROVE THE WRONG THING. That graph
+        reaches `js/doctor.mjs`, `js/setup.mjs` and `js/hooks.mjs` — three modules that
+        legitimately spawn, two of them declared above for a DIFFERENT entry and the third
+        (the model CLI `learn` shells out to) gated in `js/hooks.mjs`'s own parity test. An
+        equality over that graph would either fail or have to re-declare all three here, which
+        would put one module's decision in two files.
+        """
+        declared = {f"web/{p.name}" for p in (ROOT / "js" / "web").glob("*.mjs")
+                    if re.search(r"^\s*import\s.*'node:child_process'",
+                                 p.read_text(encoding="utf-8"), re.M)}
+        self.assertEqual(
+            declared, {rel for rel, spec in _ALLOWED_SPAWNS.items() if spec["entry"] == "web"},
+            "a module under js/web/ starts a process without a row in _ALLOWED_SPAWNS — the "
+            "web daemon is the one place in this port allowed to spawn THIS PROGRAM, and the "
+            "argument for each argv belongs in the table")
+        for p in (ROOT / "js" / "web").glob("*.mjs"):
+            text = p.read_text(encoding="utf-8")
+            for banned in ("'child_process'", '"child_process"'):
+                self.assertNotIn(banned, text,
+                                 f"js/web/{p.name} reaches a bare {banned} — the allow-list "
+                                 f"is the `node:` specifier only")
 
     def test_the_cli_spawns_only_what_the_allow_list_declares(self):
         """The half a module list cannot state: WHAT each one spawns.
@@ -515,6 +606,16 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
                     len(re.findall(r"(?<![.\w])spawnSync\s*\(", text)), spec["calls"],
                     f"js/{rel} has {spec['calls']} declared spawnSync call site(s) and the "
                     f"source no longer agrees; {spec['what']} is all this module may start")
+                # THE ASYNC FORM IS COUNTED SEPARATELY, and P6g is why: `js/web/jobs.mjs` is
+                # the first module here that starts a process it does not wait for, and a
+                # count that only knew `spawnSync` would have let a second `spawn(...)`
+                # naming an interpreter in. `spawnSync(` does not match this pattern, so the
+                # two counts partition the call sites rather than overlapping.
+                self.assertEqual(
+                    len(re.findall(r"(?<![.\w])spawn\s*\(", text)), spec.get("spawnCalls", 0),
+                    f"js/{rel} has {spec.get('spawnCalls', 0)} declared async spawn call "
+                    f"site(s) and the source no longer agrees; {spec['what']} is all this "
+                    f"module may start")
                 for literal in spec["literals"]:
                     self.assertIn(literal, text,
                                   f"js/{rel} no longer spawns {spec['what']} the declared "

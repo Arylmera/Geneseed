@@ -97,12 +97,26 @@
  * it inside a web phase would put the largest unported engine block behind the weakest
  * available gate. `/api/install` stays in `NOT_PORTED_POST`.
  */
-import { statSync, unlinkSync } from 'node:fs';
+import {
+  accessSync, constants, copyFileSync, mkdirSync, mkdtempSync, rmSync, statSync, unlinkSync,
+} from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
+import { emitGlobalInto } from '../../bin/geneseed.mjs';
+import { ROOT, discoverNames } from '../checkout.mjs';
+import { withStdoutSwallowed } from '../diff.mjs';
 import { excludeAdd, excludeRemove } from '../excludes.mjs';
+import { setupBuildArgs } from '../generate.mjs';
 import { frontmatter, memoryDropIndex } from '../hooks.mjs';
-import { installState, installTargets, readMaybe } from '../installs.mjs';
+import {
+  HOSTS, bobConfigDir, claudeConfigDir, copilotConfigDir, expanduser, opencodeConfigDir,
+  pyResolve,
+} from '../hosts.mjs';
+import {
+  EMIT_HOST_SCOPE, footprintOfDir, installState, installTargets, modeOfDir, postureOfDir,
+  readMaybe,
+} from '../installs.mjs';
 import {
   MCP_PRESETS, isDict, mcpApply, mcpCommented, mcpInstallTargets, mcpKnownNames, mcpLoad,
   mcpMeta, mcpPresetBlock, mcpSave, mcpSetEnabled, mcpState,
@@ -111,7 +125,9 @@ import {
   PY_SPACE, parseJson, pyLen, pyRepr, pyStr, pyStripSpace, pyTruthy, readText, writeText,
 } from '../lib/pyfs.mjs';
 import { pySplitLines } from '../lib/pydiff.mjs';
-import { NotFound, fingerprint, viewCfg } from './api.mjs';
+import {
+  NotFound, deployed, emitChoices, fingerprint, themeChoices, viewCfg, within,
+} from './api.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
@@ -592,4 +608,206 @@ export function apiSelectView(state, body) {
   const [host, scope, root] = hit;
   state.selectView(viewCfg(host, scope, root), root);
   return { ok: true, target: state.target, theme: state.theme, emit: state.emit };
+}
+
+// ---- P6g — restore, and the two build-command resolvers -------------------------------------
+
+/**
+ * `_web_actions._build_override` — (theme, emit) for a Build POST.
+ *
+ * A valid override in the body wins; anything missing or unrecognised falls back to the
+ * DETECTED install, so a bogus body value can never reach the build argv. That is the same
+ * allowlist shape `api_install_cmd` uses, and it is the reason neither endpoint needs to
+ * sanitise a string: an unknown one is simply not used.
+ */
+export function buildOverride(state, body) {
+  const themes = new Set(themeChoices().map((c) => c.name));
+  const emits = new Set(emitChoices().map((c) => c.name));
+  const t = bget(body, 'theme');
+  const e = bget(body, 'emit');
+  return [themes.has(t) ? t : state.theme, emits.has(e) ? e : state.emit];
+}
+
+/**
+ * `_web_actions._global_emitter_for` — the global emit matching a deployed install's
+ * `.geneseed-emit`, so the EXPECTED render uses the install's own host dialect.
+ *
+ * Returns the HOST rather than a function, because `emitGlobalInto(host, …)` is how the twin
+ * of `build.HOSTS[host]["emit_global"]` is already spelt (`js/diff.mjs` calls it that way).
+ * An unknown or missing marker falls back to OpenCode, exactly as the reference's two
+ * `.get(..., default)` calls do.
+ */
+export function globalEmitHostFor(emit) {
+  const host = (EMIT_HOST_SCOPE.get(emit || '') ?? ['opencode', 'global'])[0];
+  return HOSTS.some((h) => h.host === host) ? host : 'opencode';
+}
+
+/**
+ * `_web_actions.api_restore` — restore selected drifted files from the SOURCE render.
+ *
+ * Source wins and local edits are discarded (the inverse, keeping them, is Export
+ * improvements). Renders the expected copy exactly as `_diff_collect` does, then per rel:
+ * expected present -> overwrite/create the deployed copy; expected absent but deployed present
+ * (an 'added' file) -> delete it; neither -> an error and nothing touched.
+ *
+ * SYNCHRONOUS, AND NOT A JOB. One render, the same cost as a diff GET, and it returns a
+ * structured result rather than a job id — which is why `_post_routes` answers it before it
+ * ever consults the action table.
+ *
+ * THE EMIT AND THE FOOTPRINT ARE READ OFF THE DEPLOYMENT, and the reference's comment says
+ * what each one costs: a silently-OpenCode `expected` would overwrite a Claude install's
+ * agents with the wrong frontmatter, and a full-footprint `expected` on a lean install
+ * rewrites AGENT.md with the inlined laws and DELETES `laws/universal.md`, which only the lean
+ * emit writes.
+ */
+export function apiRestore(state, files) {
+  if (!deployed(state)) {
+    return { restored: [], deleted: [], errors: ['no deployed harness'] };
+  }
+  const restored = [];
+  const deleted = [];
+  const errors = [];
+  const target = pyResolve(state.target);
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-restore-'));
+  try {
+    const expected = pyResolve(path.join(tmp, 'expected'));
+    withStdoutSwallowed(() => emitGlobalInto(globalEmitHostFor(state.emit), {
+      theme: state.theme,
+      out: path.join(tmp, 'bundle'),
+      cfgDir: expected,
+      footprint: state.footprint,
+    }));
+    for (const raw of (pyTruthy(files) ? files : [])) {
+      const rel = pyStripSpace(pyStr(raw).replace(/\\/g, '/')).replace(/^\/+/, '');
+      const dst = pyResolve(path.join(target, rel));
+      const src = pyResolve(path.join(expected, rel));
+      if (!rel || !within(dst, target) || !within(src, expected)) {
+        errors.push(`${rel}: outside the deployed tree`);
+      } else if (isFile(src)) {
+        mkdirSync(path.dirname(dst), { recursive: true });
+        // `shutil.copyfile` — a BYTE copy, so the restored file keeps the render's own line
+        // endings rather than the platform's (the `writeText`/`copy2` rule, one file over).
+        copyFileSync(src, dst);
+        restored.push(rel);
+      } else if (isFile(dst)) {
+        unlinkSync(dst);
+        deleted.push(rel);
+      } else {
+        errors.push(`${rel}: not in the source render nor deployed`);
+      }
+    }
+  } finally {
+    // `tempfile.TemporaryDirectory()`'s cleanup, which runs on the exception path too.
+    rmSync(tmp, { recursive: true, force: true });
+  }
+  state.refresh();
+  return { restored, deleted, errors };
+}
+
+/** `_web_actions._EMIT_FOR` — (host, scope) -> the emit name that installs it. */
+const EMIT_FOR = new Map([
+  ['opencode global', 'opencode-global'], ['opencode project', 'opencode'],
+  ['claude global', 'claude-global'], ['claude project', 'claude'],
+  ['bob global', 'bob-global'], ['bob project', 'bob'],
+  ['copilot global', 'copilot-global'], ['copilot project', 'copilot'],
+]);
+
+/**
+ * `_web_actions.api_install_cmd` — the build command that installs Geneseed into a DETECTED
+ * location, or re-themes an already-active one (an in-place re-emit, the same command either
+ * way).
+ *
+ * The (host, path) pair MUST be one of the detected targets — the same allowlist
+ * `api_select_view` uses, and the reason the target is never built from raw body input — and
+ * it must not be `disabled` (reactivate first). Every other field follows the same rule: a
+ * VALID picked value wins, else the install's own, so a re-theme never silently flips the
+ * footprint, the register or the mode, and a bogus body value cannot reach the argv.
+ *
+ * `{cmd: [...]}` IS A RETURN TYPE, NOT A RESPONSE. `_post_routes` hands it straight to the job
+ * runner in the same process; it never reaches the wire. That is what collapsed P6f's
+ * "argv-in-a-response-body" question — see this file's header — and why the twin's head is
+ * `process.execPath` + `bin/geneseed.mjs` rather than a Python argv it would then have to
+ * pretend to run.
+ */
+export function apiInstallCmd(state, body) {
+  const known = new Map();
+  for (const [host, scope, root] of installTargets()) {
+    known.set(JSON.stringify([host, String(root)]), [host, scope, root]);
+  }
+  const hit = known.get(JSON.stringify(
+    [strOr(bget(body, 'host')), strOr(bget(body, 'path'))],
+  ));
+  if (hit === undefined) throw new NotFound('unknown install (host, path)');
+  const [host, scope, root] = hit;
+  if (installState(root, host, scope) === 'disabled') {
+    return { error: 'install is disabled — reactivate it before (re)building' };
+  }
+  const emit = EMIT_FOR.get(`${host} ${scope}`);
+  if (emit === undefined) return { error: `no install mode for ${host}:${scope}` };
+  const themes = new Set(themeChoices().map((c) => c.name));
+  const bt = bget(body, 'theme');
+  const theme = themes.has(bt) ? bt : state.theme;
+  const bfp = bget(body, 'footprint');
+  const fp = (bfp === 'lean' || bfp === 'full') ? bfp : footprintOfDir(root);
+  const bpos = bget(body, 'posture');
+  const pos = discoverNames('postures', 'peer').includes(bpos)
+    ? bpos : (postureOfDir(root) || 'peer');
+  const bmode = bget(body, 'mode');
+  const mode = discoverNames('modes', 'direct').includes(bmode)
+    ? bmode : (modeOfDir(root) || 'direct');
+  const out = scope === 'global' ? null : String(root);
+  const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode);
+  return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
+}
+
+/**
+ * `_web_actions.api_deploy_cmd` — the build command that deploys a FRESH per-repo harness into
+ * an arbitrary folder the user chose.
+ *
+ * The open-ended sibling of `api_install_cmd`, which only rebuilds a pre-detected target from a
+ * tight allowlist. Scope is always `project`: a global lands in the host's config dir, never a
+ * chosen folder. THIS ENDPOINT TAKES A RAW PATH, so it is the trust boundary — the path is
+ * validated here as an existing, writable directory that is not a host's own global config dir
+ * (deploying a `project` emit there would mislabel as the global row and collide on dedup).
+ */
+export function apiDeployCmd(state, body) {
+  const host = pyStripSpace(strOr(bget(body, 'host')));
+  if (!HOSTS.some((h) => h.host === host)) {
+    return { error: `unknown host: ${host || '(none)'}` };
+  }
+  const raw = pyStripSpace(strOr(bget(body, 'path')));
+  if (!raw) return { error: 'no folder given' };
+  let root;
+  try {
+    root = pyResolve(expanduser(raw));
+  } catch {
+    return { error: `bad path: ${raw}` };
+  }
+  if (!isDir(root)) return { error: `not a folder: ${root}` };
+  try {
+    accessSync(root, constants.W_OK);         // `os.access(root, os.W_OK)`
+  } catch {
+    return { error: `folder not writable: ${root}` };
+  }
+  const cfgdirs = new Set();
+  for (const fn of [opencodeConfigDir, claudeConfigDir, bobConfigDir, copilotConfigDir]) {
+    try {
+      cfgdirs.add(pyResolve(fn()));
+    } catch { /* the reference's bare `except: pass` */ }
+  }
+  if (cfgdirs.has(root)) {
+    return { error: "that's a host global config dir — use its existing row to build a global install" };
+  }
+  const themes = new Set(themeChoices().map((c) => c.name));
+  const bt = bget(body, 'theme');
+  const theme = themes.has(bt) ? bt : state.theme;
+  const bfp = bget(body, 'footprint');
+  const fp = (bfp === 'lean' || bfp === 'full') ? bfp : 'full';   // a fresh deploy is full
+  const bpos = bget(body, 'posture');
+  const pos = discoverNames('postures', 'peer').includes(bpos) ? bpos : 'peer';
+  const bmode = bget(body, 'mode');
+  const mode = discoverNames('modes', 'direct').includes(bmode) ? bmode : 'direct';
+  // project-scope emit name == host name (opencode / claude / bob / copilot)
+  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode);
+  return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
 }

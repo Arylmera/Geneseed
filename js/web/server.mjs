@@ -44,11 +44,12 @@ import {
 } from '../lib/pyfs.mjs';
 import { NotFound, PREFIX_ROUTES, STATE_ROUTES, webState } from './api.mjs';
 import {
-  apiExcludesMutate, apiMcpToggle, apiMemoryDelete, apiProfileSave, apiRulesMutate,
-  apiRulesPromote, apiSelectView,
+  apiDeployCmd, apiExcludesMutate, apiInstallCmd, apiMcpToggle, apiMemoryDelete, apiProfileSave,
+  apiRestore, apiRulesMutate, apiRulesPromote, apiSelectView, buildOverride,
 } from './actions.mjs';
 import { apiActivityToggle } from './activity.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
+import { JobManager, NOT_PORTED_ACTIONS, actionCommands } from './jobs.mjs';
 
 export { webState };
 
@@ -88,9 +89,11 @@ const CTYPES = {
  * against it in P6b would be the thing that discovered the route was missing. A 501
  * naming the phase costs one lookup and cannot be mistaken for a working endpoint.
  *
- * It shrinks to empty as P6b-P6g land. `tests/web_golden.py` has no cell for any path in
- * here, deliberately: a cell comparing a 501 against the reference's real body would
- * fail, and one comparing two 501s would be waiting to go stale.
+ * It shrank to empty in P6g and the DECLARATION STAYS. Every GET the reference answers is now
+ * answered here, so the two sets hold nothing — but they are half of a partition
+ * (`test_every_get_route_is_either_ported_or_declared_unported`), and deleting them would let
+ * the next GET route added to the reference fall through to the SPA with nothing to say so.
+ * An empty declaration is the partition asserting that there is nothing left to declare.
  */
 /**
  * SPLIT BY VERB SINCE P6b, and the split is the point rather than a tidy-up. Five paths
@@ -101,24 +104,26 @@ const CTYPES = {
  * with a 404: a plausible-looking response where the reference returns 200 or 409, which
  * is exactly the failure the 501 exists to prevent.
  */
-export const NOT_PORTED = new Set([
-  '/api/jobs',
-]);
-export const NOT_PORTED_PREFIXES = ['/api/jobs/'];
+/** EMPTY SINCE P6g — every GET the reference answers is answered here. */
+export const NOT_PORTED = new Set([]);
+export const NOT_PORTED_PREFIXES = [];
 
 /**
- * The POSTs that have not crossed YET. P6g and P6h empty this.
+ * The POSTs that have not crossed YET. P6h empties the first; the second has its own due date.
  *
  * `/api/restart` hands off to a detached `web restart`, which is the daemon lifecycle P6h
  * owns. `/api/install` is `api_install_toggle` — 27 endpoint lines over 293 lines of
  * unported all-or-nothing tree moves with rollback, a stash layout and a host fork; see
  * `js/web/actions.mjs`'s header for the measurement and why a web phase is the wrong place
  * for it.
+ *
+ * THE PREFIX LIST IS EMPTY SINCE P6g — `/api/jobs/` and `/api/actions/` both dispatch now.
+ * It stays for the reason the GET pair above stays.
  */
 export const NOT_PORTED_POST = new Set([
   '/api/restart', '/api/install',
 ]);
-export const NOT_PORTED_POST_PREFIXES = ['/api/jobs/', '/api/actions/'];
+export const NOT_PORTED_POST_PREFIXES = [];
 
 /**
  * The POSTs that will NEVER cross, which is a different claim from the set above.
@@ -199,7 +204,23 @@ export const POST_ROUTES_CONVENTION = Object.fromEntries(
  * `test_the_declared_partition_is_the_one_the_dispatcher_uses` probes all three against
  * the running handler as well.
  */
-export const PORTED_INLINE = ['/api/ping', '/api/docs', '/api/docs/page/'];
+export const PORTED_INLINE = ['/api/ping', '/api/docs', '/api/docs/page/',
+  '/api/jobs', '/api/jobs/'];
+
+/**
+ * The POSTs P6g answers outside `POST_ROUTES`, and they are outside it for a reason the
+ * table's SECOND COLUMN makes plain.
+ *
+ * `POST_ROUTES` maps a route to `(fn, okIs409)` — one handler taking `(state, body)`, one
+ * boolean deciding 200 against 409. The jobs routes fit neither half. `/api/jobs/<id>/cancel`
+ * answers 200 or 404 on a lookup, not on an `ok` field; `/api/actions/<x>` answers 202 with a
+ * job id, 409 when the runner is busy, 404 for an action the table does not name, 501 for one
+ * that has not crossed, 400 or 409 for a resolver's refusal, and 200 for `restore` — six
+ * statuses over one prefix, none of them read off `ok`. Bending the column to fit would make
+ * it lie about the five routes it currently describes exactly, so these dispatch beside the
+ * table and `tests/test_web_jobs.py` reads them out of `PORTED_POST_INLINE` instead.
+ */
+export const PORTED_POST_INLINE = ['/api/shutdown', '/api/jobs/', '/api/actions/'];
 
 function notPorted(path) {
   return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));
@@ -239,7 +260,12 @@ function readJsonBody(buf) {
 
 // ---- the request handler ---------------------------------------------------
 
-export function makeHandler(state, token, dist, holder = null) {
+/**
+ * `make_handler(state, jm, token, dist, holder)` — `jm` is the SECOND argument here as it is
+ * there. P6a shipped this without it because there was no `JobManager` to pass; every caller
+ * moved in the same commit that added one.
+ */
+export function makeHandler(state, jm, token, dist, holder = null) {
   const staticCache = new Map();
 
   function sendBytes(res, body, ctype, code = 200, extra = null, acceptEncoding = '') {
@@ -314,6 +340,14 @@ export function makeHandler(state, token, dist, holder = null) {
         throw e;
       }
     }
+    if (path === '/api/jobs') return sendJson(res, { jobs: jm.recent() }, 200, ae);
+    if (path.startsWith('/api/jobs/')) {
+      // `path.rsplit("/", 1)[1]` — the LAST segment, so `/api/jobs/a/b` looks up `b` and
+      // misses, rather than 404ing on the shape.
+      const j = jm.get(path.slice(path.lastIndexOf('/') + 1));
+      return j ? sendJson(res, j, 200, ae)
+        : sendJson(res, { error: 'no such job' }, 404, ae);
+    }
     if (notPorted(path)) {
       return sendJson(res, { error: `not ported yet: ${path}` }, 501, ae);
     }
@@ -346,10 +380,76 @@ export function makeHandler(state, token, dist, holder = null) {
       const obj = fn(state, readJsonBody(body));
       return sendJson(res, obj, (okIs409 && !pyTruthy(obj.ok)) ? 409 : 200, ae);
     }
+    if (path.startsWith('/api/jobs/') && path.endsWith('/cancel')) {
+      // `path.split("/")[3]`, positional — so `/api/jobs/<id>/cancel` takes `<id>` and a
+      // deeper path takes its third segment, which is what the reference looks up.
+      const jid = path.split('/')[3];
+      return jm.cancel(jid) ? sendJson(res, { cancelled: jid }, 200, ae)
+        : sendJson(res, { error: 'no running job by that id' }, 404, ae);
+    }
+    if (path.startsWith('/api/actions/')) {
+      return doAction(res, path.slice(path.lastIndexOf('/') + 1), readJsonBody(body), ae);
+    }
     if (notPortedPost(path)) {
       return sendJson(res, { error: `not ported yet: ${path}` }, 501, ae);
     }
     return sendJson(res, { error: 'not found' }, 404, ae);
+  }
+
+  /**
+   * `/api/actions/<x>` — the reference's own order, which is the part a port gets wrong.
+   *
+   * `restore` is answered BEFORE anything else because it is synchronous and returns a result
+   * rather than a job id. `install` and `deploy` resolve their argv from the body, and their
+   * refusal statuses DIFFER — 409 for install (its target came from an allowlist, so a refusal
+   * means the world changed under the client) and 400 for deploy (its path came from the body,
+   * so a refusal means the body was wrong). That asymmetry is the reference's; a port that
+   * unified them would be wrong on one of the two and no cell would say which.
+   *
+   * THEN the three unported rows, and only then the table. Order matters: `update` is a REAL
+   * action whose verb has not crossed, and letting it fall through to `actionCommands` would
+   * answer `{"error": "unknown action update"}` — the same thing a typo gets.
+   */
+  function doAction(res, action, body, ae) {
+    if (action === 'restore') {
+      return sendJson(res, apiRestore(state, pyTruthy(body.files) ? body.files : []), 200, ae);
+    }
+    if (action === 'install') {
+      const plan = apiInstallCmd(state, body);
+      if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 409, ae);
+      return startJob(res, 'install', [plan.cmd], ae);
+    }
+    if (action === 'deploy') {
+      const plan = apiDeployCmd(state, body);
+      if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 400, ae);
+      return startJob(res, 'deploy', [plan.cmd], ae);
+    }
+    if (NOT_PORTED_ACTIONS.has(action)) {
+      return sendJson(res, { error: `not ported yet: /api/actions/${action}` }, 501, ae);
+    }
+    // Build can be re-themed/re-targeted from the UI picker; the other actions self-resolve
+    // the deployed theme downstream. Footprint, posture and mode always follow the current
+    // install, so a re-theme preserves lean/full, the register and the operating mode.
+    const [theme, emit] = action === 'build'
+      ? buildOverride(state, body) : [state.theme, state.emit];
+    const cmds = actionCommands(action, {
+      theme, emit, footprint: state.footprint, posture: state.posture, mode: state.mode,
+    });
+    if (!pyTruthy(cmds)) {
+      return sendJson(res, { error: `unknown action ${action}` }, 404, ae);
+    }
+    return startJob(res, action, cmds, ae);
+  }
+
+  /**
+   * The 202/409 pair every job route ends in. `state.refresh()` on finish is not optional: a
+   * Build may re-theme the install, and the re-detect must read the new `.geneseed-emit` or
+   * the console keeps serving the old mode (the line P6b dropped and P6f restored).
+   */
+  function startJob(res, action, cmds, ae) {
+    const jid = jm.start(action, cmds, () => state.refresh());
+    if (jid === null) return sendJson(res, { error: 'busy' }, 409, ae);
+    return sendJson(res, { job_id: jid }, 202, ae);
   }
 
   return function handler(req, res) {
@@ -529,7 +629,10 @@ export function serve({ theme = null, port = 4747, daemon = false } = {}) {
   }
   const token = randomBytes(24).toString('base64url');
   const holder = {};
-  const srv = createServer(makeHandler(state, token, dist, holder));
+  // `JobManager(history_path=state.target / ".geneseed-web-runs.json")` — the console's job
+  // list survives a reload and a restart because it is a FILE, not a process's memory.
+  const jm = new JobManager(join(state.target, '.geneseed-web-runs.json'));
+  const srv = createServer(makeHandler(state, jm, token, dist, holder));
   holder.srv = srv;
   return new Promise((done) => {
     srv.on('error', () => {

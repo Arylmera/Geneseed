@@ -478,8 +478,8 @@ export function apiWikiItem(state, name) {
   throw new NotFound(name);
 }
 
-/** `harness._within` — containment through `normcase`, segment-wise. */
-function within(child, parent) {
+/** `harness._within` — containment through `normcase`, segment-wise. Exported for P6g's restore. */
+export function within(child, parent) {
   const c = normcase(child).split(/[\\/]/);
   const p = normcase(parent).split(/[\\/]/);
   return p.length <= c.length && p.every((seg, i) => c[i] === seg);
@@ -617,8 +617,8 @@ export function apiItem(state, type, name) {
 
 // ---- the eight endpoints -------------------------------------------------------------
 
-/** `_web_actions._theme_choices`. */
-function themeChoices() {
+/** `_web_actions._theme_choices`. Exported since P6g — `_build_override` is its third reader. */
+export function themeChoices() {
   return themeOptions().map(([name, blurb]) => {
     const data = readJsonMaybe(path.join(THEMES, `${name}.json`));
     const d = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
@@ -628,7 +628,7 @@ function themeChoices() {
 }
 
 /** `_web_actions._emit_choices`. */
-const emitChoices = () => EMIT_OPTIONS.map(([name, desc]) => ({ name, desc }));
+export const emitChoices = () => EMIT_OPTIONS.map(([name, desc]) => ({ name, desc }));
 
 /** `_web_actions.api_themes`. */
 export function apiThemes(state) {

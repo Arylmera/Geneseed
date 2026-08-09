@@ -95,7 +95,7 @@ export function manifestScope(d) {
  * `finally`, because the emit can throw: a swallow that leaked would silence every later line
  * this process printed, including the refusal explaining why.
  */
-function withStdoutSwallowed(fn) {
+export function withStdoutSwallowed(fn) {
   const real = process.stdout.write.bind(process.stdout);
   process.stdout.write = () => true;
   try {

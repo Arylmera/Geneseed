@@ -117,11 +117,61 @@ _HEADERS = ("Content-Type", "Content-Length", "Content-Encoding", "Vary", "Cache
 _WEB_STAMPS = (
     (re.compile(r'"checked_at": "\d{4}-\d{2}-\d{2} \d{2}:\d{2}"'), '"checked_at": "<WHEN>"'),
     (re.compile(r'"build_time": "\d{4}-\d{2}-\d{2} \d{2}:\d{2}"'), '"build_time": "<WHEN>"'),
+    # ---- P6g's job id, which is the same WIDTH on both sides ------------------------------
+    #
+    # 16 hex characters, `secrets.token_hex(8)` against `randomBytes(8).toString('hex')`, so
+    # it belongs above the line rather than below it: the Content-Length it produces IS
+    # comparable, and a cell that SEEDS a history file can name its own ids in any other
+    # spelling and have them compared literally — which is what gates the ordering and the
+    # running-job drop in `_load_history`.
+    (re.compile(r'"(job_id|id)": "[0-9a-f]{16}"'), r'"\1": "<JOBID>"'),
+)
+
+# The same idea for values whose WIDTH differs too, which is a second question and not a
+# tidier spelling of the first.
+#
+# `Content-Length` is a consequence of the body, so a normalised value of a DIFFERENT LENGTH
+# on the two sides moves the header as well — and comparing the header would then
+# re-introduce, through the back door, the comparison this file has already decided it cannot
+# make. `checked_at` and `build_time` are exactly 16 characters on both sides forever, so
+# their cells still gate the header exactly. These four are not:
+#
+#   * `python` — `"3.13.5"` against `null`, the P6b field with no honest twin.
+#   * `started` / `duration` — a job's wall clock and its measured runtime. `time.time()`
+#     yields seven decimals and `Date.now() / 1000` yields three, and BOTH are spelt without
+#     a decimal point when they land on a whole second (`json.dumps(1754.0)` is `1754.0`,
+#     `JSON.stringify(1754)` is `1754`) — so the pattern must accept a bare integer or it
+#     misses the Node side about one run in a thousand, which is the flakiest possible gate.
+#     `null` is deliberately NOT matched: that is the RUNNING state, and it must stay visible.
+#   * the `$ <argv>` echo — see below.
+_WEB_STAMPS_WIDTH = (
     # The one field in P6b with no honest twin: the reference reports the interpreter
     # running the daemon and a Node daemon has none. Both spellings are accepted so the
     # tag appears on both sides; the reference's actual value is asserted absolutely in
     # `tests/test_web_server.py`, which is the debt a tolerant comparison owes.
     (re.compile(r'"python": (?:"\d+\.\d+\.\d+[^"]*"|null)'), '"python": "<RUNTIME>"'),
+    (re.compile(r'"started": \d+(?:\.\d+)?'), '"started": <T>'),
+    (re.compile(r'"duration": \d+(?:\.\d+)?'), '"duration": <SECS>'),
+    # THE `$ <argv>` ECHO, and it is the one normalisation this phase had to argue for.
+    #
+    # `JobManager._run` writes `$ ` + the argv it is about to start as the job's first output
+    # line. The two argvs cannot be byte-equal by construction — the reference runs
+    # `C:\Python313\python.exe …\rituals\harness.py doctor` and the twin runs
+    # `node …\bin\geneseed-cli.mjs doctor` — and that is the POINT of the port, not a defect
+    # in it. Byte-comparing it would demand the twin name `python harness.py`, which is
+    # exactly the passthrough this port exists to remove.
+    #
+    # So it is normalised here and asserted ABSOLUTELY on each side in
+    # `tests/test_web_jobs.py`: the reference's argv head is its own interpreter and
+    # `harness.py`/`build.py`, the twin's is `node` and `bin/geneseed-cli.mjs`/
+    # `bin/geneseed.mjs`, and the TAIL — every argument after the head, where a real port bug
+    # would live — is compared literally. That is the P6b `python` precedent, now with a name.
+    #
+    # ANCHORED ON `"output": "` OR ON AN ESCAPED NEWLINE, never on a bare `$ `: the job's
+    # output is arbitrary text and a `$ ` inside it is not an echo line. The body is JSON, so
+    # the line ends at the first `\n` ESCAPE and can carry no raw newline.
+    (re.compile(r'(?<=: ")\$ (?:[^"\\]|\\.)*?\\n'), '$ <ARGV>\\\\n'),
+    (re.compile(r'(?<=\\n)\$ (?:[^"\\]|\\.)*?\\n'), '$ <ARGV>\\\\n'),
 )
 
 
@@ -152,6 +202,15 @@ _WEB_STAMPS = (
 # a negative would be `kill(-1)` on POSIX, which signals every process the user owns.
 _DEAD_PID = 2000000000
 
+# `poll=True`'s budget. A job cell starts a REAL child process — P6g's is `doctor`, which
+# renders a theme, runs five emits and syntax-checks every plugin — so the wait is seconds,
+# not milliseconds. 240 × 0.25 s is four minutes per poll, which is long enough that
+# exhausting it means the job wedged rather than that the machine was busy; the cell's own
+# `expect` names `"status": "done"`, so an exhausted poll is reported as a VACUOUS cell
+# rather than compared as a pair of matching `running` bodies.
+_POLL_MAX = 240
+_POLL_EVERY = 0.25
+
 
 def _clock_repl(now: int) -> dict:
     """P6f's DATES, derived from the cell's own shared clock rather than destamped.
@@ -181,15 +240,27 @@ def _web_destamp(data: bytes) -> bytes:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
         return data
-    for pat, repl in _WEB_STAMPS:
+    for pat, repl in _WEB_STAMPS + _WEB_STAMPS_WIDTH:
         text = pat.sub(repl, text)
     return text.encode("utf-8")
+
+
+def _width_varies(body: bytes) -> bool:
+    """Does this body carry a normalised value whose LENGTH differs between the two sides?
+
+    The question `Content-Length` asks. See `_WEB_STAMPS_WIDTH`.
+    """
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return any(pat.search(text) for pat, _ in _WEB_STAMPS_WIDTH)
 
 
 # ---- cells -----------------------------------------------------------------
 
 def _req(method="GET", path="/api/ping", headers=None, body=None, reconnect=False,
-         token=False, from_body=None):
+         token=False, from_body=None, poll=False):
     """One request.
 
     `token=True` sends the running server's real CSRF token, which the cell cannot know
@@ -208,9 +279,21 @@ def _req(method="GET", path="/api/ping", headers=None, body=None, reconnect=Fals
     green. `<rN sent>` puts the bytes that actually went on the wire into the snapshot, so
     the two sides are compared on what they SENT as well as on what came back — and an
     EMPTY substitution is reported as a vacuity finding rather than left to be discovered.
+
+    `{FROM_BODY}` IS SUBSTITUTED INTO THE PATH TOO, which P6g needs and P6f did not: a job
+    is polled at `GET /api/jobs/<id>` and the id arrives in the 202's body. The same
+    mechanism, one field over.
+
+    `poll=True` re-sends this request until the response body's `status` stops being
+    `"running"`, and records only the LAST one. A job is asynchronous by design — that is the
+    whole reason it is a job and not a synchronous endpoint — so a single GET after the 202
+    would race the child process and record `running` or `done` depending on how the machine
+    felt. Only the final response is an observation; the intermediate ones are the wait. The
+    attempt cap turns a wedged job into a reported difference rather than a hung harness.
     """
     return {"method": method, "path": path, "headers": dict(headers or {}),
-            "body": body, "reconnect": reconnect, "token": token, "from_body": from_body}
+            "body": body, "reconnect": reconnect, "token": token, "from_body": from_body,
+            "poll": poll}
 
 
 def _an_asset() -> str:
@@ -368,7 +451,193 @@ def cells() -> list[dict]:
     out += _graph_cells(cell)
     out += _activity_cells(cell)
     out += _mutate_cells(cell)
+    out += _job_cells(cell)
     return out
+
+
+# ---- P6g — the job runner and the action table -----------------------------------------
+#
+# A JOB CELL IS A THREE-REQUEST SCRIPT and the harness reuses one connection, so it is ONE
+# cell: POST `/api/actions/<x>` answers 202 with a fresh id, `GET /api/jobs/<id>` is polled
+# until it stops saying `running`, and `GET /api/jobs` reads the history back. The id is
+# carried across by `from_body`, which P6f built for a request BODY and P6g needed in a PATH.
+#
+# WHICH ACTIONS A CELL MAY RUN, and the answer is not "the cheapest". A job starts a REAL
+# child process against the REAL checkout (`cwd=ROOT`, which is the reference's own choice),
+# so the criterion is what that child may TOUCH. `doctor` and `build` render; `uninstall`
+# DELETES, and `_install_targets()` walks the job's cwd — so a cell that ran it would be one
+# stray manifest in the developer's own checkout away from deleting their harness. The two
+# rows below run against a world with NO install, where each is a refusal that writes
+# nothing: `rebuild-all` prints "no active installs" and exits 0, `diff --out` writes one
+# line to STDERR and exits 1. Between them they gate both exit-code arms, both streams and
+# the `[web] ✗` epilogue, for the price of two sub-second children.
+#
+# THE OTHER THREE ROWS ARE GATED BY A CORPUS, not by a cell — `tests/test_web_jobs.py` calls
+# `action_commands` and `actionCommands` directly and compares all eight rows. A cell runs the
+# PROGRAM; a corpus runs the FUNCTION, and the argv is a function's return value that no
+# response body ever carries.
+#
+# AND THE `$ <argv>` ECHO CANNOT BE COMPARED. See `_WEB_STAMPS`' last two entries: the two
+# argvs differ by construction and that difference IS the port. Normalised here, asserted
+# absolutely per side there.
+_OC_PATH = "{homeJ}{sepJ}.config{sepJ}opencode"
+
+# A history file as `_save_history` writes one, seeded so `_load_history` has something to
+# read. Key ORDER is the file's order on both sides (`json.dumps` and `JSON.stringify` both
+# preserve insertion order, and neither sorts), so the whole record shape is comparable.
+#
+# FOUR ENTRIES, THREE OF THEM NEGATIVE. `seed-live` is `running`, which means the server died
+# mid-job and the entry must be DROPPED rather than resurrected as a job that will never
+# finish. The `id`-less object and the bare string are the two `isinstance` guards. And the
+# two survivors are seeded OUT OF ORDER so the `started` sort has work to do — their ids are
+# not 16 hex, so `_WEB_STAMPS` leaves them alone and the order is compared literally.
+_SEEDED_HISTORY = json.dumps([
+    {"id": "seed-b", "action": "build", "status": "failed", "output": "the newer one\n",
+     "returncode": 1, "started": 200, "duration": 2.5},
+    {"id": "seed-a", "action": "doctor", "status": "done", "output": "the older one\n",
+     "returncode": 0, "started": 100, "duration": 1.5},
+    {"id": "seed-live", "action": "update", "status": "running", "output": "orphaned\n",
+     "returncode": None, "started": 300, "duration": None},
+    {"action": "doctor", "status": "done", "output": "no id at all\n"},
+    "not a dict",
+])
+
+
+def _job_cells(cell) -> list[dict]:
+    return [
+        # ---- the read side, before anything has run -------------------------------------
+        cell("jobs/nothing-has-run-so-the-list-is-empty-and-an-unknown-id-is-a-404",
+             [_req(path="/api/jobs"),
+              _req(path="/api/jobs/0123456789abcdef"),
+              _req("POST", path="/api/jobs/0123456789abcdef/cancel", body=b"{}", token=True),
+              _req("POST", path="/api/actions/nope", body=b"{}", token=True)],
+             world={"repo/.keep": ""},
+             # The four answers that need no child process, and the last two are the
+             # partition's own shape. `cancel` on an id that never existed is a 404 and not a
+             # 500; an action the TABLE does not name is `{"error": "unknown action nope"}` at
+             # 404 — which is the SAME shape the three unported rows would take if they were
+             # left to fall through, and precisely why they are declared as 501 instead. The
+             # dispatcher probe in tests/test_web_server.py holds the two apart.
+             expect=['{"jobs": []}', '{"error": "no such job"}', '404 Not Found',
+                     '{"error": "no running job by that id"}',
+                     '{"error": "unknown action nope"}'],
+             expect_absent=['not ported yet']),
+
+        cell("jobs/a-persisted-history-is-restored-and-a-running-entry-is-dropped",
+             [_req(path="/api/jobs"), _req(path="/api/jobs/seed-a")],
+             world={"repo/.keep": "", f"{_OC}/.geneseed-web-runs.json": _SEEDED_HISTORY},
+             # `_load_history` is the only thing standing between a reload and an empty
+             # console, and every one of its rules is a silent failure: a port that skipped
+             # the `running` filter shows a job that will never finish, one that skipped the
+             # sort shows the newest first, one that skipped the `id` guard crashes on the
+             # object that has none. The second request proves the restored entries are
+             # addressable and not merely listed.
+             expect=['{"jobs": [{"id": "seed-a", "action": "doctor", "status": "done", '
+                     '"output": "the older one\\n", "returncode": 0, "started": <T>, '
+                     '"duration": <SECS>}, {"id": "seed-b", "action": "build"',
+                     '{"id": "seed-a", "action": "doctor"'],
+             expect_absent=['seed-live', 'orphaned', 'no id at all', 'not a dict'],
+             # A read must not rewrite the file it read.
+             expect_files=[f"{_OC}/.geneseed-web-runs.json"]),
+
+        # ---- the runner, end to end ------------------------------------------------------
+        cell("jobs/two-actions-run-in-turn-stream-both-streams-and-persist-their-history",
+             [_req("POST", path="/api/actions/build-all", body=b"{}", token=True),
+              _req(path="/api/jobs/{FROM_BODY}", from_body="job_id", poll=True),
+              _req("POST", path="/api/actions/export", body=b"{}", token=True),
+              _req(path="/api/jobs/{FROM_BODY}", from_body="job_id", poll=True),
+              _req(path="/api/jobs")],
+             # NO INSTALL, deliberately — see the block above. `.keep` under the config dir
+             # is what makes the directory exist, which `_save_history`'s `write_text` needs
+             # and which an empty world would silently deny (its OSError is swallowed, so the
+             # history file would simply never appear and this cell's file gate would be
+             # vacuous).
+             world={"repo/.keep": "", f"{_OC}/.keep": ""},
+             expect=[
+                 # The 202 and its fresh id — normalised, but its SHAPE is the assertion:
+                 # a side that answered 200, or answered no id, leaves no tag here.
+                 '{"job_id": "<JOBID>"}',
+                 # rc 0, on STDOUT, from `[[py, h, "rebuild-all"]]`.
+                 '"action": "build-all", "status": "done"',
+                 '[rebuild-all] no active installs detected.',
+                 '"returncode": 0',
+                 # rc 1, on STDERR — which is the merge `stderr=STDOUT` performs and which a
+                 # port reading only stdout would drop entirely — plus the epilogue the
+                 # RUNNER appends when a step fails.
+                 '"action": "export", "status": "failed"',
+                 '[diff] no global Geneseed install at <HOME>',
+                 # `\\u2717`, not `✗`: `_send_json` is `json.dumps` with its default
+                 # `ensure_ascii=True`, so the epilogue reaches the wire escaped — and
+                 # `jsonDumpsCompact` had to agree, which P4b measured the hard way.
+                 '[web] \\u2717 command exited with code 1.',
+                 '"returncode": 1',
+                 # The echo line, once per job, normalised. Its ABSOLUTE form is
+                 # tests/test_web_jobs.py's.
+                 '"output": "$ <ARGV>\\n',
+             ],
+             # The finished-job order in the history, oldest first — `recent()` sorts by
+             # `started` and the console appends in that order. Anchored on the ARRAY, so it
+             # reads r5 and not a pair of single-job details two requests apart.
+             expect_re=[r'\{"jobs": \[\{"id": "<JOBID>", "action": "build-all".*'
+                        r'"action": "export"'],
+             expect_files=[f"{_OC}/.geneseed-web-runs.json"]),
+
+        # ---- /api/actions/restore — synchronous, not a job -------------------------------
+        cell("restore/the-source-render-wins-and-an-unknown-or-climbing-path-is-an-error",
+             [_req("POST", path="/api/actions/restore", token=True,
+                   body=b'{"files": ["AGENT.md", "nope.md", "../escaped.md", ""]}'),
+              _req(path="/api/diff")],
+             world=_installed(),
+             # `api_restore` renders the EXPECTED tree with the install's own host emit and
+             # footprint and then, per path: present in expected -> overwrite; absent from
+             # expected but present in deployed -> delete; neither -> an error. The seeded
+             # AGENT.md is a local edit, so the restore must replace it — and the `/api/diff`
+             # that follows is what proves it: the drift the first cell of this world reports
+             # is GONE. A restore nothing reads back is a restore no cell can see.
+             expect=['{"restored": ["AGENT.md"], "deleted": [],',
+                     '"nope.md: not in the source render nor deployed"',
+                     '"../escaped.md: outside the deployed tree"',
+                     '": outside the deployed tree"',
+                     '"deployed": true'],
+             # AGENT.md is the ONLY file the seeded manifest owns, so before the restore it
+             # is the diff's one `edited` row and after it there is no row for it at all —
+             # `_diff_collect` records nothing for a file that matches. The seeded body is
+             # named too, because it is what the unified diff would carry.
+             expect_absent=['A local edit the source render does not have',
+                            '"rel": "AGENT.md"'],
+             expect_files=[f"{_OC}/AGENT.md"]),
+
+        # ---- the two command RESOLVERS, on their refusal arms ----------------------------
+        cell("actions/install-and-deploy-refuse-every-body-they-cannot-validate",
+             [_req("POST", path="/api/actions/install", token=True,
+                   body=b'{"host": "opencode", "path": "nowhere"}'),
+              _req("POST", path="/api/actions/install", token=True,
+                   body=b'{"host": "opencode", "path": "' + _OC_PATH.encode() + b'"}'),
+              _req("POST", path="/api/actions/deploy", token=True, body=b'{}'),
+              _req("POST", path="/api/actions/deploy", token=True,
+                   body=b'{"host": "opencode"}'),
+              _req("POST", path="/api/actions/deploy", token=True,
+                   body=b'{"host": "opencode", "path": "{repoJ}{sepJ}nope"}'),
+              _req("POST", path="/api/actions/deploy", token=True,
+                   body=b'{"host": "opencode", "path": "' + _OC_PATH.encode() + b'"}'),
+              _req(path="/api/jobs")],
+             # A DISABLED install, so request two reaches the arm that exists only for it.
+             # Every request here is a refusal, and the last one is the control that says so:
+             # not one of them started a job.
+             world=_installed(**{f"{_OC}/.geneseed-disabled/.keep": ""}),
+             expect=['{"error": "not found: unknown install (host, path)"}',
+                     # `\\u2014`, not the em dash itself — `ensure_ascii=True`, as with the
+                     # `[web] \\u2717` epilogue three cells up. The ref-vs-ref self-check
+                     # reported this one as VACUOUS before the port existed.
+                     '{"error": "install is disabled \\u2014 reactivate it before '
+                     '(re)building"}', '409 Conflict',
+                     '{"error": "unknown host: (none)"}', '400 Bad Request',
+                     '{"error": "no folder given"}',
+                     '{"error": "not a folder: <SB>',
+                     '{"error": "that\'s a host global config dir',
+                     '{"jobs": []}'],
+             expect_absent=['"job_id"']),
+    ]
 
 
 # The body of a deployed-only skill, which is the ONE arbitrary text `api_graph` will parse
@@ -1941,9 +2210,13 @@ def _dyn_stamps(record: dict, port: int, pid: int) -> list[tuple[bytes, bytes]]:
     out.append((f"http://127.0.0.1:{port}".encode(), b"http://127.0.0.1:<PORT>"))
     out.append((f'"port": {port}'.encode(), b'"port": <PORT>'))
     out.append((f'"pid": {pid}'.encode(), b'"pid": <PID>'))
-    started = record.get("started")
-    if started is not None:
-        out.append((f'"started": {started}'.encode(), b'"started": <STARTED>'))
+    # THE RECORD'S `started` IS NOT HERE, and P6g is why. It used to be, as a literal
+    # `"started": <the integer second>` — and a JOB's `started` is a float whose integer part
+    # is that same second whenever the two were sampled inside one tick, so the literal bit a
+    # prefix out of it and left a per-run tail behind. `_WEB_STAMPS_WIDTH`'s
+    # `"started": \d+(?:\.\d+)?` covers the record too (its value is a bare integer, which
+    # that pattern accepts on purpose), so the field is still normalised — by the rule that
+    # can see BOTH spellings rather than by a literal that could only see one.
     return out
 
 
@@ -2018,6 +2291,17 @@ def _drive(port: int, token: str, requests: list[dict]) -> dict:
             if r["token"]:
                 headers["X-Geneseed-Token"] = token
             body = r["body"]
+            path = r["path"]
+            if r.get("from_body") is not None and "{FROM_BODY}" in path:
+                val = last.get(r["from_body"])
+                if val is None or val == "":
+                    obs[f"<r{i} from_body {r['from_body']} MISSING>"] = (
+                        b"the previous response carried no such field")
+                # NOT recorded as an observation. The id is destamped everywhere else it
+                # appears, so recording the path would only re-introduce the per-run value
+                # this harness normalises — and the linkage the substitution makes is gated
+                # by the STATUS instead: a request that carried the wrong id answers 404.
+                path = path.replace("{FROM_BODY}", str("" if val is None else val))
             if r.get("from_body") is not None and body is not None:
                 val = last.get(r["from_body"])
                 if val is None or val == "":
@@ -2033,28 +2317,42 @@ def _drive(port: int, token: str, requests: list[dict]) -> dict:
             if body is not None:
                 headers.setdefault("Content-Type", "application/json")
                 headers.setdefault("Content-Length", str(len(body)))
-            # `skip_accept_encoding`: http.client adds `Accept-Encoding: identity` on its
-            # own, and a cell that says nothing about the header must send nothing — the
-            # gzip branch is chosen by its presence.
-            conn.putrequest(r["method"], r["path"], skip_accept_encoding=True,
-                            skip_host=("Host" in headers))
-            for k, v in headers.items():
-                conn.putheader(k, v)
-            conn.endheaders(body if body is not None else None)
-            resp = conn.getresponse()
-            data = resp.read()
+            for attempt in range(_POLL_MAX if r.get("poll") else 1):
+                if attempt:
+                    time.sleep(_POLL_EVERY)
+                # `skip_accept_encoding`: http.client adds `Accept-Encoding: identity` on its
+                # own, and a cell that says nothing about the header must send nothing — the
+                # gzip branch is chosen by its presence.
+                conn.putrequest(r["method"], path, skip_accept_encoding=True,
+                                skip_host=("Host" in headers))
+                for k, v in headers.items():
+                    conn.putheader(k, v)
+                conn.endheaders(body if body is not None else None)
+                resp = conn.getresponse()
+                data = resp.read()
+                if not r.get("poll"):
+                    break
+                try:
+                    if json.loads(data.decode("utf-8")).get("status") != "running":
+                        break
+                except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+                    break
             enc = resp.getheader("Content-Encoding") or ""
             body_out = _decode_body(data, enc)
             # Content-Length is tagged in exactly two situations, and both are the same
             # rule: the length is a CONSEQUENCE of a value this harness has already
             # decided it cannot compare, so comparing the length would re-introduce the
             # comparison through the back door. `gzip` is the compressed stream (see
-            # `_decode_body`); `"python": ` is `/api/setup`'s runtime field, where the
-            # reference sends `"3.13.5"` and the Node daemon sends `null` — four bytes
-            # apart, for the one field in P6b with no honest twin. Its PRESENCE stays
-            # gated, which is what the tag is for, and the body itself is still compared
-            # byte for byte with the value normalised.
-            untagged = ('gzip' not in enc) and (b'"python": ' not in body_out)
+            # `_decode_body`); the other is any body carrying a WIDTH-VARIABLE normalised
+            # value (see `_WEB_STAMPS_WIDTH`). Its PRESENCE stays gated, which is what the
+            # tag is for, and the body itself is still compared byte for byte with the
+            # value normalised.
+            #
+            # P6g GENERALISED THE SECOND ARM, and it was a defect until it did: the test was
+            # `b'"python": ' not in body_out`, one field named by hand, and a job body's
+            # `started` (seven decimals against three) and `duration` moved Content-Length by
+            # one byte in the ref-vs-ref self-check before a line of the port existed.
+            untagged = ('gzip' not in enc) and not _width_varies(body_out)
             obs[f"<r{i} status>"] = f"{resp.status} {resp.reason}".encode()
             obs[f"<r{i} headers>"] = "\n".join(
                 f"{k}: {v if (untagged or k.title() != 'Content-Length') else '<CLEN>'}"
@@ -2196,8 +2494,16 @@ def run_cell(cli: list[str], cell: dict, now: "int | None" = None) -> "dict[str,
         roots = [("<HOME>", home), ("<REPO>", checkout), ("<REPO>", ROOT), ("<SB>", sb)]
 
         def clean(b: bytes) -> bytes:
-            return _web_destamp(harness_golden._destamp(
-                _apply(golden._normalise(_apply(b, stamps), roots), stamps)))
+            # `_web_destamp` FIRST, which P6g moved and which is not a tidy-up. `_dyn_stamps`
+            # carries a literal `"started": <the record's integer second>`, and a JOB's
+            # `started` is a FLOAT whose integer part is that same second whenever the two
+            # were sampled inside one tick. The literal replacement therefore ate the integer
+            # part and left `"started": <STARTED>.090433` behind — a per-run tail no later
+            # pattern could match, and one that only appeared when the clocks happened to
+            # agree. Running the field-and-value patterns first makes the whole number a tag
+            # before any literal can bite a prefix out of it.
+            return harness_golden._destamp(
+                _apply(golden._normalise(_apply(_web_destamp(b), stamps), roots), stamps))
 
         snap = {k: clean(v) for k, v in golden._snapshot(sb, roots).items()}
         snap.update({k: clean(v) for k, v in obs.items()})

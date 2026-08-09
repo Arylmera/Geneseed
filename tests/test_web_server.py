@@ -243,11 +243,13 @@ def _node_routes() -> dict:
         "import {PREFIX_ROUTES, STATE_ROUTES} from './js/web/api.mjs';"
         "import {NOT_PORTED_KINDS, PORTED_KINDS} from './js/web/docs.mjs';"
         "import {NOT_PORTED, NOT_PORTED_PREFIXES, NOT_PORTED_POST, DECLINED_POST,"
-        "  NOT_PORTED_POST_PREFIXES, PORTED_INLINE, PORTED_POST} from './js/web/server.mjs';"
+        "  NOT_PORTED_POST_PREFIXES, PORTED_INLINE, PORTED_POST,"
+        "  PORTED_POST_INLINE} from './js/web/server.mjs';"
         "process.stdout.write(JSON.stringify({"
         "  ported: [...Object.keys(STATE_ROUTES), ...PREFIX_ROUTES.map((r) => r[0]),"
         "           ...PORTED_INLINE],"
         "  unportedGet: [...NOT_PORTED, ...NOT_PORTED_PREFIXES],"
+        "  portedPostInline: [...PORTED_POST_INLINE],"
         "  portedPost: [...PORTED_POST],"
         "  declinedPost: [...DECLINED_POST],"
         "  unportedPost: [...NOT_PORTED_POST, ...NOT_PORTED_POST_PREFIXES],"
@@ -288,14 +290,20 @@ class TheTwoRouteTablesAgree(unittest.TestCase):
     def test_every_post_route_is_either_ported_or_declared_unported(self):
         _ref_get, ref_post = _reference_routes()
         js = _node_routes()
-        # `/api/shutdown` is the only POST the shell itself owns (P6a). Since P6f the
-        # partition has FOUR parts, not two, and the third is the point: `declinedPost` is
-        # a route that will never cross (`/api/pick-folder` is an OS-native folder dialog),
-        # which is a different claim from `unportedPost`'s "not yet". Folding them would
-        # make the to-do list wrong in the one direction nobody checks — a later phase
-        # emptying it would have to either port a GUI dialog or quietly delete a row.
-        covered = ({"/api/shutdown"} | set(js["portedPost"]) | set(js["declinedPost"])
-                   | set(js["unportedPost"]))
+        # Since P6f the partition has FOUR parts, not two, and the third is the point:
+        # `declinedPost` is a route that will never cross (`/api/pick-folder` is an OS-native
+        # folder dialog), which is a different claim from `unportedPost`'s "not yet". Folding
+        # them would make the to-do list wrong in the one direction nobody checks — a later
+        # phase emptying it would have to either port a GUI dialog or quietly delete a row.
+        #
+        # P6g ADDED THE FIFTH, and it is a DECLARATION rather than the hardcoded
+        # `{"/api/shutdown"}` this line used to carry. Three POST routes dispatch outside
+        # `POST_ROUTES` because the table's second column is the 409 convention and none of
+        # them answers on `ok`: the shell's own `/api/shutdown`, and the two job prefixes,
+        # which answer 202/409/404/501/400/200. Bending the column to fit would make it lie
+        # about the five routes it describes exactly.
+        covered = (set(js["portedPostInline"]) | set(js["portedPost"])
+                   | set(js["declinedPost"]) | set(js["unportedPost"]))
         self.assertEqual(ref_post, covered,
                          "the POST partition has drifted from the reference's routes")
         self.assertEqual(set(js["portedPost"]) & set(js["unportedPost"]), set())
@@ -328,22 +336,30 @@ class TheTwoRouteTablesAgree(unittest.TestCase):
         src = r"""
 import {createServer} from 'node:http';
 import {makeHandler, webState} from './js/web/server.mjs';
+import {JobManager} from './js/web/jobs.mjs';
 const holder = {};
-const srv = createServer(makeHandler(webState('neutral'), 'tok', 'nowhere', holder));
+// No history path: this probe must not write a job file into the developer's install.
+const srv = createServer(makeHandler(webState('neutral'), new JobManager(), 'tok',
+                                     'nowhere', holder));
 holder.srv = srv;
 srv.listen(0, '127.0.0.1', async () => {
   const base = `http://127.0.0.1:${srv.address().port}`;
-  const hit = async (method, p, tok) => (await fetch(base + p, {method,
+  const hit = async (method, p, tok, body) => (await fetch(base + p, {method,
     headers: tok ? {'X-Geneseed-Token': tok, 'Content-Type': 'application/json'} : {},
-    body: method === 'POST' ? '{}' : undefined})).status;
+    body: method === 'POST' ? (body ?? '{}') : undefined})).status;
   const out = {
-    unportedGet: await hit('GET', '/api/jobs'),
     portedGet: await hit('GET', '/api/profile'),
     portedPost: await hit('POST', '/api/excludes', 'tok'),
     unportedPost: await hit('POST', '/api/install', 'tok'),
     declinedPost: await hit('POST', '/api/pick-folder', 'tok'),
     declinedGet: await hit('GET', '/api/pick-folder'),
-    unportedPostPrefix: await hit('POST', '/api/actions/build', 'tok'),
+    // P6g's three, and none of them may START anything: this probe runs against the
+    // DEVELOPER'S OWN environment, so `/api/actions/build` (which the retired
+    // `unportedPostPrefix` probe used) would spawn a real build here.
+    jobsGet: await hit('GET', '/api/jobs'),
+    unportedAction: await hit('POST', '/api/actions/update', 'tok'),
+    unknownAction: await hit('POST', '/api/actions/nope', 'tok'),
+    inlineAction: await hit('POST', '/api/actions/restore', 'tok', '{"files": []}'),
     docsMenu: await hit('GET', '/api/docs'),
     portedKind: await hit('GET', '/api/docs/page/glossary'),
     unportedKind: await hit('GET', '/api/docs/page/cli'),
@@ -361,9 +377,14 @@ srv.listen(0, '127.0.0.1', async () => {
                            encoding="utf-8", timeout=60)
         self.assertEqual(r.returncode, 0, r.stderr[-800:])
         got = json.loads(r.stdout)
-        self.assertEqual(got["unportedGet"], 501, "an unported GET must say so")
         self.assertEqual(got["portedGet"], 200, "a ported GET must answer — the control, "
                                                 "without which every 501 below is vacuous")
+        # THE `unportedGet` PROBE IS RETIRED, on its own terms: P6g crossed `/api/jobs`, which
+        # was the last one, so `NOT_PORTED` is empty and there is no path left to ask. The two
+        # sets stay declared (see `js/web/server.mjs`) and the partition test above is what
+        # keeps them honest; asking a 501 of a route that answers 200 would be the assertion
+        # going stale rather than the gate holding.
+        self.assertEqual(got["jobsGet"], 200, "GET /api/jobs crossed in P6g")
         self.assertEqual(got["portedPost"], 409,
                          "a ported POST must answer, and an empty body is the 409 arm of "
                          "the convention — the control for the two 501s below")
@@ -376,7 +397,21 @@ srv.listen(0, '127.0.0.1', async () => {
                             "GET /api/pick-folder must fall through to the SPA: the POST "
                             "sets must not be consulted on a GET, which is what collapsing "
                             "them back into NOT_PORTED would do")
-        self.assertEqual(got["unportedPostPrefix"], 501, "the POST prefixes too")
+        # P6g's action partition, and the THREE answers are the assertion. `update` is a real
+        # action whose verb (`harness.py upgrade`) has not crossed, so it says 501; `nope` is
+        # not an action at all, so it gets the reference's own `unknown action` 404; and
+        # `restore` proves the prefix reaches a real handler, without which both refusals
+        # above would be satisfied by a dispatcher that answered nothing. A port that let the
+        # unported rows fall through to the table would answer 404 for `update` too — the same
+        # thing a typo gets — which is exactly what `NOT_PORTED_ACTIONS` exists to prevent.
+        self.assertEqual(got["unportedAction"], 501,
+                         "an action whose VERB has not crossed must say 501, not the 404 an "
+                         "unknown action gets")
+        self.assertEqual(got["unknownAction"], 404,
+                         "an action the table does not name is the reference's own 404")
+        self.assertEqual(got["inlineAction"], 200,
+                         "POST /api/actions/restore is synchronous and answers 200 — the "
+                         "control for the two refusals above")
         self.assertEqual(got["shellPost"], 200, "the shell's own POST still answers")
         # P6d's two inline routes and the KIND partition inside the second of them. The
         # ported kind beside the unported one is the same control the ported GET is above:
