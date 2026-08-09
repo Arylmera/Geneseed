@@ -9,6 +9,32 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's sixteenth piece: `geneseed diff` and `geneseed rebuild-all` have Node twins.**
+  Twelve of the harness's 24 commands now run from `node bin/geneseed-cli.mjs` as well as from
+  `python rituals/harness.py`: the drift report that shows what your deployed harness has that
+  a fresh render of the source does not (and exports it as a file you can hand to an agent to
+  back-port), and the sweep that re-emits every active install in place. 21 new side-by-side
+  checks compare everything either one can be observed doing — for `rebuild-all` that includes
+  every file of every rebuilt install.
+  **Your diffs are the same diffs.** Python's `difflib` makes specific choices about how to
+  line two files up, so the Node side reproduces it rather than using a different diff that
+  would also be correct and would not match. 176 generated cases check that, including files
+  long enough to trigger the heuristic Python applies only past 200 lines.
+  **Both commands preserve what an install already is.** A rebuild re-emits each install in
+  its own theme, host, footprint, posture and mode, read back off the install itself; `diff`
+  renders its "expected" copy the same way, so themed wording and a lean footprint are not
+  reported as your local edits.
+
+### Fixed
+- **`rebuild-all`'s progress lines came out in the wrong order when its output was redirected
+  to a file or a log** — every `[rebuild-all] <install>` line appeared *after* the build it
+  introduced, so each one named the wrong install. Only visible outside a terminal, which is
+  where the web UI's "build all" job log lives. Same helper, and the same shape, as the
+  swallowed-output fix in the previous release.
+- **The Node builder's console output now ends its lines the way the Python one does on
+  Windows.** Nothing you could see on screen, and a difference if you piped it into anything
+  that counts bytes.
+
 - **The port's fifteenth piece: `geneseed build`, `geneseed prompt` and `geneseed theme`
   have Node twins.** Ten of the harness's 24 commands now run from
   `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`: rendering the

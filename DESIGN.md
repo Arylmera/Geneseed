@@ -659,6 +659,52 @@ renders it as the name in parentheses.
   interpreter using the discovery the shim flip deleted; and a shim naming
   `bin/geneseed-cli.mjs` instead would answer three of the 24 verbs. The npm `bin` map is
   what replaces them, so they belong to the publish phase and not to this one.
+- **`diff` and `rebuild-all` cross** as [`js/diff.mjs`](js/diff.mjs) and `cmdRebuildAll` in
+  [`js/generate.mjs`](js/generate.mjs), with the install detectors extracted to
+  [`js/installs.mjs`](js/installs.mjs) and the registry to [`js/registry.mjs`](js/registry.mjs).
+  **Twelve of the 24 subcommands are now Node.**
+  **A closure walk cannot see through the standard library either.** An `ast` walk puts
+  `diff` at 252 LOC of marker and manifest reading, and the verb's *entire* user-visible
+  payload is `difflib.unified_diff`, which the walk counts as zero because `difflib` is not in
+  `rituals/`. There is no lazier answer than reproducing it: a generic JS diff produces a
+  correct diff and a *different* one, and what the acceptance matrix compares is bytes. So
+  [`js/lib/pydiff.mjs`](js/lib/pydiff.mjs) is `SequenceMatcher` and `unified_diff`, including
+  `autojunk` — the popular-line purge that engages at 200 elements and rewrites the hunks of
+  every real harness file, and which no fixture is large enough to reach.
+  **The rest of the diff is gated by cells and the algorithm by a corpus**, with the
+  unreachability measured in both directions: switching `autojunk` off turns 28 corpus cases
+  red and leaves all 189 acceptance cells green.
+  **Calling `main` in-process is not transparent, and `rebuild-all` is where that showed.**
+  Its contract is "continue past a failure so one broken install never blocks the rest",
+  which the Python gets for free from a subprocess return code. `bin/geneseed.mjs`'s `die`
+  called `process.exit`, which would have taken the loop, the CLI and every remaining install
+  with it — so it throws now and `main` converts every deliberate refusal to an exit code.
+  The first draft converted only `die`'s own, on the theory that a refusal from deeper down
+  should keep its stack; the cell for a bogus theme marker is what showed that was a
+  distinction with no principle behind it.
+  **A second live ordering bug in the same helper `build` found the first in.** The Python's
+  `[rebuild-all]` label lines arrived *after* the generator output they introduce, because
+  `print()` block-buffers when stdout is not a terminal while the inherited child writes
+  straight through — so every label named the install below it. Invisible in a terminal and
+  wrong in the web UI's "build all" log, the same consumer the `CREATE_NO_WINDOW` bug was
+  hiding output from. Fixed at the shared `run()`: flush before an inheriting spawn.
+  **And the driver's newlines are Python's now**, which closes an item carried since the
+  generator's CLI landed: its stdout was one byte short of the Python's on Windows because
+  `print()` translates and `process.stdout.write` does not, and no gate could see it —
+  `tests/golden.py` captures with `text=True`. `withPyNewlines` wraps the driver's `main`
+  rather than converting ~25 print sites, because those modules are *also* the body of the
+  seam child whose output a Python parent re-prints; translating at the site would translate
+  twice. The gate is a new `build` row in `test_the_two_entry_points_agree_on_stdout_BYTES`.
+  **`doctor` was scoped into this phase and is deliberately not in it.** Its closure is 925
+  LOC and it runs fifteen `_*_problems` checks that print nothing when they all pass — so
+  deleting any one of them is byte-identical in every clean cell, and the gate has to be one
+  *planted fault per check*. Measured: **ten of the fifteen read the checkout itself** — `src/`,
+  `themes/`, `README.md`, the web pages — and no cell can write there, because `ROOT` is
+  derived from the running file's own location on both sides and is the one thing the sandbox
+  cannot redirect. Gating `doctor` to this port's standard therefore needs a fixture kind that
+  does not exist yet: copy the checkout into the sandbox, plant one fault, and run *both*
+  binaries from the copy so their two `ROOT`s move together. That is the next phase's first
+  design decision rather than a corner of this one.
 
 ## 🚫 Explicitly out of scope
 
