@@ -9,6 +9,29 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's eighteenth piece: `geneseed uninstall` has a Node twin — and it is the first
+  one that DELETES.** Fourteen of the harness's 24 commands now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. Nothing about what
+  `uninstall` does has changed: it still removes only what the install's manifest claims,
+  still leaves your own files where they are, still never deletes `memory/` or `notebook/`
+  (`--archive-memory` moves them aside to a timestamped sibling), and still refuses to
+  proceed without `--yes` when it cannot ask.
+  **What changed is how it is checked.** Every earlier verb was proved by comparing what the
+  two implementations *wrote*. A removal needs the opposite question, and two implementations
+  that had both stopped deleting would have agreed perfectly in every test forever. So the
+  test harness grew two things: a record of every *directory* in the sandbox — an empty
+  leftover folder was invisible to all 219 previous cases, and cleaning up after itself is
+  half of what this command is for — and a way to state that a file or folder must be
+  **gone**. Thirty-five new cases, each of which also seeds a file the manifest does *not*
+  own and insists it survives: the difference between "removed the install" and "removed the
+  directory" is not a comment, it is a control.
+  **Two things the checking found, both in the existing Python.** When a file you own keeps
+  one of Geneseed's directories alive, the uninstall reports INCOMPLETE and tells you the
+  install marker was kept so you can retry — but for a *global* install the marker is already
+  gone by then, so the retry reports no install at all. And any unclaimed file under
+  `agents/` or `skills/` triggers that report even when everything Geneseed owned was removed
+  cleanly. Both are recorded as behaviour both implementations must share, not quietly fixed
+  on one side; the fix belongs to a change that can be reviewed on its own.
 - **The port's seventeenth piece: `geneseed doctor` has a Node twin.** Thirteen of the
   harness's 24 commands now run from `node bin/geneseed-cli.mjs` as well as from
   `python rituals/harness.py`: the one that validates the build — unresolved tokens, dead

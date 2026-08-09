@@ -2847,10 +2847,16 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     # husks and thirty-five cells would stay green while the half of the verb they were
     # written for went unobserved. Same shape as P5g's M30, which is why it is a stated
     # failure rather than an `if "<dirs>" in snap`.
+    # PRESENT *and* NON-EMPTY. The first draft checked only presence and mutation M22 —
+    # the walk left in place, its input replaced by `[]` — stayed green: an empty column
+    # compares equal on both sides and makes every husk assertion pass against an empty
+    # set. An empty column is never legitimate, because `run_cell` creates `home`, `repo`
+    # and `cfg` before any step runs, so there is no cell it could honestly describe.
     want_absent = cell.get("expect_absent_files", ())
-    if want_absent and "<dirs>" not in snap:
-        problems.append("the snapshot carries no <dirs> column, so every directory named "
-                        "in expect_absent_files would pass without being looked at")
+    if want_absent and not snap.get("<dirs>", b"").strip():
+        problems.append("the snapshot's <dirs> column is missing or empty, so every "
+                        "directory named in expect_absent_files would pass without being "
+                        "looked at — and the sandbox always holds home/repo/cfg")
         return problems
     kept = set(snap["<dirs>"].decode("utf-8").split("\n")) if want_absent else set()
     for unwanted in want_absent:

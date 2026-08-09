@@ -270,11 +270,15 @@ class TheAcceptanceHarnessIsNotVacuous(unittest.TestCase):
         # And the column the directory half depends on must be REQUIRED. Without this, a
         # fixture that stopped recording directories leaves every husk assertion passing on
         # an empty set — the cells stay green and observe half of what they claim.
-        self.assertTrue(
-            harness_golden.check_expectations(
-                {"expect_absent_files": ["made/husk"]},
-                {k: v for k, v in snap.items() if k != "<dirs>"}),
-            "a snapshot with no <dirs> column let a directory assertion pass unexamined")
+        for label, dirs in (("missing", None), ("empty", b""), ("blank", b"   \n")):
+            with self.subTest(dirs=label):
+                broken = {k: v for k, v in snap.items() if k != "<dirs>"}
+                if dirs is not None:
+                    broken["<dirs>"] = dirs
+                self.assertTrue(
+                    harness_golden.check_expectations(
+                        {"expect_absent_files": ["made/husk"]}, broken),
+                    f"a {label} <dirs> column let a directory assertion pass unexamined")
 
     def test_a_missing_candidate_binary_refuses_rather_than_comparing_ref_to_itself(self):
         """DECLARING the two-binary split and WIRING it are two properties.
