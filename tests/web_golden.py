@@ -141,11 +141,21 @@ def cells() -> list[dict]:
              # One request with a forged header is the whole gate, and it is the kind of
              # security branch a later sub-phase would assume someone else had covered.
              expect=['{"error": "forbidden host"}', "403 Forbidden"]),
-        cell("guard/a-forged-host-is-refused-on-post-before-the-token-is-looked-at",
-             [_req("POST", headers={"Host": "evil.example.com"}, body=b"{}", token=True)],
-             # Order matters and is observable: the host check runs FIRST, so a request
-             # carrying a VALID token still gets the host refusal. A port that checked the
-             # token first would answer `forbidden` here instead of `forbidden host`.
+        cell("guard/a-forged-host-beats-a-valid-token-on-post",
+             [_req("POST", path="/api/shutdown", headers={"Host": "evil.example.com"},
+                   body=b"{}", token=True)],
+             # The host guard is not excused by authentication: a request from a rebound
+             # page would carry the real token, because reading it out of index.html is
+             # exactly what the guard exists to stop.
+             expect=['{"error": "forbidden host"}']),
+        cell("guard/the-two-refusals-are-ordered-host-first",
+             [_req("POST", path="/api/shutdown", headers={"Host": "evil.example.com"},
+                   body=b"{}")],
+             # A request failing BOTH checks is the only one that can tell their order
+             # apart, and the cell above could not: with a valid token, host-first and
+             # token-first answer identically. M2 — swapping the two — survived until this
+             # cell existed. `expect_absent` distinguishes them by the closing brace, since
+             # `forbidden host` contains `forbidden`.
              expect=['{"error": "forbidden host"}'],
              expect_absent=['{"error": "forbidden"}']),
         cell("guard/a-post-without-the-token-is-refused",
@@ -337,22 +347,36 @@ def _drive(port: int, token: str, requests: list[dict]) -> dict:
     return obs
 
 
-def _stop(url: str, token: str, proc: subprocess.Popen) -> None:
-    """Best-effort graceful stop, then a kill. Never raises: this runs in a `finally` and
-    a harness that leaks a server per failed cell eats the port and then the machine."""
+def _stop(record: "dict | None", proc: subprocess.Popen) -> None:
+    """Graceful stop, then a kill. NEVER raises.
+
+    It runs in a `finally`, so anything it throws replaces the finding the cell was about
+    to report — and worse, it throws BEFORE the kill, leaving the server running. M11 is
+    what found that: a mutation that stopped writing the daemon record left `record` None,
+    `_stop` raised an IndexError parsing a port out of `""`, and the whole run died with
+    one orphaned server per cell instead of reporting fifteen cells whose server never came
+    up. A harness that leaks a process per failed cell eats the port and then the machine,
+    which is the failure this function exists to prevent. So: a bare `except Exception`, and
+    the kill outside it.
+    """
     try:
-        conn = http.client.HTTPConnection("127.0.0.1", int(url.rsplit(":", 1)[1]), timeout=3)
-        conn.request("POST", "/api/shutdown", body=b"{}",
-                     headers={"X-Geneseed-Token": token, "Content-Type": "application/json"})
-        conn.getresponse().read()
-        conn.close()
-    except (http.client.HTTPException, OSError, ValueError, socket.timeout):
+        if record and record.get("port"):
+            conn = http.client.HTTPConnection("127.0.0.1", int(record["port"]), timeout=3)
+            conn.request("POST", "/api/shutdown", body=b"{}",
+                         headers={"X-Geneseed-Token": record.get("token", ""),
+                                  "Content-Type": "application/json"})
+            conn.getresponse().read()
+            conn.close()
+    except Exception:  # noqa: BLE001  — see the docstring; nothing here may escape
         pass
     try:
         proc.wait(timeout=10)
     except subprocess.TimeoutExpired:
         proc.kill()
-        proc.wait(timeout=10)
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
 
 
 def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
@@ -385,13 +409,13 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
         record, obs = None, {}
         try:
             record = _wait_for_record(sb, proc)
-            if record is None:
-                out, err = proc.communicate(timeout=10)
-                return f"server did not start (rc={proc.returncode}): {out[-400:]}{err[-400:]}"
-            obs = _drive(record["port"], record.get("token", ""), cell["requests"])
+            if record is not None:
+                obs = _drive(record["port"], record.get("token", ""), cell["requests"])
         finally:
-            _stop(record["url"] if record else "", record.get("token", "") if record else "",
-                  proc)
+            _stop(record, proc)
+        if record is None:
+            out, err = proc.communicate(timeout=10)
+            return f"server did not start (rc={proc.returncode}): {out[-400:]}{err[-400:]}"
         out, err = proc.communicate(timeout=10)
 
         stamps = _dyn_stamps(record, record["port"], record["pid"])

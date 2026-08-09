@@ -205,11 +205,18 @@ export function makeHandler(state, token, dist, holder = null) {
       }
       if (req.method === 'POST') {
         // Drain the body BEFORE routing, as the reference does and for its stated
-        // reason — under keep-alive both guards answer without reading it. Node's
-        // parser tracks the message boundary itself, so an unread body would not
-        // corrupt the next request here; the read stays because `_read_json_body`
-        // needs it from P6f, and because a shell that diverged only under load is
-        // the worst kind of divergence to carry.
+        // reason — under keep-alive an unread body is parsed as the next request line,
+        // and both guards answer without ever reaching a route that would read it.
+        //
+        // THIS HALF OF IT IS INDISTINGUISHABLE HERE, and measured rather than assumed:
+        // two mutations — reading zero bytes, then neither reading nor resuming the
+        // stream — both survived the keep-alive cell, which the reference needs the
+        // drain to pass. Node's HTTP parser owns the message boundary, so unread body
+        // bytes are discarded when the response ends instead of being re-parsed. It
+        // stays because `_read_json_body` needs the bytes from P6f on, and because a
+        // shell whose two implementations diverged only under load would be the worst
+        // kind of divergence to carry. UNREACHABLE is not the word for it: the branch
+        // runs on every POST, it simply cannot be observed to matter on this runtime.
         const length = pyInt(String(req.headers['content-length'] ?? '')) ?? 0;
         return readBody(req, length, (buf) => {
           req._body = buf;
