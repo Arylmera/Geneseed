@@ -1034,6 +1034,35 @@ renders it as the name in parentheses.
   from an OpenCode plugin and carry a float, and `JSON.parse` loses Python's `1.0`.
   **Eighteen mutations, eighteen fire, no survivors** — two of them visible only in the file
   snapshot, because the response body is byte-identical with the unlink removed.
+- **The web console starts WRITING, and the argv-in-a-response-body trap had a false
+  premise.** [`js/web/actions.mjs`](js/web/actions.mjs) and [`js/mcp.mjs`](js/mcp.mjs) answer
+  the eight mutating POSTs that own their own path plus the `/api/rules` and `/api/mcp` GETs
+  that had to cross with them — **27 of 29 web paths, still fifteen subcommands.** The plan
+  called `api_install_cmd`'s `{"cmd": [sys.executable, "build.py", …]}` "a Python argv, as
+  DATA, in a response body" and offered two designs for it. **It is not in a response body**:
+  no consumer exists in `web/src/`, and `_post_routes` hands the list straight to the job
+  runner in the same process. So the "better design" bought nothing, `web/dist` did not need
+  rebuilding, and the twin simply names its own runtime — gated by a corpus rather than by a
+  byte gate that can never see the value. **Measure who READS a value before designing around
+  its shape.**
+  **A partition that shrinks needs a partition that does not.** `/api/pick-folder` opens an
+  OS-native folder dialog and will never cross, so it is declared in `DECLINED_POST` rather
+  than in `NOT_PORTED_POST` — folding a permanent decline into a to-do list makes the list
+  wrong in the one direction nobody checks.
+  **The 409 convention is a per-route column, not a rule about bodies**: five paths map
+  `ok: false` to 409, `/api/activity` answers 200 regardless, and `/api/memory/delete` carries
+  no `ok` at all. **`_read_json_body` finally has callers**, which is what P6a's retained
+  drain was for — a body that never parsed must reach the endpoint as `{}` and be refused by
+  its own validation, never as a 500 carrying a parser message the two runtimes word
+  differently.
+  **A cell with an upper-case filename found a live bug three phases old**: `sorted()` over
+  `Path` objects is case-folded on Windows, so `MEMORY.md` files under `m`, where JS's default
+  comparator puts `M` before `a` — every seeded memory file since P6b had been lower-case.
+  `comparePaths` already existed; three call sites in the catalog readers were not using it.
+  **Thirty mutations, thirty fire** — but two survived the first pass, and both were questions
+  about the CORPUS OF INPUTS. One was closed by sending a truthy non-boolean; the other could
+  not be closed by any cell, so the 409 column itself became the thing under test, read out of
+  the reference by `ast` and compared against the table `doPost` dispatches on.
 
 ## 🚫 Explicitly out of scope
 
