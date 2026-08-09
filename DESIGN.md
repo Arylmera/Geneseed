@@ -942,6 +942,44 @@ renders it as the name in parentheses.
   declaration is not a gate on the dispatcher.** The fix drives the real handler over
   `node:http`, one probe per branch of the partition, with a ported route beside them as
   the control — without which every 501 in the list is vacuous.
+- **The catalog crosses, and the taxonomy it needed was already ported.**
+  `/api/catalog/<section>`, `/api/item/<type>/<name>` and the wiki reader answer from
+  [`js/web/api.mjs`](js/web/api.mjs), over a new
+  [`js/inventory.mjs`](js/inventory.mjs) — `_harness_tui.py`'s catalog half. **Still
+  fifteen subcommands; still no call site until P6h.**
+  **The measurement is the finding.** `js/status.mjs` had said since P5d that "the ~111
+  lines of TUI taxonomy" were P7's and not ported. `LAW_CLASS`, `SKILL_CLASS`,
+  `LAW_CLASSES` and `ENTITY_STATUSES` had in fact crossed in P5g, inside `js/doctor.mjs`,
+  because doctor's authoring gates are what validate them. So P6c moved the four to the
+  module that mirrors where Python keeps them and had doctor import them back, rather than
+  writing a second copy — a copy of a value under test stops being the value under test the
+  first time one of them is edited. Only `_parse_laws`, `load_registry` and
+  `entity_status` were genuinely new.
+  **And `inventoryCounts` folded back into the walk it was a copy of.** P5d shipped a
+  counting-only twin with a docblock warning that the two must not become two classifiers;
+  `api_catalog` consumes exactly the fields the count threw away, so this was the phase
+  that would have made them two. It is now three `length`s off `tuiInventory`, and the
+  eleven `status` cells and the catalog cells gate the same classifier from opposite ends.
+  **`decodeURIComponent` is not `urllib.parse.unquote`**, and the difference is a status
+  code. The JS builtin throws a `URIError` on a `%` that is not an escape — `a%ZZfact`, a
+  trailing bare `%` — which the shell would answer as a 500 where the reference answers a
+  404 naming the literal text. `pyUnquote` reproduces Python's rule (a two-hex-digit table,
+  and anything else is left alone), gated by a 21-input corpus that also measures the two
+  runtimes' replacement of truncated UTF-8 rather than assuming it.
+  **A hand-maintained manifest is JSONC, and a cell had to say so.** `wiki.jsonc` is read
+  through the comment-tolerant loader on the reference; every manifest the harness seeds is
+  plain JSON, so a port using `JSON.parse` would have listed no wiki pages and returned an
+  empty `manifest` — both of which read as "the user has no wikis" rather than as a parse
+  failure. Found by reading the reference's loader, not by a failing cell, and closed with
+  the cell that would have.
+  **Three security branches, three cells**, because a GET carries no token: a flat name
+  containing `..`, a wiki entry whose relpath climbs out of its vault, and the router's
+  bounded `split("/", 4)` — an unbounded one hands the item route the wrong name.
+  **Thirteen mutations, and the two that survived were both those cells.** Each pointed at
+  a path with no file behind it, so the containment check could be deleted with no effect:
+  `is_file()` refused first, and a refusal and a miss produce the same 404. **A containment
+  cell whose target does not exist proves nothing.** Closed by seeding files that ARE there
+  and naming, in each cell, the content that must not come back.
 
 ## 🚫 Explicitly out of scope
 
