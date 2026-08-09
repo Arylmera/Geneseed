@@ -289,6 +289,58 @@ class TheTwoRouteTablesAgree(unittest.TestCase):
         self.assertEqual(ref_post, covered,
                          "the POST partition has drifted from the reference's routes")
 
+    def test_the_declared_partition_is_the_one_the_dispatcher_uses(self):
+        """The assertion the two tests above cannot make, and a mutation is why it exists.
+
+        Both of them read the exported SETS. Collapsing `notPortedPost` back into
+        `notPorted` — one line, and the whole reason the two lists exist — leaves both sets
+        exactly as declared and both tests green, while POST `/api/excludes` starts
+        answering `{"error": "not found"}` with a 404 instead of the 501 that says
+        "unported". That is the plausible-looking answer the 501 exists to prevent, and a
+        gate on a declaration cannot see it.
+
+        So this one drives the real handler: one probe per branch of the partition, each
+        naming the status the dispatcher must actually produce. `tests/web_golden.py`
+        cannot ask this — it compares two implementations, and no cell may hold a 501
+        against the reference's real body.
+        """
+        src = r"""
+import {createServer} from 'node:http';
+import {makeHandler, webState} from './js/web/server.mjs';
+const holder = {};
+const srv = createServer(makeHandler(webState('neutral'), 'tok', 'nowhere', holder));
+holder.srv = srv;
+srv.listen(0, '127.0.0.1', async () => {
+  const base = `http://127.0.0.1:${srv.address().port}`;
+  const hit = async (method, p, tok) => (await fetch(base + p, {method,
+    headers: tok ? {'X-Geneseed-Token': tok, 'Content-Type': 'application/json'} : {},
+    body: method === 'POST' ? '{}' : undefined})).status;
+  const out = {
+    unportedGet: await hit('GET', '/api/mcp'),
+    portedGet: await hit('GET', '/api/profile'),
+    unportedPost: await hit('POST', '/api/excludes', 'tok'),
+    unportedPostPrefix: await hit('POST', '/api/actions/build', 'tok'),
+    shellPost: await hit('POST', '/api/shutdown', 'tok'),
+  };
+  process.stdout.write(JSON.stringify(out));
+  srv.close();
+  srv.closeAllConnections();
+});
+"""
+        r = subprocess.run([shutil.which("node"), "--input-type=module", "-e", src],
+                           cwd=str(ROOT), capture_output=True, text=True,
+                           encoding="utf-8", timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        got = json.loads(r.stdout)
+        self.assertEqual(got["unportedGet"], 501, "an unported GET must say so")
+        self.assertEqual(got["portedGet"], 200, "a ported GET must answer — the control, "
+                                                "without which every 501 below is vacuous")
+        self.assertEqual(got["unportedPost"], 501,
+                         "POST /api/excludes is unported even though its GET has crossed; "
+                         "a 404 here means the two lists have been collapsed into one")
+        self.assertEqual(got["unportedPostPrefix"], 501, "the POST prefixes too")
+        self.assertEqual(got["shellPost"], 200, "the shell's own POST still answers")
+
     def test_a_ported_route_is_never_also_declared_unported(self):
         js = _node_routes()
         self.assertEqual(set(js["ported"]) & set(js["unportedGet"]), set())
