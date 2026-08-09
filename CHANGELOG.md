@@ -9,6 +9,30 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **The port's nineteenth piece: `geneseed setup` has a Node twin — and it is the first one
+  that ASKS YOU QUESTIONS.** Fifteen of the harness's 24 commands now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. The wizard behaves
+  the same: the same five questions, the same menus, each one pre-selecting what you already
+  have installed rather than a stock default, the same plan printed before anything is
+  written, and the same "nothing is written until you confirm". It still refuses outright
+  when there is no terminal to ask on, and still offers a health check at the end.
+  **One thing you can see is different, on macOS and Linux only.** The Python version tries a
+  full-screen version of the wizard first and falls back to plain prompts when it cannot; the
+  Node one goes straight to the prompts. On Windows that is what the Python has always done
+  too. The full-screen console is a later piece of the port and will bring its own wizard
+  with it.
+  **What is genuinely better: the pre-selected answers.** The install detector had been
+  reporting only the theme and install mode of what it found; the wizard also asks about
+  posture, mode and footprint, so those three questions had been quietly offering the
+  configured default instead of what is actually deployed. All five now come from the
+  install.
+  **And the checking had to grow a new shape.** A wizard cannot be tested by running the
+  command — it refuses without a terminal, which is exactly what a test gives it. So the two
+  implementations are now driven by a *file of answers* fed to them as if typed, and their
+  entire output compared character for character: every prompt, every menu line, every
+  default marker, the plan, and the choices they came back with. That immediately caught a
+  real bug in the new code — an answer containing a non-ASCII character (an accent, a
+  non-Latin digit) was being mangled before anything read it.
 - **The port's eighteenth piece: `geneseed uninstall` has a Node twin — and it is the first
   one that DELETES.** Fourteen of the harness's 24 commands now run from
   `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. Nothing about what

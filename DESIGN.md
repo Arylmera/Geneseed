@@ -783,6 +783,60 @@ renders it as the name in parentheses.
   question about the corpus of inputs before it is a question about the code. The control had to
   be re-chosen too; the first one shared mechanism with half the mutations and reported four
   over-reaches that were nothing of the kind.
+- **`setup` crosses** as [`js/setup.mjs`](js/setup.mjs), and it is the first **interactive**
+  verb in the port. **Fifteen of the 24 subcommands are now Node**, and P5 is done: the nine
+  left belong to P6–P10.
+  **`cmd_setup` is a dispatcher, and that is the phase's first finding.** It is 21 lines: a
+  TTY check that refuses, `curses.wrapper(_setup_flow)` — 1,100 lines of full-screen wizard
+  that are **P7's** — and a line-mode fallback. Same shape as `menu` and `home`, which the
+  brief had already excluded from P5 for exactly that reason. The difference is that the
+  phases table commits GA to "the text wizard + web console", and `_setup_lines` *is* the
+  text wizard, so the line arm crosses and the curses arm does not. On Windows the reference
+  always lands in the line arm anyway (there is no `curses` to import); the one stderr line
+  it prints on the way is a stated divergence, and P7's to reconcile.
+  **No cell can reach any of it, so the corpus learned to type.** `setup` refuses when
+  `sys.stdin.isatty()` is false and every cell's stdin is a pipe — so the three `setup/*`
+  cells gate the *gate*: that it refuses, that it refuses before reading or writing anything,
+  and that a full script of answers does not get it to run anyway. Everything behind it is
+  gated by a new corpus shape in `tests/test_pure_function_parity.py`: both probes run with
+  **stdin redirected from a seeded file**, and their **whole stdout is compared byte for
+  byte** — prompts, numbered menus, `(default)` markers, the plan line and the returned
+  selection in one string. That is stricter than a cell would have been, because a cell
+  cannot vary the answers at all, and it puts the newline translation under the gate for the
+  first time (every earlier probe comparison went through a JSON parse, which cannot see it).
+  **And it found a bug in the port on its first run.** The stdin reader inherited from
+  `uninstall` decoded fd 0 **one byte at a time**, which turns every multi-byte character
+  into replacement characters. Invisible for a phase because its only caller answered `y` or
+  `n`; the wizard's first non-ASCII answer exposed it. The bytes are now collected and
+  decoded once — scanning for `\n`/`\r` a byte at a time is still correct, since no UTF-8
+  continuation byte is below 0x80. This is the second phase running where moving a helper to
+  its **second owner** is what made a latent defect observable.
+  **`pyInt` joins `pyfs` as a single owner.** `int(s)` is not `Number(s)` in four ways that
+  each change a wizard answer: `Number('')` is 0, `Number('0x2')` is 2, `Number('1_0')` is
+  NaN and PEP 515 says 10, and `int` accepts any Unicode decimal where `Number` accepts none.
+  The menu's three fallback arms — an in-range index, a *parsed* out-of-range one, and an
+  unparseable answer matched against the option keys — are told apart by nothing else.
+  **The `child_process` allow-list became a table.** `_lsp_prereqs` runs `java -version` to
+  see whether OpenCode's `jdtls` has a JVM, so `js/setup.mjs` is the second module on this
+  entry allowed to spawn. The gate now carries the module, the binding, the call count and
+  the literal argv for each one, cross-checked against the source — the port's rule that the
+  second instance of anything stops being a special case.
+  **And the posture/mode debt came due.** `installedDefaults` had answered two keys since
+  P5d; the wizard pre-selects three of its five pickers from the other three, so a two-key
+  answer would have silently offered the *configured* default where the *deployed* one was
+  meant. Nothing in `status` or `doctor` moves — both read the keys they already read.
+  **34 mutations, 32 fire.** One survivor is indistinguishable (`_ask` trims, so dropping the
+  `\r` in the reader changes nothing) and one is unreachable from every gate
+  (`exportImprovements`' no-drift arm needs a deployed install byte-identical to a fresh
+  render, and the render reads `src/`). A third fired only *after* a corpus was added: eight
+  menu cases and not one of them was both a valid index and a valid option key, so matching
+  keys before parsing an index was the same function — a green mutation is a question about
+  the corpus of inputs before it is a question about the code.
+  **And a warning worth more than the phase: `< /dev/null` is a TTY to Python on Windows.**
+  The null device is a character device and the CRT's `_isatty` says yes, so smoke-testing
+  this verb's refusal from a shell runs the whole wizard and rebuilds your live install. The
+  cells are safe — `subprocess.run(input=…)` is a real pipe — but a gate on `isatty` cannot
+  be checked with a redirect.
 
 ## 🚫 Explicitly out of scope
 
