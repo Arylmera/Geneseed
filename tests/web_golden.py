@@ -331,6 +331,15 @@ def _full(**extra) -> dict:
         "vault/notes/one.md": "# One\n\nlinks to [[mine]].\n",
         "vault/notes/two.md": "# Two\n",
         "vault/notes/private/secret.md": "# Secret\n",
+        # OUTSIDE the vault, and a real `.md` file — see the two containment cells. A
+        # traversal cell whose target does not exist proves nothing: `isFile` refuses it
+        # for the wrong reason and the containment check can be deleted with no effect.
+        "outside-the-vault.md": "# Outside\n\nnot the vault's to serve.\n",
+        # A flat name CONTAINING `..` but no separator. `_flat_name` refuses it; without
+        # that clause the file would be served, and with no such file on disk the refusal
+        # and the miss produce the same 404 — which is why both mutations survived until
+        # this file existed.
+        f"{_OC}/memory/we..ird.md": "---\nname: we..ird\n---\n\nreachable only by name.\n",
         **extra,
     })
 
@@ -454,14 +463,19 @@ def _catalog_cells(cell) -> list[dict]:
                      '"body": "# One\\n\\nlinks to [[mine]].\\n"',
                      '"links": [{"label": "mine", "type": "skill"']),
         cell("item/a-wiki-page-outside-the-vault-is-a-404",
-             [_req(path="/api/item/wiki/vault:..%2F..%2Fbuild.py")], world=_full(),
-             # `_within(p, root)` after the join. A vault entry naming a path that climbs
-             # out is the whole reason the check is there, and a GET needs no token.
-             expect=['{"error": "not found: vault:../../build.py"}', "404 Not Found"],
-             expect_absent=["def main("]),
+             [_req(path="/api/item/wiki/vault:..%2Foutside-the-vault.md")], world=_full(),
+             # `_within(p, root)` after the join, and the target EXISTS — which is the
+             # whole cell. Pointed at a path with no file behind it, `is_file()` refuses
+             # first and deleting the containment check changes nothing; that version of
+             # this cell let the mutation through. A GET carries no token, so this is the
+             # only thing between a crafted name and an arbitrary read.
+             expect=['{"error": "not found: vault:../outside-the-vault.md"}',
+                     "404 Not Found"],
+             expect_absent=["not the vault's to serve"]),
         cell("item/a-flat-name-that-climbs-out-is-a-404",
              [_req(path="/api/item/memory/..%2F..%2Fbuild"),
-              _req(path="/api/item/memory/a/b")], world=_full(),
+              _req(path="/api/item/memory/a/b"),
+              _req(path="/api/item/memory/we..ird")], world=_full(),
              # `_flat_name`: a separator, a `..` or a drive colon in the segment is
              # someone steering the join outside the catalog dir. Its own cell, because
              # it is a security branch and a corpus over the helper cannot see the route.
@@ -470,8 +484,16 @@ def _catalog_cells(cell) -> list[dict]:
              # unbounded split would hand `api_item` the name `a` and answer
              # `not found: a`; the reference keeps the remainder whole and answers
              # `not found: a/b`, which is also what lets a wiki relpath survive the route.
+             #
+             # And the third names a file that IS there, whose name carries `..` and no
+             # separator. Without it the `".." in name` clause is unreachable: every other
+             # `..` this cell sends also carries a `/`, which the clause before it catches,
+             # and a `..` name with nothing behind it 404s with the same message either
+             # way. `expect_absent` is what separates "refused" from "missed".
              expect=['{"error": "not found: ../../build"}', "404 Not Found",
-                     '{"error": "not found: a/b"}']),
+                     '{"error": "not found: a/b"}',
+                     '{"error": "not found: we..ird"}'],
+             expect_absent=["reachable only by name"]),
         cell("item/an-unknown-type-and-a-missing-name-are-both-404",
              [_req(path="/api/item/nope/x"), _req(path="/api/item/")], world=_full(),
              # The two ends of the parse: an unknown TYPE falls off `api_item`'s chain,
