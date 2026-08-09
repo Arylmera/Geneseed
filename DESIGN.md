@@ -1008,6 +1008,32 @@ renders it as the name in parentheses.
   `?harness=` is `parse_qs`'s documented default and changes nothing observable, because
   the empty string and a missing value reach the same fallback. Indistinguishable through
   its one consumer, not unreachable, and kept for the reason the POST body drain was.
+- **The capability graph and the live-activity surface cross, and the spawn the plan warned
+  about was never there.** [`js/web/graph.mjs`](js/web/graph.mjs) and
+  [`js/web/activity.mjs`](js/web/activity.mjs) answer `/api/graph`, `/api/activity` (GET)
+  and `/api/activity/<sid>` — **22 of 29 web paths, still fifteen subcommands.** The plan
+  scored the pid probe as a `tasklist` spawn needing a sixth allow-list row; the source is
+  `ctypes` over `OpenProcess`, so **neither implementation spawns anything** and
+  `process.kill(pid, 0)` is the twin.
+  **`api_graph`'s two halves read two different inventories** — nodes from the deployed set,
+  edges from the SOURCE render's bodies, because deploying a skill flattens its markdown
+  links to prose. A port walking one inventory for both answers a single-banded matrix on a
+  deployed install, and every undeployed cell still passes; the cell that separates them
+  deploys a skill whose deployed body carries no links at all.
+  **A hardcoded regex can be right for one theme and empty for another**: `Rule|Law` finds
+  46 law references in the neutral render's law bodies and **zero** in the imperial one,
+  where the noun is "Dictate" — so the edge set is gated once per voice. Two more regex
+  divergences came with it: Python's word boundary is Unicode-aware where JavaScript's is
+  ASCII-only, and `re.escape` must not escape `-` (JavaScript reads `\-` outside a character
+  class as an invalid escape).
+  **The first web endpoint that DELETES**, which the response is completely silent about, so
+  `tests/web_golden.py` grew `expect_files` / `expect_absent_files` — and the clock is
+  **seeded rather than destamped**, one `now` per cell shared by both sides, because
+  normalising `updated_at` would erase the live/stale rule it exists to gate.
+  **`parseJson` is not optional once a third party writes the file**: activity snapshots come
+  from an OpenCode plugin and carry a float, and `JSON.parse` loses Python's `1.0`.
+  **Eighteen mutations, eighteen fire, no survivors** — two of them visible only in the file
+  snapshot, because the response body is byte-identical with the unlink removed.
 
 ## 🚫 Explicitly out of scope
 
