@@ -706,8 +706,16 @@ function readNotes(raw) {
 // file. Re-exported here so the hook entry's own import list does not change.
 export { resolveMemoryDir };
 
-/** `_frontmatter` — leading YAML-ish frontmatter as a flat map, plus the body. */
-function frontmatter(md) {
+/**
+ * `_frontmatter` — leading YAML-ish frontmatter as a flat map, plus the body.
+ *
+ * Exported since P6b, whose `memoryItems` reads `name` and `description` off a fact file
+ * exactly as `_web_catalog._memory_items` does. That makes the web its SECOND owner, which
+ * this port treats as a coverage event rather than a tidiness one — the fields it produces
+ * are unreachable from a P6b cell (only the COUNT is consumed) and P6c's catalog cells are
+ * what gate them.
+ */
+export function frontmatter(md) {
   const m = FRONTMATTER_RE.exec(md);
   if (!m) return [new Map(), md];
   const fm = new Map();

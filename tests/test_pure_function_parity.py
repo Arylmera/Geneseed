@@ -193,7 +193,33 @@ def _cases() -> list[dict]:
     cases.append({"fn": "theme_options", "args": []})
     cases.append({"fn": "posture_options", "args": []})
     cases.append({"fn": "mode_options", "args": []})
+    for ts in _MINUTE_STAMP_CORPUS:
+        cases.append({"fn": "minute_stamp", "args": [ts]})
     return cases
+
+
+# P6b — `%Y-%m-%d %H:%M`, which `api_overview`'s `build_time` and `stamp_doctor`'s
+# `checked_at` both render.
+#
+# A CORPUS AND NOT A CELL, because the cell cannot see it. Both values are sampled while
+# the cell runs and the two sides run seconds apart, so `tests/web_golden.py` normalises
+# them to `<WHEN>` — which means a Node twin formatting in UTC, or with a zero-padding bug,
+# or with the month and day swapped, would compare EQUAL in every web cell. The stamp is a
+# pure function of an epoch second and the local zone, so the corpus is where it can be
+# compared: same machine, same zone, same instant, both formatters.
+#
+# The instants are chosen for what they can break: a single-digit month, day, hour and
+# minute in one value (zero padding, four times over), midnight and one minute before it
+# (the date rollover), a UTC noon that is a different date in some zones, and a DST
+# transition. `datetime.fromtimestamp` is naive local time on the reference — the JS twin
+# uses `getFullYear`/`getMonth`/… for the same reason, and `toISOString` would be UTC.
+_MINUTE_STAMP_CORPUS = [
+    1_704_070_861.0,     # 2024-01-01 00:01:01 UTC — single-digit month, day, hour, minute
+    1_704_067_199.0,     # one second before 2024-01-01 UTC — the rollover, from the other side
+    1_720_612_800.0,     # 2024-07-10 12:00:00 UTC — a different DATE in UTC+13 / UTC-12
+    1_710_054_000.0,     # 2024-03-10 07:00:00 UTC — inside the US DST spring-forward hour
+    1_762_064_100.5,     # a FRACTIONAL second: `st_mtime` is a float and `mtimeMs` is not
+]
 
 
 # --------------------------------------------------------------------------------------

@@ -132,6 +132,8 @@ const stemOf = (p) => path.basename(p, path.extname(p));
 
 /** `sorted(set)` over strings, the ordering every problem list is emitted in. */
 const sortedUnique = (xs) => [...new Set(xs)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+/** `sorted(probs)` — SORTED, not deduped, which is what `_ran` fills a group with. */
+const sortedProblems = (xs) => [...xs].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 /**
  * `k in d` for a Python dict — OWN keys only.
@@ -1076,15 +1078,19 @@ export function claudeBobEmitProblems(themeName) {
  * working directory for.
  */
 export function doctorCollect({
-  theme = null, allThemes = false, bundle = null, noBundle = false,
+  theme = null, allThemes = false, bundle = null, noBundle = false, groups = null,
 } = {}) {
   const available = themeFiles().map(stemOf);
   if (!available.length) return [[], ['[doctor] no themes found']];
 
-  // `_ran` without its `groups` side effect — the label argument stays because it is the one
-  // place each check is NAMED, which is what a reader of this function needs and what P6's
-  // accumulator will key on.
-  const ran = (check, label, probs) => probs;
+  // `_ran` — the label is the one place each check is NAMED, and since P6b a caller can
+  // pass an array to collect them. `/api/doctor` renders one card per entry, which is the
+  // only reason the structured view exists; `cmd_doctor` passes nothing and gets the flat
+  // list, so the return contract is unchanged either way. `on_progress` is still P7's.
+  const ran = (check, label, probs) => {
+    if (groups !== null) groups.push({ check, label, problems: sortedProblems(probs) });
+    return probs;
+  };
 
   // Only probe the deployed install when we actually need it (no theme / not --all).
   const detected = (theme || allThemes) ? null : (installedDefaults().theme ?? null);

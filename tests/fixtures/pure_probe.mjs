@@ -24,6 +24,7 @@ import {
   setupSummaryLines, themeOptions,
 } from '../../js/setup.mjs';
 import { unifiedDiff, pySplitLines } from '../../js/lib/pydiff.mjs';
+import { stampMinute } from '../../js/web/api.mjs';
 
 const FNS = {
   version_verdict: (a) => versionVerdict(a[0], a[1]),
@@ -57,6 +58,8 @@ const FNS = {
   posture_options: () => postureOptions(),
   mode_options: () => modeOptions(),
   installed_defaults: () => installedDefaults(),
+  // Seconds in, as `st_mtime` is; `stampMinute` takes ms, as `mtimeMs` is.
+  minute_stamp: (a) => stampMinute(a[0] * 1000),
   setup_summary_lines: (a) => setupSummaryLines(...a),
   // The stdin readers. Their PROMPTS are stdout, which is why the wizard job is compared as
   // raw bytes rather than through a JSON parse — see the test's docstring.

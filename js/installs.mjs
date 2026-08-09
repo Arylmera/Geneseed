@@ -32,14 +32,27 @@ import path from 'node:path';
 import { CONFIG, THEMES, ROOT, discoverNames } from './checkout.mjs';
 import { GLOBAL_MANIFEST, HOSTS, pyResolve } from './hosts.mjs';
 import { registryRoots } from './registry.mjs';
-import { pyPrintErr, pyRepr } from './lib/pyfs.mjs';
+import { pyPrintErr, pyRepr, readText } from './lib/pyfs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
-/** `Path.read_text(encoding="utf-8")`, or null where Python raises OSError. */
+/**
+ * `Path.read_text(encoding="utf-8")`, or null where Python raises OSError.
+ *
+ * `readText`, not a bare `readFileSync`: `read_text` opens in TEXT mode, so Python's
+ * universal-newline decoding folds `\r\n` and a lone `\r` to `\n` before the caller ever
+ * sees them, and `readFileSync` does not. Every caller here reads a single-line marker and
+ * trims it, which is why the divergence sat latent through five phases — P6b's
+ * `/api/profile` is the first consumer that hands the whole decoded text back out, and
+ * `profile/a-seeded-profile-carries-its-fingerprint` failed on the CRLF the seeder wrote
+ * AND on the sha256 of it. Fixed here rather than at that one call site: the multi-line
+ * readers (`installs.mjs`'s AGENT.md sigil scan and carrier read, `uninstall.mjs`'s two)
+ * all mirror a Python `read_text` too, so every one of them was wrong in the same way and
+ * a guard at the new caller would have left them wrong.
+ */
 export function readMaybe(p) {
-  try { return readFileSync(p, 'utf8'); } catch { return null; }
+  try { return readText(p); } catch { return null; }
 }
 
 /** `json.loads(...)` of a file, or null — Python catches JSONDecodeError and OSError alike. */

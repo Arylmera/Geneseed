@@ -8,6 +8,7 @@ monkeypatching, and running a second process is the same thing the real CLI does
 """
 from __future__ import annotations
 
+import datetime
 import difflib
 import json
 import shutil
@@ -82,6 +83,11 @@ def run(fn: str, args: list):
         return harness._mode_options()
     if fn == "installed_defaults":
         return harness._installed_defaults()
+    if fn == "minute_stamp":
+        # `_web_overview.api_overview`'s `build_time`, spelled as the reference spells it:
+        # a NAIVE `fromtimestamp`, which is local time. `stamp_doctor`'s `checked_at` is
+        # `time.strftime` of the same format on `localtime()`, so one corpus covers both.
+        return datetime.datetime.fromtimestamp(args[0]).strftime("%Y-%m-%d %H:%M")
     if fn == "setup_summary_lines":
         return harness._setup_summary_lines(*args)
     # ---- the stdin readers. Their PROMPTS are stdout, which is why the wizard job is

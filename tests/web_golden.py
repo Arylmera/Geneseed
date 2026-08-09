@@ -57,7 +57,19 @@ gated. Everything uncompressed is still compared byte for byte.
 AND A DESTAMP CANNOT REACH INSIDE ONE, which decides a cell rather than the harness: the
 token is injected into `index.html` before compression and its 32 random characters
 compress to a different LENGTH every run, so the reference differed from itself. The gzip
-pair therefore runs over a payload carrying no per-run value.
+pair therefore runs over a payload carrying no per-run value. `/api/themes` is the JSON
+side of the same pair for the same reason — it is the one body over `_GZIP_MIN` that
+carries no path, no clock and no token.
+
+THREE MORE VALUES ARE PER-RUN, AND THEY LIVE IN A BODY RATHER THAN IN THE RECORD.
+`checked_at` and `build_time` are both `%Y-%m-%d %H:%M` sampled while the cell runs, and
+the two sides run seconds apart — a cell straddling a minute boundary would fail at
+random. `python` is `sys.version.split()[0]`, which a Node daemon has no honest answer for
+(see `js/web/api.mjs`; it answers `null`). All three are normalised by `_WEB_STAMPS`, and
+each pattern matches only a WELL-FORMED value, so a side that stopped emitting the field
+leaves the tag absent and the cell's `expect` fails instead of quietly agreeing. The value
+`python` is tolerant of has its absolute assertion in
+`tests/test_web_server.py::test_the_reference_reports_its_own_interpreter_version`.
 
 SAFETY. Every cell runs under `golden.cell_env`, so the server resolves its target inside
 a throwaway HOME. And every server this file starts is stopped in a `finally`: `web/` has
@@ -92,6 +104,35 @@ ROOT = golden.ROOT
 # server sent them, which gates their relative order without gating the noise around them.
 _HEADERS = ("Content-Type", "Content-Length", "Content-Encoding", "Vary", "Cache-Control")
 
+# The per-run values that live in a RESPONSE BODY rather than in the daemon record, so
+# `_dyn_stamps` (which reads its values out of that record) cannot reach them.
+#
+# TARGETED, like every stamp in this file, and targeted twice over: each pattern names the
+# FIELD and requires a well-formed VALUE. `"checked_at": "2026-08-09 18:42"` is rewritten;
+# `"checked_at": null` is not, and neither is a bare `2026-08-09 18:42` appearing in some
+# other field. That is what lets a cell assert the tag is PRESENT — a side that answered
+# null, or an empty string, or a differently-formatted clock, would leave no tag and fail
+# the `expect` rather than compare equal to nothing.
+_WEB_STAMPS = (
+    (re.compile(r'"checked_at": "\d{4}-\d{2}-\d{2} \d{2}:\d{2}"'), '"checked_at": "<WHEN>"'),
+    (re.compile(r'"build_time": "\d{4}-\d{2}-\d{2} \d{2}:\d{2}"'), '"build_time": "<WHEN>"'),
+    # The one field in P6b with no honest twin: the reference reports the interpreter
+    # running the daemon and a Node daemon has none. Both spellings are accepted so the
+    # tag appears on both sides; the reference's actual value is asserted absolutely in
+    # `tests/test_web_server.py`, which is the debt a tolerant comparison owes.
+    (re.compile(r'"python": (?:"\d+\.\d+\.\d+[^"]*"|null)'), '"python": "<RUNTIME>"'),
+)
+
+
+def _web_destamp(data: bytes) -> bytes:
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data
+    for pat, repl in _WEB_STAMPS:
+        text = pat.sub(repl, text)
+    return text.encode("utf-8")
+
 
 # ---- cells -----------------------------------------------------------------
 
@@ -114,6 +155,32 @@ def _an_asset() -> str:
     if not names:
         raise RuntimeError("web/dist/assets holds no .js — the static cells cannot be built")
     return names[0]
+
+
+# ---- the seeded worlds P6b's endpoints read -------------------------------------------
+#
+# A deployed opencode-global install, as every detector in the harness recognises one: the
+# emit marker names the host, the theme marker names the voice, the manifest is what
+# `_deployed` and `_diff_collect` look for, and the version marker is what `status`
+# compares. `imperial` rather than `neutral` deliberately — `neutral` is also the FALLBACK
+# every one of those detectors returns when it finds nothing, so a cell seeded with it
+# cannot tell detection from default.
+_OC = "home/.config/opencode"
+# A fingerprint no source render can ever produce, so the version verdict is the stable
+# "differs" arm rather than a race against whatever the checkout currently hashes to.
+_VERSION = "0000000000000000"
+_DEPLOYED_AGENT = "# Deployed AGENT.md\n\nA local edit the source render does not have.\n"
+
+
+def _installed(**extra) -> dict:
+    return dict({
+        "repo/.keep": "",
+        f"{_OC}/.geneseed-manifest.json": json.dumps({"owned": ["AGENT.md"]}),
+        f"{_OC}/.geneseed-emit": "opencode-global\n",
+        f"{_OC}/.geneseed-theme": "imperial\n",
+        f"{_OC}/.geneseed-version": _VERSION,
+        f"{_OC}/AGENT.md": _DEPLOYED_AGENT,
+    }, **extra)
 
 
 def cells() -> list[dict]:
@@ -226,7 +293,230 @@ def cells() -> list[dict]:
              # stops the server off the request path — the response must arrive first.
              expect=['{"stopping": true}', "200 OK"]),
     ]
+    out += _read_cells(cell)
     return out
+
+
+def _read_cells(cell) -> list[dict]:
+    """P6b — the eight read endpoints whose closure P5 had already crossed.
+
+    WHICH OF THEM NEEDS THE CHECKOUT FIXTURE, measured rather than assumed (P5h asked the
+    same question and the answer there was no). Only the two that run DOCTOR:
+    `_doctor_collect` reads `Harness/`, which is gitignored and therefore absent from the
+    copy, and reads the working tree for every other check — so a cell asserting "no
+    problems" against the live `ROOT` passes or fails with whatever the developer has open
+    in their editor. `checkout={}` makes those two reproducible, and a planted fault is
+    what stops the clean pair from being the fixture-too-plain hole (eight groups, every
+    one of them empty, and deleting any check is invisible).
+
+    Everything else reads `ROOT` too — `src/`, `themes/` — but both sides read the SAME
+    `ROOT`, so a dirty tree moves them together. The copy costs 0.31 s per cell per side
+    and buys nothing there.
+    """
+    return [
+        # ---- /api/themes ---------------------------------------------------------------
+        cell("themes/every-theme-carries-its-accent-tagline-and-sigil",
+             [_req(path="/api/themes")], world={"repo/.keep": ""},
+             expect=['"name": "imperial", "blurb": "Warhammer 40k", "accent": "yellow"',
+                     '"name": "neutral", "blurb": "plain professional voice"',
+                     '"name": "files", "desc": "Plain bundle for any AGENT.md tool."',
+                     # `ensure_ascii=True` is `json.dumps`' default and the sigils are all
+                     # emoji, so the escaped spelling is the one on the wire. `JSON.stringify`
+                     # does NOT escape, which is exactly the divergence `jsonDumpsCompact`
+                     # exists to close — and this is the body that would show it.
+                     '\\ud83e\\uddec Gene-seed implanted']),
+        cell("themes/an-undeployed-host-still-reports-a-current-pair",
+             [_req(path="/api/themes")], world={"repo/.keep": ""},
+             # Describing the reference, not adjudicating it: with nothing deployed the
+             # detected pair is whatever `_installed_defaults` finds, and the theme falls
+             # back to `neutral`. The cell below is what tells detection from fallback.
+             expect=['"current": {"theme": "neutral"']),
+        cell("themes/the-detected-install-is-the-current-pair",
+             [_req(path="/api/themes")], world=_installed(),
+             expect=['"current": {"theme": "imperial", "emit": "opencode-global"}']),
+        cell("themes/a-json-body-over-the-threshold-is-gzipped",
+             [_req(path="/api/themes", headers={"Accept-Encoding": "gzip"})],
+             world={"repo/.keep": ""},
+             # THE `application/json` GZIP BRANCH, which P6a recorded as unreachable
+             # because a ping body is 30 bytes. `/api/themes` is 4.5 kB and — unlike every
+             # other body this phase adds — carries no path, no clock and no token, which
+             # is what a compressed payload has to be: a destamp cannot reach inside one.
+             expect=["Content-Encoding: gzip", "Vary: Accept-Encoding",
+                     "Content-Type: application/json"]),
+
+        # ---- /api/setup ----------------------------------------------------------------
+        cell("setup/reports-the-deployed-install-snapshot",
+             [_req(path="/api/setup")], world=_installed(),
+             expect=['"theme": "imperial", "accent": "yellow", "emit": "opencode-global"',
+                     '"installed_fp": "0000000000000000"',
+                     '"agent_md_present": true', '"deployed": true',
+                     # The tolerant field, asserted PRESENT here and asserted absolutely in
+                     # tests/test_web_server.py — see `_WEB_STAMPS`. `<CLEN>` is the tag
+                     # its four-byte width difference forces onto the header, stated at
+                     # the cell rather than left to be discovered in `_drive`.
+                     '"python": "<RUNTIME>"', 'Content-Length: <CLEN>']),
+        cell("setup/an-undeployed-target-says-so",
+             [_req(path="/api/setup")], world={"repo/.keep": ""},
+             # `installed_fp` is deliberately NOT named: with no host dir seeded, the
+             # candidate chain walks on to the checkout's own `Harness/` and finds a real
+             # fingerprint there. Both sides read the same one, so the byte comparison
+             # still gates it; naming it would tie this cell to the developer's tree.
+             expect=['"deployed": false',
+                     '"agent_md": null, "agent_md_present": false',
+                     '"theme": "neutral", "accent": "cyan"',
+                     '"target": "<HOME>']),
+
+        # ---- /api/installs -------------------------------------------------------------
+        cell("installs/one-row-per-detected-host-carries-its-state",
+             [_req(path="/api/installs")], world=_installed(),
+             expect=['"id": "opencode:global", "host": "opencode", "scope": "global"',
+                     '"state": "active"', '"theme": "imperial"', '"selected": true',
+                     '"id": "claude:global"', '"state": "absent"',
+                     '"postures": ["peer", "artisan", "assistant", "expert", "mentor"]',
+                     '"modes": ["direct", "foreman"]']),
+        cell("installs/a-stashed-install-is-reported-disabled",
+             [_req(path="/api/installs")],
+             world=_installed(**{f"{_OC}/.geneseed-disabled/.keep": ""}),
+             # `_install_state`'s third arm. Without it `active` and `absent` are the only
+             # two values any cell ever sees, and a port that dropped the stash check
+             # would answer `active` here and be invisible.
+             expect=['"host": "opencode", "scope": "global", "path": "<HOME>',
+                     '"state": "disabled"']),
+
+        # ---- /api/excludes -------------------------------------------------------------
+        cell("excludes/no-global-install-means-no-installs-to-union",
+             [_req(path="/api/excludes")], world={"repo/.keep": ""},
+             expect=['{"excludes": [], "installs": []}']),
+        cell("excludes/a-seeded-exclusion-is-listed-with-its-host",
+             [_req(path="/api/excludes")],
+             # `{repo/}`, not `{repo}`: the substitution lands INSIDE a JSON string, and a
+             # Windows path's backslashes make `\U` an invalid escape — `_read_excludes`
+             # then swallows the JSONDecodeError and returns the empty stub, which is a
+             # seeded file that reads exactly like a working one. The self-check is what
+             # caught it.
+             world=_installed(**{f"{_OC}/excludes.json": json.dumps(
+                 {"excludes": [{"path": "{repo/}", "wired": {"opencode": True}}]})}),
+             # The union view: one record per path, carrying the hosts that hold it. The
+             # empty cell above is its positive control — without it, a port that always
+             # answered the stub would pass here on the strength of the seeded file alone.
+             expect=['"path": "<SB>/repo"', '"hosts": ["opencode"]',
+                     '"wired": {"opencode": true}', '"host": "opencode", "cfg": "<HOME>']),
+
+        # ---- /api/profile --------------------------------------------------------------
+        cell("profile/an-absent-profile-reports-exists-false",
+             [_req(path="/api/profile")], world={"repo/.keep": ""},
+             # A REQUIRED field's emptiness, defined: `fingerprint` is "" and not the
+             # sha256 of the empty string, which is a different sixteen characters.
+             expect=['{"exists": false,', '"text": "", "fingerprint": ""}',
+                     'PROFILE.md']),
+        cell("profile/a-seeded-profile-carries-its-fingerprint",
+             [_req(path="/api/profile")],
+             world=_installed(**{f"{_OC}/PROFILE.md": "# Me\n\nI write Rust.\n"}),
+             expect=['"exists": true', '"text": "# Me\\n\\nI write Rust.\\n"',
+                     # sha256("# Me\n\nI write Rust.\n")[:16], stated so the cell gates the
+                     # TRUNCATION and the digest, not merely that some hex came back.
+                     '"fingerprint": "3557095f088da537"']),
+
+        # ---- /api/diff -----------------------------------------------------------------
+        cell("diff/a-deployed-install-reports-its-drift",
+             [_req(path="/api/diff")], world=_installed(),
+             expect=['"deployed": true', '"theme": "imperial"',
+                     '"rel": "AGENT.md", "status": "edited"',
+                     '"rel": ".geneseed-version", "status": "edited"',
+                     '"status": "missing"',
+                     '"+++ deployed/AGENT.md"']),
+        cell("diff/no-deployed-harness-reports-deployed-false",
+             [_req(path="/api/diff")], world={"repo/.keep": ""},
+             expect=['"deployed": false', '"files": []']),
+
+        # ---- /api/doctor ---------------------------------------------------------------
+        cell("doctor/every-check-reports-its-own-group",
+             [_req(path="/api/doctor")], world=_installed(), checkout={},
+             # The group list is the whole reason this endpoint is not `doctor`'s stdout:
+             # `_doctor_collect(groups=)` is the parameter P6b decided to grow, and eight
+             # labels in order are what say it filled.
+             expect=['"themes": ["imperial"], "ok": true, "problems": []',
+                     '"check": "build", "label": "Build scan (imperial)"',
+                     '"check": "global", "label": "Global install (imperial)"',
+                     '"check": "claude_bob"', '"check": "parity", "label": "Theme parity"',
+                     '"check": "colors"', '"check": "authoring"',
+                     '"check": "shim", "label": "Hook shim"',
+                     '"check": "bundle", "label": "Committed bundle drift"',
+                     '"checked_at": "<WHEN>"']),
+        cell("doctor/a-planted-fault-lands-in-its-own-group-and-in-the-flat-list",
+             [_req(path="/api/doctor")], world=_installed(),
+             checkout={"src/memory/README.md":
+                       "# Memory\n\nA planted {{NOPE}} token and a [dead link](./nowhere.md).\n"},
+             # The fixture-too-plain hole, closed. Eight empty groups compare equal to eight
+             # empty groups however the accumulator is wired — including not being wired at
+             # all. One fault proves the problems reach BOTH the group and the flat list,
+             # and that `ok` follows the flat list rather than being hardcoded.
+             #
+             # TWO faults rather than one, and the reason is `sorted(probs)`: the reference
+             # sorts each group's problems, and a single problem per group cannot tell a
+             # sorted list from an insertion-ordered one. Two messages beginning `dead
+             # link` and `unresolved token`, over two footprints, put four out-of-order
+             # entries in the `global` group.
+             expect=['"ok": false',
+                     '"check": "build", "label": "Build scan (imperial)", "problems": '
+                     '["[imperial] dead link \'./nowhere.md\'',
+                     '"[imperial] unresolved token {{NOPE}}',
+                     '"check": "global", "label": "Global install (imperial)", "problems": '
+                     '["[imperial global/full] dead link',
+                     '"[imperial global/lean] unresolved token'],
+             expect_absent=['"problems": [], "groups"']),
+
+        # ---- /api/overview -------------------------------------------------------------
+        cell("overview/an-undeployed-target-counts-the-source-render",
+             [_req(path="/api/overview")], world={"repo/.keep": ""}, checkout={},
+             # `state.inventory`'s fallback arm: nothing is installed, so the counts come
+             # from a fresh render of `src/` rather than from the deployed dirs. The cell
+             # below is the other arm, and the two numbers must differ or neither is gated.
+             # `install` is NOT null here, which is worth saying out loud: `_install_targets`
+             # lists every host's global config dir whether or not anything is installed in
+             # it, so the current view still resolves to a row. `deployed` is the field that
+             # carries the answer, and the two are independent.
+             expect=['"deployed": false', '"diff": null', '"build_time": null',
+                     '"install": {"host": "opencode", "scope": "global"'],
+             expect_re=[r'"counts": \{"agents": [1-9]\d*, "skills": [1-9]\d*, '
+                        r'"laws": [1-9]\d*']),
+        cell("overview/a-deployed-install-counts-what-is-installed",
+             [_req(path="/api/overview")], checkout={},
+             world=_installed(**{
+                 f"{_OC}/agents/mine.md": "---\nname: mine\n---\n\n> my agent\n\nbody\n",
+                 f"{_OC}/agents/_template.md": "> not an agent\n",
+                 f"{_OC}/skills/mine/SKILL.md": "---\nname: mine\n---\n\n> my skill\n",
+                 f"{_OC}/memory/a-fact.md":
+                     "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n",
+                 f"{_OC}/notebook/scratch.md": "# scratch\n",
+                 f"{_OC}/context.json": '{"context": []}\n',
+             }),
+             # ONE of each, and an `_`-prefixed agent that must NOT be counted — the
+             # template convention `_spec_entries` skips. `laws` still comes from the
+             # render, which is what says the deployed arm replaces two of the three
+             # counts and not all three.
+             expect=['"counts": {"agents": 1, "skills": 1, "laws": ',
+                     '"memory": 1, "notebook": 1, "wiki": 0, "config": 1}',
+                     '"deployed": true', '"build_time": "<WHEN>"',
+                     '"install": {"host": "opencode", "scope": "global"',
+                     '"diff": {"edited": ']),
+        cell("overview/the-cached-doctor-verdict-is-the-stamped-shape",
+             [_req(path="/api/doctor"), _req(path="/api/overview")],
+             world=_installed(), checkout={},
+             # Two requests, and the second is the point. `api_doctor` STAMPS the verdict
+             # and `api_overview` reads `state.doctor` — which holds three keys, not the
+             # eight-group payload the first request returned. A port that cached the whole
+             # `api_doctor` body would answer this cell with `themes` and `groups` inside
+             # overview's `doctor` object.
+             #
+             # WHAT THIS CELL DOES NOT GATE, stated rather than implied: that the second
+             # request REUSES the first's run instead of recomputing it. Both answers are
+             # identical either way — the cache is a cost, and a cell cannot see a cost.
+             # `test_doctor_verdict_is_cached_until_refresh` in tests/test_web.py is its
+             # gate on the reference; the Node twin's is `js/web/api.mjs`'s own shape.
+             expect=['"doctor": {"ok": true, "problems": [], "checked_at": "<WHEN>"}'],
+             expect_absent=['"doctor": {"themes"']),
+    ]
 
 
 # ---- running one cell ------------------------------------------------------
@@ -334,12 +624,23 @@ def _drive(port: int, token: str, requests: list[dict]) -> dict:
             resp = conn.getresponse()
             data = resp.read()
             enc = resp.getheader("Content-Encoding") or ""
+            body_out = _decode_body(data, enc)
+            # Content-Length is tagged in exactly two situations, and both are the same
+            # rule: the length is a CONSEQUENCE of a value this harness has already
+            # decided it cannot compare, so comparing the length would re-introduce the
+            # comparison through the back door. `gzip` is the compressed stream (see
+            # `_decode_body`); `"python": ` is `/api/setup`'s runtime field, where the
+            # reference sends `"3.13.5"` and the Node daemon sends `null` — four bytes
+            # apart, for the one field in P6b with no honest twin. Its PRESENCE stays
+            # gated, which is what the tag is for, and the body itself is still compared
+            # byte for byte with the value normalised.
+            untagged = ('gzip' not in enc) and (b'"python": ' not in body_out)
             obs[f"<r{i} status>"] = f"{resp.status} {resp.reason}".encode()
             obs[f"<r{i} headers>"] = "\n".join(
-                f"{k}: {'<GZLEN>' if (k.title() == 'Content-Length' and 'gzip' in enc) else v}"
+                f"{k}: {v if (untagged or k.title() != 'Content-Length') else '<CLEN>'}"
                 for k, v in resp.getheaders() if k.title() in _HEADERS
             ).encode()
-            obs[f"<r{i} body>"] = _decode_body(data, enc)
+            obs[f"<r{i} body>"] = body_out
     except (http.client.HTTPException, OSError) as e:
         obs["<transport>"] = f"{type(e).__name__}: {e}".encode()
     finally:
@@ -422,8 +723,8 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
         roots = [("<HOME>", home), ("<REPO>", checkout), ("<REPO>", ROOT), ("<SB>", sb)]
 
         def clean(b: bytes) -> bytes:
-            return harness_golden._destamp(_apply(golden._normalise(_apply(b, stamps), roots),
-                                                  stamps))
+            return _web_destamp(harness_golden._destamp(
+                _apply(golden._normalise(_apply(b, stamps), roots), stamps)))
 
         snap = {k: clean(v) for k, v in golden._snapshot(sb, roots).items()}
         snap.update({k: clean(v) for k, v in obs.items()})

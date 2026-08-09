@@ -38,9 +38,11 @@ import { join, resolve as pathResolve, extname, basename, sep } from 'node:path'
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
-import { GLOBAL_MANIFEST, opencodeConfigDir, pyResolve } from '../hosts.mjs';
-import { themeOfDir } from '../installs.mjs';
+import { GLOBAL_MANIFEST, pyResolve } from '../hosts.mjs';
 import { jsonDumpsCompact, pyInt, pyPrint, writeText } from '../lib/pyfs.mjs';
+import { STATE_ROUTES, webState } from './api.mjs';
+
+export { webState };
 
 const ROOT = pathResolve(fileURLToPath(import.meta.url), '..', '..', '..');
 
@@ -82,29 +84,36 @@ const CTYPES = {
  * here, deliberately: a cell comparing a 501 against the reference's real body would
  * fail, and one comparing two 501s would be waiting to go stale.
  */
+/**
+ * SPLIT BY VERB SINCE P6b, and the split is the point rather than a tidy-up. Five paths
+ * answer BOTH verbs with different bodies — `/api/mcp`, `/api/excludes`, `/api/rules`,
+ * `/api/profile`, `/api/activity` — and P6b ports the GET half of two of them. One set
+ * keyed on path alone would have taken `/api/excludes` out of the unported list the
+ * moment its GET landed, and its POST would then have answered `{"error": "not found"}`
+ * with a 404: a plausible-looking response where the reference returns 200 or 409, which
+ * is exactly the failure the 501 exists to prevent.
+ */
 export const NOT_PORTED = new Set([
-  '/api/overview', '/api/activity', '/api/themes', '/api/setup', '/api/doctor',
-  '/api/graph', '/api/mcp', '/api/installs', '/api/excludes', '/api/rules',
-  '/api/profile', '/api/diff', '/api/docs', '/api/jobs',
-  '/api/restart', '/api/pick-folder', '/api/install', '/api/view',
-  '/api/memory/delete', '/api/rules/promote',
+  '/api/activity', '/api/graph', '/api/mcp', '/api/rules', '/api/docs', '/api/jobs',
 ]);
-const NOT_PORTED_PREFIXES = ['/api/activity/', '/api/catalog/', '/api/item/',
-  '/api/docs/page/', '/api/jobs/', '/api/actions/'];
+export const NOT_PORTED_PREFIXES = ['/api/activity/', '/api/catalog/', '/api/item/',
+  '/api/docs/page/', '/api/jobs/'];
+
+/** Every POST route but `/api/shutdown`, which is the shell's own. P6f-P6g empty this. */
+export const NOT_PORTED_POST = new Set([
+  '/api/restart', '/api/pick-folder', '/api/mcp', '/api/install', '/api/excludes',
+  '/api/view', '/api/activity', '/api/memory/delete', '/api/rules', '/api/rules/promote',
+  '/api/profile',
+]);
+export const NOT_PORTED_POST_PREFIXES = ['/api/jobs/', '/api/actions/'];
 
 function notPorted(path) {
   return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));
 }
 
-/**
- * The resolved view of the deployed harness a request reads from — `WebState`'s three
- * fields the shell itself needs. The detected emit/footprint/posture/mode arrive with the
- * first endpoint that reads them; adding a field nothing consumes would be a claim this
- * phase has not gated.
- */
-export function webState(theme = null) {
-  const target = opencodeConfigDir();
-  return { target, root: target, theme: theme || themeOfDir(target) || 'neutral' };
+function notPortedPost(path) {
+  return NOT_PORTED_POST.has(path)
+    || NOT_PORTED_POST_PREFIXES.some((p) => path.startsWith(p));
 }
 
 // ---- the request handler ---------------------------------------------------
@@ -162,6 +171,10 @@ export function makeHandler(state, token, dist, holder = null) {
   }
 
   function doGet(req, res, path, ae) {
+    // The reference's own table first, then the routes that parse the path — and `ping`
+    // sits between them there too, so the order here is its order.
+    const route = STATE_ROUTES[path];
+    if (route !== undefined) return sendJson(res, route(state), 200, ae);
     if (path === '/api/ping') return sendJson(res, { ok: true, theme: state.theme }, 200, ae);
     if (notPorted(path)) {
       return sendJson(res, { error: `not ported yet: ${path}` }, 501, ae);
@@ -189,7 +202,9 @@ export function makeHandler(state, token, dist, holder = null) {
       });
       return sendJson(res, { stopping: true }, 200, ae);
     }
-    if (notPorted(path)) return sendJson(res, { error: `not ported yet: ${path}` }, 501, ae);
+    if (notPortedPost(path)) {
+      return sendJson(res, { error: `not ported yet: ${path}` }, 501, ae);
+    }
     return sendJson(res, { error: 'not found' }, 404, ae);
   }
 

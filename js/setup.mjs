@@ -216,8 +216,13 @@ export function modeOptions() {
   return discoverNames('modes', 'direct').map((n) => [n, MODE_BLURBS[n] ?? '']);
 }
 
-/** `_harness_setup.EMIT_OPTIONS`. */
-const EMIT_OPTIONS = [
+/**
+ * `_harness_setup.EMIT_OPTIONS`.
+ *
+ * Exported since P6b: `/api/themes` returns the same nine as its `emits` list, and a copy
+ * of a table under test silently stops being the table under test.
+ */
+export const EMIT_OPTIONS = [
   ['opencode-global', 'OpenCode global config dir — every repo inherits it (recommended).'],
   ['claude-global', 'Claude Code global config dir (~/.claude) — CLAUDE.md, agents, skills, hooks.'],
   ['opencode', 'Per-repo .opencode/ layer committed into one repository.'],
