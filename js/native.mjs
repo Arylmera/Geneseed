@@ -34,7 +34,39 @@ import { writeText, copyFile, jsonDumps, parseJson, pyStr, pyRepr, pyTruthy, rea
   from './lib/pyfs.mjs';
 
 /** Mirrors `_build_core.VENDORED_SKILL_DIRS`. */
-const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report']);
+export const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report']);
+
+/**
+ * `PurePath(rel).parts` — split on EITHER separator, empties dropped.
+ *
+ * `'skills/x/'.split('/')` carries a trailing `''` that `Path` does not have, and the two
+ * vendored predicates below are `len(parts) >= 2` tests where that would matter.
+ */
+const pathParts = (rel) => rel.split(/[\\/]+/).filter((p) => p !== '');
+
+/**
+ * `_build_render.is_vendored_path` — a BUNDLE-relative `skills/<vendored>/…`.
+ *
+ * `DIR_SKILLS` is always the neutral `skills`, so the second segment is the skill name.
+ */
+export function isVendoredPath(rel) {
+  const parts = pathParts(rel);
+  return parts.length >= 2 && parts[0] === 'skills' && VENDORED_SKILL_DIRS.has(parts[1]);
+}
+
+/**
+ * `build._validate_is_vendored` — the same question, tolerant of `skills` at ANY depth.
+ *
+ * The per-repo native layers nest one level deeper than a `files`/opencode-global bundle
+ * (`.claude/skills/<name>/…`, `.bob/skills/<name>/…`, `.github/skills/<name>/…`), so
+ * `doctor`'s scan of those trees needs the loose form or every vendored folder's own
+ * upstream cross-links read as dead links. Never the last segment — `parts[:-1]`, because a
+ * FILE named `skills` is not a directory of them.
+ */
+export function validateIsVendored(rel) {
+  const parts = pathParts(rel);
+  return parts.slice(0, -1).some((p, i) => p === 'skills' && VENDORED_SKILL_DIRS.has(parts[i + 1]));
+}
 
 /** Mirrors `_build_emit.AGENT_COLORS` — the fallback when a theme carries no map. */
 const AGENT_COLORS = {
@@ -78,6 +110,38 @@ export function firstBlockquote(text) {
 /** `_build_emit.desc_of`. */
 export function descOf(text) {
   return firstBlockquote(text);
+}
+
+/** `_build_render._HTML_COMMENT_RE`. */
+const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
+
+/**
+ * `_build_render._desc_block_problem` — "" when the spec's shape holds, else the reason.
+ *
+ * The guard `firstBlockquote` needs and cannot be: it returns the first `>` line ANYWHERE,
+ * so a spec that opens with prose and quotes something later gets that unrelated line as its
+ * OpenCode/Claude/Bob `description:`, with nothing anywhere reporting it. This asserts the
+ * shape every real spec has — title, then the purpose blockquote — after the authoring
+ * comment is stripped.
+ *
+ * `.replace` with a `g` regex, matching `re.sub`'s replace-all; the Python's pattern is
+ * non-global-looking but `re.sub` always is. `split('\n')` rather than `pySplitLines`: the
+ * text has been through `readText`, and the reason `firstBlockquote` gives for the same
+ * choice applies verbatim to the same files.
+ */
+export function descBlockProblem(text) {
+  const nonblank = text.replace(HTML_COMMENT_RE, '').split('\n').filter((ln) => ln.trim());
+  if (!nonblank.length) return 'file is empty (after stripping authoring comments)';
+  if (!nonblank[0].replace(/^\s+/, '').startsWith('#')) {
+    return `first content line is not a title ('# ...'): ${pyRepr(nonblank[0].trim())}`;
+  }
+  if (nonblank.length < 2) return 'has a title but no purpose blockquote after it';
+  const second = nonblank[1].trim();
+  if (!second.startsWith('>')) {
+    return `first block after the title is not a '>' blockquote: ${pyRepr(second)}`;
+  }
+  if (!second.replace(/^>+/, '').trim()) return 'purpose blockquote is empty';
+  return '';
 }
 
 /** `_build_render._is_readonly`. */
@@ -285,7 +349,9 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     // Vendored third-party skill folders ride along verbatim, preserving their own
     // multi-file layout — copied through, NOT wrapped as a native SKILL.md, and never
     // counted as harness skills.
-    if (sparts.length >= 2 && sparts[0] === 'skills' && VENDORED_SKILL_DIRS.has(sparts[1])) {
+    // `isVendoredPath`, not a fourth copy of the same three clauses: P5g gave the predicate a
+    // second caller (`doctor`'s bundle scan) and the byte gate is what licenses the merge.
+    if (isVendoredPath(relPosix(src, source))) {
       const dest = path.join(skillsDir, ...sparts.slice(1));
       if (!claim(dest)) continue;
       mkdirSync(path.dirname(dest), { recursive: true });

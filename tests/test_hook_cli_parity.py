@@ -393,33 +393,80 @@ class TheHookEntryIsNotAPassthrough(unittest.TestCase):
 
 @unittest.skipIf(NODE is None, "node is not on PATH")
 class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
-    """`bin/geneseed-cli.mjs`, and the ban here is the STRONG one.
+    """`bin/geneseed-cli.mjs`, and P5g is the day this ban became an ALLOW-LIST.
 
-    The hook entry could only assert the narrow property — exactly one child-process binding,
-    because `learn`'s whole purpose is handing notes to `$GENESEED_LLM`. Nothing this entry
-    carries has any reason to start a process, so it gets the driver's ban verbatim: no
-    child-process module anywhere in its transitive imports. The day a verb that genuinely
-    spawns lands here (`web`, `upgrade`), this gate is where that decision gets recorded.
+    IT USED TO BE THE STRONG FORM: no child-process module anywhere in the entry's transitive
+    imports, the driver's ban verbatim, because nothing the entry carried had any reason to
+    start a process. Its own docstring named the successor condition — "the day a verb that
+    genuinely spawns lands here (`web`, `upgrade`), this gate is where that decision gets
+    recorded" — and `doctor` arrived first.
+
+    WHY `doctor` IS ALLOWED WHERE `build` WAS NOT. `_authoring_problems` runs `node --check`
+    over the OpenCode plugins, and there is no in-process equivalent: `vm.Script` compiles as
+    a SCRIPT, every plugin is ESM, and `node --check` accepts those through module-syntax
+    detection while `vm.Script` rejects them with a SyntaxError of its own. That is the
+    opposite of `build`, whose spawn existed only because `build.py` is a different PROGRAM
+    and whose Node twin is a module in this one. A syntax checker is not a passthrough.
+
+    SO THE PROPERTY GETS ASSERTED DIRECTLY INSTEAD OF AS A SIDE EFFECT. The old gate proved
+    "cannot spawn" and inferred "does not shell back to Python"; these three prove the second
+    thing on purpose — one binding, one call site, and an argv that is `node --check`. It is
+    the shape the hook entry has carried for `$GENESEED_LLM` since P5a, and
+    `test_doctor_validates_the_build_with_no_python_on_path` below is the dynamic half —
+    the one that would fail if the allow-list were used to shell back to `harness.py`.
     """
 
-    def test_the_cli_reaches_no_child_process_module(self):
-        """STATIC, and transitive — a source grep on the entry alone cannot see an import
-        one module deep, which is the hole P5a had to close for the generator driver."""
-        seen, queue = set(), [HARNESS_CLI]
+    def test_the_cli_reaches_child_process_only_where_it_is_declared(self):
+        """STATIC, and transitive — a source grep on the entry alone cannot see an import one
+        module deep, which is the hole P5a had to close for the generator driver."""
+        allowed = ROOT / "js" / "doctor.mjs"
+        seen, queue, importers = set(), [HARNESS_CLI], []
         while queue:
             f = queue.pop()
             if f in seen or not f.is_file():
                 continue
             seen.add(f)
             text = f.read_text(encoding="utf-8")
-            for banned in ("node:child_process", "'child_process'", '"child_process"'):
+            if re.search(r"^\s*import\s.*'node:child_process'", text, re.M):
+                importers.append(f)
+            for banned in ("'child_process'", '"child_process"'):
                 self.assertNotIn(
                     banned, text,
-                    f"bin/geneseed-cli.mjs reaches {banned} through {f.relative_to(ROOT)}")
+                    f"bin/geneseed-cli.mjs reaches a bare {banned} through "
+                    f"{f.relative_to(ROOT)} — the allow-list is the `node:` specifier only")
             for spec in re.findall(r"from\s+'(\.[^']+)'", text):
                 queue.append((f.parent / spec).resolve())
         self.assertGreater(len(seen), 2,
                            "the import walk found almost nothing, so it proves nothing")
+        self.assertEqual(
+            importers, [allowed],
+            f"child_process is imported by {[str(p.relative_to(ROOT)) for p in importers]}; "
+            f"js/doctor.mjs is the only module on this entry allowed to, and only for "
+            f"`node --check`")
+
+    def test_the_cli_spawns_only_a_node_syntax_check(self):
+        """The half a module list cannot state: WHAT it spawns.
+
+        A `\\bspawnSync\\s*\\(` scan is deliberately anchored on the import binding rather than
+        on the word — `js/hooks.mjs`'s twin of this test found three `SOME_RE.exec(...)` when
+        it scanned for `exec` — and the argv is asserted literally, because a second call site
+        that reused the binding to start an interpreter would satisfy a count alone.
+        """
+        text = allowed_text = (ROOT / "js" / "doctor.mjs").read_text(encoding="utf-8")
+        imports = re.findall(r"import\s+(.+?)\s+from\s+'node:child_process'", text)
+        self.assertEqual(imports, ["{ spawnSync }"],
+                         f"js/doctor.mjs imports {imports} from child_process; exactly one "
+                         f"binding is allowed and it is spawnSync")
+        self.assertEqual(len(re.findall(r"(?<![.\w])spawnSync\s*\(", text)), 1,
+                         "js/doctor.mjs has more than one spawnSync call site; `node --check` "
+                         "is the only thing this verb may start")
+        self.assertIn("spawnSync(node, ['--check', js]", allowed_text,
+                      "the one spawn is no longer `node --check <plugin>` — a spawn that "
+                      "took its command from anywhere else would be the passthrough this "
+                      "entry exists not to be")
+        self.assertIn("const node = pyWhich('node');", allowed_text,
+                      "the spawned binary no longer comes from a PATH lookup, so the "
+                      "reference's skip-when-node-is-absent branch cannot be reproduced")
 
     def test_exclude_reads_a_real_install_with_no_python_on_path(self):
         """DYNAMIC. A passthrough's `spawn('python', ...)` dies with ENOENT here; a second
@@ -445,6 +492,34 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
                           "exclude list produced no install row with python off PATH — it "
                           "is driving the Python CLI rather than being a second "
                           "implementation")
+
+    def test_doctor_validates_the_build_with_no_python_on_path(self):
+        """The verb the allow-list was opened for, refuted the same way.
+
+        `doctor` is the most spawn-shaped verb that has crossed: it runs a full build, five
+        emits and a `node --check` per plugin. It is also the one where a passthrough would be
+        least visible — `run(['python', 'harness.py', 'doctor'])` produces byte-identical
+        output in every cell of the matrix, because the reference is what it would be running.
+        With no python anywhere on PATH there is nothing for such a call to find.
+
+        `--no-bundle` and one theme, because this asserts the plumbing rather than the checks;
+        the fifteen checks are gated one planted fault at a time in `harness_golden`.
+        """
+        stripped, dropped = _path_without_python()
+        self.assertTrue(dropped, "PATH held no python at all, so this run proves nothing")
+        with tempfile.TemporaryDirectory() as tmp_s:
+            home = Path(tmp_s) / "home"
+            home.mkdir(parents=True)
+            # cell_env redirects GENESEED_HOME, which matters more here than anywhere else:
+            # doctor EMITS, every emit rewrites the machine-wide hook shim, and an unsandboxed
+            # run would repoint the developer's own installs at this test's temp dir.
+            env = golden.cell_env(home)
+            env["PATH"] = stripped
+            r = run_cli(["doctor", "--theme", "neutral", "--no-bundle"], env=env)
+            self.assertEqual(r.returncode, 0,
+                             f"doctor failed with python off PATH:\n{r.stdout[-2000:]}\n"
+                             f"{r.stderr[-2000:]}")
+            self.assertIn("[doctor] ok — 1 theme(s) clean", r.stdout)
 
 
 @unittest.skipIf(NODE is None, "node is not on PATH")

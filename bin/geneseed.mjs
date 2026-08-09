@@ -742,6 +742,31 @@ const GLOBAL_EMITS = {
   copilot: emitCopilotGlobal,
 };
 
+/**
+ * The PER-REPO half of the same idea, and `doctor` is its only caller.
+ *
+ * `_claude_bob_emit_problems` renders `emit_claude`, `emit_bob` and `emit_copilot` into
+ * throwaway sandboxes and scans each — the three emits that write CLAUDE.md/AGENTS.md
+ * straight into a repo, and the ones outside doctor's sweep when the skill-table dead links
+ * shipped.
+ *
+ * IT CALLS THE EMIT, NOT `main`, AND THAT IS THE WHOLE POINT OF THE EXPORT. Routing this
+ * through `driverMain(['--emit', 'claude', …])` would look like less code and would run two
+ * stages the Python's direct call never reaches: `writeMarkers` drops `.geneseed-emit` and
+ * `.geneseed-footprint` into the sandbox, and `registryRecord` writes a row into the USER'S
+ * install registry for a temp directory that is deleted a millisecond later. A validation
+ * pass must not register an install.
+ *
+ * `footprint: 'full'` is the Python signature default that `_claude_bob_emit_problems`'s
+ * three-positional call leaves in place, inherited here rather than re-decided.
+ */
+const PROJECT_EMITS = { claude: emitClaude, bob: emitBob, copilot: emitCopilot };
+
+export function emitProjectInto(host, { theme, out, root, footprint = 'full' }) {
+  const emit = PROJECT_EMITS[host];
+  return withPyNewlines(() => emit(makeCfg(), { theme, footprint, root }, out));
+}
+
 export function emitGlobalInto(host, { theme, out, cfgDir, footprint }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.

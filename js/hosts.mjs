@@ -135,6 +135,27 @@ export const HOSTS = [
   { host: 'copilot', configDir: copilotConfigDir, projectMarker: '.github' },
 ];
 
+/**
+ * `_build_global.host_catalogs_natively` — does `host` list every skill and agent to the
+ * model by itself?
+ *
+ * The third column of `HOSTS`, and the reason the docblock above no longer says
+ * `native_catalog` stays out: `doctor`'s `_rendered_problems` has to know, because a host
+ * that catalogues natively gets AGENT.md's tables collapsed to a pointer and comparing the
+ * portable shape against its bundle reports AGENT.md stale on every run forever. It is a
+ * column and not a set literal so that the capability is still declared in exactly one place
+ * — the Python's own reason for the helper.
+ *
+ * Unknown host -> false, which is the shape that KEEPS the tables. The value arrives from a
+ * user-editable `.geneseed-emit` marker, so an unrecognised one must degrade to the portable
+ * bundle rather than raise.
+ */
+const NATIVE_CATALOG = { opencode: true, claude: true, bob: false, copilot: false };
+
+export function hostCatalogsNatively(host) {
+  return Boolean(NATIVE_CATALOG[host]);
+}
+
 /** `_harness_learn.MEMORY_DIR_NAMES` — the neutral name and the imperial theme's. */
 const MEMORY_DIR_NAMES = ['memory', 'anamnesis'];
 

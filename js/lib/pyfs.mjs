@@ -8,9 +8,13 @@
  * Everything here is stdlib-only, ESM, and deliberately tiny — it is imported by hook
  * paths eventually, where load time is a per-tool-call cost.
  */
-import { writeFileSync, readFileSync, copyFileSync, statSync, utimesSync } from 'node:fs';
+import {
+  accessSync, constants, writeFileSync, readFileSync, copyFileSync, statSync, utimesSync,
+} from 'node:fs';
 import { EOL } from 'node:os';
 import path from 'node:path';
+
+const { X_OK } = constants;
 
 /**
  * `Path.write_text(text, encoding="utf-8")`.
@@ -486,6 +490,62 @@ export const pyLjust = (s, width) => s + ' '.repeat(Math.max(0, width - pyLen(s)
  * RESOLVED repo path — Python never matches a `..` entry there, and a normalising port would
  * match it and unwire a file the reference would have left alone.
  */
+/**
+ * `shutil.which(cmd, path=None)` — the first executable named `cmd` on PATH, or null.
+ *
+ * `doctor` runs `node --check` over the OpenCode plugins and SKIPS the whole check when node
+ * is not on PATH. `process.execPath` is not that: it is always set, so a port that used it
+ * would run the check in a world where the reference silently declines to — the divergence a
+ * PATH-removal refutation is aimed at, and the reason this is a real lookup rather than one
+ * line of "we are node, we know where node is".
+ *
+ * The Windows half is the part with behaviour in it, and three of its four rules were
+ * MEASURED against CPython 3.13 rather than assumed. `PATHEXT` supplies the suffixes, and the
+ * returned path carries PATHEXT's OWN SPELLING of the extension rather than the file's
+ * (`zzcmd.CMD` for a `zzcmd.cmd` on disk). An extension already in that set means the command
+ * is spelled in full. The current directory is NOT prepended — it was until 3.12 and the
+ * first draft here reproduced the old behaviour. An EMPTY PATH entry is not skipped either:
+ * `join('', cmd)` is a relative path, and Python answers with one.
+ *
+ * Gated as a pure function over a seeded directory in `tests/test_pure_function_parity.py`:
+ * a cell can only ever observe the one answer this machine's PATH gives.
+ */
+export function pyWhich(cmd, searchPath = null) {
+  const win = process.platform === 'win32';
+  const isExec = (p) => {
+    try {
+      if (!statSync(p).isFile()) return false;
+      accessSync(p, X_OK);
+      return true;
+    } catch { return false; }
+  };
+  // A command with a directory separator is not looked up at all — Python checks it as given.
+  if (cmd.includes('/') || (win && cmd.includes('\\'))) return isExec(cmd) ? cmd : null;
+  const exts = win
+    ? (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
+    : [];
+  const spelled = win && exts.some((e) => cmd.toLowerCase().endsWith(e.toLowerCase()));
+  // `os.path.join`, which CONCATENATES where `path.join` NORMALISES. The difference shows the
+  // moment a PATH entry is spelled with the other separator — routine on Windows, where Git
+  // Bash and MSYS put forward-slash entries in it — and the answer is the string a caller
+  // then spawns. Measured: the corpus case with a posix-spelled directory was the one that
+  // differed, and `path.join` had rewritten the whole path rather than appending to it.
+  const joinRaw = (dir, name) => (
+    dir === '' || /[\\/]$/.test(dir) || (win && dir.endsWith(':'))
+      ? dir + name : dir + path.sep + name);
+  const seen = new Set();
+  for (const dir of (searchPath ?? process.env.PATH ?? '').split(path.delimiter)) {
+    const key = win ? dir.toLowerCase() : dir;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    for (const ext of (!win || spelled ? [''] : exts)) {
+      const candidate = joinRaw(dir, cmd + ext);
+      if (isExec(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
 export function pyPathStr(s) {
   const raw = path.parse(s).root;
   // Each separator individually, never `replace(/[\\/]+/g, sep)`: a UNC root's LEADING pair

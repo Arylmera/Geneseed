@@ -40,6 +40,7 @@
  * tables from ever answering the same verb twice, since the shim bakes only one of them.
  */
 import { cmdDiff } from '../js/diff.mjs';
+import { cmdDoctor } from '../js/doctor.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
@@ -106,6 +107,17 @@ const VERBS = {
   'rebuild-all': {
     fn: cmdRebuildAll,
     positionals: [],
+  },
+  doctor: {
+    fn: cmdDoctor,
+    positionals: [],
+    // `--theme` again carries no `choices` — `harness.py`'s does not either, and an unknown
+    // one is refused by the generator when the per-theme build runs, which is what
+    // `doctor/an-unknown-theme-is-refused-by-the-generator` compares.
+    options: { '--theme': 'theme', '--bundle': 'bundle' },
+    // argparse's dest for `--no-bundle` is `no_bundle`; the JS keeps the Python dest in
+    // camelCase so the two tables read against each other.
+    flags: { '--all': 'all', '--no-bundle': 'noBundle' },
   },
 };
 

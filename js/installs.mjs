@@ -75,7 +75,7 @@ export const defaultMode = () => configuredDefault('mode', 'direct');
 // ---- theme, footprint, posture, mode, read back off a deployed tree -----------------------
 
 /** `_build_render.theme_files` — shipped themes, `_`-prefixed scaffolds excluded. */
-function themeFiles() {
+export function themeFiles() {
   let names;
   try { names = readdirSync(THEMES); } catch { return []; }
   return names.filter((n) => n.endsWith('.json') && !n.startsWith('_')).sort()
@@ -283,7 +283,7 @@ export function installTargets() {
         }
       } catch { /* as the Python's bare `except Exception: pass` */ }
     }
-    const key = `${host} ${pyResolve(root)}`;
+    const key = `${host}\0${pyResolve(root)}`;
     if (!seen.has(key)) { seen.add(key); out.push([host, scope, root]); }
   };
 
