@@ -32,11 +32,11 @@ import path from 'node:path';
 
 import { main as driverMain } from '../bin/geneseed.mjs';
 import { makeCfg } from './checkout.mjs';
-import { opencodeConfigDir, expanduser, pyResolve } from './hosts.mjs';
+import { opencodeConfigDir, pyResolve } from './hosts.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from './opencode.mjs';
 import { renderAll } from './render.mjs';
 import {
-  jsonDumpsIndent, parseJson, pyPrint, pyRepr, readText, writeText,
+  jsonDumpsIndent, parseJson, pyPrint, pyPrintErr, pyRepr, readText, writeText,
 } from './lib/pyfs.mjs';
 
 /** `_harness_build._HEX_RE`. Anchored at BOTH ends — `#123` and `#1122334` both fail. */
@@ -51,7 +51,12 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
  * exception, so dressing a crash as a one-liner would hide a bug.
  */
 function sysExit(msg) {
-  process.stderr.write(`${msg}\n`.replaceAll('\n', process.platform === 'win32' ? '\r\n' : '\n'));
+  // `pyPrintErr`, NOT a local newline translation. The first draft inlined the `\n` ->
+  // `\r\n` rule here and every cell passed, because `harness_golden` reads stderr through
+  // `subprocess`'s universal-newline decode and cannot see the difference — the same
+  // transport hole P5b measured. A second copy of a translation is exactly what P5d's
+  // `pyStrPath`/`pyPathStr` split was, and it is ungated in precisely the same way.
+  pyPrintErr(`${msg}\n`);
   const e = new Error(msg);
   e.exitCode = 1;
   throw e;
@@ -168,7 +173,8 @@ export function cmdPrompt(args) {
 
 /** `_harness_build._resolve_themes_dir` — explicit `--dir`, else a repo `.opencode/`, else global. */
 export function resolveThemesDir(args) {
-  if (args.dir) return pyResolve(expanduser(args.dir));
+  // `Path(args.dir).expanduser().resolve()` — `pyResolve` already expands a leading `~`.
+  if (args.dir) return pyResolve(args.dir);
   const repo = path.join(process.cwd(), '.opencode');
   if (!args.globalDir && isDir(repo)) return path.join(repo, 'themes');
   return path.join(opencodeConfigDir(), 'themes');
@@ -177,10 +183,24 @@ export function resolveThemesDir(args) {
 /**
  * `_harness_build._load_user_palette` — `--from` seeds, `--palette` overlays, then validate.
  *
- * The palette is a **Map**, not an object, and that is the P3a hazard rather than a style
- * choice: `pal` is iterated to build the bad-value list, and JS hoists integer-like keys to
- * the front of an object while Python keeps insertion order. A palette file whose first key
- * is `"0"` would list it first here and last there.
+ * The palette is a **Map** because `pal`'s iteration order is OBSERVABLE: it is the order
+ * of the bad-value list in the refusal message, and JS hoists integer-like keys to the front
+ * of a plain object while Python's dict keeps insertion order (the P3a hazard).
+ *
+ * THE MAP IS NOT A COMPLETE FIX AND SAYING SO IS THE POINT. `JSON.parse` has already
+ * reordered by the time anything here runs — measured, not assumed: its reviver is invoked
+ * in the hoisted order too, so no parse-time hook can recover the text's order. The Map
+ * only preserves what it is handed. A palette carrying an integer-like key AND a second bad
+ * value therefore still diverges:
+ *
+ *     {"zzz": "y", "0": "x"}   python: zzz='y', 0='x'      node: 0='x', zzz='y'
+ *
+ * That is this port's oldest known difference becoming REACHABLE for the first time — every
+ * phase since P3a has carried it as a hazard no cell could reach. It is recorded rather than
+ * fixed: recovering source order means hand-scanning the JSON text, which is a reproduction
+ * of a parser (P5c's rule: those need a corpus, and this one would need one for every
+ * escaping rule) traded for the ORDER OF TWO NAMES in an error message that both
+ * implementations still emit, for the same values, with the same exit code.
  */
 export function loadUserPalette(args, cfg) {
   const pal = new Map();

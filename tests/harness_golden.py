@@ -40,7 +40,7 @@ cell that is not deterministic cannot gate anything.
 WHY THE CELLS CARRY `expect` AS WELL AS COMPARING
 -------------------------------------------------
 P4e/M43: a cross-implementation comparison is structurally blind to a defect BOTH sides
-share. That risk is higher here than it was for the generator, because these four verbs
+share. That risk is higher here than it was for the generator, because the four HOOK verbs
 are silent on almost every path by design — a hook must never break a tool call, so every
 unreadable payload, every missing file and every bypass exits 0 with no output. Two CLIs
 that both stopped gating would agree perfectly, in every cell, forever.
@@ -50,7 +50,14 @@ that have to appear, `expect_silent` for the paths whose whole contract is sayin
 and `expect_files` for the ones that write. Those run against the REFERENCE side and fail
 the cell when they do not hold — a cell that has stopped exercising what it names is
 reported as vacuous rather than banked as a pass. `test_hook_cli_parity.py` asserts that
-every cell carries at least one of the three.
+every cell carries at least one of them.
+
+AND IT IS NOT ONLY THE SILENT VERBS. `build` is loud and its first three cells still
+asserted the wrong thing: `harness build` printed nothing, so they were written
+`expect_silent=True` — a faithful record of a Windows bug in `_harness_core.run`, stated
+absolutely, in the file whose job is stating things absolutely. The absolute half answers
+"what does the reference do", never "is the reference right"; only reading the two
+implementations against each other asks the second question. See the `build` section.
 
 SAFETY: every cell runs under `golden.cell_env`, which redirects HOME/USERPROFILE/XDG/
 APPDATA/LOCALAPPDATA into a throwaway dir and clears every host relocation variable and
@@ -1357,11 +1364,16 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
 def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     """The absolute assertions, run against the REFERENCE side.
 
-    This is the half a comparison cannot do. These four verbs are silent on almost every
+    This is the half a comparison cannot do. The four hook verbs are silent on almost every
     path by design, so two implementations that both stopped working would agree in every
     cell. `expect` states what the reference must actually say; when it stops saying it,
     the cell is reported as vacuous instead of banked — the same discipline as golden's
     `sovereign` carve-out, which fails when it excuses nothing.
+
+    What it does NOT do is adjudicate. These assertions describe the reference, so a cell
+    written against a reference that is wrong records the fault faithfully and passes; P5e's
+    first `build` cells did exactly that. The comparison is what surfaces the disagreement,
+    and a person is what decides which side of it is right.
     """
     problems = []
     text = (snap["<stdout>"] + b"\n" + snap["<stderr>"]).decode("utf-8", "replace")
