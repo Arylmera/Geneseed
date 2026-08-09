@@ -45,7 +45,7 @@ import {
 import path from 'node:path';
 
 import {
-  claudeCfg, claudeReadManifest, emitHostScopeOf, installKind, installState,
+  claudeReadManifest, emitHostScopeOf, installKind, installState,
   registeredTargets, readMaybe, DISABLED_STASH,
 } from './installs.mjs';
 import {
