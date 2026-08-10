@@ -26,13 +26,15 @@ under a `files` whitelist are not derivable from reading the docs, and the first
     publishable tarball. The root `.gitignore` names both directories. npm packed them.
   * `"rituals/"` shipped 28 `__pycache__/*.pyc` files, likewise gitignored.
   * `"src/"` did NOT ship `src/notebook/README.md`, a tracked file, because
-    `src/notebook/.gitignore` says `*` + `!.gitignore` and npm-packlist honours nested
-    ignore files. See `NPM_STRIPS` below — this one is a live defect, not a tidy-up.
+    `src/notebook/.gitignore` said `*` + `!.gitignore` and npm-packlist honours nested
+    ignore files.
 
 The first two are fixed by narrowing the globs (`docs/*.md` + `docs/web/`,
-`rituals/*.py`). The third cannot be fixed from `package.json` at all: an explicit
-`"src/notebook/README.md"` entry, `"src/notebook/**"`, `"src/notebook/*"` and a root
-`.npmignore` were each measured and each failed. It is declared instead.
+`rituals/*.py`). The third could not be fixed from `package.json` at all — an explicit
+`"src/notebook/README.md"` entry, `"src/notebook/**"`, `"src/notebook/*"`,
+`"src/notebook/"` and a root `.npmignore` were each measured and each failed — so P10b
+fixed it in the RENDERER: the two product ignore files are stored without the leading dot
+and `dest_rel` puts it back. `NPM_STRIPS` is the empty set that watches for a relapse.
 
 WHAT THE `engines` FLOOR IS, AND WHY IT IS NOT A ROUND NUMBER. `API_FLOOR` is the table of
 the newest runtime features this code depends on, each with the Node version that supplies
@@ -50,11 +52,14 @@ P10a, and a foot-gun afterwards) fail loudly rather than fork the two. `descript
 `keywords` are prose with no consumer inside the program; a drift gate on them would be
 ceremony.
 
-WHY `private: true`. The package is complete enough to install and run and is NOT
-complete enough to publish: five subcommands are still Python-only, the docs `cli` kind is
-P10c's, and `link`/`unlink` are undecided (P10b). `private` makes `npm publish` refuse
-outright, so publishing stays a deliberate edit rather than an accident, and P10e's OIDC
-workflow removes it in the same commit that decides to ship.
+WHY `private` IS GONE. It was there for exactly two reasons, both P10a defects that only
+an INSTALL could see, and P10b fixed both in the renderer — see
+`TheInstalledTreeIsTheOneAUserGets`, which now emits a bundle from the installed package
+and diffs it against the checkout's. What is left before a first publish is scope, not
+correctness (`tui`/`menu`/`home` are P7's, the docs `cli` kind is P10c's, `migrate` is
+P10d's, and the OIDC workflow is P10e's) — and none of those makes an installed package
+do the wrong thing. Publishing remains a human act: nothing in this repo runs
+`npm publish`.
 
 THE ONE PYTHON DEPENDENCY, AND WHY IT IS GATED AT THE SOURCE RATHER THAN THE BUNDLE.
 `TheBundlesOnlyPythonIsDeclared` scans every tracked file under `src/` and `adapters/` —
@@ -75,7 +80,10 @@ NAMES the Python front door; the scan freezes those too, so a new one has to be 
 """
 from __future__ import annotations
 
+import atexit
+import filecmp
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -87,22 +95,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "package.json"
 
-_PACK: tuple[set[str], set[str], set[str]] | None = None
+_PACK: tuple[set[str], set[str], set[str], Path] | None = None
 
 
-def _package_under_test() -> tuple[set[str], set[str], set[str]]:
-    """Pack AND install once per process — (npm's report, the tarball, the INSTALLED tree).
+def _package_under_test() -> tuple[set[str], set[str], set[str], Path]:
+    """Pack AND install once per process — (npm's report, the tarball, the INSTALLED tree,
+    the installed package's directory).
 
     THREE SETS, BECAUSE THEY ARE THREE DIFFERENT ANSWERS AND ONLY THE LAST ONE IS THE ONE
     A USER GETS. `npm pack --json` reports SOURCE paths. The tarball holds those same
-    paths. `npm install` then rewrites two of them on extraction, and neither of the first
-    two layers shows it. Reading only the report — or only the tarball — is how a defect
-    that leaks a user's agent memory into their git repository stayed invisible through
-    both. See `TheInstallRenamesEveryDotGitignore`.
+    paths. `npm install` rewrites some of them on extraction, and neither of the first two
+    layers shows it. Reading only the report — or only the tarball — is how a defect that
+    leaked a user's agent memory into their git repository stayed invisible through both.
+    See `TheInstalledTreeIsTheOneAUserGets`.
+
+    THE FOURTH RETURN IS THE DIRECTORY ITSELF, and it is what P10b needed that P10a did
+    not: a file LIST cannot answer "does a bundle emitted from this install match one
+    emitted from the checkout". Only running the installed generator can, so the install
+    outlives this call and is cleaned up at interpreter exit.
     """
     global _PACK
     if _PACK is None:
         npm = shutil.which("npm")
+        keep = Path(tempfile.mkdtemp(prefix="gs-npm-install-"))
+        atexit.register(shutil.rmtree, keep, True)
         with tempfile.TemporaryDirectory() as tmp:
             tmp_p = Path(tmp)
             proc = subprocess.run(
@@ -119,7 +135,7 @@ def _package_under_test() -> tuple[set[str], set[str], set[str]]:
                     m.name[len("package/"):] for m in tar.getmembers()
                     if m.isfile() and m.name.startswith("package/")
                 }
-            consumer = tmp_p / "consumer"
+            consumer = keep / "consumer"
             consumer.mkdir()
             (consumer / "package.json").write_text(
                 '{"name":"geneseed-install-probe","version":"1.0.0","private":true}\n',
@@ -131,12 +147,31 @@ def _package_under_test() -> tuple[set[str], set[str], set[str]]:
             )
             if proc.returncode != 0:
                 raise AssertionError(f"npm install of the tarball failed: {proc.stderr[-2000:]}")
-            pkg = consumer / "node_modules" / "geneseed"
-            installed = {
-                p.relative_to(pkg).as_posix() for p in pkg.rglob("*") if p.is_file()
-            }
-        _PACK = (reported, inside, installed)
+        pkg = consumer / "node_modules" / "geneseed"
+        installed = {p.relative_to(pkg).as_posix() for p in pkg.rglob("*") if p.is_file()}
+        _PACK = (reported, inside, installed, pkg)
     return _PACK
+
+
+def _emit_bundle(generator_root: Path, out: Path, home: Path) -> None:
+    """Emit a portable bundle with `bin/geneseed.mjs`, with every home-shaped variable
+    redirected into `home` so the user's real install registry is never read or written."""
+    env = {
+        **os.environ,
+        "HOME": str(home), "USERPROFILE": str(home), "XDG_CONFIG_HOME": str(home / "cfg"),
+        "APPDATA": str(home / "appdata"), "LOCALAPPDATA": str(home / "localappdata"),
+    }
+    proc = subprocess.run(
+        [_NODE, str(generator_root / "bin" / "geneseed.mjs"), "--emit", "files",
+         "--out", str(out)],
+        cwd=str(generator_root), capture_output=True, text=True, timeout=600, env=env,
+    )
+    if proc.returncode != 0:
+        raise AssertionError(
+            f"emit from {generator_root} failed ({proc.returncode}): {proc.stderr[-2000:]}")
+
+
+_NODE = shutil.which("node") or "node"
 
 
 def _tracked() -> list[str]:
@@ -177,8 +212,9 @@ SHIPS: tuple[tuple[str, str], ...] = (
     ("web/src/pages/Laws.jsx", "doctor's lawMetaProblems reads this ONE file out of web/src; "
                                "shipping the other 99 to satisfy it would be 700 kB of React "
                                "sources nothing else in the package opens"),
-    ("rituals/", "five subcommands are still Python-only (home, tui, menu, link, unlink) and "
-                 "the docs `cli` kind reads harness.build_argparser() — P10c's"),
+    ("rituals/", "THREE subcommands are still Python-only (home, tui, menu — all P7's; "
+                 "`link`/`unlink` crossed in P10b) and the docs `cli` kind reads "
+                 "harness.build_argparser() — P10c's"),
     ("build.py", "rituals/harness.py imports the `build` facade"),
     ("_build_core.py", "the facade's modules"),
     ("_build_emit.py", "the facade's modules"),
@@ -188,10 +224,17 @@ SHIPS: tuple[tuple[str, str], ...] = (
     ("_install_registry.py", "the facade's modules"),
     ("harness.config.json", "js/checkout.mjs CONFIG — every render reads it"),
     ("registry.json", "js/inventory.mjs and doctor's registryProblems read it"),
-    ("geneseed", "the bash front door. Under npm the self-heal is `npm i -g geneseed@latest`, "
-                 "so the launcher is NOT the updater any more — but it is still the only way "
-                 "to reach the five Python-only verbs, and P10b's `link`/`unlink` put THESE "
-                 "files on PATH. Dropping them here would pre-decide P10b"),
+    # P10b RE-ARGUED THIS ROW, because the reason it carried stopped being true. `link`
+    # crossed, and the Node CLI's shim names `bin/geneseed-cli.mjs` rather than these files
+    # (P5b's "Node bakes node"), so nothing puts the launchers on PATH from an npm install
+    # any more. They still ship, on a narrower claim: `home`/`tui`/`menu` are Python-only
+    # until P7, `rituals/*.py` ships for them, and README/QUICKSTART/SETUP — which also ship
+    # — tell the reader to run `./geneseed`. Four small files, or three shipped documents
+    # that lie. When P7 lands, this row is the next one to re-argue.
+    ("geneseed", "the bash front door; the shipped README/QUICKSTART/SETUP name it, and it "
+                 "is the route to the three Python-only verbs left (home, tui, menu). NOT "
+                 "the updater under npm (`npm i -g geneseed@latest` is), and NOT what "
+                 "`link` puts on PATH any more — re-argue when P7 lands"),
     ("geneseed.cmd", "the Windows front door, same argument"),
     ("geneseed.ps1", "the Windows front door, same argument"),
     ("bootstrap", "`geneseed bootstrap` execs it; still referenced by all three launchers"),
@@ -216,32 +259,19 @@ WITHHELD: tuple[tuple[str, str], ...] = (
     (".gitattributes", "repo mechanics"),
 )
 
-# Tracked, intended to ship, and npm REFUSES TO PACK IT. `src/notebook/.gitignore` is
-# product content (`*` + `!.gitignore` — the one rule the agent cannot lift inside its own
-# notebook) that npm-packlist also reads as a live ignore rule for the source tree, so the
-# sibling README is invisible to `npm pack` no matter what `files` says. Four `files`
-# spellings and a root `.npmignore` were each measured and each failed.
+# EMPTY SINCE P10b, AND KEPT DECLARED. This held the one tracked file `npm pack` refused
+# to carry: `src/notebook/README.md`, hidden by `src/notebook/.gitignore`'s `*` because
+# npm-packlist honours nested ignore files. Five `files` spellings and a root `.npmignore`
+# were each measured and each failed — `files` cannot override an ignore file.
 #
-# CONSEQUENCE, and it is not cosmetic: a bundle emitted by an npm-installed geneseed has
-# no `notebook/README.md` — the agent's notebook charter. `ensureNotebookIndex` still
-# writes `NOTEBOOK.md`, so nothing errors at emit time.
-#
-# THIS ONE IS LOUD, AND ITS SIBLING IS NOT — worth knowing which gate you are relying on.
-# `geneseed doctor` run from a tarball install reports it: 84 problems at the time of
-# measurement, six per theme across fourteen (`dead link 'notebook/README.md' in
-# AGENT.md`, plus the .bob/.claude/.github spellings). The `.gitignore` -> `.npmignore`
-# rename below shares this root cause and doctor says NOTHING about it — zero mentions in
-# the same run. That asymmetry is why the rename needed a gate written for it and this
-# row did not.
-#
-# NEITHER FIX BELONGS TO P10a. Adding `src/notebook/.npmignore` would win the pack (npm
-# never packs `.npmignore`) and would render `notebook/.npmignore` into every user's
-# bundle, because renderAll walks everything under src/. Adding `!README.md` to
-# `src/notebook/.gitignore` would fix the pack and would also un-ignore the charter inside
-# every user's repo, which is a product decision about the notebook's sovereignty. Both
-# are P10b's to choose between; this row fails the moment one of them lands, which is the
-# only way a workaround gets deleted when it stops being needed.
-NPM_STRIPS: frozenset[str] = frozenset({"src/notebook/README.md"})
+# P10b killed it at the source instead: the two product ignore files are stored as
+# `gitignore` (no dot) and `_build_render.dest_rel` puts the dot back at render time, so
+# nothing under `src/` is an ignore file to npm-packlist any more. The set stays declared
+# and stays empty, which is the shape that makes a REGRESSION visible: a new nested
+# `.gitignore` under a shipped tree starts eating siblings again and
+# `test_the_tarball_omits_nothing_the_partition_ships` is what says so, immediately,
+# instead of someone quietly adding a row here.
+NPM_STRIPS: frozenset[str] = frozenset()
 
 # `npm pack` adds this whatever `files` says, and it is untracked until it is committed.
 ALWAYS_PACKED: frozenset[str] = frozenset({"package.json"})
@@ -339,83 +369,135 @@ class TheTarballIsTheDeclaredPartition(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("npm"), "npm is not on PATH")
-class TheInstallRenamesEveryDotGitignore(unittest.TestCase):
-    """`npm install` renames EVERY `.gitignore` to `.npmignore` on extraction. No opt-out.
+class TheInstalledTreeIsTheOneAUserGets(unittest.TestCase):
+    """The EXTRACTED tree, not the tarball — the layer where P10a's headline defect lived.
 
-    THIS IS P10a's HEADLINE DEFECT AND IT IS WHY `private` IS STILL TRUE. Two files under
-    `src/` are named `.gitignore` and both are RENDERED INTO EVERY BUNDLE:
+    `npm install` renames EVERY file named `.gitignore` to `.npmignore` on extraction, no
+    opt-out. Two files under `src/` were named `.gitignore` and both RENDER INTO EVERY
+    BUNDLE, so a bundle emitted by an npm-installed geneseed had `memory/.npmignore` and
+    `notebook/.npmignore` and NO `.gitignore` at all — the agent's private memory and
+    notebook, committable in the user's repository. Nothing errored. Nothing warned.
+    `doctor` said nothing: zero mentions in the same run that reported the LOUD sibling 84
+    times. `git status` in the user's repo was the first place it showed up.
 
-        src/memory/.gitignore     -> the agent's memory store stays off the team's remote
-        src/notebook/.gitignore   -> `*` + `!.gitignore`; the notebook's sovereignty rule
+    ALL THREE OF THE OBVIOUS VIEWS WERE CLEAN. `npm pack --json` reported
+    `src/notebook/.gitignore`; the TARBALL contained `package/src/notebook/.gitignore`.
+    Only the extracted `node_modules` tree disagreed. A gate reading the manifest, the
+    pack report, or even the tarball was green on all three — which is the packaging form
+    of "ask what the TRANSPORT normalises", where the transport is the installer.
 
-    A bundle emitted by an npm-installed geneseed therefore has `memory/.npmignore` and
-    `notebook/.npmignore` and NO `.gitignore` at all — so the agent's private memory and
-    notebook become committable in the user's repository. Nothing errors. Nothing warns.
-    `git status` in the user's repo is the first place it shows up, after the fact.
+    THE FIX WAS THE RENDERER, IN BOTH IMPLEMENTATIONS. The two product ignore files are
+    stored as `src/memory/gitignore` and `src/notebook/gitignore` — a name git does not
+    read as an ignore file, npm-packlist does not honour and npm's extract does not rename
+    — and `_build_render.dest_rel` / `js/render.mjs`'s `destRel` put the dot back at render
+    time, exactly as they already did for `AGENT.md.tmpl`. Emitted bytes are unchanged, so
+    259 golden cells stayed green across the fix rather than being regenerated.
 
-    MEASURED THROUGH ALL THREE LAYERS, and the first two are clean:
-    `npm pack --dry-run --json` reports `src/notebook/.gitignore`, and the TARBALL
-    contains `package/src/notebook/.gitignore`. Only the extracted `node_modules` tree
-    disagrees. A gate that read the manifest, or the pack report, or even the tarball,
-    would have been green on all three. That is the packaging form of "ask what the
-    TRANSPORT normalises" — and here the transport is not the wire, it is the installer.
-
-    Not fixable from `package.json`. `files` cannot suppress the rename, a `postinstall`
-    repair is skipped under `--ignore-scripts` (a data-leak fix that works only sometimes
-    is worse than a blocked publish), and both real fixes change the RENDERER in two
-    implementations: either the emitter asserts these two files the way
-    `ensureBundleGitignore` already asserts the bundle's own, or the source files are
-    renamed to something npm leaves alone and the renderer maps them back. P10b's choice.
-
-    The tests below hold the line in both directions: the casualty list may not grow, and
-    when it shrinks to nothing the `private` assertion here is what has to be deleted
-    deliberately.
+    THE GATE IS DELIBERATELY NOT A LIST COMPARISON. `test_a_bundle_emitted_from_the_
+    install_matches_the_checkout` runs the INSTALLED generator and diffs its bundle against
+    the checkout's, byte for byte. That is the only check in this file that would have
+    caught the defect on the day it was written, because the defect was not a missing file
+    in the package — every file was there, one of them under the wrong name.
     """
 
-    RENAMED_BY_NPM = {
-        "src/memory/.gitignore": "src/memory/.npmignore",
-        "src/notebook/.gitignore": "src/notebook/.npmignore",
+    #: Kept declared and kept EMPTY. Anything in the tarball that is missing from the
+    #: extracted tree is a file npm renamed or dropped on the way in, and the answer is
+    #: never a new row here — it is a source file that must stop being named `.gitignore`.
+    RENAMED_BY_NPM: dict[str, str] = {}
+
+    #: The two product ignore files, by their ON-DISK source name and their RENDERED name.
+    #: Absolute, per side, because a set comparison between the tarball and the install is
+    #: silent about a defect BOTH layers share.
+    IGNORE_SOURCES = {
+        "src/memory/gitignore": "memory/.gitignore",
+        "src/notebook/gitignore": "notebook/.gitignore",
     }
 
-    def test_the_rename_happens_at_install_and_not_before(self):
-        """The absolute half: name which layer is innocent, so a future fix in the wrong
-        layer cannot look like a fix."""
-        reported, inside, _installed = _package_under_test()
-        for src_name in self.RENAMED_BY_NPM:
-            with self.subTest(src=src_name):
-                self.assertIn(src_name, reported, "npm pack --json stopped reporting it")
-                self.assertIn(src_name, inside, "the TARBALL stopped carrying it")
-
-    def test_the_casualty_list_is_exact(self):
-        _reported, inside, installed = _package_under_test()
+    def test_the_install_renames_nothing(self):
+        _reported, inside, installed, _pkg = _package_under_test()
         lost = sorted(p for p in inside if p not in installed)
         self.assertEqual(
             lost, sorted(self.RENAMED_BY_NPM),
-            "the set of files that are in the tarball and NOT in the installed tree has "
-            "changed. A NEW entry means another source file reaches consumers under the "
-            "wrong name — check what it is before shipping anything.",
+            "files that are in the tarball and NOT in the installed tree. npm renames "
+            "`.gitignore` to `.npmignore` on extraction; if one of these renders into a "
+            "bundle it is a data leak, not a packaging wart. Rename the SOURCE (see "
+            "_build_render.dest_rel) rather than adding a row here.",
         )
-        for src_name, installed_name in self.RENAMED_BY_NPM.items():
+
+    def test_no_npmignore_reaches_the_installed_tree(self):
+        """The absolute half of the above: name the artefact, not just the difference. A
+        set comparison goes green if the tarball ALSO starts carrying `.npmignore`."""
+        _reported, _inside, installed, _pkg = _package_under_test()
+        stray = sorted(p for p in installed if Path(p).name in (".npmignore", ".gitignore"))
+        self.assertEqual(
+            stray, [],
+            "an ignore file survived into the installed package. Under `src/` it renders "
+            "into every user bundle under whatever name npm chose:\n  " + "\n  ".join(stray),
+        )
+
+    def test_the_ignore_sources_are_present_under_the_name_npm_leaves_alone(self):
+        _reported, _inside, installed, _pkg = _package_under_test()
+        for src_name in self.IGNORE_SOURCES:
             with self.subTest(src=src_name):
+                self.assertTrue((ROOT / src_name).is_file(), "the source file is gone")
                 self.assertIn(
-                    installed_name, installed,
-                    f"{src_name} did not even arrive as {installed_name}",
+                    src_name, installed,
+                    f"{src_name} did not reach the installed tree at all — if it came "
+                    f"through under another name the whole fix has been undone",
                 )
 
-    def test_every_casualty_is_one_that_renders_into_a_bundle(self):
-        """The severity claim, asserted rather than described: these live under `src/`, and
-        `renderAll` walks everything under `src/`."""
-        for src_name in self.RENAMED_BY_NPM:
-            with self.subTest(src=src_name):
-                self.assertTrue(src_name.startswith("src/"))
-                self.assertTrue((ROOT / src_name).is_file())
+    def test_a_bundle_emitted_from_the_install_matches_the_checkout(self):
+        """THE ONE THAT WOULD HAVE CAUGHT IT. Emit from the installed package and from the
+        checkout, and diff. Both runs get a redirected HOME so neither touches the user's
+        install registry."""
+        _reported, _inside, _installed, pkg = _package_under_test()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_p = Path(tmp)
+            from_npm, from_git = tmp_p / "from-npm", tmp_p / "from-git"
+            _emit_bundle(pkg, from_npm, tmp_p / "home-npm")
+            _emit_bundle(ROOT, from_git, tmp_p / "home-git")
+            npm_files = {p.relative_to(from_npm).as_posix()
+                         for p in from_npm.rglob("*") if p.is_file()}
+            git_files = {p.relative_to(from_git).as_posix()
+                         for p in from_git.rglob("*") if p.is_file()}
+            self.assertEqual(
+                sorted(git_files - npm_files), [],
+                "the npm-installed generator emitted a bundle MISSING files the checkout "
+                "emits — this is the shape of both P10a defects",
+            )
+            self.assertEqual(
+                sorted(npm_files - git_files), [],
+                "the npm-installed generator emitted files the checkout does not",
+            )
+            differing = sorted(
+                rel for rel in git_files
+                if not filecmp.cmp(from_npm / rel, from_git / rel, shallow=False)
+            )
+            self.assertEqual(differing, [], f"bundle files differ byte-for-byte: {differing}")
 
-    def test_the_package_stays_private_while_a_casualty_exists(self):
-        if self.RENAMED_BY_NPM:
-            self.assertIs(
-                _manifest().get("private"), True,
-                "a bundle emitted from this package would ship a user's agent memory and "
-                "notebook without a .gitignore. Fix the rename before removing `private`.",
+    def test_the_emitted_bundle_really_carries_the_ignore_files(self):
+        """Absolute, beside the diff: a diff of two bundles that BOTH lost `.gitignore`
+        is green. Name the files that have to be there."""
+        _reported, _inside, _installed, pkg = _package_under_test()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_p = Path(tmp)
+            out = tmp_p / "bundle"
+            _emit_bundle(pkg, out, tmp_p / "home")
+            for src_name, rendered in self.IGNORE_SOURCES.items():
+                with self.subTest(rendered=rendered):
+                    dest = out / rendered
+                    self.assertTrue(
+                        dest.is_file(),
+                        f"a bundle emitted from the npm install has no {rendered} — the "
+                        f"user's agent memory and notebook are committable",
+                    )
+                    self.assertEqual(
+                        dest.read_bytes(), (ROOT / src_name).read_bytes(),
+                        f"{rendered} is not a copy of {src_name}",
+                    )
+            self.assertTrue(
+                (out / "notebook" / "README.md").is_file(),
+                "the notebook charter is missing — the LOUD half of the same defect",
             )
 
 
@@ -530,11 +612,16 @@ class TheManifestInventsNoFacts(unittest.TestCase):
                       "bundleDependencies"):
             self.assertNotIn(field, m, f"{field} breaks the zero-dependency claim")
 
-    def test_publishing_is_still_a_deliberate_edit(self):
-        self.assertIs(
-            _manifest().get("private"), True,
-            "P10a ships a package that installs and runs; it does not decide to publish "
-            "one. Remove `private` in the commit that means to publish, not before.",
+    def test_the_package_is_publishable(self):
+        """`private` came off in P10b, and the two defects that put it there are gated by
+        `TheInstalledTreeIsTheOneAUserGets`. Asserted ABSENT rather than deleted, so
+        putting it back is as deliberate as taking it off was — a silent re-add would make
+        P10e's publish workflow fail at the last step with no test naming why."""
+        self.assertNotIn(
+            "private", _manifest(),
+            "the package is private again. If a new defect blocks publication, say which "
+            "one here — `private` with no gate beside it is how a workaround outlives its "
+            "reason.",
         )
 
     def test_the_license_field_matches_the_license_file(self):

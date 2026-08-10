@@ -237,13 +237,25 @@ export function themedRel(rel, theme) {
   return parts.join(path.sep);
 }
 
-/** `_build_render.dest_rel` — AGENT.md.tmpl -> AGENT.md; everything else keeps its name. */
+/**
+ * `_build_render.dest_rel` — AGENT.md.tmpl -> AGENT.md; gitignore -> .gitignore;
+ * everything else keeps its name.
+ *
+ * WHY THE IGNORE FILES ARE STORED WITHOUT THE DOT — the Python twin's comment carries the
+ * full argument. In short: `src/memory/.gitignore` and `src/notebook/.gitignore` are
+ * product content, and under their real names `npm install` renamed them to `.npmignore`
+ * on extraction (so an npm-installed Geneseed emitted bundles with NO `.gitignore` and
+ * leaked the user's agent memory into their repo) while `npm pack` read the notebook's
+ * `*` as a live ignore rule and dropped its sibling README. A file named `gitignore` is
+ * invisible to all three; the dot goes back on here. Emitted bytes unchanged.
+ */
 export function destRel(rel) {
   // path.join normalises the '.' that dirname returns for a bare filename, so a
   // top-level AGENT.md.tmpl comes back as 'AGENT.md', not './AGENT.md'.
-  return path.basename(rel) === 'AGENT.md.tmpl'
-    ? path.join(path.dirname(rel), 'AGENT.md')
-    : rel;
+  const name = path.basename(rel);
+  if (name === 'AGENT.md.tmpl') return path.join(path.dirname(rel), 'AGENT.md');
+  if (name === 'gitignore') return path.join(path.dirname(rel), '.gitignore');
+  return rel;
 }
 
 /**

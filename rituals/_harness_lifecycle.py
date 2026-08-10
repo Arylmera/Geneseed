@@ -326,26 +326,39 @@ def _win_bin_dir() -> Path:
     return Path(base) / "Geneseed" / "bin"
 
 
+def _win_user_path_script(action: str, directory: str) -> str:
+    """The PowerShell one-liner `_win_user_path` runs — BUILT SEPARATELY FROM RUNNING IT.
+
+    Split out in P10b so the port has something it can gate. Everything that can be wrong
+    here is in this string: the single-quote escape (a user called O'Brien has an
+    apostrophe in `%LOCALAPPDATA%`), the `;` split that must drop empty segments so a
+    trailing separator does not append an empty entry, and the `-notcontains` that keeps
+    `link` idempotent. RUNNING it edits the persistent USER Path in the registry, which no
+    test in this repo may do — so `tests/test_win_user_path.py` runs this function over a
+    corpus and byte-compares it against the JS twin, and the spawn below stays ungated.
+    """
+    directory = directory.replace("'", "''")   # PS single-quote escape (O'Brien)
+    if action == "add":
+        return (f"$d='{directory}';"
+                "$p=[Environment]::GetEnvironmentVariable('Path','User');"
+                "if (-not $p) {$p=''};"
+                "$parts=$p.Split(';') | Where-Object {$_ -ne ''};"
+                "if ($parts -notcontains $d) {"
+                "  $np=(@($parts)+$d) -join ';';"
+                "  [Environment]::SetEnvironmentVariable('Path',$np,'User')}")
+    return (f"$d='{directory}';"
+            "$p=[Environment]::GetEnvironmentVariable('Path','User');"
+            "if ($p) {"
+            "  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');"
+            "  [Environment]::SetEnvironmentVariable('Path',$np,'User')}")
+
+
 def _win_user_path(action: str, directory: str) -> bool:
     """Add/remove `directory` from the persistent USER Path via PowerShell (operates on
     the user scope only, so it never truncates the system PATH). Returns success."""
-    directory = directory.replace("'", "''")   # PS single-quote escape (O'Brien)
-    if action == "add":
-        ps = (f"$d='{directory}';"
-              "$p=[Environment]::GetEnvironmentVariable('Path','User');"
-              "if (-not $p) {$p=''};"
-              "$parts=$p.Split(';') | Where-Object {$_ -ne ''};"
-              "if ($parts -notcontains $d) {"
-              "  $np=(@($parts)+$d) -join ';';"
-              "  [Environment]::SetEnvironmentVariable('Path',$np,'User')}")
-    else:
-        ps = (f"$d='{directory}';"
-              "$p=[Environment]::GetEnvironmentVariable('Path','User');"
-              "if ($p) {"
-              "  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');"
-              "  [Environment]::SetEnvironmentVariable('Path',$np,'User')}")
     try:
-        return run(["powershell", "-NoProfile", "-Command", ps]).returncode == 0
+        return run(["powershell", "-NoProfile", "-Command",
+                    _win_user_path_script(action, directory)]).returncode == 0
     except OSError:
         return False
 

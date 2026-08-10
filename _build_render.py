@@ -641,9 +641,30 @@ def themed_rel(rel: Path, theme: dict) -> Path:
 
 
 def dest_rel(rel: Path) -> Path:
-    # AGENT.md.tmpl -> AGENT.md ; everything else keeps its name.
+    # AGENT.md.tmpl -> AGENT.md ; gitignore -> .gitignore ; everything else keeps its name.
+    #
+    # WHY THE IGNORE FILES ARE STORED WITHOUT THE DOT. `src/memory/.gitignore` and
+    # `src/notebook/.gitignore` are product CONTENT that renders into every bundle — and
+    # under their real names two OTHER tools also read them, neither of which we invited:
+    #
+    #   * `npm install` renames EVERY `.gitignore` to `.npmignore` on extraction, with no
+    #     opt-out. A bundle emitted from an npm-installed Geneseed therefore carried
+    #     `memory/.npmignore` + `notebook/.npmignore` and NO `.gitignore` at all — the
+    #     user's agent memory and notebook, committable in their repository, silently.
+    #   * `npm pack` honours nested ignore files, so `src/notebook/.gitignore`'s `*` hid
+    #     its own sibling `README.md` — the notebook charter — from the tarball.
+    #
+    # Neither is fixable from `package.json` (five `files` spellings and a root
+    # `.npmignore` were each measured and each failed), and both die here: a file named
+    # `gitignore` is invisible to git, to npm-packlist and to npm's extract rename, and
+    # the renderer puts the dot back on the way out. The emitted bytes are unchanged,
+    # which is why 259 golden cells stayed green across this fix rather than being
+    # regenerated. `_build_global._global_memory`/`_global_notebook` seed from the SOURCE
+    # path rather than from this one, so they call it too.
     if rel.name == "AGENT.md.tmpl":
         return rel.with_name("AGENT.md")
+    if rel.name == "gitignore":
+        return rel.with_name(".gitignore")
     return rel
 
 

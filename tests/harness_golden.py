@@ -187,7 +187,8 @@ def cells() -> list[dict]:
             + _build_cells() + _prompt_cells() + _theme_cells()
             + _diff_cells() + _rebuild_all_cells() + _doctor_cells()
             + _uninstall_cells() + _setup_cells() + _web_cells() + _upgrade_cells()
-            + _sync_self_cells() + _bootstrap_cells() + _update_alias_cells())
+            + _sync_self_cells() + _bootstrap_cells() + _update_alias_cells()
+            + _link_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -3032,6 +3033,104 @@ def _upgrade_cells() -> list[dict]:
 #     nothing where `upgrade v1.2.3` warns. Two defects behind one plausible shortcut
 #     (mutations M21 and M22), and the second cell below is what separates them.
 
+#: THE ONE ENVIRONMENT RULE THAT MAKES THESE CELLS SAFE TO RUN AT ALL.
+#:
+#: `link`/`unlink` edit the persistent USER Path through PowerShell, and no cell may do
+#: that. `cell_env` already redirects `LOCALAPPDATA` into the sandbox, so `_win_bin_dir()`
+#: is `{home}/AppData/Local/Geneseed/bin` and the SHIM half is contained for free. The
+#: PATH half is contained here, by handing the verb a `PATH` that holds the sandbox bin
+#: dir AND NOTHING ELSE — which does two jobs at once:
+#:
+#:   * `cmd_link` short-circuits (`on_path` is true) and never reaches the spawn;
+#:   * `cmd_unlink` has no short-circuit, so it DOES reach the spawn — and `powershell` is
+#:     not on this PATH, so the launch fails, `_win_user_path` takes its `OSError -> False`
+#:     arm and the verb takes its "removed the shim, said nothing about PATH" branch.
+#:
+#: Both arms are real behaviour of the reference, reached honestly, with the registry
+#: never opened. The SUCCESS arm of `_win_user_path` stays ungated in both implementations
+#: and `js/link.mjs` says so — the only way to gate it is to edit this machine.
+#:
+#: The Windows binaries need no PATH of their own: `python.exe` and `node.exe` are launched
+#: by absolute path and neither resolves a DLL through PATH.
+#: BACKSLASHES, and the first run of these cells is what said so. `cmd_link` asks
+#: `str(bindir).lower() in PATH.lower()` — a plain substring test against `str(Path)`,
+#: which is backslash-separated on Windows. Spelled with `/` the entry is a perfectly valid
+#: path that simply never matches, so the verb fell through to the spawn and the cell
+#: silently tested the OTHER branch. Caught by its own `expect_absent`, ref-vs-ref, before
+#: a line of the port ran.
+_LINK_PATH = {"PATH": "{home}\\AppData\\Local\\Geneseed\\bin"}
+_LINK_SHIM = "home/AppData/Local/Geneseed/bin/geneseed.cmd"
+
+
+def _link_cells() -> list[dict]:
+    """`link` / `unlink` — P10b, and the Windows arm is the only one this machine runs.
+
+    THE UNIX ARM IS UNREACHABLE FROM HERE and is declared rather than faked: it symlinks
+    `ROOT/geneseed` into `~/.local/bin`, and a Windows host has neither the symlink
+    privilege by default nor a `~/.local/bin` worth writing to. Its port is a straight
+    translation with NO divergence (both implementations name the same launcher file), so
+    the risk it carries is smaller than the Windows arm's — which is the one that writes a
+    shim naming an interpreter, and the one every cell below is aimed at.
+    """
+    def lk(name, argv, **kw):
+        kw.setdefault("world", {"repo/.keep": ""})
+        kw.setdefault("env", dict(_LINK_PATH))
+        # THE ID PREFIX IS THE VERB, not the group. `test_the_matrix_covers_every_verb_it
+        # _claims` reads the text before the `/` and requires it to equal the binary's verb
+        # table, so five cells all called `link/…` left `unlink` uncovered while the group
+        # looked complete. Caught by that gate, which is what it is for.
+        return dict(id=f"{argv[0]}/{name}", bin="cli",
+                    steps=[{"argv": list(argv), "cwd": "repo"}], **kw)
+
+    if sys.platform != "win32":
+        return []
+    return [
+        lk("writes-the-shim-and-finds-the-dir-already-on-path", ("link",),
+           # The shim's ARGV LINE is destamped (see `_STAMPS`) because the two runtimes bake
+           # their own runner and entry into it — P5b's rule. Everything else about the file
+           # is compared byte for byte, including the `@echo off` header and the double
+           # carriage return `Path.write_text` leaves behind.
+           expect=["geneseed: wrote shim ", "is on your user PATH", "open a NEW terminal"],
+           # The absolute half of the destamp: the reference must not be silently writing
+           # nothing, and the ELSE branch — reached only when the spawn is attempted and
+           # fails — must not be what this cell is looking at.
+           expect_absent=["add '", "to your PATH manually"],
+           expect_files=[_LINK_SHIM]),
+        lk("is-idempotent-when-the-shim-is-already-there", ("link",),
+           world={"repo/.keep": "",
+                  _LINK_SHIM: "@echo off\r\nSTALE SHIM FROM A PREVIOUS INSTALL\r\n"},
+           # Seeded with a shim whose content is WRONG, so "the file exists afterwards"
+           # cannot be satisfied by a verb that did nothing: the stale line has to be gone
+           # from the snapshot, and `expect_absent` cannot see a file, so the byte
+           # comparison of the sandbox is what carries it. The cell states the direction.
+           expect=["geneseed: wrote shim "],
+           expect_files=[_LINK_SHIM]),
+        lk("reports-a-manual-step-when-the-dir-is-not-on-path", ("link",),
+           # THE OTHER BRANCH, and the only cell here that reaches the spawn from `link`.
+           # PATH is a directory that exists and holds nothing, so `on_path` is false, the
+           # verb calls `_win_user_path('add', …)`, `powershell` is not on this PATH, the
+           # launch fails and the manual-step advice is printed. The registry is untouched
+           # for the same reason the message appears.
+           env={"PATH": "{sb}/nowhere"},
+           world={"repo/.keep": "", "nowhere/.keep": ""},
+           expect=["geneseed: wrote shim ", "to your PATH manually"],
+           expect_absent=["is on your user PATH"],
+           expect_files=[_LINK_SHIM]),
+        lk("unlink-removes-the-shim", ("unlink",),
+           world={"repo/.keep": "",
+                  _LINK_SHIM: '@echo off\r\n"py" "h" %*\r\n'},
+           expect=["geneseed: removed "],
+           expect_absent=["no linked launcher found"],
+           # The absolute half of a DELETION — P5h's column. Without it two implementations
+           # that both stopped deleting compare equal.
+           expect_absent_files=[_LINK_SHIM]),
+        lk("unlink-with-nothing-linked-says-so", ("unlink",),
+           expect=["geneseed: no linked launcher found."],
+           expect_absent=["geneseed: removed "],
+           expect_absent_files=[_LINK_SHIM]),
+    ]
+
+
 def _sync_self_cells() -> list[dict]:
     def ss(name, argv=("sync-self",), **kw):
         return dict(id=f"sync-self/{name}", bin="cli", world={"repo/.keep": ""},
@@ -3271,6 +3370,23 @@ _STAMPS = (
     # `test_the_install_log_names_each_runtimes_own_command` in tests/test_hook_cli_parity.py,
     # which runs both binaries and asserts each argv absolutely against its own runtime.
     (re.compile(r"^command: .+$", re.M), "command: <ARGV>"),
+    # ---- P10b's shim, and it is the SAME rule as the line above --------------------------
+    #
+    # `link` writes `%LOCALAPPDATA%\\Geneseed\\bin\\geneseed.cmd`, whose one real line names
+    # an interpreter and an entry point. The reference bakes `sys.executable` +
+    # `rituals/harness.py`; the twin bakes `process.execPath` + `bin/geneseed-cli.mjs`,
+    # because a Node process cannot know which Python would have run and inventing one
+    # writes a shim naming an interpreter the user may not have. P5b settled that shape for
+    # the hook shim ("Node bakes node") and P3a settled the gate: byte-comparable once
+    # runner and entry are ARGUMENTS.
+    #
+    # ANCHORED AT LINE START AND REQUIRING TWO NON-EMPTY QUOTED VALUES, so a side that
+    # stopped writing the line leaves no tag and its cell fails rather than comparing equal
+    # to nothing. `@echo off` and the DOUBLE carriage return `Path.write_text` produces are
+    # outside the match and stay byte-compared. The debt is paid in
+    # `test_the_link_shim_names_each_runtimes_own_entry_point` in tests/test_hook_cli_parity.py,
+    # which runs both binaries into a sandboxed HOME and asserts each shim absolutely.
+    (re.compile(r'^"[^"\r\n]+" "[^"\r\n]+" %\*', re.M), '"<RUNNER>" "<ENTRY>" %*'),
 )
 
 

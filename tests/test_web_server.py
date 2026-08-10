@@ -369,7 +369,13 @@ srv.listen(0, '127.0.0.1', async () => {
     // arm. A regression that skipped the preflight would answer 202 and this asserts 422,
     // which is the same thing said twice: the gate fails, and it fails before a job exists.
     updateAction: await hit('POST', '/api/actions/update', 'tok'),
-    unportedAction: await hit('POST', '/api/actions/link', 'tok'),
+    // P10b RETIRED THE `unportedAction` PROBE AND COULD NOT RE-POINT IT. It asked for an
+    // action whose verb had not crossed and required 501; `link` was its last target and
+    // `NOT_PORTED_ACTIONS` is now empty, so no target exists. Nor can one be borrowed: every
+    // remaining action either STARTS A JOB in the developer's checkout or, for `link` and
+    // `unlink` themselves, writes a shim and edits the real user PATH. The 501 arm's claim
+    // moves to `tests/test_web_jobs.py`, which reads the set out of the module — a gate on
+    // the declaration, which is weaker than a probe and is declared as such.
     unknownAction: await hit('POST', '/api/actions/nope', 'tok'),
     inlineAction: await hit('POST', '/api/actions/restore', 'tok', '{"files": []}'),
     docsMenu: await hit('GET', '/api/docs'),
@@ -431,9 +437,12 @@ srv.listen(0, '127.0.0.1', async () => {
         # its own question. Its subject is the partition — a real action must not get the 404 a
         # typo gets — and that needs a row that is STILL declared. `update`'s new assertion
         # below is a different claim about a different thing.
-        self.assertEqual(got["unportedAction"], 501,
-                         "an action whose VERB has not crossed must say 501, not the 404 an "
-                         "unknown action gets")
+        # THE 501 PROBE IS GONE — see the comment beside its retired line in the source
+        # above. What survives here is the pair it existed to hold apart: a REAL action
+        # (`update`, 422) and an INVENTED one (`nope`, 404). With `NOT_PORTED_ACTIONS`
+        # empty, "no real action gets the 404 a typo gets" is now a statement about the
+        # whole table rather than about one row, and `test_web_jobs.py`'s `ast` cross-check
+        # is what proves it for every row at once.
         # THE POSITIVE HALF OF P8c'S FIRST PAYMENT. `update` left `NOT_PORTED_ACTIONS`, and a
         # payment nothing observes is not a payment: without this the removal is visible only
         # as the ABSENCE of a 501, which a dispatcher that answered 404 would also produce.

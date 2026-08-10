@@ -49,6 +49,7 @@ import { cmdDoctor } from '../js/doctor.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
 import { pyInt } from '../js/lib/pyfs.mjs';
+import { cmdLink, cmdUnlink } from '../js/link.mjs';
 import { cmdSetup } from '../js/setup.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
 import { cmdUninstall } from '../js/uninstall.mjs';
@@ -136,6 +137,17 @@ const VERBS = {
     // argparse's dest for `--archive-memory` is `archive_memory`; camelCase here, as
     // `--no-bundle` above, so the two tables read against each other.
     flags: { '--yes': 'yes', '--archive-memory': 'archiveMemory' },
+  },
+  link: {
+    fn: cmdLink,
+    // `lk.add_argument("dir", nargs="?", default=None)` — no `choices`: the reference hands
+    // the string straight to `Path`, and a directory that does not exist is answered by the
+    // mkdir failing, not by argparse.
+    positionals: [{ name: 'dir', optional: true }],
+  },
+  unlink: {
+    fn: cmdUnlink,
+    positionals: [],
   },
   setup: {
     fn: cmdSetup,

@@ -95,7 +95,10 @@ def _global_memory(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
     for _out_rel, text, src in items:
         sp = src.relative_to(_build_core.SRC).as_posix().split("/")
         if sp[0] == "memory" and len(sp) > 1:
-            dest = mem_dir / Path(*sp[1:])
+            # `dest_rel`, because this seeds from the SOURCE path and not from `_out_rel`
+            # (which is themed, and `memory/` never is). Without it the store would be
+            # seeded with the on-disk name `gitignore` — see `_build_render.dest_rel`.
+            dest = mem_dir / dest_rel(Path(*sp[1:]))
             dest.parent.mkdir(parents=True, exist_ok=True)
             if text is not None:
                 dest.write_text(text, encoding="utf-8")
@@ -131,7 +134,8 @@ def _global_notebook(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
     for _out_rel, text, src in items:
         sp = src.relative_to(_build_core.SRC).as_posix().split("/")
         if sp[0] == nb_name and len(sp) > 1:
-            dest = nb_dir / Path(*sp[1:])
+            # `dest_rel` — same reason as `_global_memory` above.
+            dest = nb_dir / dest_rel(Path(*sp[1:]))
             dest.parent.mkdir(parents=True, exist_ok=True)
             if text is not None:
                 dest.write_text(text, encoding="utf-8")

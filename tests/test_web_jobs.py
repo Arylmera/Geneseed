@@ -48,8 +48,14 @@ NODE = shutil.which("node")
 #: The five rows whose verb has crossed, and the three that have not. Written here as the
 #: EXPECTED partition rather than imported from either implementation, because a test that read
 #: its own answer out of the thing under test would agree with any drift.
-PORTED = ["build", "build-all", "doctor", "export", "uninstall", "update"]
-NOT_PORTED = ["link", "unlink"]
+PORTED = ["build", "build-all", "doctor", "export", "link", "uninstall", "unlink", "update"]
+#: EMPTY SINCE P10b — every action the reference dispatches on is answered by the Node
+#: runner. Kept declared, and kept asserted below, because this is the only place that says
+#: so: `test_web_server.py`'s running 501 probe was RETIRED in the same phase (its last
+#: target was `link`, and no remaining action can be probed without either starting a job in
+#: the developer's checkout or editing the real user PATH). A gate on a declaration is
+#: weaker than a probe; that trade is the honest cost of the set reaching zero.
+NOT_PORTED: list[str] = []
 
 
 def _node_json(src: str):
@@ -119,8 +125,13 @@ class TheActionPartitionMatchesTheReference(unittest.TestCase):
                          "the Node runner claims actions the reference does not name")
         self.assertEqual(set(js["ported"]) & set(js["unported"]), set())
         self.assertEqual(set(js["unported"]), set(NOT_PORTED),
-                         "`update` left this set in P8c; the two rows still blocked are "
-                         "`link`/`unlink` (P10b), and that phase ends by deleting them")
+                         "`update` left this set in P8c and `link`/`unlink` in P10b, which "
+                         "empties it. It stays DECLARED so the next unported action has a "
+                         "place to be declared in rather than falling through to a 404")
+        self.assertEqual(js["unported"], [],
+                         "NOT_PORTED_ACTIONS is empty as of P10b: every action the reference "
+                         "dispatches on is answered by the Node runner. A new row here is a "
+                         "regression unless a new ACTION arrived with it")
 
     @unittest.skipUnless(NODE, "node is not on PATH")
     def test_the_actions_dispatched_outside_the_table_are_declared_too(self):
@@ -157,6 +168,11 @@ class TheTwoRunnersResolveTheSameCommands(unittest.TestCase):
         "build-all": ("rituals/harness.py", "bin/geneseed-cli.mjs"),
         "export": ("rituals/harness.py", "bin/geneseed-cli.mjs"),
         "uninstall": ("rituals/harness.py", "bin/geneseed-cli.mjs"),
+        # P10b's two. Nothing about the ARGV is special — which is the point of listing them:
+        # the head/tail discipline is what proves the job runner spawns the Node CLI for these
+        # rather than falling back to the reference the way a passthrough would.
+        "link": ("rituals/harness.py", "bin/geneseed-cli.mjs"),
+        "unlink": ("rituals/harness.py", "bin/geneseed-cli.mjs"),
         # P8c. The TAIL comparison below is what makes this row worth adding rather than
         # merely moving: the action is named `update` and the argv must name `upgrade`, which
         # is the subparser both runtimes actually carry. A twin that spelled the tail

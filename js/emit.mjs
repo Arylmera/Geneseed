@@ -71,7 +71,7 @@ import {
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
-import { renderAll, renderFile, SRC_DIR_TOKENS } from './render.mjs';
+import { destRel, renderAll, renderFile, SRC_DIR_TOKENS } from './render.mjs';
 import { writeNativeLayer, loadAgentOverrides } from './native.mjs';
 import {
   ensureAgentOverridesStub, writePrimaryAgent, writeCommandLayer, writePonytailCommand,
@@ -827,7 +827,10 @@ function globalMemory(cfgDir, items, legacy, srcRoot) {
   for (const { text, src } of items) {
     const sp = relPosix(srcRoot, src).split('/');
     if (sp[0] === 'memory' && sp.length > 1) {
-      const dest = path.join(memDir, ...sp.slice(1));
+      // `destRel`, because this seeds from the SOURCE path and not from the item's `rel`
+      // (which is themed, and `memory/` never is). Without it the store would be seeded
+      // with the on-disk name `gitignore` — see `js/render.mjs`'s `destRel`.
+      const dest = path.join(memDir, destRel(path.join(...sp.slice(1))));
       mkdirSync(path.dirname(dest), { recursive: true });
       if (text !== null) writeText(dest, text);
       else copyFile(src, dest);
@@ -856,7 +859,8 @@ function globalNotebook(cfgDir, items, legacy, srcRoot) {
   for (const { text, src } of items) {
     const sp = relPosix(srcRoot, src).split('/');
     if (sp[0] === nbName && sp.length > 1) {
-      const dest = path.join(nbDir, ...sp.slice(1));
+      // `destRel` — same reason as `globalMemory` above.
+      const dest = path.join(nbDir, destRel(path.join(...sp.slice(1))));
       mkdirSync(path.dirname(dest), { recursive: true });
       if (text !== null) writeText(dest, text);
       else copyFile(src, dest);

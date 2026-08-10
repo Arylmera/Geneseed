@@ -604,6 +604,29 @@ _ALLOWED_SPAWNS = {
             "child = spawn(exe, args, {",
         ],
     },
+    # P10b, AND THE ONLY ROW WHOSE SPAWN NO TEST IN THIS REPO MAY RUN.
+    #
+    # The persistent USER Path lives in `HKCU\\Environment`, not in this process's
+    # environment: editing it needs the registry, Node has no registry API, and
+    # `[Environment]::SetEnvironmentVariable(...,'User')` also broadcasts WM_SETTINGCHANGE,
+    # which even a `reg add` binding would not. So there is no in-process equivalent, and a
+    # `reg.exe` spawn would be a WORSE primitive rather than one fewer.
+    #
+    # RUNNING IT EDITS THE DEVELOPER'S MACHINE. That is why `winUserPathScript` is a separate
+    # exported function: everything that can be wrong (the `''` escape, the empty-segment
+    # drop, the idempotence) is in the STRING, `tests/test_win_user_path.py` compares that
+    # string against the Python twin over a corpus, and the spawn's success arm is declared
+    # ungated in `js/link.mjs`. The literal below is what keeps the two apart — a mutation
+    # that inlined the script back into the spawn breaks this row.
+    "link.mjs": {
+        "entry": "cli",
+        "binding": "{ spawnSync }", "calls": 1,
+        "what": "`powershell -NoProfile -Command <script>` — the persistent USER Path",
+        "literals": [
+            "const r = spawnSync('powershell',",
+            "['-NoProfile', '-Command', winUserPathScript(action, directory)],",
+        ],
+    },
     "web/jobs.mjs": {
         "entry": "cli",
         "binding": "{ spawn, spawnSync }", "calls": 1, "spawnCalls": 1,
@@ -1157,6 +1180,55 @@ class TheEntryRefusesRatherThanNoOps(unittest.TestCase):
                                  f"{name} wrote {written} instead of one report")
                 self.assertRegex(written[0], pattern,
                                  f"{name} stamps the improvements filename differently")
+
+    @unittest.skipUnless(sys.platform == "win32", "the shim is the Windows arm of `link`")
+    def test_the_link_shim_names_each_runtimes_own_entry_point(self):
+        """The debt P10b's shim stamp owes — the same shape as the `command:` test below.
+
+        `link` writes `%LOCALAPPDATA%\\Geneseed\\bin\\geneseed.cmd`, whose one real line is
+        `"<runner>" "<entry>" %*`. The two runtimes cannot write the same one, so
+        `harness_golden._STAMPS` normalises it — and a normalisation with no absolute
+        assertion beside it is a value nothing gates.
+
+        THE NEGATIVE HALF IS THE POINT. A twin that baked `python …/rituals/harness.py` into
+        the shim would compare equal in all five cells (it would BE the reference) and would
+        put a Python command on the PATH of a no-Python-needed install.
+
+        NOTHING HERE TOUCHES THE REAL MACHINE. `LOCALAPPDATA` is redirected into the temp
+        dir, so the shim is written there; `PATH` is that same bin dir and nothing else, so
+        `on_path` is true and neither run reaches PowerShell or the registry. That is the
+        cells' rule, restated at the one place that runs the verb outside them.
+        """
+        for name, cmd, own, foreign in (
+                ("python", [sys.executable, str(HARNESS_PY)], "rituals/harness.py", ".mjs"),
+                ("node", [NODE, str(HARNESS_CLI)], "bin/geneseed-cli.mjs", "harness.py")):
+            with self.subTest(impl=name), tempfile.TemporaryDirectory() as tmp_s:
+                tmp = Path(tmp_s)
+                home = tmp / "home"
+                bindir = home / "AppData" / "Local" / "Geneseed" / "bin"
+                env = golden.cell_env(home)
+                env["PATH"] = str(bindir)
+                r = subprocess.run([str(c) for c in cmd] + ["link"], cwd=str(tmp), env=env,
+                                   capture_output=True, text=True, encoding="utf-8")
+                self.assertEqual(r.returncode, 0, r.stderr[:400])
+                self.assertIn("is on your user PATH", r.stdout,
+                              f"{name} did not take the already-on-PATH branch — this test "
+                              f"would then have spawned PowerShell against the real registry")
+                shim = (bindir / "geneseed.cmd").read_text(encoding="utf-8")
+                line = next((ln for ln in shim.splitlines() if ln.strip().endswith("%*")), None)
+                self.assertIsNotNone(line, f"{name} wrote no argv line into the shim — the "
+                                           f"stamp in harness_golden normalises nothing\n{shim!r}")
+                self.assertIn(own, line.replace("\\", "/"),
+                              f"{name} does not name its own entry point in the link shim")
+                self.assertNotIn(foreign, line.replace("\\", "/"),
+                                 f"{name} names the OTHER runtime's entry point — a shim that "
+                                 f"does that puts the wrong program on the user's PATH")
+                # The runner, absolutely: the shim must name the RUNNING binary by absolute
+                # path, never a bare `python`/`node` that PATH could re-resolve (the Microsoft
+                # Store alias stub is the case the reference's own comment names).
+                runner = line.split('"')[1]
+                self.assertTrue(Path(runner).is_absolute(),
+                                f"{name} baked a relative runner into the shim: {runner!r}")
 
     def test_the_install_log_names_each_runtimes_own_command(self):
         """The debt P8b's `command:` stamp owes, and it is the P6g `$ <argv>` shape in a FILE.

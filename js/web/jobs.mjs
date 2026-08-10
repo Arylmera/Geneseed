@@ -412,24 +412,29 @@ const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');
 const GEN = () => path.join(ROOT, 'bin', 'geneseed.mjs');
 
 /**
- * The rows whose VERB has not crossed. Answered 501 by the dispatcher, cross-checked against
- * `action_commands`' own keys by `ast` in `tests/test_web_jobs.py`, and each removed by the
- * phase that ports its verb:
+ * The rows whose VERB has not crossed. **EMPTY SINCE P10b, AND STILL DECLARED.**
  *
- *   `link` / `unlink` -> `harness.py link|unlink` -> P10b
+ * P6g opened it with three rows and wrote the rule that closes it: each removed by the phase
+ * that ports its verb. `update` left in P8c; `link` and `unlink` left in P10b, which is the
+ * phase that also had to decide whether those two verbs should exist under npm at all
+ * (`js/link.mjs`'s docblock carries the argument, and the deciding vote was these two rows —
+ * the console's Settings buttons POST here, and only a ported verb can answer them).
  *
- * `update` LEFT THIS SET IN P8c, spending P6g's declaration exactly as P6g wrote it would be
- * spent. Its row names the `upgrade` VERB — not `update`, which is only argparse's alias for it
- * — so the job runner spawns `node bin/geneseed-cli.mjs upgrade` and the 422 preflight arm in
- * `js/web/server.mjs` gates it, the same two halves the reference has.
+ * WHY AN EMPTY SET RATHER THAN A DELETED ONE. The `ast` cross-check in
+ * `tests/test_web_jobs.py` reads this set against `action_commands`' own keys, and an empty
+ * set is the strongest form that check ever takes: it asserts that EVERY action the reference
+ * dispatches on is answered by the Node runner. Deleting the declaration would delete that
+ * assertion, and the next unported action would come back as a silent 404 — the thing the
+ * 501 exists to prevent.
  *
  * A 501 AND NOT THE 404 THE TABLE WOULD PRODUCE. `action_commands` returns `None` for an
  * unknown action and the reference maps that to `{"error": "unknown action <x>"}` at 404 — so
- * leaving these rows to fall through would answer, for a REAL action, the same thing a typo
- * gets. The 501 says "this exists and has not crossed", which is the claim, and the dispatcher
- * probe in `tests/test_web_server.py` holds the two apart by asking for both.
+ * a real-but-unported action falling through would answer the same thing a typo gets. With
+ * this set empty the 501 branch is now UNREACHABLE by construction, which is exactly what the
+ * dispatcher probe in `tests/test_web_server.py` asserts: every real action answers 202 and
+ * only an invented one answers 404.
  */
-export const NOT_PORTED_ACTIONS = new Set(['link', 'unlink']);
+export const NOT_PORTED_ACTIONS = new Set();
 
 /**
  * The three actions `_post_routes` answers INLINE, without consulting the table: `restore` is
@@ -458,6 +463,8 @@ function actionTable({
     export: [[NODE(), CLI(), 'diff', '--out']],
     // Local-machine maintenance, surfaced in the web Settings. uninstall keeps memory (never
     // deleted) and runs non-interactively with --yes.
+    link: [[NODE(), CLI(), 'link']],
+    unlink: [[NODE(), CLI(), 'unlink']],
     uninstall: [[NODE(), CLI(), 'uninstall', '--yes']],
   };
 }

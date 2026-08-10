@@ -2,7 +2,6 @@
   "//": "Every field here is argued and gated in tests/test_package_manifest.py. `files`, `bin` and `engines` each have a test that fails when reality drifts from this file; `version` mirrors harness.config.json and is gated too. Read that docblock before editing this one.",
   "name": "geneseed",
   "version": "1.0.0",
-  "private": true,
   "description": "A portable, theme-able harness you implant once and use everywhere to grow a disciplined AI coding agent.",
   "keywords": [
     "ai",
@@ -36,7 +35,6 @@
     "bin/",
     "js/",
     "src/",
-    "src/notebook/README.md",
     "themes/",
     "adapters/",
     "docs/*.md",
