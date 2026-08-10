@@ -172,9 +172,21 @@ const VERBS = {
     // `cmdUpgrade` re-reads it as one when `themes/<ref>.json` exists. Dropping the row
     // would make that spelling a "unrecognized arguments" refusal on the Node side alone.
     //
-    // `aliases=["update"]` is NOT reproduced here and that is P8c's, not an oversight: the
-    // alias is what `js/web/jobs.mjs`' `NOT_PORTED_ACTIONS` still declares, and the two have
-    // to move together or the partition test that cross-checks them fails.
+    positionals: [{ name: 'ref', optional: true }, { name: 'theme', optional: true }],
+  },
+  // `up.add_parser(..., aliases=["update"])`, reproduced in P8c as a ROW OF ITS OWN rather than
+  // as an `aliases` field on the row above — because a field would be a DECLARATION and the
+  // three matrix gates read this table as the DISPATCH (rule 7, and M23 is where it was
+  // learned). As a key it is a real verb: `test_every_entry_verb_is_a_real_harness_subcommand`
+  // now reads argparse's aliases out of `harness.py` and finds it, and
+  // `test_the_matrix_covers_every_verb_it_claims` demands the `update/` cell group that proves
+  // it reaches `cmdUpgrade` — including the theme re-read, which is what separates it from
+  // `sync-self`.
+  //
+  // It is NOT what the web console's `update` ACTION needs: that row's argv names `upgrade`,
+  // the subparser, and always did. The two were coupled only in a handoff's note.
+  update: {
+    fn: cmdUpgrade,
     positionals: [{ name: 'ref', optional: true }, { name: 'theme', optional: true }],
   },
   'sync-self': {

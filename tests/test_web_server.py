@@ -335,6 +335,12 @@ class TheTwoRouteTablesAgree(unittest.TestCase):
         """
         src = r"""
 import {createServer} from 'node:http';
+// BEFORE the imports below are USED, and the ordering is the safety: `preflight()` reads the
+// developer's own checkout, and on a clean tree with an upstream it would say "ready" and the
+// `update` probe would start a REAL `git pull` + rebuild of this repository. Pointing `GIT_DIR`
+// at a path that does not exist makes every git call in it fail, so the endpoint always takes
+// the 422 arm — a probe of the dispatch that cannot reach the transport.
+process.env.GIT_DIR = 'geneseed-probe-no-such-git-dir';
 import {makeHandler, webState} from './js/web/server.mjs';
 import {JobManager} from './js/web/jobs.mjs';
 const holder = {};
@@ -357,11 +363,18 @@ srv.listen(0, '127.0.0.1', async () => {
     // DEVELOPER'S OWN environment, so `/api/actions/build` (which the retired
     // `unportedPostPrefix` probe used) would spawn a real build here.
     jobsGet: await hit('GET', '/api/jobs'),
-    unportedAction: await hit('POST', '/api/actions/update', 'tok'),
+    // P8c: `update` crossed, so this is a POSITIVE probe now — and it MUST stay one that
+    // starts nothing. `GIT_DIR` is set to a path that does not exist before the handler is
+    // built, so every `git -C ROOT …` in `preflight()` fails and the endpoint takes its 422
+    // arm. A regression that skipped the preflight would answer 202 and this asserts 422,
+    // which is the same thing said twice: the gate fails, and it fails before a job exists.
+    updateAction: await hit('POST', '/api/actions/update', 'tok'),
+    unportedAction: await hit('POST', '/api/actions/link', 'tok'),
     unknownAction: await hit('POST', '/api/actions/nope', 'tok'),
     inlineAction: await hit('POST', '/api/actions/restore', 'tok', '{"files": []}'),
     docsMenu: await hit('GET', '/api/docs'),
     portedKind: await hit('GET', '/api/docs/page/glossary'),
+    aboutKind: await hit('GET', '/api/docs/page/about'),
     unportedKind: await hit('GET', '/api/docs/page/cli'),
     // LAST, always: this one stops the server, and every probe after it would fail with
     // an ECONNRESET that reads like a routing bug.
@@ -408,16 +421,30 @@ srv.listen(0, '127.0.0.1', async () => {
                             "GET /api/pick-folder must fall through to the SPA: the POST "
                             "sets must not be consulted on a GET, which is what collapsing "
                             "them back into NOT_PORTED would do")
-        # P6g's action partition, and the THREE answers are the assertion. `update` is a real
-        # action whose verb (`harness.py upgrade`) has not crossed, so it says 501; `nope` is
-        # not an action at all, so it gets the reference's own `unknown action` 404; and
-        # `restore` proves the prefix reaches a real handler, without which both refusals
-        # above would be satisfied by a dispatcher that answered nothing. A port that let the
-        # unported rows fall through to the table would answer 404 for `update` too — the same
-        # thing a typo gets — which is exactly what `NOT_PORTED_ACTIONS` exists to prevent.
+        # P6g's action partition, and the FOUR answers are the assertion. `link` is a real
+        # action whose verb (`harness.py link`) has not crossed, so it says 501; `nope` is not
+        # an action at all, so it gets the reference's own `unknown action` 404; `restore`
+        # proves the prefix reaches a real handler, without which both refusals would be
+        # satisfied by a dispatcher that answered nothing; and `update` is the payment.
+        #
+        # P8c REPLACED `update` HERE WITH `link`, and the swap is what keeps this test asking
+        # its own question. Its subject is the partition — a real action must not get the 404 a
+        # typo gets — and that needs a row that is STILL declared. `update`'s new assertion
+        # below is a different claim about a different thing.
         self.assertEqual(got["unportedAction"], 501,
                          "an action whose VERB has not crossed must say 501, not the 404 an "
                          "unknown action gets")
+        # THE POSITIVE HALF OF P8c'S FIRST PAYMENT. `update` left `NOT_PORTED_ACTIONS`, and a
+        # payment nothing observes is not a payment: without this the removal is visible only
+        # as the ABSENCE of a 501, which a dispatcher that answered 404 would also produce.
+        # 422 is the arm the probe's `GIT_DIR` forces (see the source above) and it is the arm
+        # this endpoint is really about — a local-only preflight ahead of the job, so a dirty
+        # tree gets an explanation instead of a spawn that fails.
+        self.assertEqual(got["updateAction"], 422,
+                         "POST /api/actions/update crossed in P8c and is gated on preflight: "
+                         "501 means the row went back into NOT_PORTED_ACTIONS, 404 means it "
+                         "fell through to the table, and 202 means the preflight was skipped "
+                         "and a real `git pull` just started")
         self.assertEqual(got["unknownAction"], 404,
                          "an action the table does not name is the reference's own 404")
         self.assertEqual(got["inlineAction"], 200,
@@ -432,6 +459,13 @@ srv.listen(0, '127.0.0.1', async () => {
         self.assertEqual(got["unportedKind"], 501,
                          "a docs KIND that has not crossed must say so — falling through "
                          "to the NotFound at the bottom would report the page missing")
+        # P8c'S SECOND PAYMENT, and the same shape as `updateAction` above: `about` left
+        # `NOT_PORTED_KINDS`, and "not 501 any more" is satisfied by a 404 as well. The page
+        # runs `git remote get-url` through `originDisplay()`, so this is also the probe that
+        # says the docs tree may reach the module `_ALLOWED_SPAWNS` declares.
+        self.assertEqual(got["aboutKind"], 200,
+                         "the docs `about` kind crossed in P8c — 501 means it is back in "
+                         "NOT_PORTED_KINDS, 404 means KIND_ROUTES has no row for it")
 
     def test_the_409_convention_is_per_route_and_matches_the_reference(self):
         """The column no cell can gate, cross-checked against the source of truth.

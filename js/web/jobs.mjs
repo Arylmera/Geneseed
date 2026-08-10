@@ -412,20 +412,24 @@ const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');
 const GEN = () => path.join(ROOT, 'bin', 'geneseed.mjs');
 
 /**
- * The three rows whose VERB has not crossed. Answered 501 by the dispatcher, cross-checked
- * against `action_commands`' own keys by `ast` in `tests/test_web_jobs.py`, and each removed by
- * the phase that ports its verb:
+ * The rows whose VERB has not crossed. Answered 501 by the dispatcher, cross-checked against
+ * `action_commands`' own keys by `ast` in `tests/test_web_jobs.py`, and each removed by the
+ * phase that ports its verb:
  *
- *   `update` -> `harness.py upgrade`      -> P8
  *   `link` / `unlink` -> `harness.py link|unlink` -> P10b
+ *
+ * `update` LEFT THIS SET IN P8c, spending P6g's declaration exactly as P6g wrote it would be
+ * spent. Its row names the `upgrade` VERB — not `update`, which is only argparse's alias for it
+ * — so the job runner spawns `node bin/geneseed-cli.mjs upgrade` and the 422 preflight arm in
+ * `js/web/server.mjs` gates it, the same two halves the reference has.
  *
  * A 501 AND NOT THE 404 THE TABLE WOULD PRODUCE. `action_commands` returns `None` for an
  * unknown action and the reference maps that to `{"error": "unknown action <x>"}` at 404 — so
- * leaving these three to fall through would answer, for a REAL action, the same thing a typo
+ * leaving these rows to fall through would answer, for a REAL action, the same thing a typo
  * gets. The 501 says "this exists and has not crossed", which is the claim, and the dispatcher
  * probe in `tests/test_web_server.py` holds the two apart by asking for both.
  */
-export const NOT_PORTED_ACTIONS = new Set(['update', 'link', 'unlink']);
+export const NOT_PORTED_ACTIONS = new Set(['link', 'unlink']);
 
 /**
  * The three actions `_post_routes` answers INLINE, without consulting the table: `restore` is
@@ -446,6 +450,11 @@ function actionTable({
     // Rebuild EVERY active install in place (each in its own theme+emit). The per-install
     // resolution lives in the rebuild-all subcommand, so the web layer threads no theme/emit.
     'build-all': [[NODE(), CLI(), 'rebuild-all']],
+    // P8c. The row names `upgrade`, which is the VERB; `update` is the action name here and
+    // argparse's alias there, and the reference's own row is `[py, harness.py, "upgrade"]` for
+    // the same reason. The daemon bounce this job must not do itself is `GENESEED_WEB_JOB`'s
+    // job, set by `_run` above and read by `js/update.mjs` — P6g's contract with P8, honoured.
+    update: [[NODE(), CLI(), 'upgrade']],
     export: [[NODE(), CLI(), 'diff', '--out']],
     // Local-machine maintenance, surfaced in the web Settings. uninstall keeps memory (never
     // deleted) and runs non-interactively with --yes.

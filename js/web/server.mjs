@@ -54,6 +54,12 @@ import {
   jsonDumpsCompact, parseJson, pyInt, pyPrint, pyStr, pyTruthy, pyUnquote, pyWhich, writeText,
 } from '../lib/pyfs.mjs';
 import { promptLine } from '../setup.mjs';
+// P8c. The reference imports `_update` LAZILY inside the handler, to keep `build` and its
+// `sys.path` side effect out of web-import time; ESM has no such side effect and the import is
+// static. `js/update.mjs` imports `restartDaemon` from THIS module, so the two form a cycle —
+// which resolves because everything either side needs of the other is a hoisted function
+// declaration, not a value read at module-evaluation time.
+import { preflight } from '../update.mjs';
 import { NotFound, PREFIX_ROUTES, STATE_ROUTES, webState } from './api.mjs';
 import {
   apiDeployCmd, apiExcludesMutate, apiInstallCmd, apiInstallToggle, apiMcpToggle,
@@ -445,9 +451,17 @@ export function makeHandler(state, jm, token, dist, holder = null) {
    * so a refusal means the body was wrong). That asymmetry is the reference's; a port that
    * unified them would be wrong on one of the two and no cell would say which.
    *
-   * THEN the three unported rows, and only then the table. Order matters: `update` is a REAL
-   * action whose verb has not crossed, and letting it fall through to `actionCommands` would
-   * answer `{"error": "unknown action update"}` — the same thing a typo gets.
+   * `update` COMES NEXT AND IS INLINE, since P8c: it is gated on a LOCAL-ONLY preflight before
+   * a job is ever started, so a dirty tree or a zip-download install gets a friendly 422 the UI
+   * renders as an info popup instead of a job that spawns and then fails. Its finish handler is
+   * its own too — the child skips its own daemon bounce (`GENESEED_WEB_JOB`, set by `_run`), so
+   * the restart happens HERE, after the job is saved as finished, and only when it succeeded: a
+   * failed update changed nothing worth reloading and bouncing would disconnect the PWA for no
+   * reason.
+   *
+   * THEN the unported rows, and only then the table. Order matters: `link`/`unlink` are REAL
+   * actions whose verb has not crossed, and letting them fall through to `actionCommands` would
+   * answer `{"error": "unknown action link"}` — the same thing a typo gets.
    */
   function doAction(res, action, body, ae) {
     if (action === 'restore') {
@@ -462,6 +476,19 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       const plan = apiDeployCmd(state, body);
       if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 400, ae);
       return startJob(res, 'deploy', [plan.cmd], ae);
+    }
+    if (action === 'update') {
+      const pre = preflight();
+      if (!pre.ok) {
+        return sendJson(res,
+          { precondition: pre.code, kind: pre.kind, message: pre.message }, 422, ae);
+      }
+      const jid = jm.start('update', actionCommands('update'), (rc) => {
+        state.refresh();
+        if (rc === 0) requestRestart(state.theme);
+      });
+      if (jid === null) return sendJson(res, { error: 'busy' }, 409, ae);
+      return sendJson(res, { job_id: jid }, 202, ae);
     }
     if (NOT_PORTED_ACTIONS.has(action)) {
       return sendJson(res, { error: `not ported yet: /api/actions/${action}` }, 501, ae);

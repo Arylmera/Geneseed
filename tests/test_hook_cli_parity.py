@@ -110,8 +110,23 @@ def cli_verbs() -> set[str]:
 
 
 def harness_py_subcommands() -> set[str]:
-    return set(re.findall(r'sub\.add_parser\(\s*"([a-z][a-z-]*)"',
-                          HARNESS_PY.read_text(encoding="utf-8")))
+    """Every name `rituals/harness.py` answers to — the subparsers AND argparse's aliases.
+
+    THE ALIASES ARE NOT A DETAIL. `upgrade` carries `aliases=["update"]`, so `harness.py update`
+    has always worked; a set built from `add_parser`'s first argument alone says it does not,
+    and would refuse the Node entry the row that makes the two interchangeable. P8c is when
+    `bin/geneseed-cli.mjs` grew that row, and this reads the aliases out of the reference rather
+    than listing them, for the reason every partition in this port reads its source of truth.
+    """
+    text = HARNESS_PY.read_text(encoding="utf-8")
+    names = set(re.findall(r'sub\.add_parser\(\s*"([a-z][a-z-]*)"', text))
+    aliased = re.findall(r'aliases=\[([^\]]*)\]', text)
+    assert aliased, ("rituals/harness.py declares no argparse aliases any more — this reader "
+                     "is stale, and every alias it would have found is now silently absent "
+                     "from the set both entry points are checked against")
+    for group in aliased:
+        names.update(re.findall(r'"([a-z][a-z-]*)"', group))
+    return names
 
 
 @unittest.skipIf(NODE is None, "node is not on PATH")

@@ -1681,10 +1681,11 @@ def _docs_cells(cell) -> list[dict]:
     that does, and the cells send it in all four shapes the reference distinguishes
     (a valid value, the other valid value, an unknown one, and blank).
 
-    TWO KINDS ARE NOT PORTED AND HAVE NO CELL, deliberately, for the reason the shell's
+    ONE KIND IS NOT PORTED AND HAS NO CELL, deliberately, for the reason the shell's
     `NOT_PORTED` set has none: a cell holding a 501 against the reference's real body would
     fail, and one holding two 501s would be waiting to go stale.
-    `tests/test_web_server.py` cross-checks the kind partition instead.
+    `tests/test_web_server.py` cross-checks the kind partition instead. `about` was the other
+    one until P8c, and its cell is below.
     """
     # A markdown page that SLICES: its anchor names a section of SETUP.md, and a successful
     # slice drops the anchor so the client does not also scroll.
@@ -1749,6 +1750,29 @@ def _docs_cells(cell) -> list[dict]:
                      '"label": "Rule (Law)", "neutral": "Rule", "themed": "Dictate"',
                      # An un-themed term: the same word in both columns, lower-cased.
                      '"label": "Posture", "neutral": "posture", "themed": "posture"']),
+        cell("docs/the-about-page-reads-the-installs-own-git-origin",
+             [_req(path="/api/docs/page/about")], world=_full(),
+             # P8c'S SECOND PAYMENT, and the cell the deferral owed. `about` is the only docs
+             # kind that leaves the checkout's files: `_origin_display()` runs
+             # `git remote get-url origin` against ROOT — the DEVELOPER'S repository, which
+             # both sides read identically because it is one repository and the call is a
+             # read. (No cell here may WRITE to it; `harness_golden`'s `git` fixture exists
+             # for the verbs that do.)
+             #
+             # `repo_is_github` IS THE FIELD THIS CELL IS FOR. It gates every github-shaped
+             # deep link in the UI, its value is a `github_slug`/`githubSlug` spelling away
+             # from `false` on either side, and `false` is a perfectly plausible answer that
+             # nothing else would report — the About page would simply render fewer links.
+             # Found exactly that way before the cell existed.
+             #
+             # `python` is the P6b field with no honest twin (`"3.13.5"` against `null`);
+             # `_WEB_STAMPS_WIDTH` tags both spellings and
+             # `test_web_server.py::test_the_reference_reports_its_own_interpreter_version`
+             # is the absolute half. Naming the tag here is what says the field is PRESENT.
+             expect=['"kind": "about"', '"version": {}', '"license": "MIT"',
+                     '"repo": "https://github.com/', '"repo_is_github": true',
+                     '"python": "<RUNTIME>"', '"deployed": true', '"theme": "imperial"'],
+             expect_absent=['not ported yet', '"repo_is_github": false', '"repo": null']),
         cell("docs/an-unknown-page-is-a-404",
              [_req(path="/api/docs/page/nope")], world=_full(),
              expect=['{"error": "not found: nope"}', "404 Not Found"]),

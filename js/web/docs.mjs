@@ -6,7 +6,8 @@
  * discovered inside it. `api_docs_page` dispatches on five KINDS, and 57 of the 59 pages
  * are one of the three that are pure string work: `markdown` (read, slice, strip),
  * `concept` (an inline body with live counts substituted) and `glossary`. Those three
- * cross. The other two do not, and each has a reason that is not "it is long":
+ * crossed in P6d, `about` in P8c (four of five), and `cli` is P10c's. The two deferrals had
+ * a reason that is not "it is long":
  *
  *   * `cli` walks `harness.build_argparser()` — **182 lines, 24 subparsers, 43
  *     `add_argument` calls**, every one carrying help text, a metavar, choices and a
@@ -16,11 +17,13 @@
  *     being the value under test, and this would be the largest copy in it. The real fix is
  *     to make the parser's metadata DATA that both sides read — which is packaging work,
  *     and belongs with P10's `bin` map rather than here.
- *   * `about` calls `_update._origin_display()`, which shells out to `git remote get-url`.
- *     `rituals/_update.py` is P8's whole subject and this would need an `_ALLOWED_SPAWNS`
- *     row for `git` ahead of the phase that argues for it.
+ *   * `about` called `_update._origin_display()`, which shells out to `git remote get-url`.
+ *     `rituals/_update.py` was P8's whole subject and P6d would have needed an
+ *     `_ALLOWED_SPAWNS` row for `git` ahead of the phase that argues for it. **PAID IN P8c**:
+ *     P8a made that argument and ported `originDisplay()`, so the deferral was a one-line
+ *     removal from `NOT_PORTED_KINDS` and a row in `KIND_ROUTES`.
  *
- * So `NOT_PORTED_KINDS` declares them, `api_docs_page` answers 501 for either, and
+ * So `NOT_PORTED_KINDS` declares what is left, `api_docs_page` answers 501 for it, and
  * `tests/test_web_server.py` cross-checks that set against the kinds `_web_docs.py`
  * actually dispatches on — the same partition shape the route table took in P6b, which is
  * why it is a table here too and not two `if`s.
@@ -37,7 +40,9 @@ import { ROOT, THEMES } from '../checkout.mjs';
 import { readJsonMaybe, readMaybe } from '../installs.mjs';
 import { pyResolve } from '../hosts.mjs';
 import { PY_SPACE, normcase, parseJson, pyStripSpace } from '../lib/pyfs.mjs';
-import { NotFound, resolveLinks } from './api.mjs';
+import { statusData } from '../status.mjs';
+import { originDisplay } from '../update.mjs';
+import { NotFound, deployed, resolveLinks } from './api.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 
@@ -377,12 +382,63 @@ function glossary(state) {
 }
 
 /**
- * The two kinds P6d does not answer — see this module's header for why each is not merely
- * long. `tests/test_web_server.py` cross-checks this set against the kinds
- * `_web_docs.api_docs_page` dispatches on, so a sixth kind added to the reference cannot
- * quietly fall through to the `NotFound` at the bottom.
+ * `_web_docs._about` — the About page: a version line, the deployed install, and the links.
+ *
+ * `repo` is the install's OWN git origin (where updates come from), and `repo_is_github` is
+ * what gates the github-shaped deep links in the UI. Both come from `originDisplay()`, which
+ * is the one thing P6d could not have: it shells `git remote get-url`, and P8a is the phase
+ * that argued for the `git` row in `_ALLOWED_SPAWNS`.
+ *
+ * TWO FIELDS ARE NOT WHAT THEY LOOK LIKE, and both are the reference's own shape rather than
+ * a shortcut here:
+ *
+ *   * `version` reads `sd.get("version")`, and `_status_data()` HAS NO SUCH KEY — it spells the
+ *     fingerprints `source_fp` / `installed_fp` / `version_verdict`. So the field is `{}` in
+ *     the reference, always, and `sd.version || {}` reproduces the expression rather than the
+ *     constant: if the key ever appears, both sides gain it together.
+ *   * `python` is `sys.version.split()[0]`, and a Node daemon has no honest answer. `null`,
+ *     the P6b precedent, spelled the same way `apiSetup` spells it — not Node's own version
+ *     under a Python key. `tests/web_golden.py` tolerates the pair and
+ *     `tests/test_web_server.py` asserts each side absolutely.
+ *
+ * `statusData()` is called for one dead field, and deliberately: the reference pays the same
+ * cost on the same page, and a twin that skipped it would answer faster in a way no gate
+ * measures and no user asked for.
  */
-export const NOT_PORTED_KINDS = new Set(['cli', 'about']);
+function about(state) {
+  const sd = statusData();
+  const od = originDisplay();
+  return {
+    version: sd.version || {},
+    theme: state.theme,
+    emit: state.emit,
+    deployed: deployed(state),
+    target: String(state.target),
+    root: String(ROOT),
+    python: null,
+    repo: od.url,
+    // `githubSlug`, not `github_slug`. `OriginDisplay`'s JS twin keeps the Python field in
+    // camelCase the way every other ported record does, and the RESPONSE key is snake_case
+    // because it is the wire format — the two spellings meet exactly here. Reading the wire
+    // name off the record gives `undefined`, which is a perfectly plausible `false`: the About
+    // page silently drops every github deep link and nothing else changes. Caught by comparing
+    // the two payloads by hand before a cell existed; `docs/the-about-page-...` is the cell.
+    repo_is_github: Boolean(od.githubSlug),
+    license: 'MIT',
+  };
+}
+
+/**
+ * The kind P6d does not answer — see this module's header for why it is not merely long.
+ * `tests/test_web_server.py` cross-checks this set against the kinds `_web_docs.api_docs_page`
+ * dispatches on, so a sixth kind added to the reference cannot quietly fall through to the
+ * `NotFound` at the bottom.
+ *
+ * `about` LEFT THIS SET IN P8c, which is the payment P6d's deferral named: the blocker was
+ * never the page, it was `_origin_display` and the `git` spawn behind it, and P8a ported both.
+ * A one-line removal from a declared partition is what the partition was built for.
+ */
+export const NOT_PORTED_KINDS = new Set(['cli']);
 
 /** `_web_docs.api_docs`. */
 export function apiDocs(state, harnessName = null) {
@@ -445,6 +501,9 @@ const KIND_ROUTES = {
   },
   glossary: (state, pageId, page) => ({
     id: pageId, title: page.title, kind: 'glossary', ...glossary(state),
+  }),
+  about: (state, pageId, page) => ({
+    id: pageId, title: page.title, kind: 'about', ...about(state),
   }),
 };
 

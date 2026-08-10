@@ -187,7 +187,7 @@ def cells() -> list[dict]:
             + _build_cells() + _prompt_cells() + _theme_cells()
             + _diff_cells() + _rebuild_all_cells() + _doctor_cells()
             + _uninstall_cells() + _setup_cells() + _web_cells() + _upgrade_cells()
-            + _sync_self_cells() + _bootstrap_cells())
+            + _sync_self_cells() + _bootstrap_cells() + _update_alias_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -3064,6 +3064,43 @@ def _sync_self_cells() -> list[dict]:
            expect=["[geneseed] preflight: checking the local checkout ...",
                    "You have local changes in the Geneseed folder"],
            expect_absent=["[geneseed] fetching from origin", "rebuilding bundle"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
+# update  —  argparse's ALIAS for upgrade, which is a different thing from sync-self's
+# --------------------------------------------------------------------------------------
+#
+# `up = sub.add_parser("upgrade", …, aliases=["update"])`. An alias binds the SAME parser and
+# the SAME `fn`, so `harness.py update imperial` is `harness.py upgrade imperial` down to the
+# hidden `ref` positional — which is exactly what makes it different from `sync-self`, whose
+# separate parser hands `ref` to a function that throws it away.
+#
+# TWO CELLS, AND THE SECOND IS THE ONE THAT COULD NOT BE ANYTHING ELSE. A row wired to
+# `cmdSyncSelf` passes the first (both refuse a dirty checkout identically) and fails the
+# second, because only `cmd_upgrade` re-reads `ref` and announces it.
+
+def _update_alias_cells() -> list[dict]:
+    def ua(name, argv, **kw):
+        return dict(id=f"update/{name}", bin="cli", world={"repo/.keep": ""},
+                    steps=[{"argv": list(argv), "cwd": "repo"}], **kw)
+
+    return [
+        ua("reaches-the-same-preflight-upgrade-does", ("update",), git="dirty",
+           expect=["[geneseed] preflight: checking the local checkout ...",
+                   "You have local changes in the Geneseed folder"],
+           expect_absent=["[geneseed] fetching from origin", "rebuilding bundle",
+                          "invalid choice"]),
+        ua("binds-upgrades-hidden-ref-positional-and-announces-it",
+           ("update", "v1.2.3"), checkout={},
+           # `cmd_upgrade`'s back-compat re-read, reached through the alias: `ref` is dead, so
+           # it is reinterpreted as a THEME when `themes/<ref>.json` exists and announced as
+           # ignored when it does not. `sync-self v1.2.3` says nothing at all — which is what
+           # this cell would catch if the alias were ever wired at `cmdSyncSelf`, and a
+           # `checkout={}` copy keeps it cheap by being refused immediately after.
+           expect=["ref 'v1.2.3' is IGNORED",
+                   "This Geneseed install isn't a git checkout"],
+           expect_absent=["rebuilding bundle"]),
     ]
 
 

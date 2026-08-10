@@ -18,10 +18,11 @@ ABSOLUTE assertion on EVERY side it is tolerant of (P6b's rule, and P6f applied 
 against its own runtime, and the TAIL — every argument after the head, which is where a real
 port bug lives — compared literally.
 
-AND THE PARTITION. `action_commands` has eight rows and three of them name a verb that has not
-crossed (`update` -> P8, `link`/`unlink` -> P10b). Spawning `python harness.py upgrade` for
-those would be exactly the passthrough this port exists to remove, so they are DECLARED in
-`NOT_PORTED_ACTIONS` and answered 501. That declaration is cross-checked against
+AND THE PARTITION. `action_commands` has eight rows and two of them still name a verb that has
+not crossed (`link`/`unlink` -> P10b). Spawning `python harness.py link` for those would be
+exactly the passthrough this port exists to remove, so they are DECLARED in
+`NOT_PORTED_ACTIONS` and answered 501. `update` was the third until P8c ported `upgrade` and
+spent its declaration. That declaration is cross-checked against
 `action_commands`' own keys with `ast` here — the third instance of the partition gate, after
 the route table and the docs kinds — so a NINTH row added to the reference cannot quietly
 answer "unknown action".
@@ -47,8 +48,8 @@ NODE = shutil.which("node")
 #: The five rows whose verb has crossed, and the three that have not. Written here as the
 #: EXPECTED partition rather than imported from either implementation, because a test that read
 #: its own answer out of the thing under test would agree with any drift.
-PORTED = ["build", "build-all", "doctor", "export", "uninstall"]
-NOT_PORTED = ["link", "unlink", "update"]
+PORTED = ["build", "build-all", "doctor", "export", "uninstall", "update"]
+NOT_PORTED = ["link", "unlink"]
 
 
 def _node_json(src: str):
@@ -118,8 +119,8 @@ class TheActionPartitionMatchesTheReference(unittest.TestCase):
                          "the Node runner claims actions the reference does not name")
         self.assertEqual(set(js["ported"]) & set(js["unported"]), set())
         self.assertEqual(set(js["unported"]), set(NOT_PORTED),
-                         "the three blocked rows are `update` (P8) and `link`/`unlink` "
-                         "(P10b); each of those phases ends by deleting its row")
+                         "`update` left this set in P8c; the two rows still blocked are "
+                         "`link`/`unlink` (P10b), and that phase ends by deleting them")
 
     @unittest.skipUnless(NODE, "node is not on PATH")
     def test_the_actions_dispatched_outside_the_table_are_declared_too(self):
@@ -156,6 +157,12 @@ class TheTwoRunnersResolveTheSameCommands(unittest.TestCase):
         "build-all": ("rituals/harness.py", "bin/geneseed-cli.mjs"),
         "export": ("rituals/harness.py", "bin/geneseed-cli.mjs"),
         "uninstall": ("rituals/harness.py", "bin/geneseed-cli.mjs"),
+        # P8c. The TAIL comparison below is what makes this row worth adding rather than
+        # merely moving: the action is named `update` and the argv must name `upgrade`, which
+        # is the subparser both runtimes actually carry. A twin that spelled the tail
+        # `["update"]` would be relying on argparse's alias, which `bin/geneseed-cli.mjs`
+        # reproduces as a table row of its own and could stop reproducing tomorrow.
+        "update": ("rituals/harness.py", "bin/geneseed-cli.mjs"),
     }
 
     @classmethod
