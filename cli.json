@@ -1,5 +1,5 @@
 {
-  "source_sha256": "ff8bbcf1ae195e18a6aa80956c16218d25e8380514fdf3a78875d1aebeaca918",
+  "source_sha256": "a662e7d8bdd73d8ce04e7fc07df163d9efb4fb1d37bd75194f2911b4300904e8",
   "prog": "harness",
   "commands": [
     {
@@ -391,6 +391,30 @@
       "description": "",
       "positionals": [],
       "options": [],
+      "mutex": []
+    },
+    {
+      "name": "migrate",
+      "help": "move this machine from the git-checkout install shape to the npm one: re-emit every registered install, re-bake the hook shim, and report what must be fixed by hand",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--dry-run"
+          ],
+          "dest": "dry_run",
+          "metavar": null,
+          "help": "survey and print the plan; write nothing",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
       "mutex": []
     },
     {

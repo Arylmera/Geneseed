@@ -15,10 +15,11 @@
  */
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import {
-  hookPrefix, hookShimBody, hookShimPath, managedBlockRead,
+  autostartPaths, autostartStale, hookPrefix, hookShimBody, hookShimPath, managedBlockRead,
   managedBlockRemove, managedBlockWrite, mergeClaudeSettings, mergeOpencodeJson,
-  opencodeTarget, readJsonc,
+  migrateShape, opencodeTarget, readJsonc,
   settingsIntegrityCheck, shimHome, unwireClaudeExcludes, unwireClaudeSettings,
   wireClaudeExcludes, writeHookShim,
 } from '../js/settings.mjs';
@@ -132,9 +133,32 @@ function integrity(job) {
   };
 }
 
+/**
+ * P10d — `migrateShape` and `autostartStale` over a corpus of REAL config text.
+ *
+ * A CELL RUNS THE PROGRAM; A CORPUS RUNS THE FUNCTION, and these two need the corpus for
+ * different reasons. `migrateShape`'s hardest case is shape 2 vs shape 3, which differ ONLY
+ * inside the shim body — and `golden._snapshot` excludes every `geneseed-hook*` file, because
+ * its body legitimately differs between the two implementations, so no cell can vary it and
+ * compare the result. `autostartStale` reads files this repository has never written, so
+ * every input to it is one a fixture must invent.
+ */
+function migrate(job) {
+  return {
+    shapes: job.corpus.map(([commands, body]) => migrateShape(commands, body)),
+    autostart: job.autostart.map(([text, root]) => autostartStale(text, root)),
+    // RELATIVE TO HOME, because the absolute answer embeds the machine's own home directory
+    // and the two sides would differ on nothing that matters. What the function actually
+    // decides IS the pair of relative locations, and comparing them this way also states
+    // that BOTH platforms' paths come back on ONE platform — which is what makes the macOS
+    // arm reachable from the Windows machine these gates run on.
+    paths: autostartPaths().map((p) => path.relative(os.homedir(), p).replaceAll('\\', '/')),
+  };
+}
+
 const KINDS = {
   jsonc, shim, 'opencode-wire': opencodeWire, 'claude-emit': claudeEmit, teardown,
-  'managed-block': managedBlock, integrity,
+  'managed-block': managedBlock, integrity, migrate,
 };
 
 for (const job of jobs) {

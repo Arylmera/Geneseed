@@ -122,11 +122,11 @@ class TheFileIsWhatTheParserProduces(unittest.TestCase):
             for arg in command["positionals"] + command["options"]:
                 self.assertNotIn("hidden", arg)
                 self.assertNotIn("type", arg)
-        # 25 invocable names — 24 subparsers plus argparse's `update` alias, which carries no
+        # 26 invocable names — 25 subparsers plus argparse's `update` alias, which carries no
         # help of its own because `_choices_actions` registers the text under the canonical
         # name only. Both readers inherit that, and the Node entry dispatches `update`
-        # BECAUSE of it.
-        self.assertEqual(len(page["commands"]), 25)
+        # BECAUSE of it. (24 subparsers until P10d added `migrate`.)
+        self.assertEqual(len(page["commands"]), 26)
         alias = next(c for c in page["commands"] if c["name"] == "update")
         self.assertEqual(alias["help"], "")
 

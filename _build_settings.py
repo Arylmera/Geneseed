@@ -623,6 +623,76 @@ def _unwire_claude_excludes(path: Path, excludes: list) -> None:
 # stays recognisable and no path-separator spelling has to be guessed.
 _GENESEED_HOOK_SNIFF = ("harness.py", _SHIM_MARK)
 
+# P10d. `_GENESEED_HOOK_SNIFF` answers "is this hook Geneseed's?". A MIGRATION needs the
+# other question — "is this Geneseed's OLD one?" — and the two are not the same sniff.
+#
+# THREE SHAPES ARE IN THE WILD, AND TWO OF THEM ARE IDENTICAL IN THE SETTINGS FILE:
+#   1. legacy-direct  the command itself names `harness.py` (pre-shim, P0 and earlier)
+#   2. shim-python    the command names the shim; the shim BODY runs python + harness.py
+#   3. shim-node      the command names the shim; the shim BODY runs node + the .mjs entry
+#
+# 2 and 3 differ ONLY inside the shim body. A classifier that read the host config alone —
+# the obvious one, and the one every integrity check here already does — would call a
+# fully-unmigrated machine "already migrated", silently, and `migrate` would be a no-op on
+# exactly the installs it exists for. So the shim body is a REQUIRED input, not a refinement.
+_SHIM_ENTRY_MARK = "geneseed-hook.mjs"
+
+
+def _migrate_shape(commands: "list[str]", shim_body: str) -> str:
+    """Classify one host config's Geneseed wiring: 'legacy' | 'current' | 'none'.
+
+    PURE, so `tests/test_settings_parity.py` can run it over a corpus of real config text
+    that no cell can seed — and so the Node twin is comparable function-to-function rather
+    than only through a verb.
+
+    'none' is not a fault. A Copilot install wires no hooks at all, and a user's own
+    `settings.json` may carry three hand-written hooks and no Geneseed entry; both must
+    classify as "nothing here to migrate" rather than as "unrecognised", or `migrate`
+    refuses on the most common config on any machine."""
+    if any("harness.py" in c for c in commands):
+        return "legacy"                                    # shape 1, unambiguous
+    if any(_SHIM_MARK in c for c in commands):
+        # shape 2 vs 3 — and ONLY the body can tell them apart.
+        return "current" if _SHIM_ENTRY_MARK in shim_body else "legacy"
+    return "none"
+
+
+def _autostart_paths() -> "list[Path]":
+    """Where a user's hand-written web-daemon autostart entry lives, per platform.
+
+    NOTHING IN THIS REPOSITORY HAS EVER WRITTEN ONE. `SETUP.md` instructs the user to
+    create them by hand (a hidden VBS in `shell:startup` on Windows, a LaunchAgent plist on
+    macOS), and a grep for `vbs|LaunchAgents|launchctl|plist` across every .py/.mjs/.sh/.cmd
+    in the tree finds no writer. So `migrate` REPORTS a stale one and never rewrites it:
+    it is a hand-authored login configuration outside this tool's ownership boundary, and
+    the rule for that is already written down in `_settings_integrity_check` — a
+    Geneseed-pattern entry the manifest does not claim is "possibly user-authored; left
+    alone".
+
+    Both platforms' paths are returned on both platforms deliberately. The scan is a file
+    read that misses harmlessly, and returning only the host platform's would make the
+    macOS arm unreachable from the Windows machine this port is developed on — an
+    ungated branch dressed up as a platform fork."""
+    home = Path.home()
+    return [
+        home / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu"
+             / "Programs" / "Startup" / "geneseed-web.vbs",
+        home / "Library" / "LaunchAgents" / "dev.geneseed.web.plist",
+    ]
+
+
+def _autostart_stale(text: str, root: Path) -> bool:
+    """True when an autostart entry names a Geneseed launcher somewhere OTHER than `root`.
+
+    The test is deliberately weak in one direction and strict in the other: it fires only
+    when the file mentions geneseed at all (so an unrelated Startup entry is never touched
+    or named), and it clears only when the CURRENT root appears verbatim. A false positive
+    costs the user one printed line; a false negative leaves a login task pointing at a
+    checkout that npm is about to make stale, which is the failure worth catching."""
+    if "geneseed" not in text.lower():
+        return False
+    return str(root) not in text and str(root).replace("\\", "/") not in text
+
 
 def _settings_hook_groups(loaded: dict) -> "list[tuple[str, dict]]":
     """Flatten a loaded settings.json's `hooks` block to (event, group) pairs, mirroring

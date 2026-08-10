@@ -643,6 +643,70 @@ export function unwireClaudeExcludes(p, excludes) {
 // silently leave live hooks behind in every config emitted before the shim landed.
 export const GENESEED_HOOK_SNIFF = ['harness.py', SHIM_MARK];
 
+// P10d. `GENESEED_HOOK_SNIFF` answers "is this hook Geneseed's?". A MIGRATION needs the other
+// question — "is this Geneseed's OLD one?" — and the two are not the same sniff.
+//
+// THREE SHAPES ARE IN THE WILD, AND TWO OF THEM ARE IDENTICAL IN THE SETTINGS FILE:
+//   1. legacy-direct  the command itself names `harness.py` (pre-shim, P0 and earlier)
+//   2. shim-python    the command names the shim; the shim BODY runs python + harness.py
+//   3. shim-node      the command names the shim; the shim BODY runs node + the .mjs entry
+//
+// 2 and 3 differ ONLY inside the shim body. A classifier reading the host config alone would
+// call a fully-unmigrated machine "already migrated" — silently — and `migrate` would no-op on
+// exactly the installs it exists for. The shim body is a REQUIRED input, not a refinement.
+export const SHIM_ENTRY_MARK = 'geneseed-hook.mjs';
+
+/**
+ * `_build_settings._migrate_shape` — 'legacy' | 'current' | 'none'.
+ *
+ * PURE, so `tests/test_settings_parity.py` runs it over a corpus of real config text no cell
+ * can seed. 'none' is not a fault: a Copilot install wires no hooks, and a user's own
+ * settings.json may carry three hand-written hooks and no Geneseed entry. Both must read as
+ * "nothing to migrate" rather than "unrecognised", or `migrate` refuses on the commonest
+ * config on any machine.
+ */
+export function migrateShape(commands, shimBody) {
+  if (commands.some((c) => c.includes('harness.py'))) return 'legacy';
+  if (commands.some((c) => c.includes(SHIM_MARK))) {
+    return shimBody.includes(SHIM_ENTRY_MARK) ? 'current' : 'legacy';
+  }
+  return 'none';
+}
+
+/**
+ * `_build_settings._autostart_paths` — where a hand-written web-daemon autostart entry lives.
+ *
+ * NOTHING IN THIS REPOSITORY HAS EVER WRITTEN ONE — `SETUP.md` tells the user to create them
+ * by hand, and no .py/.mjs/.sh/.cmd in the tree contains `vbs`, `LaunchAgents` or `plist`. So
+ * `migrate` REPORTS a stale one and never rewrites it, on the rule `settingsIntegrityCheck`
+ * already states: an entry the manifest does not claim is "possibly user-authored; left alone".
+ *
+ * Both platforms' paths on both platforms, deliberately — the scan is a read that misses
+ * harmlessly, and returning only the host platform's would make the macOS arm unreachable
+ * from the Windows machine this port is developed on: an ungated branch dressed as a fork.
+ */
+export function autostartPaths() {
+  const home = os.homedir();
+  return [
+    path.join(home, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu',
+      'Programs', 'Startup', 'geneseed-web.vbs'),
+    path.join(home, 'Library', 'LaunchAgents', 'dev.geneseed.web.plist'),
+  ];
+}
+
+/**
+ * `_build_settings._autostart_stale` — the entry names a Geneseed launcher somewhere else.
+ *
+ * Weak in one direction and strict in the other on purpose: it fires only when the file
+ * mentions geneseed at all (an unrelated Startup entry is never named), and clears only when
+ * the CURRENT root appears verbatim. A false positive costs one printed line; a false negative
+ * leaves a login task pointing at a checkout npm is about to make stale.
+ */
+export function autostartStale(text, root) {
+  if (!text.toLowerCase().includes('geneseed')) return false;
+  return !text.includes(root) && !text.includes(root.replaceAll('\\', '/'));
+}
+
 /** `_build_settings._settings_hook_groups` — flatten `hooks` to [event, group] pairs. */
 export function settingsHookGroups(loaded) {
   const hooks = get(loaded, 'hooks');

@@ -65,6 +65,241 @@ def cmd_rebuild_all(args: argparse.Namespace) -> int:
     return 0
 
 
+def _known_emits() -> frozenset:
+    """Every emit name the generator answers to — the set an unrecognised marker is NOT in.
+
+    A FUNCTION rather than a module-level constant on purpose: `_EMIT_HOST_SCOPE` lives in
+    `_harness_mcp` and cross-submodule names are linked by `harness.py`'s splice AFTER every
+    submodule has been imported, so evaluating it at import time raises NameError. Every
+    other cross-module reference in this file is inside a function body for the same reason."""
+    return frozenset(_EMIT_HOST_SCOPE)
+
+
+def _hook_settings_file(root: Path, host: str, scope: str) -> "Path | None":
+    """The settings file a host wires hook COMMANDS into, or None for a host with none.
+
+    Only Claude and Bob carry hook commands. OpenCode's hooks are a PLUGIN (emitted JS that
+    runs in the host's own process and names neither the shim nor harness.py) and Copilot has
+    no hook mechanism at all, so both classify as 'none' and their whole migration is the
+    re-emit — the same re-emit, in the same change, on all three hosts."""
+    if host not in ("claude", "bob"):
+        return None
+    name = "settings.local.json" if scope == "project" and host != "bob" else "settings.json"
+    return root / name
+
+
+def _hook_commands_of(file: Path) -> "list[str]":
+    """Every hook command string in a settings file; [] when unreadable or unparseable.
+
+    `build._read_jsonc`, NOT `json.loads`. A hand-edited settings.json carrying comments and
+    a trailing comma is the one shape no machine in this project writes, and strict JSON
+    rejects it — which would classify a wired install as `none` and make `migrate` skip the
+    machine silently. `_merge_claude_settings` already reads through comments for exactly
+    this reason and `_settings_integrity_check`'s docblock says so out loud: the one settings
+    state emit refuses to touch is precisely the one that must not escape verification.
+    Found by the JSONC corpus fixture, which is the case a generated one would have hidden."""
+    try:
+        loaded, _had_comments = build._read_jsonc(file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(loaded, dict) or not isinstance(loaded.get("hooks"), dict):
+        return []
+    out: "list[str]" = []
+    for groups in loaded["hooks"].values():
+        if not isinstance(groups, list):
+            continue
+        for g in groups:
+            if not isinstance(g, dict) or not isinstance(g.get("hooks"), list):
+                continue
+            out.extend(h["command"] for h in g["hooks"]
+                       if isinstance(h, dict) and isinstance(h.get("command"), str))
+    return out
+
+
+def _migrate_stamp_path() -> Path:
+    """`<GENESEED_HOME>/.migrated` — the ROOT the last successful migration installed from."""
+    return build._shim_home() / ".migrated"
+
+
+def _migrate_stash_dir() -> Path:
+    return build._shim_home() / ".migrate-backup"
+
+
+def _migrate_survey() -> dict:
+    """Classify every active install WITHOUT touching anything.
+
+    A refusal raised here is free — nothing has been written, so "refuse and report" needs no
+    rollback. That ordering is the cheapest atomicity there is, and it is why the survey is a
+    separate pass rather than a check inside the re-emit loop."""
+    rows, commands, unrecognised = [], [], []
+    for host, scope, root in _install_targets():
+        if _install_state(root, host, scope) != "active":
+            continue
+        em = root / ".geneseed-emit"
+        marker = em.read_text(encoding="utf-8").strip() if em.is_file() else ""
+        # An unrecognised marker is a REFUSAL, not a default. `cmd_rebuild_all` coerces here.
+        if marker and marker not in _known_emits():
+            unrecognised.append((host, scope, root, marker))
+            continue
+        file = _hook_settings_file(root, host, scope)
+        if file is not None:
+            commands.extend(_hook_commands_of(file))
+        rows.append((host, scope, root, marker, file))
+    try:
+        shim_body = build._hook_shim_path().read_text(encoding="utf-8")
+    except OSError:
+        shim_body = ""
+    shape = build._migrate_shape(commands, shim_body)
+    try:
+        stamped = _migrate_stamp_path().read_text(encoding="utf-8").strip()
+    except OSError:
+        stamped = ""
+    # THE TRIGGER IS THE STAMP, AND THE SHAPE IS REPORTED. The first draft had it the other
+    # way round and the ref-vs-ref self-check killed it in one run: `shape == "legacy"` cannot
+    # be a trigger, because what "current" MEANS is "the shim body names the .mjs entry", and
+    # THIS implementation bakes python + harness.py by design (`_hook_runner_entry`). A
+    # migration run from the reference could never reach `current`, its second run would
+    # re-emit forever, and the two implementations would diverge on idempotence by
+    # construction. The stamp is a value both sides write and read identically.
+    return {"rows": rows, "unrecognised": unrecognised, "shape": shape,
+            "needed": stamped != str(ROOT)}
+
+
+def _autostart_findings() -> "list[Path]":
+    """Hand-written login entries naming another checkout. Reported, never rewritten."""
+    out = []
+    for p in build._autostart_paths():
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if build._autostart_stale(text, ROOT):
+            out.append(p)
+    return out
+
+
+def _stash_key(p: Path) -> str:
+    """A backup name that cannot collide across drives and is legal on both platforms."""
+    return re.sub(r"[\\/:]", "_", str(p))
+
+
+def cmd_migrate(args: argparse.Namespace) -> int:
+    """Move this machine from the git-checkout install shape to the npm shim shape.
+
+    P10d, AND IT IS NOT A PORT — new behaviour, written on both implementations in the same
+    change so `tests/harness_golden.py` (a CROSS-implementation gate) has a reference side.
+
+    IT IS NOT `rebuild-all` EITHER, and that was checked before being discarded. The re-emit
+    is the same engine and is reused; four behaviours differ, and each is a cell:
+
+      * an unrecognised emit marker  — rebuild-all COERCES to a default; migrate REFUSES.
+        Coercion is right for a rebuild and is *guessing what the user installed* here.
+      * a failing root — rebuild-all continues (one broken install must not block the rest);
+        migrate ROLLS EVERYTHING BACK, because a half-migrated machine is the failure this
+        verb exists to prevent.
+      * an already-migrated machine — rebuild-all re-emits; migrate writes NOTHING.
+      * stale autostart entries — not a rebuild's subject; surveyed and reported here.
+
+    TWO TRIGGERS, AND IT TAKES BOTH. Work is needed when the wiring is `legacy` (and shapes 2
+    and 3 differ only inside the shim BODY, never in the settings file — see
+    `build._migrate_shape`) OR when the stamp does not name this ROOT. Neither alone is
+    enough: an OpenCode-only machine wires no hooks, so its shape is permanently 'none' and a
+    shape-only trigger re-emits it forever; and a user who reinstalls the old Python build
+    flips the shape back to 'legacy' while the stamp still matches, and must migrate again."""
+    survey = _migrate_survey()
+    rows, unrecognised = survey["rows"], survey["unrecognised"]
+
+    if unrecognised:
+        # Refuse the WHOLE run. Skipping the row we did not understand and migrating the rest
+        # is exactly the half-migrated machine this verb exists to prevent.
+        sys.stderr.write("[migrate] REFUSED — unrecognised install marker(s):\n")
+        for host, scope, root, marker in unrecognised:
+            sys.stderr.write(f"[migrate]   {host}:{scope} ({root}) has .geneseed-emit "
+                             f"'{marker}', which is not an emit this generator answers to.\n")
+        sys.stderr.write("[migrate] Nothing was changed. Fix or delete the marker, "
+                         "then re-run.\n")
+        return 3
+
+    if not rows:
+        print("[migrate] no active installs detected.")
+        return 0
+
+    if not survey["needed"]:
+        print(f"[migrate] already on the npm shape ({len(rows)} install(s)); nothing to do.")
+        return 0
+
+    print(f"[migrate] {len(rows)} install(s), wiring shape: {survey['shape']}")
+    if args.dry_run:
+        for host, scope, root, _marker, _file in rows:
+            print(f"[migrate] would re-emit {host}:{scope} ({root})")
+        for p in _autostart_findings():
+            print(f"[migrate] would report the autostart entry at {p}")
+        print("[migrate] --dry-run: nothing was written.")
+        return 0
+
+    # Stash every file the re-emit can touch, so the rollback below can put it all back.
+    stash, saved = _migrate_stash_dir(), []
+    try:
+        shutil.rmtree(stash, ignore_errors=True)
+        stash.mkdir(parents=True, exist_ok=True)
+        targets = [f for _h, _s, _r, _m, f in rows if f is not None]
+        for p in targets + [build._hook_shim_path()]:
+            if not p.exists():
+                continue
+            dest = stash / _stash_key(p)
+            shutil.copyfile(p, dest)
+            saved.append((p, dest))
+    except OSError as e:
+        sys.stderr.write(f"[migrate] could not stage a backup ({e}); nothing was changed.\n")
+        return 1
+
+    def _restore() -> None:
+        for orig, dest in saved:
+            try:
+                shutil.copyfile(dest, orig)
+            except OSError:
+                pass          # best effort — the failure is reported by the caller regardless
+        shutil.rmtree(stash, ignore_errors=True)
+
+    for host, scope, root, marker, _file in rows:
+        if marker and _EMIT_HOST_SCOPE.get(marker, ("", ""))[0] != host:
+            marker = ""
+        emit = marker or _DEFAULT_EMIT.get((host, scope), "opencode-global")
+        theme = _theme_of_dir(root) or _default_theme()
+        out = None if scope == "global" else str(root)
+        argv = _setup_build_args(theme, emit, out, out, _footprint_of_dir(root),
+                                 _posture_of_dir(root) or _default_posture(),
+                                 _mode_of_dir(root) or _default_mode())
+        label = f"{host}:{scope} ({root})"
+        print(f"[migrate] re-emitting {label}: theme={theme} emit={emit}")
+        rc = run([sys.executable, str(BUILD), *argv]).returncode
+        if rc != 0:
+            # ALL OR NOTHING. `cmd_rebuild_all` continues here on purpose; a migration must
+            # not, or the machine is left half on each shape.
+            sys.stderr.write(f"[migrate] FAILED {label} (exit {rc}) — rolling back.\n")
+            _restore()
+            sys.stderr.write(f"[migrate] rolled back {len(saved)} file(s); "
+                             "the install is unchanged.\n")
+            return 1
+
+    shutil.rmtree(stash, ignore_errors=True)
+    try:
+        stamp = _migrate_stamp_path()
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(f"{ROOT}\n", encoding="utf-8")
+    except OSError:
+        pass      # an unwritable stamp costs a redundant re-emit next run, never correctness
+
+    print(f"[migrate] migrated {len(rows)} install(s).")
+
+    # What could NOT be fixed automatically. Reported, never rewritten: nothing in this
+    # repository has ever written an autostart entry, so migrate does not own the file.
+    for p in _autostart_findings():
+        print(f"[migrate] NOTE: the autostart entry at {p} still names another checkout — "
+              "update it by hand to run: geneseed web --no-browser")
+    return 0
+
+
 def _link_problems(md: Path, text: str, out: Path, rel: Path) -> list[str]:
     """Dead links AND non-hermetic links — any target that leaves the bundle.
     Hermeticity (DESIGN Decision 5) is the invariant that lets the bundle be

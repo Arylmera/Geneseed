@@ -50,6 +50,7 @@ import { cmdDiff } from '../js/diff.mjs';
 import { cmdDoctor } from '../js/doctor.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
+import { cmdMigrate } from '../js/migrate.mjs';
 import { pyInt } from '../js/lib/pyfs.mjs';
 import { cmdLink, cmdUnlink } from '../js/link.mjs';
 import { cmdSetup } from '../js/setup.mjs';
@@ -99,6 +100,9 @@ const VERBS = {
   },
   'rebuild-all': {
     fn: cmdRebuildAll,
+  },
+  migrate: {
+    fn: cmdMigrate,
   },
   doctor: {
     fn: cmdDoctor,

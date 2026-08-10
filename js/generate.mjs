@@ -119,7 +119,7 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
  * A pre-marker install still has a (host, scope), which is what the walk found it by, so it
  * is rebuilt in its own mode rather than defaulted to OpenCode.
  */
-const DEFAULT_EMIT = new Map([
+export const DEFAULT_EMIT = new Map([
   ['opencode global', 'opencode-global'], ['opencode project', 'opencode'],
   ['claude global', 'claude-global'], ['claude project', 'claude'],
   ['bob global', 'bob-global'], ['bob project', 'bob'],
