@@ -412,8 +412,17 @@ class TheShellWrappersAreGone(unittest.TestCase):
     what keeps it answering.
     """
 
-    #: The two files, and the reference count that makes the scan below non-vacuous.
+    #: The two files.
     GONE = ("upgrade.sh", "sync-self.sh")
+
+    #: THE HISTORICAL RECORDS, exempt from the scan below — and the exemption is the scan's
+    #: own premise applied honestly rather than a hole in it. What it hunts is a POINTER: a
+    #: doc, launcher or CI step that tells someone to run a script that is not there. A
+    #: changelog entry saying "`upgrade.sh` and `sync-self.sh` are gone, use `geneseed
+    #: upgrade`" is the opposite of that, and DESIGN.md's record of why they went is the
+    #: reasoning a future reader needs most. Scrubbing the names out of an append-only
+    #: history to satisfy a grep would delete the record OF the removal.
+    RECORDS = ("CHANGELOG.md", "DESIGN.md")
 
     def _tracked(self):
         out = subprocess.run(["git", "ls-files"], cwd=str(ROOT), capture_output=True,
@@ -439,11 +448,16 @@ class TheShellWrappersAreGone(unittest.TestCase):
 
         EVERY tracked text file, not just the launchers: the references were spread across
         README, SETUP, two adapter documents, a docs page, three `rituals/` modules and a
-        comment in `build.py`. This file names them, which is why it excludes itself.
+        comment in `build.py`. This file names them, which is why it excludes itself, and so
+        do the two append-only records — see `RECORDS` for why that is the rule rather than an
+        exception to it.
         """
         offenders = []
+        scanned = 0
         for p in self._tracked():
             if p.resolve() == Path(__file__).resolve() or not p.is_file():
+                continue
+            if p.name in self.RECORDS and p.parent == ROOT:
                 continue
             if p.suffix.lower() in (".woff2", ".png", ".jpg", ".ico", ".gz"):
                 continue
@@ -451,9 +465,14 @@ class TheShellWrappersAreGone(unittest.TestCase):
                 text = p.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 continue
+            scanned += 1
             for name in self.GONE:
                 if name in text:
                     offenders.append(f"{p.relative_to(ROOT).as_posix()} -> {name}")
+        # Non-vacuity, because two exemptions and three `continue`s are exactly how a scan
+        # ends up reading nothing and reporting a pass.
+        self.assertGreater(scanned, 100, f"the scan read only {scanned} files, so a clean "
+                                         f"result says nothing")
         self.assertFalse(offenders, "these still name a deleted shell wrapper:\n  "
                                     + "\n  ".join(sorted(offenders)))
 

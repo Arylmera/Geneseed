@@ -1207,6 +1207,59 @@ renders it as the name in parentheses.
   own copy of the bug: every `[rebuild-all]` line an upgrade printed on Windows was discarded,
   including the FAILED rows its error message tells you to look for. Found by a cell's
   ABSOLUTE half naming a line the reference was not printing.
+- **`sync-self` and `bootstrap` cross — nineteen of 24 — and the two shell wrappers are
+  deleted.** `sync_self` is nine lines and calls `upgrade()`, so its cells gate the DISPATCH
+  rather than new behaviour — and "an alias" turns out to be two properties, not one: the row
+  points at `cmdSyncSelf` and not at `cmdUpgrade` because `sync-self cyberpunk` must NOT
+  rebuild in cyberpunk the way `upgrade cyberpunk` does. `cmd_bootstrap` was the phase's real
+  work and the plan never measured it: 30 lines over a fork, ~143 reachable and ~141 not.
+  The curses progress screen is P7's, declared on exactly the terms P5i declared `cmd_setup`'s;
+  `_harness_supports` and `_stale_factory_hint` are declared for a second reason — they detect
+  argparse's `invalid choice` from a PARTIALLY updated install, and the Node step is a function
+  this binary statically imported.
+  **The step is an IMPORT, not a spawn, and this module is where that had to be argued twice.**
+  P8a's rows spawn because the code on disk changes halfway through the verb; nothing has
+  changed when the update step STARTS, so `cmdUpgrade()` in-process is the same program and the
+  reference's own spawn is an artifact of a progress UI needing a pipe. The ARGV is still built,
+  because the install log promises the user a command they can re-run — and that line cannot be
+  byte-equal across runtimes, so it is normalised (the P6g `$ <argv>` shape, now in a FILE) with
+  the absolute per-side assertion beside it.
+  **The deletion needed a gate of its own.** `upgrade.sh` and `sync-self.sh` were an interpreter
+  probe and `exec "$PY" rituals/harness.py <sub>`; no launcher invoked either, and all three
+  probe `harness.py <cmd> --help` and fall back to `python rituals/_update.py <cmd>` — a stable
+  contract that never went through a wrapper. Twelve tracked files still NAMED them, `bootstrap`'s
+  own header comment among them, so the gate scans every tracked text file: the next stale
+  pointer fails a test instead of a user.
+  **Three defects, all found by a cell's absolute half.** `cmd_bootstrap` re-exec'd
+  `python rituals/_harness_lifecycle.py setup` — `__file__` rather than `harness.py` — and that
+  module has no `__main__` block, so `geneseed bootstrap` UPDATED AND THEN SKIPPED THE WIZARD,
+  reporting success, on the front door's own default path. The Node step called `upgrade()`
+  where the reference's step is the SUBCOMMAND, and `cmd_upgrade` is where the pre-update
+  improvements export lives. And the first `nargs="*"` in the verb table swallowed unknown
+  OPTIONS, so `geneseed bootstrap --no-setpu` would have run a full bootstrap instead of
+  refusing — the most dangerous parse bug this entry point could have had.
+- **P8c pays two partition debts, and a payment needs a gate DIRECTION.** `update` leaves
+  `NOT_PORTED_ACTIONS` and the docs `about` kind leaves `NOT_PORTED_KINDS` — one line each,
+  which is what P6g and P6d built the partitions for. What is not one line is the observation:
+  a removal seen only as the ABSENCE of a 501 is satisfied by a 404, so the dispatcher probe
+  that asserted 501 now asserts the success shape for both.
+  **The probe that asks for `update` can never START one.** It runs against the developer's own
+  checkout, where a clean tree with an upstream would make the preflight say "ready" — so the
+  probe points `GIT_DIR` at a path that does not exist, every git call in the preflight fails,
+  and 422 is the only reachable answer. That is also the arm the endpoint is really about: a
+  local-only gate ahead of the job, so a dirty tree gets an explanation instead of a spawn that
+  fails. `unportedAction` moves to `link`, which is still declared, so the partition question
+  keeps being asked by something that can still answer it.
+  **`aliases=["update"]` was believed coupled to that and is not.** The action's argv names
+  `upgrade`, the VERB, on both sides and always did. The alias is a separate parity fact, and it
+  lands as a ROW in the verb table rather than as an `aliases` field, because the three matrix
+  gates read that table as the DISPATCH — so `harness_py_subcommands()` now reads argparse's
+  aliases out of the reference and an `update/` cell group proves the row reaches `cmdUpgrade`,
+  the dead `ref` positional's re-read included.
+  **And the `about` page's defect is this port's recurring shape.** `OriginDisplay`'s JS twin
+  spells the field `githubSlug`; the wire format spells it `repo_is_github`. Reading the wire
+  name off the record gives `undefined` — a perfectly plausible `false` that silently drops
+  every github deep link on the page and changes nothing else.
 
 ## 🚫 Explicitly out of scope
 

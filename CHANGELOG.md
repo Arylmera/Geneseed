@@ -9,6 +9,27 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **`geneseed bootstrap`, `geneseed sync-self` and `geneseed update` have Node twins, and the
+  web console's Update button works without Python.** Nineteen of the harness's 24 commands
+  now run from `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. The
+  About page in the web console works there too — it reads your install's own git origin, so
+  the links on it point at the repository your updates actually come from.
+- **A real fix in `geneseed bootstrap`: it now runs the setup wizard again.** `bootstrap`
+  updates everything and then hands off to `setup` — and that handoff was pointed at an
+  internal module instead of the harness, so it did nothing at all and exited 0. `./geneseed`
+  with no arguments takes that path. If bootstrap has been "succeeding" without ever showing
+  you the wizard, this is why.
+
+### Removed
+- **`upgrade.sh` and `sync-self.sh` are gone.** Each was a few lines of bash that found a
+  Python interpreter and then ran `rituals/harness.py upgrade` (or `sync-self`) — the same
+  command every launcher already runs, on every OS, and one that native Windows could never
+  reach through a `.sh` file at all. Use `./geneseed upgrade` (or `.\geneseed.cmd upgrade`,
+  `.\geneseed.ps1 upgrade`, `python rituals/harness.py upgrade`, or the web console's Update
+  button) — all of which is what they did. Nothing else changes: the launchers' self-repair
+  path for a factory too old to know the subcommand never went through either script and is
+  untouched.
+
 - **`geneseed upgrade` has a Node twin — the one command a "no Python needed" install could
   not do without Python.** Seventeen of the harness's 24 commands now run from
   `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`, and this is the
