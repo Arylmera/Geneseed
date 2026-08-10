@@ -193,8 +193,9 @@ const VERBS = {
     fn: cmdSyncSelf,
     // `ss.add_argument("ref", nargs="?", help=argparse.SUPPRESS)` and nothing else. The row
     // points at `cmdSyncSelf` rather than at `cmdUpgrade`, and that is not tidiness: `sync-self`
-    // DROPS its `ref` where `upgrade` re-reads it as a theme, so the two verbs answer
-    // `sync-self cyberpunk` differently. See `js/update.mjs`'s `syncSelf`.
+    // DROPS its `ref` before `upgrade` ever sees it, where `upgrade` both WARNS about one and
+    // re-reads it as a theme — so the two verbs answer `sync-self cyberpunk` and
+    // `sync-self v1.2.3` differently. See `js/update.mjs`'s `syncSelf` for both halves.
     positionals: [{ name: 'ref', optional: true }],
   },
   bootstrap: {

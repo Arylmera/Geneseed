@@ -745,14 +745,18 @@ export async function cmdUpgrade(args) {
  *
  * One `git pull` refreshes the launchers AND the factory, so the two verbs became one
  * operation; the separate subcommand is kept for the stable contract. `ref` is bound by the
- * parser for back-compat and then IGNORED — git follows the checkout's own branch — so this
- * calls `upgrade()` with no arguments rather than forwarding anything.
+ * parser for back-compat and then dropped HERE — this calls `upgrade()` with no arguments
+ * rather than forwarding anything.
  *
- * WHICH IS WHY THIS IS NOT `cmdUpgrade`. `cmdUpgrade` re-reads its own dead `ref` positional as
- * a THEME when `themes/<ref>.json` exists, and announces `ref '<x>' is IGNORED` when it does
- * not. Wiring the verb table's row straight at `cmdUpgrade` would make `sync-self cyberpunk`
- * rebuild in cyberpunk, which the reference does not do —
- * `sync-self/the-ref-positional-is-accepted-and-never-re-read-as-a-theme` is that cell.
+ * "IGNORED" IS NOT SILENT, which is what makes the dropping observable and is a correction the
+ * mutations made to this docblock. `upgrade(ref)` does not quietly disregard a ref — it opens by
+ * LOGGING `⚠️ ref '<x>' is IGNORED — updates follow the checkout's current branch`. So
+ * `syncSelf` forwarding its argument would make `sync-self v1.2.3` print a warning the reference
+ * never prints (mutation M22), and wiring the verb table's row straight at `cmdUpgrade` would
+ * additionally make `sync-self cyberpunk` rebuild in cyberpunk, because `cmdUpgrade` re-reads
+ * the dead positional as a THEME when `themes/<ref>.json` exists (M21). Two different defects
+ * behind one plausible-looking shortcut, and
+ * `sync-self/the-ref-positional-is-accepted-and-never-re-read-as-a-theme` is the cell for both.
  */
 export function syncSelf(_ref = null) {
   return upgrade();

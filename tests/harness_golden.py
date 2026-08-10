@@ -3023,12 +3023,14 @@ def _upgrade_cells() -> list[dict]:
 #
 #   * the verb reaches `upgrade`'s code at all (a table row that answered nothing, or that
 #     answered `cmd_upgrade`, would look identical on the happy path), and
-#   * IT DROPS ITS ARGUMENT. `cmd_upgrade` re-reads its dead `ref` positional as a THEME
-#     when one exists by that name, and prints `ref '<x>' is IGNORED` when one does not.
-#     `cmd_sync_self` does neither: it hands `ref` to `sync_self`, which ignores it and
-#     calls `upgrade()` with NO arguments. So `sync-self cyberpunk` must rebuild in the
-#     checkout's configured theme while `upgrade cyberpunk` rebuilds in cyberpunk — and a
-#     port that wired the row straight to `cmdUpgrade` would pass every other cell here.
+#   * IT DROPS ITS ARGUMENT, AND "DROPS" IS OBSERVABLE TWICE. `upgrade(ref)` does not
+#     disregard a ref quietly — it LOGS `⚠️ ref '<x>' is IGNORED` — and `cmd_upgrade` on top
+#     of that re-reads the dead positional as a THEME when one exists by that name.
+#     `cmd_sync_self` reaches neither: it hands `ref` to `sync_self`, which calls `upgrade()`
+#     with NO arguments. So `sync-self cyberpunk` must rebuild in the checkout's configured
+#     theme while `upgrade cyberpunk` rebuilds in cyberpunk, AND `sync-self v1.2.3` must say
+#     nothing where `upgrade v1.2.3` warns. Two defects behind one plausible shortcut
+#     (mutations M21 and M22), and the second cell below is what separates them.
 
 def _sync_self_cells() -> list[dict]:
     def ss(name, argv=("sync-self",), **kw):

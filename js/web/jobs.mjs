@@ -47,25 +47,25 @@
  * primitive, not this program.
  *
  * ---------------------------------------------------------------------------------------
- * THE PARTITION — five of the eight action rows cross and three do not.
+ * THE PARTITION — six of the eight action rows cross and two do not.
  *
- * `doctor`, `build`, `build-all`, `export` and `uninstall` all name a verb that has crossed.
- * `update` runs `harness.py upgrade` (P8) and `link`/`unlink` run `harness.py link|unlink`
- * (P10b). A Node runner that spawned `python harness.py upgrade` for those would put Python
- * back into a "no Python needed" install for the one operation that matters most, so they are
- * DECLARED in `NOT_PORTED_ACTIONS` and answered 501 by the dispatcher, and P8/P10b each end
- * by deleting their row. `tests/test_web_jobs.py` cross-checks the two sets against
- * `action_commands`' own keys with `ast`, so a NINTH row added to the reference cannot quietly
- * answer "unknown action".
+ * `doctor`, `build`, `build-all`, `export`, `uninstall` and — since P8c — `update` all name a
+ * verb that has crossed. `link`/`unlink` run `harness.py link|unlink` (P10b). A Node runner
+ * that spawned `python harness.py link` for those would put Python back into a "no Python
+ * needed" install, so they are DECLARED in `NOT_PORTED_ACTIONS` and answered 501 by the
+ * dispatcher, and P10b ends by deleting both rows. `tests/test_web_jobs.py` cross-checks the
+ * two sets against `action_commands`' own keys with `ast`, so a NINTH row added to the
+ * reference cannot quietly answer "unknown action".
  *
  * ---------------------------------------------------------------------------------------
  * THREE DETAILS OF `_run`, EACH A COMMENT EXPLAINING A BUG IT ALREADY FIXED.
  *
  * `GENESEED_WEB_JOB=1` tells `upgrade` it is running INSIDE this daemon so it must not bounce
  * the daemon mid-job — which killed the job's own tracking and left the console on `running`
- * forever. It is set here even though no ported row reads it yet, because it is P6g's CONTRACT
- * WITH P8: the verb that will read it does not exist, and a contract written after the fact is
- * a contract that was broken once first.
+ * forever. It was set here before any ported row read it, because it was P6g's CONTRACT WITH
+ * P8, and a contract written after the fact is a contract that was broken once first. P8a is
+ * where `js/update.mjs` began honouring it, and P8c is where the `update` row that triggers
+ * it crossed — so it is a live pair now rather than a promise.
  *
  * `PYTHONUNBUFFERED=1` reaches the Python child AND its own Python children, or their stdout
  * is block-buffered into the pipe and the console looks stuck. THE EQUIVALENT THOUGHT FOR
