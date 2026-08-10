@@ -2249,17 +2249,21 @@ def _oc_install(owned: list, **extra) -> dict:
     }, **extra)
 
 
-def _claude_install(**extra) -> dict:
+def _claude_install(owned=("agents/scribe.md",), **extra) -> dict:
     """A claude-GLOBAL install at `home/.claude` — the other half of the host fork.
 
     `managed` is what makes it Claude-shaped: there is no `instructions` array to unmerge,
     so the reversal is the manifest's owned list plus the CLAUDE.md managed block plus the
     settings.json hooks, and the stash is tagged by HOST so a root carrying two installs can
-    disable each independently."""
+    disable each independently.
+
+    `owned` is a PARAMETER because a mutation asked for it. Emptying it (with no CLAUDE.md
+    beside it) is the only world in which `stash.mkdir` is load-bearing — see the cell that
+    uses it."""
     return dict({
         "repo/.keep": "",
         f"{_CL}/.geneseed-manifest.json": json.dumps({
-            "owned": ["agents/scribe.md"],
+            "owned": list(owned),
             "managed": {"claude_md": {"rel": "CLAUDE.md"}, "settings_file": "settings.json",
                         "settings_hooks": [], "settings_excludes": []}}),
         f"{_CL}/.geneseed-emit": "claude-global\n",
@@ -2513,6 +2517,21 @@ def _install_cells(cell) -> list[dict]:
                            # survives a disable, and this is the file that proves it.
                            f"{_CL}/CLAUDE.md", f"{_CL}/.geneseed-manifest.json"],
              expect_absent_files=[f"{_CL}/agents"]),
+
+        cell("install/a-claude-deactivate-with-nothing-to-move-still-marks-it-disabled",
+             [_req("POST", path="/api/install",
+                   body=_toggle("deactivate", host="claude", path=_CLAUDE_PATH), token=True),
+              installs],
+             # NO owned files and NO CLAUDE.md, so nothing moves and no block is stashed —
+             # and `stash.mkdir` is then the ONLY thing that makes the install disabled,
+             # because presence of the dir IS the flag. THE CELL EXISTS BECAUSE A MUTATION
+             # SURVIVED: deleting that mkdir was invisible in the two Claude cells above,
+             # where the owned move and the block write both create the stash on the way
+             # past. Without it the endpoint answers `ok: true` while the install stays on.
+             world=_claude_install(owned=()),
+             expect=['{"ok": true, "kind": "claude", "moved": 0}', "200 OK",
+                     '"id": "claude:global"', '"state": "disabled"'],
+             expect_files=[f"{_CL}/.geneseed-manifest.json"]),
 
         cell("install/reactivating-a-claude-global-install-restores-the-block-and-rewires",
              [_req("POST", path="/api/install",
