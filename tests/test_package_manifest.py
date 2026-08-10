@@ -156,6 +156,12 @@ def _manifest() -> dict:
 # --------------------------------------------------------------------------------------
 
 SHIPS: tuple[tuple[str, str], ...] = (
+    # Not decorative. This row did not exist when the file was written, because
+    # `package.json` was still UNTRACKED — `git ls-files` does not list a file until it is
+    # committed, so the partition was total right up to the commit that made it false, and
+    # the whole acceptance matrix had already been run and reported green. A gate whose
+    # input is the git index has to be re-run AFTER the commit, not only before it.
+    ("package.json", "the manifest itself; npm packs it whatever `files` says"),
     ("bin/", "the three entry points — the whole reason there is a package"),
     ("js/", "the port"),
     ("src/", "the product: what a bundle is rendered from"),
