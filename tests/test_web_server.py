@@ -381,7 +381,12 @@ srv.listen(0, '127.0.0.1', async () => {
     docsMenu: await hit('GET', '/api/docs'),
     portedKind: await hit('GET', '/api/docs/page/glossary'),
     aboutKind: await hit('GET', '/api/docs/page/about'),
-    unportedKind: await hit('GET', '/api/docs/page/cli'),
+    // P10c: THIS PROBE USED TO REQUIRE 501, and `NOT_PORTED_KINDS` is empty now, so no page
+    // has an unported kind and none can be borrowed — the same retirement `unknownAction`
+    // took above, for the same reason. It stays as the POSITIVE CONTROL for the last kind to
+    // cross; the 501 arm's claim rests on the declaration cross-check below, which is a gate
+    // on a declaration and therefore weaker than a probe, and is declared as such.
+    cliKind: await hit('GET', '/api/docs/page/cli'),
     // LAST, always: this one stops the server, and every probe after it would fail with
     // an ECONNRESET that reads like a routing bug.
     shellPost: await hit('POST', '/api/shutdown', 'tok'),
@@ -460,14 +465,15 @@ srv.listen(0, '127.0.0.1', async () => {
                          "POST /api/actions/restore is synchronous and answers 200 — the "
                          "control for the two refusals above")
         self.assertEqual(got["shellPost"], 200, "the shell's own POST still answers")
-        # P6d's two inline routes and the KIND partition inside the second of them. The
-        # ported kind beside the unported one is the same control the ported GET is above:
-        # a 501 for `cli` means nothing unless `glossary` answers.
+        # P6d's two inline routes and the KIND partition inside the second of them. Every
+        # kind answers as of P10c, so all three of these are 200 and the set they come from
+        # is empty — the 501 arm has no reachable target left, said out loud where the probe
+        # is built and in `js/web/docs.mjs`'s own docblock.
         self.assertEqual(got["docsMenu"], 200)
         self.assertEqual(got["portedKind"], 200)
-        self.assertEqual(got["unportedKind"], 501,
-                         "a docs KIND that has not crossed must say so — falling through "
-                         "to the NotFound at the bottom would report the page missing")
+        self.assertEqual(got["cliKind"], 200,
+                         "P6d's deferral was paid in P10c — 501 means `cli` is back in "
+                         "NOT_PORTED_KINDS, 404 means KIND_ROUTES has no row for it")
         # P8c'S SECOND PAYMENT, and the same shape as `updateAction` above: `about` left
         # `NOT_PORTED_KINDS`, and "not 501 any more" is satisfied by a 404 as well. The page
         # runs `git remote get-url` through `originDisplay()`, so this is also the probe that
@@ -532,12 +538,17 @@ srv.listen(0, '127.0.0.1', async () => {
     def test_every_docs_kind_is_either_ported_or_declared_unported(self):
         """The route partition, one level in.
 
-        `api_docs_page` dispatches on five KINDS and P6d crosses three: `cli` walks
-        `harness.build_argparser()` (24 subparsers and 43 `add_argument` calls, none of
-        which a Node twin can introspect) and `about` shells out through
-        `_update._origin_display`, which is P8's. Both are declared rather than left to
-        fall out of the chain — and the set is cross-checked here so a SIXTH kind added to
-        the reference cannot quietly answer "page not found".
+        `api_docs_page` dispatches on five KINDS. P6d crossed three, P8c `about`, and P10c
+        the last one — `cli`, which used to walk `harness.build_argparser()` (24 subparsers
+        and 43 `add_argument` calls, none of which a Node twin can introspect) and now reads
+        the generated `cli.json` on both sides.
+
+        SO `NOT_PORTED_KINDS` IS EMPTY, AND THIS CHECK IS AT ITS STRONGEST THERE: it now says
+        every kind the reference dispatches on is answered by the port, and a SIXTH kind
+        added to the reference still cannot quietly answer "page not found". It is also the
+        only surviving gate on the 501 arm, since an empty set leaves the running probe above
+        nothing to aim at — a gate on a declaration, weaker than a probe, and named as such
+        in all three places that carry the claim.
         """
         src = (ROOT / "rituals" / "_web_docs.py").read_text(encoding="utf-8")
         tree = ast.parse(src)

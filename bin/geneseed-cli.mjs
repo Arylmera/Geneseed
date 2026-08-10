@@ -36,14 +36,16 @@
  *
  * THE VERB SET IS SMALL AND REFUSES THE REST BY NAME, exactly as the hook entry does.
  * `harness.py` has 24 subparsers (25 invocable names — `update` aliases `upgrade`); this
- * file carries sixteen of those names, which is fifteen subparsers plus that alias. `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two
- * tables from ever answering the same verb twice, since the shim bakes only one of them.
+ * file carries eighteen of those names, which is seventeen subparsers plus that alias.
+ * `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two tables from ever
+ * answering the same verb twice, since the shim bakes only one of them.
  *
  * P6h MADE THE DISPATCH ASYNCHRONOUS and put `js/web/` on this entry's import graph. Both
  * are noted where they happen (`main`'s `await`, and the `web` row below); the consequence
  * for the file as a whole is that its transitive imports now reach two modules that spawn,
  * which `_ALLOWED_SPAWNS` in `tests/test_hook_cli_parity.py` declares argv by argv.
  */
+import { cliSpec } from '../js/cli.mjs';
 import { cmdDiff } from '../js/diff.mjs';
 import { cmdDoctor } from '../js/doctor.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
@@ -56,141 +58,74 @@ import { cmdUninstall } from '../js/uninstall.mjs';
 import { cmdBootstrap, cmdSyncSelf, cmdUpgrade } from '../js/update.mjs';
 import { cmdWeb } from '../js/web/server.mjs';
 
+/**
+ * The verbs this entry answers — and, since P10c, NOTHING ELSE ABOUT THEM.
+ *
+ * Every row used to carry its own `positionals` / `options` / `flags` / `optValue` / `ints` /
+ * `mutex` / `variadic`, transcribed by hand from `rituals/harness.py`: 18 rows describing 43
+ * `add_argument` calls, gated against the subparsers by NAME only. When
+ * `_web_docs._cli_reference` stopped walking the parser and started reading `cli.json`,
+ * keeping that would have made THREE transcriptions of one parser — the parser, the file, and
+ * here. So the argument surface comes from `js/cli.mjs`'s `cliSpec()`, derived from the same
+ * file the docs page serves, and what is left in a row is the one thing a data file cannot
+ * hold: the FUNCTION.
+ *
+ * IT IS STILL A TABLE and still the DISPATCH rather than a declaration beside one.
+ * `tests/test_hook_cli_parity.py` scrapes `const VERBS = {` for its three matrix gates, and
+ * `main`'s refusal lists `Object.keys(VERBS)` IN THIS ORDER, which `harness_golden` cells
+ * assert verbatim — the order is the old table's and is not alphabetical.
+ */
 const VERBS = {
   exclude: {
     fn: cmdExclude,
-    // `argparse` positionals, in order. `choices` reproduces the subparser's
-    // `add_argument("action", choices=[...])`; `optional` is its `nargs="?"`.
-    positionals: [
-      { name: 'action', choices: ['add', 'remove', 'list'] },
-      { name: 'path', optional: true },
-    ],
   },
   status: {
     fn: cmdStatus,
-    positionals: [],
   },
   version: {
     fn: cmdVersion,
-    positionals: [],
-    // `--target <dir>`. The first OPTION any verb here takes, so `parse` grew a table for
-    // them rather than a special case: argparse accepts `--target X` and `--target=X`
-    // alike, and an option with no value is its own error.
-    options: { '--target': 'target' },
   },
   build: {
     fn: cmdBuild,
-    positionals: [],
-    // No `choices` here, deliberately: `harness.py`'s own `--theme` carries none and hands
-    // the string to the generator, which is where the theme list actually lives.
-    options: { '--theme': 'theme' },
   },
   prompt: {
     fn: cmdPrompt,
-    positionals: [],
-    options: { '--theme': 'theme', '--out': 'out' },
   },
   theme: {
     fn: cmdTheme,
-    positionals: [{ name: 'name' }],
-    // argparse `dest=` differs from the flag spelling for two of these, and the JS keeps
-    // the Python dest in camelCase so the two tables read against each other.
-    options: {
-      '--from': 'fromTheme', '--palette': 'palette', '--dir': 'dir',
-    },
-    // The first verb with flags that take NO value, and the first with a mutually
-    // exclusive group. Both are argparse features rather than new behaviour.
-    flags: { '--global': 'globalDir', '--solid-only': 'solidOnly',
-      '--transparent-only': 'transparentOnly' },
-    mutex: [['--solid-only', '--transparent-only']],
   },
   diff: {
     fn: cmdDiff,
-    positionals: [],
-    options: { '--target': 'target', '--theme': 'theme' },
-    flags: { '--full': 'full' },
-    // The first `nargs="?"` in this table. `--out` bare is argparse's `const=True` — "the
-    // default timestamped path" — and `--out FILE` is the string, so `cmd_diff` branches on
-    // `args.out is True`. A verb-table entry that made it a plain option would refuse the
-    // bare form, and one that made it a flag would drop the filename.
-    optValue: { '--out': 'out' },
   },
   'rebuild-all': {
     fn: cmdRebuildAll,
-    positionals: [],
   },
   doctor: {
     fn: cmdDoctor,
-    positionals: [],
-    // `--theme` again carries no `choices` — `harness.py`'s does not either, and an unknown
-    // one is refused by the generator when the per-theme build runs, which is what
-    // `doctor/an-unknown-theme-is-refused-by-the-generator` compares.
-    options: { '--theme': 'theme', '--bundle': 'bundle' },
-    // argparse's dest for `--no-bundle` is `no_bundle`; the JS keeps the Python dest in
-    // camelCase so the two tables read against each other.
-    flags: { '--all': 'all', '--no-bundle': 'noBundle' },
   },
   uninstall: {
     fn: cmdUninstall,
-    positionals: [],
-    options: { '--target': 'target' },
-    // argparse's dest for `--archive-memory` is `archive_memory`; camelCase here, as
-    // `--no-bundle` above, so the two tables read against each other.
-    flags: { '--yes': 'yes', '--archive-memory': 'archiveMemory' },
   },
   link: {
     fn: cmdLink,
-    // `lk.add_argument("dir", nargs="?", default=None)` — no `choices`: the reference hands
-    // the string straight to `Path`, and a directory that does not exist is answered by the
-    // mkdir failing, not by argparse.
-    positionals: [{ name: 'dir', optional: true }],
   },
   unlink: {
     fn: cmdUnlink,
-    positionals: [],
   },
   setup: {
     fn: cmdSetup,
-    // `su = sub.add_parser("setup")` and nothing else — the wizard asks rather than parses,
-    // so the only argument surface it has is the absence of one.
-    positionals: [],
   },
   web: {
     fn: cmdWeb,
-    // The first verb with an OPTIONAL positional carrying `choices` — `nargs="?"` with a
-    // `choices` list, so an absent action is the foreground server and a wrong one is
-    // refused. `parse` already had both halves; this is the first row that uses them
-    // together, and the order matters: an optional positional that skipped its `choices`
-    // check would make `geneseed web stpo` start a server instead of refusing.
-    positionals: [{ name: 'action', optional: true,
-      choices: ['start', 'stop', 'restart', 'status'] }],
-    options: { '--theme': 'theme', '--port': 'port' },
-    // argparse dests: `no_browser` and `daemon_internal`, camelCase here so the two tables
-    // read against each other. `--daemon-internal` is `help=argparse.SUPPRESS` on the
-    // reference — hidden, not absent, and `tests/web_golden.py` passes it 95 times a run.
-    flags: { '--no-browser': 'noBrowser', '--daemon-internal': 'daemonInternal' },
-    // `type=int`. The FIRST typed option in this table, and it is here rather than skipped
-    // because the failure it prevents is silent: `pyInt('abc')` is null, and a `?? 4747`
-    // fallback would bind the default port while the operator believes they asked for
-    // another. argparse refuses, so this refuses.
-    ints: ['--port'],
   },
   upgrade: {
     fn: cmdUpgrade,
-    // TWO optional positionals and no options at all — `up.add_argument("ref", nargs="?")`
-    // followed by `up.add_argument("theme", nargs="?")`. The first is DEAD (git follows the
-    // checkout's own branch since the zip path was removed) and is kept because argparse
-    // still binds it: `geneseed upgrade imperial` puts the theme in `ref`, which is why
-    // `cmdUpgrade` re-reads it as one when `themes/<ref>.json` exists. Dropping the row
-    // would make that spelling a "unrecognized arguments" refusal on the Node side alone.
-    //
-    positionals: [{ name: 'ref', optional: true }, { name: 'theme', optional: true }],
   },
   // `up.add_parser(..., aliases=["update"])`, reproduced in P8c as a ROW OF ITS OWN rather than
   // as an `aliases` field on the row above — because a field would be a DECLARATION and the
   // three matrix gates read this table as the DISPATCH (rule 7, and M23 is where it was
   // learned). As a key it is a real verb: `test_every_entry_verb_is_a_real_harness_subcommand`
-  // now reads argparse's aliases out of `harness.py` and finds it, and
+  // reads argparse's aliases out of `harness.py` and finds it, and
   // `test_the_matrix_covers_every_verb_it_claims` demands the `update/` cell group that proves
   // it reaches `cmdUpgrade` — including the theme re-read, which is what separates it from
   // `sync-self`.
@@ -199,30 +134,16 @@ const VERBS = {
   // the subparser, and always did. The two were coupled only in a handoff's note.
   update: {
     fn: cmdUpgrade,
-    positionals: [{ name: 'ref', optional: true }, { name: 'theme', optional: true }],
   },
   'sync-self': {
+    // Points at `cmdSyncSelf` rather than at `cmdUpgrade`, and that is not tidiness:
+    // `sync-self` DROPS its `ref` before `upgrade` ever sees it, where `upgrade` both WARNS
+    // about one and re-reads it as a theme — so the two verbs answer `sync-self cyberpunk`
+    // and `sync-self v1.2.3` differently. See `js/update.mjs`'s `syncSelf` for both halves.
     fn: cmdSyncSelf,
-    // `ss.add_argument("ref", nargs="?", help=argparse.SUPPRESS)` and nothing else. The row
-    // points at `cmdSyncSelf` rather than at `cmdUpgrade`, and that is not tidiness: `sync-self`
-    // DROPS its `ref` before `upgrade` ever sees it, where `upgrade` both WARNS about one and
-    // re-reads it as a theme — so the two verbs answer `sync-self cyberpunk` and
-    // `sync-self v1.2.3` differently. See `js/update.mjs`'s `syncSelf` for both halves.
-    positionals: [{ name: 'ref', optional: true }],
   },
   bootstrap: {
     fn: cmdBootstrap,
-    // The FIRST `nargs="*"` in this table. `bs.add_argument("extra", nargs="*",
-    // help=argparse.SUPPRESS)` exists to TOLERATE a legacy `[theme]` argument after the ref —
-    // `geneseed bootstrap main imperial` must run, not refuse — so a row without `variadic`
-    // would make that spelling `unrecognized arguments` on the Node side alone. Nothing reads
-    // the value, and `parse` collects it as a list for that reason rather than discarding it:
-    // a sink that silently swallowed tokens would also swallow a mistyped flag.
-    positionals: [{ name: 'ref', optional: true }],
-    variadic: 'extra',
-    // argparse's dest for `--no-setup` is `no_setup`; camelCase here, as `--no-bundle` above,
-    // so the two tables read against each other.
-    flags: { '--no-setup': 'noSetup' },
   },
 };
 
@@ -236,6 +157,11 @@ function die(code, msg) {
 /**
  * `argparse`'s surface for the verbs here, and only theirs: ordered positionals, some
  * optional, some with `choices`.
+ *
+ * `spec` comes from `js/cli.mjs`'s `cliSpec()` since P10c — derived from `cli.json`, which is
+ * generated from `harness.build_argparser()`. This function's rules are unchanged; what
+ * changed is that the table they run over is no longer written out by hand beside them. Every
+ * argparse feature named below is a row of that derivation.
  *
  * The WORDING of an argparse failure is deliberately not reproduced — argparse prints a
  * usage block computed from the whole parser tree, and P5a set the precedent for the hook
@@ -363,7 +289,18 @@ async function main(argv) {
       + 'bin/geneseed-hook.mjs, and every other harness subcommand is still Python — run '
       + `\`python rituals/harness.py ${verb}\`.`);
   }
-  const parsed = parse(spec, argv.slice(1));
+  // `cli.json`, generated from `harness.build_argparser()`. A verb this table dispatches and
+  // the file does not describe is a REFUSAL and not a parse with no rules: an empty spec
+  // would accept every token and bind none of them, so `geneseed uninstall --target X` would
+  // run against the default target while the operator believes they named one. Doctor reports
+  // the same fault on both binaries; this is what a user hits first.
+  const argSpec = cliSpec(verb);
+  if (argSpec === null) {
+    return die(2, `cli.json describes no subcommand '${verb}' — this install's parser `
+      + 'metadata is missing or stale. Run `geneseed doctor`, and regenerate it from a '
+      + 'checkout with `python tests/gen_cli_reference.py`.');
+  }
+  const parsed = parse(argSpec, argv.slice(1));
   if (parsed.error) return die(2, parsed.error);
   try {
     // `await`, since P6h. `cmdWeb` is the first verb whose body is asynchronous — Node has

@@ -819,6 +819,193 @@ def _claude_bob_emit_problems(theme_name: str) -> list[str]:
     return problems
 
 
+# ----------------------------------------------------------------- the CLI reference
+#
+# `harness.build_argparser()` is 24 subparsers (25 invocable names — `update` aliases
+# `upgrade`) and 43 `add_argument` calls, and it is the only description of the CLI either
+# implementation has. Node cannot introspect argparse, so the metadata is GENERATED from the
+# parser into `cli.json` and BOTH sides read that file: the web console's `cli` docs page
+# (`_web_docs._cli_reference`) and `bin/geneseed-cli.mjs`'s own argument parser, whose `VERBS`
+# table used to carry a second hand-written transcription of the same 43 calls.
+#
+# WHAT STOPS IT ROTTING is `_cli_reference_problems`, reported by doctor on BOTH binaries:
+# the file records a digest of the file the parser lives in, and a parser that moved without a
+# regeneration is a doctor problem rather than a page quietly describing a CLI nobody has.
+#
+# THE DIGEST, RATHER THAN THE STRONGER "REGENERATE AND COMPARE" A PYTHON DOCTOR COULD RUN, is
+# the whole design. `tests/harness_golden.py` compares the two doctors byte for byte, so a
+# check only one of them can perform is a check the other passes SILENTLY — P4e's fifth
+# coverage hole, wearing a partition as a disguise. Hashing one file is something Node does as
+# well as Python does, so the fault that matters (the parser moved) reddens both binaries with
+# the same sentence. The residue — a hand-edited `cli.json` whose digest still matches — is
+# `tests/test_cli_reference.py`'s, where being Python-only costs nothing and the acceptance
+# loop runs it anyway.
+
+CLI_JSON = ROOT / "cli.json"
+_HARNESS_PY = ROOT / "rituals" / "harness.py"
+
+#: The keys the docs PAGE has always carried, per argument. `_cli_arg` produces two more for
+#: `bin/geneseed-cli.mjs` (`type`, `hidden`) and the page is filtered back to exactly this set
+#: so the response the tracked `web/dist` renders is byte-for-byte what it was before.
+_PAGE_ARG_KEYS = ("names", "dest", "metavar", "help", "choices", "default",
+                  "required", "nargs", "is_flag")
+
+
+def cli_source_digest(path: "Path | None" = None) -> str:
+    """sha256 of the parser's own file, NEWLINE-NORMALISED.
+
+    `.gitattributes` asks for `eol=lf` and `js/doctor.mjs` is CRLF on disk regardless — an
+    attribute governs a checkout, not a working tree that predates it. A digest sensitive to
+    the line ending would report drift on a machine that has none, and the recorded value
+    was computed on whichever machine last regenerated the file.
+
+    `path` EXISTS BECAUSE THE NORMALISATION IS OTHERWISE UNREACHABLE. `rituals/harness.py` is
+    LF in this working tree, so a twin that dropped `.replace()` would agree with this one on
+    every input either has — a green mutation that is a question about the corpus of inputs
+    before it is a question about the code. `tests/test_cli_reference.py` runs both
+    implementations over a CRLF file through this argument."""
+    import hashlib
+    src = path if path is not None else _HARNESS_PY
+    return hashlib.sha256(src.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def _cli_arg(a) -> dict:
+    return {
+        "names": list(a.option_strings),
+        "dest": a.dest,
+        "metavar": a.metavar,
+        "help": "" if a.help is argparse.SUPPRESS else (a.help or ""),
+        "choices": list(a.choices) if a.choices else None,
+        "default": None if a.default is None else
+                   (a.default if isinstance(a.default, (str, int, float, bool))
+                    else str(a.default)),
+        "required": bool(getattr(a, "required", False)),
+        "nargs": str(a.nargs) if a.nargs is not None else None,
+        "is_flag": bool(a.option_strings) and a.nargs == 0,
+        # The two fields the page never needed and the Node entry cannot work without.
+        # `type=int` is what makes `--port abc` a refusal instead of a silent fallback to
+        # 4747; `hidden` is `help=argparse.SUPPRESS`, and the walk used to DROP those
+        # arguments entirely — four of which bind real values (`upgrade ref`, `sync-self
+        # ref`, `bootstrap extra`, `web --daemon-internal`, the last passed 95 times a run
+        # by tests/web_golden.py).
+        "type": getattr(a.type, "__name__", None) if a.type is not None else None,
+        "hidden": a.help is argparse.SUPPRESS,
+    }
+
+
+def build_cli_reference(parser: argparse.ArgumentParser) -> dict:
+    """Walk an argparser into a JSON-able shape: one entry per subcommand, with its help
+    text, positionals, options and mutually-exclusive groups.
+
+    Takes the parser rather than calling `harness.build_argparser()` itself, and that is not
+    style: `rituals/harness.py` runs as `__main__`, so an `import harness` from one of its own
+    submodules would load the module a SECOND time under its real name and re-run the splice.
+    Nothing inside the harness process needs this function — the generator and the tests do,
+    and both reach it through a normal `import harness`.
+
+    THE FULL PARSER, hidden arguments included; `load_cli_reference` is what filters it down
+    to the page. `sub.choices` carries argparse's ALIASES as keys of their own, so `update`
+    appears beside `upgrade` with an empty help — the help text lives on the parent's
+    pseudo-action, which is registered under the canonical name only. That is what this walk
+    has always produced and both readers depend on it: the Node entry dispatches `update` as
+    a row of its own."""
+    sub_action = next((a for a in parser._actions
+                       if isinstance(a, argparse._SubParsersAction)), None)
+    if sub_action is None:
+        return {"prog": parser.prog, "commands": []}
+
+    commands = []
+    for name, sp in sub_action.choices.items():
+        positionals, options = [], []
+        for a in sp._actions:
+            if isinstance(a, argparse._HelpAction):
+                continue
+            (positionals if not a.option_strings else options).append(_cli_arg(a))
+        # The help text we attached via sub.add_parser(..., help=...) lives on the
+        # subparser action, not on sp itself — read it back from the parent.
+        help_text = ""
+        for action in sub_action._choices_actions:
+            if action.dest == name:
+                help_text = action.help or ""
+                break
+        # `add_mutually_exclusive_group()`. Group membership lives on the GROUP, not on the
+        # action, so it cannot be part of `_cli_arg`. Only `theme` has one, and without this
+        # the Node entry would accept `--solid-only --transparent-only` where argparse
+        # refuses it. Declaration order, not sorted: it is the order the refusal names them
+        # in.
+        mutex = [[o for ga in g._group_actions for o in ga.option_strings]
+                 for g in sp._mutually_exclusive_groups]
+        commands.append({
+            "name": name,
+            "help": help_text,
+            "description": sp.description or "",
+            "positionals": positionals,
+            "options": options,
+            "mutex": [m for m in mutex if m],
+        })
+    commands.sort(key=lambda c: c["name"])
+    return {"prog": parser.prog, "commands": commands}
+
+
+def write_cli_reference(parser: argparse.ArgumentParser) -> bool:
+    """Generate `cli.json`. True when the bytes changed, so a caller can exit non-zero and
+    be usable as a CI drift check — `sync_themes`' contract, for the same reason.
+
+    `write_bytes`, not `write_text`: the file is `text=auto eol=lf` and Python's text mode
+    would put CRLF in it on Windows, leaving the tree permanently dirty."""
+    data = {"source_sha256": cli_source_digest(), **build_cli_reference(parser)}
+    raw = (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    # BYTES on both sides of the comparison too. `read_text` translates newlines, so a file
+    # that had somehow been written with CRLF would compare EQUAL to the LF it is about to be
+    # replaced with and this would report "already in sync" while rewriting it.
+    old = CLI_JSON.read_bytes() if CLI_JSON.is_file() else None
+    CLI_JSON.write_bytes(raw)
+    return old != raw
+
+
+def load_cli_reference() -> dict:
+    """`cli.json` as the docs page consumes it: the generated file minus the arguments
+    argparse hides, minus the generator's own bookkeeping.
+
+    THE PAGE IS A VIEW OF THE FILE, not the other way round. `bin/geneseed-cli.mjs` needs the
+    hidden arguments and the page must not show them, so the file carries everything and each
+    reader filters. An unreadable file answers with the empty reference rather than a 500 —
+    doctor is what reports it, on both binaries."""
+    try:
+        data = json.loads(CLI_JSON.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"prog": "harness", "commands": []}
+    return {
+        "prog": data.get("prog", "harness"),
+        "commands": [{
+            "name": c.get("name", ""),
+            "help": c.get("help", ""),
+            "description": c.get("description", ""),
+            "positionals": _page_args(c.get("positionals", [])),
+            "options": _page_args(c.get("options", [])),
+        } for c in data.get("commands", [])],
+    }
+
+
+def _page_args(args: list) -> list:
+    return [{k: a.get(k) for k in _PAGE_ARG_KEYS} for a in args if not a.get("hidden")]
+
+
+def _cli_reference_problems() -> list[str]:
+    """`cli.json` must still describe the parser it was generated from — doctor's half of the
+    contract, and the half that runs on a user's machine where the test suite does not."""
+    try:
+        data = json.loads(CLI_JSON.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ["[cli] cli.json is missing or unreadable — regenerate it from a checkout "
+                "with `python tests/gen_cli_reference.py`"]
+    if data.get("source_sha256") != cli_source_digest():
+        return ["[cli] cli.json is stale: rituals/harness.py has changed since it was "
+                "generated — regenerate it from a checkout with "
+                "`python tests/gen_cli_reference.py`"]
+    return []
+
+
 def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
                     on_progress=None, groups=None):
     """Run every doctor check; return (themes, sorted_unique_problems). on_progress
@@ -873,6 +1060,7 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
     problems += _ran("colors", "Colour themes", _color_theme_problems())
     problems += _ran("authoring", "Authoring gates", _authoring_problems())
     problems += _ran("shim", "Hook shim", shim_probs)
+    problems += _ran("cli", "CLI reference", _cli_reference_problems())
     if not no_bundle:
         b = Path(bundle).expanduser().resolve() if bundle else ROOT / "Harness"
         problems += _ran("bundle", "Committed bundle drift", _rendered_problems(b))

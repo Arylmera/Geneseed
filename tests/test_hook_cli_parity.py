@@ -830,7 +830,7 @@ class TheHarnessCliIsNotAPassthrough(unittest.TestCase):
         With no python anywhere on PATH there is nothing for such a call to find.
 
         `--no-bundle` and one theme, because this asserts the plumbing rather than the checks;
-        the fifteen checks are gated one planted fault at a time in `harness_golden`.
+        the sixteen checks are gated one planted fault at a time in `harness_golden`.
         """
         stripped, dropped = _path_without_python()
         self.assertTrue(dropped, "PATH held no python at all, so this run proves nothing")

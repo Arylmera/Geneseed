@@ -59,23 +59,28 @@ SERVER_JS = ROOT / "js" / "web" / "server.mjs"
 WEB_SERVER_PY = ROOT / "rituals" / "_web_server.py"
 
 
-def _cli_web_row() -> str:
-    """The `web: { … }` entry of `bin/geneseed-cli.mjs`'s VERBS table, as source.
+def _cli_web_spec() -> dict:
+    """The argparse surface `bin/geneseed-cli.mjs` ACTUALLY PARSES `web` with.
 
-    A brace-counting slice rather than a regex: the row contains nested objects and arrays,
-    and a lazy match would stop at the first `}` inside `positionals`.
+    THIS USED TO BE A SOURCE SCRAPE of the `web: { … }` row, and P10c is why it is not.
+    That row carried its own hand-written `positionals`/`options`/`flags`/`ints` — a second
+    transcription of the same subparser this file reads with `ast` — and the phase's whole
+    subject was that `harness.build_argparser()` may have exactly ONE description. The row is
+    `{ fn: cmdWeb }` now and the surface comes from `js/cli.mjs`'s `cliSpec()`, derived from
+    the generated `cli.json`.
+
+    So the gate moved with it, and it moved in the direction rule 7 asks for: a scrape reads
+    a DECLARATION, and this asks the module the entry point itself calls. A `cliSpec` that
+    stopped deriving `ints` would still leave `'--port'` sitting in the file for a scrape to
+    find; it cannot fool this.
     """
-    text = HARNESS_CLI.read_text(encoding="utf-8")
-    start = text.index("\n  web: {")
-    depth, i = 0, text.index("{", start)
-    for j in range(i, len(text)):
-        if text[j] == "{":
-            depth += 1
-        elif text[j] == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start:j + 1]
-    raise AssertionError("bin/geneseed-cli.mjs's web row is unbalanced")
+    src = ("import {cliSpec} from './js/cli.mjs';"
+           "process.stdout.write(JSON.stringify(cliSpec('web')));")
+    r = subprocess.run([NODE, "--input-type=module", "-e", src], cwd=str(ROOT),
+                       capture_output=True, text=True, encoding="utf-8")
+    if r.returncode != 0:
+        raise AssertionError(f"could not read cliSpec('web'): {r.stderr[-800:]}")
+    return json.loads(r.stdout)
 
 
 def _reference_web_parser() -> dict:
@@ -123,26 +128,31 @@ class TheWebVerbTableMatchesTheSubparserItCopies(unittest.TestCase):
         self.assertEqual(ref["flags"], ["--daemon-internal", "--no-browser"])
         self.assertEqual(ref["ints"], ["--port"])
 
+    @unittest.skipUnless(NODE, "node is not on PATH")
     def test_the_node_row_carries_every_argument_the_reference_declares(self):
-        ref, row = _reference_web_parser(), _cli_web_row()
-        for choice in ref["choices"]:
-            self.assertIn(f"'{choice}'", row,
-                          f"bin/geneseed-cli.mjs's web row does not accept `{choice}` — "
-                          f"the reference's subparser does, and the two binaries have to "
-                          f"answer to the same argv")
-        for flag in ref["options"] + ref["flags"]:
-            self.assertIn(f"'{flag}'", row,
-                          f"bin/geneseed-cli.mjs's web row does not name {flag}")
+        ref, spec = _reference_web_parser(), _cli_web_spec()
+        action = spec["positionals"][0]
+        self.assertEqual(action["name"], "action")
+        self.assertEqual(action.get("choices"), ref["choices"],
+                         "bin/geneseed-cli.mjs does not accept the same web actions as the "
+                         "reference's subparser, and the two binaries have to answer to the "
+                         "same argv")
+        for flag in ref["options"]:
+            self.assertIn(flag, spec.get("options", {}),
+                          f"bin/geneseed-cli.mjs's web spec does not name {flag}")
+        for flag in ref["flags"]:
+            self.assertIn(flag, spec.get("flags", {}),
+                          f"bin/geneseed-cli.mjs's web spec does not name {flag}")
         for flag in ref["ints"]:
-            self.assertRegex(row, r"ints:\s*\[[^\]]*'" + re.escape(flag) + r"'",
-                             f"{flag} is `type=int` on the reference and untyped here — a "
-                             f"non-integer would silently fall back to the default port")
-        # The optional positional, which is `nargs=\"?\"` there. Named because an entry that
+            self.assertIn(flag, spec.get("ints", []),
+                          f"{flag} is `type=int` on the reference and untyped here — a "
+                          f"non-integer would silently fall back to the default port")
+        # The optional positional, which is `nargs="?"` there. Named because an entry that
         # made `action` REQUIRED would refuse the foreground server, which is the shape
         # `geneseed web` alone has.
-        self.assertIn("optional: true", row,
-                      "the web row's `action` is not optional; `geneseed web` with no "
-                      "action is the foreground server on the reference")
+        self.assertTrue(action.get("optional"),
+                        "the web spec's `action` is not optional; `geneseed web` with no "
+                        "action is the foreground server on the reference")
 
     @unittest.skipUnless(NODE, "node is not on PATH")
     def test_a_non_integer_port_is_refused_rather_than_defaulted(self):

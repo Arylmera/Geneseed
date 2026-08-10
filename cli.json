@@ -1,0 +1,892 @@
+{
+  "source_sha256": "ff8bbcf1ae195e18a6aa80956c16218d25e8380514fdf3a78875d1aebeaca918",
+  "prog": "harness",
+  "commands": [
+    {
+      "name": "bootstrap",
+      "help": "update everything (sync + upgrade) with a progress UI, then run setup",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "ref",
+          "metavar": null,
+          "help": "accepted for back-compat; ignored (git follows the current branch)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [],
+          "dest": "extra",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "*",
+          "is_flag": false,
+          "type": null,
+          "hidden": true
+        }
+      ],
+      "options": [
+        {
+          "names": [
+            "--no-setup"
+          ],
+          "dest": "no_setup",
+          "metavar": null,
+          "help": "update only; skip the setup wizard",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "build",
+      "help": "render src/ -> Harness/",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "context",
+      "help": "print context.json eager entries for a SessionStart hook (Rule XVIII)",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--root"
+          ],
+          "dest": "root",
+          "metavar": null,
+          "help": "the install's own dir (set by the emitted hook). A GLOBAL install's hook stands down when a Geneseed project install of the same host is at/above cwd (project-bypasses-global); GENESEED_STACK_GLOBAL=1 disables.",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "diff",
+      "help": "report how a deployed global harness differs from a fresh render (back-port aid)",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--target"
+          ],
+          "dest": "target",
+          "metavar": null,
+          "help": "deployed config dir (default: $OPENCODE_CONFIG_DIR / ~/.config/opencode)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme",
+          "metavar": null,
+          "help": "theme the deployment used (default: auto-detected from the deployed marker/sigil)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--full"
+          ],
+          "dest": "full",
+          "metavar": null,
+          "help": "show unified diffs, not just the file-level summary",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--out"
+          ],
+          "dest": "out",
+          "metavar": "FILE",
+          "help": "also write the drift as a markdown improvements file — the artifact to hand to an agent to back-port edits into src/ (bare --out picks a timestamped file under improvements/)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "doctor",
+      "help": "validate the build: unresolved tokens, dead links, non-hermetic escapes, theme-key parity, and that a committed bundle matches src. Defaults to the INSTALLED theme (--theme NAME for one, --all to sweep every theme)",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--all"
+          ],
+          "dest": "all",
+          "metavar": null,
+          "help": "sweep EVERY theme (maintainer full check / CI), not just the installed one — the default scopes to the installed theme",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--bundle"
+          ],
+          "dest": "bundle",
+          "metavar": null,
+          "help": "committed bundle to check for drift vs a fresh render (default: ./Harness)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-bundle"
+          ],
+          "dest": "no_bundle",
+          "metavar": null,
+          "help": "skip the committed-bundle drift check",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "exclude",
+      "help": "manage sovereign-repo exclusions: folders where the GLOBAL installs go dormant (hooks silent, preamble suppressed); stored in each install's excludes.json",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "action",
+          "metavar": null,
+          "help": "",
+          "choices": [
+            "add",
+            "remove",
+            "list"
+          ],
+          "default": null,
+          "required": true,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [],
+          "dest": "path",
+          "metavar": null,
+          "help": "folder to exclude / re-include (absolute or relative)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "git-gate",
+      "help": "PreToolUse hook: force an ASK before every git commit/push (Law XX backstop)",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--root"
+          ],
+          "dest": "root",
+          "metavar": null,
+          "help": "the install's own dir (set by the emitted hook); enables the sovereign-repo bypass from <root>/excludes.json",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "home",
+      "help": "default entry for a bare ./geneseed: open the web UI when possible (interactive + GUI browser), else the TUI menu",
+      "description": "",
+      "positionals": [],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "learn",
+      "help": "distil notes/transcript into memory entries",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "file",
+          "metavar": null,
+          "help": "notes file, or a transcript (default: stdin — also accepts a lifecycle-hook JSON payload with a transcript_path)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [
+        {
+          "names": [
+            "--memory"
+          ],
+          "dest": "memory",
+          "metavar": null,
+          "help": "bundle memory dir to dedup against and index into (default: $GENESEED_MEMORY, else ./memory or ./Harness/memory)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--consolidate"
+          ],
+          "dest": "consolidate",
+          "metavar": null,
+          "help": "rebuild MEMORY.md from the fact files on disk: re-index orphans, prune dead lines, report duplicate descriptions",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "link",
+      "help": "put `geneseed` on PATH so it runs from any directory",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "dir",
+          "metavar": null,
+          "help": "bin dir to install into (Unix; default ~/.local/bin)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "menu",
+      "help": "interactive main menu (the default for ./geneseed)",
+      "description": "",
+      "positionals": [],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "prompt",
+      "help": "emit a self-contained install prompt (no Python needed to use it)",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--out"
+          ],
+          "dest": "out",
+          "metavar": null,
+          "help": "write to FILE (default: stdout)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "rebuild-all",
+      "help": "rebuild every active install in place (each in its own theme+emit), best-effort — continue past failures",
+      "description": "",
+      "positionals": [],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "rule-gate",
+      "help": "PreToolUse hook: force an ASK before any write to user-rules.md or memory (Law VI backstop)",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--root"
+          ],
+          "dest": "root",
+          "metavar": null,
+          "help": "the install's own dir (set by the emitted hook); scopes the memory/ match and enables the sovereign-repo bypass",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "setup",
+      "help": "interactive install wizard (dependency-free, all OSes)",
+      "description": "",
+      "positionals": [],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "status",
+      "help": "print the install dashboard as text (theme, mode, counts, memory, version)",
+      "description": "",
+      "positionals": [],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "sync-self",
+      "help": "refresh the orchestration layer — launchers + update scripts (cross-platform; an alias of upgrade)",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "ref",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": true
+        }
+      ],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "theme",
+      "help": "create a user OpenCode colour theme (solid + transparent) in the live themes dir; survives rebuilds",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "name",
+          "metavar": null,
+          "help": "theme name (auto-prefixed 'geneseed-'; selected as /theme geneseed-<name>)",
+          "choices": null,
+          "default": null,
+          "required": true,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [
+        {
+          "names": [
+            "--from"
+          ],
+          "dest": "from_theme",
+          "metavar": "SHIPPED",
+          "help": "seed the full palette from a shipped theme (e.g. tokyonight), then tweak",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--palette"
+          ],
+          "dest": "palette",
+          "metavar": "FILE",
+          "help": "JSON palette to apply: {\"palette\":{…}} or a bare role->#hex map",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--dir"
+          ],
+          "dest": "dir",
+          "metavar": null,
+          "help": "explicit themes dir (default: auto-detect repo/global)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--global"
+          ],
+          "dest": "global_dir",
+          "metavar": null,
+          "help": "write to OpenCode's global themes dir even inside a repo with .opencode/",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--solid-only"
+          ],
+          "dest": "solid_only",
+          "metavar": null,
+          "help": "write only the opaque flavour",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--transparent-only"
+          ],
+          "dest": "transparent_only",
+          "metavar": null,
+          "help": "write only the transparent flavour",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": [
+        [
+          "--solid-only",
+          "--transparent-only"
+        ]
+      ]
+    },
+    {
+      "name": "tui",
+      "help": "full-screen curses control panel (Unix)",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme",
+          "metavar": null,
+          "help": "theme to show (default: harness.config.json)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "uninstall",
+      "help": "remove a global or project-scoped Geneseed install (manifest-tracked); memory/notebook are never deleted (--archive-memory moves them aside)",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--target"
+          ],
+          "dest": "target",
+          "metavar": null,
+          "help": "repo (project scope) or config dir (global scope) to uninstall from; default: the cwd if it holds a project install, else the OpenCode global config dir",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--yes"
+          ],
+          "dest": "yes",
+          "metavar": null,
+          "help": "skip the confirmation prompt",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--archive-memory"
+          ],
+          "dest": "archive_memory",
+          "metavar": null,
+          "help": "move the memory and notebook stores aside to sibling archived-memory/ + archived-notebook/ <timestamp> dirs (never deleted; default keeps them in place)",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "unlink",
+      "help": "remove the `geneseed` launcher from PATH",
+      "description": "",
+      "positionals": [],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "update",
+      "help": "",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "ref",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": true
+        },
+        {
+          "names": [],
+          "dest": "theme",
+          "metavar": null,
+          "help": "optional: force a theme (neutral|imperial|…)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "upgrade",
+      "help": "self-update: git pull the install's origin (ff-only), validate, then rebuild the bundle + every install",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "ref",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": true
+        },
+        {
+          "names": [],
+          "dest": "theme",
+          "metavar": null,
+          "help": "optional: force a theme (neutral|imperial|…)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "version",
+      "help": "show installed vs current-source fingerprint and whether they match",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--target"
+          ],
+          "dest": "target",
+          "metavar": null,
+          "help": "deployed dir to check (default: the OpenCode global config dir)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
+      "name": "web",
+      "help": "serve the deployed harness as a local web UI (browse agents/skills/laws/memory + run actions)",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "action",
+          "metavar": null,
+          "help": "start|stop|restart|status — run the UI as a background daemon so it doesn't block the terminal (omit to run in the foreground)",
+          "choices": [
+            "start",
+            "stop",
+            "restart",
+            "status"
+          ],
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme",
+          "metavar": null,
+          "help": "force a theme (default: detected)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--port"
+          ],
+          "dest": "port",
+          "metavar": null,
+          "help": "port (default: 4747)",
+          "choices": null,
+          "default": 4747,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": "int",
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-browser"
+          ],
+          "dest": "no_browser",
+          "metavar": null,
+          "help": "don't auto-open the browser",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--daemon-internal"
+          ],
+          "dest": "daemon_internal",
+          "metavar": null,
+          "help": "",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": true
+        }
+      ],
+      "mutex": []
+    }
+  ]
+}

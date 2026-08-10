@@ -1,9 +1,10 @@
 /**
  * `_harness_build.cmd_doctor` — validate the build.
  *
- * Fifteen `_*_problems` checks over one theme (or every theme), and `[doctor] ok — …` when
- * all fifteen find nothing. That last sentence is why this module's gate looks the way it
- * does, and it is worth stating here rather than only in the spec: **delete any single check
+ * Sixteen `_*_problems` checks over one theme (or every theme) — the newest is P10c's `cli`
+ * — and `[doctor] ok — …` when all sixteen find nothing. That last sentence is why this
+ * module's gate looks the way it does, and it is worth stating here rather than only in the
+ * spec: **delete any single check
  * and a clean run is byte-identical**, so a cross-implementation comparison cannot tell this
  * file from a stub that prints the OK line. `tests/harness_golden.py` therefore plants ONE
  * FAULT PER CHECK, in a private copy of the checkout — see `_copy_checkout` there for why a
@@ -33,6 +34,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { CONFIG, PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC, makeCfg } from './checkout.mjs';
+import { cliReferenceProblems } from './cli.mjs';
 import { main as driverMain, emitGlobalInto, emitProjectInto } from '../bin/geneseed.mjs';
 import { stripCapabilityLinks } from './emit.mjs';
 import { hostCatalogsNatively, pyResolve } from './hosts.mjs';
@@ -1087,6 +1089,11 @@ export function doctorCollect({
   problems = problems.concat(ran('colors', 'Colour themes', colorThemeProblems()));
   problems = problems.concat(ran('authoring', 'Authoring gates', authoringProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
+  // P10c. The ONE check in this file whose fault neither implementation can construct from
+  // its own state — `cli.json` is generated from a Python parser — and the only one both
+  // perform by hashing the same file rather than by re-deriving the value. See `js/cli.mjs`
+  // for why it is a digest and not a regenerate-and-compare.
+  problems = problems.concat(ran('cli', 'CLI reference', cliReferenceProblems()));
   if (!noBundle) {
     // `Path(bundle).expanduser().resolve()`, which `pyResolve` already IS — the default is
     // deliberately NOT resolved, because the Python's `ROOT / "Harness"` is not either and

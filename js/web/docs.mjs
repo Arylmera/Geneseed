@@ -9,14 +9,17 @@
  * crossed in P6d, `about` in P8c (four of five), and `cli` is P10c's. The two deferrals had
  * a reason that is not "it is long":
  *
- *   * `cli` walks `harness.build_argparser()` — **182 lines, 24 subparsers, 43
+ *   * `cli` walked `harness.build_argparser()` — **182 lines, 24 subparsers, 43
  *     `add_argument` calls**, every one carrying help text, a metavar, choices and a
  *     default. A Node twin cannot introspect it; reproducing it means transcribing the
  *     whole CLI surface into a second table that would describe verbs `bin/geneseed-cli.mjs`
  *     cannot even run. This port's standing rule is that a copy of a value under test stops
- *     being the value under test, and this would be the largest copy in it. The real fix is
- *     to make the parser's metadata DATA that both sides read — which is packaging work,
- *     and belongs with P10's `bin` map rather than here.
+ *     being the value under test, and this would be the largest copy in it. **PAID IN P10c**,
+ *     by the fix the deferral named: the parser's metadata is generated into `cli.json` and
+ *     both implementations read that file. `js/cli.mjs` is the reader, doctor is what fails
+ *     when the file and the parser part company, and `bin/geneseed-cli.mjs`'s `VERBS` table
+ *     — which was a SECOND transcription of the same 43 calls — reads it too, so the port
+ *     ended with one description of the CLI where it had been heading for three.
  *   * `about` called `_update._origin_display()`, which shells out to `git remote get-url`.
  *     `rituals/_update.py` was P8's whole subject and P6d would have needed an
  *     `_ALLOWED_SPAWNS` row for `git` ahead of the phase that argues for it. **PAID IN P8c**:
@@ -37,6 +40,7 @@ import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { ROOT, THEMES } from '../checkout.mjs';
+import { cliReference } from '../cli.mjs';
 import { readJsonMaybe, readMaybe } from '../installs.mjs';
 import { pyResolve } from '../hosts.mjs';
 import { PY_SPACE, normcase, parseJson, pyStripSpace } from '../lib/pyfs.mjs';
@@ -429,16 +433,27 @@ function about(state) {
 }
 
 /**
- * The kind P6d does not answer — see this module's header for why it is not merely long.
- * `tests/test_web_server.py` cross-checks this set against the kinds `_web_docs.api_docs_page`
- * dispatches on, so a sixth kind added to the reference cannot quietly fall through to the
- * `NotFound` at the bottom.
+ * EMPTY SINCE P10c, AND KEPT DECLARED — the third partition in this port to reach that state,
+ * after `NOT_PORTED_POST` and `NOT_PORTED_ACTIONS`.
  *
- * `about` LEFT THIS SET IN P8c, which is the payment P6d's deferral named: the blocker was
- * never the page, it was `_origin_display` and the `git` spawn behind it, and P8a ported both.
- * A one-line removal from a declared partition is what the partition was built for.
+ * `tests/test_web_server.py` cross-checks this set against the kinds
+ * `_web_docs.api_docs_page` dispatches on by `ast`, and that check is at its STRONGEST when
+ * the set is empty: it then says every kind the reference dispatches on is answered here. A
+ * sixth kind added to the reference still cannot quietly fall through to the `NotFound` at
+ * the bottom, and the next unported kind has a place to be declared rather than reading as a
+ * typo'd page id.
+ *
+ * WHAT DIED WITH THE LAST ROW is the 501 arm's only reachable target. `test_web_server.py`'s
+ * running probe used to GET `/api/docs/page/cli` and require 501; with the set empty no page
+ * has an unported kind and none can be borrowed. That probe is now the positive control for
+ * `cli` (200), and the claim that the 501 arm still works rests on the declaration check
+ * alone — strictly weaker, discipline #7, and said out loud there as it is here.
+ *
+ * `about` left in P8c (`_origin_display` and the `git` spawn behind it, not the page).
+ * `cli` left in P10c, and its blocker was neither: it was that `harness.build_argparser()`
+ * cannot be introspected from Node at all. See `js/cli.mjs`.
  */
-export const NOT_PORTED_KINDS = new Set(['cli']);
+export const NOT_PORTED_KINDS = new Set();
 
 /** `_web_docs.api_docs`. */
 export function apiDocs(state, harnessName = null) {
@@ -504,6 +519,11 @@ const KIND_ROUTES = {
   }),
   about: (state, pageId, page) => ({
     id: pageId, title: page.title, kind: 'about', ...about(state),
+  }),
+  // P6d's deferral, paid in P10c. The row is one line because the work was not in the page:
+  // it was in making `harness.build_argparser()`'s metadata a file both implementations read.
+  cli: (state, pageId, page) => ({
+    id: pageId, title: page.title, kind: 'cli', ...cliReference(),
   }),
 };
 

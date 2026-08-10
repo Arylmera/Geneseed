@@ -1773,6 +1773,32 @@ def _docs_cells(cell) -> list[dict]:
                      '"repo": "https://github.com/', '"repo_is_github": true',
                      '"python": "<RUNTIME>"', '"deployed": true', '"theme": "imperial"'],
              expect_absent=['not ported yet', '"repo_is_github": false', '"repo": null']),
+        cell("docs/the-cli-page-is-the-parser-minus-what-argparse-hides",
+             [_req(path="/api/docs/page/cli")], world=_full(),
+             # P6d'S DEFERRAL, PAID IN P10c — and the cell has to earn more than "200 now",
+             # because both implementations answer this page out of ONE FILE (`cli.json`).
+             # The byte comparison is therefore close to vacuous here by construction, which
+             # is exactly the case discipline #8 covers: a tolerant comparison owes an
+             # absolute assertion, and so does an over-agreeable one.
+             #
+             # So what this cell states is the FILTER, in both directions. The file carries
+             # the FULL parser including `help=argparse.SUPPRESS` arguments — four of them,
+             # and `bin/geneseed-cli.mjs` cannot parse `web --daemon-internal` or
+             # `bootstrap main imperial` without them — and the PAGE is the file with those
+             # removed and the generator's own bookkeeping (`hidden`, `type`, `mutex`) left
+             # behind. A reader that forgot to filter shows the user flags argparse hides;
+             # one that filtered the FILE instead breaks the CLI and no page would say so.
+             expect=['"kind": "cli"', '"prog": "harness"',
+                     '"name": "doctor"', '"names": ["--no-bundle"]',
+                     '"name": "exclude"', '"choices": ["add", "remove", "list"]',
+                     # argparse's alias is a command of its own, with no help of its own:
+                     # `_choices_actions` registers the text under the canonical name only.
+                     # Both readers inherit that from the file, and the Node entry dispatches
+                     # `update` as a row because of it.
+                     '{"name": "update", "help": "", "description": ""',
+                     '{"name": "upgrade", "help": "self-update: git pull'],
+             expect_absent=['not ported yet', '"--daemon-internal"', '"dest": "extra"',
+                            '"hidden"', '"type":', '"mutex"']),
         cell("docs/an-unknown-page-is-a-404",
              [_req(path="/api/docs/page/nope")], world=_full(),
              expect=['{"error": "not found: nope"}', "404 Not Found"]),

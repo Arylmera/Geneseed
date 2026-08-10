@@ -51,6 +51,7 @@
     "_install_registry.py",
     "harness.config.json",
     "registry.json",
+    "cli.json",
     "geneseed",
     "geneseed.cmd",
     "geneseed.ps1",
