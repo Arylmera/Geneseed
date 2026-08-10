@@ -1131,6 +1131,35 @@ renders it as the name in parentheses.
   returned the empty string at end-of-file would answer YES to "run npm install now?" on
   every non-interactive run; the reference's `input()` raises there. The byte reader now
   reports that case as null, gated by a stdin-seeded corpus.
+- **The install TOGGLE crosses and the web console is whole — 29 of 29 paths ANSWER, still
+  sixteen subcommands.** [`js/uninstall.mjs`](js/uninstall.mjs) gains the reversible half it was
+  written expecting: deactivate MOVES every owned artifact into a sibling stash and drops the
+  wiring, reactivate moves the same bytes back, and the stash directory's PRESENCE is the
+  disabled flag — no recorded state that could drift from the filesystem. `/api/pick-folder` is
+  the one endpoint that is DECLINED rather than deferred, and `NOT_PORTED_POST` is now empty and
+  still declared.
+  **A deferral's measurement is a claim about another file and it rots exactly like a
+  docblock.** The handoff said "293 lines over nine functions"; it is 306 over eleven, it
+  counted one that had crossed three phases earlier, and it never named three others. 293 was a
+  SPAN — nine bodies plus the blank lines between them.
+  **`web_golden` had no `<dirs>` column, and a third of the engine lived in it.** A file
+  snapshot cannot see an empty directory, so a port that moved every owned file and left
+  `skills/<name>/` standing was byte-identical in all 95 cells. One pseudo-file closed it for
+  the whole matrix **including every cell written before it existed** — which is what a harness
+  axis can do and a per-cell expectation cannot — and it broke none of them.
+  **The rollback branch is reachable, and exactly one world shape reaches it.** A deactivate is
+  all-or-nothing, and the move only fails on a destination that already exists — but a
+  pre-existing stash makes the install `disabled`, so the operation refuses before the loop. The
+  single seedable shape is a manifest naming a file AND its parent directory. **When a defensive
+  branch looks unreachable, ask what input makes the operation fail at its SECOND step**, not
+  whether a cell can fail it at all.
+  **One line is a security boundary rather than a translation**: pathlib's `/` REPLACES the base
+  for an absolute entry, so a manifest naming `/evil.md` resolves outside the root and is
+  dropped, where a `path.join` port would have folded it back inside and moved a file the
+  manifest never owned.
+  **And a refusal to guess is a gate that runs in production.** The settings merger will not
+  default the hook shim's runner and entry, so the Claude reactivate answered with that refusal
+  on its first Node run instead of quietly wiring hooks at an invented path.
 
 ## 🚫 Explicitly out of scope
 
