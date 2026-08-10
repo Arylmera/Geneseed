@@ -5,7 +5,7 @@ already gates the counts that come out of `src/`: laws, agents, skills, themes a
 since P10e — plugins. This module gates the other kind of counting sentence, the one
 `src/` cannot answer: **what a reader is promised about the two runtimes.**
 
-Four claims, and each one was wrong at least once during this port:
+Six claims, and each one was wrong at least once during this port:
 
 * **"these commands have no Node twin"** — derived from `cli.json`'s subparser list
   minus the two Node entry tables. Transcribing that list is exactly the
@@ -17,6 +17,9 @@ Four claims, and each one was wrong at least once during this port:
   same fact from the packaging side; this one asserts the DOCS say it. A gate on the
   package that no sentence in the README reflects still ships a README that promises
   a Python-free install.
+* **`N plugins` and `N themes`** — derived from `adapters/opencode/plugins/geneseed-*.js`
+  and `themes/*.json`, over the files `doctor`'s mirror is not handed. The plugin count
+  is the one that actually drifted: the README said six while seven shipped.
 * **`npx <name>`** — the name in the install command must be the name
   `package.json` declares. A published package under a different name than the one
   the README tells people to run is not recoverable by an edit.
