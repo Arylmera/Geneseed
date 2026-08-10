@@ -78,6 +78,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import golden  # noqa: E402  (needs tests/ on the path first)
@@ -140,6 +141,12 @@ def cells() -> list[dict]:
                       clean copy and is not the same as omitting the key — omitting it
                       runs against the real checkout, as every other cell does. See
                       `_copy_checkout` for why a verb that reads `ROOT` needs this.
+        git           the WRITABLE variant, added in P8a: a name for the git state this
+                      cell needs ("ready", "broken", "uptodate", "dirty", "detached",
+                      "no-upstream", "diverged", "unrelated", "origin=<url>"). The CLI is
+                      run from a private `git clone` of a template this file builds, whose
+                      `origin` is a bare repo on disk — see `_git_template`. `checkout`
+                      faults may be given beside it and are planted AFTER the clone.
         steps         [{argv, stdin, cwd, seed}] — more than one runs them in order into the
                       SAME sandbox, and only the LAST step's streams are compared (the
                       others' effects survive in the tree, which is the point). `seed` is a
@@ -179,7 +186,7 @@ def cells() -> list[dict]:
             + _exclude_cells() + _status_cells() + _version_cells()
             + _build_cells() + _prompt_cells() + _theme_cells()
             + _diff_cells() + _rebuild_all_cells() + _doctor_cells()
-            + _uninstall_cells() + _setup_cells() + _web_cells())
+            + _uninstall_cells() + _setup_cells() + _web_cells() + _upgrade_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -2719,6 +2726,277 @@ def _web_cells() -> list[dict]:
 
 
 # --------------------------------------------------------------------------------------
+# upgrade  —  the verb that REWRITES ITS OWN SOURCE, and the fixture that lets it
+# --------------------------------------------------------------------------------------
+#
+# THE FIXTURE IS THE PHASE. Every other verb here reads the checkout; this one fast-forwards
+# it, so its cells need a git repository they may write AND an origin they may fetch from.
+# `_git_template` + `_clone_checkout` are where that is built and where the reasoning lives;
+# what belongs here is what the cells can and cannot say once it exists.
+#
+# WHAT NO CELL CAN REACH, MEASURED RATHER THAN ASSUMED.
+#
+#   1. `_fetch_streaming`'s STREAM. `git fetch --progress` against a local bare origin
+#      prints NOTHING — measured, twice, byte-identical and empty. So the reader thread, the
+#      phase-change filter (`line.split(":", 1)[0] != last`, the thing that keeps a hundred
+#      `Receiving objects: 43%` repaints out of the log) and the 15s heartbeat are all
+#      REACHABLE and never VARIED, which is P5d's tenth hole in its purest form: the loop
+#      runs in every cell below and observes nothing in any of them. Only a slow REMOTE
+#      fetch produces those lines and no cell may have one. The phase filter is pure over a
+#      line sequence and is gated as a corpus in `tests/test_pure_function_parity.py`; the
+#      heartbeat and the hard deadline are gated by neither and are declared in the handoff.
+#   2. `_parse_origin`'s INTERESTING BRANCHES. A fixture origin is a local path, which
+#      `urlsplit` gives no host — so `_origin_display` falls through to `DEFAULT_ORIGIN` and
+#      every cell here would print the same line. The `origin=` arm exists to break that:
+#      one cell gives the clone an `https://127.0.0.1:1/...` remote and reads the parsed url
+#      back off the `update source:` line. scp-form (`git@host:owner/repo`), the `.git`
+#      suffix and the two-segment github slug stay corpus-gated.
+#   3. THE COPIED CHECKOUT IS OUTSIDE THE SNAPSHOT (`_copy_checkout`'s third paragraph), so
+#      nothing here observes the pulled TREE, only what the verb says about it. That is why
+#      `_pull_and_validate`'s two arms are separated by the DOCTOR VERDICT and by the
+#      rollback message rather than by a file: `git reset --hard` lands where `_snapshot`
+#      cannot see. `GENESEED_OUT` is pointed into the sandbox in every rebuild cell so the
+#      part that CAN be observed — the ~99-file bundle the upgrade re-renders — is.
+#
+# THE CLOCK, AND WHY IT IS NOT A PROBLEM HERE. `_Log` truncates and appends to
+# `~/.geneseed-install.log`, which `cell_env` puts in the sandbox, so the whole transcript is
+# a snapshotted file as well as a compared stream — and it carries no timestamps.
+#
+# COST. Ten of these cells run a real bundle render (that is `_rebuild_bundle`, i.e. the
+# verb); two also run `doctor --all --no-bundle`, which is 30s+ on the reference side. Those
+# two are the entire gate on `_pull_and_validate`, so they are the most expensive cells in
+# this file and the least optional.
+
+_UPGRADE_OUT = {"GENESEED_OUT": "{sb}/bundle"}
+_BUNDLE_MADE = ["bundle/AGENT.md", "bundle/.geneseed-theme", "bundle/.geneseed-version"]
+# A deployed global OpenCode install with an edit source does not have — `export_improvements`
+# is the FIRST thing `cmd_upgrade` runs, and this is what makes it find something.
+_DRIFTED = "# Deployed AGENT.md\n\nA local edit the upgrade is about to overwrite.\n"
+
+
+def _upgrade_cells() -> list[dict]:
+    def up(name, argv=("upgrade",), world=None, steps=None, **kw):
+        return dict(id=f"upgrade/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    steps=steps or [{"argv": list(argv), "cwd": "repo"}], **kw)
+
+    # Every preflight refusal shares these: the source line and the phase banner are printed
+    # BEFORE the check, and no refusal may reach the fetch.
+    def refuses(msg, **kw):
+        kw.setdefault("expect", [])
+        kw["expect"] = ["[geneseed] preflight: checking the local checkout ...", msg,
+                        *kw["expect"]]
+        kw.setdefault("expect_absent", [])
+        kw["expect_absent"] = ["[geneseed] fetching from origin", "rebuilding bundle",
+                               *kw["expect_absent"]]
+        return kw
+
+    return [
+        # ---- Phase A: the five local refusals -----------------------------------------
+        up("a-checkout-that-is-not-a-git-repo-is-refused", checkout={},
+           # `checkout={}` is a plain COPY of the tracked files with no `.git` at all, which
+           # is exactly what a zip-download install looks like. `GIT_CEILING_DIRECTORIES`
+           # (see run_cell) is what stops git walking out of the temp dir and answering
+           # about some other repository entirely.
+           **refuses("This Geneseed install isn't a git checkout")),
+        up("a-detached-head-is-refused", git="detached",
+           **refuses("HEAD is detached (a tag/commit is checked out)")),
+        up("a-branch-with-no-upstream-is-refused", git="no-upstream",
+           **refuses("Your branch has no upstream")),
+        up("local-changes-are-refused-before-anything-is-fetched", git="dirty",
+           **refuses("You have local changes in the Geneseed folder")),
+        # `ref` is a dead positional `_update` ignores, and `cmd_upgrade` re-reads it as a
+        # THEME when one exists by that name. This is the arm where it does not, so the
+        # warning fires — the only cell that reaches it, and cheap because the checkout is
+        # refused immediately afterwards.
+        up("a-ref-argument-that-names-no-theme-is-announced-and-ignored",
+           ("upgrade", "v1.2.3"), checkout={},
+           **refuses("This Geneseed install isn't a git checkout",
+                     expect=["ref 'v1.2.3' is IGNORED"])),
+
+        # ---- Phase B: the fetch, and the four classifications --------------------------
+        up("an-unreachable-origin-reports-the-fetch-failure-and-the-daemon-hint",
+           git="origin=https://127.0.0.1:1/owner/repo.git",
+           env={"GENESEED_NET_TIMEOUT": "45"},
+           # THREE THINGS AT ONCE, and each is the only cell that has it.
+           #  * `_parse_origin` on a real URL: host + path, `.git` stripped, port dropped.
+           #  * `GENESEED_NET_TIMEOUT`, which is otherwise 120 in every cell.
+           #  * THE NO-NETWORK PROOF. `GIT_ALLOW_PROTOCOL=file` is what produces that
+           #    refusal; if it ever stops being honoured this cell goes VACUOUS, which is
+           #    the loudest signal this harness has.
+           expect=["[geneseed] update source: https://127.0.0.1/owner/repo",
+                   "timeout: 45s",
+                   "[geneseed] ✗ could not reach the remote:",
+                   "transport 'https' not allowed",
+                   "geneseed web restart"],
+           expect_absent=["rebuilding bundle", "already up to date"]),
+        up("a-tokened-origin-is-redacted-out-of-every-line",
+           git="origin=https://gsbot:s3cr3t-t0ken@127.0.0.1:1/owner/repo.git",
+           # `_redact_url_creds` runs on `_git`'s and `_fetch_streaming`'s output both. The
+           # credential IS there — the remote carries it and git's own error names the
+           # remote — so this is a containment cell whose target exists, and the positive
+           # control is the host it must still print.
+           expect=["[geneseed] update source: https://127.0.0.1/owner/repo",
+                   "could not reach the remote:"],
+           expect_absent=["s3cr3t-t0ken", "gsbot:"]),
+        up("local-commits-that-cannot-fast-forward-are-refused", git="diverged",
+           expect=["[geneseed] fetching from origin",
+                   "Your branch has local commits and can't fast-forward"],
+           expect_absent=["rebuilding bundle", "fast-forwarding to upstream"]),
+        up("a-rewritten-upstream-is-refused-with-the-re-clone-advice", git="unrelated",
+           # ahead > 0 AND no merge-base — `_measure_upstream`'s `unrelated` arm, and the
+           # only difference between it and `diverged` above is the exit of `git merge-base`.
+           expect=["Upstream history was rewritten"],
+           expect_absent=["can't fast-forward", "rebuilding bundle"]),
+
+        # ---- the rebuild half ----------------------------------------------------------
+        up("already-up-to-date-still-rebuilds-the-bundle-and-every-install",
+           git="uptodate", env=_UPGRADE_OUT,
+           expect=["[geneseed] already up to date.",
+                   "[geneseed] rebuilding bundle -> ",
+                   # `_config_theme` — the LOCAL `harness.config.json`, captured before the
+                   # pull can overwrite it with upstream's. The `config default` spelling is
+                   # only reached when that file names no theme, which no checkout does.
+                   "(theme: neutral, emit: files)",
+                   "[geneseed] refreshing every active install (rebuild-all) ...",
+                   "[rebuild-all] no active installs detected.",
+                   "[geneseed] ✓ upgrade complete."],
+           # The OTHER half of the GENESEED_WEB_JOB pair below. Without a cell that names
+           # its absence, removing the env-var branch is invisible: both arms return 0 and
+           # `restart_daemon(only_if_running=True)` is silent when nothing is running.
+           expect_absent=["web daemon will restart itself",
+                          "fast-forwarding to upstream"],
+           expect_files=[*_BUNDLE_MADE, "home/.geneseed-install.log"]),
+        up("the-web-job-marker-suppresses-the-daemon-bounce",
+           git="uptodate", env=dict(_UPGRADE_OUT, GENESEED_WEB_JOB="1"),
+           # P6g's CONTRACT WITH THIS VERB, and the cell that makes it gateable. The web
+           # console runs `upgrade` as a job and tracks it by process; bouncing the daemon
+           # from inside the child kills the tracker and the console shows `running`
+           # forever. P6g could not gate its own end of it (removing the variable from the
+           # job runner's env was byte-identical everywhere, mutation M127) because nothing
+           # on the other side READ it. This is the other side.
+           expect=["web daemon will restart itself after this job to load the new code."],
+           expect_absent=["could not refresh the web daemon"],
+           expect_files=_BUNDLE_MADE),
+        up("an-explicit-theme-argument-is-rebuilt-with",
+           # `cmd_upgrade`'s back-compat reinterpretation: the hidden `ref` positional eats
+           # the first argument, so `geneseed upgrade imperial` would silently drop the
+           # theme unless `ref` is re-read as one when `themes/<ref>.json` exists. The cell
+           # above proves the un-themed spelling, so this pair separates the two readings.
+           ("upgrade", _SIGIL_THEME), git="uptodate", env=_UPGRADE_OUT,
+           expect=[f"(theme: {_SIGIL_THEME}, emit: files)",
+                   f"built theme '{_SIGIL_THEME}'"],
+           expect_absent=["theme: neutral", "is IGNORED"],
+           expect_files=_BUNDLE_MADE),
+        up("the-markers-decide-the-theme-and-the-emit-when-no-argument-does",
+           git="uptodate", env=_UPGRADE_OUT,
+           # `_resolve_emit` and `_marker_theme` both read the GLOBAL CONFIG DIR first and
+           # the bundle second. Seeded in the config dir, so a port that only looked beside
+           # the bundle rebuilds a global install as a plain `files` one — which is a host
+           # change disguised as a rebuild, the same failure `rebuild-all`'s
+           # `a-marker-naming-another-host-is-not-trusted` names.
+           world={f"{_OC}/.geneseed-emit": "opencode-global\n",
+                  f"{_OC}/.geneseed-theme": f"{_SIGIL_THEME}\n"},
+           expect=[f"(theme: {_SIGIL_THEME}, emit: opencode-global)",
+                   "[geneseed] opencode-global -> "],
+           expect_absent=["emit: files"],
+           expect_files=[f"{_OC}/AGENT.md", f"{_OC}/.geneseed-version"]),
+        up("a-stray-in-folder-bundle-is-rescued-before-the-rebuild",
+           git="uptodate", env=_UPGRADE_OUT,
+           # `Harness/` is in the repo's `.gitignore`, so planting it after the clone leaves
+           # `git status --untracked-files=no` clean and preflight passes — the only way to
+           # put an OLD in-folder bundle in front of `_migrate_stray_bundle` at all. What
+           # the cell can observe is the rescue: `context.json` and `memory/` arriving in
+           # the canonical `out`, which IS inside the sandbox.
+           checkout={"Harness/context.json": '{"seeded": true}\n',
+                     "Harness/memory/note.md": "# rescued\n"},
+           expect=["rescued context.json from ", "rescued memory/ from ",
+                   "removing stray in-folder bundle "],
+           expect_files=["bundle/context.json", "bundle/memory/note.md"]),
+
+        # ---- the pull, and the doctor gate on it ---------------------------------------
+        up("a-new-commit-is-pulled-validated-and-rebuilt", git="ready", env=_UPGRADE_OUT,
+           # THE WHOLE VERB, end to end, and the only cell that reaches `_pull_and_validate`
+           # at all. The pulled-commit echo is a real byte comparison because both sides
+           # clone the SAME template: one commit, one subject, one abbreviated sha.
+           expect=["[geneseed] 1 new commit(s) upstream — updating ...",
+                   "[geneseed] fast-forwarding to upstream ...",
+                   "[geneseed] pulled:", "upstream: a new commit",
+                   "[geneseed] validating the pulled source (doctor — can take a minute) ...",
+                   "[doctor] ok — ", "[geneseed] rebuilding bundle -> ",
+                   "[geneseed] ✓ upgrade complete."],
+           expect_absent=["FAILS validation", "already up to date"],
+           expect_files=_BUNDLE_MADE),
+        up("a-pulled-commit-that-fails-validation-is-rolled-back", git="broken",
+           env=_UPGRADE_OUT,
+           # THE SAFETY NET, and it cannot be reached without an upstream tip that really
+           # does fail `doctor` — which is why the template carries one. The legend is part
+           # of the contract: it is the only place the doctor's vocabulary is explained, and
+           # a port that rolled back silently would leave the user with no next step.
+           expect=["[geneseed] fast-forwarding to upstream ...",
+                   "dead link 'laws/nosuchlaw.md'",
+                   "the pulled source FAILS validation — rolled back to the previous commit",
+                   "[geneseed] doctor problem legend",
+                   "'dead link'          → a skill/agent body links a sibling"],
+           # The rollback is what makes the rebuild unreachable: `upgrade` returns 1 from
+           # `_pull_and_validate` and never renders. Naming that here is what separates
+           # "rolled back" from "rolled back and rebuilt the old source anyway".
+           expect_absent=["rebuilding bundle", "✓ upgrade complete"],
+           expect_absent_files=["bundle"]),
+        up("after-a-failed-validation-the-source-is-back-where-it-was", git="broken",
+           # THE ROLLBACK ITSELF, which the cell above cannot see. `_copy_checkout`'s third
+           # paragraph is the reason: the checkout lives OUTSIDE the snapshotted sandbox, so
+           # `git reset --hard` leaves no trace a cell can read and a port that printed
+           # "rolled back" while leaving the tree on the bad commit is byte-identical
+           # everywhere. That is the shape P4e/M43 names — a defect both implementations
+           # could share — and the fix is to ask the checkout a question afterwards.
+           #
+           # `version`'s SOURCE fingerprint is that question. It is a content hash of `src/`,
+           # and the upstream tip this fixture rejects edits `src/AGENT.md.tmpl` — so
+           # rolled-back and not-rolled-back print different digests. The two sides clone one
+           # template, so the byte comparison gates the VALUE while `expect_re` gates the
+           # shape (`test_no_cell_hardcodes_a_source_fingerprint` refuses a literal).
+           steps=[{"argv": ["upgrade"], "cwd": "repo"},
+                  {"argv": ["version"], "cwd": "repo"}],
+           expect_re=[r"\[version\] source:\s+[0-9a-f]{12}"],
+           # Only the LAST step's streams are compared and asserted, so the rollback message
+           # belongs to the cell above; what this one may say is what `version` says.
+           expect_absent=["FAILS validation"]),
+
+        # ---- export_improvements, which runs FIRST and must never block ----------------
+        up("a-deployed-install-with-local-edits-is-exported-before-anything-moves",
+           checkout={},
+           # `cmd_upgrade` calls `export_improvements()` ahead of `_update.upgrade()`
+           # precisely so the rebuild does not overwrite hand edits unrecorded. The checkout
+           # is refused straight afterwards, which is what keeps this cell cheap: the export
+           # has already happened by then.
+           world={f"{_OC}/.geneseed-manifest.json": '{"owned": ["AGENT.md"]}',
+                  f"{_OC}/.geneseed-theme": "neutral\n",
+                  f"{_OC}/AGENT.md": _DRIFTED},
+           expect=["[upgrade] deployed harness carries local edits — saved to ",
+                   "[upgrade] hand that file to your agent to back-port them into src/.",
+                   "This Geneseed install isn't a git checkout"],
+           expect_files=[f"{_OC}/improvements/improvements-<STAMP>.md"]),
+        up("a-deployed-install-with-no-drift-exports-nothing", checkout={},
+           # THE ARM THIS PORT HAS OWED SINCE P5f. `export_improvements` returns None both
+           # when there is no install and when there is one that MATCHES — two very
+           # different things that look identical from outside, so the no-drift branch has
+           # never been distinguishable from an absent one. It needs a deployment that is
+           # byte-identical to a fresh render, and nothing before P8 could build one inside
+           # a cell. `rebuild-all` can: step one deploys a real global install from this
+           # very source, step two upgrades and finds nothing to say. The cell above is its
+           # positive control — same fixture, one edited file, the message appears.
+           steps=[{"argv": ["rebuild-all"], "cwd": "repo"},
+                  {"argv": ["upgrade"], "cwd": "repo"}],
+           world={f"{_OC}/.geneseed-manifest.json": '{"owned": []}\n',
+                  f"{_OC}/.geneseed-emit": "opencode-global\n"},
+           expect=["This Geneseed install isn't a git checkout"],
+           expect_absent=["carries local edits", "could not export local edits"],
+           expect_absent_files=[f"{_OC}/improvements"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
 # the runner
 # --------------------------------------------------------------------------------------
 
@@ -2866,6 +3144,199 @@ def _copy_checkout(dst: Path, faults: dict) -> None:
         p.write_text(text, encoding="utf-8")
 
 
+#: THE FIXTURE ENVIRONMENT THE TEMPLATE IS BUILT UNDER — pinned, and isolated from the
+#: developer's own git.
+#:
+#: `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` to `os.devnull`: a machine with
+#: `commit.gpgsign = true` would otherwise fail every fixture commit (and a machine with
+#: `init.defaultBranch = master` would name the branch something the cells do not).
+#:
+#: The four identity/date variables make the commit SHAs a FUNCTION OF THE TREE. Both sides
+#: of a cell clone the same template so they would agree anyway, but `_pull_and_validate`
+#: echoes `git log --oneline`, and a SHA that changed between two runs of the harness would
+#: make every mutation diff unreadable.
+_GIT_FIXTURE_ENV = {
+    "GIT_AUTHOR_NAME": "Geneseed Fixture", "GIT_AUTHOR_EMAIL": "fixture@geneseed.invalid",
+    "GIT_COMMITTER_NAME": "Geneseed Fixture",
+    "GIT_COMMITTER_EMAIL": "fixture@geneseed.invalid",
+    "GIT_AUTHOR_DATE": "2020-01-01T00:00:00+0000",
+    "GIT_COMMITTER_DATE": "2020-01-01T00:00:00+0000",
+    "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull,
+}
+
+#: THE ONE-LINE PROOF THAT NO CELL CAN REACH THE NETWORK, and it is not a comment.
+#:
+#: `upgrade` fetches. `_fetch_streaming` runs `git fetch --progress` against whatever the
+#: checkout's `origin` names, and a cell that reached the REAL origin would be a flake at
+#: best (a corporate proxy, an offline laptop) and a mutation of the developer's own
+#: checkout at worst. The fixture answers that by pointing `origin` at a bare repo it built
+#: itself, but "the fixture points somewhere safe" is a claim about the fixture, not about
+#: git — a cell that set its own remote, or a port that resolved a remote from somewhere
+#: else, would slip straight past it.
+#:
+#: So the ban is enforced by GIT ITSELF, for EVERY cell in this file, not only the upgrade
+#: ones: with `GIT_ALLOW_PROTOCOL=file` git refuses any transport but a local path —
+#: `fatal: transport 'https' not allowed` — before a socket is opened. And it is PROVEN
+#: rather than asserted: `upgrade/an-unreachable-origin-...` points a fixture at
+#: `https://127.0.0.1:1/...` and its `expect` names that exact refusal, so the day the
+#: variable stops being honoured a cell goes vacuous instead of going online. (The host is
+#: loopback as well, so the cell is harmless even to a git that ignored the variable — the
+#: same belt-and-braces as `_web_cells`' port 1.)
+_NO_NETWORK_ENV = {"GIT_ALLOW_PROTOCOL": "file", "GIT_TERMINAL_PROMPT": "0"}
+
+_TEMPLATE: "dict | None" = None
+
+
+def _fixture_git(cwd: Path, *args: str) -> "tuple[int, str]":
+    p = subprocess.run(["git", *[str(a) for a in args]], cwd=str(cwd), capture_output=True,
+                       encoding="utf-8", errors="replace",
+                       env={**os.environ, **_GIT_FIXTURE_ENV, **_NO_NETWORK_ENV})
+    return p.returncode, ((p.stdout or "") + (p.stderr or "")).strip()
+
+
+def _git_template() -> dict:
+    """A BARE ORIGIN AND THREE UPSTREAM TIPS, built once per run and cloned per cell.
+
+    WHY A TEMPLATE RATHER THAN A REPO PER CELL. `upgrade` mutates a git checkout, so unlike
+    every earlier verb its fixture has to be a checkout it may WRITE — which means
+    `_copy_checkout` plus `git init` plus a commit, and that commit is 2.2s over 526 files
+    (the copy itself is 0.28s). Twice per cell across the group that is minutes of pure
+    fixture. A `git clone --local` off a bare template is 0.8s and hardlinks the object
+    store, and hardlinks are safe here in a way `_copy_checkout` measured them not to be:
+    git objects are immutable, so a cell can only ever ADD to its own store.
+
+    IT ALSO MAKES THE COMMIT IDS SHARED. Both sides of a cell clone the SAME template, so
+    `_pull_and_validate`'s `git log --oneline` echo is byte-comparable without a destamp —
+    the reference and the candidate are looking at one set of commits rather than at two
+    trees that happen to hash alike.
+
+    `git add -A --FORCE`, and the `--force` is load-bearing. The copy carries
+    `src/notebook/README.md` and `src/notebook/.gitignore`, which are TRACKED in the real
+    repo and which the repo's own `.gitignore` (`notebook/`, the agent's personal scratch
+    space) nevertheless matches. A plain `git add -A` inside the copy drops both, the
+    committed tree loses them, and `doctor --all` on the clone then reports five dead links
+    to `notebook/` that the fixture planted by accident — which would have made
+    `_pull_and_validate`'s SUCCESS arm unreachable and its rollback arm look like the only
+    behaviour the verb has.
+
+    THREE TIPS, because `_measure_upstream` classifies rather than reports:
+      * `main`      A -> B, where B adds a file. A clone reset to A is `behind 1` = ready.
+      * `broken`    A -> C, where C breaks `doctor`. The rollback arm, and the ONLY way to
+                    reach it: doctor is what gates the pull, so a fixture with no failing
+                    upstream cannot tell "validated" from "did not validate".
+      * (`main` at its tip, unreset) = uptodate.
+    """
+    global _TEMPLATE
+    if _TEMPLATE is not None:
+        return _TEMPLATE
+    tpl = Path(tempfile.mkdtemp(prefix="gs-upgrade-tpl-"))
+    seed = tpl / "seed"
+    seed.mkdir(parents=True)
+    _copy_checkout(seed, {})
+    _fixture_git(seed, "init", "-q", "-b", "main")
+    # In the repo's OWN config, because `git clone` does not copy it and Git for Windows'
+    # SYSTEM config turns `core.autocrlf` on: without this the merge would write CRLF into
+    # the pulled files on one machine and LF on another, and `doctor` reads them.
+    _fixture_git(seed, "config", "core.autocrlf", "false")
+    _fixture_git(seed, "config", "core.fileMode", "false")
+    _fixture_git(seed, "add", "-A", "--force")
+    rc, out = _fixture_git(seed, "commit", "-q", "-m", "geneseed fixture: the base commit")
+    if rc != 0:
+        raise RuntimeError(f"the upgrade fixture could not commit its checkout copy: {out}")
+    _, sha_a = _fixture_git(seed, "rev-parse", "HEAD")
+    (seed / "UPSTREAM-NOTE.md").write_text(
+        "A file only the upstream commit has.\n", encoding="utf-8")
+    _fixture_git(seed, "add", "-A", "--force")
+    _fixture_git(seed, "commit", "-q", "-m", "upstream: a new commit")
+    # The tip that must NOT survive validation. A dead link in a rendered body is what
+    # `_link_problems` reports, it needs no theme of its own, and `--no-bundle` (which is
+    # what `_run_doctor` passes) does not skip it.
+    _fixture_git(seed, "checkout", "-q", "-b", "broken", sha_a)
+    (seed / "src" / "AGENT.md.tmpl").write_text(
+        (seed / "src" / "AGENT.md.tmpl").read_text(encoding="utf-8")
+        + "\n[a link upstream broke](laws/nosuchlaw.md)\n", encoding="utf-8")
+    _fixture_git(seed, "add", "-A", "--force")
+    _fixture_git(seed, "commit", "-q", "-m", "upstream: a commit that fails validation")
+    _fixture_git(seed, "checkout", "-q", "main")
+    origin = tpl / "origin.git"
+    rc, out = _fixture_git(seed, "clone", "-q", "--bare", str(seed), str(origin))
+    if rc != 0 or not (origin / "HEAD").is_file():
+        raise RuntimeError(f"the upgrade fixture could not build its bare origin: {out}")
+    _TEMPLATE = {"dir": tpl, "origin": origin, "base": sha_a}
+    return _TEMPLATE
+
+
+def _clone_checkout(dst: Path, state: str, faults: dict) -> None:
+    """One cell's OWN git checkout, in the state its arm needs, with `faults` planted after.
+
+    `state` is the arm of `_preflight` / `_measure_upstream` this cell is about; every one
+    of them is produced by moving the CLONE, never by touching the template, so the cells
+    stay order-independent (the property `_copy_checkout` refused to give up for a seventh
+    of a second, and the same answer here).
+
+    Faults are planted AFTER the clone, so they are working-tree edits. That is deliberate
+    and it cuts both ways: a fault on a TRACKED path makes the tree dirty (which is what
+    `dirty` uses), and a fault on an IGNORED path — `Harness/` — is invisible to
+    `git status --untracked-files=no` and reaches `_migrate_stray_bundle` with preflight
+    still clean.
+    """
+    tpl = _git_template()
+    branch = "broken" if state == "broken" else "main"
+    rc, out = _fixture_git(dst.parent, "clone", "--local", "-q", "--branch", branch,
+                           str(tpl["origin"]), str(dst))
+    if rc != 0:
+        raise RuntimeError(f"the upgrade fixture could not clone its template: {out}")
+    _fixture_git(dst, "config", "core.autocrlf", "false")
+    _fixture_git(dst, "config", "core.fileMode", "false")
+    if state in ("ready", "broken", "dirty", "diverged"):
+        _fixture_git(dst, "reset", "--hard", "-q", tpl["base"])
+    if state == "detached":
+        _fixture_git(dst, "checkout", "-q", "--detach", "HEAD")
+    elif state == "no-upstream":
+        _fixture_git(dst, "branch", "--unset-upstream")
+    elif state == "dirty":
+        (dst / "harness.config.json").write_text("{}\n", encoding="utf-8")
+    elif state == "diverged":
+        (dst / "A-LOCAL-COMMIT.md").write_text("local work\n", encoding="utf-8")
+        _fixture_git(dst, "add", "-A", "--force")
+        _fixture_git(dst, "commit", "-q", "-m", "a local commit the upstream does not have")
+    elif state == "unrelated":
+        # `--orphan` keeps the index, so this commits the same tree with NO parent: ahead of
+        # `@{u}` by one and sharing no merge-base with it, which is exactly the shape a
+        # force-pushed upstream leaves behind. The upstream has to be re-pointed by hand
+        # because a new branch has none.
+        _fixture_git(dst, "checkout", "-q", "--orphan", "rewritten")
+        _fixture_git(dst, "commit", "-q", "-m", "a root commit with no shared history")
+        _fixture_git(dst, "branch", "--set-upstream-to=origin/main")
+    elif state.startswith("origin="):
+        _fixture_git(dst, "remote", "set-url", "origin", state.split("=", 1)[1])
+    elif state not in ("ready", "broken", "dirty", "uptodate"):
+        raise RuntimeError(f"the upgrade fixture has no arm named {state!r}")
+    # WHERE THE NO-NETWORK CLAIM IS CHECKED AT THE SOURCE. `GIT_ALLOW_PROTOCOL` makes git
+    # refuse a remote transport; this makes the fixture refuse to BUILD one that would need
+    # it, so a cell whose arm names an origin outside the sandbox fails here rather than
+    # somewhere downstream where it reads as a port bug.
+    #
+    # The HOST is what is checked, not the prefix: the first draft compared
+    # `url.startswith("https://127.0.0.1:")` and the credential-redaction cell — whose whole
+    # point is a `user:token@` in front of the host — tripped it. A `startswith` on a URL is
+    # a check on its userinfo as much as on its host, which is the bug that cell exists to
+    # find in `_update` and which it found here first.
+    _, url = _fixture_git(dst, "remote", "get-url", "origin")
+    host = urlsplit(url).hostname or ""
+    if not (url.startswith(str(tpl["dir"])) or url.startswith(str(dst))
+            or host in ("127.0.0.1", "::1")):
+        raise RuntimeError(f"the upgrade fixture built a checkout whose origin is {url!r} "
+                           f"— a cell may only ever fetch from its own template")
+    for rel, text in faults.items():
+        p = dst / rel
+        if text is None:
+            p.unlink(missing_ok=True)
+            continue
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+
+
 def _repoint(cli: list[str], checkout: Path) -> list[str]:
     """Re-aim an already-resolved CLI at the copied checkout.
 
@@ -2897,12 +3368,14 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
     1 where Python returns 0 would be invisible without it.
     """
     faults = cell.get("checkout")
+    gitstate = cell.get("git")
     with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as ctd:
         sb = Path(td)
         home, repo, cfg = sb / "home", sb / "repo", sb / "cfg"
         for d in (home, repo, cfg):
             d.mkdir(parents=True, exist_ok=True)
-        checkout = Path(ctd) / "checkout" if faults is not None else ROOT
+        own = faults is not None or gitstate is not None
+        checkout = Path(ctd) / "checkout" if own else ROOT
         repl = {"{sb}": str(sb), "{home}": str(home), "{repo}": str(repo),
                 "{cfg}": str(cfg), "{py}": sys.executable, "{llm}": str(FAKE_LLM),
                 "{ck}": str(checkout)}
@@ -2910,12 +3383,21 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
         # BEFORE the native ones would match — `{sb}` is not a substring of `{sb/}`, so the
         # two never collide, but the posix keys are listed first to keep that obvious.
         repl = {**{k[:-1] + "/}": v.replace("\\", "/") for k, v in repl.items()}, **repl}
-        if faults is not None:
+        if gitstate is not None:
+            _clone_checkout(checkout, _subst(gitstate, repl), _subst(faults or {}, repl))
+        elif faults is not None:
             _copy_checkout(checkout, _subst(faults, repl))
+        if own:
             cli = _repoint(cli, checkout)
         _seed(sb, cell.get("world") or {}, repl)
 
         env = golden.cell_env(home)
+        # See `_NO_NETWORK_ENV`: git refuses a remote transport in EVERY cell, not only the
+        # ones that fetch, and `GIT_CEILING_DIRECTORIES` stops a `.git`-less checkout copy
+        # from discovering a repository ABOVE its temp dir — which is how a
+        # "this isn't a git checkout" cell could otherwise end up describing some other
+        # repository that happened to sit on the path to the sandbox.
+        env.update(_NO_NETWORK_ENV, GIT_CEILING_DIRECTORIES=str(Path(ctd)))
         env.update(_subst(cell.get("env") or {}, repl))
 
         proc = None

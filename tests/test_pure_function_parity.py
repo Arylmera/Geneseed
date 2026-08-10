@@ -204,6 +204,17 @@ def _cases() -> list[dict]:
     for body in _HARNESS_BLOCK_CORPUS:
         for host in ("opencode", "claude"):
             cases.append({"fn": "strip_harness_blocks", "args": [body, host]})
+    for s in _ORIGIN_CORPUS:
+        cases.append({"fn": "parse_origin", "args": [s]})
+    for s in _REDACT_CORPUS:
+        cases.append({"fn": "redact_url_creds", "args": [s]})
+    for s in _COUNT_CORPUS:
+        cases.append({"fn": "count_or_zero", "args": [s]})
+    for lines in _FETCH_LINE_CORPUS:
+        cases.append({"fn": "fetch_phases", "args": [lines, ""]})
+        # A non-empty starting phase: `_reader` keeps `last` across chunks, and a port that
+        # reset it per chunk would re-log the phase the previous read ended on.
+        cases.append({"fn": "fetch_phases", "args": [lines, "remote"]})
     return cases
 
 
@@ -613,6 +624,117 @@ _AGENT_ENTRY_CORPUS = (
     ["AGENT.MD"],                                   # case-sensitive comparison on both
     [None, 42, "bundle/AGENT.md"],                  # the isinstance guard
     ["AGENT.md/"],                                  # a trailing separator still names it
+)
+
+
+# --------------------------------------------------------------------------------------
+# P8a — `_update`'s four pure functions
+# --------------------------------------------------------------------------------------
+#
+# WHY A CORPUS AND NOT CELLS, measured in both directions. `upgrade`'s cells run against a
+# private clone whose `origin` is a LOCAL PATH, because the alternative is a cell that
+# reaches the network. `urlsplit` gives a local path no host, so `_parse_origin` returns
+# `DEFAULT_ORIGIN` for every one of them and the whole parser is one branch wide from inside
+# the matrix. One cell breaks that (an `https://127.0.0.1:1/owner/repo.git` remote, which
+# also proves the no-network block); the scp form, the `.git` suffix, the port, the
+# case-folding and the two-segment github slug are reachable from no cell at all.
+#
+# `_count` and `_redact_url_creds` are cell-REACHABLE and never VARIED — git prints `0` or
+# `1` in every cell, and the one tokened remote exercises one shape of one regex.
+#
+# `fetch_phases` is the tenth-hole case in its purest form: `_fetch_streaming`'s reader runs
+# in every fetching cell and `git fetch --progress` over a local path prints NOTHING, so the
+# filter that keeps a thousand `Receiving objects: 43%` repaints out of the install log is
+# reached and never exercised. The corpus is a recorded transcript instead.
+_ORIGIN_CORPUS = (
+    "https://github.com/Arylmera/Geneseed",
+    "https://github.com/Arylmera/Geneseed.git",
+    "https://github.com/Arylmera/Geneseed.GIT",         # the suffix test is case-insensitive
+    "https://GitHub.COM/Arylmera/Geneseed.git",         # ...and so is the host
+    "https://user:tok@github.com/Arylmera/Geneseed.git",
+    "https://github.com:443/Arylmera/Geneseed.git",     # port dropped from the display url
+    "git@github.com:Arylmera/Geneseed.git",             # scp form — no `://` at all
+    "git@github.com:Arylmera/Geneseed",
+    "ssh://git@github.com/Arylmera/Geneseed.git",
+    "git://github.com/Arylmera/Geneseed.git",
+    "https://gitlab.com/group/sub/project.git",         # three segments -> url, NO slug
+    "https://github.com/Arylmera/Geneseed/extra.git",   # three segments on github -> no slug
+    "https://github.com/OnlyOne.git",                   # one segment -> no slug
+    "https://github.com/Arylmera/Geneseed/",            # trailing separator
+    "https://github.com//Arylmera//Geneseed//",         # ...and a doubled one
+    "https://example.invalid/o/r.git?ref=x#frag",       # query and fragment are not the path
+    # THE FALLBACK ARM, which is what every fixture and every relative remote takes.
+    "C:\\Users\\me\\origin.git", "C:/Users/me/origin.git", "/srv/git/geneseed.git",
+    "../sibling-clone", "origin.git", "", "   ", "https://", "://nohost/x",
+    # An IPv6 literal: `.hostname` strips the brackets and lowercases, which a naive
+    # "split on the last colon" port turns into `[::1`.
+    "https://[::1]:8443/o/r.git",
+    # A remote with a NEWLINE in it. `_git` strips before this ever sees it, so this is the
+    # direct-call shape and it is what says `pyStripSpace` and `.strip()` agree here.
+    "  https://github.com/Arylmera/Geneseed.git  \n",
+)
+
+_REDACT_CORPUS = (
+    "", "no url here at all",
+    "https://user@github.com/o/r.git",
+    "https://user:tok@github.com/o/r.git",
+    # TWO in one line — `re.sub` replaces every match and a port using a non-global regex
+    # would redact only the first. The reachable shape: a fetch error naming the remote twice.
+    "fatal: could not read from https://a:b@h/x and https://c:d@h/y",
+    "ssh://git@host/o/r.git", "git@github.com:o/r.git",       # scp form has no `://`
+    "https://@github.com/o/r.git",                            # empty userinfo does NOT match
+    "https://a/b@c/d",                                        # the `@` is in the PATH
+    "https://a b@github.com/x",                               # a space ends the userinfo
+    "https://a\u00a0b@github.com/x",                          # ...and so does a NBSP
+    "https://a\ufeffb@github.com/x",                          # but U+FEFF does NOT, in Python
+    "https://a\u001cb@github.com/x",                          # and U+001C DOES, in Python
+)
+
+# `int(s) if s.isdigit() else 0` over what `git rev-list --count` can hand it, plus the
+# shapes it cannot: `_count` is called on `_git`'s already-stripped stdout, so an empty
+# answer (git absent) is the real second case and the rest are the guard's edges.
+#
+# TWO INPUTS ARE DELIBERATELY ABSENT, and the first draft carried both. `str.isdigit()` is
+# true for `'٣'` (Arabic-Indic three) and for `'²'`, while `int()` accepts only the DECIMAL
+# ones — so the reference answers 3 for the first and CRASHES with a ValueError on the
+# second. `'²'` therefore cannot be gated by anything (a corpus entry the reference dies on
+# is not a comparison), and `'٣'` is a genuine divergence the port declines to reproduce:
+# `js/update.mjs`'s `pyCount` is ASCII-only, `_count`'s only caller is `git rev-list
+# --count`, and git prints ASCII. Recorded in the P8a handoff rather than gated here,
+# because a corpus that demands equality is the wrong place to record a known difference.
+_COUNT_CORPUS = ("0", "1", "42", "007", "", "   ", "\n3\n", "-1", "+1", "3.0", "1e3",
+                 "abc", "1 2")
+
+# A recorded `git fetch --progress` transcript, as universal-newline decoding delivers it:
+# every `\r` repaint is its own line, which is why the phase filter exists.
+_FETCH_LINE_CORPUS = (
+    [],
+    [""],
+    ["remote: Enumerating objects: 12, done."],
+    ["remote: Enumerating objects: 12, done.",
+     "remote: Counting objects:   8% (1/12)",
+     "remote: Counting objects:  25% (3/12)",
+     "remote: Counting objects: 100% (12/12), done.",
+     "remote: Compressing objects:  50% (3/6)",
+     "remote: Compressing objects: 100% (6/6), done.",
+     "Receiving objects:  10% (1/10)",
+     "Receiving objects: 100% (10/10), 1.21 KiB | 1.21 MiB/s, done.",
+     "Resolving deltas: 100% (2/2), done.",
+     "From https://github.com/Arylmera/Geneseed",
+     "   4f536d9..91d912c  main       -> origin/main"],
+    # A phase that RECURS after another one — `last` is a single value, not a seen-set, so
+    # the second run of the same phase is logged again. Reachable on a multi-remote fetch.
+    ["Receiving objects: 10%", "Resolving deltas: 50%", "Receiving objects: 90%"],
+    # Blank and whitespace-only lines are dropped BEFORE the phase is taken, so they neither
+    # log nor reset the phase.
+    ["remote: Counting objects: 1%", "", "   ", "remote: Counting objects: 2%"],
+    # A line with NO colon: `split(":", 1)[0]` is the whole line, so every distinct one logs.
+    ["done", "done", "still done"],
+    # A credential in the transport line, which is the reason the reader redacts at all.
+    ["From https://gsbot:s3cr3t@github.com/o/r"],
+    # A U+00A0-padded line: Python's `.strip()` removes it and `String.trim()` also does, but
+    # the U+001C one below separates `PY_SPACE` from `\s` for real.
+    ["\u00a0remote: Counting objects: 1%\u00a0", "\u001cremote: Counting objects: 2%\u001c"],
 )
 
 

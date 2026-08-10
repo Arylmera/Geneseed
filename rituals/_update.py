@@ -455,11 +455,23 @@ def _rebuild_installs(here: Path, log: _Log) -> int:
     """Refresh every registered ACTIVE install (opencode/claude/bob/copilot, global and
     project scope) via `harness.py rebuild-all`. The emit-marker rebuild only covers
     THIS checkout's own bundle — without this pass a claude-global or bob install
-    keeps serving the OLD render after every upgrade, silently."""
+    keeps serving the OLD render after every upgrade, silently.
+
+    NO `_NO_WINDOW` HERE, AND THAT IS THE FIX P5e MADE EVERYWHERE ELSE. `subprocess` sets
+    `STARTF_USESTDHANDLES` only when at least one stream is redirected; with all three
+    inherited, CREATE_NO_WINDOW hands the child a fresh hidden console instead of this
+    process's handles and **everything it prints is discarded on Windows**.
+    `_harness_core.run` learned that in P5e and its docstring names `rebuild-all` by name —
+    but this module deliberately does not import it (it stays standalone so a stale factory
+    can self-heal), so it kept its own copy of the flag and its own copy of the bug. Every
+    `[rebuild-all]` line an upgrade produced was thrown away, including the FAILED rows the
+    error two frames up tells the user to look for ("details above"). Found by
+    `upgrade/already-up-to-date-...`'s absolute half, which named a line the reference was
+    not printing."""
     log("[geneseed] refreshing every active install (rebuild-all) ...")
     proc = subprocess.run(
         [sys.executable, str(here / "rituals" / "harness.py"), "rebuild-all"],
-        cwd=str(here), **_NO_WINDOW)
+        cwd=str(here))
     return proc.returncode
 
 

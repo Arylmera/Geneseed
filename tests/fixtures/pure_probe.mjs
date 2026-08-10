@@ -28,6 +28,7 @@ import {
 import { unifiedDiff, pySplitLines } from '../../js/lib/pydiff.mjs';
 import { stampMinute } from '../../js/web/api.mjs';
 import { buildPlan, daemonArgs, restartArgs } from '../../js/web/server.mjs';
+import { fetchPhases, parseOrigin, pyCount, redactUrlCreds } from '../../js/update.mjs';
 import {
   sliceSection, slugifyHeading, stripHarnessBlocks,
 } from '../../js/web/docs.mjs';
@@ -82,6 +83,12 @@ const FNS = {
   confirm: (a) => confirm(...a),
   ask_choice: (a) => askChoice(a[0], a[1], a[2]),
   collect_setup_lines: () => collectSetupLines(),
+  // `_update`'s pure four (P8a). `parseOrigin` returns a namedtuple on the reference side,
+  // which JSON carries as a list — hence the two-element array here.
+  parse_origin: (a) => { const o = parseOrigin(a[0]); return [o.url, o.githubSlug]; },
+  redact_url_creds: (a) => redactUrlCreds(a[0]),
+  count_or_zero: (a) => pyCount(a[0]),
+  fetch_phases: (a) => fetchPhases(a[0], a[1]),
 };
 
 const job = JSON.parse(readFileSync(process.argv[2], 'utf8'));

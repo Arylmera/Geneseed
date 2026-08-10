@@ -52,6 +52,7 @@ import { pyInt } from '../js/lib/pyfs.mjs';
 import { cmdSetup } from '../js/setup.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
 import { cmdUninstall } from '../js/uninstall.mjs';
+import { cmdUpgrade } from '../js/update.mjs';
 import { cmdWeb } from '../js/web/server.mjs';
 
 const VERBS = {
@@ -161,6 +162,20 @@ const VERBS = {
     // fallback would bind the default port while the operator believes they asked for
     // another. argparse refuses, so this refuses.
     ints: ['--port'],
+  },
+  upgrade: {
+    fn: cmdUpgrade,
+    // TWO optional positionals and no options at all — `up.add_argument("ref", nargs="?")`
+    // followed by `up.add_argument("theme", nargs="?")`. The first is DEAD (git follows the
+    // checkout's own branch since the zip path was removed) and is kept because argparse
+    // still binds it: `geneseed upgrade imperial` puts the theme in `ref`, which is why
+    // `cmdUpgrade` re-reads it as one when `themes/<ref>.json` exists. Dropping the row
+    // would make that spelling a "unrecognized arguments" refusal on the Node side alone.
+    //
+    // `aliases=["update"]` is NOT reproduced here and that is P8c's, not an oversight: the
+    // alias is what `js/web/jobs.mjs`' `NOT_PORTED_ACTIONS` still declares, and the two have
+    // to move together or the partition test that cross-checks them fails.
+    positionals: [{ name: 'ref', optional: true }, { name: 'theme', optional: true }],
   },
 };
 

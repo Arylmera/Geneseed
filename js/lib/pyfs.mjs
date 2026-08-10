@@ -9,7 +9,8 @@
  * paths eventually, where load time is a per-tool-call cost.
  */
 import {
-  accessSync, constants, writeFileSync, readFileSync, copyFileSync, statSync, utimesSync,
+  accessSync, appendFileSync, constants, writeFileSync, readFileSync, copyFileSync, statSync,
+  utimesSync,
 } from 'node:fs';
 import { EOL } from 'node:os';
 import path from 'node:path';
@@ -35,6 +36,19 @@ const { X_OK } = constants;
  */
 export function writeText(path, text) {
   writeFileSync(path, EOL === '\n' ? text : text.replaceAll('\n', EOL), 'utf8');
+}
+
+/**
+ * `path.open("a", encoding="utf-8").write(text)` — the APPEND half of the rule above.
+ *
+ * Same translation, second mode. It lives here rather than inlined at its one call site
+ * (`js/update.mjs`'s install log) because the newline rule has exactly one owner in this
+ * port and a second copy of it is how the rule rots: an appended line written with
+ * `appendFileSync` alone is the only LF-terminated line in an otherwise CRLF file, which is
+ * invisible in an editor and a whole-file difference to the gate.
+ */
+export function appendText(path, text) {
+  appendFileSync(path, EOL === '\n' ? text : text.replaceAll('\n', EOL), 'utf8');
 }
 
 /**

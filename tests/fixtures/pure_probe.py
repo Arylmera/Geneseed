@@ -22,6 +22,33 @@ import harness  # noqa: E402
 
 
 def run(fn: str, args: list):
+    # `_update`'s pure four (P8a). Imported lazily so a probe that never asks for them does
+    # not pay `import build` twice — `harness` above already did.
+    if fn in ("parse_origin", "redact_url_creds", "count_or_zero", "fetch_phases"):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rituals"))
+        import _update
+        if fn == "parse_origin":
+            return list(_update._parse_origin(args[0]))
+        if fn == "redact_url_creds":
+            return _update._redact_url_creds(args[0])
+        if fn == "count_or_zero":
+            return _update._count(args[0])
+        # `_fetch_streaming`'s reader loop, lifted out of its thread: the same lines in, the
+        # ones it would LOG out, plus the phase it ends on. The loop is inline in the
+        # reference (it closes over `p.stdout`, `lines` and `log`), so this reproduces it
+        # rather than calling it — which is the one shape this corpus allows, and only
+        # because the alternative is no gate at all on the branch that keeps a fetch's
+        # thousand progress repaints out of the install log.
+        logged, last = [], args[1]
+        for raw in args[0]:
+            line = _update._redact_url_creds(raw.strip())
+            if not line:
+                continue
+            phase = line.split(":", 1)[0]
+            if phase != last:
+                logged.append(line)
+                last = phase
+        return [logged, last]
     if fn == "unified_diff":
         return list(difflib.unified_diff(args[0], args[1], fromfile="source/f",
                                          tofile="deployed/f", lineterm=""))

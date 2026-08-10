@@ -537,6 +537,52 @@ _ALLOWED_SPAWNS = {
             "(process.platform === 'darwin' ? ['open', [url], {}] : ['xdg-open', [url], {}]);",
         ],
     },
+    # ---------------------------------------------------------------------------------
+    # P8a, AND ITS ARGUMENT IS THE STRONGEST ROW IN THIS TABLE.
+    #
+    # `git` first, because it is the plain one: there is no git library in the Node stdlib,
+    # this port will not vendor one, and every git call in the module goes through a single
+    # `gitRun` seam that is which-guarded, credential-redacted and never throws. `taskkill`
+    # rides with it for the reason `web/jobs.mjs`' does — a timed-out `git fetch` leaves
+    # `git-remote-https` holding the pipe and the `.git` lock files, and Windows has no
+    # in-process process-group kill.
+    #
+    # THE OTHER THREE RE-EXECUTE THIS PROGRAM, and unlike the job runner's the reason is not
+    # isolation — it is that THE CODE ON DISK CHANGES HALFWAY THROUGH THE VERB.
+    # `pullAndValidate` fast-forwards the working tree and then has to ask the PULLED source
+    # whether it is sound; `rebuildBundle` has to render with the PULLED generator;
+    # `rebuildInstalls` has to re-emit every install with it. An in-process `cmdDoctor` or
+    # `driverMain` answers with the modules THIS process imported before the merge — it would
+    # validate the old source, pass, and then render the old source into the bundle while
+    # reporting an upgrade. That is not a slower right answer, it is the wrong one, and it
+    # would defeat the doctor gate that exists to catch a bad upstream commit.
+    #
+    # WHICH IS ALSO WHY `js/generate.mjs` IS NOT A PRECEDENT AGAINST THIS. `cmdBuild` imports
+    # `driverMain` and calls it, and that module's docblock argues at length that a Node CLI
+    # spawning a Node driver is the passthrough this port removes. Both are true: the
+    # discriminator is whether anything changed underneath, and `build` is the one verb where
+    # nothing has.
+    "update.mjs": {
+        "entry": "cli",
+        "binding": "{ spawn, spawnSync }", "calls": 5, "spawnCalls": 1,
+        "what": "`git …` (the update transport), `taskkill /T` (a timed-out fetch's tree), "
+                "and `node bin/geneseed-{cli,}.mjs` re-executed over the PULLED source",
+        "literals": [
+            # The PATH lookup is named for the reason doctor's and setup's are: the reference
+            # answers `(None, "", "")` — reported as "git is not installed or not on PATH" —
+            # when `shutil.which` misses, and a hardcoded binary cannot reproduce that.
+            "const exe = pyWhich('git');",
+            "spawnSync('taskkill', ['/F', '/T', '/PID', String(child.pid)]",
+            # The three self-re-executions, each naming the running interpreter by absolute
+            # path and this repo's own entry points. No spelling of `python` can reach them.
+            "[path.join(String(cand), 'bin', 'geneseed-cli.mjs'), 'doctor', '--all', "
+            "'--no-bundle'],",
+            "[path.join(String(here), 'bin', 'geneseed.mjs'), ...buildArgs],",
+            "[path.join(String(here), 'bin', 'geneseed-cli.mjs'), 'rebuild-all'],",
+            # The fetch is the async one — the only spawn in this port that streams.
+            "child = spawn(exe, args, {",
+        ],
+    },
     "web/jobs.mjs": {
         "entry": "cli",
         "binding": "{ spawn, spawnSync }", "calls": 1, "spawnCalls": 1,
