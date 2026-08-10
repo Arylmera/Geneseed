@@ -1348,6 +1348,34 @@ renders it as the name in parentheses.
   trace because `_write_hook_shim` skips an unchanged body, so nothing — not even an mtime —
   moved. `golden.sandbox_process_home()` and `tests/test_home_sandbox.py` close it, and the
   gate's first finding was a `setUpModule` shadowed by a second one further down the file.
+- **P7b — the panel runs on this machine after all, and the layout half crosses with it.**
+  `tui` was the twenty-fifth and last subcommand, so **every command now runs from Node**.
+  The phase opened by disproving its own brief: a bare `import curses` fails on stock Windows
+  Python, but `rituals/_harness_core.py` catches that and installs `rituals/_winterm.py` under
+  the name `curses` — **the shim is not a layer beside curses, on Windows it IS curses**. So
+  the reference's panel opens here, `_winterm._Window` takes a stream and a pinned geometry
+  and reads keys through an instance attribute, and the panel can be driven in-process. That
+  made `windows-curses` the wrong answer rather than an unavailable one: installing it would
+  swap PDCurses in for the 353 lines of hand-rolled VT code Geneseed actually ships to Windows,
+  hiding exactly the "hard-won console behaviour" the phase was told to be careful of.
+  **What crosses is the alignment contract** — display width, width-aware truncation and
+  padding, the three glyph tiers, the scroll clamp, the eighths progress bar, the theme reads,
+  and the inventory's two consumers. `_dwidth` is the one function with no equivalent at any
+  rung: JavaScript has neither `east_asian_width` nor `combining`, `\p{Mn}|\p{Me}` disagrees
+  with `combining(ch) != 0` on 897 codepoints, and no dependency may be added — so the port
+  carries its own range tables and **the gate over them is the whole input space rather than a
+  case list**: both sides walk every codepoint from U+0000 to U+2FFFF, run-length encode the
+  widths and compare, against the live `unicodedata` rather than a copy of it.
+  **The panel itself is declared, and the declaration is asserted from both directions**: the
+  reference is shown drawing one, and the port is shown emitting no alt-screen escape, no
+  cursor hide and no section header — plus a structural check that there is nothing in
+  `js/tui.mjs` that *could* draw one. A declaration that only says "we did not" is a claim
+  about one run; this says there is no screen to reach.
+  The phase's own worst defect was a fixture, not a port: a scripted key list feeding a
+  BLOCKING reader deadlocked the suite the moment it ran dry — and it did not hang when the
+  module ran alone, because the `setUpClass` that suppressed the splash set an environment
+  variable the target module had already read at import. **A fixture whose effect depends on
+  import order passes in isolation and hangs in the suite.**
 
 ## 🚫 Explicitly out of scope
 
