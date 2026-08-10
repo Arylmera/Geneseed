@@ -15,6 +15,19 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
 import _build_core  # noqa: E402  (owner of the source roots / posture / mode — see its docstring)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import golden  # noqa: E402  (the process-home sandbox)
+
+
+def setUpModule():
+    # This module emits IN-PROCESS, and `_write_hook_shim()` targets the ENVIRONMENT's home
+    # rather than the emit's own `--out` or `cfg=`. Without this, running the suite rewrites
+    # the developer's machine-wide hook shim. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
+
+
+def tearDownModule():
+    golden.restore_process_home()
 
 
 class SubstituteTests(unittest.TestCase):

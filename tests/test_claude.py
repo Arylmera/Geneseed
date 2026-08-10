@@ -20,6 +20,18 @@ import _build_core  # noqa: E402  (the single owner of ROOT/SRC/THEMES — see i
 import _build_emit  # noqa: E402  (hook shim path + the Geneseed-hook marker tuple)
 import _build_settings  # noqa: E402  (the host-config wiring layer)
 import _harness_build  # noqa: E402  (monkeypatched directly for the rebuild-all test)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import golden  # noqa: E402  (the process-home sandbox)
+
+
+def setUpModule():
+    # This module emits IN-PROCESS, and `_write_hook_shim()` targets the ENVIRONMENT's home
+    # rather than the emit's own `--out` or `cfg=`. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
+
+
+def tearDownModule():
+    golden.restore_process_home()
 
 
 def _read(p):

@@ -274,6 +274,70 @@ def _shim_health(sandbox: Path, emit: str) -> "str | None":
 RELOCATION_VARS = ("OPENCODE_CONFIG_DIR", "BOB_CONFIG_DIR", "COPILOT_CONFIG_DIR")
 
 
+#: Every variable that decides where "home" is, in the order a resolver reaches for one.
+#: `GENESEED_HOME` is listed last because it is the strongest: `_build_settings._shim_home()`
+#: prefers it over `Path.home()`, so an ambient `GENESEED_HOME` OVERRIDES a module's own
+#: HOME/USERPROFILE sandbox — which is how the first measurement of this defect reported
+#: three well-behaved modules as polluters.
+HOME_VARS = ("HOME", "USERPROFILE", "XDG_CONFIG_HOME", "APPDATA", "LOCALAPPDATA",
+             "GENESEED_HOME")
+
+
+def home_overrides(home: Path) -> dict:
+    """The six assignments that move "home" into `home`. ONE definition, because a child's
+    env (`cell_env`) and this process's env (`sandbox_process_home`) have to agree on what
+    the word covers — a sandbox missing one row is a sandbox with a hole in it."""
+    return {"HOME": str(home), "USERPROFILE": str(home),
+            "XDG_CONFIG_HOME": str(home / ".config"),
+            "APPDATA": str(home / "AppData" / "Roaming"),
+            "LOCALAPPDATA": str(home / "AppData" / "Local"),
+            "GENESEED_HOME": str(home / ".geneseed")}
+
+
+#: The stack of live process-home sandboxes — a stack rather than a flag so a nested
+#: `sandbox_process_home()` (the positive control in tests/test_home_sandbox.py runs one
+#: inside a suite that may already have one) restores to what it displaced.
+_PROCESS_HOMES: list = []
+
+
+def sandbox_process_home() -> Path:
+    """Move THIS PROCESS's home into a fresh temp dir, and return it. Call from a test
+    module's `setUpModule`, and `restore_process_home()` from `tearDownModule`.
+
+    WHY IT EXISTS, AND WHY A CHILD'S `cell_env` IS NOT ENOUGH. `_build_settings.
+    _write_hook_shim()` runs on EVERY emit and writes `<home>/.geneseed/bin/geneseed-hook
+    [.cmd]` — the machine-wide shim every installed hook execs — at a path that comes from
+    the environment and NOT from the emit's own `--out` or `cfg=`. A test module that calls
+    `build.emit_claude_global(...)` in-process therefore rewrites the DEVELOPER'S live shim,
+    on every run of the suite.
+
+    AND IT LEAVES NO TRACE, which is why it survived ten phases: a Python-driven emit
+    reproduces the body the shim already had, so `_write_hook_shim`'s unchanged-content
+    fast path takes and not even the mtime moves. Only a Node-driven emit — which bakes a
+    different runner — makes the damage visible, and by then the machine's shim is wrong.
+    """
+    # ignore_cleanup_errors: a rendered tree on Windows can still be held by a virus
+    # scanner when the module ends, and a teardown that can raise is not a teardown.
+    td = tempfile.TemporaryDirectory(prefix="gs-home-", ignore_cleanup_errors=True)
+    home = Path(td.name)
+    saved = {var: os.environ.get(var) for var in HOME_VARS}
+    os.environ.update(home_overrides(home))
+    _PROCESS_HOMES.append((td, saved))
+    return home
+
+
+def restore_process_home() -> None:
+    """Undo the innermost `sandbox_process_home()`. Restores ABSENCE as absence — putting
+    an empty string back where nothing was set would leave `Path.home()` reading `""`."""
+    td, saved = _PROCESS_HOMES.pop()
+    for var, val in saved.items():
+        if val is None:
+            os.environ.pop(var, None)
+        else:
+            os.environ[var] = val
+    td.cleanup()
+
+
 def cell_env(home: Path) -> dict:
     """The environment one cell runs in: every path the generator resolves redirected
     into `home`, and every knob that could redirect or alter output cleared.
@@ -294,12 +358,7 @@ def cell_env(home: Path) -> dict:
     first term — so the two are never even looked up. They are cleared so that the day the
     ANSI branch is made reachable (a pty, a `--color` flag) the matrix does not silently
     become machine-dependent on the developer's own shell."""
-    env = dict(os.environ, HOME=str(home), USERPROFILE=str(home),
-               XDG_CONFIG_HOME=str(home / ".config"),
-               APPDATA=str(home / "AppData" / "Roaming"),
-               LOCALAPPDATA=str(home / "AppData" / "Local"),
-               GENESEED_HOME=str(home / ".geneseed"),
-               PYTHONUTF8="1")
+    env = dict(os.environ, **home_overrides(home), PYTHONUTF8="1")
     for var in (*RELOCATION_VARS, "NO_COLOR", "TERM"):
         env.pop(var, None)
     for var in [k for k in env if k.startswith("GENESEED_") and k != "GENESEED_HOME"]:

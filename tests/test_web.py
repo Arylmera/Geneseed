@@ -16,6 +16,9 @@ sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
 import _build_core  # noqa: E402  (owner of the source roots / host config dirs — see its docstring)
 import web  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import golden  # noqa: E402  (the process-home sandbox)
+
 
 # A WebState built with no explicit target resolves to the machine's own OpenCode
 # config dir — so these tests used to read whatever harness the developer happened
@@ -33,6 +36,13 @@ _ORIG_CONFIG_DIR = None
 
 def setUpModule():
     global _FIXTURE_TD, _FIXTURE, _ORIG_CONFIG_DIR
+    # FIRST, and in this process: the fixture below moves the CHILD's home, but this module
+    # also emits IN-PROCESS (`build.emit_bob`, `emit_copilot*`, `emit_opencode_global`), and
+    # `_write_hook_shim()` targets the ENVIRONMENT's home rather than the emit's `--out`.
+    # Without this the suite rewrites the developer's machine-wide hook shim. It runs before
+    # the subprocess so the child inherits the sandboxed GENESEED_HOME too — which the env
+    # dict below never set, since it predates the shim. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
     _FIXTURE_TD = tempfile.TemporaryDirectory()
     home = Path(_FIXTURE_TD.name)
     env = {
@@ -59,6 +69,7 @@ def tearDownModule():
         _build_core._opencode_config_dir = _ORIG_CONFIG_DIR
     if _FIXTURE_TD is not None:
         _FIXTURE_TD.cleanup()
+    golden.restore_process_home()
 
 
 class LocalHostGuardTests(unittest.TestCase):

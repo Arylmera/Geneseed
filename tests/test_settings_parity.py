@@ -64,6 +64,19 @@ sys.path.insert(0, str(ROOT))
 
 import build  # noqa: E402
 import _build_core  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import golden  # noqa: E402  (the process-home sandbox)
+
+
+def setUpModule():
+    # `_write_hook_shim()` targets the ENVIRONMENT's home rather than any argument, so this
+    # module's shim-body parity cases run against the developer's real shim without it.
+    # See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
+
+
+def tearDownModule():
+    golden.restore_process_home()
 
 NODE = shutil.which("node")
 _NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}

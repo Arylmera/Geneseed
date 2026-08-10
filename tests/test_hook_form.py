@@ -14,6 +14,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import _build_core
 import _build_settings  # noqa: E402  (the host-config wiring layer)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import golden  # noqa: E402  (the process-home sandbox)
+
+
+def setUpModule():
+    # `HookShimTests` moves GENESEED_HOME per test, but the emit-shape classes in this file
+    # do not, and `_write_hook_shim()` targets the ENVIRONMENT's home. Without this the
+    # suite rewrites the developer's shim. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
+
+
+def tearDownModule():
+    golden.restore_process_home()
 
 # The harness.py subcommands whose whole purpose is to stand between the agent and an
 # act needing the user's word. Everything else must fail open.

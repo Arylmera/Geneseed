@@ -18,6 +18,20 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
 import _update  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import golden  # noqa: E402  (the process-home sandbox)
+
+
+def setUpModule():
+    # The route here is not visible in this file's own syntax: the tests that do NOT mock
+    # `_rebuild_bundle` run a real one, which spawns the generator with this process's
+    # environment — and `_write_hook_shim()` targets the ENVIRONMENT's home. Measured, and
+    # declared in `_ROUTED_BY_ANOTHER_PATH`. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
+
+
+def tearDownModule():
+    golden.restore_process_home()
 
 
 class ResolveEmitTests(unittest.TestCase):

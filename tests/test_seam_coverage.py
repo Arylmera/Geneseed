@@ -48,6 +48,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _build_core          # noqa: E402
 import build                # noqa: E402
 import test_emit_boundary   # noqa: E402  (its CELLS list is the coverage side of this gate)
+import golden               # noqa: E402  (the process-home sandbox)
+
+
+def setUpModule():
+    # This module emits IN-PROCESS, and `_write_hook_shim()` targets the ENVIRONMENT's home
+    # rather than the emit's own `--out` or `cfg=`. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
+
+
+def tearDownModule():
+    golden.restore_process_home()
 
 NODE = shutil.which("node")
 

@@ -50,6 +50,16 @@ sys.path.insert(0, str(HERE))
 import golden  # noqa: E402  — the sandbox env and the snapshot/normalise pair, reused
 import _build_core  # noqa: E402
 
+
+def setUpModule():
+    # This module emits IN-PROCESS, and `_write_hook_shim()` targets the ENVIRONMENT's home
+    # rather than the emit's own `--out` or `cfg=`. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
+
+
+def tearDownModule():
+    golden.restore_process_home()
+
 NODE = shutil.which("node")
 
 _NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
