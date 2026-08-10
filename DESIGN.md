@@ -1376,6 +1376,38 @@ renders it as the name in parentheses.
   module ran alone, because the `setUpClass` that suppressed the splash set an environment
   variable the target module had already read at import. **A fixture whose effect depends on
   import order passes in isolation and hangs in the suite.**
+- **P7c — the curses leftovers, and the four names that turned out to be one closure.** The
+  last porting phase. It was handed five named leftovers and **two of them were names rather
+  than code**: `_tui_inventory` has no consumer at all in `_harness_tui_views.py`, and
+  `cmd_setup`'s curses arm, `cmd_bootstrap`'s curses arm and `_doctor_collect(on_progress=)`
+  are one subsystem with three entrances — `_grow_flow` calls bootstrap's `_run_steps` and
+  ends in `_doctor_view`, the only caller of `on_progress=` in the repo. That subsystem is the
+  panel, so the panel stays declared; but the declaration needed a **fresh argument**, because
+  P7b's ("a cell cannot reach it") had been dissolved by P7b itself. The new one: the port's
+  `setup` and `bootstrap` have no curses arm to fall back *from* — they take the reference's
+  own documented fallback unconditionally — and **no gate in this project can compare two
+  panels**, since the reference is driven through Python's own `_winterm` and a Node panel
+  would be graded against a hand-written expectation on both sides. *When the phase that
+  inherits a declaration also dissolves its premise, the declaration has to be re-argued
+  rather than re-quoted.*
+  **What crosses is `theme_anim.play_line`** — the line wizard's install animation, whose only
+  caller crossed in P5i. Six language primitives had to be spelled out rather than assumed:
+  `dict.get` against the JavaScript prototype chain, `str.center`'s `marg & width & 1` term,
+  Python's non-negative modulo, floor division into a repeat count that *throws* where Python
+  empties, strict `int()` for `COLUMNS`, and `max(default=0)` against `Math.max()`. It went
+  into a new module rather than `js/tui.mjs`, so that module's "contains no escape sequence"
+  assertion — the thing that makes the panel's declaration a measurement — survived untouched.
+  **The empty-inventory crash P7b recorded is fixed**: an inventory with no agents, skills or
+  laws crashed the panel on its first frame, and the guard went at the call site rather than in
+  `_detail_lines`, whose `None` return is a contract the corpus gates on both implementations.
+  The phase's worst defect was again a fixture: a test drove the ported wizard with an empty
+  stdin, on the reasoning that EOF is the inert input — and **every reader falls back to its
+  default on EOF, the last default being `Proceed? (Y/n)` → yes**, so it ran a real 99-file
+  build into the checkout. **An interactive component has no inert input; declining is an
+  answer and has to be spelled.** And a second one worth keeping: a stale `.pyc` in the
+  gitignored `__pycache__` executed instead of the source after a `git stash` round-trip
+  restored an mtime the cache satisfied — **a test can fail, or pass, against bytecode that is
+  not the source.**
 
 ## 🚫 Explicitly out of scope
 
