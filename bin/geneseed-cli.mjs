@@ -35,8 +35,8 @@
  * so it is not a discriminator between the two.
  *
  * THE VERB SET IS SMALL AND REFUSES THE REST BY NAME, exactly as the hook entry does.
- * `harness.py` has 24 subparsers (25 invocable names — `update` aliases `upgrade`); this
- * file carries eighteen of those names, which is seventeen subparsers plus that alias.
+ * `harness.py` has 25 subparsers (26 invocable names — `update` aliases `upgrade`); this
+ * file carries twenty of those names, which is nineteen subparsers plus that alias.
  * `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two tables from ever
  * answering the same verb twice, since the shim bakes only one of them.
  *
@@ -53,6 +53,7 @@ import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs
 import { cmdMigrate } from '../js/migrate.mjs';
 import { pyInt } from '../js/lib/pyfs.mjs';
 import { cmdLink, cmdUnlink } from '../js/link.mjs';
+import { cmdHome, cmdMenu } from '../js/menu.mjs';
 import { cmdSetup } from '../js/setup.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
 import { cmdUninstall } from '../js/uninstall.mjs';
@@ -148,6 +149,15 @@ const VERBS = {
   },
   bootstrap: {
     fn: cmdBootstrap,
+  },
+  // P7a. Both are DISPATCHERS whose off-TTY arm is the whole of what a cell can reach, and
+  // `menu`'s on-TTY arm falls back rather than opening a panel — `js/menu.mjs`'s header
+  // argues both, and `tui` is deliberately NOT here: it has no arm this entry can answer.
+  menu: {
+    fn: cmdMenu,
+  },
+  home: {
+    fn: cmdHome,
   },
 };
 

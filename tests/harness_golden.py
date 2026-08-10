@@ -188,7 +188,8 @@ def cells() -> list[dict]:
             + _diff_cells() + _rebuild_all_cells() + _doctor_cells()
             + _uninstall_cells() + _setup_cells() + _web_cells() + _upgrade_cells()
             + _sync_self_cells() + _bootstrap_cells() + _update_alias_cells()
-            + _link_cells() + _migrate_cells())
+            + _link_cells() + _migrate_cells()
+            + _menu_cells() + _home_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -2812,6 +2813,74 @@ _BUNDLE_MADE = ["bundle/AGENT.md", "bundle/.geneseed-theme", "bundle/.geneseed-v
 # A deployed global OpenCode install with an edit source does not have — `export_improvements`
 # is the FIRST thing `cmd_upgrade` runs, and this is what makes it find something.
 _DRIFTED = "# Deployed AGENT.md\n\nA local edit the upgrade is about to overwrite.\n"
+
+
+# --------------------------------------------------------------------------------------
+# menu + home  —  two dispatchers whose OTHER arm no cell has, and the cells say which
+# --------------------------------------------------------------------------------------
+#
+# WHAT A CELL REACHES HERE, AND WHAT IT CANNOT. A cell's stdin is a pipe, so
+# `sys.stdin.isatty()` is FALSE in every one of them. That makes exactly one arm of each verb
+# reachable — `cmd_menu`'s command list, and `cmd_home`'s fall-through into it — and it makes
+# the other arm of each unreachable BY CONSTRUCTION: `cmd_menu`'s is `curses.wrapper(
+# _main_menu)`, 3,398 lines of full-screen panel that is P7b's, and `cmd_home`'s spawns a
+# detached daemon and opens a browser. Neither is a gap this harness could close by trying
+# harder; both are gated where they can be, which for the fork itself is the corpus in
+# `tests/test_pure_function_parity.py` (it fakes the TTY) and for the daemon is `web/`.
+#
+# ⚠ AND `< /dev/null` IS NOT THE WAY TO GET THE NON-TTY ARM. On Windows, Python reports a
+# redirect from the null device as a TTY: a previous session tried exactly that against
+# `setup`, `isatty()` answered TRUE, the whole wizard ran, and it rebuilt the machine's live
+# install. Cells get their stdin from the harness's own pipe, which is honest about itself.
+#
+# THE TWO REFUSALS THESE CELLS CAN TELL APART ARE THE OUTPUT AND THE EXIT CODE, NOT THE
+# BRANCH. `home` with GENESEED_NO_WEB=1 takes `_web_first_ok`'s FIRST refusal and `home`
+# without it takes the SECOND (the isatty one); both then print the same three lines, so the
+# pair is INDISTINGUISHABLE here and is separated in the corpus instead. The cell is kept
+# anyway, because it is the one place a port that read the knob and then ignored it would
+# still have to produce the right bytes.
+
+
+def _menu_cells() -> list[dict]:
+    def mb(name, argv, **kw):
+        return dict(id=f"menu/{name}", bin="cli", world={"repo/.keep": ""},
+                    steps=[{"argv": argv, "cwd": "repo"}], **kw)
+
+    return [
+        mb("off-a-tty-prints-the-command-list", ["menu"],
+           expect=["Geneseed — no interactive menu here. Get started with:  "
+                   "python harness.py setup",
+                   "Other commands:  bootstrap · update · build · doctor · diff · tui · web",
+                   "On a VT-capable terminal, a bare `./geneseed` opens the interactive "
+                   "menu of these."],
+           # The three lines are the WHOLE of this arm — no TUI banner, and no complaint
+           # about curses, which is what the reference writes on the arm above this one.
+           # Without this direction a port that printed the list AND the fallback notice
+           # would pass on `expect` alone.
+           expect_absent=["TUI unavailable", "opening the web console"]),
+    ]
+
+
+def _home_cells() -> list[dict]:
+    def hb(name, argv, **kw):
+        return dict(id=f"home/{name}", bin="cli", world={"repo/.keep": ""},
+                    steps=[{"argv": argv, "cwd": "repo"}], **kw)
+
+    return [
+        hb("off-a-tty-falls-through-to-the-menu", ["home"],
+           # `_web_first_ok()` returns False at the isatty test, and `cmd_home`'s whole
+           # remaining body is `return cmd_menu(args)`. The `expect_absent` is the load
+           # bearing half: a port that started the daemon anyway would print the opening
+           # line, spawn a detached server on port 4747 and leave it running.
+           expect=["Geneseed — no interactive menu here. Get started with:  "
+                   "python harness.py setup"],
+           expect_absent=["opening the web console", "Geneseed UI on", "already running on"]),
+        hb("the-opt-out-knob-refuses-before-anything-else", ["home"],
+           env={"GENESEED_NO_WEB": "1"},
+           expect=["Geneseed — no interactive menu here. Get started with:  "
+                   "python harness.py setup"],
+           expect_absent=["opening the web console"]),
+    ]
 
 
 def _upgrade_cells() -> list[dict]:

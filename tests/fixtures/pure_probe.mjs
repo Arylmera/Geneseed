@@ -32,6 +32,7 @@ import { fetchPhases, parseOrigin, pyCount, redactUrlCreds } from '../../js/upda
 import {
   sliceSection, slugifyHeading, stripHarnessBlocks,
 } from '../../js/web/docs.mjs';
+import { webFirstOk } from '../../js/menu.mjs';
 
 const FNS = {
   version_verdict: (a) => versionVerdict(a[0], a[1]),
@@ -89,6 +90,15 @@ const FNS = {
   redact_url_creds: (a) => redactUrlCreds(a[0]),
   count_or_zero: (a) => pyCount(a[0]),
   fetch_phases: (a) => fetchPhases(a[0], a[1]),
+  // P7a. `args[0]` FAKES `isTTY`, because a probe's stdin is a seeded file and every branch
+  // past the isatty test would otherwise be dead on both sides — the one input no cell and
+  // no ordinary corpus entry can vary. `process.stdin.isTTY` is a plain property here, as
+  // `sys.stdin` is a plain module attribute there; both are put back afterwards.
+  web_first_ok: (a) => {
+    const real = process.stdin.isTTY;
+    process.stdin.isTTY = a[0];
+    try { return webFirstOk(); } finally { process.stdin.isTTY = real; }
+  },
 };
 
 const job = JSON.parse(readFileSync(process.argv[2], 'utf8'));

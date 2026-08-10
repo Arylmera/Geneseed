@@ -1151,7 +1151,8 @@ def _seed(home: Path, world: dict) -> None:
         p.write_text(text, encoding="utf-8")
 
 
-def _run_seeded(cmd: list[str], cases: list[dict], home: Path, stdin: bytes) -> bytes:
+def _run_seeded(cmd: list[str], cases: list[dict], home: Path, stdin: bytes,
+                extra_env: "dict[str, str | None] | None" = None) -> bytes:
     """One probe process, stdin from a seeded FILE, WHOLE stdout returned as bytes.
 
     A file rather than `input=`: the point is that fd 0 is a real readable descriptor the
@@ -1164,6 +1165,15 @@ def _run_seeded(cmd: list[str], cases: list[dict], home: Path, stdin: bytes) -> 
         answers = Path(td) / "answers.txt"
         answers.write_bytes(stdin)
         env = golden.cell_env(home)
+        # AFTER `cell_env`, never before: it clears every `GENESEED_*` knob by PREFIX, so a
+        # `GENESEED_NO_WEB` set first would be wiped and the row would silently become the
+        # row above it. A `None` value POPS — an env row has to be able to say "unset", or
+        # the developer's own `SSH_TTY` decides what half this corpus measures.
+        for var, val in (extra_env or {}).items():
+            if val is None:
+                env.pop(var, None)
+            else:
+                env[var] = val
         with answers.open("rb") as fh:
             proc = subprocess.run(cmd + [str(job)], stdin=fh, capture_output=True,
                                   env=env, cwd=str(ROOT))
@@ -1510,6 +1520,128 @@ class ThePureFunctionsAgreeOnEveryInputNoCellCanBuild(unittest.TestCase):
                 and any(isinstance(e, str) and e[:1] not in ("/", "\\") for e in ls)]
         self.assertTrue(both, "no case pairs a rootless-absolute entry with a relative one, "
                               "so this corpus cannot see which rule the walk applied")
+
+
+# --------------------------------------------------------------------------------------
+# P7a — `_web_first_ok`, with the TTY FAKED
+# --------------------------------------------------------------------------------------
+#
+# `cmd_home` picks between the web console and the TUI menu, and `_web_first_ok` is the whole
+# decision. Its FIRST test after the opt-out knob is `sys.stdin.isatty()`, and no cell in this
+# project has a TTY — so from the acceptance matrix the function has exactly two reachable
+# lines and the other four refusals are dead. That is the "reachable but never VARIED" hole,
+# in its purest form: the branch is executed, it just always answers the same way.
+#
+# SO THE PROBE FAKES THE ONE INPUT. `sys.stdin` becomes a stand-in whose `isatty()` returns
+# what the case asked for, and `process.stdin.isTTY` is assigned the same. Not a pty: Windows
+# has none in the stdlib, and — the trap this project has already paid for once — redirecting
+# `/dev/null` into Python on Windows is reported as a TTY, which is how a previous session ran
+# an entire setup wizard against the developer's live install.
+#
+# THE ENVIRONMENT IS THE OTHER AXIS, so each row is its own probe process. `cell_env` clears
+# every `GENESEED_*` knob by prefix and inherits the rest, so each row states BOTH what it
+# sets and what it unsets — otherwise a developer running this on an SSH session would be
+# measuring a different function from a developer running it locally.
+#
+# WHAT IS STILL NOT REACHED, and it is one branch: the Linux display-server test and the
+# browser lookup underneath it. Every row below answers False at `SSH_*` or True at the
+# browser test on a Windows or macOS machine, and `js/menu.mjs`'s `browserAvailable` declares
+# the divergence it carries there (the reference walks `webbrowser`'s registry; the port asks
+# whether `xdg-open` — the binary `openUrl` will actually run — is on PATH).
+
+#: (name, env-overrides) — `None` UNSETS. Each row is one probe process per side.
+_WEB_FIRST_ENVS = [
+    # The baseline, with every knob the function reads explicitly absent.
+    ("plain", {"GENESEED_NO_WEB": None, "SSH_CONNECTION": None, "SSH_TTY": None}),
+    # `os.environ.get(...)` is truthy for any non-empty string, and an EMPTY one must NOT
+    # opt out — `GENESEED_NO_WEB=` in a shell profile is a common way to write "not set".
+    ("opted-out", {"GENESEED_NO_WEB": "1", "SSH_CONNECTION": None, "SSH_TTY": None}),
+    ("opted-out-with-an-empty-value",
+     {"GENESEED_NO_WEB": "", "SSH_CONNECTION": None, "SSH_TTY": None}),
+    # The two SSH knobs are an `or`, so each needs its own row: a port that read only the
+    # first would agree with the reference on every case where both are set.
+    ("ssh-connection",
+     {"GENESEED_NO_WEB": None, "SSH_CONNECTION": "10.0.0.1 51 10.0.0.2 22", "SSH_TTY": None}),
+    ("ssh-tty", {"GENESEED_NO_WEB": None, "SSH_CONNECTION": None, "SSH_TTY": "/dev/pts/0"}),
+]
+
+#: Both answers to the faked isatty, in this order — the results below are read positionally.
+_WEB_FIRST_CASES = [{"fn": "web_first_ok", "args": [True]},
+                    {"fn": "web_first_ok", "args": [False]}]
+
+
+@unittest.skipIf(shutil.which("node") is None, "node is not on PATH")
+class TheWebFirstDecisionAgreesOnAnInputNoCellCanGive(unittest.TestCase):
+    """`_web_first_ok`, over the five environments and both answers to `isatty()`."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.home = Path(cls._tmp.name) / "home"
+        cls.home.mkdir(parents=True, exist_ok=True)
+        cls.runs = {}
+        for name, env in _WEB_FIRST_ENVS:
+            cls.runs[name] = (
+                _run_seeded([sys.executable, str(PY_PROBE)], _WEB_FIRST_CASES, cls.home,
+                            b"", env),
+                _run_seeded(["node", str(JS_PROBE)], _WEB_FIRST_CASES, cls.home, b"", env),
+            )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    @staticmethod
+    def _results(raw: bytes) -> list:
+        return json.loads(raw.decode("utf-8"))["results"]
+
+    def test_every_environment_produces_the_same_bytes(self):
+        for name, (ref, new) in self.runs.items():
+            with self.subTest(env=name):
+                self.assertEqual(ref, new)
+
+    def test_every_refusal_is_a_refusal_on_both_sides(self):
+        """The absolute half. A cross-implementation equality is blind to a fault both sides
+        share, and here the shared fault has a name: return False always. Each row states
+        what the REFERENCE must answer, and the equality above carries it to the port."""
+        for name in ("opted-out", "ssh-connection", "ssh-tty"):
+            with self.subTest(env=name):
+                for side, raw in zip(("ref", "new"), self.runs[name]):
+                    self.assertEqual(self._results(raw), [False, False],
+                                     f"{side}: {name} must refuse on a TTY and off one")
+        for name, (ref, new) in self.runs.items():
+            with self.subTest(env=name, tty=False):
+                # Off a TTY every row refuses, whatever else is set — the isatty test is
+                # second and nothing after it can undo it.
+                self.assertIs(self._results(ref)[1], False)
+                self.assertIs(self._results(new)[1], False)
+
+    def test_an_empty_opt_out_does_not_opt_out(self):
+        """`GENESEED_NO_WEB=` must behave as unset. It is the one case where the two
+        implementations could agree by accident on the wrong rule — `if os.environ.get(x)`
+        and `if (process.env.x)` are both truthiness tests, and a port that wrote
+        `!== undefined` would pass every other row here."""
+        self.assertEqual(self._results(self.runs["opted-out-with-an-empty-value"][0]),
+                         self._results(self.runs["plain"][0]),
+                         "an empty GENESEED_NO_WEB changed the reference's answer")
+        self.assertEqual(self.runs["opted-out-with-an-empty-value"][1],
+                         self.runs["plain"][1])
+
+    def test_the_corpus_produced_both_answers(self):
+        """The positive control, and this corpus needs one badly: every assertion above is
+        satisfied by a function that returns False unconditionally.
+
+        The True comes from `plain` on a TTY. On a headless Linux box it will not, and that
+        is a true statement about that machine rather than a flaky test — the message says
+        so, because a corpus that can only produce one answer is measuring nothing."""
+        answers = {v for raw, _ in self.runs.values() for v in self._results(raw)}
+        self.assertEqual(answers, {True, False},
+                         "every row answered the same way, so this corpus cannot tell a "
+                         "working `_web_first_ok` from one that always refuses. On a "
+                         "headless Linux machine (no DISPLAY, no browser) that is expected "
+                         f"and the gate is vacuous there; this machine is {sys.platform}.")
+        self.assertIs(self._results(self.runs["plain"][0])[0], True)
+        self.assertIs(self._results(self.runs["plain"][1])[0], True)
 
 
 if __name__ == "__main__":

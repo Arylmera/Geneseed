@@ -92,9 +92,9 @@ The launcher finds Python on its own (the `py` launcher, else `python` on PATH);
 
 ### 🐍 What still needs Python — said plainly
 
-22 of the 25 subcommands run from Node, along with all four hooks, every web-console endpoint and both generators — producing byte-identical output, gated on every commit across every theme × host × footprint. So an npx install is Python-free **for the harness itself**, with exactly three exceptions. None is on the install path; all three are named here rather than discovered later.
+24 of the 25 subcommands run from Node, along with all four hooks, every web-console endpoint and both generators — producing byte-identical output, gated on every commit across every theme × host × footprint. So an npx install is Python-free **for the harness itself**, with exactly three exceptions. None is on the install path; all three are named here rather than discovered later.
 
-- **Three commands have no Node twin**: `home`, `tui`, `menu` — the interactive front-ends. Every other command runs from Node. Asking for one of them from an npm install refuses by name and prints the Python command to run instead, from a checkout.
+- **One command has no Node twin**: `tui` — the full-screen browse panel. Every other command runs from Node. Asking for it from an npm install refuses by name and prints the Python command to run instead, from a checkout. `menu` and `home` do run from Node: `home` opens the web console exactly as it does under Python, and off a terminal both print the same command list. On a terminal, `geneseed menu` from Node says the full-screen panel is Python-only and prints that list — the panel itself is still `python rituals/harness.py menu`.
 - **One Python script rides inside the harness you install.** The `token-report` skill is a script, not prose, so **every bundle carries** exactly one file that needs an interpreter: `src/skills/token-report/scripts/token_report.py`. It runs only when the agent invokes that one skill. Nothing else in a bundle is Python, on any host, theme or footprint — a test freezes that.
 - **`upgrade` / `update` / `sync-self` / `bootstrap` are for a git checkout.** They `git pull` the install's own origin. From an npm install they stop before touching anything and name `npm install -g geneseed@latest` as the update instead.
 

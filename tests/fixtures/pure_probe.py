@@ -24,6 +24,20 @@ import harness  # noqa: E402
 def run(fn: str, args: list):
     # `_update`'s pure four (P8a). Imported lazily so a probe that never asks for them does
     # not pay `import build` twice — `harness` above already did.
+    # P7a. `args[0]` FAKES `sys.stdin.isatty()`, because a probe's stdin is a seeded file and
+    # every branch past the isatty test would otherwise be dead on both sides — the one input
+    # no cell and no ordinary corpus entry can vary. A stand-in object rather than a real
+    # terminal: there is no pty on Windows, and `< /dev/null` is reported as a TTY by Python
+    # here, which is how a previous session ran an entire wizard against a live install.
+    if fn == "web_first_ok":
+        class _Stdin:
+            def __init__(self, tty): self._tty = tty
+            def isatty(self): return self._tty
+        real, sys.stdin = sys.stdin, _Stdin(args[0])
+        try:
+            return harness._web_first_ok()
+        finally:
+            sys.stdin = real
     if fn in ("parse_origin", "redact_url_creds", "count_or_zero", "fetch_phases"):
         sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rituals"))
         import _update

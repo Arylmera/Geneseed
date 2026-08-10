@@ -107,7 +107,11 @@ class TheDocsNameTheVerbsThatStillNeedPython(unittest.TestCase):
     # Stops at the first `.`, not at the end of the line: the names are the first sentence
     # after the colon, and swallowing the rest of the paragraph would let any later
     # backticked token join the set the docs are held to.
-    MARKER = re.compile(r"(\w+) commands? have no Node twin[^\n]*?:([^\n.]*)")
+    # `ha(?:ve|s)` since P7a: the count reached ONE, and "One command have no Node twin" is
+    # not a sentence. A gate that fixes the grammar of a number fixes the number too — this
+    # one silently stopped matching, and an unmatched MARKER is caught only because
+    # `assertIsNotNone` is there. Number-agreement is the doc's business, not the gate's.
+    MARKER = re.compile(r"(\w+) commands? ha(?:ve|s) no Node twin[^\n]*?:([^\n.]*)")
 
     def test_the_derived_set_is_not_empty_and_is_what_this_test_thinks_it_is(self):
         """A positive control. Every assertion below compares against this set, so a
