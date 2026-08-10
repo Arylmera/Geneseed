@@ -564,7 +564,7 @@ _ALLOWED_SPAWNS = {
     # nothing has.
     "update.mjs": {
         "entry": "cli",
-        "binding": "{ spawn, spawnSync }", "calls": 5, "spawnCalls": 1,
+        "binding": "{ spawn, spawnSync }", "calls": 6, "spawnCalls": 1,
         "what": "`git …` (the update transport), `taskkill /T` (a timed-out fetch's tree), "
                 "and `node bin/geneseed-{cli,}.mjs` re-executed over the PULLED source",
         "literals": [
@@ -579,6 +579,12 @@ _ALLOWED_SPAWNS = {
             "'--no-bundle'],",
             "[path.join(String(here), 'bin', 'geneseed.mjs'), ...buildArgs],",
             "[path.join(String(here), 'bin', 'geneseed-cli.mjs'), 'rebuild-all'],",
+            # P8b's, and its argument is `_reexec`'s: `bootstrap` hands off to `setup` in a
+            # FRESH process precisely because this one still holds the pre-update modules. Node
+            # has no `execv`, so the reference's Windows branch — run it and exit with its
+            # status — is the only shape available, and `stdio: 'inherit'` is what makes the
+            # wizard the user's own terminal session rather than a captured one.
+            "const r = spawnSync(argv[0], argv.slice(1), { stdio: 'inherit', ...NO_WINDOW });",
             # The fetch is the async one — the only spawn in this port that streams.
             "child = spawn(exe, args, {",
         ],
@@ -1136,6 +1142,89 @@ class TheEntryRefusesRatherThanNoOps(unittest.TestCase):
                                  f"{name} wrote {written} instead of one report")
                 self.assertRegex(written[0], pattern,
                                  f"{name} stamps the improvements filename differently")
+
+    def test_the_install_log_names_each_runtimes_own_command(self):
+        """The debt P8b's `command:` stamp owes, and it is the P6g `$ <argv>` shape in a FILE.
+
+        `_diagnose_failed_step` persists `command: <argv>` into the install log so a user can
+        re-run the step that failed. The two argvs cannot be byte-equal — the reference names
+        its interpreter and `rituals/harness.py`, the twin names `process.execPath` and
+        `bin/geneseed-cli.mjs` — so `harness_golden._STAMPS` normalises the line, and a
+        normalisation without an absolute assertion beside it is a value nothing gates.
+
+        THE NEGATIVE HALF IS WHY THIS IS NOT "the tails match". A twin that wrote
+        `python harness.py upgrade` into the log would satisfy any comparison of the argument
+        after the head — it would BE the reference — and it would tell a user of a
+        no-Python-needed install to run a command they have no interpreter for.
+
+        The failure is provoked the way the cell provokes it: an origin `GIT_ALLOW_PROTOCOL`
+        refuses, in a checkout copy neither run may write to. `GENESEED_LOG` puts the log in
+        the temp dir, which is also what keeps this out of the developer's own `$HOME`.
+        """
+        for name, cmd, own, foreign in (
+                ("python", [sys.executable, str(HARNESS_PY)], "rituals/harness.py", ".mjs"),
+                ("node", [NODE, str(HARNESS_CLI)], "bin/geneseed-cli.mjs", "harness.py")):
+            with self.subTest(impl=name), tempfile.TemporaryDirectory() as tmp_s:
+                tmp = Path(tmp_s)
+                ck = tmp / "checkout"
+                harness_golden._clone_checkout(
+                    ck, "origin=https://127.0.0.1:1/owner/repo.git", {})
+                log = tmp / "install.log"
+                env = golden.cell_env(tmp / "home")
+                env.update(harness_golden._NO_NETWORK_ENV, GENESEED_LOG=str(log),
+                           GENESEED_OUT=str(tmp / "bundle"))
+                repointed = harness_golden._repoint([str(c) for c in cmd], ck)
+                r = subprocess.run(repointed + ["bootstrap", "--no-setup"], cwd=str(ck),
+                                   env=env, capture_output=True, text=True, encoding="utf-8")
+                self.assertEqual(r.returncode, 1,
+                                 f"{name}: the step was expected to FAIL — without a failed "
+                                 f"step nothing writes a diagnosis at all\n{r.stdout[-600:]}")
+                written = log.read_text(encoding="utf-8")
+                line = next((ln for ln in written.splitlines()
+                             if ln.startswith("command: ")), None)
+                self.assertIsNotNone(line, f"{name} wrote no `command:` line into the install "
+                                           f"log — the stamp in harness_golden is normalising "
+                                           f"a line that is not there\n{written[-600:]}")
+                self.assertIn(own, line.replace("\\", "/"),
+                              f"{name} does not name its own entry point in the install log")
+                self.assertNotIn(foreign, line.replace("\\", "/"),
+                                 f"{name} names the OTHER runtime's entry point — a log that "
+                                 f"tells the user to run the implementation they do not have")
+                self.assertTrue(line.endswith(" upgrade"),
+                                f"{name}'s recorded command does not end in the subcommand "
+                                f"that ran: {line!r}")
+
+    def test_a_mistyped_flag_is_refused_by_the_variadic_sink_on_both_sides(self):
+        """`bootstrap` is the first verb here with a `nargs="*"` positional, and a sink that
+        absorbed an unknown OPTION would be the most dangerous parse bug in this entry point:
+        `geneseed bootstrap --no-setpu` would run the whole bootstrap — an update AND a setup
+        wizard — while the user believes they asked for neither. argparse refuses it, so this
+        refuses it, and both sides are checked because only one of them was changed.
+
+        RUN INSIDE A `dirty` FIXTURE CLONE, belt and braces. The probe is about a refusal that
+        must happen BEFORE anything dispatches; if it regressed, the command it would run is an
+        update — so it is pointed at a throwaway checkout whose own preflight would refuse it
+        anyway, and never at the developer's.
+        """
+        with tempfile.TemporaryDirectory() as tmp_s:
+            tmp = Path(tmp_s)
+            ck = tmp / "checkout"
+            harness_golden._clone_checkout(ck, "dirty", {})
+            env = golden.cell_env(tmp / "home")
+            env.update(harness_golden._NO_NETWORK_ENV)
+            for name, cmd in (("python", [sys.executable, str(HARNESS_PY)]),
+                              ("node", [NODE, str(HARNESS_CLI)])):
+                with self.subTest(impl=name):
+                    argv = harness_golden._repoint([str(c) for c in cmd], ck)
+                    r = subprocess.run(argv + ["bootstrap", "main", "--no-setpu"],
+                                       cwd=str(ck), env=env, capture_output=True, text=True,
+                                       encoding="utf-8")
+                    self.assertEqual(r.returncode, 2,
+                                     f"{name} did not refuse a mistyped flag "
+                                     f"(exit {r.returncode})\n{r.stdout[-500:]}")
+                    self.assertIn("--no-setpu", r.stderr)
+                    self.assertNotIn("step 1/1", r.stdout,
+                                     f"{name} started the update step before refusing")
 
     def test_an_emitted_hook_command_shape_runs_through_the_shell(self):
         """End-to-end, through `sh`/`cmd.exe`, with the `|| exit 0` a real emitted command

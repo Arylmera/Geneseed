@@ -264,7 +264,7 @@ def build_argparser() -> argparse.ArgumentParser:
     up.set_defaults(fn=cmd_upgrade)
 
     ss = sub.add_parser("sync-self", help="refresh the orchestration layer — launchers + update "
-                                          "scripts (cross-platform; replaces sync-self.sh)")
+                                          "scripts (cross-platform; an alias of upgrade)")
     ss.add_argument("ref", nargs="?", default=None, help=argparse.SUPPRESS)  # ignored; git follows the current branch
     ss.set_defaults(fn=cmd_sync_self)
 

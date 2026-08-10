@@ -311,7 +311,8 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
 
 def cmd_sync_self(args: argparse.Namespace) -> int:
     """Refresh the orchestration layer (launchers + update scripts) that `upgrade` does
-    not touch. Cross-platform — replaces sync-self.sh; the wrapper now delegates here."""
+    not touch. Cross-platform, and an alias of `upgrade` since one `git pull` refreshes the
+    launchers and the factory together — the subcommand is kept for the stable contract."""
     import _update
     return _update.sync_self(args.ref)
 
@@ -478,7 +479,17 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     if not args.no_setup:
         # Re-exec the freshly-updated harness so setup uses the new code (this running
         # process still holds the pre-update modules in memory).
-        _reexec([sys.executable, str(Path(__file__).resolve()), "setup"])
+        #
+        # `harness.py`, NOT `__file__`. This module is imported normally (harness.py splices
+        # the submodules' namespaces together after importing them), so `__file__` here is
+        # `rituals/_harness_lifecycle.py` — a module with no `__main__` block, which as a
+        # script imports its dependencies, defines its functions and exits 0 in silence. So
+        # `geneseed bootstrap` updated and then SKIPPED THE WIZARD, on the front door's own
+        # default path (`./geneseed` bare -> bootstrap -> setup), reporting success. The two
+        # re-execs in `_harness_menu.py` always named `harness.py`; this one was the outlier.
+        # Found by the npx port's `bootstrap` cell naming setup's refusal and the reference
+        # not printing it.
+        _reexec([sys.executable, str(Path(__file__).resolve().parent / "harness.py"), "setup"])
     # Scripted `bootstrap --no-setup` must not exit 0 over a failed update.
     return 1 if failed else 0
     return 0

@@ -394,6 +394,70 @@ class UpgradeFlowTests(unittest.TestCase):
         rb.assert_not_called()
 
 
+class TheShellWrappersAreGone(unittest.TestCase):
+    """P8b deleted `upgrade.sh` and `sync-self.sh`, and a deletion needs a gate too.
+
+    THEY WERE ALREADY VESTIGIAL AND THAT IS THE ARGUMENT, checked here rather than asserted in
+    a commit message. Each was ~30 lines of bash whose entire body was an interpreter probe and
+    `exec "$PY" rituals/harness.py {upgrade|sync-self} "$@"` — the same subcommand every
+    launcher already calls, on every OS, with no bash. They could not run on native Windows,
+    where the flow they name has been the documented one for as long as `geneseed.cmd` has
+    existed. What replaces them is not new: it is `geneseed upgrade`, `python rituals/harness.py
+    upgrade`, and now `node bin/geneseed-cli.mjs upgrade`.
+
+    THE ONE THING THAT MUST NOT GO WITH THEM is `_update.main()`. All three launchers (`geneseed`,
+    `geneseed.cmd`, `geneseed.ps1`) probe `harness.py <cmd> --help` and, on a miss, fall back to
+    `python rituals/_update.py <cmd>` to self-heal a factory too old to know the subcommand.
+    That is a STABLE CONTRACT, it never went through either wrapper, and `AliasTests` below is
+    what keeps it answering.
+    """
+
+    #: The two files, and the reference count that makes the scan below non-vacuous.
+    GONE = ("upgrade.sh", "sync-self.sh")
+
+    def _tracked(self):
+        out = subprocess.run(["git", "ls-files"], cwd=str(ROOT), capture_output=True,
+                             text=True, encoding="utf-8")
+        self.assertEqual(out.returncode, 0, "git ls-files failed — the scan below would be "
+                                            "vacuous rather than passing")
+        return [ROOT / rel for rel in out.stdout.split("\n") if rel.strip()]
+
+    def test_neither_wrapper_is_tracked_any_more(self):
+        for name in self.GONE:
+            with self.subTest(script=name):
+                self.assertFalse((ROOT / name).exists(), f"{name} is back on disk")
+        tracked = {p.name for p in self._tracked()}
+        self.assertTrue(tracked, "the tracked-file list is empty")
+        for name in self.GONE:
+            self.assertNotIn(name, tracked)
+
+    def test_nothing_in_the_repository_still_points_at_them(self):
+        """The half a `rm` does not do. A launcher, a doc or a CI step naming a script that is
+        no longer there fails at the moment a user runs it, which is the worst time to find out
+        — and `bootstrap`'s own header comment described the update as "sync-self.sh then
+        upgrade.sh" long after the harness stopped invoking either.
+
+        EVERY tracked text file, not just the launchers: the references were spread across
+        README, SETUP, two adapter documents, a docs page, three `rituals/` modules and a
+        comment in `build.py`. This file names them, which is why it excludes itself.
+        """
+        offenders = []
+        for p in self._tracked():
+            if p.resolve() == Path(__file__).resolve() or not p.is_file():
+                continue
+            if p.suffix.lower() in (".woff2", ".png", ".jpg", ".ico", ".gz"):
+                continue
+            try:
+                text = p.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            for name in self.GONE:
+                if name in text:
+                    offenders.append(f"{p.relative_to(ROOT).as_posix()} -> {name}")
+        self.assertFalse(offenders, "these still name a deleted shell wrapper:\n  "
+                                    + "\n  ".join(sorted(offenders)))
+
+
 class AliasTests(unittest.TestCase):
     def test_sync_self_calls_upgrade(self):
         with mock.patch.object(_update, "upgrade", return_value=0) as up:

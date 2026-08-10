@@ -34,7 +34,7 @@
  *     `test_the_improvements_filename_is_stamped_the_same_way_by_both` — absolute, per
  *     implementation, because a comparison made tolerant of a value owes one somewhere else.
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -44,9 +44,19 @@ import {
   EMIT_HOST_SCOPE, defaultTheme, footprintOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from './installs.mjs';
 import { unifiedDiff, pySplitLines } from './lib/pydiff.mjs';
-import { pyPrint, pyPrintErr, readText, writeText } from './lib/pyfs.mjs';
+import { pyPathStr, pyPrint, pyPrintErr, readText, writeText } from './lib/pyfs.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
+
+/**
+ * `_harness_core._T0` — this process's start, in epoch seconds.
+ *
+ * Python samples it at `_harness_core` import time and `_flush_export_notes` is its only
+ * reader. Module load is the same moment here for the same reason: the entry imports this
+ * module before it parses an argument, so nothing an invocation does can have happened
+ * before it.
+ */
+const T0 = Date.now() / 1000;
 
 /**
  * `_harness_diff._cmp_key` — how an owned file is keyed for drift.
@@ -270,10 +280,9 @@ export function writeImprovements(target, theme, files, outPath = null) {
  * "an install, and no drift". `setup` is the caller and reads exactly that: it prints the
  * path when there is one and says nothing when there is not.
  *
- * `_flush_export_notes`, its neighbour in the Python, is deliberately NOT here. Its two
- * callers are `cmd_setup`'s curses arm and the re-exec inside `upgrade`/`bootstrap` — P7's
- * and P8's — so porting it now would add a function with no caller in this binary, which is
- * the keep-vs-delete criterion this port uses in the other direction.
+ * `flushExportNotes` below is its neighbour in the Python, and P5f left it out on the
+ * keep-vs-delete criterion this port uses: a function with no caller in this binary. P8b is
+ * the due date that docblock named — `cmdBootstrap` is the caller.
  */
 export function exportImprovements(target = null, theme = null, outPath = null) {
   const collected = diffCollect({ target, theme });
@@ -282,6 +291,37 @@ export function exportImprovements(target = null, theme = null, outPath = null) 
   if (!collected.files || collected.files.length === 0) return [null, collected.files];
   return [writeImprovements(collected.target, collected.theme, collected.files, outPath),
     collected.files];
+}
+
+/**
+ * `_harness_diff._flush_export_notes` — re-print, on the RESTORED terminal, every improvements
+ * file exported since this process started.
+ *
+ * WHY IT SCANS RATHER THAN TRACKS. The export that matters most is the one an update STEP made
+ * — in the reference that is a child process, so a call counter in this one would never see it.
+ * It reads the GLOBAL install's `improvements/` and takes anything newer than `T0 - 1`, and the
+ * one-second slack is the reference's: a file written in the same second the process started
+ * can carry an mtime a hair below it.
+ *
+ * Its callers in the Python are `cmd_setup`'s curses arm, the TUI's teardown and
+ * `cmd_bootstrap`; here it is `cmdBootstrap` alone, because the first two are P7's.
+ */
+export function flushExportNotes() {
+  let fresh = [];
+  try {
+    const d = path.join(String(opencodeConfigDir()), 'improvements');
+    // `Path.glob` on a directory that is not there yields nothing rather than raising, which
+    // is why the reference needs no existence check and this needs the readdir in the try.
+    fresh = readdirSync(d)
+      .filter((n) => n.startsWith('improvements-') && n.endsWith('.md'))
+      .map((n) => path.join(d, n))
+      .filter((p) => statSync(p).mtimeMs / 1000 >= T0 - 1)
+      .sort();
+  } catch { return; }
+  if (fresh.length === 0) return;
+  for (const p of fresh) pyPrint(`[geneseed] improvements file saved: ${pyPathStr(p)}\n`);
+  pyPrint('[geneseed] the deployed harness carried local edits — hand the file to '
+    + 'your agent to back-port them into src/.\n');
 }
 
 /** `_harness_diff.cmd_diff`. */

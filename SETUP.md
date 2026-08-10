@@ -717,8 +717,8 @@ not connected, walk these in order:
 | `GENESEED_ROOT` | `harness context` | repo root to discover docs from (default: cwd) |
 | `GENESEED_MODEL` | learn + context plugins | `provider/model` fallback if the session model can't be read (learn distils with it; context shows it in the self-awareness line) |
 | `GENESEED_LLM` | `harness learn` (Claude) | model CLI for distillation, e.g. `claude -p` |
-| `GENESEED_EMIT` | `upgrade.sh` | `opencode-global` \| `opencode` \| unset (plain bundle) |
-| `GENESEED_OUT` / `GENESEED_ROOT` | `upgrade.sh` | bundle / project-root locations |
+| `GENESEED_EMIT` | `geneseed upgrade` | `opencode-global` \| `opencode` \| unset (plain bundle) |
+| `GENESEED_OUT` / `GENESEED_ROOT` | `geneseed upgrade` | bundle / project-root locations |
 | `GENESEED_DEBUG` | context + notify + ponytail plugins | `1` re-enables discovery/inject logs (context), decision/delivery logs (notify), and level-switch logs (ponytail) |
 | `GENESEED_CONTEXT_INJECT` | context plugin | `off` disables the injected block (rely on the AGENT.md law) |
 | `GENESEED_EAGER_FILE_KB` / `GENESEED_EAGER_TOTAL_KB` | context plugin | per-file / total eager injection budget (default 16 / 48) |
@@ -737,7 +737,7 @@ not connected, walk these in order:
 | `GENESEED_COMMANDS` | `build.py` | `1` also emits the `/slash` command layer |
 | `GENESEED_TUI_ASCII` / `GENESEED_TUI_PLAIN` | TUI / harness | force pure-ASCII / drop emoji + animation in the TUI |
 | `GENESEED_NO_ANIM` | install animation | disable the themed install animation |
-| `GENESEED_LOG` | `upgrade.sh` | override the install/upgrade log path |
+| `GENESEED_LOG` | `geneseed upgrade` | override the install/upgrade log path |
 | `GENESEED_NET_TIMEOUT` | `upgrade` | seconds before download attempts give up (default 20, floor 5) |
 | `GENESEED_NO_WEB` | launcher / menu | `1` disables the web-first default of bare `./geneseed` — falls back to the terminal menu |
 | `OPENCODE_CONFIG_DIR` / `XDG_CONFIG_HOME` | global emit | where the global install is written |

@@ -186,7 +186,8 @@ def cells() -> list[dict]:
             + _exclude_cells() + _status_cells() + _version_cells()
             + _build_cells() + _prompt_cells() + _theme_cells()
             + _diff_cells() + _rebuild_all_cells() + _doctor_cells()
-            + _uninstall_cells() + _setup_cells() + _web_cells() + _upgrade_cells())
+            + _uninstall_cells() + _setup_cells() + _web_cells() + _upgrade_cells()
+            + _sync_self_cells() + _bootstrap_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -3011,6 +3012,184 @@ def _upgrade_cells() -> list[dict]:
 
 
 # --------------------------------------------------------------------------------------
+# sync-self  —  the ALIAS, and what an alias still has to get right
+# --------------------------------------------------------------------------------------
+#
+# `sync_self(ref)` is `return upgrade()` and nothing else: one `git pull` refreshes the
+# launchers AND the factory, so the two verbs became one operation and the separate
+# subcommand survives only as a stable contract. That makes this group's subject the
+# DISPATCH rather than any new behaviour — but "an alias" is not one property, it is two,
+# and the second is the one a port gets wrong:
+#
+#   * the verb reaches `upgrade`'s code at all (a table row that answered nothing, or that
+#     answered `cmd_upgrade`, would look identical on the happy path), and
+#   * IT DROPS ITS ARGUMENT. `cmd_upgrade` re-reads its dead `ref` positional as a THEME
+#     when one exists by that name, and prints `ref '<x>' is IGNORED` when one does not.
+#     `cmd_sync_self` does neither: it hands `ref` to `sync_self`, which ignores it and
+#     calls `upgrade()` with NO arguments. So `sync-self cyberpunk` must rebuild in the
+#     checkout's configured theme while `upgrade cyberpunk` rebuilds in cyberpunk — and a
+#     port that wired the row straight to `cmdUpgrade` would pass every other cell here.
+
+def _sync_self_cells() -> list[dict]:
+    def ss(name, argv=("sync-self",), **kw):
+        return dict(id=f"sync-self/{name}", bin="cli", world={"repo/.keep": ""},
+                    steps=[{"argv": list(argv), "cwd": "repo"}], **kw)
+
+    return [
+        ss("is-an-alias-of-upgrade-and-rebuilds-the-bundle-in-place",
+           git="uptodate", env=_UPGRADE_OUT,
+           # `upgrade`'s own vocabulary, printed by a verb that is not spelled `upgrade`.
+           # The `✓ upgrade complete.` line is the alias made visible: the message is
+           # `upgrade`'s and a twin that re-implemented the verb would have written its own.
+           expect=["[geneseed] already up to date.",
+                   "[geneseed] rebuilding bundle -> ",
+                   "(theme: neutral, emit: files)",
+                   "[geneseed] ✓ upgrade complete."],
+           expect_files=_BUNDLE_MADE),
+        ss("the-ref-positional-is-accepted-and-never-re-read-as-a-theme",
+           ("sync-self", _SIGIL_THEME), git="uptodate", env=_UPGRADE_OUT,
+           # THE CELL THAT SEPARATES THE ALIAS FROM THE VERB IT ALIASES, and its pair is
+           # `upgrade/an-explicit-theme-argument-is-rebuilt-with`, which gives the SAME
+           # argument to `upgrade` and gets cyberpunk. A row wired to `cmdUpgrade` builds
+           # cyberpunk here; a row that forwarded `ref` into `upgrade(ref)` prints
+           # `is IGNORED`. Neither is what the reference does.
+           expect=["(theme: neutral, emit: files)"],
+           expect_absent=[f"theme: {_SIGIL_THEME}", f"built theme '{_SIGIL_THEME}'",
+                          "is IGNORED"],
+           expect_files=_BUNDLE_MADE),
+        ss("a-dirty-checkout-is-refused-through-the-alias-too", git="dirty",
+           # Cheap, and it states that the preflight is reached THROUGH the alias rather
+           # than only through `upgrade` — the arm a row that dispatched to nothing would
+           # never print.
+           expect=["[geneseed] preflight: checking the local checkout ...",
+                   "You have local changes in the Geneseed folder"],
+           expect_absent=["[geneseed] fetching from origin", "rebuilding bundle"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
+# bootstrap  —  the update STEP RUNNER, and the half of it a cell can reach
+# --------------------------------------------------------------------------------------
+#
+# MEASURED RATHER THAN ASSUMED, because the plan never measured it. `cmd_bootstrap` is 30
+# lines over a fork no cell can take both sides of:
+#
+#   * `sys.stdin.isatty()` -> `curses.wrapper(_bootstrap_progress, …)`, which is
+#     `_run_steps` + `_run_logged` + `_bootstrap_draw` + `_clean_line` + `_pipe_select_ok`
+#     — 141 lines of progress UI. A cell's stdin is a pipe, so this arm is unreachable from
+#     every cell in this file, exactly as `cmd_setup`'s curses arm was in P5i. It is P7's,
+#     declared rather than half-ported.
+#   * the else -> `_bootstrap_plain`, 31 lines, and the whole of what this group gates:
+#     `_update_step_cmd` (10) + `_harness_supports` (11) + `_diagnose_failed_step` (26) +
+#     `_stale_factory_hint` (16) + `_install_logfile` (10) + `_flush_export_notes` (19) +
+#     `_reexec` (9). ~143 lines reachable, ~141 not.
+#
+# TWO OF THOSE ARE UNREACHABLE FOR A SECOND REASON and are declared with the curses arm.
+# `_harness_supports` probes whether the installed `harness.py` knows the subcommand — in a
+# cell it always does, so `_update_step_cmd` always returns the harness spelling — and
+# `_stale_factory_hint` fires only on argparse's `invalid choice`, which is what that probe
+# missing produces. Both describe a PARTIALLY UPDATED install, and a fixture that could
+# build one would have to ship a second, older harness.
+#
+# THE THREE EXIT CODES ARE THE SUBJECT. `_bootstrap_plain` treats 0 AND 3 as done and
+# everything else as failed, because `upgrade` returns 3 for an info precondition (dirty
+# tree, no upstream, already up to date) and a bootstrap that reported those as failures
+# would tell every user with local changes that their install broke. One cell per code, and
+# the 3 is the one a port gets wrong by writing `rc != 0`.
+
+_BOOTSTRAP_STEP = "[geneseed] step 1/1: Update & rebuild ..."
+
+
+def _bootstrap_cells() -> list[dict]:
+    def bs(name, argv=("bootstrap", "--no-setup"), world=None, **kw):
+        return dict(id=f"bootstrap/{name}", bin="cli",
+                    world=dict({"repo/.keep": ""}, **(world or {})),
+                    steps=[{"argv": list(argv), "cwd": "repo"}], **kw)
+
+    return [
+        bs("no-setup-runs-the-update-step-and-stops", git="uptodate", env=_UPGRADE_OUT,
+           # The step banner is `_bootstrap_plain`'s own and the lines between it are the
+           # update's, on the SAME stream — which is what says the step's output is not
+           # swallowed. (The reference INHERITS the child's streams; P5e's `CREATE_NO_WINDOW`
+           # finding is that inheriting them and passing that flag discards everything the
+           # child prints, and P8a found the last call site still doing it. A cell naming a
+           # line the step prints is the only thing that would have caught either.)
+           expect=[_BOOTSTRAP_STEP,
+                   "[geneseed] already up to date.",
+                   "[geneseed] rebuilding bundle -> ",
+                   "[geneseed] ✓ update complete."],
+           # `--no-setup` means the re-exec never happens, and the setup wizard's refusal is
+           # what would prove it did.
+           expect_absent=["[setup] needs an interactive terminal", "✗ step"],
+           expect_files=[*_BUNDLE_MADE, "home/.geneseed-install.log"]),
+        bs("an-info-precondition-is-reported-as-done-and-not-as-a-failure", git="dirty",
+           # EXIT 3, and the rule the whole runner turns on. `upgrade` refuses a dirty tree
+           # with 3; `rc not in (0, 3)` is what keeps that out of the failure path, and a
+           # port spelling it `rc != 0` prints `✗ step 1/1 FAILED (exit 3)` and exits 1.
+           # The `<exit>` column is what adjudicates the second half.
+           expect=[_BOOTSTRAP_STEP,
+                   "You have local changes in the Geneseed folder",
+                   "[geneseed] ✓ update complete."],
+           expect_absent=["✗ step", "FAILED", "full install log"]),
+        bs("a-failed-step-is-diagnosed-and-persisted-to-the-install-log",
+           git="origin=https://127.0.0.1:1/owner/repo.git",
+           env=dict(_UPGRADE_OUT, GENESEED_NET_TIMEOUT="45"),
+           # EXIT 1, reached through the CHEAPEST failing arm there is: the fetch cannot
+           # reach a loopback origin that `GIT_ALLOW_PROTOCOL=file` refuses outright, so
+           # `upgrade` returns 1 with no pull and without the ~35s doctor the validation arm
+           # costs.
+           #
+           # THE LOG IS THE POINT. The progress pane is ephemeral and the plain path's child
+           # output scrolls past, so `_diagnose_failed_step` persists WHY to the install log
+           # — and a port that printed the diagnosis and skipped the file leaves a user with
+           # a "details above" that has nothing above it. The file is in the snapshot, so its
+           # CONTENTS are compared as well as its existence (see `_STAMPS` for the one line
+           # in it that cannot be: the argv, which names a different runtime per side).
+           expect=[_BOOTSTRAP_STEP,
+                   "[geneseed] ✗ could not reach the remote:",
+                   "[geneseed] ✗ step 1/1 FAILED (exit 1): Update & rebuild",
+                   "[geneseed] ── full install log: "],
+           expect_absent=["✓ update complete", "rebuilding bundle"],
+           expect_files=["home/.geneseed-install.log"]),
+        bs("an-improvements-file-the-step-exported-is-re-announced-afterwards",
+           git="dirty",
+           # `_flush_export_notes`, and this is the ONLY caller this port has for it — which
+           # is why `js/diff.mjs` left it out in P5f and named this phase as the due date.
+           #
+           # It does not track calls: it SCANS the global install's `improvements/` for
+           # anything written since this process started, precisely so an export made by the
+           # update STEP (a child, in the reference) is caught too. So the cell needs a
+           # deployed install with drift — `cmd_upgrade` exports before it does anything —
+           # and a checkout that is refused straight afterwards, which keeps it cheap.
+           #
+           # The PAIR of messages is the assertion: `[upgrade] … saved to` comes from inside
+           # the update step and `[geneseed] improvements file saved:` is the re-announcement
+           # after it. A port with no flush prints only the first.
+           world={f"{_OC}/.geneseed-manifest.json": '{"owned": ["AGENT.md"]}',
+                  f"{_OC}/.geneseed-theme": "neutral\n",
+                  f"{_OC}/AGENT.md": _DRIFTED},
+           expect=["[upgrade] deployed harness carries local edits — saved to ",
+                   "[geneseed] improvements file saved: ",
+                   "[geneseed] the deployed harness carried local edits — hand the file to "
+                   "your agent to back-port them into src/."],
+           expect_files=[f"{_OC}/improvements/improvements-<STAMP>.md"]),
+        bs("without-no-setup-it-hands-off-to-a-FRESH-setup-process",
+           ("bootstrap",), git="dirty",
+           # `_reexec`. It exists because this process still holds the PRE-update modules and
+           # setup must run the code the update just wrote — so it is a new process either
+           # way (execv on POSIX; on Windows a subprocess whose status this one exits with,
+           # which is what the Node twin does on both).
+           #
+           # A CELL REACHES IT CHEAPLY BECAUSE SETUP REFUSES A PIPE. `cmd_setup` opens with
+           # an isatty gate (see `_setup_cells`), so the handoff is observable as that
+           # refusal and the wizard never runs. The `<exit>` column carries setup's code,
+           # which is the other half: `_reexec` exits WITH the child's status, not its own.
+           expect=[_BOOTSTRAP_STEP, "[geneseed] ✓ update complete.", *_SETUP_REFUSAL],
+           expect_absent=["✗ step"]),
+    ]
+
+
+# --------------------------------------------------------------------------------------
 # the runner
 # --------------------------------------------------------------------------------------
 
@@ -3038,6 +3217,21 @@ _STAMPS = (
     # only in new, in the `<dirs>` column and in every key beneath it. Both separators:
     # the path is POSIX in a snapshot key and `str(Path)` on stdout, which is `\` here.
     (re.compile(r"(archived-(?:memory|notebook)[\\/])\d{8}-\d{6}"), r"\1<STAMP>"),
+    # ---- P8b's argv, and it is the P6g `$ <argv>` precedent in a FILE ---------------------
+    #
+    # `_diagnose_failed_step` writes `command: <the update step's argv>` into the install log
+    # so a user can reproduce the step that failed. The two argvs cannot be byte-equal by
+    # construction — the reference names `C:\Python313\python.exe …\rituals\harness.py
+    # upgrade` and the twin names `…\node.exe …\bin\geneseed-cli.mjs upgrade` — and that is
+    # the POINT of the port, not a defect in it. Byte-comparing it would demand the twin write
+    # `python harness.py`, which is the passthrough this port exists to remove.
+    #
+    # ANCHORED AT THE START OF A LINE and requiring a non-empty value, so a side that stopped
+    # writing the line leaves no tag and its cell's `expect` fails rather than comparing equal
+    # to nothing. The debt a tolerant comparison owes is paid in
+    # `test_the_install_log_names_each_runtimes_own_command` in tests/test_hook_cli_parity.py,
+    # which runs both binaries and asserts each argv absolutely against its own runtime.
+    (re.compile(r"^command: .+$", re.M), "command: <ARGV>"),
 )
 
 

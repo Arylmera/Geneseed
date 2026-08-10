@@ -36,7 +36,7 @@
  *
  * THE VERB SET IS SMALL AND REFUSES THE REST BY NAME, exactly as the hook entry does.
  * `harness.py` has 24 subparsers (25 invocable names — `update` aliases `upgrade`); this
- * file carries twelve. `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two
+ * file carries fifteen. `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two
  * tables from ever answering the same verb twice, since the shim bakes only one of them.
  *
  * P6h MADE THE DISPATCH ASYNCHRONOUS and put `js/web/` on this entry's import graph. Both
@@ -52,7 +52,7 @@ import { pyInt } from '../js/lib/pyfs.mjs';
 import { cmdSetup } from '../js/setup.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
 import { cmdUninstall } from '../js/uninstall.mjs';
-import { cmdUpgrade } from '../js/update.mjs';
+import { cmdBootstrap, cmdSyncSelf, cmdUpgrade } from '../js/update.mjs';
 import { cmdWeb } from '../js/web/server.mjs';
 
 const VERBS = {
@@ -177,6 +177,28 @@ const VERBS = {
     // to move together or the partition test that cross-checks them fails.
     positionals: [{ name: 'ref', optional: true }, { name: 'theme', optional: true }],
   },
+  'sync-self': {
+    fn: cmdSyncSelf,
+    // `ss.add_argument("ref", nargs="?", help=argparse.SUPPRESS)` and nothing else. The row
+    // points at `cmdSyncSelf` rather than at `cmdUpgrade`, and that is not tidiness: `sync-self`
+    // DROPS its `ref` where `upgrade` re-reads it as a theme, so the two verbs answer
+    // `sync-self cyberpunk` differently. See `js/update.mjs`'s `syncSelf`.
+    positionals: [{ name: 'ref', optional: true }],
+  },
+  bootstrap: {
+    fn: cmdBootstrap,
+    // The FIRST `nargs="*"` in this table. `bs.add_argument("extra", nargs="*",
+    // help=argparse.SUPPRESS)` exists to TOLERATE a legacy `[theme]` argument after the ref —
+    // `geneseed bootstrap main imperial` must run, not refuse — so a row without `variadic`
+    // would make that spelling `unrecognized arguments` on the Node side alone. Nothing reads
+    // the value, and `parse` collects it as a list for that reason rather than discarding it:
+    // a sink that silently swallowed tokens would also swallow a mistyped flag.
+    positionals: [{ name: 'ref', optional: true }],
+    variadic: 'extra',
+    // argparse's dest for `--no-setup` is `no_setup`; camelCase here, as `--no-bundle` above,
+    // so the two tables read against each other.
+    flags: { '--no-setup': 'noSetup' },
+  },
 };
 
 function die(code, msg) {
@@ -279,6 +301,20 @@ function parse(spec, argv) {
         + `${p.choices.map((c) => `'${c}'`).join(', ')})` };
     }
     args[p.name] = tok;
+  }
+  // `nargs="*"` — a trailing sink that absorbs whatever the named positionals did not take.
+  // It runs AFTER them, which is argparse's order too: `bootstrap main imperial` binds `main`
+  // to `ref` and leaves `imperial` here.
+  //
+  // IT ABSORBS POSITIONALS, NOT OPTIONS, and the distinction is the whole safety of it.
+  // argparse fails an unknown `--flag` with `unrecognized arguments` however many `nargs="*"`
+  // positionals a subparser has; a sink that swallowed it would make `geneseed bootstrap
+  // --no-setpu` run the FULL bootstrap — an update and a setup wizard — while the user
+  // believes they asked for neither. The same rule as the named positionals above.
+  if (spec.variadic !== undefined) {
+    const flagLike = rest.filter((t) => t.startsWith('-') && t !== '-');
+    if (flagLike.length) return { error: `unrecognized arguments: ${flagLike.join(' ')}` };
+    args[spec.variadic] = rest.splice(0, rest.length);
   }
   if (rest.length) return { error: `unrecognized arguments: ${rest.join(' ')}` };
   return { args };

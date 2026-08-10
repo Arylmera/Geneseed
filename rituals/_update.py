@@ -297,7 +297,7 @@ def _pull_and_validate(log) -> tuple[bool, str, str]:
 
 def _logfile() -> Path:
     """Persistent install log, overridable with $GENESEED_LOG. Falls back to the temp
-    dir if the home location is not writable (parity with upgrade.sh)."""
+    dir if the home location is not writable."""
     env = os.environ.get("GENESEED_LOG")
     if env:
         return Path(env)

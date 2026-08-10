@@ -420,7 +420,7 @@ def main() -> None:
     else:
         build(args.theme, out, args.footprint)
 
-    # Persist the emit mode + theme (host state) so a later bare `./upgrade.sh` keeps
+    # Persist the emit mode + theme (host state) so a later bare `geneseed upgrade` keeps
     # deploying the same way and the setup wizard can detect the install. A global emit
     # renders into the config dir without calling build(), so its markers go there;
     # other modes' go in `out`. The emit name disambiguates the target — no --host flag.

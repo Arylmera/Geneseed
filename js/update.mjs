@@ -43,7 +43,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { ROOT } from './checkout.mjs';
-import { exportImprovements } from './diff.mjs';
+import { exportImprovements, flushExportNotes } from './diff.mjs';
 import { opencodeConfigDir } from './hosts.mjs';
 import {
   PY_SPACE, appendText, copyFile, pyInt, pyPathStr, pyPrint, pyPrintErr, pyStripSpace, pyWhich,
@@ -464,7 +464,7 @@ export function logfile() {
   return path.join(os.homedir(), '.geneseed-install.log');
 }
 
-/** `_Log` — print (flushed) and append, with the temp-dir fallback `upgrade.sh` also has. */
+/** `_Log` — print (flushed) and append, with a temp-dir fallback when `$HOME` is read-only. */
 export class Log {
   constructor() {
     this.path = logfile();
@@ -738,4 +738,175 @@ export async function cmdUpgrade(args) {
     ref = null;
   }
   return upgrade(ref, theme);
+}
+
+/**
+ * `_update.sync_self` — an ALIAS of `upgrade`, and the argument it drops is the behaviour.
+ *
+ * One `git pull` refreshes the launchers AND the factory, so the two verbs became one
+ * operation; the separate subcommand is kept for the stable contract. `ref` is bound by the
+ * parser for back-compat and then IGNORED — git follows the checkout's own branch — so this
+ * calls `upgrade()` with no arguments rather than forwarding anything.
+ *
+ * WHICH IS WHY THIS IS NOT `cmdUpgrade`. `cmdUpgrade` re-reads its own dead `ref` positional as
+ * a THEME when `themes/<ref>.json` exists, and announces `ref '<x>' is IGNORED` when it does
+ * not. Wiring the verb table's row straight at `cmdUpgrade` would make `sync-self cyberpunk`
+ * rebuild in cyberpunk, which the reference does not do —
+ * `sync-self/the-ref-positional-is-accepted-and-never-re-read-as-a-theme` is that cell.
+ */
+export function syncSelf(_ref = null) {
+  return upgrade();
+}
+
+/** `_harness_lifecycle.cmd_sync_self`. */
+export function cmdSyncSelf(args) {
+  return syncSelf(args.ref);
+}
+
+// ---------------------------------------------------------------------------------------
+// bootstrap — the update STEP RUNNER
+// ---------------------------------------------------------------------------------------
+//
+// WHAT CROSSES AND WHAT DOES NOT, measured rather than assumed (`rituals/_harness_lifecycle.py`
+// `cmd_bootstrap` and its closure, ~284 lines over eleven functions):
+//
+//   * `_bootstrap_plain` and everything under it CROSS — the step banner, the 0/3/other exit
+//     rule, `_diagnose_failed_step`'s persistence to the install log, `_flush_export_notes`
+//     and `_reexec`.
+//   * `_bootstrap_progress` / `_run_steps` / `_run_logged` / `_bootstrap_draw` / `_clean_line`
+//     / `_pipe_select_ok` — 141 lines of CURSES progress UI — do NOT. P5i ported `cmd_setup`'s
+//     LINE wizard and declared its curses arm on exactly these terms; this is the same arm of
+//     the same fork (`sys.stdin.isatty()`), and it belongs with P7's panel. The consequence is
+//     stated plainly: an interactive `geneseed bootstrap` shows a progress screen under Python
+//     and plain lines under Node, and every non-interactive invocation — which is every cell,
+//     every script and every CI run — is identical.
+//   * `_harness_supports` and `_stale_factory_hint` do not cross either, and for a reason that
+//     is not "unreachable from a cell". They exist because a PARTIAL update can leave a new
+//     launcher over a `harness.py` that has never heard of `upgrade`, so `_update_step_cmd`
+//     probes the subcommand with a `--help` spawn and falls back to `rituals/_update.py`. The
+//     Node twin's step is a function it statically imported: there is no version of this
+//     program in which `upgrade` is missing and no argparse `invalid choice` to detect. A twin
+//     that spawned a `--help` probe to answer a question it already knows would be ceremony.
+//
+// THE STEP IS AN IMPORT, NOT A SPAWN, and this is the one place in this module where that is
+// the right answer. `_ALLOWED_SPAWNS`' argument for the other re-executions is that THE CODE ON
+// DISK CHANGES HALFWAY THROUGH — `pullAndValidate` must ask the PULLED source, `rebuildBundle`
+// must render with the PULLED generator. Nothing has changed when the update step STARTS, so
+// `upgrade()` here is the same program either way, and the reference's own spawn is an artifact
+// of the progress UI needing a pipe to stream. What is kept is the ARGV, because the install
+// log promises the user a command they can re-run.
+
+/**
+ * `_update_step_cmd(here, sub)`, reduced to what survives the paragraph above: the command that
+ * reproduces this step, for the log and the diagnosis.
+ *
+ * The stale-factory fallback is not reproduced (see the block comment). This names the running
+ * interpreter by absolute path and this repo's own CLI — the same spelling every other argv in
+ * this port uses, and no spelling of `python` can reach it.
+ */
+function updateStepCmd(sub) {
+  return [process.execPath, path.join(String(ROOT), 'bin', 'geneseed-cli.mjs'), sub];
+}
+
+/**
+ * `_harness_lifecycle._diagnose_failed_step` — the diagnosis for a failed update step, PERSISTED
+ * before it is printed.
+ *
+ * The persistence is the point rather than a nicety: the curses log pane is ephemeral and the
+ * plain path's child output scrolls past, so without the file the only trace of WHY a step
+ * failed is gone the moment the screen tears down — and the error two frames up tells the user
+ * to look for details.
+ *
+ * `output` reaches the reference as a captured re-probe used to recognise argparse's
+ * `invalid choice`; the twin has no such probe and passes `''`, so the stale-factory lines
+ * cannot appear here. The branch that writes it to the log is kept because it is the
+ * reference's, and the cell that reaches this function proves the two agree with it empty.
+ */
+export function diagnoseFailedStep(n, total, title, cmd, rc, output) {
+  const lines = [`[geneseed] ✗ step ${n}/${total} FAILED (exit ${rc}): ${title}`];
+  // `_install_logfile()` in the reference is `_update._logfile()` behind an import guard that
+  // cannot fail here, and its fallback is the same path `logfile()` already returns.
+  const logpath = logfile();
+  if (logpath !== null) {
+    try {
+      let body = `\n==== geneseed update: step ${n}/${total} '${title}' `
+        + `FAILED (exit ${rc}) ====\n`;
+      body += `command: ${cmd.map(String).join(' ')}\n`;
+      if (output.trim()) body += `${output.replace(/\n+$/, '')}\n`;
+      appendText(logpath, body);
+      lines.push(`[geneseed] ── full install log: ${logpath}`);
+    } catch { /* OSError: pass */ }
+  }
+  return lines;
+}
+
+/**
+ * `_harness_lifecycle._bootstrap_plain` — run the update step with plain output, never fatally.
+ *
+ * EXIT 3 IS NOT A FAILURE. `upgrade` returns 3 for an info precondition — a dirty tree, no
+ * upstream, already up to date — and a bootstrap that reported those as failures would tell
+ * every user with local changes that their install broke. `rc not in (0, 3)`, spelled here as
+ * two comparisons, is the whole rule; `rc !== 0` is the plausible wrong version of it.
+ *
+ * Returns true when a step FAILED, so scripted callers get a real exit code.
+ */
+async function bootstrapPlain() {
+  // One `git pull` refreshes launchers + factory together, then rebuilds — a single step.
+  //
+  // `cmdUpgrade`, NOT `upgrade`. The step the reference runs is the SUBCOMMAND — its argv is
+  // `harness.py upgrade` — and `cmd_upgrade` is where `export_improvements()` lives, ahead of
+  // the update it must run before. A step wired at the module function skips it, and the
+  // deployed harness's local edits are overwritten by the rebuild with nothing recorded.
+  // Caught by `bootstrap/an-improvements-file-the-step-exported-is-re-announced-afterwards`,
+  // which was written for `_flush_export_notes` and found this instead.
+  const steps = [['Update & rebuild', updateStepCmd('upgrade'),
+    () => cmdUpgrade({ ref: null, theme: null })]];
+  let failed = false;
+  for (let i = 0; i < steps.length; i += 1) {
+    const [title, cmd, step] = steps[i];
+    pyPrint(`[geneseed] step ${i + 1}/${steps.length}: ${title} ...\n`);
+    // eslint-disable-next-line no-await-in-loop
+    const rc = await step();
+    if (rc !== 0 && rc !== 3) {
+      failed = true;
+      for (const ln of diagnoseFailedStep(i + 1, steps.length, title, cmd, rc, '')) {
+        pyPrint(`${ln}\n`);
+      }
+    }
+  }
+  if (!failed) pyPrint('[geneseed] ✓ update complete.\n');
+  return failed;
+}
+
+/**
+ * `_harness_lifecycle._reexec` — hand off to a FRESH process so the just-updated code on disk
+ * runs, not the modules this one loaded before the pull.
+ *
+ * Node has no `execv`, so this is always the reference's WINDOWS branch: run the child normally
+ * and exit with its status. That branch exists in the reference for its own reason (`os.execv`
+ * on Windows spawns and kills the parent, handing the console back to the launcher's cmd.exe
+ * mid-run so the two then fight over input), and on POSIX the only difference here is that a
+ * process id survives the handoff. Nothing observes it.
+ */
+function reexec(argv) {
+  const r = spawnSync(argv[0], argv.slice(1), { stdio: 'inherit', ...NO_WINDOW });
+  return r.status === null ? 1 : r.status;
+}
+
+/**
+ * `_harness_lifecycle.cmd_bootstrap` — update everything, then hand off to a fresh `setup`.
+ *
+ * `flushExportNotes()` runs BEFORE the handoff, deliberately: the re-exec replaces this process
+ * and the update step's own improvements notice has scrolled past (or, under the reference's
+ * curses arm, died with the alternate screen).
+ */
+export async function cmdBootstrap(args) {
+  const failed = await bootstrapPlain();
+  flushExportNotes();
+  if (!args.noSetup) {
+    return reexec([process.execPath,
+      path.join(String(ROOT), 'bin', 'geneseed-cli.mjs'), 'setup']);
+  }
+  // Scripted `bootstrap --no-setup` must not exit 0 over a failed update.
+  return failed ? 1 : 0;
 }

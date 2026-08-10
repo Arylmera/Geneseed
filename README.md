@@ -226,8 +226,6 @@ Geneseed/
 ├── geneseed.cmd          native Windows launcher (cmd.exe) — same subcommands, no bash
 ├── geneseed.ps1          native Windows launcher (PowerShell) — same subcommands, no bash
 ├── bootstrap             one-shot: update everything (sync + upgrade), then run setup
-├── upgrade.sh            self-upgrade from the published source
-├── sync-self.sh          meta-updater: refreshes the launcher + upgrade scripts
 ├── harness.config.json   default theme + metadata
 ├── src/                  canonical source — edit here
 │   ├── AGENT.md.tmpl     the entrypoint, rendered to AGENT.md

@@ -82,25 +82,28 @@ your-repo/
   the instruction path is prefixed (`["Harness/AGENT.md"]`):
   `python build.py --emit opencode --out repo/Harness --root repo`.
 
-### Keeping it in sync — `upgrade.sh`
+### Keeping it in sync — `geneseed upgrade`
 
-By default `upgrade.sh` emits only the **plain bundle** (rendered to a sibling
+By default `geneseed upgrade` emits only the **plain bundle** (rendered to a sibling
 `Harness/`). If you reference the bundle's `AGENT.md` directly — including by
 absolute path from anywhere on the machine, or through OpenCode's global config —
 that's all you need; **no `opencode.json` is written**.
 
 ```
 cd Geneseed
-./upgrade.sh                  # plain bundle, keeps the last-built theme
-./upgrade.sh main imperial    # force a theme while upgrading
+./geneseed upgrade              # plain bundle, keeps the last-built theme
+./geneseed upgrade imperial     # force a theme while upgrading
 ```
+
+On Windows use `.\geneseed.cmd upgrade` (or `.\geneseed.ps1`) — same subcommands,
+no bash.
 
 The native layer is **opt-in**. To (re)generate subagents, native skills, and an
 `opencode.json` on upgrade, set `GENESEED_EMIT=opencode` (or
 `GENESEED_EMIT=opencode-global` for the global install):
 
 ```
-GENESEED_EMIT=opencode ./upgrade.sh main imperial
+GENESEED_EMIT=opencode ./geneseed upgrade imperial
 ```
 
 That writes `opencode.json` + `.opencode/` to the project root (the Geneseed
@@ -317,7 +320,7 @@ skills, plugins — **not** memory) and removes stale ones on re-emit, leaving y
 agents/skills/plugins and the memory store untouched.
 
 Use `$OPENCODE_CONFIG_DIR` to keep the global harness in a **git-tracked** folder.
-On upgrade: `GENESEED_EMIT=opencode-global ./upgrade.sh` — or, on Windows,
+On upgrade: `GENESEED_EMIT=opencode-global ./geneseed upgrade` — or, on Windows,
 `$env:GENESEED_EMIT="opencode-global"; .\geneseed.cmd upgrade` — (the mode is then
 remembered in `<cfg>/.geneseed-emit`, so a bare upgrade keeps it). Full design, setup
 guide, and acceptance checklist: [GLOBAL-HARNESS-SPEC.md](GLOBAL-HARNESS-SPEC.md).
