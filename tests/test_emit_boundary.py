@@ -29,6 +29,7 @@ every cell passes while proving nothing. CI must have Node.
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import concurrent.futures
 import json
 import os
 import re
@@ -537,14 +538,30 @@ def _run_side(cell: dict, js: bool) -> dict:
                 "shim": {p.name: golden._normalise(p.read_bytes(), roots) for p in shim}}
 
 
+def _run_sides(work: "list[tuple[dict, bool]]") -> list:
+    """`_run_side` over many (cell, js) pairs, CONCURRENTLY, in the order asked for.
+
+    Each call makes its own temp sandbox, its own `golden.cell_env` and its own child
+    processes, and reads nothing another call writes — so this changes how long the gate
+    takes and nothing about what it compares. It is the whole reason this file went from
+    74 s to a fifth of that: every one of these calls is a full `build.py` run.
+
+    `golden.DEFAULT_JOBS` rather than a second knob: the cell harnesses and this file are
+    the same kind of work, and one number to tune beats two that can disagree."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=golden.DEFAULT_JOBS) as pool:
+        return list(pool.map(lambda a: _run_side(*a), work))
+
+
 @unittest.skipUnless(NODE, "node is not on PATH — the emit boundary cannot be exercised")
 class EmitBoundaryTests(unittest.TestCase):
 
     def test_node_driven_and_python_emits_are_indistinguishable(self):
-        for cell in CELLS:
+        # Both sides of every cell up front; the assertions below are unchanged and still
+        # run one `subTest` per cell, in matrix order, so a failure names the same cell it
+        # always did.
+        ran = _run_sides([(cell, js) for cell in CELLS for js in (False, True)])
+        for cell, (py, node) in zip(CELLS, zip(ran[0::2], ran[1::2])):
             with self.subTest(cell=cell["id"]):
-                py = _run_side(cell, js=False)
-                node = _run_side(cell, js=True)
                 self.assertEqual(py["exit"], node["exit"],
                                  f"{cell['id']}: exit codes differ\n"
                                  f"  python stderr: {py['stderr'][-400:]!r}\n"
@@ -674,9 +691,10 @@ class EmitBoundaryTests(unittest.TestCase):
         constructing the state it names still compares two identical trees and reports
         success. These three are the ones whose subject is a file the USER co-owns, so a
         cell going quiet here means the port's most dangerous code is unwatched."""
-        got = {cid: _run_side(next(c for c in CELLS if c["id"] == cid), js=True)
-               for cid in ("claude/stale-excludes", "claude/commented-settings",
-                           "opencode/commented-jsonc")}
+        ids = ("claude/stale-excludes", "claude/commented-settings",
+               "opencode/commented-jsonc")
+        sel = [next(c for c in CELLS if c["id"] == cid) for cid in ids]
+        got = dict(zip(ids, _run_sides([(c, True) for c in sel])))
 
         stale = got["claude/stale-excludes"]
         manifest = json.loads(stale["files"]["out/.claude/.geneseed-manifest.json"])
@@ -784,12 +802,13 @@ class EmitBoundaryTests(unittest.TestCase):
         ONE hard-to-reach branch, and a cell that stopped reaching it would still compare
         two identical trees and report success — the exact shape that made an earlier
         parity assertion green against a configuration where its subject cannot occur."""
-        got = {c["id"]: _run_side(c, js=True) for c in CELLS
+        sel = [c for c in CELLS
                if c["id"] in ("files/renamed-owned-dir", "files/suspicious-owned-dir",
                               "files/non-bundle-out", "opencode/primary+commands",
                               "files/user-edits", "files/legacy-wiki", "files/downgrade",
                               "files/non-string-owned-dirs",
-                              "opencode/bundle-in-subfolder")}
+                              "opencode/bundle-in-subfolder")]
+        got = {c["id"]: r for c, r in zip(sel, _run_sides([(c, True) for c in sel]))}
 
         renamed = got["files/renamed-owned-dir"]
         self.assertEqual(renamed["exit"], 0)
@@ -877,8 +896,8 @@ class EmitBoundaryTests(unittest.TestCase):
         the second emit must NOT rewrite (only detectable because the fixture CHANGED it
         first), and a render whose product never lands in the child's own tree — the
         CLAUDE.md managed block, which Python writes from the text Node computed."""
-        got = {c["id"]: _run_side(c, js=True) for c in CELLS
-               if c["id"].startswith(("claude/", "bob/", "copilot/"))}
+        sel = [c for c in CELLS if c["id"].startswith(("claude/", "bob/", "copilot/"))]
+        got = {c["id"]: r for c, r in zip(sel, _run_sides([(c, True) for c in sel]))}
 
         proj = got["claude/project"]
         self.assertIn(b"<!-- BEGIN GENESEED -->", proj["files"].get("out/CLAUDE.md", b""),
@@ -1013,8 +1032,8 @@ class EmitBoundaryTests(unittest.TestCase):
         is the one emit whose manifest carries no `managed` key and no `scope`, which is
         why its payload needs `cfgName` and nothing else. If it ever grows a `managed` the
         wire contract changes, and this is where that shows up."""
-        got = {c["id"]: _run_side(c, js=True) for c in CELLS
-               if c["id"].startswith("opencode-global/")}
+        sel = [c for c in CELLS if c["id"].startswith("opencode-global/")]
+        got = {c["id"]: r for c, r in zip(sel, _run_sides([(c, True) for c in sel]))}
         CFG = "home/.config/opencode"
 
         base = got["opencode-global/neutral/full"]

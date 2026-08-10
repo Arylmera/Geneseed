@@ -80,6 +80,7 @@ failed cell would eat the port and then the machine.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import gzip
 import http.client
 import json
@@ -3035,33 +3036,48 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
     return problems
 
 
-def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int) -> int:
-    print(f"[web-golden] {len(matrix)} cells · ref={' '.join(ref)} · new={' '.join(new)}")
+def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int,
+            jobs: int = 1) -> int:
+    print(f"[web-golden] {len(matrix)} cells · ref={' '.join(ref)} · new={' '.join(new)}"
+          f" · jobs={jobs}")
     failures: list[str] = []
-    for i, cell in enumerate(matrix, 1):
-        cid = cell["id"]
-        # One clock per CELL, shared by both sides — see `_DEAD_PID`'s block.
+
+    def _pair(cell: dict) -> tuple:
+        """Both sides of ONE cell, and the CLOCK stays inside it.
+
+        `now` is sampled here rather than in `run_cell` precisely so the two sides of a cell
+        seed the same seconds — that is unchanged by the pool, and it is why the sample must
+        be per-cell-per-worker rather than one value hoisted out of the loop: under
+        concurrency a hoisted clock would drift arbitrarily far from the cell that used it,
+        and `_clock_repl`'s `{stale}`/`{older}` offsets are relative to it.
+
+        Every cell binds `--port 0`, so the OS hands each server its own free port and two
+        cells running at once can no more collide than a cell and the developer's own
+        daemon could."""
         now = int(time.time())
-        a, b = run_cell(ref, cell, now), run_cell(new, cell, now)
-        if isinstance(a, str) or isinstance(b, str):
-            failures.append(f"  {cid}: server failed\n    ref: {a if isinstance(a, str) else 'ok'}"
-                            f"\n    new: {b if isinstance(b, str) else 'ok'}")
-            continue
-        vacuous = check_expectations(cell, a, now)
-        if vacuous:
-            failures.append(f"  {cid}: VACUOUS\n" + "\n".join(f"    {p}" for p in vacuous))
-            continue
-        only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
-        differing = sorted(k for k in set(a) & set(b) if a[k] != b[k])
-        if only_a or only_b or differing:
-            parts = [f"  {cid}: {len(only_a)} missing, {len(only_b)} extra, "
-                     f"{len(differing)} differing"]
-            parts += [f"    - only in ref: {k}" for k in only_a[:5]]
-            parts += [f"    + only in new: {k}" for k in only_b[:5]]
-            parts += [golden._diff(k, a[k], b[k]) for k in differing[:4]]
-            failures.append("\n".join(parts))
-        if i % 5 == 0 or i == len(matrix):
-            print(f"[web-golden]   {i}/{len(matrix)} ({len(failures)} failing)")
+        return run_cell(ref, cell, now), run_cell(new, cell, now), now
+
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
+    with pool:
+        for i, (cell, (a, b, now)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
+            cid = cell["id"]
+            if isinstance(a, str) or isinstance(b, str):
+                failures.append(f"  {cid}: server failed\n    ref: {a if isinstance(a, str) else 'ok'}"
+                                f"\n    new: {b if isinstance(b, str) else 'ok'}")
+            elif (vacuous := check_expectations(cell, a, now)):
+                failures.append(f"  {cid}: VACUOUS\n" + "\n".join(f"    {p}" for p in vacuous))
+            else:
+                only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
+                differing = sorted(k for k in set(a) & set(b) if a[k] != b[k])
+                if only_a or only_b or differing:
+                    parts = [f"  {cid}: {len(only_a)} missing, {len(only_b)} extra, "
+                             f"{len(differing)} differing"]
+                    parts += [f"    - only in ref: {k}" for k in only_a[:5]]
+                    parts += [f"    + only in new: {k}" for k in only_b[:5]]
+                    parts += [golden._diff(k, a[k], b[k]) for k in differing[:4]]
+                    failures.append("\n".join(parts))
+            if i % 5 == 0 or i == len(matrix):
+                print(f"[web-golden]   {i}/{len(matrix)} ({len(failures)} failing)")
     if not failures:
         print(f"[web-golden] ok — {len(matrix)} cells identical")
         return 0
@@ -3084,7 +3100,15 @@ def main(argv=None) -> int:
                     help="comma-separated cell-id prefixes to keep. Refuses an empty "
                          "selection rather than reporting 0/0 as a pass.")
     ap.add_argument("--limit", type=int, default=5, help="failing cells to detail")
+    ap.add_argument("--jobs", type=int, default=golden.DEFAULT_JOBS, metavar="N",
+                    help="cells to run CONCURRENTLY (default: %(default)s on this "
+                         "machine). Each cell starts its own server on its own OS-chosen "
+                         "port inside its own sandbox, so this changes only how long the "
+                         "gate takes, never what it compares.")
     args = ap.parse_args(argv)
+    if args.jobs < 1:
+        print(f"[web-golden] --jobs must be at least 1, got {args.jobs}")
+        return 2
 
     ref = harness_golden._resolve_cli(golden._split(args.ref)) if args.ref else [
         sys.executable, str(ROOT / "rituals" / "harness.py"), "web"]
@@ -3097,7 +3121,7 @@ def main(argv=None) -> int:
             print(f"[web-golden] --only {','.join(keep)} selected 0 cells — nothing would "
                   f"be compared, which is not a pass.")
             return 2
-    return compare(ref, new, matrix, args.limit)
+    return compare(ref, new, matrix, args.limit, jobs=args.jobs)
 
 
 if __name__ == "__main__":

@@ -58,6 +58,7 @@ overwrite the user's actual installs, twice per run. Never remove the sandbox.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import difflib
 import hashlib
 import json
@@ -70,6 +71,14 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+#: Cells run CONCURRENTLY by default. Every cell builds its own temp sandbox, derives its
+#: own environment from `cell_env` and spawns its own children; nothing is shared and
+#: nothing is ordered, so the pool changes how long the gate takes and nothing about what
+#: it compares. Capped rather than `cpu_count()` because each worker is two generator
+#: processes writing ~99 files, and past ~8 the disk answers before the CPU does.
+#: `--jobs 1` is the old serial run, for a failure you want to watch happen.
+DEFAULT_JOBS = min(8, os.cpu_count() or 1)
 
 EMITS = ("files", "opencode", "opencode-global", "claude", "claude-global",
          "bob", "bob-global", "copilot", "copilot-global")
@@ -429,60 +438,34 @@ def _diff(name: str, a: bytes, b: bytes) -> str:
 
 def compare(ref: list[str], new: list[str], quick: bool, limit: int,
             ref_repeat: int = 1, new_repeat: int = 1,
-            matrix: "list[dict] | None" = None) -> int:
+            matrix: "list[dict] | None" = None, jobs: int = 1) -> int:
     matrix = cells(quick) if matrix is None else matrix
     times = {1: "", 2: " ×2"}
     print(f"[golden] {len(matrix)} cells · ref={' '.join(ref)}{times.get(ref_repeat, '')}"
-          f" · new={' '.join(new)}{times.get(new_repeat, '')}")
+          f" · new={' '.join(new)}{times.get(new_repeat, '')} · jobs={jobs}")
     failures: list[str] = []
-    for i, cell in enumerate(matrix, 1):
-        cid = cell.get("label") or (
-            f"{cell['theme']}/{cell['emit']}/{cell['footprint']}"
-            + (f"/{cell['posture']}" if cell.get("posture") else "")
-            + (f"/{cell['mode']}" if cell.get("mode") else ""))
-        # The reference side of a deletion cell is the AFTER configuration emitted into a
-        # clean sandbox — the tree the prune is supposed to reproduce.
+
+    def _pair(cell: dict) -> tuple:
+        """Both sides of ONE cell. The reference side of a deletion cell is the AFTER
+        configuration emitted into a clean sandbox — the tree the prune is supposed to
+        reproduce."""
         ref_cell = {k: v for k, v in cell.items() if k != "before"}
-        a, b = run_cell(ref, ref_cell, ref_repeat), run_cell(new, cell, new_repeat)
-        # The streams are only comparable when both sides ran the same number of times.
-        # Emit two legitimately says different things from emit one — it warns about files
-        # it now finds already there — so `--idempotent` and `--deletion`, which compare a
-        # fresh emit against a tree that already held one, drop them rather than reporting
-        # a difference that is the point of the flag.
-        runs = (ref_repeat, new_repeat + (1 if cell.get("before") else 0))
-        if runs[0] != runs[1] and not isinstance(a, str) and not isinstance(b, str):
-            for snap in (a, b):
-                snap.pop("<stdout>", None)
-                snap.pop("<stderr>", None)
-        if isinstance(a, str) or isinstance(b, str):
-            failures.append(f"  {cid}: generator failed\n    ref: {a if isinstance(a, str) else 'ok'}"
-                            f"\n    new: {b if isinstance(b, str) else 'ok'}")
-            continue
-        only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
-        differing = sorted(k for k in set(a) & set(b) if a[k] != b[k])
-        # The sovereign write-once seeds. A deletion cell switches the theme under a tree
-        # that already has one, and the agent's own spaces are seeded ONCE and never
-        # re-rendered by design (`_build_render.py:880` for the bundle's notebook,
-        # `_global_memory`/`_global_notebook` for the config dirs) — so they keep the
-        # pre-switch vocabulary while a fresh emit renders the new one. That is the
-        # contract, not a prune failure. Named per cell rather than filtered globally, and
-        # a cell whose carve-out catches NOTHING fails: a normaliser that has stopped
-        # excusing anything is hiding whatever it would excuse next.
-        stale = {k for k in differing if any(k.endswith(s) for s in cell.get("sovereign", ()))}
-        differing = [k for k in differing if k not in stale]
-        if cell.get("sovereign") and not stale:
-            failures.append(f"  {cid}: no file kept its pre-switch text — the sovereign "
-                            f"carve-out {list(cell['sovereign'])} excuses nothing here "
-                            f"and must be removed")
-        elif only_a or only_b or differing:
-            parts = [f"  {cid}: {len(only_a)} missing, {len(only_b)} extra, "
-                     f"{len(differing)} differing"]
-            parts += [f"    - only in ref: {k}" for k in only_a[:5]]
-            parts += [f"    + only in new: {k}" for k in only_b[:5]]
-            parts += [_diff(k, a[k], b[k]) for k in differing[:2]]
-            failures.append("\n".join(parts))
-        if i % 25 == 0 or i == len(matrix):
-            print(f"[golden]   {i}/{len(matrix)} ({len(failures)} failing)")
+        return run_cell(ref, ref_cell, ref_repeat), run_cell(new, cell, new_repeat)
+
+    # `pool.map` yields in SUBMISSION order, so the failure list, the `--limit` cut and the
+    # progress counter all read exactly as they did serially. An exception inside a worker
+    # is re-raised here rather than swallowed, so a crashed cell ends the run loudly instead
+    # of shortening the matrix silently.
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
+    with pool:
+        for i, (cell, (a, b)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
+            cid = cell.get("label") or (
+                f"{cell['theme']}/{cell['emit']}/{cell['footprint']}"
+                + (f"/{cell['posture']}" if cell.get("posture") else "")
+                + (f"/{cell['mode']}" if cell.get("mode") else ""))
+            _compare_cell(cid, cell, a, b, ref_repeat, new_repeat, failures)
+            if i % 25 == 0 or i == len(matrix):
+                print(f"[golden]   {i}/{len(matrix)} ({len(failures)} failing)")
     if not failures:
         print(f"[golden] ok — {len(matrix)} cells byte-identical")
         return 0
@@ -492,6 +475,50 @@ def compare(ref: list[str], new: list[str], quick: bool, limit: int,
     if len(failures) > limit:
         print(f"[golden] ... and {len(failures) - limit} more (raise --limit to see them)")
     return 1
+
+
+def _compare_cell(cid: str, cell: dict, a, b, ref_repeat: int, new_repeat: int,
+                  failures: list[str]) -> None:
+    """Adjudicate one already-run cell. Split out of `compare` when the runs became
+    concurrent: everything here reads two finished snapshots and appends to `failures`,
+    and it stays on the main thread so the ordering and the reporting are unchanged."""
+    # The streams are only comparable when both sides ran the same number of times.
+    # Emit two legitimately says different things from emit one — it warns about files
+    # it now finds already there — so `--idempotent` and `--deletion`, which compare a
+    # fresh emit against a tree that already held one, drop them rather than reporting
+    # a difference that is the point of the flag.
+    runs = (ref_repeat, new_repeat + (1 if cell.get("before") else 0))
+    if runs[0] != runs[1] and not isinstance(a, str) and not isinstance(b, str):
+        for snap in (a, b):
+            snap.pop("<stdout>", None)
+            snap.pop("<stderr>", None)
+    if isinstance(a, str) or isinstance(b, str):
+        failures.append(f"  {cid}: generator failed\n    ref: {a if isinstance(a, str) else 'ok'}"
+                        f"\n    new: {b if isinstance(b, str) else 'ok'}")
+        return
+    only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
+    differing = sorted(k for k in set(a) & set(b) if a[k] != b[k])
+    # The sovereign write-once seeds. A deletion cell switches the theme under a tree
+    # that already has one, and the agent's own spaces are seeded ONCE and never
+    # re-rendered by design (`_build_render.py:880` for the bundle's notebook,
+    # `_global_memory`/`_global_notebook` for the config dirs) — so they keep the
+    # pre-switch vocabulary while a fresh emit renders the new one. That is the
+    # contract, not a prune failure. Named per cell rather than filtered globally, and
+    # a cell whose carve-out catches NOTHING fails: a normaliser that has stopped
+    # excusing anything is hiding whatever it would excuse next.
+    stale = {k for k in differing if any(k.endswith(s) for s in cell.get("sovereign", ()))}
+    differing = [k for k in differing if k not in stale]
+    if cell.get("sovereign") and not stale:
+        failures.append(f"  {cid}: no file kept its pre-switch text — the sovereign "
+                        f"carve-out {list(cell['sovereign'])} excuses nothing here "
+                        f"and must be removed")
+    elif only_a or only_b or differing:
+        parts = [f"  {cid}: {len(only_a)} missing, {len(only_b)} extra, "
+                 f"{len(differing)} differing"]
+        parts += [f"    - only in ref: {k}" for k in only_a[:5]]
+        parts += [f"    + only in new: {k}" for k in only_b[:5]]
+        parts += [_diff(k, a[k], b[k]) for k in differing[:2]]
+        failures.append("\n".join(parts))
 
 
 def _split(cmd: str) -> list[str]:
@@ -547,7 +574,19 @@ def main(argv=None) -> int:
                          "has crossed instead of reporting eight refusals as failures. "
                          "Drop the flag once all nine cross — it narrows the matrix and "
                          "narrowing it is the thing to stop doing.")
+    ap.add_argument("--jobs", type=int, default=DEFAULT_JOBS, metavar="N",
+                    help="cells to run CONCURRENTLY (default: %(default)s on this machine). "
+                         "A cell is a self-contained sandbox and two child processes, so "
+                         "this changes only how long the gate takes, never what it "
+                         "compares — `--jobs 1` is the old serial run and reports "
+                         "identically.")
     args = ap.parse_args(argv)
+    # Refused rather than clamped, for `--repeat 0`'s reason: `ThreadPoolExecutor(0)` raises
+    # and a negative one would too, but a flag that silently corrected itself would let a
+    # typo'd `--jobs` read as an accepted setting.
+    if args.jobs < 1:
+        print(f"[golden] --jobs must be at least 1, got {args.jobs}")
+        return 2
     ref = _split(args.ref) if args.ref else [sys.executable, "build.py"]
     new = _split(args.new) if args.new else ref
     keep = None
@@ -575,19 +614,22 @@ def main(argv=None) -> int:
     if args.deletion:
         # Both sides are the SAME generator; the variable is what the target held before.
         m = _keep(deletion_cells(args.quick))
-        return 2 if m is None else compare(ref, ref, args.quick, args.limit, matrix=m)
+        return 2 if m is None else compare(ref, ref, args.quick, args.limit, matrix=m,
+                                           jobs=args.jobs)
     if args.idempotent:
         # Both sides are the SAME generator; the variable is whether the target already
         # holds a previous emit. A difference here is a re-emit bug, not a port bug.
         m = _keep(cells(args.quick))
         return 2 if m is None else compare(ref, ref, args.quick, args.limit,
-                                           ref_repeat=1, new_repeat=2, matrix=m)
+                                           ref_repeat=1, new_repeat=2, matrix=m,
+                                           jobs=args.jobs)
     if args.repeat < 1:
         print(f"[golden] --repeat must be at least 1, got {args.repeat}")
         return 2
     m = _keep(cells(args.quick))
     return 2 if m is None else compare(ref, new, args.quick, args.limit, matrix=m,
-                                       ref_repeat=args.repeat, new_repeat=args.repeat)
+                                       ref_repeat=args.repeat, new_repeat=args.repeat,
+                                       jobs=args.jobs)
 
 
 if __name__ == "__main__":

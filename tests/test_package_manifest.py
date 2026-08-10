@@ -203,10 +203,15 @@ SHIPS: tuple[tuple[str, str], ...] = (
     ("themes/", "render.loadTheme reads these; a themeless install renders nothing"),
     ("adapters/", "bin/geneseed.mjs, js/hooks.mjs and js/web/docs.mjs all read ROOT/adapters"),
     ("docs/web/", "js/web/docs.mjs serves ROOT/docs; the console's Docs pages ARE these files"),
-    ("docs/opencode-plugin-setup.md", "docs/*.md — the four non-web pages, same reader"),
+    ("docs/opencode-plugin-setup.md", "docs/*.md — the five non-web pages, same reader"),
     ("docs/token-footprint.md", "docs/*.md"),
     ("docs/web-ui.md", "docs/*.md"),
     ("docs/wiki.md", "docs/*.md"),
+    # P9. Ships for the reason the others do not: it is the standing statement of what the
+    # Node port does NOT prove, and a package carrying two implementations owes its reader
+    # that list. `docs/specs/` is gitignored, so a ledger kept only in a phase note is a
+    # per-machine file — this is the tracked home for it.
+    ("docs/port-ledger.md", "docs/*.md — what the Node port does not prove"),
     ("web/dist/", "TRACKED and load-bearing: js/web/server.mjs serves it, and _npm_build is a "
                   "first-run-from-a-partial-checkout path no cell reaches"),
     ("web/src/pages/Laws.jsx", "doctor's lawMetaProblems reads this ONE file out of web/src; "

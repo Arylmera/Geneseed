@@ -127,9 +127,10 @@ class FlagWiringTests(unittest.TestCase):
     def _capture(self, argv):
         seen = {}
 
-        def fake_compare(ref, new, quick, limit, ref_repeat=1, new_repeat=1, matrix=None):
+        def fake_compare(ref, new, quick, limit, ref_repeat=1, new_repeat=1, matrix=None,
+                         jobs=1):
             seen.update(ref=ref, new=new, ref_repeat=ref_repeat,
-                        new_repeat=new_repeat, matrix=matrix)
+                        new_repeat=new_repeat, matrix=matrix, jobs=jobs)
             return 0
 
         real, golden.compare = golden.compare, fake_compare
@@ -155,6 +156,29 @@ class FlagWiringTests(unittest.TestCase):
         self.assertEqual((seen["ref_repeat"], seen["new_repeat"]), (1, 1))
         rc, _ = self._capture(["--quick", "--repeat", "0"])
         self.assertEqual(rc, 2, "--repeat 0 would compare nothing and must be refused")
+
+    def test_jobs_reaches_compare_on_every_path_and_refuses_zero(self):
+        """`--jobs` degrades in the direction nobody notices: a run that silently fell back
+        to one worker still compares every cell and still passes, so the only symptom is
+        the clock — and nobody times a green gate. It is the same shape as `--repeat`'s
+        wiring, which P4c measured going green with the wiring dropped.
+
+        ALL THREE PATHS, because `main` has three `compare` calls and P4c's lesson was that
+        a narrowing flag needs a wiring test per call site: the plain run, `--idempotent`
+        and `--deletion` each thread it separately and each could stop."""
+        for extra in ([], ["--idempotent"], ["--deletion"]):
+            with self.subTest(mode=extra or ["plain"]):
+                _, seen = self._capture(["--quick", "--jobs", "3", *extra])
+                self.assertEqual(seen["jobs"], 3,
+                                 "--jobs did not reach compare: the gate silently ran "
+                                 "serially while its header said otherwise")
+        _, seen = self._capture(["--quick"])
+        self.assertEqual(seen["jobs"], golden.DEFAULT_JOBS,
+                         "the default did not reach compare either")
+        self.assertGreaterEqual(golden.DEFAULT_JOBS, 1)
+        rc, _ = self._capture(["--quick", "--jobs", "0"])
+        self.assertEqual(rc, 2, "--jobs 0 cannot build a pool and must be refused, not "
+                                "clamped — a corrected typo reads as an accepted setting")
 
     def test_emits_narrows_the_matrix_and_refuses_an_unknown_mode(self):
         _, seen = self._capture(["--emits", "files"])

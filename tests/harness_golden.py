@@ -70,6 +70,7 @@ every knob a cell depends on is stated by the cell instead of inherited from the
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
@@ -4395,34 +4396,47 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     return problems
 
 
-def compare(ref: dict, new: dict, matrix: list[dict], limit: int) -> int:
+def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1) -> int:
     """`ref` and `new` map a cell's `bin` ("hook"/"cli") to the command that answers it."""
     shown = " · ".join(f"new[{k}]={' '.join(v)}" for k, v in sorted(new.items()))
-    print(f"[harness-golden] {len(matrix)} cells · ref={' '.join(ref['hook'])} · {shown}")
+    print(f"[harness-golden] {len(matrix)} cells · ref={' '.join(ref['hook'])} · {shown}"
+          f" · jobs={jobs}")
     failures: list[str] = []
-    for i, cell in enumerate(matrix, 1):
-        cid = cell["id"]
+
+    def _pair(cell: dict) -> tuple:
+        """Both sides of ONE cell. `run_cell` builds two throwaway temp dirs, seeds its own
+        world, derives its env from `golden.cell_env` and runs every step with `cwd` inside
+        that sandbox — it shares nothing with another cell and depends on no ordering, which
+        is what makes running them at once a change to the clock and not to the gate. The
+        `doctor` cells are why it is worth doing: each one copies 511 tracked files TWICE
+        (see `_copy_checkout`) on top of two ~2 s runs of the verb."""
         which = cell.get("bin", "hook")
-        a, b = run_cell(ref[which], cell), run_cell(new[which], cell)
-        if isinstance(a, str) or isinstance(b, str):
-            failures.append(f"  {cid}: CLI failed\n    ref: {a if isinstance(a, str) else 'ok'}"
-                            f"\n    new: {b if isinstance(b, str) else 'ok'}")
-            continue
-        vacuous = check_expectations(cell, a)
-        if vacuous:
-            failures.append(f"  {cid}: VACUOUS\n" + "\n".join(f"    {p}" for p in vacuous))
-            continue
-        only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
-        differing = sorted(k for k in set(a) & set(b) if a[k] != b[k])
-        if only_a or only_b or differing:
-            parts = [f"  {cid}: {len(only_a)} missing, {len(only_b)} extra, "
-                     f"{len(differing)} differing"]
-            parts += [f"    - only in ref: {k}" for k in only_a[:5]]
-            parts += [f"    + only in new: {k}" for k in only_b[:5]]
-            parts += [golden._diff(k, a[k], b[k]) for k in differing[:3]]
-            failures.append("\n".join(parts))
-        if i % 20 == 0 or i == len(matrix):
-            print(f"[harness-golden]   {i}/{len(matrix)} ({len(failures)} failing)")
+        return run_cell(ref[which], cell), run_cell(new[which], cell)
+
+    # `pool.map` yields in submission order, so the failure list and the `--limit` cut read
+    # exactly as they did serially; a worker's exception is re-raised here rather than
+    # quietly shortening the matrix.
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
+    with pool:
+        for i, (cell, (a, b)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
+            cid = cell["id"]
+            if isinstance(a, str) or isinstance(b, str):
+                failures.append(f"  {cid}: CLI failed\n    ref: {a if isinstance(a, str) else 'ok'}"
+                                f"\n    new: {b if isinstance(b, str) else 'ok'}")
+            elif (vacuous := check_expectations(cell, a)):
+                failures.append(f"  {cid}: VACUOUS\n" + "\n".join(f"    {p}" for p in vacuous))
+            else:
+                only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
+                differing = sorted(k for k in set(a) & set(b) if a[k] != b[k])
+                if only_a or only_b or differing:
+                    parts = [f"  {cid}: {len(only_a)} missing, {len(only_b)} extra, "
+                             f"{len(differing)} differing"]
+                    parts += [f"    - only in ref: {k}" for k in only_a[:5]]
+                    parts += [f"    + only in new: {k}" for k in only_b[:5]]
+                    parts += [golden._diff(k, a[k], b[k]) for k in differing[:3]]
+                    failures.append("\n".join(parts))
+            if i % 20 == 0 or i == len(matrix):
+                print(f"[harness-golden]   {i}/{len(matrix)} ({len(failures)} failing)")
     if not failures:
         print(f"[harness-golden] ok — {len(matrix)} cells identical")
         return 0
@@ -4462,7 +4476,14 @@ def main(argv=None) -> int:
                          "port, and for iteration. Refuses an empty selection rather than "
                          "reporting 0/0 as a pass.")
     ap.add_argument("--limit", type=int, default=5, help="failing cells to detail")
+    ap.add_argument("--jobs", type=int, default=golden.DEFAULT_JOBS, metavar="N",
+                    help="cells to run CONCURRENTLY (default: %(default)s on this "
+                         "machine). A cell is a self-contained sandbox, so this changes "
+                         "only how long the gate takes, never what it compares.")
     args = ap.parse_args(argv)
+    if args.jobs < 1:
+        print(f"[harness-golden] --jobs must be at least 1, got {args.jobs}")
+        return 2
 
     ref = _resolve_cli(golden._split(args.ref)) if args.ref else [
         sys.executable, str(ROOT / "rituals" / "harness.py")]
@@ -4489,7 +4510,7 @@ def main(argv=None) -> int:
                   f"({needs[0]}, ...). They would have been compared against the reference "
                   f"itself, which always passes. Pass --new-cli, or --only the hook verbs.")
             return 2
-    return compare({"hook": ref, "cli": ref}, new, matrix, args.limit)
+    return compare({"hook": ref, "cli": ref}, new, matrix, args.limit, jobs=args.jobs)
 
 
 if __name__ == "__main__":
