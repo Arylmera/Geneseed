@@ -9,6 +9,21 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **`npx geneseed setup` is now the way in, and the README says exactly where that stops
+  being true.** The install docs assume npm first: one command, no clone, no Python, on
+  macOS, Linux and Windows alike. **22 of the 25 commands** run from Node, along with all
+  four hooks, every web-console endpoint and both generators, producing byte-identical
+  output. Three things still need Python and each is now named in the README and the Setup
+  guide rather than discovered: the interactive front-ends `home`, `tui` and `menu` have no
+  Node twin; the self-update commands (`upgrade`, `update`, `sync-self`, `bootstrap`) are for
+  a git checkout and now point an npm install at `npm install -g geneseed@latest` instead of
+  telling it to re-clone; and **every bundle carries one Python script**, the `token-report`
+  skill's own, which runs when the agent invokes that skill and at no other time. In the web
+  console, the "browse…" folder picker needs an OS-native dialog and reports itself
+  unavailable on the Node server — the path field beside it stays editable.
+  A publishing workflow ships with it, using npm's trusted publishing (OIDC): no long-lived
+  token in the repository, manual trigger only, and it explains the one step that has to be
+  done by hand on the npm side. Nothing has been published.
 - **`geneseed migrate` moves an existing install to the npm shape, in one pass.** If you
   installed by cloning the repository, your hooks run through a small machine-wide shim that
   hands every call to your checkout's Python; installing from npm changes where that code

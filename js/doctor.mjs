@@ -684,11 +684,23 @@ export function lawMetaProblems(lawNums, lawClass, lawClasses) {
  */
 export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '') {
   const problems = [];
-  const { laws, agents, skills } = counts;
+  const { laws, agents, skills, plugins } = counts;
 
   for (const m of readme.matchAll(/(\d+) universal laws/g)) {
     if (Number(m[1]) !== laws) {
       problems.push(`[authoring] README prose says '${m[1]} universal laws' but src has ${laws}`);
+    }
+  }
+  // The README plugin count. It had drifted — the overview sentence said six while seven
+  // shipped — because the project's other plugin count ({N_PLUGINS} in the web docs) reads
+  // a DEPLOYED plugins dir that a markdown file in this repository never has. `plugins` is
+  // optional in `counts` (Python's `.get`, undefined here) because the corpus predates it.
+  if (plugins !== undefined) {
+    for (const m of readme.matchAll(/(\d+) \*{0,2}plugins/g)) {
+      if (Number(m[1]) !== plugins) {
+        problems.push(`[authoring] README prose says '${m[1]} plugins' but `
+          + `adapters/opencode/plugins has ${plugins}`);
+      }
     }
   }
   for (const [label, want] of [['Agents', agents], ['Skills', skills]]) {
@@ -816,6 +828,11 @@ export function countTableProblems() {
     skills: srcStems('skills').size,
     laws: lawNums.length,
     themes: themeFiles().length,
+    // Last on purpose: the badge loop below walks this object in insertion order and the
+    // message sequence is compared byte for byte against the Python implementation.
+    plugins: existsSync(PLUGIN_SRC)
+      ? readdirSync(PLUGIN_SRC).filter((f) => f.startsWith('geneseed-') && f.endsWith('.js')).length
+      : 0,
   };
   let readme;
   try { readme = readText(path.join(ROOT, 'README.md')); } catch { return problems; }

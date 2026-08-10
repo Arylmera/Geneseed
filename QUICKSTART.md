@@ -1,45 +1,50 @@
 # ⚡ Quickstart — 5 minutes
 
-The fastest path: the guided wizard, installing **OpenCode global** — one
-install, every repo inherits it, nothing committed into your projects. Only
-prerequisites: **git** and **Python 3** (stdlib-only, nothing to pip install).
+The fastest path: one command, installing **OpenCode global** — one install, every
+repo inherits it, nothing committed into your projects. The only prerequisite is
+**Node ≥ 22.3**. No clone, no Python on the install path, nothing left behind.
+(Three things still involve Python; none is on this page. The Setup guide
+[names all three](SETUP.md#-where-python-is-still-required--the-exact-list).)
 
-## 1 · Clone and run the wizard
+## 1 · Run the wizard
 
-**macOS / Linux**
+    npx geneseed setup
 
-    git clone https://github.com/Arylmera/Geneseed.git
-    cd Geneseed
-    ./geneseed setup
+Same command on macOS, Linux and Windows (cmd, PowerShell, or any POSIX shell).
 
-**Windows** (cmd or PowerShell — native, no WSL)
+Pick a **theme**, pick **OpenCode global** when asked for the install mode, confirm.
+The wizard builds the harness and offers a health check.
 
-    git clone https://github.com/Arylmera/Geneseed.git
-    cd Geneseed
-    .\geneseed.cmd setup
-
-Pick a **theme** (previewed live), pick **OpenCode global** when asked for the
-install mode, confirm. The wizard builds the harness and offers a health check.
+Want the command to stay? `npm install -g geneseed`, then plain `geneseed …` from
+any directory.
 
 ## 2 · Verify
 
 Open your agent in any repo — the first reply starts with the readiness sigil
 and your project's docs are already in context. Then:
 
-    ./geneseed doctor        # .\geneseed.cmd doctor on Windows
+    npx geneseed doctor
 
 should print `ok`.
 
 ## 3 · Optional niceties
 
-- **Run from anywhere:** `./geneseed link` (`.\geneseed.cmd link` on Windows),
-  then plain `geneseed` works in any directory.
-- **Browse it:** `geneseed web` opens the local web console; bare `geneseed`
-  opens the TUI main menu.
+- **Browse it:** `npx geneseed web` opens the local web console.
+- **Full-screen TUI:** the `tui` and `menu` front-ends are the one part that still
+  needs a git checkout and Python 3 — see [the Setup guide](SETUP.md#-prerequisites)
+  for the exact list of what does.
+
+## Coming from a clone?
+
+    npx geneseed migrate --dry-run    # survey what would change; writes nothing
+    npx geneseed migrate              # move every install onto the npm shape
+
+All-or-nothing, keeps each install's own theme and mode, and never rewrites a hook
+or a login item it did not create. Your clone keeps working meanwhile.
 
 ## Everything else
 
-Claude Code and plain-`AGENT.md` installs, per-repo mode, MCP servers, all
+Claude Code, Bob and plain-`AGENT.md` installs, per-repo mode, MCP servers, all
 environment knobs, and troubleshooting live in the full **[Setup guide](SETUP.md)**.
 
 Once installed, point the agent at your repo's own docs with a tiny

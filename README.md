@@ -6,12 +6,13 @@
 
 [![CI](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml/badge.svg)](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
-[![stdlib only](https://img.shields.io/badge/deps-stdlib%20only-success)](build.py)
+[![Node >= 22.3](https://img.shields.io/badge/node-%3E%3D22.3-5fa04e)](package.json)
+[![zero dependencies](https://img.shields.io/badge/deps-zero-success)](package.json)
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
 [![Skills](https://img.shields.io/badge/skills-47-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-17-orange)](src/agents/)
 [![Laws](https://img.shields.io/badge/laws-37-critical)](src/laws/universal.md)
+[![Plugins](https://img.shields.io/badge/plugins-7-teal)](adapters/opencode/plugins/)
 [![OpenCode · Claude Code · Bob · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
 
 [**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & TUI**](#-3--web--tui) · [**What you get**](#-4--what-you-get)
@@ -20,7 +21,7 @@
 
 ---
 
-Geneseed distils an agent operating system into a generic harness built around a single `AGENT.md`. Point your tool at it and the agent inherits a set of operating **rules**, a roster of capability **agents**, native **skills**, a **memory** convention, and — on OpenCode — six **plugins** that auto-load your project's docs, capture durable memory, enforce the safety laws, run saved workflows, ping you when a long run finishes, and hold a minimal-code mode when you ask for one. One source builds it; it follows you into every repo.
+Geneseed distils an agent operating system into a generic harness built around a single `AGENT.md`. Point your tool at it and the agent inherits a set of operating **rules**, a roster of capability **agents**, native **skills**, a **memory** convention, and — on OpenCode — 7 **plugins** that auto-load your project's docs, capture durable memory, enforce the safety laws, run saved workflows, ping you when a long run finishes, hold a minimal-code mode when you ask for one, and stream what each session is doing to the web console. One source builds it; it follows you into every repo.
 
 This page is the overview. Four parts: **why** it exists, how to **set it up**, the two ways to **drive it** (web & TUI), and **what you get**. For every install path, configuration knob, and troubleshooting step, read the full [Setup guide](SETUP.md).
 
@@ -47,21 +48,34 @@ python build.py --theme imperial # Warhammer 40k voice, identical structure
 
 ## 🚀 2 · Setup
 
-Two ways in — guided or one command. Either takes a few minutes; the only prerequisites are **git** and **Python 3** (the harness is stdlib-only, nothing to `pip install`).
+### ⚡ The short way — `npx`
 
-### 🪄 The guided way — TUI wizard (macOS, Linux & Windows)
+One command, nothing cloned, no Python on the install path. The only prerequisite is **Node ≥ 22.3**. (Three things still involve Python and none of them is this command — [named below](#-what-still-needs-python--said-plainly).)
 
-The launcher ships a dependency-free, full-screen wizard: pick a **theme** (each one previewed live — tagline, sigil, voice — as you move through the list), pick an **install mode** — *OpenCode global* (recommended; every repo inherits it), *per-repo `.opencode/`*, or *plain bundle* for any `AGENT.md` tool — confirm, and it builds and offers a health check. Bare `geneseed` opens the **main menu** instead, listing every action: browse, review local edits, refresh/set up, update, rebuild, memory, status, and Settings (MCP servers, run-from-anywhere, uninstall).
+```bash
+npx geneseed setup            # the guided wizard
+```
 
-**macOS / Linux**
+The wizard asks for a **theme** (each one previewed live — tagline, sigil, voice) and an **install mode** — *OpenCode global* (recommended; every repo inherits it), *per-repo `.opencode/`*, or *plain bundle* for any `AGENT.md` tool — then builds and offers a health check. It works the same on macOS, Linux and Windows (cmd, PowerShell, or a POSIX shell).
+
+Keeping it around is the same command with `npm`:
+
+```bash
+npm install -g geneseed       # then plain `geneseed <command>` from any directory
+npm install -g geneseed@latest   # …and that is also the update
+```
+
+**[QUICKSTART.md](QUICKSTART.md)** walks this in 5 minutes. Every other route (Claude Code, plain `AGENT.md`, per-repo installs, MCP servers, troubleshooting) lives in the full **[Setup guide](SETUP.md)**.
+
+### 🧬 The long way — a git checkout
+
+Cloning still works and is what you want if you intend to *change* the harness rather than use it. It needs **git** and **Python 3** (stdlib-only, nothing to `pip install`) and gives you the full-screen TUI as well.
 
 ```bash
 git clone https://github.com/Arylmera/Geneseed.git
 cd Geneseed
 ./geneseed setup          # the wizard — or bare `./geneseed` for the main menu
 ```
-
-If `python3` is missing on macOS, `xcode-select --install` or Homebrew provides it. `./geneseed tui` opens the browse panel directly.
 
 **Windows** — native, no bash, WSL, curl, or unzip; works from cmd or PowerShell:
 
@@ -72,16 +86,24 @@ cd Geneseed
 # PowerShell-native twin: .\geneseed.ps1 [setup]
 ```
 
-The launcher finds Python on its own (the `py` launcher, else `python` on PATH). The full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+ `conhost` — via a stdlib-only ANSI backend; an older console degrades gracefully to the same wizard as plain text prompts. Screens and results are identical to macOS: theme → install mode → confirm → build → health check.
+The launcher finds Python on its own (the `py` launcher, else `python` on PATH); if `python3` is missing on macOS, `xcode-select --install` or Homebrew provides it. The full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+ `conhost` — via a stdlib-only ANSI backend; an older console degrades gracefully to the same wizard as plain text prompts.
 
-That's the whole fast path — **[QUICKSTART.md](QUICKSTART.md)** walks it in
-5 minutes. Every other route (Claude Code, plain `AGENT.md`, per-repo installs,
-MCP servers, troubleshooting) lives in the full **[Setup guide](SETUP.md)**.
+**Already installed from a clone?** `geneseed migrate` moves every install you have onto the npm shape in one pass, all-or-nothing, without touching hooks or login items it did not write. Your old clone keeps working for a full release — there is no cliff. See [Migrate an existing install](docs/web/migrate.md).
+
+### 🐍 What still needs Python — said plainly
+
+22 of the 25 subcommands run from Node, along with all four hooks, every web-console endpoint and both generators — producing byte-identical output, gated on every commit across every theme × host × footprint. So an npx install is Python-free **for the harness itself**, with exactly three exceptions. None is on the install path; all three are named here rather than discovered later.
+
+- **Three commands have no Node twin**: `home`, `tui`, `menu` — the interactive front-ends. Every other command runs from Node. Asking for one of them from an npm install refuses by name and prints the Python command to run instead, from a checkout.
+- **One Python script rides inside the harness you install.** The `token-report` skill is a script, not prose, so **every bundle carries** exactly one file that needs an interpreter: `src/skills/token-report/scripts/token_report.py`. It runs only when the agent invokes that one skill. Nothing else in a bundle is Python, on any host, theme or footprint — a test freezes that.
+- **`upgrade` / `update` / `sync-self` / `bootstrap` are for a git checkout.** They `git pull` the install's own origin. From an npm install they stop before touching anything and name `npm install -g geneseed@latest` as the update instead.
+
+One more honest edge, in the web console rather than the CLI: the **"browse…" folder picker** opens an OS-native dialog, which only the Python server can do. On the Node server the button reports that it is unavailable and the field beside it stays editable — type or paste the path.
 
 ### ✅ After installing
 
-- **Verify** — open your agent in any repo: the first reply starts with the readiness sigil and your project's docs are already in context. `./geneseed doctor` (`.\geneseed.cmd doctor`) should print `ok`.
-- **Run it from anywhere** — `./geneseed link` symlinks into `~/.local/bin`; `.\geneseed.cmd link` writes a shim into `%LOCALAPPDATA%\Geneseed\bin` and adds it to your user PATH (open a new terminal). Then plain `geneseed` works from any directory.
+- **Verify** — open your agent in any repo: the first reply starts with the readiness sigil and your project's docs are already in context. `geneseed doctor` should print `ok`.
+- **Run it from anywhere** — a global `npm install -g geneseed` already does this. From a checkout, `./geneseed link` symlinks into `~/.local/bin`; `.\geneseed.cmd link` writes a shim into `%LOCALAPPDATA%\Geneseed\bin` and adds it to your user PATH (open a new terminal).
 - **Everything else** — other tools (Claude Code, plain `AGENT.md`), per-repo installs, MCP servers, environment knobs, troubleshooting: **[SETUP.md](SETUP.md)**.
 
 ---
@@ -220,13 +242,18 @@ Token cost per host: **[docs/token-footprint.md](docs/token-footprint.md)**.
 
 ```
 Geneseed/
+├── package.json          the npm package: three commands, zero dependencies
+├── bin/                  the Node entry points — geneseed-cli.mjs (the CLI), geneseed-hook.mjs
+│                         (the four hook verbs), geneseed.mjs (the generator driver)
+├── js/                   the Node harness — generator, hooks, web server, doctor, installs
+├── cli.json              the argument parser as data; both runtimes read it
 ├── build.py              generator (stdlib only)
 ├── geneseed              launcher (bash): bare `./geneseed` = interactive main menu; + subcommands
 │                         (`./geneseed link` puts it on PATH so `geneseed` runs from anywhere)
 ├── geneseed.cmd          native Windows launcher (cmd.exe) — same subcommands, no bash
 ├── geneseed.ps1          native Windows launcher (PowerShell) — same subcommands, no bash
 ├── bootstrap             one-shot: update everything (sync + upgrade), then run setup
-├── harness.config.json   default theme + metadata
+├── harness.config.json   default theme + metadata (the one owner of the version)
 ├── src/                  canonical source — edit here
 │   ├── AGENT.md.tmpl     the entrypoint, rendered to AGENT.md
 │   ├── laws/             governance rules
@@ -235,35 +262,48 @@ Geneseed/
 │   ├── memory/           memory convention + index
 │   └── notebook/         the agent's own freeform space — convention + index
 ├── themes/               voice token maps (14 themes shipped)
-├── rituals/harness.py    the CLI behind the launchers: menu · setup · tui · web · build · doctor ·
-│                         diff · upgrade · sync-self · link/unlink · context · learn · prompt ·
-│                         status · version · bootstrap · uninstall
+├── rituals/harness.py    the Python CLI: build · doctor · diff · rebuild-all · status · version ·
+│                         theme · prompt · exclude · setup · web · migrate · link/unlink ·
+│                         uninstall · upgrade/update · sync-self · bootstrap · context · learn ·
+│                         git-gate · rule-gate · home · tui · menu
 ├── rituals/web.py        local web UI server (stdlib HTTP) behind `geneseed web`
 ├── web/                  Vite + React UI source; the committed web/dist/ build is what ships
-├── tests/                stdlib unit tests + a Node workflow-runtime test
-├── docs/                 guides (web-ui, wiki, …); specs/, reviews/, superpowers/ are
-│                         local working docs — git-ignored, never distributed
+├── tests/                stdlib unit tests, three cell harnesses, Node test suites
+├── docs/                 guides (web-ui, wiki, …) + docs/web/ (the console's Docs pages);
+│                         specs/, reviews/, superpowers/ are local working docs — git-ignored
 ├── adapters/             per-host glue (opencode/, claude-code/, bob/, copilot/)
-└── .github/workflows/    CI: doctor + tests
+└── .github/workflows/    ci.yml (doctor + tests) · publish.yml (npm, OIDC, manual only)
 ```
 
 ## 🧪 Validate & test
 
 ```bash
 python rituals/harness.py doctor                      # every theme + parity + authoring + drift
+node bin/geneseed-cli.mjs doctor                      # …and the same checks from the Node side
 python -m unittest discover -s tests -p "test_*.py"   # generator + CLI unit tests (no deps)
-node --test tests/workflow_runtime.test.mjs tests/guard.test.mjs tests/context_wiki.test.mjs tests/context_delivery.test.mjs tests/notify.test.mjs tests/ponytail.test.mjs   # Node suites
+node --test "tests/**/*.test.mjs"                     # Node suites (node expands the glob)
 ```
 
-`doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs all three on every push and PR, on both Linux and Windows.
+`doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs all four on every push and PR, on both Linux and Windows. Publishing is a separate, manually-triggered workflow (`.github/workflows/publish.yml`) — see [Contributing](#-contributing).
 
 ## 🔄 Keeping it current
+
+**Installed from npm** — one command, and it rebuilds every active install for you:
+
+```bash
+npm install -g geneseed@latest
+geneseed rebuild-all   # re-render every registered install in its own theme + mode
+```
+
+**Installed from a clone** — the `git pull` route, which also refreshes the launchers:
 
 ```bash
 ./geneseed update      # everything in one: refresh the scripts + content, then rebuild
 ./geneseed bootstrap   # update everything, then drop into the setup wizard
 ./geneseed upgrade     # just the content refresh (remembers theme + emit mode)
 ```
+
+**Moving from a clone to npm** — `geneseed migrate` re-emits every install you already have onto the npm shape, all-or-nothing, and reports (never rewrites) the hooks and login items it did not write. `--dry-run` prints the plan first. See [Migrate an existing install](docs/web/migrate.md).
 
 **Local edits survive.** The self-improvement loops let the agent refine its deployed agent/skill files in place. Before setup, re-theme, or upgrade overwrites them, any drift is auto-exported to a markdown **improvements file** under `improvements/` *inside the deployed harness dir* (e.g. `~/.config/opencode/improvements/` for the global install) — beside the install it describes, untouched by rebuilds and uninstall. Hand it to an agent in this repo to back-port the changes into `src/`. On demand: `./geneseed diff --out FILE`, or `e` in the TUI's *Review local edits* view.
 
@@ -292,7 +332,13 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 
 ## 🤝 Contributing
 
-Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Arylmera/Geneseed). The CI is dependency-free and runs on every push — keep `doctor` green and the test suites passing. Adding a new theme is one JSON file in `themes/` with the same voice-token keys; `doctor` will tell you if any are missing.
+Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Arylmera/Geneseed). The CI is dependency-free and runs on every push — keep `doctor` green on **both** binaries and the test suites passing. Adding a new theme is one JSON file in `themes/` with the same voice-token keys; `doctor` will tell you if any are missing.
+
+Three things that bite when you don't know them:
+
+- **`rituals/harness.py` and `cli.json` change together.** The argument parser is data now: `cli.json` carries it, `bin/geneseed-cli.mjs` cannot parse a single verb without it, and `doctor` compares a sha256 of `rituals/harness.py` against the digest inside the file. Edit the parser, then run `python tests/gen_cli_reference.py` (it exits non-zero when it changed the file, so it doubles as a drift check) and commit both. A mismatch is a loud doctor problem on **both** binaries — which is the intended failure, not a surprise.
+- **The version has one owner: `harness.config.json`.** `package.json` mirrors it and a test fails the fork. Never `npm version` — it edits one of the two.
+- **Publishing is deliberate and manual.** `.github/workflows/publish.yml` uses npm trusted publishing (OIDC); there is no `NPM_TOKEN` in this repository and there must not be one. It runs only from Actions → publish → Run workflow, and the npm-side trusted publisher is keyed on that workflow's **filename** — renaming the file breaks publishing with no local symptom, which is why the file names itself in its own header and a test asserts the two agree.
 
 ## 📄 License
 

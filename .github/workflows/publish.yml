@@ -1,0 +1,87 @@
+name: publish
+
+# Publish `geneseed` to npm using TRUSTED PUBLISHING (OIDC).
+#
+# There is no `NPM_TOKEN` in this repository and there is not meant to be one. The job
+# mints a short-lived OIDC token from GitHub, npm exchanges it for a one-shot publish
+# grant, and nothing long-lived is ever stored. Provenance is attested automatically as
+# part of that exchange, so there is no `--provenance` flag here on purpose.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────
+# ⛔ THE ONE STEP THAT CANNOT BE REHEARSED LOCALLY — AND IT IS MANUAL, AND IT IS ONCE
+# ─────────────────────────────────────────────────────────────────────────────────────
+# npm has to be told that THIS repository and THIS workflow file are allowed to publish
+# the package. Nothing in this repository can do it, and no local run can prove it was
+# done: the first `npm publish` here either finds a configured trusted publisher or
+# fails with an authentication error. Every other step in this file was exercised by a
+# local `npm pack` + `npm install` (tests/test_package_manifest.py); this one was not,
+# and cannot be.
+#
+# Do it once, signed in to npmjs.com as the account that owns `geneseed`:
+#
+#   npmjs.com → the package → Settings → Trusted publisher → GitHub Actions
+#     Organization or user   Arylmera
+#     Repository             Geneseed
+#     Workflow filename      publish.yml      ← must equal THIS file's own name
+#     Environment            (leave empty — this job declares no environment)
+#
+# or, from a terminal logged in with `npm login`:
+#
+#   npm trust github geneseed --file publish.yml --repo Arylmera/Geneseed
+#
+# ⚠ THE PACKAGE HAS NEVER BEEN PUBLISHED. A trusted publisher is configured on a
+# package, and npm's UI reaches that screen through a package that exists. If the
+# account's own "Trusted publishers" screen will not accept an unpublished name, the
+# FIRST publish has to be done by hand from a logged-in terminal (`npm publish` at the
+# repository root) and the trusted publisher configured immediately afterwards, from
+# the package's Settings tab. Every publish after that runs from here.
+#
+# ⚠ RENAMING THIS FILE BREAKS PUBLISHING, SILENTLY. The trusted publisher is keyed on
+# the workflow FILENAME. A renamed workflow still runs and still mints a token; npm just
+# refuses it. `tests/test_docs_claims.ThePublishWorkflowIsDeliberate` fails when the
+# filename named above stops matching the file it is written in — which is the only
+# local symptom that exists.
+#
+# The trigger is MANUAL, deliberately: Actions → publish → Run workflow. There is no
+# `push:` trigger, and the gate above forbids adding one. Bump the version in
+# `harness.config.json` first (`package.json` mirrors it and a fork fails
+# `test_version_mirrors_harness_config`) — never with `npm version`, which edits only
+# one of the two.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # mints the OIDC token npm exchanges for the publish grant
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - uses: actions/setup-node@v4
+        with:
+          # Trusted publishing needs Node >= 22.14.0. `engines` in package.json says
+          # >=22.3.0 and that is a DIFFERENT number on purpose: it is the floor for
+          # running geneseed, not for publishing it.
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      # The npm bundled with a setup-node image can predate 11.5.1, which is where
+      # trusted publishing landed. Pin the floor rather than hope for it.
+      - name: npm new enough for trusted publishing
+        run: npm install -g npm@latest
+
+      # `workflow_dispatch` can run against any ref, including one CI never saw, and a
+      # published version cannot be taken back after 72 hours. Re-run the two gates that
+      # read the tree the tarball is cut from, on the runner, before anything leaves it.
+      - name: doctor (every theme + parity + authoring gates)
+        run: python rituals/harness.py doctor --all
+      - name: unit tests
+        run: python -m unittest discover -s tests -p "test_*.py"
+
+      - name: publish
+        run: npm publish

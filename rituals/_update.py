@@ -121,7 +121,11 @@ Preflight = namedtuple("Preflight", ["ok", "code", "kind", "message"])
 
 _PRE_MSG = {
     "no_git_exe": ("info", "git is not installed or not on PATH — install git to enable updates."),
-    "not_git":    ("info", "This Geneseed install isn't a git checkout — re-clone it with git to enable updates."),
+    # Names BOTH routes rather than detecting which one this is. Since the npm package,
+    # the commonest way to reach this arm is an `npm i -g geneseed` install, for which
+    # "re-clone it with git" was exactly the wrong instruction; and telling the two apart
+    # would be a detection this message does not need to carry.
+    "not_git":    ("info", "This Geneseed install isn't a git checkout — update it with `npm install -g geneseed@latest`, or re-clone it with git."),
     "detached":   ("info", "HEAD is detached (a tag/commit is checked out). Run `git checkout <branch>` to re-enable updates."),
     "no_upstream": ("info", "Your branch has no upstream — set one with `git branch --set-upstream-to`."),
     "dirty":      ("info", "You have local changes in the Geneseed folder. Commit or stash them, then update."),

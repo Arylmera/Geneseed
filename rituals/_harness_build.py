@@ -849,11 +849,23 @@ def _prose_mirror_problems(readme: str, web: str, counts: dict[str, int],
     crafted drift without touching the tree."""
     problems: list[str] = []
     laws, agents, skills = counts["laws"], counts["agents"], counts["skills"]
+    plugins = counts.get("plugins")
 
     # README prose: "N universal laws".
     for n in re.findall(r"(\d+) universal laws", readme):
         if int(n) != laws:
             problems.append(f"[authoring] README prose says '{n} universal laws' but src has {laws}")
+    # README prose: "N plugins". This one had drifted — the overview sentence said six
+    # while seven shipped, and the row below it listed all seven. The project's OTHER
+    # plugin count, the web docs' {N_PLUGINS}, reads a DEPLOYED plugins dir, which a
+    # markdown file in this repository never has; so this mirror had no derived source
+    # and nothing to notice it. `plugins` is optional in `counts` because the corpus
+    # predates it.
+    if plugins is not None:
+        for n in re.findall(r"(\d+) \*{0,2}plugins", readme):
+            if int(n) != plugins:
+                problems.append(f"[authoring] README prose says '{n} plugins' but "
+                                f"adapters/opencode/plugins has {plugins}")
     # README "What you get" table rows: **🤖 Agents** (N) and **🛠 Skills** (N).
     for label, want in (("Agents", agents), ("Skills", skills)):
         m = re.search(rf"{label}\*\*\s*\((\d+)\)", readme)
@@ -958,6 +970,9 @@ def _count_table_problems() -> list[str]:
         "skills": len(_src_stems("skills")),
         "laws": len(law_nums),
         "themes": len(build.theme_files()),
+        # Last on purpose: the badge loop below walks this dict in order and the message
+        # sequence is compared byte for byte against the Node implementation.
+        "plugins": len(list(build.PLUGIN_SRC.glob("geneseed-*.js"))),
     }
     try:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

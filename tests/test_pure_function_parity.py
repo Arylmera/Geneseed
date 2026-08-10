@@ -491,7 +491,11 @@ _DESC_BLOCK_CORPUS = (
 # `_prose_mirror_problems(readme, web, counts, skill_stems, shipped)`. Pure over five inputs,
 # and the two mirrors that live in Python source (`_web_core`) and in SHIPPED.md are the ones
 # a cell would have to hand-write a module to plant.
-_COUNTS = {"laws": 37, "agents": 17, "skills": 47}
+_COUNTS = {"laws": 37, "agents": 17, "skills": 47, "plugins": 7}
+# The plugin arm is OPTIONAL in `counts` — Python reads it with `.get`, JS destructures to
+# `undefined` — so it needs a row WITHOUT the key as well, or "the arm is skipped" and "the
+# arm agrees" are the same observation on both sides.
+_COUNTS_NO_PLUGINS = {"laws": 37, "agents": 17, "skills": 47}
 _README_OK = ("Geneseed ships 37 universal laws.\n"
               "| **🤖 Agents** (17) | one per capability |\n"
               "| **🛠 Skills** (47) | workflows: alpha · beta · gamma |\n")
@@ -521,6 +525,13 @@ _PROSE_MIRROR_CORPUS = (
     ["", "", _COUNTS, [], "Every row below is present: 37 laws, 17 agents, 47 skills.\n"],
     ["", "", _COUNTS, [], "Every row below is present: 36 laws, 17 agents, 41 skills.\n"],
     ["", "", _COUNTS, [], "no capability row here at all"],
+    # The README plugin mirror, which said six while seven shipped. Both spellings the
+    # README uses (bare, and bolded as `**plugins**`), right and wrong, plus the
+    # key-absent row that proves the optional arm is skipped identically on both sides.
+    ["OpenCode gets 7 plugins.\n", "", _COUNTS, [], ""],
+    ["OpenCode gets 6 **plugins** that auto-load.\n", "", _COUNTS, [], ""],
+    ["OpenCode gets 6 **plugins** that auto-load.\n", "", _COUNTS_NO_PLUGINS, [], ""],
+    [_README_OK + "and 6 plugins\n", "", _COUNTS, ["alpha", "beta", "gamma"], ""],
 )
 
 # `is_vendored_path` against `_validate_is_vendored` — the same question at two depths, and

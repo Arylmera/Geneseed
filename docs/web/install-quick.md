@@ -4,34 +4,31 @@ order: 0
 title: "Install in 5 minutes"
 kind: "concept"
 ---
-Three steps. The only prerequisites are **git** and **Python 3** — the harness is stdlib-only, nothing to `pip install`.
+Two steps. The only prerequisite is **Node ≥ 22.3** — Geneseed ships as an npm package with zero dependencies.
 
-### 1. Clone
+### 1. Run the setup wizard
+
+```
+npx geneseed setup
+```
+
+The same command on macOS, Linux and Windows (cmd, PowerShell, or any POSIX shell). The wizard asks for a theme and an install mode (OpenCode global is recommended — one install, every repo inherits it), then builds and offers a health check.
+
+To keep the command around: `npm install -g geneseed`, then plain `geneseed …` from any directory.
+
+### 2. Open your agent
+
+Open OpenCode (or Claude Code, Bob, Copilot, or any `AGENT.md`-aware tool) in any repo. The first reply opens with the readiness sigil (`✅` neutral / `🧬` imperial / your theme's equivalent) and your project's docs are already in context.
+
+### Prefer a clone?
 
 ```
 git clone https://github.com/Arylmera/Geneseed.git
 cd Geneseed
+./geneseed setup            # Windows: .\geneseed.cmd setup
 ```
 
-### 2. Run the setup wizard
-
-The wizard previews each theme as you move through it, picks an install mode (OpenCode global is recommended — one install, every repo inherits it), then builds and offers a health check.
-
-**macOS / Linux**
-
-```
-./geneseed setup
-```
-
-**Windows** (cmd or PowerShell — no bash needed)
-
-```
-.\geneseed.cmd setup
-```
-
-### 3. Open your agent
-
-Open OpenCode (or Claude Code, or any `AGENT.md`-aware tool) in any repo. The first reply opens with the readiness sigil (`✅` neutral / `🧬` imperial / your theme's equivalent) and your project's docs are already in context.
+A checkout needs **git** and **Python 3** (stdlib-only, nothing to `pip install`) and is what you want if you intend to change the harness rather than use it — it also carries the full-screen TUI. Already installed this way? [Migrate to npx](#/docs/migrate) moves every install across in one pass.
 
 ---
 

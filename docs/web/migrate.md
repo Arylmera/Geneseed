@@ -1,6 +1,6 @@
 ---
 group: howto
-order: 7
+order: 8
 title: "Migrate an existing install to npx"
 kind: "concept"
 ---
