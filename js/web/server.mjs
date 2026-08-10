@@ -34,9 +34,10 @@
  * caller — which is what put this tree on the CLI's import graph and moved
  * `js/web/jobs.mjs`'s spawn row to `entry: "cli"`.
  *
- * WHAT IS STILL NOT HERE. `/api/install` (`api_install_toggle`, 293 lines of tree-move
- * engine — P6i) and `/api/pick-folder` (declined, a GUI dialog). `NOT_PORTED_POST` and
- * `DECLINED_POST` below are what keep that partial state loud instead of plausible.
+ * WHAT IS STILL NOT HERE, SINCE P6i: `/api/pick-folder` alone, and it is DECLINED rather than
+ * deferred — an OS-native folder chooser has no Node twin that is not a new GUI dependency.
+ * `NOT_PORTED_POST` is empty and stays declared, because an empty half of a partition is the
+ * partition asserting there is nothing left; `DECLINED_POST` is what still has a member.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -55,7 +56,8 @@ import {
 import { promptLine } from '../setup.mjs';
 import { NotFound, PREFIX_ROUTES, STATE_ROUTES, webState } from './api.mjs';
 import {
-  apiDeployCmd, apiExcludesMutate, apiInstallCmd, apiMcpToggle, apiMemoryDelete, apiProfileSave,
+  apiDeployCmd, apiExcludesMutate, apiInstallCmd, apiInstallToggle, apiMcpToggle,
+  apiMemoryDelete, apiProfileSave,
   apiRestore, apiRulesMutate, apiRulesPromote, apiSelectView, buildOverride,
 } from './actions.mjs';
 import { apiActivityToggle } from './activity.mjs';
@@ -120,19 +122,21 @@ export const NOT_PORTED = new Set([]);
 export const NOT_PORTED_PREFIXES = [];
 
 /**
- * The POST that has not crossed YET — one row since P6h took `/api/restart`.
+ * The POSTs that have not crossed YET — and EMPTY SINCE P6i, which took `/api/install`.
  *
- * `/api/install` is `api_install_toggle` — 27 endpoint lines over 293 lines of
- * unported all-or-nothing tree moves with rollback, a stash layout and a host fork; see
- * `js/web/actions.mjs`'s header for the measurement and why a web phase is the wrong place
- * for it.
+ * IT STAYS DECLARED, for the same reason the GET pair above stays and the prefix lists have
+ * stayed since P6g: this set is half of a partition
+ * (`test_every_post_route_is_either_ported_or_declared_unported`), so an empty set is the
+ * partition ASSERTING that there is nothing left to declare. Delete it and the next POST route
+ * added to the reference falls through to `{"error": "not found"}` at 404 — a plausible-looking
+ * answer where the reference returns 200 or 409 — with nothing to say so.
  *
- * THE PREFIX LIST IS EMPTY SINCE P6g — `/api/jobs/` and `/api/actions/` both dispatch now.
- * It stays for the reason the GET pair above stays.
+ * THE DISPATCHER PROBE NEEDS A TARGET, which an empty set no longer supplies.
+ * `tests/test_web_server.py` retired its `unportedGet` probe when `NOT_PORTED` emptied in P6g;
+ * `unportedPost` is retired here for the same reason, and `declinedPost` (`/api/pick-folder`,
+ * which never crosses) is what keeps the 501 arm of the dispatcher under a live probe.
  */
-export const NOT_PORTED_POST = new Set([
-  '/api/install',
-]);
+export const NOT_PORTED_POST = new Set([]);
 export const NOT_PORTED_POST_PREFIXES = [];
 
 /**
@@ -177,6 +181,11 @@ export const DECLINED_POST = new Set([
  */
 const POST_ROUTES = new Map([
   ['/api/mcp', [apiMcpToggle, true]],
+  // P6i. `_post_routes` wraps this one in its own `except NotFound` and then maps
+  // `ok: false` to 409 — the same shape as `/api/mcp` beside it, so it fits the table's
+  // second column exactly and needs no third inline dispatch. The inner catch is redundant
+  // (see this table's docblock); `handler`'s outer one answers identically.
+  ['/api/install', [apiInstallToggle, true]],
   ['/api/excludes', [apiExcludesMutate, true]],
   ['/api/view', [apiSelectView, true]],
   ['/api/activity', [apiActivityToggle, false]],

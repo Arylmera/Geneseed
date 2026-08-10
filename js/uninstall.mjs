@@ -25,12 +25,15 @@
  *    It is why `_archive_store` MOVES and never deletes, and why the Python's `memory=delete`
  *    disposition has no flag reaching it from the CLI. This port keeps both properties.
  *
- * WHAT IS NOT HERE, AND WHY. `_install_deactivate` / `_install_reactivate` — the reversible
- * siblings that share `_move_tree`, `_prune_empty_ancestors` and the stash — are the WEB and
- * TUI consoles' verbs, not the CLI's. `cmd_uninstall` reaches the stash only to `rmtree` it,
- * which is four lines rather than the ~200 the pair costs, and the port's own criterion for
- * dead code is "part of an asserted partition" — an unported deactivate has no partition to
- * be part of until P6 brings its caller.
+ * AND SINCE P6i, THE REVERSIBLE SIBLINGS ARE HERE TOO. `_install_deactivate` /
+ * `_install_reactivate` (and their Claude-style twins) were left out with a due date: "an
+ * unported deactivate has no partition to be part of until P6 brings its caller". P6f found
+ * the caller — `api_install_toggle` — and P6i ports it, so the pair arrives in the module
+ * whose thirteen private helpers it shares (`pruneAncestors`, `settingsFile`, `claudeMdPath`,
+ * `managedOf`, `ownedOf`, `installAgentEntry`, `unmergeOpencodeJson`, `rmtreeQuiet`, …),
+ * exactly as `_harness_mcp.py` keeps them in one file. Deactivate is `_uninstall_global` with
+ * `move` where it has `unlink`, plus an inverse; splitting them would have duplicated the
+ * owned-file walk and the ancestor prune a fourth time.
  *
  * NO SPAWN. `bin/geneseed-cli.mjs`'s `child_process` allow-list names `js/doctor.mjs` and one
  * argv, and this module does not extend it: every operation here is a filesystem call. That
@@ -44,20 +47,24 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
+import { hookRunnerEntry } from '../bin/geneseed.mjs';
 import { confirm } from './setup.mjs';
 import {
-  claudeReadManifest, emitHostScopeOf, installKind, installState,
+  claudeCfg, claudeReadManifest, emitHostScopeOf, installKind, installState,
   registeredTargets, readMaybe, DISABLED_STASH,
 } from './installs.mjs';
 import {
   GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, opencodeConfigDir, pyResolve,
 } from './hosts.mjs';
+import { mcpCommented } from './mcp.mjs';
 import {
-  managedBlockRemove, opencodeTarget, readJsonc, settingsIntegrityCheck,
+  managedBlockRead, managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
+  opencodeTarget, readJsonc, settingsIntegrityCheck, wireClaudeExcludes,
   unwireClaudeExcludes, unwireClaudeSettings,
 } from './settings.mjs';
 import {
-  jsonDumps, jsonDumpsIndent, pyIsAbsolute, pyPrint, pyPrintErr, writeText,
+  comparePaths, indexOfEq, jsonDumps, jsonDumpsIndent, pyEq, pyIsAbsolute, pyPrint,
+  pyPrintErr, readText, within, writeText,
 } from './lib/pyfs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
@@ -719,4 +726,396 @@ export function cmdUninstall(args) {
   if (scope === 'global') printSurvivingProjectInventory(root);
   else if (scope === 'project') printOtherHostHits(root, host);
   return 0;
+}
+
+// ---- P6i: ACTIVATION — the reversible half ---------------------------------------------
+//
+// Deactivate turns an install OFF without deleting a byte: every owned artifact MOVES into a
+// sibling stash and the wiring is dropped. Reactivate moves the same bytes back. The stash
+// dir's PRESENCE is the disabled flag and its CONTENTS are the restore source — there is no
+// recorded JSON state that could drift from the filesystem, which is the design decision the
+// whole port has to preserve rather than improve on.
+//
+// ALL-OR-NOTHING IS THE PROPERTY, and it is the one a port breaks silently. A move that fails
+// puts every earlier move back and reports, leaving the install fully `active`; a port that
+// merely stopped on the failure would leave a half-gutted config dir that neither state
+// answers for. `tests/web_golden.py`'s `install/a-deactivate-whose-second-move-collides…`
+// drives it: a manifest naming a file AND its parent directory is the only shape a seeded
+// world can use to make the SECOND move collide.
+
+/** `e` is an OSError rather than a programming fault — Node tags fs errors with `code`. */
+const isOsError = (e) => Boolean(e) && typeof e.code === 'string';
+
+/**
+ * `_harness_mcp._move_tree` — move a file or dir, refusing an existing destination.
+ *
+ * THE REFUSAL IS THE CONTRACT, not a safety net: the stash is what a reactivate restores
+ * FROM, so silently overwriting a destination would destroy the only copy of whatever was
+ * already there. The caller catches and rolls back.
+ *
+ * `raise FileExistsError(dst)` is a SINGLE-ARGUMENT OSError, whose `str()` is just the path,
+ * and the caller interpolates it into the `failed` list a cell compares byte for byte — so
+ * the message is reproduced exactly here. Node's own fs errors word themselves completely
+ * differently (`EEXIST: file already exists, rename 'a' -> 'b'` against Python's
+ * `[Errno 17] File exists: 'b'`); that divergence is real, declared, and unreachable from
+ * any cell, exactly as `unlinkOwned`'s is — the only arm a seeded world can reach is this
+ * one, which is why this one is exact.
+ *
+ * `renameSync`, not a copy-then-delete: `shutil.move` falls back to a copy across
+ * filesystems, and the stash is a SIBLING inside the same root, so there is no device to
+ * cross by construction.
+ */
+function moveTree(src, dst) {
+  if (existsSync(dst)) {
+    const e = new Error(String(dst));
+    e.code = 'EEXIST';
+    throw e;
+  }
+  mkdirSync(path.dirname(dst), { recursive: true });
+  renameSync(src, dst);
+}
+
+/**
+ * `_harness_mcp._stashed_kind` — which kind of install a stash holds, from its CONTENTS.
+ *
+ * There is no recorded tag, on purpose. A project stash carries `.opencode/`; a global one
+ * carries the moved owned files. `null` for an empty or missing stash.
+ */
+function stashedKind(root) {
+  const stash = path.join(root, DISABLED_STASH);
+  if (isDir(path.join(stash, '.opencode'))) return 'project';
+  if (isDir(stash) && !isEmptyDir(stash)) return 'global';
+  return null;
+}
+
+/**
+ * `_harness_mcp._install_relive` — the disabled install's CONTENT was re-created live.
+ *
+ * The user ran `build`/`upgrade` while disabled. The live signal is KIND-SPECIFIC and the
+ * stashed kind is what picks it: a global deactivate moves AGENT.md aside (leaving the
+ * manifest marker, so `installKind` still answers 'global' and would false-positive on its
+ * own), a project deactivate leaves AGENT.md alone and moves `.opencode/`.
+ */
+function installRelive(root) {
+  if (stashedKind(root) === 'project') return isDir(path.join(root, '.opencode'));
+  return isFile(path.join(root, 'AGENT.md'));
+}
+
+/**
+ * `_harness_mcp._install_move_list` — the rels to move aside, `_within`-guarded.
+ *
+ * `path.resolve(rroot, r)` and NOT `path.join`, which is the one line here that is a security
+ * boundary rather than a translation. The Python is `(rroot / r).resolve()`, and pathlib's
+ * `/` REPLACES the base when the right operand is absolute — so a manifest entry naming
+ * `C:/evil.md` resolves outside the root and `_within` rejects it. `path.join` would have
+ * concatenated it into `<root>/C:/evil.md`, which passes containment and would then be MOVED.
+ * `path.resolve` has pathlib's semantics for exactly this case, and collapses `..` besides,
+ * which is why the guard runs on the resolved path rather than the lexical one.
+ */
+function installMoveList(root, kind) {
+  let rels;
+  if (kind === 'project') {
+    rels = ['.opencode'];
+  } else {
+    rels = ownedOf(claudeReadManifest(root)).filter((r) => r !== VERSION_MARKER);
+  }
+  const rroot = pyResolve(root);
+  return rels.filter((r) => r && within(pyResolve(path.resolve(rroot, r)), rroot));
+}
+
+/**
+ * `_harness_mcp._install_readd_entry` — put back JUST the AGENT.md `instructions` entry.
+ *
+ * Deliberately a minimal inline re-add rather than the emit's own merge, whose side effects
+ * (adding `permission` and `lsp: true` when absent) would clobber values the user may have
+ * set since the install was disabled. A commented `.jsonc` is not rewritten — the same
+ * refusal `unmergeOpencodeJson` makes — but here the files have ALREADY been restored, so it
+ * tells the operator what to add rather than failing the whole reactivate. That asymmetry is
+ * the reference's and is gated per side.
+ */
+export function installReaddEntry(target, entry) {
+  if (!existsSync(target)) {
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeText(target, `${jsonDumpsIndent({
+      $schema: 'https://opencode.ai/config.json', instructions: [entry],
+    })}\n`);
+    return true;
+  }
+  let raw;
+  try { raw = readText(target); } catch { return false; }   // except OSError
+  const [cfg, hadComments] = readJsonc(raw);
+  if (typeof cfg !== 'object' || cfg === null || Array.isArray(cfg)) return false;
+  const instr = Array.isArray(cfg.instructions) ? cfg.instructions : [];
+  if (indexOfEq(instr, entry) >= 0) return false;
+  if (path.extname(target) === '.jsonc' && hadComments) {
+    pyPrint(`[activate] ${path.basename(target)} has comments — not rewriting it. Add this `
+      + `to its "instructions" by hand: ${jsonDumps(entry)}\n`);
+    return false;
+  }
+  cfg.instructions = [...instr, entry];
+  writeText(target, `${jsonDumpsIndent(cfg)}\n`);
+  return true;
+}
+
+/**
+ * `sorted(stash.rglob('*'))` with the directories dropped.
+ *
+ * `comparePaths`, not a bare sort: Windows compares paths case-folded and POSIX does not, and
+ * the order here decides which collision is reported first in `failed`. Sorting the files
+ * alone is the same order as sorting everything and skipping dirs afterwards, which is what
+ * the Python does. `isDir` rather than the dirent flag, so a symlinked directory is recursed
+ * into exactly as `is_dir()` follows it.
+ */
+function stashFiles(stash) {
+  const out = [];
+  const walk = (d) => {
+    let ents;
+    try { ents = readdirSync(d); } catch { return; }
+    for (const name of ents) {
+      const full = path.join(d, name);
+      if (isDir(full)) walk(full);
+      else out.push(full);
+    }
+  };
+  walk(stash);
+  return out.sort(comparePaths);
+}
+
+/** `rel.as_posix()` for a path already known to be relative. */
+const asPosix = (rel) => rel.split(path.sep).join('/');
+
+/**
+ * `_harness_mcp._install_deactivate` — turn an OpenCode install off without deleting a byte.
+ *
+ * The config edit is the LAST step and the only non-move mutation, so a move failure rolls
+ * back cleanly with the `instructions` entry still intact. The prune climbs from each moved
+ * file's PARENT so a `skills/<name>/` husk goes too — the half of this function no file
+ * snapshot can see, and the reason `tests/web_golden.py` grew a `<dirs>` column in P6i.
+ */
+export function installDeactivate(root, host = 'opencode', scope = 'global') {
+  if (CLAUDE_STYLE.includes(host)) return claudeDeactivate(root, scope, host);
+  if (installState(root) !== 'active') {
+    return { ok: false, error: `install is not active (${installState(root)})` };
+  }
+  const kind = installKind(root);
+  const target = opencodeTarget(path.join(root, 'opencode.json'));
+  // Caught UP FRONT, before any file moves: a commented `.jsonc` cannot be rewritten without
+  // dropping the user's comments, so refuse and move NOTHING.
+  if (mcpCommented(target)) {
+    return { ok: false,
+      error: `${path.basename(target)} has comments — refusing to rewrite it. `
+        + 'Disable by hand or convert it to plain .json first.' };
+  }
+  const stash = path.join(root, DISABLED_STASH);
+  const done = [];   // rels already moved, for rollback
+  for (const rel of installMoveList(root, kind)) {
+    const src = path.join(root, rel);
+    if (!existsSync(src)) continue;   // a manifest entry already gone — nothing to move
+    try {
+      moveTree(src, path.join(stash, rel));
+      done.push(rel);
+    } catch (e) {
+      if (!isOsError(e)) throw e;
+      for (const r of [...done].reverse()) {
+        try { renameSync(path.join(stash, r), path.join(root, r)); } catch { /* OSError */ }
+      }
+      rmtreeQuiet(stash);
+      return { ok: false, failed: [`${rel} (${e.message})`], rolled_back: done.length };
+    }
+  }
+  unmergeOpencodeJson(path.join(root, 'opencode.json'), installAgentEntry(root, kind));
+  for (const rel of done) pruneAncestors(path.dirname(path.join(root, rel)), root);
+  return { ok: true, kind, moved: done.length };
+}
+
+/** `_harness_mcp._install_reactivate` — the inverse. */
+export function installReactivate(root, host = 'opencode', scope = 'global') {
+  if (CLAUDE_STYLE.includes(host)) return claudeReactivate(root, scope, host);
+  if (installState(root) !== 'disabled') {
+    return { ok: false, error: `install is not disabled (${installState(root)})` };
+  }
+  const stash = path.join(root, DISABLED_STASH);
+  const target = opencodeTarget(path.join(root, 'opencode.json'));
+  // The re-emit-while-disabled guard: discard the now-stale snapshot rather than clobber the
+  // fresh files, ensure the entry is present, and SAY SO. `installRelive`, not `installKind`
+  // — a global deactivate leaves the manifest marker behind, so the kind test would lie here.
+  if (installRelive(root)) {
+    const kind = installKind(root) || 'global';
+    rmtreeQuiet(stash);
+    installReaddEntry(target, installAgentEntry(root, kind));
+    return { ok: true,
+      note: 'install was re-created while disabled; discarded the stashed snapshot' };
+  }
+  const leftovers = [];
+  let moved = 0;
+  for (const src of stashFiles(stash)) {
+    const rel = path.relative(stash, src);
+    const dst = path.join(root, rel);
+    if (existsSync(dst)) {
+      // NEVER delete the stash while anything is unrestored — skip, keep, report.
+      leftovers.push(asPosix(rel));
+      continue;
+    }
+    mkdirSync(path.dirname(dst), { recursive: true });
+    renameSync(src, dst);
+    moved += 1;
+  }
+  if (leftovers.length) return { ok: false, failed: leftovers, moved };
+  const kind = installKind(root) || 'global';
+  installReaddEntry(target, installAgentEntry(root, kind));
+  rmtreeQuiet(stash);
+  return { ok: true, kind, moved };
+}
+
+// ---- the Claude-style fork (Claude · IBM Bob · GitHub Copilot) ---------------------------
+//
+// A Claude-style install has NO `instructions` array — the harness reaches the host through
+// the CLAUDE.md managed block and the settings.json hooks. So the reversal is three moving
+// parts instead of one: stash the owned agents/skills, EXCISE the managed block (stashing its
+// content for an exact restore), and unwire the recorded hook groups. The stash lives under a
+// host-TAGGED subdir so one root carrying both an OpenCode and a Claude install can disable
+// each independently.
+
+/**
+ * `_harness_mcp._clean_host_stash` — drop this host's stash and the parent if it empties.
+ *
+ * So 'disabled' never lingers as an empty marker, and a same-root other-host stash is left
+ * standing.
+ */
+function cleanHostStash(cfg, host = 'claude') {
+  rmtreeQuiet(path.join(cfg, DISABLED_STASH, host));
+  const parent = path.join(cfg, DISABLED_STASH);
+  if (isDir(parent) && isEmptyDir(parent)) rmdirQuiet(parent);
+}
+
+/**
+ * `_harness_mcp._remerge_claude_hooks` — re-merge the canonical hooks and RECORD the claims.
+ *
+ * Threading the manifest's recorded claims through is what prunes stale groups; writing the
+ * resulting set back is what keeps a group re-added after an interpreter or checkout move
+ * from being orphaned at uninstall. The manifest rewrite is atomic through a sibling temp
+ * file and swallows its own OSError, exactly as the reference does — a failed bookkeeping
+ * write must not fail the reactivate that has already moved every file back.
+ */
+function remergeClaudeHooks(cfg) {
+  const data = claudeReadManifest(cfg);
+  const managed = managedOf(data);
+  // `hookOpts` is the one argument `mergeClaudeSettings` will not default, and it is right
+  // not to: there is no computable fallback for the runner/entry the shim bakes. The
+  // emitter's own originator is imported rather than restated — a reactivate that wired a
+  // different shim path would point every re-added hook at a file the emitter never writes.
+  const [, claims] = mergeClaudeSettings(settingsFile(cfg, managed), 'global',
+    managed.settings_hooks ?? null, hookRunnerEntry());
+  // `and data` — a manifest that did not parse is not one to write back.
+  if (!pyEq(claims, managed.settings_hooks ?? null) && Object.keys(data).length > 0) {
+    managed.settings_hooks = claims;
+    data.managed = managed;
+    const tmp = path.join(cfg, `${GLOBAL_MANIFEST}.tmp`);
+    try {
+      writeText(tmp, `${jsonDumpsIndent(data)}\n`);
+      renameSync(tmp, path.join(cfg, GLOBAL_MANIFEST));
+    } catch { /* except OSError: pass */ }
+  }
+}
+
+/** `_harness_mcp._claude_deactivate`. */
+function claudeDeactivate(root, scope = 'global', host = 'claude') {
+  const cfg = claudeCfg(root, scope, host);
+  // `installState` dispatches Claude-style hosts to `claudeState(root, scope, host)`, which
+  // is the call the Python makes directly. Same answer, one exported name.
+  if (installState(root, host, scope) !== 'active') {
+    return { ok: false,
+      error: `install is not active (${installState(root, host, scope)})` };
+  }
+  const man = claudeReadManifest(cfg);
+  const managed = managedOf(man);
+  const stash = path.join(cfg, DISABLED_STASH, host);
+  const rroot = pyResolve(cfg);
+  const rels = ownedOf(man).filter((r) => r && r !== VERSION_MARKER
+    && within(pyResolve(path.resolve(rroot, r)), rroot));
+  const done = [];
+  for (const rel of rels) {
+    const src = path.join(cfg, rel);
+    if (!existsSync(src)) continue;
+    try {
+      moveTree(src, path.join(stash, rel));
+      done.push(rel);
+    } catch (e) {
+      if (!isOsError(e)) throw e;
+      for (const r of [...done].reverse()) {
+        try { renameSync(path.join(stash, r), path.join(cfg, r)); } catch { /* OSError */ }
+      }
+      cleanHostStash(cfg, host);
+      return { ok: false, failed: [`${rel} (${e.message})`], rolled_back: done.length };
+    }
+  }
+  unwireClaudeSettings(settingsFile(cfg, managed), managed.settings_hooks || []);
+  unwireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
+  // The same integrity check the uninstall path runs: a deactivate that silently failed to
+  // unwire would leave hooks firing in a repo the user believes is off.
+  settingsIntegrityCheck(settingsFile(cfg, managed), managed, 'absent');
+  const cm = claudeMdPath(cfg, managed);
+  const block = managedBlockRead(cm);
+  mkdirSync(stash, { recursive: true });   // presence == disabled, even if nothing moved
+  if (block !== null) {
+    writeText(path.join(stash, '_claude_md_block.txt'), block);
+    // ALWAYS EXCISE, never whole-file delete: prose the user added around the block must
+    // survive a disable. The file goes only if nothing else remains.
+    managedBlockRemove(cm);
+  }
+  for (const rel of done) pruneAncestors(path.dirname(path.join(cfg, rel)), cfg);
+  return { ok: true, kind: host, moved: done.length };
+}
+
+/** `_harness_mcp._claude_reactivate`. */
+function claudeReactivate(root, scope = 'global', host = 'claude') {
+  const cfg = claudeCfg(root, scope, host);
+  if (installState(root, host, scope) !== 'disabled') {
+    return { ok: false,
+      error: `install is not disabled (${installState(root, host, scope)})` };
+  }
+  const stash = path.join(cfg, DISABLED_STASH, host);
+  const blockFile = path.join(stash, '_claude_md_block.txt');
+  const reliveManifest = claudeReadManifest(cfg);
+  // `.get("managed") or {}` — an `or`, not an isinstance guard, and the difference is
+  // observable on a manifest whose `managed` is `null`.
+  const reliveManaged = reliveManifest.managed || {};
+  let relive = managedBlockRead(claudeMdPath(cfg, reliveManaged)) !== null;
+  // Bob GLOBAL writes no managed AGENTS.md block — its preamble carrier is the owned
+  // `rules/geneseed.md`, so a live copy of THAT is the relive signal there. Without this arm
+  // the guard never fires for bob-global and every stashed file collides with the fresh emit,
+  // stranding the install 'disabled' until the stash is deleted by hand.
+  if (!relive && !reliveManaged.claude_md) {
+    relive = Object.keys(reliveManifest).length > 0
+      && isFile(path.join(cfg, 'rules', 'geneseed.md'));
+  }
+  if (relive) {
+    remergeClaudeHooks(cfg);   // ensure the hooks are present (and the claims exact)
+    cleanHostStash(cfg, host);
+    return { ok: true,
+      note: 'install was re-created while disabled; discarded the stashed snapshot' };
+  }
+  const leftovers = [];
+  let moved = 0;
+  for (const src of stashFiles(stash)) {
+    const rel = path.relative(stash, src);
+    if (asPosix(rel) === '_claude_md_block.txt') continue;   // restored separately, below
+    const dst = path.join(cfg, rel);
+    if (existsSync(dst)) {
+      leftovers.push(asPosix(rel));
+      continue;
+    }
+    mkdirSync(path.dirname(dst), { recursive: true });
+    renameSync(src, dst);
+    moved += 1;
+  }
+  if (leftovers.length) return { ok: false, failed: leftovers, moved };
+  remergeClaudeHooks(cfg);
+  const managed = claudeReadManifest(cfg).managed || {};
+  wireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
+  if (existsSync(blockFile)) {
+    managedBlockWrite(claudeMdPath(cfg, managed), readText(blockFile));
+  }
+  cleanHostStash(cfg, host);
+  return { ok: true, kind: host, moved };
 }

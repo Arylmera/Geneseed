@@ -199,9 +199,15 @@ class TheRestartRouteIsDeclaredBecauseItCannotBeProbed(unittest.TestCase):
         self.assertIn("/api/restart", js["inline"],
                       "/api/restart is neither declared unported nor declared as an inline "
                       "dispatch — it would fall through to the shell's own 404")
-        self.assertEqual(js["unported"], ["/api/install"],
-                         "the unported POST list is not the one P6h left behind; "
-                         "`/api/install` is P6i's and nothing else should be there")
+        # P6i EMPTIED IT AND KEPT IT DECLARED. `/api/install` was the last row; asserting the
+        # emptiness here is what stops the declaration from being quietly deleted, which is
+        # the one way an empty partition half stops being an assertion and becomes an
+        # omission. A route added to the reference and left undeclared then fails the UNION
+        # check in `tests/test_web_server.py`, which is the arrangement this pair exists for.
+        self.assertEqual(js["unported"], [],
+                         "NOT_PORTED_POST is empty since P6i and must STAY DECLARED — an "
+                         "empty half of a partition is the partition asserting there is "
+                         "nothing left to declare")
 
 
 class TheDaemonLauncherReExecutesItselfAndNeverPython(unittest.TestCase):

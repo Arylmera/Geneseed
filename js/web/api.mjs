@@ -72,7 +72,9 @@ import {
 import { firstBlockquote } from '../native.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../setup.mjs';
 import { accentFor, statusData } from '../status.mjs';
-import { comparePaths, normcase, pyStripSpace, pyUnquote, readText } from '../lib/pyfs.mjs';
+import {
+  comparePaths, normcase, pyStripSpace, pyUnquote, readText, within,
+} from '../lib/pyfs.mjs';
 import { readJsonc } from '../settings.mjs';
 import { apiActivity, apiActivityDetail } from './activity.mjs';
 import { apiMcp, apiRules } from './actions.mjs';
@@ -478,12 +480,14 @@ export function apiWikiItem(state, name) {
   throw new NotFound(name);
 }
 
-/** `harness._within` — containment through `normcase`, segment-wise. Exported for P6g's restore. */
-export function within(child, parent) {
-  const c = normcase(child).split(/[\\/]/);
-  const p = normcase(parent).split(/[\\/]/);
-  return p.length <= c.length && p.every((seg, i) => c[i] === seg);
-}
+/**
+ * `harness._within` — re-exported from `js/lib/pyfs.mjs`, where P6i moved it.
+ *
+ * It lived here from P6b (the restore's containment check) until `_install_move_list` needed
+ * the same predicate from `js/uninstall.mjs`, which must not import the web tree. The
+ * re-export keeps `js/web/actions.mjs`'s import path unchanged.
+ */
+export { within };
 
 /**
  * `_web_catalog._flat_name` — catalog names are flat basenames.

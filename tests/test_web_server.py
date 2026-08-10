@@ -350,7 +350,7 @@ srv.listen(0, '127.0.0.1', async () => {
   const out = {
     portedGet: await hit('GET', '/api/profile'),
     portedPost: await hit('POST', '/api/excludes', 'tok'),
-    unportedPost: await hit('POST', '/api/install', 'tok'),
+    crossedPost: await hit('POST', '/api/install', 'tok'),
     declinedPost: await hit('POST', '/api/pick-folder', 'tok'),
     declinedGet: await hit('GET', '/api/pick-folder'),
     // P6g's three, and none of them may START anything: this probe runs against the
@@ -388,8 +388,19 @@ srv.listen(0, '127.0.0.1', async () => {
         self.assertEqual(got["portedPost"], 409,
                          "a ported POST must answer, and an empty body is the 409 arm of "
                          "the convention — the control for the two 501s below")
-        self.assertEqual(got["unportedPost"], 501,
-                         "POST /api/install has not crossed and must say so")
+        # P6i RETIRED THE `unportedPost` PROBE, on the same terms P6g retired `unportedGet`:
+        # `/api/install` crossed, `NOT_PORTED_POST` is empty, and there is no unported POST
+        # left to ask. Asking a 501 of a route that now answers would be the assertion going
+        # stale rather than the gate holding. What replaces it is the OPPOSITE assertion over
+        # the same path — an empty body reaches the endpoint, misses the (host, path)
+        # allowlist and raises `NotFound`, which the outer catch answers 404. That is a live
+        # probe of the route the set no longer names, and it fails if the row is ever removed
+        # from `POST_ROUTES` (it would answer 404 with a different body — or 501 if someone
+        # re-added the declaration without the dispatch).
+        self.assertEqual(got["crossedPost"], 404,
+                         "POST /api/install crossed in P6i: an empty body names no install, "
+                         "so it must reach the endpoint and raise NotFound — a 501 here "
+                         "means the row went back into NOT_PORTED_POST")
         self.assertEqual(got["declinedPost"], 501,
                          "POST /api/pick-folder never crosses and must say so — a 404 here "
                          "means DECLINED_POST is declared but not dispatched on")

@@ -124,6 +124,7 @@ import {
 import {
   PY_SPACE, parseJson, pyLen, pyRepr, pyStr, pyStripSpace, pyTruthy, readText, writeText,
 } from '../lib/pyfs.mjs';
+import { installDeactivate, installReactivate, installUninstall } from '../uninstall.mjs';
 import { pySplitLines } from '../lib/pydiff.mjs';
 import {
   NotFound, deployed, emitChoices, fingerprint, themeChoices, viewCfg, within,
@@ -770,6 +771,51 @@ export function apiInstallCmd(state, body) {
  * validated here as an existing, writable directory that is not a host's own global config dir
  * (deploying a `project` emit there would mislabel as the global row and collide on dedup).
  */
+/**
+ * `_web_actions.api_install_toggle` — deactivate, reactivate, or REMOVE one install.
+ *
+ * KEYED ON THE (host, path) PAIR, and the pair must be one of the DETECTED installs. A cwd can
+ * carry both an OpenCode and a Claude install at the same path, so a path alone is ambiguous;
+ * and this endpoint moves and deletes whole trees, so the root is never built from raw body
+ * input. An unknown pair is a `NotFound`, which the shell answers 404.
+ *
+ * THE ENGINE IS `js/uninstall.mjs`'s, and P6i is what brought it. `installDeactivate` /
+ * `installReactivate` are the reversible siblings of `installUninstall` — the same owned-file
+ * walk and ancestor prune with `move` where the reversal has `unlink` — which is why they live
+ * beside it rather than in the web tree. `remove` is `installUninstall`, which crossed in P5h
+ * and reaches the wire for the first time here.
+ */
+export function apiInstallToggle(state, body) {
+  const known = new Map();
+  for (const [host, scope, root] of installTargets()) {
+    known.set(JSON.stringify([host, String(root)]), [host, scope, root]);
+  }
+  const hit = known.get(JSON.stringify(
+    [strOr(bget(body, 'host')), strOr(bget(body, 'path'))],
+  ));
+  if (hit === undefined) throw new NotFound('unknown install (host, path)');
+  const [host, scope, root] = hit;
+  const action = bget(body, 'action');
+  let res;
+  if (action === 'deactivate') {
+    res = installDeactivate(root, host, scope);
+  } else if (action === 'activate') {
+    res = installReactivate(root, host, scope);
+  } else if (action === 'remove') {
+    // Destructive. `memory` ∈ {keep, archive, delete} governs the memory/notebook stores and
+    // is validated IN THE ENGINE — an unknown value falls back to `keep`, never a surprise
+    // delete, which is why a bogus body value is passed through rather than rejected here.
+    const mem = bget(body, 'memory');
+    res = installUninstall(root, host, scope, pyTruthy(mem) ? mem : 'keep');
+  } else {
+    // `{action!r}` — Python's repr, SINGLE-quoted. `JSON.stringify` would double-quote it
+    // inside a JSON string body and the two sides would differ on every typo.
+    res = { ok: false, error: `unknown action ${pyRepr(action)}` };
+  }
+  state.refresh();
+  return res;
+}
+
 export function apiDeployCmd(state, body) {
   const host = pyStripSpace(strOr(bget(body, 'host')));
   if (!HOSTS.some((h) => h.host === host)) {

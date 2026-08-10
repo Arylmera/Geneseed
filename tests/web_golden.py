@@ -452,6 +452,7 @@ def cells() -> list[dict]:
     out += _activity_cells(cell)
     out += _mutate_cells(cell)
     out += _job_cells(cell)
+    out += _install_cells(cell)
     return out
 
 
@@ -2194,6 +2195,347 @@ def _read_cells(cell) -> list[dict]:
 
 # ---- running one cell ------------------------------------------------------
 
+# ---- P6i — `api_install_toggle` and the tree-move/rollback engine under it ---------------
+#
+# THE FIRST WEB CELLS THAT MOVE FILES, and they are why the `<dirs>` column exists at all:
+# a third of `_install_deactivate` is `_prune_empty_ancestors`, and a FILE snapshot cannot
+# see a husk. Every one of these cells therefore names what went, what SURVIVED, and — where
+# the engine prunes — the directory that must not still be standing. P5h's three directions,
+# arriving in the web harness.
+#
+# THE ROLLBACK ARM IS DRIVEN, not declared. `_install_deactivate` is ALL-OR-NOTHING: a move
+# that fails puts every earlier move back and leaves the install `active` rather than
+# half-gutted. Reaching it needs the SECOND move to fail, and the only shape a seeded world
+# can produce is a manifest whose `owned` names a file AND its parent directory — the first
+# move creates `<stash>/a/`, and the second then finds its destination already there, which
+# is exactly what `_move_tree` refuses. Without that shape the rollback loop, the
+# `rolled_back` count and the `rmtree(stash)` beside them are twelve lines no cell reaches
+# and no mutation can kill.
+#
+# EVERY REFUSAL CELL SEEDS A REAL INSTALL (the plan's rule 6). A 404 for an unknown
+# (host, path) proves nothing against an empty sandbox — the refusal and the miss give the
+# same answer — so each refusal runs against a world where a live install is one field away,
+# and names in `expect_files` the artifact that must still be there afterwards.
+_CL = "home/.claude"
+_INSTALL_PATH = "{homeJ}{sepJ}.config{sepJ}opencode"
+_CLAUDE_PATH = "{homeJ}{sepJ}.claude"
+# `_install_agent_entry(root, "global")` is `(root / "AGENT.md").as_posix()` — an ABSOLUTE
+# posix path carrying the sandbox. Seeded in the spelling the emit would have written, so
+# `_unmerge_opencode_json` really finds an entry to drop rather than no-oping.
+_OC_ENTRY = "{home/}/.config/opencode/AGENT.md"
+_STALE = "# STALE — the snapshot taken when the install was disabled\n"
+_FRESH = "# FRESH — re-emitted live while the install was disabled\n"
+_CLAUDE_MD = ("# my own notes\n\nprose the user added, which a disable must not eat.\n\n"
+              "<!-- BEGIN GENESEED -->\nthe managed preamble\n<!-- END GENESEED -->\n")
+
+
+def _oc_json(*entries) -> str:
+    return json.dumps({"$schema": "https://opencode.ai/config.json",
+                       "instructions": list(entries)}, indent=2) + "\n"
+
+
+def _oc_install(owned: list, **extra) -> dict:
+    """An opencode-GLOBAL install at `home/.config/opencode`, with `owned` as its manifest
+    says. The markers are seeded because they are the half that must NOT move: a global
+    deactivate leaves every marker in place (theme/emit/version detection keeps working
+    while disabled), which is what `expect_files` names beside each stashed path."""
+    return dict({
+        "repo/.keep": "",
+        f"{_OC}/.geneseed-manifest.json": json.dumps({"owned": owned}),
+        f"{_OC}/.geneseed-emit": "opencode-global\n",
+        f"{_OC}/.geneseed-theme": "imperial\n",
+        f"{_OC}/.geneseed-version": _VERSION,
+        f"{_OC}/opencode.json": _oc_json(_OC_ENTRY),
+    }, **extra)
+
+
+def _claude_install(**extra) -> dict:
+    """A claude-GLOBAL install at `home/.claude` — the other half of the host fork.
+
+    `managed` is what makes it Claude-shaped: there is no `instructions` array to unmerge,
+    so the reversal is the manifest's owned list plus the CLAUDE.md managed block plus the
+    settings.json hooks, and the stash is tagged by HOST so a root carrying two installs can
+    disable each independently."""
+    return dict({
+        "repo/.keep": "",
+        f"{_CL}/.geneseed-manifest.json": json.dumps({
+            "owned": ["agents/scribe.md"],
+            "managed": {"claude_md": {"rel": "CLAUDE.md"}, "settings_file": "settings.json",
+                        "settings_hooks": [], "settings_excludes": []}}),
+        f"{_CL}/.geneseed-emit": "claude-global\n",
+        f"{_CL}/.geneseed-theme": "imperial\n",
+        f"{_CL}/.geneseed-version": _VERSION,
+        f"{_CL}/settings.json": '{\n  "hooks": {}\n}\n',
+    }, **extra)
+
+
+def _toggle(action, host="opencode", path=_INSTALL_PATH, **extra) -> bytes:
+    return json.dumps({"host": host, "path": path, "action": action, **extra}).encode()
+
+
+def _install_cells(cell) -> list[dict]:
+    installs = _req(path="/api/installs")
+    return [
+        cell("install/deactivating-a-global-install-stashes-its-tree-and-prunes-the-husk",
+             [_req("POST", path="/api/install", body=_toggle("deactivate"), token=True),
+              installs],
+             world=_oc_install(
+                 ["AGENT.md", "skills/deep/nested/SKILL.md"],
+                 **{f"{_OC}/AGENT.md": _DEPLOYED_AGENT,
+                    f"{_OC}/skills/deep/nested/SKILL.md": "# a vendored skill\n"}),
+             # The nested owned file is the whole reason this cell is not just `AGENT.md`:
+             # `_prune_empty_ancestors` climbs from the moved file's PARENT, so a flat
+             # move-list exercises none of it (`AGENT.md`'s parent IS the root, and the loop
+             # stops immediately). Three husk levels, and all three are directories no file
+             # snapshot could ever have reported.
+             expect=['{"ok": true, "kind": "global", "moved": 2}', "200 OK",
+                     '"state": "disabled"'],
+             expect_files=[f"{_OC}/.geneseed-disabled/AGENT.md",
+                           f"{_OC}/.geneseed-disabled/skills/deep/nested/SKILL.md",
+                           # The markers STAY. They are the positive control beside the
+                           # deletions (P5c's rule): without them a port that moved the whole
+                           # directory would satisfy every `expect_absent_files` below.
+                           f"{_OC}/.geneseed-emit", f"{_OC}/.geneseed-theme",
+                           f"{_OC}/.geneseed-manifest.json"],
+             expect_absent_files=[f"{_OC}/AGENT.md", f"{_OC}/skills",
+                                  f"{_OC}/skills/deep", f"{_OC}/skills/deep/nested"]),
+
+        cell("install/a-deactivate-whose-second-move-collides-rolls-the-first-one-back",
+             [_req("POST", path="/api/install", body=_toggle("deactivate"), token=True),
+              _req("POST", path="/api/install", body=_toggle("activate"), token=True),
+              installs],
+             # `owned` names `a/one.md` AND `a`. The first move creates `<stash>/a/`; the
+             # second finds `<stash>/a` already there and `_move_tree` refuses rather than
+             # overwrite a destination it is responsible for restoring. That is the ONLY
+             # rollback trigger a seeded world can produce — see this section's header.
+             world=_oc_install(
+                 ["a/one.md", "a"],
+                 **{f"{_OC}/AGENT.md": _DEPLOYED_AGENT,
+                    f"{_OC}/a/one.md": "# the file the rollback must put back\n"}),
+             # Request 2 is not decoration: `install is not disabled (active)` is the
+             # assertion that the rollback left the install genuinely active rather than
+             # cosmetically so — and it is the second refusal string of the pair, which no
+             # other cell reaches.
+             expect=['"ok": false', '"failed": ["a (', '"rolled_back": 1', "409 Conflict",
+                     '{"ok": false, "error": "install is not disabled (active)"}',
+                     '"state": "active"'],
+             expect_files=[f"{_OC}/a/one.md", f"{_OC}/AGENT.md", f"{_OC}/opencode.json"],
+             # The stash goes with the rollback — a failed deactivate leaves no trace at all.
+             expect_absent_files=[f"{_OC}/.geneseed-disabled"]),
+
+        cell("install/reactivating-restores-every-stashed-file-and-removes-the-stash",
+             [_req("POST", path="/api/install", body=_toggle("activate"), token=True),
+              installs],
+             world=_oc_install(
+                 ["AGENT.md", "skills/deep/nested/SKILL.md"],
+                 **{f"{_OC}/.geneseed-disabled/AGENT.md": _DEPLOYED_AGENT,
+                    f"{_OC}/.geneseed-disabled/skills/deep/nested/SKILL.md": "# a skill\n",
+                    # No live AGENT.md and no instructions entry: the disabled shape.
+                    f"{_OC}/opencode.json": _oc_json()}),
+             expect=['{"ok": true, "kind": "global", "moved": 2}', "200 OK",
+                     '"state": "active"'],
+             expect_files=[f"{_OC}/AGENT.md", f"{_OC}/skills/deep/nested/SKILL.md"],
+             # `rmtree(stash)` runs LAST and the tree it removes is directories only by
+             # then — invisible to a file snapshot, which is the column's second customer.
+             expect_absent_files=[f"{_OC}/.geneseed-disabled",
+                                  f"{_OC}/.geneseed-disabled/skills"]),
+
+        cell("install/a-reactivate-collision-keeps-the-stash-and-reports-the-leftover",
+             [_req("POST", path="/api/install", body=_toggle("activate"), token=True),
+              installs],
+             world=_oc_install(
+                 ["skills/x.md"],
+                 **{f"{_OC}/.geneseed-disabled/skills/x.md": _STALE,
+                    f"{_OC}/skills/x.md": _FRESH,
+                    f"{_OC}/opencode.json": _oc_json()}),
+             # "Never delete the stash while anything is unrestored." The install stays
+             # DISABLED and the stashed bytes stay put, so the operator can retry by hand —
+             # a port that removed the stash on the failure path would strand them forever
+             # and every response byte would still match.
+             expect=['{"ok": false, "failed": ["skills/x.md"], "moved": 0}', "409 Conflict",
+                     '"state": "disabled"'],
+             expect_files=[f"{_OC}/.geneseed-disabled/skills/x.md", f"{_OC}/skills/x.md"]),
+
+        cell("install/a-rebuild-while-disabled-discards-the-stale-stash",
+             [_req("POST", path="/api/install", body=_toggle("activate"), token=True),
+              installs],
+             world=_oc_install(
+                 ["AGENT.md"],
+                 **{f"{_OC}/.geneseed-disabled/AGENT.md": _STALE,
+                    f"{_OC}/AGENT.md": _FRESH,
+                    f"{_OC}/opencode.json": _oc_json()}),
+             # `_install_relive` — the user ran `build` while disabled, so the live files are
+             # newer than the snapshot. The stash is DISCARDED rather than moved back over
+             # them, and the instructions entry is re-added so the install is whole.
+             #
+             # WHAT THIS CELL CANNOT SEE ABSOLUTELY: that `AGENT.md` still holds the FRESH
+             # bytes rather than the stale ones. `expect`/`expect_absent` read responses, and
+             # no ported endpoint serves an install's file content. The cross-implementation
+             # comparison covers a clobber (the two seeds differ by their first word); a port
+             # that clobbered on BOTH sides would not be caught here, which is what the
+             # `_STALE`/`_FRESH` naming is for when someone reads the snapshot.
+             expect=['{"ok": true, "note": "install was re-created while disabled; '
+                     'discarded the stashed snapshot"}', "200 OK", '"state": "active"'],
+             expect_files=[f"{_OC}/AGENT.md", f"{_OC}/opencode.json"],
+             expect_absent_files=[f"{_OC}/.geneseed-disabled",
+                                  f"{_OC}/.geneseed-disabled/AGENT.md"]),
+
+        cell("install/a-commented-opencode-jsonc-refuses-before-anything-moves",
+             [_req("POST", path="/api/install", body=_toggle("deactivate"), token=True),
+              installs],
+             world=_oc_install(
+                 ["AGENT.md"],
+                 **{f"{_OC}/AGENT.md": _DEPLOYED_AGENT,
+                    # `_opencode_target` prefers a `.jsonc` sibling when one exists.
+                    f"{_OC}/opencode.jsonc": "{\n  // the user's own note\n  "
+                                             '"instructions": ["' + _OC_ENTRY + '"]\n}\n'}),
+             # The refusal is CHECKED UP FRONT, before the loop — rewriting a commented
+             # config would drop the user's comments, and a deactivate that moved the tree
+             # and then refused to unwire would leave an install that is neither on nor off.
+             # `\\u2014`, not the character. `_send_json` is `json.dumps` with
+             # `ensure_ascii=True`, so the em dash reaches the wire escaped — P6g's third
+             # gate defect, and the self-check caught this one the same way. The sibling
+             # cell below keeps the raw character because its message is a `print`, on the
+             # daemon's stdout, where nothing encodes it.
+             expect=['"ok": false',
+                     'opencode.jsonc has comments \\u2014 refusing to rewrite it.',
+                     "409 Conflict", '"state": "active"'],
+             expect_files=[f"{_OC}/AGENT.md", f"{_OC}/opencode.jsonc"],
+             expect_absent_files=[f"{_OC}/.geneseed-disabled"]),
+
+        cell("install/a-reactivate-into-a-commented-jsonc-restores-the-files-and-says-so",
+             [_req("POST", path="/api/install", body=_toggle("activate"), token=True)],
+             world=_oc_install(
+                 ["AGENT.md"],
+                 **{f"{_OC}/.geneseed-disabled/AGENT.md": _DEPLOYED_AGENT,
+                    f"{_OC}/opencode.jsonc": "{\n  // the user's own note\n}\n"}),
+             # The asymmetry is deliberate in the reference and must survive the port: a
+             # DEACTIVATE refuses outright, a REACTIVATE restores every byte and only then
+             # tells the operator to add the entry by hand. `_install_readd_entry`'s print is
+             # the engine's ONE line of stdout, and it lands on the daemon's stream.
+             expect=['{"ok": true, "kind": "global", "moved": 1}',
+                     "[activate] opencode.jsonc has comments — not rewriting it. Add this "
+                     'to its "instructions" by hand: "<HOME>'],
+             expect_files=[f"{_OC}/AGENT.md"],
+             expect_absent_files=[f"{_OC}/.geneseed-disabled"]),
+
+        cell("install/an-unknown-host-over-a-live-install-is-a-404",
+             [_req("POST", path="/api/install",
+                   body=_toggle("deactivate", host="bogus"), token=True), installs],
+             world=_oc_install(["AGENT.md"], **{f"{_OC}/AGENT.md": _DEPLOYED_AGENT}),
+             # The PAIR is the key, and the path here is a real detected install's — so this
+             # is a refusal over a target that exists, not a miss dressed as one. `known` is
+             # built from `_install_targets()` precisely so a body can never name a root the
+             # engine will then move.
+             expect=['{"error": "not found: unknown install (host, path)"}', "404 Not Found",
+                     '"state": "active"'],
+             expect_files=[f"{_OC}/AGENT.md"],
+             expect_absent_files=[f"{_OC}/.geneseed-disabled"]),
+
+        cell("install/deactivating-an-already-disabled-install-is-refused",
+             [_req("POST", path="/api/install", body=_toggle("deactivate"), token=True),
+              installs],
+             world=_oc_install(["AGENT.md"],
+                               **{f"{_OC}/.geneseed-disabled/AGENT.md": _DEPLOYED_AGENT,
+                                  f"{_OC}/opencode.json": _oc_json()}),
+             expect=['{"ok": false, "error": "install is not active (disabled)"}',
+                     "409 Conflict", '"state": "disabled"'],
+             expect_files=[f"{_OC}/.geneseed-disabled/AGENT.md"]),
+
+        cell("install/an-unknown-action-is-refused-and-moves-nothing",
+             [_req("POST", path="/api/install", body=_toggle("nope"), token=True), installs],
+             world=_oc_install(["AGENT.md"], **{f"{_OC}/AGENT.md": _DEPLOYED_AGENT}),
+             # `{action!r}` — Python's repr, single-quoted. The twin needs `pyRepr`, and a
+             # naive `JSON.stringify` would double-quote it inside a JSON string.
+             expect=['{"ok": false, "error": "unknown action \'nope\'"}', "409 Conflict",
+                     '"state": "active"'],
+             expect_files=[f"{_OC}/AGENT.md"],
+             expect_absent_files=[f"{_OC}/.geneseed-disabled"]),
+
+        cell("install/an-absolute-manifest-entry-escapes-the-root-and-is-never-moved",
+             [_req("POST", path="/api/install", body=_toggle("deactivate"), token=True)],
+             world=_oc_install(
+                 ["/evil.md", "AGENT.md"],
+                 **{f"{_OC}/AGENT.md": _DEPLOYED_AGENT,
+                    f"{_OC}/evil.md": "# NOT owned — a manifest entry that escapes\n"}),
+             # THE CONTAINMENT GUARD, and the cell exists because the guard is one character
+             # wide. `(rroot / r)` is pathlib's `/`, which REPLACES the base when `r` is
+             # absolute: `/evil.md` resolves to `C:\evil.md`, lands outside the root, and is
+             # dropped. `path.join` would have concatenated it back INSIDE the root
+             # (`<root>\evil.md`) — a path that exists here on purpose — and the endpoint
+             # would then move a file the manifest never legitimately owned.
+             #
+             # `/evil.md` rather than `C:/evil.md` deliberately: the rooted-but-driveless
+             # spelling is the one that behaves identically on both platforms (POSIX
+             # `Path('/home/x') / '/evil.md'` is `/evil.md` too), so this cell discriminates
+             # everywhere rather than on Windows alone.
+             expect=['{"ok": true, "kind": "global", "moved": 1}', "200 OK"],
+             expect_files=[f"{_OC}/evil.md", f"{_OC}/.geneseed-disabled/AGENT.md"],
+             expect_absent_files=[f"{_OC}/.geneseed-disabled/evil.md"]),
+
+        cell("install/removing-an-install-deletes-the-tree-and-de-lists-it",
+             [_req("POST", path="/api/install", body=_toggle("remove"), token=True),
+              installs],
+             world=_oc_install(
+                 ["AGENT.md", "skills/deep/nested/SKILL.md"],
+                 **{f"{_OC}/AGENT.md": _DEPLOYED_AGENT,
+                    f"{_OC}/skills/deep/nested/SKILL.md": "# a vendored skill\n",
+                    # The POSITIVE CONTROL (P5c): a file the manifest does NOT own, in a
+                    # directory the reversal sweeps. A port that deleted by glob rather than
+                    # by manifest takes this with it, and every deletion below still passes.
+                    f"{_OC}/skills/mine.md": "# the user's own skill\n"}),
+             # The DESTRUCTIVE third action. `installUninstall` crossed in P5h with
+             # `harness uninstall` as its only caller; this is the first cell that reaches it
+             # through the web layer, which is the partition `api_install_toggle`'s three-arm
+             # dispatch is — without it, `remove` is a branch the endpoint's two other cells
+             # cannot distinguish from a typo.
+             expect=['"ok": true', '"removed": 2', '"memory": "keep"', "200 OK",
+                     '"state": "absent"'],
+             expect_files=[f"{_OC}/skills/mine.md"],
+             expect_absent_files=[f"{_OC}/AGENT.md", f"{_OC}/.geneseed-manifest.json",
+                                  f"{_OC}/.geneseed-emit", f"{_OC}/skills/deep",
+                                  f"{_OC}/skills/deep/nested"]),
+
+        cell("install/deactivating-a-claude-global-install-stashes-under-its-host",
+             [_req("POST", path="/api/install",
+                   body=_toggle("deactivate", host="claude", path=_CLAUDE_PATH), token=True),
+              installs],
+             world=_claude_install(**{f"{_CL}/agents/scribe.md": "# an owned agent\n",
+                                      f"{_CL}/CLAUDE.md": _CLAUDE_MD}),
+             # The host fork, and it is a different engine rather than a flag: no
+             # `instructions` array, a host-TAGGED stash, the settings hooks unwired and
+             # verified, and the CLAUDE.md block excised into the stash for an exact restore.
+             expect=['{"ok": true, "kind": "claude", "moved": 1}', "200 OK",
+                     '"id": "claude:global"', '"state": "disabled"'],
+             expect_files=[f"{_CL}/.geneseed-disabled/claude/agents/scribe.md",
+                           f"{_CL}/.geneseed-disabled/claude/_claude_md_block.txt",
+                           # ALWAYS EXCISED, NEVER DELETED. The user's prose around the block
+                           # survives a disable, and this is the file that proves it.
+                           f"{_CL}/CLAUDE.md", f"{_CL}/.geneseed-manifest.json"],
+             expect_absent_files=[f"{_CL}/agents"]),
+
+        cell("install/reactivating-a-claude-global-install-restores-the-block-and-rewires",
+             [_req("POST", path="/api/install",
+                   body=_toggle("activate", host="claude", path=_CLAUDE_PATH), token=True),
+              installs],
+             world=_claude_install(**{
+                 f"{_CL}/.geneseed-disabled/claude/agents/scribe.md": "# an owned agent\n",
+                 f"{_CL}/.geneseed-disabled/claude/_claude_md_block.txt":
+                     "the managed preamble",
+                 f"{_CL}/CLAUDE.md": "# my own notes\n\nprose the user added.\n"}),
+             # `_claude_md_block.txt` is SKIPPED by the restore walk and written back through
+             # `_managed_block_write` instead — a port that let it through would leave a
+             # stray `.txt` in the config dir and no block in CLAUDE.md. `moved` counts 1,
+             # not 2, and that number is the assertion.
+             expect=['{"ok": true, "kind": "claude", "moved": 1}', "200 OK",
+                     '"state": "active"'],
+             expect_files=[f"{_CL}/agents/scribe.md", f"{_CL}/CLAUDE.md"],
+             expect_absent_files=[f"{_CL}/.geneseed-disabled",
+                                  f"{_CL}/.geneseed-disabled/claude",
+                                  f"{_CL}/_claude_md_block.txt"]),
+    ]
+
+
 def _dyn_stamps(record: dict, port: int, pid: int) -> list[tuple[bytes, bytes]]:
     """The four per-run values, in every spelling a cell can observe them in.
 
@@ -2507,6 +2849,22 @@ def run_cell(cli: list[str], cell: dict, now: "int | None" = None) -> "dict[str,
 
         snap = {k: clean(v) for k, v in golden._snapshot(sb, roots).items()}
         snap.update({k: clean(v) for k, v in obs.items()})
+        # THE DIRECTORY COLUMN, and P6i is the first web phase that MOVES files.
+        #
+        # `harness_golden` grew one in P5h for the first verb that DELETES; `web_golden` never
+        # did, and P6h's handoff flagged the gap rather than paying it. It is the same hole in
+        # the same shape: `golden._snapshot` walks FILES, so an empty directory is invisible,
+        # and `_install_deactivate`'s ancestor prune leaves NOTHING in a file snapshot to look
+        # at — a port that moved every owned file and left `skills/<name>/` standing was
+        # byte-identical in all 95 cells. Half of the engine this phase ports is the prune.
+        #
+        # One pseudo-file rather than a sixth expectation kind, for the same reason as there:
+        # it closes the hole for every cell in the matrix at once, including the 95 written
+        # before it existed, where a per-cell declaration would only cover the cells that
+        # remembered to make one.
+        snap["<dirs>"] = clean("\n".join(sorted(
+            p.relative_to(sb).as_posix() for p in sb.rglob("*") if p.is_dir())
+        ).encode("utf-8"))
         # The record, as a column of its own. It is DELETED by a graceful stop, so the file
         # snapshot above cannot see it — and it carries the token, the port, the pid and the
         # started second, which is the only place four of this harness's destamps are
@@ -2575,8 +2933,22 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
         if rel not in snap:
             problems.append(f"the reference no longer leaves {rel!r} behind — this cell "
                             f"names it as a file the endpoint must NOT remove")
-    for rel in cell.get("expect_absent_files", ()):
-        if rel in snap:
+    # DIRECTORIES COUNT, since P6i. `expect_absent_files` used to read the file keys only,
+    # which made every DIRECTORY named in it pass trivially — and the husk an
+    # `_prune_empty_ancestors` failure leaves behind is exactly a directory. Same rule as
+    # `harness_golden`'s: the column is REQUIRED and NON-EMPTY when a cell names anything
+    # absent, because an empty column compares equal on both sides and makes every husk
+    # assertion pass against an empty set. `run_cell` creates `home`, `repo` and `cfg` before
+    # the server starts, so there is no cell an empty column could honestly describe.
+    want_absent = cell.get("expect_absent_files", ())
+    if want_absent and not snap.get("<dirs>", b"").strip():
+        problems.append("the snapshot's <dirs> column is missing or empty, so every "
+                        "directory named in expect_absent_files would pass without being "
+                        "looked at — and the sandbox always holds home/repo/cfg")
+        return problems
+    kept = set(snap["<dirs>"].decode("utf-8").split("\n")) if want_absent else set()
+    for rel in want_absent:
+        if rel in snap or rel in kept:
             problems.append(f"the reference now leaves {rel!r} behind, which this cell "
                             f"exists to prove it prunes")
     if "<transport>" in snap:

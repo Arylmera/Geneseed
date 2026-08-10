@@ -241,6 +241,21 @@ export function comparePaths(a, b) {
 }
 
 /**
+ * `_harness_core._within` \u2014 containment through `normcase`, segment-wise.
+ *
+ * MOVED HERE IN P6i, from `js/web/api.mjs` where P6b first needed it. The Python is a harness
+ * CORE primitive (`child.relative_to(parent)` in a try/except), and its second caller is
+ * `_install_move_list` in `js/uninstall.mjs` \u2014 a CLI-level module that must not import the
+ * web tree to reach it. Beside `normcase`, which is the thing it is actually about.
+ * `js/web/api.mjs` re-exports it so its existing importers are unchanged.
+ */
+export function within(child, parent) {
+  const c = normcase(child).split(/[\\/]/);
+  const p = normcase(parent).split(/[\\/]/);
+  return p.length <= c.length && p.every((seg, i) => c[i] === seg);
+}
+
+/**
  * A number as `json.loads` produced it, carrying the literal it was parsed from.
  *
  * `json.loads` yields an `int` for `20` and a `float` for `1.0`, and Python's `str()`

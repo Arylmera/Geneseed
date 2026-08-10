@@ -234,8 +234,16 @@ function die(code, msg) {
  * considered and rejected was a per-driver shim path: the path is baked into every already
  * emitted hook command, so changing it makes every existing install's hooks stale until
  * re-emit, which is P10's migration arriving five phases early.
+ *
+ * EXPORTED SINCE P6i, because the emitter is no longer its only caller.
+ * `js/uninstall.mjs`'s `remergeClaudeHooks` re-merges the canonical hooks when a disabled
+ * Claude install is turned back on, and `mergeClaudeSettings` refuses to guess the pair —
+ * correctly. There is exactly one right answer on this side and it is this function, so the
+ * second caller imports it rather than restating two lines that must never drift: a
+ * reactivate whose shim path differed from the emitter's would wire hooks pointing at a file
+ * the emitter never writes.
  */
-function hookRunnerEntry() {
+export function hookRunnerEntry() {
   return { runner: process.execPath, entry: path.join(ROOT, 'bin', 'geneseed-hook.mjs') };
 }
 
