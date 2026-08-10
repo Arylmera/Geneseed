@@ -9,6 +9,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **Geneseed is an npm package now — as a file on disk, not yet as something you can
+  install.** The repository carries a `package.json` with three commands (`geneseed`,
+  `geneseed-hook`, `geneseed-build`), a minimum Node version of 22.3.0, and an explicit list
+  of what a release would contain. Packing it and installing the result works today: all
+  three commands run, and `geneseed-build` renders a full bundle from the installed copy.
+  **It is deliberately marked private, so publishing it is impossible by accident**, and two
+  problems have to be fixed first — both found by installing it rather than by reading it.
+  npm rewrites the two `.gitignore` files that guard the agent's `memory/` and `notebook/`
+  directories, which would let an agent's private notes be committed into your repository;
+  and the notebook's charter page goes missing from the bundle (`geneseed doctor` reports
+  that one loudly, on every theme). Installing from a git clone is unaffected — nothing about
+  the current install path has changed.
 - **`geneseed bootstrap`, `geneseed sync-self` and `geneseed update` have Node twins, and the
   web console's Update button works without Python.** Nineteen of the harness's 24 commands
   now run from `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. The
