@@ -493,7 +493,7 @@ CELLS = [
 def _run_side(cell: dict, js: bool) -> dict:
     """One cell, one runtime, one fresh sandbox. Returns exit code, both normalised
     streams, and the snapshot of every file produced."""
-    with tempfile.TemporaryDirectory(prefix="geneseed-boundary-") as td_s:
+    with golden.sandbox(prefix="geneseed-boundary-") as td_s:
         td = Path(td_s)
         home, out = td / "home", td / "out"
         home.mkdir()
@@ -623,7 +623,7 @@ class EmitBoundaryTests(unittest.TestCase):
         as skipping the write, so claim and file stay trivially consistent and the checker
         says nothing even in the state it exists to catch."""
         import build
-        td = Path(tempfile.mkdtemp(prefix="geneseed-verify-"))
+        td = Path(os.path.realpath(tempfile.mkdtemp(prefix="geneseed-verify-")))
         self.addCleanup(shutil.rmtree, td, ignore_errors=True)
         home, repo = td / "home", td / "repo"
         repo.mkdir(parents=True)
@@ -1141,7 +1141,7 @@ class EmitBoundaryTests(unittest.TestCase):
         The second half is what keeps this honest: the progress the generator DID produce
         must come back inside the payload. A run that simply printed nothing would satisfy
         the first assertion and prove the opposite of what is claimed."""
-        with tempfile.TemporaryDirectory(prefix="geneseed-protocol-") as td_s:
+        with golden.sandbox(prefix="geneseed-protocol-") as td_s:
             td = Path(td_s)
             job = {"kind": "build", "cfg": _build_core.js_cfg(), "theme": "neutral",
                    "out": str(td / "out"), "footprint": "full", "nativeCatalog": False}
@@ -1179,7 +1179,7 @@ class EmitBoundaryTests(unittest.TestCase):
         hardcoded one of them would diverge on a path no cell can reach, since every cell
         renders a complete source. Three spellings is also why hardcoding LOOKS safe: two
         are computed from an argument and the third is a constant."""
-        with tempfile.TemporaryDirectory(prefix="geneseed-incomplete-") as td_s:
+        with golden.sandbox(prefix="geneseed-incomplete-") as td_s:
             td = Path(td_s)
             src = td / "src"
             shutil.copytree(_build_core.SRC, src,

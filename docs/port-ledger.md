@@ -71,6 +71,32 @@ makes the next unported thing visible instead of silently absent.
   * Two `web_golden` `expect_re`s named Windows' case-folded catalog order as if it were the
     only one.
   * The `link`/`unlink` Unix arm (row 5) and the `_web_first_ok` browser step (row 11).
+* **What the first WINDOWS CI run found, and what the harnesses now guarantee.** The same
+  argument as above, one platform over: PR #78's first run was green on a Windows laptop and
+  in WSL, and red on `windows-latest`. Every finding was an environment the developer's
+  machine could not produce, so each fix carries a gate that MANUFACTURES the environment
+  (`tests/test_sandbox_paths.py`, and the two named below) rather than one that waits for a
+  runner to supply it.
+  * **Sandbox paths are CANONICAL.** GitHub's Windows runner spells `TEMP` as the 8.3 alias
+    `C:\Users\RUNNER~1\…`; the generator's `Path.resolve()` expands it, so every destamp
+    root matched nothing and the raw sandbox name leaked into 45 byte comparisons — and
+    `git-gate/sovereign-bypass` went VACUOUS because the excludes entry it seeds stopped
+    matching a resolved cwd. `golden.sandbox()` is the one owner for the three cell
+    harnesses; `tests/golden.py` also canonicalises `tempfile.tempdir` at import, which
+    covers the twenty other modules that call `tempfile` directly. POSIX reaches the same
+    duality through symlinks and the gates build one there.
+  * **`resolveOut` was `path.resolve` where the reference is `Path.resolve()`** — a PORT bug
+    the aliasing exposed and a canonicalising fixture would have hidden. Now `pyResolve`,
+    the twin that already existed for this and is used at nine other sites.
+  * **`pyWhich` did not reproduce the current-directory rule.** `shutil.which` prepends
+    `os.curdir` unless `NoDefaultCurrentDirectoryInExePath` is DEFINED; Git Bash defines it
+    and the runner does not. The corpus reached the branch and never varied the variable.
+  * **A bare `text=True` decoded node's stdout with the locale codec** in
+    `tests/test_win_user_path.py`; `PYTHONUTF8=1` (this repo's runbook, not CI) had been
+    making it accidentally right since P5a made the same finding.
+  * **A `TemporaryDirectory` cleanup race killed the Linux `cells` job** after it had
+    compared 270 of 318 cells; the same commit passed on re-run. `sandbox()` cannot raise
+    on teardown, for the reason `sandbox_process_home` already gave.
 * **The `cells` job is Linux-only.** `validate` (doctor + the unit suite + `node --test`)
   still runs on `ubuntu-latest` *and* `windows-latest`, so every cross-implementation gate
   that is not a cell runs on both; the three harnesses themselves run on Linux in CI and on

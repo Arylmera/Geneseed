@@ -548,9 +548,20 @@ export const pyLjust = (s, width) => s + ' '.repeat(Math.max(0, width - pyLen(s)
  * MEASURED against CPython 3.13 rather than assumed. `PATHEXT` supplies the suffixes, and the
  * returned path carries PATHEXT's OWN SPELLING of the extension rather than the file's
  * (`zzcmd.CMD` for a `zzcmd.cmd` on disk). An extension already in that set means the command
- * is spelled in full. The current directory is NOT prepended — it was until 3.12 and the
- * first draft here reproduced the old behaviour. An EMPTY PATH entry is not skipped either:
- * `join('', cmd)` is a relative path, and Python answers with one.
+ * is spelled in full. An EMPTY PATH entry is not skipped either: `join('', cmd)` is a
+ * relative path, and Python answers with one.
+ *
+ * THE FOURTH RULE IS THE CURRENT DIRECTORY, and it was measured on a machine that could not
+ * see it. `shutil.which` prepends `os.curdir` to the search — even to a `path=` given
+ * explicitly — when `_winapi.NeedCurrentDirectoryForExePath` says so, and that Win32 call
+ * answers TRUE unless `NoDefaultCurrentDirectoryInExePath` is DEFINED in the environment.
+ * Git Bash and this repo's developer machine both define it, so the reference answered None
+ * there and the first draft's "the current directory is NOT prepended — it was until 3.12"
+ * described an environment variable it had mistaken for a version change. GitHub's Windows
+ * runner does not define it: the reference answered `.\\geneseed.CMD` for a `geneseed` looked
+ * up beside the repo root, this returned null, and the parity corpus said so on the first CI
+ * run. The variable is an INPUT, so it is read here rather than baked, and
+ * `test_the_curdir_rule_agrees_in_both_environment_states` runs the corpus with it both ways.
  *
  * Gated as a pure function over a seeded directory in `tests/test_pure_function_parity.py`:
  * a cell can only ever observe the one answer this machine's PATH gives.
@@ -578,8 +589,14 @@ export function pyWhich(cmd, searchPath = null) {
   const joinRaw = (dir, name) => (
     dir === '' || /[\\/]$/.test(dir) || (win && dir.endsWith(':'))
       ? dir + name : dir + path.sep + name);
+  const dirs = (searchPath ?? process.env.PATH ?? '').split(path.delimiter);
+  // `NeedCurrentDirectoryForExePath(cmd)`: TRUE — so `.` goes in FRONT — unless the variable
+  // is defined. Only reachable with a separator-free `cmd`, which is the only way execution
+  // gets this far. Inserted before the dedupe, exactly where `shutil.which` inserts it, so a
+  // PATH that already names `.` is searched once.
+  if (win && process.env.NoDefaultCurrentDirectoryInExePath === undefined) dirs.unshift('.');
   const seen = new Set();
-  for (const dir of (searchPath ?? process.env.PATH ?? '').split(path.delimiter)) {
+  for (const dir of dirs) {
     const key = win ? dir.toLowerCase() : dir;
     if (seen.has(key)) continue;
     seen.add(key);

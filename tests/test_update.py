@@ -22,15 +22,37 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import golden  # noqa: E402  (the process-home sandbox)
 
 
+#: Restored by `tearDownModule`. See `NoCellCanReachTheNetwork` for what it buys.
+_SAVED_ALLOW_PROTOCOL: "str | None" = None
+
+
 def setUpModule():
     # The route here is not visible in this file's own syntax: the tests that do NOT mock
     # `_rebuild_bundle` run a real one, which spawns the generator with this process's
     # environment — and `_write_hook_shim()` targets the ENVIRONMENT's home. Measured, and
     # declared in `_ROUTED_BY_ANOTHER_PATH`. See tests/test_home_sandbox.py.
     golden.sandbox_process_home()
+    # THE SAME BAN `harness_golden._NO_NETWORK_ENV` PUTS ON EVERY CELL, for the module that
+    # owns the verb those cells exercise. This file's flow tests call the REAL `upgrade()`
+    # with `_measure_upstream` mocked out, and `upgrade()` logs "fetching from origin ..."
+    # BEFORE that call — so the log claims a fetch that never happens, and a CI transcript
+    # reads exactly like a test that went online. It was not one (measured: the fetch seam
+    # is mocked in every arm that reaches it). But "no test reaches the network" was a
+    # property of the mocks rather than of anything enforced, and one un-mocked seam in a
+    # future arm would silently make it false. Git enforces it here instead: with
+    # `GIT_ALLOW_PROTOCOL=file` a fetch over https dies with `transport 'https' not
+    # allowed` before a socket opens, and `NoCellCanReachTheNetwork` proves that is what
+    # happens rather than asserting it.
+    global _SAVED_ALLOW_PROTOCOL
+    _SAVED_ALLOW_PROTOCOL = os.environ.get("GIT_ALLOW_PROTOCOL")
+    os.environ["GIT_ALLOW_PROTOCOL"] = "file"
 
 
 def tearDownModule():
+    if _SAVED_ALLOW_PROTOCOL is None:
+        os.environ.pop("GIT_ALLOW_PROTOCOL", None)
+    else:
+        os.environ["GIT_ALLOW_PROTOCOL"] = _SAVED_ALLOW_PROTOCOL
     golden.restore_process_home()
 
 
@@ -292,17 +314,40 @@ class MeasureUpstreamTests(unittest.TestCase):
 
 class FetchStreamingTests(unittest.TestCase):
     def _popen_stub(self, script):
-        """A real subprocess running `script` stands in for git fetch."""
+        """A real subprocess running `script` stands in for git fetch.
+
+        `spawned` collects the Popen objects handed back, because the pipe they carry is
+        itself part of the contract — see `_assert_pipe_closed`."""
         real_popen = subprocess.Popen
+        spawned = []
         def fake_which(_name):
             return sys.executable
         def fake_popen(cmd, **kw):
-            return real_popen([sys.executable, "-c", script], **{
+            p = real_popen([sys.executable, "-c", script], **{
                 k: v for k, v in kw.items() if k != "env"})
-        return fake_which, fake_popen
+            spawned.append(p)
+            return p
+        return fake_which, fake_popen, spawned
+
+    def _assert_pipe_closed(self, spawned):
+        """`_fetch_streaming` must close the read end on EVERY exit.
+
+        Not tidiness. Its only production caller is `upgrade()`, which runs inside
+        `geneseed web`'s daemon — a process that stays up for weeks — so a pipe left open
+        per upgrade is a descriptor leaked per upgrade, and the unit suite was already
+        saying so in `ResourceWarning: unclosed file` on two lines of this class. A
+        ResourceWarning fires whenever the collector gets round to it, which makes it
+        useless as a gate; the handle is checked directly instead."""
+        # `spawned[0]` and not "the only one": on Windows `_kill_tree` shells out to
+        # `taskkill`, and this stub patches `subprocess.Popen` module-wide, so the timeout
+        # arm's kill is intercepted too and stands up a SECOND stub child. Only the first
+        # is the fetch, and only the fetch's pipe is `_fetch_streaming`'s to close.
+        self.assertTrue(spawned, "the stub should have spawned the fetch child")
+        self.assertTrue(spawned[0].stdout.closed,
+                        "_fetch_streaming returned with git's pipe still open")
 
     def test_streams_progress_and_returns_rc(self):
-        which, popen = self._popen_stub(
+        which, popen, spawned = self._popen_stub(
             "import sys; print('Receiving objects: 100% (3/3), done.'); sys.exit(0)")
         logged = []
         with mock.patch.object(_update.shutil, "which", which), \
@@ -311,9 +356,10 @@ class FetchStreamingTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("Receiving objects", tail)
         self.assertTrue(any("Receiving objects" in m for m in logged))
+        self._assert_pipe_closed(spawned)
 
     def test_timeout_kills_and_returns_none(self):
-        which, popen = self._popen_stub("import time; time.sleep(60)")
+        which, popen, spawned = self._popen_stub("import time; time.sleep(60)")
         logged = []
         with mock.patch.object(_update.shutil, "which", which), \
              mock.patch.object(_update.subprocess, "Popen", popen), \
@@ -322,12 +368,41 @@ class FetchStreamingTests(unittest.TestCase):
             rc, _ = _update._fetch_streaming(logged.append)
         self.assertIsNone(rc)
         self.assertTrue(any("killed it" in m for m in logged))
+        # The timeout arm returns from INSIDE the poll loop, which is the exit a `close()`
+        # written after the loop would miss.
+        self._assert_pipe_closed(spawned)
 
     def test_no_git_exe(self):
         with mock.patch.object(_update.shutil, "which", lambda _n: None):
             rc, err = _update._fetch_streaming()
         self.assertIsNone(rc)
         self.assertIn("git is not installed", err)
+
+
+@unittest.skipUnless(shutil.which("git"), "git is not on PATH")
+class NoCellCanReachTheNetwork(unittest.TestCase):
+    """The POSITIVE CONTROL for `setUpModule`'s `GIT_ALLOW_PROTOCOL=file`.
+
+    Declaring a ban and running under one are two properties, and only the second is worth
+    anything: this runs the REAL `_fetch_streaming` — no mock, no seam — against this
+    checkout's real `origin`, and requires git to refuse it by TRANSPORT. Without the
+    variable the same call fetches, so the gate is red the moment the ban stops being
+    applied, on any machine and in CI.
+
+    It is harmless on the way to being useful: the refusal happens in git's own argument
+    handling, before a connection is attempted, and `fetch` writes nothing to the working
+    tree on the failing path."""
+
+    def test_a_real_fetch_is_refused_by_transport(self):
+        rc, url, _ = _update._git("remote", "get-url", "origin")
+        url = (url or "").strip()
+        if rc != 0 or not url.startswith(("http://", "https://", "ssh://", "git@")):
+            self.skipTest(f"origin is not a network remote here ({url[:60]!r})")
+        code, out = _update._fetch_streaming()
+        self.assertNotEqual(code, 0, "the fetch SUCCEEDED — the network ban is not applied")
+        self.assertIn("not allowed", out,
+                      "git failed for some other reason than the transport ban; the ban "
+                      f"may not be in effect. git said: {out!r}")
 
 
 class PullAndValidateTests(unittest.TestCase):

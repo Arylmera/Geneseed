@@ -2875,7 +2875,7 @@ def run_cell(cli: list[str], cell: dict, now: "int | None" = None) -> "dict[str,
     """
     faults = cell.get("checkout")
     now = int(time.time()) if now is None else now
-    with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as ctd:
+    with golden.sandbox() as td, golden.sandbox() as ctd:
         sb = Path(td)
         home, repo, cfg = sb / "home", sb / "repo", sb / "cfg"
         for d in (home, repo, cfg):

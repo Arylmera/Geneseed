@@ -92,9 +92,20 @@ const NATIVE_CATALOG = { opencode: true, claude: true, bob: false, copilot: fals
  *  names the AGENT.md a bundle emit just wrote, and it names it by the same resolution the
  *  emit used. Copying the one line would be a second owner of the rule that a bare `Harness`
  *  follows the invocation and not the checkout — which is what
- *  `build/the-bundle-follows-cwd-not-the-checkout` exists to gate. */
+ *  `build/the-bundle-follows-cwd-not-the-checkout` exists to gate.
+ *
+ *  `pyResolve` AND NOT `path.resolve`, and the difference is the whole reason `pyResolve`
+ *  exists: the reference ends in `.resolve()`, which canonicalises — 8.3 short names expanded
+ *  on Windows, symlinks followed on POSIX, the filesystem's own casing — where `path.resolve`
+ *  only normalises `.`/`..`. Nine `pyResolve` call sites had the rule and this one did not.
+ *  It is invisible on a machine whose paths are already canonical, which is every machine
+ *  this ran on until GitHub's Windows runner handed it a `C:\\Users\\RUNNER~1\\...` and the
+ *  two CLIs printed the same directory under two different names — a 70-byte difference in a
+ *  line compared BYTE for byte by `test_the_two_entry_points_agree_on_stdout_BYTES`. The
+ *  argument to `pyResolve` is made absolute first so its `expanduser` cannot fire: the
+ *  reference does not expand `~` here, and a bare `~` is a legal directory name. */
 export function resolveOut(raw) {
-  return path.resolve(process.cwd(), raw);
+  return pyResolve(path.resolve(process.cwd(), raw));
 }
 
 /**

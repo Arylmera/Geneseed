@@ -59,18 +59,39 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import difflib
 import hashlib
 import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# THE PROCESS'S TEMP BASE, CANONICALISED, FOR EVERY MODULE THAT IMPORTS THIS ONE.
+#
+# `golden.sandbox()` gives the three cell harnesses a canonical root, and its docstring
+# explains why they need one. But the same requirement belongs to every test that hands a
+# temp path to a child and then destamps the child's output — and that is most of
+# `tests/`, spread across ~40 `tempfile` calls in twenty files rather than three. On
+# GitHub's Windows runner `TEMP` names the 8.3 SHORT spelling, `mkdtemp()` inherits it, the
+# generator resolves it, and the destamp holds a string that appears nowhere in the bytes:
+# `test_node_cli_parity`'s stacking warning compared `<sandbox>\py\repo` against
+# `<sandbox>\node\repo` with the shared prefix un-blanked, and reported the two halves of
+# its own fixture as a port difference.
+#
+# One assignment fixes all of them, because `mkdtemp`/`TemporaryDirectory` read
+# `tempfile.tempdir` at call time. It changes only WHICH SPELLING of the same directory
+# they return — nothing about where the files go. Children still read `TEMP` for
+# themselves and are deliberately left alone: making a child's temp canonical too would
+# have hidden the `resolveOut` bug that this same runner found (`bin/geneseed.mjs`).
+tempfile.tempdir = os.path.realpath(tempfile.gettempdir())
 
 #: Cells run CONCURRENTLY by default. Every cell builds its own temp sandbox, derives its
 #: own environment from `cell_env` and spawns its own children; nothing is shared and
@@ -316,6 +337,46 @@ def home_overrides(home: Path) -> dict:
             "GENESEED_HOME": str(home / ".geneseed")}
 
 
+@contextlib.contextmanager
+def sandbox(prefix: "str | None" = None):
+    """One cell's temp dir: CANONICAL, and with a teardown that cannot raise.
+
+    Every harness in this repo used `tempfile.TemporaryDirectory()` directly. Both of the
+    properties this adds were found by the first CI run — neither is reachable from a
+    developer's machine, and neither is cosmetic.
+
+    CANONICAL, because THE PATH A CHILD REPORTS IS NOT THE PATH WE HANDED IT. GitHub's
+    Windows runner sets `TEMP` to the 8.3 SHORT spelling (`C:\\Users\\RUNNER~1\\...`), so
+    `mkdtemp()` returns a short path, we pass it as `--out`, and the generator's
+    `Path.resolve()` expands it to the long one (`C:\\Users\\runneradmin\\...`) before
+    printing. `_normalise` is then holding a root that appears nowhere in the bytes it is
+    normalising: the raw sandbox name survives into the comparison and every cell whose
+    stdout names its own sandbox differs — 49 subtests on the first Windows run, all of
+    them one bug. The same duality broke a CELL rather than a comparison:
+    `git-gate/sovereign-bypass` seeds `excludes.json` with the sandbox path and the hook
+    matches it against a RESOLVED cwd, so the bypass missed and the cell that exists to
+    prove the gate stays silent watched it speak. Both go away if the root we hand out is
+    the one a child will resolve to. POSIX has the same duality through symlinks
+    (`/tmp -> /private/tmp`), which is why this is `realpath` and not a Windows branch.
+
+    A TEARDOWN THAT CANNOT RAISE, because the run had already finished comparing by then.
+    The Linux `cells` job died with `OSError: [Errno 39] Directory not empty` out of
+    `TemporaryDirectory.cleanup()` at cell ~270 of 318 — a cell's own checkout copy being
+    written to while `rmtree` walked it — and took the whole harness with it. The same
+    commit passed on the next run, which is the definition of a flake, and losing 318
+    green cells to a `/tmp` entry nobody reads is the wrong trade. `sandbox_process_home`
+    already reached this conclusion for its own directory; this is the same rule for the
+    cells, and it leaves at most one temp tree behind on a race.
+
+    Yields a `str`, like the `TemporaryDirectory` it replaces, so call sites only change
+    the constructor."""
+    d = os.path.realpath(tempfile.mkdtemp(prefix=prefix))
+    try:
+        yield d
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 #: The stack of live process-home sandboxes — a stack rather than a flag so a nested
 #: `sandbox_process_home()` (the positive control in tests/test_home_sandbox.py runs one
 #: inside a suite that may already have one) restores to what it displaced.
@@ -341,7 +402,9 @@ def sandbox_process_home() -> Path:
     # ignore_cleanup_errors: a rendered tree on Windows can still be held by a virus
     # scanner when the module ends, and a teardown that can raise is not a teardown.
     td = tempfile.TemporaryDirectory(prefix="gs-home-", ignore_cleanup_errors=True)
-    home = Path(td.name)
+    # Canonical for the same reason `sandbox()` is: this path goes into HOME/APPDATA and
+    # comes back out of a child that has resolved it.
+    home = Path(os.path.realpath(td.name))
     saved = {var: os.environ.get(var) for var in HOME_VARS}
     os.environ.update(home_overrides(home))
     _PROCESS_HOMES.append((td, saved))
@@ -403,7 +466,7 @@ def run_cell(gen: list[str], cell: dict, repeat: int = 1) -> "dict[str, bytes] |
     identical on both passes and the prune's `old_owned - owned` is always empty. A cell
     with a `before` whose tree loses nothing is rejected rather than run — see
     `_DELETION_AXES`."""
-    with tempfile.TemporaryDirectory() as td:
+    with sandbox() as td:
         home, out = Path(td) / "home", Path(td) / "out"
         home.mkdir()
         env = cell_env(home)

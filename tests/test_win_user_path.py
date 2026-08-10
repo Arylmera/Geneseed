@@ -33,6 +33,7 @@ both sides take the "said nothing about PATH" branch with the registry untouched
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -88,8 +89,14 @@ def _candidate() -> dict[str, str]:
         " out[`${a}\\u0000${n}`] = winUserPathScript(a, d);"
         "process.stdout.write(JSON.stringify(out));"
     )
-    p = subprocess.run([NODE, "--input-type=module", "-e", src],
-                       cwd=str(ROOT), capture_output=True, text=True, timeout=120)
+    # `encoding="utf-8"` and NOT a bare `text=True`: node writes UTF-8 whatever the console
+    # code page is, while `text=True` decodes with the PARENT's locale encoding — cp1252 on
+    # a Windows machine that is not in UTF-8 mode. The corpus has an accented row, so the
+    # candidate came back as `GÃ©nÃ©seed` and every unicode subtest failed on the first CI
+    # run. It was green here only because this repo's runbook exports `PYTHONUTF8=1`, which
+    # makes the locale encoding UTF-8 and a bare `text=True` accidentally right.
+    p = subprocess.run([NODE, "--input-type=module", "-e", src], cwd=str(ROOT),
+                       capture_output=True, encoding="utf-8", timeout=120)
     if p.returncode != 0:
         raise AssertionError(f"node failed: {p.stderr[-2000:]}")
     return json.loads(p.stdout)
@@ -104,6 +111,39 @@ class TheTwoScriptBuildersAgree(unittest.TestCase):
         for key in sorted(ref):
             with self.subTest(row=key.replace("\u0000", "/")):
                 self.assertEqual(cand[key], ref[key])
+
+    @unittest.skipUnless(NODE, "node is not on PATH")
+    def test_the_accented_row_survives_the_pipe(self):
+        """The ABSOLUTE half of the unicode row, which the comparison above cannot give.
+
+        A comparison is green when both sides are wrong and red when either is — but it
+        cannot say WHICH, and a mojibake'd candidate reads exactly like a builder bug. This
+        asserts the candidate's own bytes: the accented directory has to come back out of
+        node's pipe as itself."""
+        cand = _candidate()
+        self.assertIn(CORPUS["unicode"], cand["add\u0000unicode"],
+                      "the accented path did not survive the transport — the pipe was "
+                      "decoded with something other than UTF-8")
+
+    @unittest.skipUnless(NODE and sys.platform == "win32", "no node, or not Windows")
+    @unittest.skipIf(os.environ.get("GENESEED_NO_UTF8_PROBE"), "this IS the probe")
+    def test_the_comparison_still_holds_outside_utf8_mode(self):
+        """RUN THE COMPARISON IN THE ENVIRONMENT THAT HAS THE BUG.
+
+        Both tests above are green under either decoder as long as this process is in UTF-8
+        mode, and this repo's runbook always puts it there (`PYTHONUTF8=1`). CI does not,
+        which is how a bare `text=True` survived to the first non-developer machine. So the
+        gate re-runs the comparison in a child with UTF-8 mode explicitly OFF, where the
+        locale encoding on Windows is cp1252 and the defect is reachable."""
+        env = {**os.environ, "PYTHONUTF8": "0", "GENESEED_NO_UTF8_PROBE": "1"}
+        p = subprocess.run(
+            [sys.executable, "-m", "unittest",
+             "tests.test_win_user_path.TheTwoScriptBuildersAgree"],
+            cwd=str(ROOT), env=env, capture_output=True, encoding="utf-8",
+            errors="replace", timeout=300)
+        self.assertEqual(p.returncode, 0,
+                         "the two builders stop agreeing once the interpreter is out of "
+                         f"UTF-8 mode:\n{p.stderr[-3000:]}")
 
     def test_the_corpus_actually_contains_what_it_is_named_for(self):
         """P6d's rule: a corpus entry that does not contain the character it is named for is

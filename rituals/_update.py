@@ -17,6 +17,7 @@ seam, which is which-guarded, credential-scrubbed, and never raises.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -233,23 +234,34 @@ def _fetch_streaming(log=None):
     t.start()
     start = time.monotonic()
     next_beat = 15.0
-    while p.poll() is None:
-        elapsed = time.monotonic() - start
-        if elapsed >= timeout:
-            _kill_tree(p)
-            try:
-                p.wait(timeout=5)     # reap — the daemon is long-lived
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-            if log:
-                log(f"[geneseed] ✗ fetch produced nothing for {timeout}s — killed it.")
-            return (None, "\n".join(lines[-5:]))
-        if log and elapsed >= next_beat:
-            log(f"[geneseed]   ... still fetching ({int(elapsed)}s elapsed)")
-            next_beat += 15.0
-        time.sleep(0.25)
-    t.join(timeout=5)
-    return (p.returncode, "\n".join(lines[-5:]))
+    # The pipe is closed on EVERY exit, including the timeout one. Nothing here is
+    # short-lived: this runs inside `geneseed web`'s daemon, which stays up for weeks, so
+    # a read end leaked per upgrade is a file descriptor leaked per upgrade. It surfaced
+    # as `ResourceWarning: unclosed file` in the unit suite — a warning about the daemon,
+    # printed by the tests, and true of both.
+    try:
+        while p.poll() is None:
+            elapsed = time.monotonic() - start
+            if elapsed >= timeout:
+                _kill_tree(p)
+                try:
+                    p.wait(timeout=5)     # reap — the daemon is long-lived
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+                if log:
+                    log(f"[geneseed] ✗ fetch produced nothing for {timeout}s — killed it.")
+                return (None, "\n".join(lines[-5:]))
+            if log and elapsed >= next_beat:
+                log(f"[geneseed]   ... still fetching ({int(elapsed)}s elapsed)")
+                next_beat += 15.0
+            time.sleep(0.25)
+        return (p.returncode, "\n".join(lines[-5:]))
+    finally:
+        # Join FIRST: the reader is iterating this pipe, and closing it underneath the
+        # thread is how a clean shutdown turns into a traceback on a daemon thread.
+        t.join(timeout=5)
+        with contextlib.suppress(OSError):
+            p.stdout.close()
 
 
 def _measure_upstream(log=None):

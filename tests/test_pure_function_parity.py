@@ -1233,7 +1233,8 @@ def _web_daemon_cases(tmp: Path) -> list[dict]:
     return cases
 
 
-def _run(cmd: list[str], cases: list[dict], ascii_mode: bool) -> list:
+def _run(cmd: list[str], cases: list[dict], ascii_mode: bool,
+         extra_env: "dict[str, str | None] | None" = None) -> list:
     with tempfile.TemporaryDirectory() as td:
         job = Path(td) / "job.json"
         job.write_text(json.dumps({"cases": cases}), encoding="utf-8")
@@ -1241,6 +1242,16 @@ def _run(cmd: list[str], cases: list[dict], ascii_mode: bool) -> list:
         env.pop("GENESEED_TUI_ASCII", None)
         if ascii_mode:
             env["GENESEED_TUI_ASCII"] = "1"
+        # `None` REMOVES, so a caller can drive an axis whose two states are "set" and
+        # "not present at all" — which is what NeedCurrentDirectoryForExePath reads.
+        # CASE-INSENSITIVELY, because `dict(os.environ)` on Windows hands back the keys
+        # UPPER-CASED: a `pop("NoDefaultCurrentDirectoryInExePath")` matches nothing there,
+        # the variable survives into the child, and the axis silently runs one state twice.
+        for k, v in (extra_env or {}).items():
+            for existing in [e for e in env if e.lower() == k.lower()]:
+                env.pop(existing)
+            if v is not None:
+                env[k] = v
         # No text=True: both probes write UTF-8 whatever the console code page is, and the
         # decoder is pinned for the same reason harness_golden pins it.
         proc = subprocess.run(cmd + [str(job)], capture_output=True, env=env, cwd=str(ROOT))
@@ -1616,6 +1627,39 @@ class ThePureFunctionsAgreeOnEveryInputNoCellCanBuild(unittest.TestCase):
             for case, a, b in zip(self.cases, ref, new):
                 with self.subTest(ascii=ascii_mode, fn=case["fn"], args=case["args"]):
                     self.assertEqual(a, b)
+
+    @unittest.skipUnless(sys.platform == "win32", "the curdir rule is Windows-only")
+    def test_the_curdir_rule_agrees_in_both_environment_states(self):
+        """`NoDefaultCurrentDirectoryInExePath` is an INPUT to `shutil.which`, and until CI
+        ran this corpus nothing varied it.
+
+        `shutil.which` prepends the current directory to the search — to an explicit `path=`
+        as well — unless that variable is defined, because it asks
+        `_winapi.NeedCurrentDirectoryForExePath`, which is what `cmd.exe` asks. Git Bash
+        defines it and so does this repo's developer machine, so every run of the corpus so
+        far measured ONE state of the axis, `pyWhich` was written to match that state, and
+        the port answered null where the reference answered `.\\geneseed.CMD` the moment it
+        ran somewhere the variable was absent. `_which_cases` already carries the case that
+        separates them (`geneseed`, a real file at the repo root, looked up on a PATH that
+        does not contain it); what it did not carry was the second environment.
+
+        The vacuity guard is the point of the last assertion: if the two states produced the
+        same answers this would be two identical runs of an axis that is not being driven."""
+        cases = _which_cases(Path(self._tmp.name))
+        answers = {}
+        for label, value in (("defined", "1"), ("absent", None)):
+            extra = {"NoDefaultCurrentDirectoryInExePath": value}
+            ref = _run([sys.executable, str(PY_PROBE)], cases, False, extra)
+            new = _run(["node", str(JS_PROBE)], cases, False, extra)
+            with self.subTest(NoDefaultCurrentDirectoryInExePath=label):
+                for case, a, b in zip(cases, ref, new):
+                    with self.subTest(args=case["args"]):
+                        self.assertEqual(a, b)
+            answers[label] = ref
+        self.assertNotEqual(
+            answers["defined"], answers["absent"],
+            "the variable changed nothing, so this test ran the same state twice and the "
+            "corpus still cannot see the current-directory rule")
 
     def _anim(self, fn: str, ascii_mode: bool = False):
         """(ref, new) results for one P7c function, in corpus order."""

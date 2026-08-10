@@ -4259,7 +4259,7 @@ def _git_template() -> dict:
     global _TEMPLATE
     if _TEMPLATE is not None:
         return _TEMPLATE
-    tpl = Path(tempfile.mkdtemp(prefix="gs-upgrade-tpl-"))
+    tpl = Path(os.path.realpath(tempfile.mkdtemp(prefix="gs-upgrade-tpl-")))
     seed = tpl / "seed"
     seed.mkdir(parents=True)
     _copy_checkout(seed, {})
@@ -4399,7 +4399,7 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
     """
     faults = cell.get("checkout")
     gitstate = cell.get("git")
-    with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as ctd:
+    with golden.sandbox() as td, golden.sandbox() as ctd:
         sb = Path(td)
         home, repo, cfg = sb / "home", sb / "repo", sb / "cfg"
         for d in (home, repo, cfg):
