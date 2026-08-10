@@ -1160,6 +1160,53 @@ renders it as the name in parentheses.
   **And a refusal to guess is a gate that runs in production.** The settings merger will not
   default the hook shim's runner and entry, so the Claude reactivate answered with that refusal
   on its first Node run instead of quietly wiring hooks at an invented path.
+- **`upgrade` crosses — seventeen of 24 — and the phase's real work was a fixture that could
+  WRITE.** [`js/update.mjs`](js/update.mjs) is `rituals/_update.py`'s upgrade half: the
+  preflight, the streamed fetch, the four upstream classifications, the fast-forward, the
+  doctor gate with its exact rollback, and the two rebuilds. Every other verb in this port
+  READS the checkout; this one rewrites it, so its cells needed a git repository they could
+  fast-forward and an origin they could fetch from — a `git clone --local` off a bare
+  template the harness builds once per run (2.2 s to commit 526 files, 0.8 s to clone one).
+  **The spawn ban's fourth exception, and its argument is not the job runner's.** `js/web/`
+  spawns for ISOLATION; this module spawns because **the code on disk changes halfway through
+  the verb**. `pullAndValidate` fast-forwards and then has to ask the PULLED source whether it
+  is sound, and `rebuildBundle` has to render with the PULLED generator — an in-process
+  `cmdDoctor` would validate the modules this process loaded before the merge, pass, and then
+  render the old source while reporting an upgrade. `js/generate.mjs`'s `cmdBuild` calls the
+  driver in-process and is right to; the discriminator is whether anything changed underneath.
+  **"No cell reaches the network" is enforced by git, not by the fixture.** A fixture that
+  merely points `origin` somewhere safe is a claim about the fixture. `GIT_ALLOW_PROTOCOL=file`
+  is in EVERY cell's environment now, so git refuses `https` before a socket opens — and one
+  cell names that refusal in its `expect`, so the day the variable stops being honoured a cell
+  goes vacuous instead of going online.
+  **`git add -A` drops files that are TRACKED**, which is how a fixture plants a fault by
+  accident. Two source files under `src/notebook/` are in the index and also matched by the
+  repo's own `.gitignore`; without `--force` the fixture's commit lost them, `doctor --all`
+  on the clone reported five dead links nobody planted, and the pull's SUCCESS arm would have
+  been unreachable while its rollback arm looked like the verb's only behaviour.
+  **A local fetch prints NOTHING**, so the streaming half — the reader, the phase filter that
+  keeps a thousand `Receiving objects: 43%` repaints out of the log, the 15 s heartbeat — is
+  reachable in every cell and varied in none. The filter moved to the corpus; the heartbeat
+  and the hard deadline are gated by neither, and saying so is the point.
+  **P6g's `GENESEED_WEB_JOB` finally has a reader, so its mutation finally fires.** The job
+  runner sets it and this verb honours it by NOT bouncing the daemon mid-job; a pair of cells
+  differing only in that variable is what makes deleting either end red.
+  **`export_improvements`' no-drift arm is gated at last**, and it took the first phase that
+  could deploy a byte-fresh install inside a cell: step one is `rebuild-all`, step two is the
+  upgrade that finds nothing to say. The drift cell beside it is the positive control — same
+  fixture, one edited file, the message appears.
+  **Twenty-four mutations, twenty-two fire, and the two survivors are ONE finding.** The
+  credential in a tokened remote passes two independent scrubbers on one path — `_git` redacts
+  its stdout, and `_parse_origin` then rebuilds the display url from host and path — so either
+  alone suffices and neither is observable by itself. Removing BOTH turns the cell red, which
+  is what says it is connected; each is separately corpus-gated. **A cell aimed at a defence in
+  depth gates the conjunction, not the layers**, and the cell's comment now says so instead of
+  naming the wrong one.
+  **And P5e's `CREATE_NO_WINDOW` fix had one call site left.** `_update` keeps its own copy of
+  the flag (it stays importable standalone so a stale factory can self-heal) and so kept its
+  own copy of the bug: every `[rebuild-all]` line an upgrade printed on Windows was discarded,
+  including the FAILED rows its error message tells you to look for. Found by a cell's
+  ABSOLUTE half naming a line the reference was not printing.
 
 ## 🚫 Explicitly out of scope
 

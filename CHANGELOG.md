@@ -9,6 +9,22 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **`geneseed upgrade` has a Node twin — the one command a "no Python needed" install could
+  not do without Python.** Seventeen of the harness's 24 commands now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`, and this is the
+  one that mattered most: an install that shelled out to Python to update ITSELF would have
+  had Python as a hard requirement of the only command you must always be able to run.
+  Everything about the update is unchanged — it still fast-forwards your own checkout's
+  origin and never pushes, still refuses to touch a dirty tree, a detached HEAD or a branch
+  with no upstream, still validates the pulled source with `doctor` before trusting it and
+  **rolls the checkout back to the previous commit if that validation fails**, and still
+  rebuilds the bundle plus every registered install afterwards. Local edits you made to a
+  deployed harness are still exported to an improvements file first, so a rebuild cannot
+  quietly overwrite them.
+  **One real fix rides with it, on Windows.** The `[rebuild-all]` lines an upgrade printed
+  while refreshing your other installs were being discarded — including the FAILED rows the
+  error message tells you to look for. They now appear, in the terminal and in
+  `~/.geneseed-install.log` both.
 - **The port's nineteenth piece: `geneseed setup` has a Node twin — and it is the first one
   that ASKS YOU QUESTIONS.** Fifteen of the harness's 24 commands now run from
   `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. The wizard behaves

@@ -2832,10 +2832,24 @@ def _upgrade_cells() -> list[dict]:
            expect_absent=["rebuilding bundle", "already up to date"]),
         up("a-tokened-origin-is-redacted-out-of-every-line",
            git="origin=https://gsbot:s3cr3t-t0ken@127.0.0.1:1/owner/repo.git",
-           # `_redact_url_creds` runs on `_git`'s and `_fetch_streaming`'s output both. The
-           # credential IS there — the remote carries it and git's own error names the
-           # remote — so this is a containment cell whose target exists, and the positive
-           # control is the host it must still print.
+           # WHAT THIS CELL GATES, CORRECTED BY ITS OWN MUTATIONS. The first draft said it
+           # was `_redact_url_creds`, and two mutations said otherwise: removing the
+           # redactor is GREEN here, and so is removing `urlsplit`'s userinfo drop. The
+           # credential passes TWO independent scrubbers on one path — `_git` redacts its
+           # stdout, and `_parse_origin` then rebuilds the display url from host + path —
+           # so either one alone is enough and neither is observable by itself. Removing
+           # BOTH turns this cell red (the host becomes `gsbot`), which is what says the
+           # cell is connected rather than vacuous; each scrubber separately is gated in
+           # `tests/test_pure_function_parity.py`, where mutating one fails 14 cases and
+           # the other 4.
+           #
+           # AND THE `expect_absent` HALF CANNOT FIRE ON ANY MUTATION, by construction: it
+           # runs against the REFERENCE side, which is never the thing being mutated. It is
+           # here as an absolute statement about what the reference must not print — the
+           # only direction `expect` cannot express — and the byte comparison is what does
+           # the adjudicating. Measured rather than assumed: git strips the SCHEME out of
+           # its "does not appear to be a git repository" message, so no cell can put a
+           # `scheme://user:tok@` through `_CREDS_RE` at all.
            expect=["[geneseed] update source: https://127.0.0.1/owner/repo",
                    "could not reach the remote:"],
            expect_absent=["s3cr3t-t0ken", "gsbot:"]),
