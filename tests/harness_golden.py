@@ -3298,6 +3298,23 @@ def _bootstrap_cells() -> list[dict]:
            # what would prove it did.
            expect_absent=["[setup] needs an interactive terminal", "✗ step"],
            expect_files=[*_BUNDLE_MADE, "home/.geneseed-install.log"]),
+        bs("a-legacy-theme-argument-after-the-ref-is-tolerated-not-refused",
+           ("bootstrap", "main", "imperial", "--no-setup"), git="uptodate", env=_UPGRADE_OUT,
+           # `bs.add_argument("extra", nargs="*", help=argparse.SUPPRESS)` exists for exactly
+           # this spelling — a legacy `[theme]` after the ref, which must RUN rather than be
+           # refused — and NOTHING READS THE VALUE, so "it ran" is the only observable there
+           # is.
+           #
+           # ADDED BY P10c'S MUTATION RUN, and it is the corpus hole that phase's rule
+           # predicts. `bin/geneseed-cli.mjs` carried a `variadic: 'extra'` row with a comment
+           # explaining precisely this failure, and deleting it left all five bootstrap cells
+           # green: not one of them passed a second positional. The row was gated by its own
+           # existence. Without it the Node side prints `unrecognized arguments: imperial` and
+           # exits 2 — a full update-and-rebuild refused on one runtime only.
+           expect=[_BOOTSTRAP_STEP, "[geneseed] already up to date.",
+                   "[geneseed] ✓ update complete."],
+           expect_absent=["unrecognized arguments", "✗ step"],
+           expect_files=[*_BUNDLE_MADE, "home/.geneseed-install.log"]),
         bs("an-info-precondition-is-reported-as-done-and-not-as-a-failure", git="dirty",
            # EXIT 3, and the rule the whole runner turns on. `upgrade` refuses a dirty tree
            # with 3; `rc not in (0, 3)` is what keeps that out of the failure path, and a
