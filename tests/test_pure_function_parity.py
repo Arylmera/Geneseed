@@ -216,6 +216,139 @@ def _cases() -> list[dict]:
         # reset it per chunk would re-log the phase the previous read ended on.
         cases.append({"fn": "fetch_phases", "args": [lines, "remote"]})
     cases += _tui_cases()
+    cases += _theme_anim_cases()
+    return cases
+
+
+# --------------------------------------------------------------------------------------
+# P7c — `theme_anim`, the line mode's install animation
+# --------------------------------------------------------------------------------------
+#
+# The one P7c leftover that is NOT the declared curses panel. `play_line`'s only caller is
+# `_harness_setup._setup_lines`, which crossed in P5i as `setupLines`, and P5i left the
+# animation out with the note "belongs to P7 with the rest of the terminal layer". This is
+# that phase, and the call site is one line in a function that already exists.
+#
+# WHY A CORPUS AND NOT A CELL, for a SEVENTH distinct reason. `_setup_lines` is behind
+# `sys.stdin.isatty()`, so no cell reaches it — that is P5i's reason and it still holds. But
+# `play_line` adds one of its own: its whole behaviour turns on `sys.stdout.isatty()`, and a
+# cell's stdout is a pipe by construction. Off a TTY it prints the title and the static card
+# and returns; the scrolling animation, which is the entire point of the module, is
+# structurally dead in every cell that can be written. Same shape as `_status_lines`'
+# colour half in P5c, and the same answer.
+#
+# THE ENVIRONMENT IS AN ARGUMENT HERE, and that is legitimate where it was not for
+# `_TUI_ASCII`. `_anim_ok` reads its four variables at CALL time, so passing a dict per case
+# exercises the real read; `_TUI_ASCII` is a module constant read at IMPORT time, which is
+# why THAT axis is a second process instead. Getting the two mixed up is what deadlocked the
+# suite for fifteen minutes in P7b.
+
+#: `(name, env, isatty)` — the decision table of `_anim_ok`, one case per branch plus the
+#: combinations that separate a Windows rule from a POSIX one.
+_ANIM_OK_CORPUS = [
+    ({"TERM": "xterm-256color"}, True),          # the yes
+    ({"TERM": "xterm-256color"}, False),         # not a terminal
+    ({"TERM": "xterm-256color", "GENESEED_NO_ANIM": "1"}, True),
+    ({"TERM": "xterm-256color", "GENESEED_TUI_PLAIN": "1"}, True),
+    # An EMPTY opt-out does not opt out — `os.environ.get(...)` is falsy for "" and so is
+    # `process.env.X` for the same value. The twin of P7a's `_an_empty_opt_out_does_not`.
+    ({"TERM": "xterm-256color", "GENESEED_NO_ANIM": ""}, True),
+    ({"TERM": "xterm-256color", "GENESEED_TUI_PLAIN": ""}, True),
+    # ⚠ TERM=dumb and TERM unset are refusals on POSIX and NOT on Windows — the reference
+    # guards that branch with `if os.name != "nt"`. On this machine both answer True; on a
+    # Unix runner both answer False, and the two implementations must AGREE either way,
+    # which is what a comparison gate gives that a hardcoded expectation would not.
+    ({"TERM": "dumb"}, True),
+    ({"TERM": "DUMB"}, True),
+    ({"TERM": ""}, True),
+    ({}, True),
+]
+
+#: `(theme, ok, isatty, env)` for `play_line`.
+#:
+#: THE ANIMATED CASES ARE NARROW ON PURPOSE. `steps = min(width + sprite_w, 64)` and each
+#: step sleeps 25 ms, so a full-width case costs 1.6 s per side per glyph mode — four times
+#: over. A narrow terminal cuts that to a third AND is the better test: the sprite is clipped
+#: at both edges, which is the arithmetic in `_place` that a wide canvas never exercises.
+#: The width CAP (`min(..., 56)`) is covered by the static cases, which cost nothing.
+_PLAY_LINE_CORPUS = [
+    # ---- the static card: every theme, off a TTY, which is what a pipe gets ----
+    *[(t, True, False, {"COLUMNS": "80"}) for t in
+      ("imperial", "pirate", "cyberpunk", "gamer", "military", "sports", "wizard",
+       "neutral")],
+    # A theme that is not in the table falls back to `neutral` via `ART.get(theme, ...)`.
+    ("nosuchtheme", True, False, {"COLUMNS": "80"}),
+    ("", True, False, {"COLUMNS": "80"}),
+    # `ok=False` returns after the title and draws no card at all — the failed-install arm.
+    ("imperial", False, False, {"COLUMNS": "80"}),
+    ("neutral", False, True, {"COLUMNS": "80", "TERM": "xterm"}),
+    # The width arithmetic: `min(COLUMNS - 1, 56)` on both sides of the cap, and a terminal
+    # narrower than the card, which clips every row.
+    ("pirate", True, False, {"COLUMNS": "200"}),
+    ("pirate", True, False, {"COLUMNS": "57"}),
+    ("pirate", True, False, {"COLUMNS": "12"}),
+    # COLUMNS ABSENT. `shutil.get_terminal_size` then asks `sys.__stdout__` — a pipe in both
+    # probes — and falls back to 80; the port reads `process.stdout.columns`, which is
+    # undefined off a terminal, and falls back to the same 80. The one case that gates the
+    # fallback rather than the env read.
+    ("gamer", True, False, {}),
+    # COLUMNS set to something `int()` REFUSES. Python's `int('80x')` raises and
+    # `get_terminal_size` swallows it into the fallback; `parseInt('80x')` is 80, so a port
+    # that reached for the lenient parser answers 79 here and 80 everywhere else.
+    ("gamer", True, False, {"COLUMNS": "80x"}),
+    ("gamer", True, False, {"COLUMNS": ""}),
+    ("gamer", True, False, {"COLUMNS": "0"}),
+    ("gamer", True, False, {"COLUMNS": "-5"}),
+    # ---- the animated arm, which no cell can reach ----
+    # `neutral` has THREE poses and no ground line; `imperial` has two poses and a
+    # single-character ground. `_tile`'s phase offset needs a multi-character ground, which
+    # is `pirate`'s "~^~ ".
+    ("neutral", True, True, {"COLUMNS": "14", "TERM": "xterm"}),
+    ("imperial", True, True, {"COLUMNS": "14", "TERM": "xterm"}),
+    ("pirate", True, True, {"COLUMNS": "30", "TERM": "xterm"}),
+    # An animated call with the animation DISABLED still takes the static path — the branch
+    # a port could get right for the wrong reason by never checking the environment.
+    ("cyberpunk", True, True, {"COLUMNS": "30", "TERM": "xterm", "GENESEED_NO_ANIM": "1"}),
+]
+
+
+def _theme_anim_cases() -> list[dict]:
+    cases: list[dict] = []
+    # Every key in the table, the fallback, and the two prototype-chain names: `ART.get` is
+    # a miss for `constructor` on the reference and reaches `Object.prototype.constructor`
+    # in JavaScript unless the port asked `Object.hasOwn`. `_icon`/`_mark` had the same trap
+    # in P7b and this table is a third one.
+    for theme in ("imperial", "pirate", "cyberpunk", "gamer", "military", "sports",
+                  "wizard", "neutral", "nosuchtheme", "", "constructor", "__proto__",
+                  "toString", "hasOwnProperty"):
+        cases.append({"fn": "art_for", "args": [theme]})
+    # `_place`: the sprite at every position it can be drawn at. x < 0 slices from the LEFT
+    # (`row[-x:]`), x >= 0 pads, and the result is truncated to `width` — where a NEGATIVE
+    # width is `s[:-1]`, dropping the last character rather than returning nothing, in both
+    # languages. The astral row is the code-point/UTF-16 axis: `ART` is ASCII today, so the
+    # port is free to slice either way and would be right until the day someone draws an
+    # emoji sprite. Gating it now costs one `Array.from`.
+    for row in ("", "abc", "  |[o o]|  ", "<#|=====|#====-", "|‾|", "𝔊𝔊𝔊", "a𝔊b"):
+        for x in (-40, -4, -3, -1, 0, 1, 3, 40):
+            for width in (-1, 0, 1, 5, 11, 56):
+                cases.append({"fn": "anim_place", "args": [row, x, width]})
+    # `_tile`: the empty tile's early return, a one-character ground, a four-character one
+    # (`pirate`'s), and the phase offset — where Python's `%` is non-negative and
+    # JavaScript's keeps the sign, so `phase % len(tile)` at -1 is the last offset there and
+    # a negative index here. `width // len(tile)` is FLOOR division, and a negative width
+    # gives a repeat count of 0 or less, which `''.repeat()` throws on rather than emptying.
+    for tile in ("", "_", "=-", "~^~ ", "^"):
+        for width in (-3, 0, 1, 7, 56):
+            for phase in (0, 1, 3, 4, 7, -1, -3, -7):
+                cases.append({"fn": "anim_tile", "args": [tile, width, phase]})
+    # `_height`: `max(..., default=0)` over a ragged pose list, and the EMPTY list, which is
+    # what `default=0` is for — `Math.max()` of nothing is `-Infinity`.
+    for poses in ([], [[]], [["a"]], [["a", "b"], ["c"]], [[], ["a", "b", "c"]]):
+        cases.append({"fn": "anim_height", "args": [poses]})
+    for env, tty in _ANIM_OK_CORPUS:
+        cases.append({"fn": "anim_ok", "args": [tty, env]})
+    for theme, ok, tty, env in _PLAY_LINE_CORPUS:
+        cases.append({"fn": "play_line", "args": [theme, ok, tty, env]})
     return cases
 
 
@@ -1470,6 +1603,65 @@ class ThePureFunctionsAgreeOnEveryInputNoCellCanBuild(unittest.TestCase):
                 with self.subTest(ascii=ascii_mode, fn=case["fn"], args=case["args"]):
                     self.assertEqual(a, b)
 
+    def _anim(self, fn: str, ascii_mode: bool = False):
+        """(ref, new) results for one P7c function, in corpus order."""
+        ref, new = self.out[ascii_mode]
+        picked = [i for i, c in enumerate(self.cases) if c["fn"] == fn]
+        self.assertTrue(picked, f"no {fn} cases in the corpus at all")
+        return [ref[i] for i in picked], [new[i] for i in picked]
+
+    def test_the_animation_corpus_reaches_the_arm_no_cell_can_reach(self):
+        """The positive control for P7c's whole entry, and it has to name the ANIMATED arm
+        specifically. Off a TTY `play_line` prints a title and a static card, which is what
+        every cell would see if a cell could get past `setup`'s isatty gate at all — so a
+        corpus of static cases would agree perfectly between two implementations while the
+        scrolling half, which is the entire module, went untested. `\\x1b[{n}A` is the cursor
+        move that only the animation writes."""
+        ref, new = self._anim("play_line")
+        for label, side in (("reference", ref), ("port", new)):
+            with self.subTest(side=label):
+                animated = [s for s in side if "\x1b[" in s]
+                self.assertGreaterEqual(len(animated), 3,
+                                        f"the {label} never took the animated arm")
+                self.assertTrue(any("A\r" in s for s in animated),
+                                "no cursor-up move — the frames were not redrawn in place")
+                self.assertTrue([s for s in side if "\x1b[" not in s],
+                                f"the {label} never took the STATIC arm either, so the "
+                                f"corpus is not separating the two")
+
+    def test_the_animation_corpus_can_see_the_newline_translation(self):
+        """`print()` and `sys.stdout.write` translate `\\n` in the TEXT layer, so a capture
+        that is not a real `TextIOWrapper` compares LF against LF and the CRLF split walks
+        straight through it — P5b's transport hole. The reference probe wraps a `BytesIO` in
+        a real wrapper for exactly this, and here is where that is worth something."""
+        if os.linesep == "\n":      # pragma: no cover — a POSIX runner
+            self.skipTest("no newline translation to see on this platform")
+        ref, new = self._anim("play_line")
+        self.assertTrue(any("\r\n" in s for s in ref),
+                        "the reference capture shows no CRLF — it is not going through the "
+                        "text layer, and this corpus cannot see a newline bug")
+        self.assertTrue(any("\r\n" in s for s in new))
+
+    def test_the_anim_ok_corpus_produced_both_answers(self):
+        """A decision table gated only where it says yes is half a gate."""
+        ref, _new = self._anim("anim_ok")
+        self.assertIn(True, ref)
+        self.assertIn(False, ref)
+
+    def test_the_art_table_falls_back_without_inheriting_a_function(self):
+        """`ART.get(theme, ART[DEFAULT])` against `ART[theme]`. `constructor` and
+        `__proto__` are a miss on the reference and a HIT on the prototype chain in
+        JavaScript, so a port spelled with `??` hands back a Function here. Both must land on
+        the neutral theme, and a real theme must NOT — or the fallback is everything."""
+        ref, new = self._anim("art_for")
+        self.assertEqual(ref, new)
+        neutral = ref[7]
+        self.assertEqual(neutral["title"], "Geneseed")
+        for i in (8, 9, 10, 11, 12, 13):     # nosuchtheme, "", and the four inherited names
+            self.assertEqual(ref[i], neutral, f"art_for case {i} did not fall back")
+        self.assertNotEqual(ref[0], neutral,
+                            "every theme resolved to neutral — the table is not being read")
+
     def test_the_probes_produce_the_panel_and_not_an_empty_echo(self):
         """The positive control. Every assertion above is an EQUALITY between two probes,
         and two probes that both returned nothing would satisfy all of them — the same hole
@@ -1871,6 +2063,46 @@ class TheDisplayWidthAgreesOnEveryCodepointThereIs(unittest.TestCase):
         case = [{"fn": "dwidth_rle", "args": list(_DWIDTH_SWEEP)}]
         self.assertEqual(_run([sys.executable, str(PY_PROBE)], case, True)[0], self.ref)
         self.assertEqual(_run(["node", str(JS_PROBE)], case, True)[0], self.new)
+
+
+class TheWizardStillPlaysTheAnimationOnBothSides(unittest.TestCase):
+    """The CALL SITE, which the corpus above does not reach and nothing else does either.
+
+    `_theme_anim_cases()` gates what `play_line` DOES. It says nothing about whether anyone
+    calls it, and the one caller is unreachable from every gate this project has: it sits in
+    `_setup_lines` after a successful build, behind `sys.stdin.isatty()` (so no cell), and
+    past the point where P5i's wizard corpus deliberately stops (so no corpus) — because
+    everything beyond `collect_setup_lines` spawns the generator and writes a real tree.
+
+    So deleting the call would be invisible in all 259 golden cells, all 317 harness cells,
+    all 1,895 corpus cases and both doctors. That is this port's FIFTH coverage hole exactly
+    — code that is silent on success and therefore deletable with nothing noticing — and the
+    answer to it is the same one P4e used: assert the thing structurally rather than leave it
+    unasserted because the behavioural gate is expensive.
+
+    It is a weak test on purpose, and it is honest about which half it covers: the corpus
+    proves the animation is RIGHT, this proves it is WIRED, and neither claims the other.
+    """
+
+    def test_both_implementations_animate_between_the_build_and_the_summary(self):
+        import inspect
+        sys.path.insert(0, str(ROOT / "rituals"))
+        import harness  # noqa: E402
+
+        ref = inspect.getsource(harness._setup_lines)
+        new = (ROOT / "js" / "setup.mjs").read_text(encoding="utf-8")
+        new = new[new.index("export function setupLines("):]
+        new = new[:new.index("\nexport function ")]
+        for label, src, call, build, summary in (
+                ("reference", ref, "play_line(theme, True)", "Running:", "_setup_summary_lines"),
+                ("port", new, "playLine(theme, true)", "Running:", "setupSummaryLines")):
+            with self.subTest(side=label):
+                self.assertIn(call, src, f"the {label} wizard no longer plays the animation")
+                self.assertLess(src.index(build), src.index(call),
+                                "the animation runs BEFORE the build — it is the reveal for "
+                                "an install that already succeeded")
+                self.assertLess(src.index(call), src.index(summary),
+                                "the animation runs after the summary rather than before it")
 
 
 @unittest.skipIf(shutil.which("node") is None, "node is not on PATH")

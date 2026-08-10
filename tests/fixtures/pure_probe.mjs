@@ -37,6 +37,42 @@ import {
   clamp, detailLines, dwidth, fit, glyphs, icon, logoLines, mark, progressBar, spin,
   themeFlair, themePreview, truncd, tuiEntries,
 } from '../../js/tui.mjs';
+import { animOk, artFor, height, place, playLine, tile } from '../../js/anim.mjs';
+
+/**
+ * P7c. `anim_ok` and `play_line` need two seams the reference probe also takes: the
+ * environment (read at CALL time by `_anim_ok`, so a per-case dict is the real read and not
+ * a monkeypatch) and stdout.
+ *
+ * THE CAPTURE REPLACES `process.stdout.write`, NOT `process.stdout`. `pyPrint` closes over
+ * `process.stdout` at call time, so patching the method is enough — and it has to be the
+ * method, because the probe's own results document goes out on the SAME stream afterwards.
+ * `isTTY` is assigned rather than faked with a device: `< /dev/null` reads as a TTY to
+ * Python on Windows, which is how an earlier session ran a whole wizard against a live
+ * install.
+ */
+function withEnvAndStdout(env, tty, fn) {
+  const keys = ['GENESEED_NO_ANIM', 'GENESEED_TUI_PLAIN', 'TERM', 'COLUMNS'];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  const realWrite = process.stdout.write.bind(process.stdout);
+  const realTty = process.stdout.isTTY;
+  let buf = '';
+  for (const k of keys) delete process.env[k];
+  for (const [k, v] of Object.entries(env)) if (v !== null) process.env[k] = v;
+  process.stdout.isTTY = tty;
+  process.stdout.write = (chunk) => { buf += chunk; return true; };
+  try {
+    const value = fn();
+    return value === undefined ? buf : value;
+  } finally {
+    process.stdout.write = realWrite;
+    process.stdout.isTTY = realTty;
+    for (const k of keys) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+}
 
 const FNS = {
   version_verdict: (a) => versionVerdict(a[0], a[1]),
@@ -122,6 +158,19 @@ const FNS = {
   // The exhaustive one — see the reference probe's comment. `String.fromCodePoint` is the
   // codepoint-wise constructor; `String.fromCharCode` would build a UTF-16 unit and answer
   // for the wrong character everywhere above U+FFFF, which is where the emoji rule lives.
+  // ---- P7c: `theme_anim`, the line mode's install animation ---------------------------
+  art_for: (a) => {
+    const got = artFor(a[0]);
+    return {
+      title: got.title, sprite: got.sprite, ground: got.ground || '', card: got.card,
+    };
+  },
+  anim_place: (a) => place(a[0], a[1], a[2]),
+  anim_tile: (a) => tile(a[0], a[1], a[2]),
+  anim_height: (a) => height(a[0]),
+  anim_ok: (a) => withEnvAndStdout(a[1], a[0], () => animOk()),
+  play_line: (a) => withEnvAndStdout(a[3], a[2], () => { playLine(a[0], a[1]); }),
+
   dwidth_rle: (a) => {
     const runs = [];
     let prev = null;

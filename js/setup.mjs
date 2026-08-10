@@ -45,6 +45,7 @@ import { existsSync, readSync } from 'node:fs';
 import path from 'node:path';
 
 import { main as driverMain, resolveOut } from '../bin/geneseed.mjs';
+import { playLine } from './anim.mjs';
 import { discoverNames } from './checkout.mjs';
 import { exportImprovements } from './diff.mjs';
 import { cmdDoctor } from './doctor.mjs';
@@ -410,13 +411,16 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
  * code — is the same, and `driverMain` already converts the generator's `die` into a throw
  * so a refusal returns a code instead of killing the wizard.
  *
- * TWO THINGS THE REFERENCE DOES THAT THIS DOES NOT, both stated in the module header's
- * terms. `theme_anim.play_line` — the themed install animation — belongs to P7 with the rest
- * of the terminal layer, and the Python already wraps it in a bare `except: pass` labelled
- * "cosmetic only — never block a successful install". And the `python build.py` in the
- * printed plan is the reference's own wording, kept verbatim: it is compared byte-for-byte
- * by the corpus, and rewriting it to `geneseed build` is P10's documentation pass, not a
- * silent edit here.
+ * ONE THING THE REFERENCE DOES THAT THIS DOES NOT, stated in the module header's terms. The
+ * `python build.py` in the printed plan is the reference's own wording, kept verbatim: it is
+ * compared byte-for-byte by the corpus, and rewriting it to `geneseed build` is P10's
+ * documentation pass, not a silent edit here.
+ *
+ * `theme_anim.play_line` USED TO BE THE SECOND, and P7c crossed it — `js/anim.mjs`, gated by
+ * `_theme_anim_cases()` in `tests/test_pure_function_parity.py`. The bare `catch` around it
+ * is the reference's own, labelled there "cosmetic only — never block a successful install",
+ * and it is kept for the same reason: the animation runs AFTER the build has already
+ * succeeded, so nothing it can do may change the exit code.
  */
 export function setupLines() {
   const sel = collectSetupLines();
@@ -447,6 +451,9 @@ export function setupLines() {
     pyPrintErr('[setup] build failed — no harness written (see the output above).\n');
     return rc;
   }
+  try {
+    playLine(theme, true);        // themed install animation (motion → reveal card)
+  } catch { /* cosmetic only — never block a successful install */ }
   for (const [kind, text] of setupSummaryLines(theme, emit, out, root, true)) {
     pyPrint(`${{ ok: '✓', warn: '!', info: '-' }[kind] ?? '-'} ${text}\n`);
   }

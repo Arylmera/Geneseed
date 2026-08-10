@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import datetime
 import difflib
+import io
 import json
+import os
 import shutil
 import sys
 import urllib.parse
@@ -215,6 +217,70 @@ def run(fn: str, args: list):
         return [list(r) for r in harness._tui_entries(args[0])]
     if fn == "detail_lines":
         return harness._detail_lines(args[0], args[1], args[2])
+    # ---- P7c: `theme_anim`, the line mode's install animation --------------------------
+    if fn in ("art_for", "anim_place", "anim_tile", "anim_height", "anim_ok", "play_line"):
+        import theme_anim
+
+        if fn == "art_for":
+            # `dict.get(theme, ART[DEFAULT])`. The miss keys matter: `constructor` and
+            # `__proto__` are a plain miss here and reach up the prototype chain in
+            # JavaScript unless the port asked `Object.hasOwn`.
+            got = theme_anim.art_for(args[0])
+            return {"title": got["title"], "sprite": [list(p) for p in got["sprite"]],
+                    "ground": got.get("ground", ""), "card": list(got["card"])}
+        if fn == "anim_place":
+            return theme_anim._place(args[0], args[1], args[2])
+        if fn == "anim_tile":
+            return theme_anim._tile(args[0], args[1], args[2])
+        if fn == "anim_height":
+            return theme_anim._height([list(p) for p in args[0]])
+        # `anim_ok` and `play_line` share a fixture, and it is two seams rather than one.
+        #
+        # ENV IS AN ARGUMENT, NOT THE PROCESS'S. `_anim_ok` reads GENESEED_NO_ANIM /
+        # GENESEED_TUI_PLAIN / TERM / COLUMNS at CALL time, unlike `_TUI_ASCII`, which is a
+        # module constant read at import. So a dict per case is legitimate here where it
+        # would have been monkeypatching there — and it lets one process cover every
+        # combination instead of one process per setting.
+        #
+        # STDOUT IS A REAL `TextIOWrapper` OVER A `BytesIO`, and that is the load-bearing
+        # half. A plain capture object would have been three lines shorter and would have
+        # measured the wrong thing: `print()` and `sys.stdout.write` translate `\n` to
+        # `os.linesep` in the TEXT LAYER, so a capture that is not one compares LF on this
+        # side against whatever the port emits and cannot see the CRLF split — the transport
+        # hole P5b measured. The wrapper IS the translation, so it is under the gate.
+        # `isatty` is overridden because it is the one input a probe's real stdout cannot
+        # vary, and `< /dev/null` answers TRUE on Windows.
+        env_keys = ("GENESEED_NO_ANIM", "GENESEED_TUI_PLAIN", "TERM", "COLUMNS")
+        overrides = args[-1]
+        saved = {k: os.environ.get(k) for k in env_keys}
+        tty = args[-2]
+
+        class _Cap(io.TextIOWrapper):
+            def isatty(self):
+                return tty
+
+        buf = io.BytesIO()
+        cap = _Cap(buf, encoding="utf-8", newline=None, write_through=True)
+        real_stdout = sys.stdout
+        for k in env_keys:
+            os.environ.pop(k, None)
+        os.environ.update({k: v for k, v in overrides.items() if v is not None})
+        sys.stdout = cap
+        try:
+            if fn == "anim_ok":
+                out = theme_anim._anim_ok()
+            else:
+                theme_anim.play_line(args[0], args[1])
+                cap.flush()
+                out = buf.getvalue().decode("utf-8")
+        finally:
+            sys.stdout = real_stdout
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        return out
     if fn == "dwidth_rle":
         # THE EXHAUSTIVE ONE. `_dwidth` is the only function in this phase with no Node
         # equivalent at any rung — `unicodedata.east_asian_width` and `unicodedata.
