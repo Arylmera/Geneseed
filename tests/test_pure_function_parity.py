@@ -292,9 +292,16 @@ _PLAY_LINE_CORPUS = [
     # undefined off a terminal, and falls back to the same 80. The one case that gates the
     # fallback rather than the env read.
     ("gamer", True, False, {}),
-    # COLUMNS set to something `int()` REFUSES. Python's `int('80x')` raises and
-    # `get_terminal_size` swallows it into the fallback; `parseInt('80x')` is 80, so a port
-    # that reached for the lenient parser answers 79 here and 80 everywhere else.
+    # COLUMNS set to something `int()` REFUSES. Python's `int('40x')` raises and
+    # `get_terminal_size` swallows it into the fallback; `parseInt('40x')` is a cheerful 40.
+    #
+    # ⚠ THE VALUE MUST NOT PARSE TO THE FALLBACK. The first draft used `'80x'` and the
+    # `parseInt` mutation SURVIVED: the lenient parser answers 80, the fallback is also 80,
+    # and the two implementations agreed for opposite reasons. Same shape as a containment
+    # cell whose target does not exist — the refusal and the wrong answer are indistinguishable
+    # when they coincide. `'40x'` and `'40.9'` are far from 80 in both directions.
+    ("gamer", True, False, {"COLUMNS": "40x"}),
+    ("gamer", True, False, {"COLUMNS": "40.9"}),
     ("gamer", True, False, {"COLUMNS": "80x"}),
     ("gamer", True, False, {"COLUMNS": ""}),
     ("gamer", True, False, {"COLUMNS": "0"}),
@@ -306,6 +313,12 @@ _PLAY_LINE_CORPUS = [
     ("neutral", True, True, {"COLUMNS": "14", "TERM": "xterm"}),
     ("imperial", True, True, {"COLUMNS": "14", "TERM": "xterm"}),
     ("pirate", True, True, {"COLUMNS": "30", "TERM": "xterm"}),
+    # ⚠ ONE CASE WIDE ENOUGH THAT THE 64-FRAME CAP BINDS. Every narrow case above has
+    # `width + sprite_w` under 64, so `min(..., 64)` returns the sum and the cap is dead —
+    # changing it to 63 left the whole corpus green. The narrow cases are narrow for the
+    # 25 ms-per-frame budget, and that economy is exactly what hid the cap. `neutral` has the
+    # fewest rows, so this costs the least full-width run there is.
+    ("neutral", True, True, {"COLUMNS": "80", "TERM": "xterm"}),
     # An animated call with the animation DISABLED still takes the static path — the branch
     # a port could get right for the wrong reason by never checking the environment.
     ("cyberpunk", True, True, {"COLUMNS": "30", "TERM": "xterm", "GENESEED_NO_ANIM": "1"}),
