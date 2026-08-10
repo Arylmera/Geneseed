@@ -189,7 +189,7 @@ def cells() -> list[dict]:
             + _uninstall_cells() + _setup_cells() + _web_cells() + _upgrade_cells()
             + _sync_self_cells() + _bootstrap_cells() + _update_alias_cells()
             + _link_cells() + _migrate_cells()
-            + _menu_cells() + _home_cells())
+            + _menu_cells() + _home_cells() + _tui_cells())
 
 
 # --------------------------------------------------------------------------------------
@@ -2816,17 +2816,18 @@ _DRIFTED = "# Deployed AGENT.md\n\nA local edit the upgrade is about to overwrit
 
 
 # --------------------------------------------------------------------------------------
-# menu + home  —  two dispatchers whose OTHER arm no cell has, and the cells say which
+# menu + home + tui  —  three dispatchers whose OTHER arm no cell has, and the cells say which
 # --------------------------------------------------------------------------------------
 #
 # WHAT A CELL REACHES HERE, AND WHAT IT CANNOT. A cell's stdin is a pipe, so
 # `sys.stdin.isatty()` is FALSE in every one of them. That makes exactly one arm of each verb
-# reachable — `cmd_menu`'s command list, and `cmd_home`'s fall-through into it — and it makes
-# the other arm of each unreachable BY CONSTRUCTION: `cmd_menu`'s is `curses.wrapper(
-# _main_menu)`, 3,398 lines of full-screen panel that is P7b's, and `cmd_home`'s spawns a
-# detached daemon and opens a browser. Neither is a gap this harness could close by trying
-# harder; both are gated where they can be, which for the fork itself is the corpus in
-# `tests/test_pure_function_parity.py` (it fakes the TTY) and for the daemon is `web/`.
+# reachable — `cmd_menu`'s command list, `cmd_home`'s fall-through into it, and `cmd_tui`'s
+# refusal — and it makes the other arm of each unreachable BY CONSTRUCTION: `cmd_menu`'s and
+# `cmd_tui`'s are `curses.wrapper(...)`, the full-screen panel that is P7c's, and `cmd_home`'s
+# spawns a detached daemon and opens a browser. Neither is a gap this harness could close by
+# trying harder; all are gated where they can be, which for the forks is the corpus in
+# `tests/test_pure_function_parity.py` (it fakes the TTY), for the panel's layout half is that
+# same corpus and `tests/test_tui_boundary.py`, and for the daemon is `web/`.
 #
 # ⚠ AND `< /dev/null` IS NOT THE WAY TO GET THE NON-TTY ARM. On Windows, Python reports a
 # redirect from the null device as a TTY: a previous session tried exactly that against
@@ -2880,6 +2881,47 @@ def _home_cells() -> list[dict]:
            expect=["Geneseed — no interactive menu here. Get started with:  "
                    "python harness.py setup"],
            expect_absent=["opening the web console"]),
+    ]
+
+
+def _tui_cells() -> list[dict]:
+    """P7b. `cmd_tui`'s off-a-TTY arm, which is the whole of the verb a cell can reach.
+
+    THE `expect_absent` IS THE LOAD-BEARING HALF, and more so here than for `menu`. This arm
+    is a REFUSAL, and a refusal is the one shape where "did nothing" and "did the right
+    thing" look alike — so each cell names the panel's own leavings and requires their
+    ABSENCE: the alt-screen escape `curses.wrapper` writes before the first draw, the
+    wordmark the splash paints, and the section headers `_tui_entries` builds. A port that
+    opened a panel anyway, or that built the inventory before refusing (the reference does
+    not — the isatty test is the FIRST statement in the function), would trip one of them.
+    """
+    def tb(name, argv, **kw):
+        return dict(id=f"tui/{name}", bin="cli", world={"repo/.keep": ""},
+                    steps=[{"argv": argv, "cwd": "repo"}], **kw)
+
+    absent = ["\x1b[?1049h",              # the alt-screen enter — a panel opened
+              "\x1b[?25l",                # the cursor hide that goes with it
+              "GENESEED",                 # `_logo_lines`' wordmark, drawn by the splash
+              "AGENTS (", "SKILLS (", "LAWS (",   # `_tui_entries`' section headers
+              "full-screen panel unavailable"]    # the OTHER refusal — see below
+    return [
+        tb("off-a-tty-refuses-before-it-builds-anything", ["tui"],
+           expect=["[tui] not an interactive terminal. Use `harness setup`, `doctor`, "
+                   "or `build`."],
+           # `full-screen panel unavailable` is in the absent list on purpose: `cmd_tui` has
+           # TWO refusal lines and they are reached by different tests, so a port that
+           # collapsed them into one would still print something plausible on this arm. The
+           # cell requires the isatty one and forbids the curses one.
+           expect_absent=absent),
+        # `--theme` is bound by the parser and then never read on this arm, because the
+        # isatty test comes before `_tui_inventory(args.theme or ...)`. The cell exists to
+        # say so: a port that resolved the theme first would still print the same line, but
+        # a port that resolved a BAD one would not, and `nosuchtheme` is bad.
+        tb("the-theme-argument-is-not-read-before-the-refusal",
+           ["tui", "--theme", "nosuchtheme"],
+           expect=["[tui] not an interactive terminal. Use `harness setup`, `doctor`, "
+                   "or `build`."],
+           expect_absent=absent + ["nosuchtheme"]),
     ]
 
 

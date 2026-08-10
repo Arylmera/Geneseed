@@ -36,12 +36,12 @@ that matches your tool, then configure and verify. For the conceptual overview s
 An npx install runs the harness itself without Python. Three exceptions exist and are
 named here rather than found later:
 
-- **1 command has no Node twin**: `tui`, the full-screen browse panel. Asking for it from
-  the Node CLI refuses by name and prints the `python rituals/harness.py <command>` line
-  to run from a checkout. `menu` and `home` run from either runtime — `home` opens the web
-  console, and off a terminal both print the same command list — but the full-screen menu
-  behind `geneseed menu` on a terminal is still Python, and the Node entry says so and
-  prints the command list instead. Every other command in this guide runs from either
+- **0 commands have no Node twin**: every command in this guide runs from either runtime.
+  What is still Python is a SCREEN, not a command — the full-screen browse panel that
+  `geneseed tui` and `geneseed menu` open on a terminal. From Node both refuse the panel by
+  name and print the `python rituals/harness.py <command>` line to run from a checkout;
+  off a terminal, which is how scripts and CI run them, the two runtimes print the same
+  bytes. `home` opens the web console from either. Every other command in this guide runs from either
   runtime.
 - **One Python script rides inside the harness you install.** The `token-report` skill is
   a script rather than prose, so **every bundle carries** one interpreter-dependent file: `src/skills/token-report/scripts/token_report.py`.

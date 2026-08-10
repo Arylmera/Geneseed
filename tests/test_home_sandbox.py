@@ -24,6 +24,22 @@ HOME/USERPROFILE/XDG_CONFIG_HOME/APPDATA/LOCALAPPDATA pointed at a fresh temp di
 crucially NOT `GENESEED_HOME`, which `_shim_home()` prefers over `Path.home()` and which
 therefore OVERRIDES a module's own sandbox and reports well-behaved modules as polluters.
 Whatever lands in that dir is what would have landed in `~`.
+
+THE SECOND CLASS, WHICH THIS DERIVATION DOES NOT AND SHOULD NOT SEE (P7b). Everything above
+is about WRITES made in THIS process. There is a second way a module reads the developer's
+machine and it is not syntactically distinguishable from correct code: spawning a `bin/`
+entry, which inherits this process's environment and therefore resolves `~` to the real home.
+Nothing lands in the sweep's temp dir, so the measurement in this docstring is blind to it —
+what goes wrong is that the CHILD answers differently on a laptop with Geneseed installed
+than on a clean one, and the test records the machine's state as a result.
+
+`tests/test_cli_reference.py` had exactly that: its control ran `exclude list` and asserted
+exit 0, which holds only where a global install exists. It is fixed at the source (the
+control now runs a verb whose answer is a property of the COPY) and sandboxed as well. It is
+NOT added to the derived set below, because that set means "can write the shim from this
+process" and this module cannot — widening it to mean "spawns anything" would name most of
+the suite and stop being a measurement. If a third module is found this way, that is the
+point at which a second derived set earns its keep; one occurrence is a fix, not a gate.
 """
 from __future__ import annotations
 

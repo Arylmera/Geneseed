@@ -215,6 +215,135 @@ def _cases() -> list[dict]:
         # A non-empty starting phase: `_reader` keeps `last` across chunks, and a port that
         # reset it per chunk would re-log the phase the previous read ended on.
         cases.append({"fn": "fetch_phases", "args": [lines, "remote"]})
+    cases += _tui_cases()
+    return cases
+
+
+# --------------------------------------------------------------------------------------
+# P7b — the TUI's pure half (the alignment contract)
+# --------------------------------------------------------------------------------------
+#
+# These are the functions that decide what a row LOOKS LIKE before any curses call is made,
+# and they are here rather than in cells for the reason discipline point 9 gives: a cell
+# runs the program, and no cell of this project can run the panel. They belong to `_cases()`
+# — not to a class of their own — because `_run` already runs every case twice, once with
+# `GENESEED_TUI_ASCII` set and once without, and the display tier is exactly the axis these
+# functions branch on.
+#
+# WHAT THE ASCII AXIS DOES *NOT* REACH, said rather than implied: `GENESEED_TUI_PLAIN`, the
+# middle tier. `_icon`/`_mark`/`_spin` each pick between three glyph sets and this corpus
+# varies only two, so the symbol tier's column is asserted for the reference in
+# `TheDisplayTiersAreThreeAndTheCorpusReachesThem` below and carried to the port by the
+# equality. Adding a third `_run` axis would have been the other answer; it costs a third
+# probe process per side for a tier that no reachable code path selects.
+
+#: Strings chosen for what each breaks in `_dwidth`/`_truncd`/`_fit`. The single biggest
+#: risk in this group is that a JS implementation iterates UTF-16 units rather than code
+#: points, so most rows carry something astral.
+_DWIDTH_CORPUS = [
+    "", " ", "abc", "a b  c",
+    # CJK — the East_Asian_Width W half of the table, which is the whole reason `_fit`
+    # exists rather than `str.ljust`.
+    "日本語", "한국어", "ｱｲｳ", "ＡＢＣ",
+    # Astral emoji: ONE code point, TWO columns, and TWO UTF-16 units. A port that measured
+    # `String.length` answers 2 here for the wrong reason and 4 for two of them, so a
+    # single emoji cannot be the only case.
+    "🤖", "🤖🤖", "x🤖y", "✨📜🧬",
+    # The FE0F/FE0E selectors — the branch that promotes a single-width base to two, and
+    # the one that must NOT. `⚠️` and `ℹ️` are the two the mark table actually ships.
+    "⚠️", "ℹ️", "⚠︎", "⚠", "️", "a️", "日️",
+    # A selector after something already WIDE: `prev == 1` is false, so nothing is added —
+    # a port that wrote `prev != 2` would agree everywhere else and diverge here.
+    "🤖️", "️️",
+    # Combining marks: zero columns, and `prev` resets so a following selector does not
+    # promote the mark. NFD 'é' is the case a `\p{Mn}` proxy gets right and `é` precomposed
+    # is the control that says the rule is about the class and not about "non-ASCII".
+    "é", "é", "é️", "́", "à́b",
+    # A Thai vowel sign: `Mn` but combining class ZERO, so it is ONE column. This is the
+    # single row that separates the port's table from the `\p{Mn}` shortcut.
+    "ั", "กั", "่", "ก่",
+    # The glyphs the panel actually draws.
+    "▸▴▾◆✦§", "─│┌┐└┘", "█▏▎▍▌▋▊▉", "⠋⠙⠹",
+    # Lone surrogates cannot be built with `String.fromCodePoint` in a way that survives a
+    # JSON round trip, so they are covered by `dwidth_rle` below rather than here.
+]
+
+#: A synthetic inventory for `_tui_entries`/`_detail_lines` — shaped like `tuiInventory`'s
+#: output but hand-written, because a machine-written fixture hides the hand-written case
+#: (P6c's lesson) and because the counts in the section headers are the point.
+_TUI_INV = {
+    "agents": [{"name": "archivist", "desc": "keeps the record", "body": "# Archivist\n\nOne.\n"},
+               {"name": "bob", "desc": "", "body": ""}],
+    "skills": [{"name": "audit", "desc": "d", "body": "line\nline two"}],
+    "laws": [{"num": "I", "title": "Secrets", "body": "Never.\n\nEver.\n"},
+             {"num": "XVII", "title": "The em—dash", "body": ""}],
+    "theme": "neutral",
+}
+
+#: An inventory with EMPTY sections — the counts become 0 and the rows are headers only.
+#: Without it a port that dropped the header rows entirely would still match every count.
+_TUI_INV_EMPTY = {"agents": [], "skills": [], "laws": [], "theme": "neutral"}
+
+
+def _tui_cases() -> list[dict]:
+    cases: list[dict] = []
+    for mode in (True, False):
+        cases.append({"fn": "glyphs", "args": [mode]})
+    for s in _DWIDTH_CORPUS:
+        cases.append({"fn": "dwidth", "args": [s]})
+        # Widths around each string's own: 0 and negative (the early return), one under
+        # (which must not split a two-column glyph in half), exact, and one over (where
+        # `_fit` pads and `_truncd` does not).
+        for width in (-1, 0, 1, 2, 3, 6, 40):
+            cases.append({"fn": "truncd", "args": [s, width]})
+            cases.append({"fn": "fit", "args": [s, width]})
+    # Every key in both tables, plus a miss — and `constructor`/`__proto__`, which are a
+    # `dict.get` miss on the reference and reach up the prototype chain in JavaScript if
+    # the port used a truthiness test instead of `Object.hasOwn`.
+    for name in ("browse", "diff", "setup", "theme", "update", "bootstrap", "build",
+                 "memory", "status", "settings", "quit", "doctor", "mcp", "link", "unlink",
+                 "uninstall", "back", "agent", "skill", "law", "library", "notebook",
+                 "wiki", "config", "badge", "web", "nope", "", "constructor", "__proto__",
+                 "toString", "hasOwnProperty"):
+        cases.append({"fn": "icon", "args": [name]})
+    for kind in ("ok", "fail", "warn", "info", "pending", "edited", "added", "missing",
+                 "mcp_on", "mcp_off", "mcp_absent", "nope", "", "constructor", "__proto__"):
+        cases.append({"fn": "mark", "args": [kind]})
+    # A full turn of both frame sets plus the wrap, and a NEGATIVE tick: Python's `%`
+    # returns a non-negative remainder and JavaScript's keeps the sign, so `frames[-1 % 10]`
+    # is the last frame there and `undefined` here unless the port corrected for it.
+    for i in (0, 1, 3, 4, 9, 10, 11, 13, 40, -1, -3, -10):
+        cases.append({"fn": "spin", "args": [i]})
+    cases.append({"fn": "logo_lines", "args": []})
+    # `_clamp`: total below, equal to and above the viewport, and a `top` past the end.
+    for top, total, view in ((0, 0, 10), (0, 5, 10), (3, 5, 10), (0, 30, 10), (25, 30, 10),
+                             (30, 30, 10), (99, 30, 10), (-4, 30, 10), (5, 10, 0)):
+        cases.append({"fn": "clamp", "args": [top, total, view]})
+    # `_progress_bar`: the clamps, the eighths frontier, and the HALF-EIGHTH values where
+    # Python's banker's rounding and `Math.round` part company (`round(0.5) == 0`).
+    for frac in (-1.0, 0.0, 0.001, 0.0625, 0.125, 0.2, 0.25, 1 / 3, 0.5, 0.6666666666666666,
+                 0.75, 0.9, 0.99, 0.999, 1.0, 2.0):
+        for width in (1, 8, 24):
+            cases.append({"fn": "progress_bar", "args": [frac, width]})
+    cases.append({"fn": "progress_bar", "args": [0.5]})       # the DEFAULT width
+    # The theme reads, over every theme the checkout ships plus two misses. `_theme_flair`'s
+    # BANNER is a `splitlines()`, so a theme WITH a banner and one without are both needed.
+    for theme in sorted(p.stem for p in (ROOT / "themes").glob("*.json")) + ["nope", ""]:
+        cases.append({"fn": "theme_preview", "args": [theme]})
+        cases.append({"fn": "theme_flair", "args": [theme]})
+    for inv in (_TUI_INV, _TUI_INV_EMPTY):
+        cases.append({"fn": "tui_entries", "args": [inv]})
+    # `_detail_lines` falls off the end for an unknown kind and returns None, which is not
+    # `[]` — a pane rendering one where the reference renders the other is a real defect.
+    for kind, label, data in (("law", "Rule I — Secrets", _TUI_INV["laws"][0]),
+                              ("law", "Rule XVII", _TUI_INV["laws"][1]),
+                              ("law", "Rule ?", None),
+                              ("agent", "archivist", _TUI_INV["agents"][0]),
+                              ("agent", "bob", _TUI_INV["agents"][1]),
+                              ("skill", "audit", _TUI_INV["skills"][0]),
+                              ("agent", "x", None), ("head", "AGENTS (2)", None),
+                              ("nope", "x", _TUI_INV["agents"][0])):
+        cases.append({"fn": "detail_lines", "args": [kind, label, data]})
     return cases
 
 
@@ -1642,6 +1771,182 @@ class TheWebFirstDecisionAgreesOnAnInputNoCellCanGive(unittest.TestCase):
                          f"and the gate is vacuous there; this machine is {sys.platform}.")
         self.assertIs(self._results(self.runs["plain"][0])[0], True)
         self.assertIs(self._results(self.runs["plain"][1])[0], True)
+
+
+# --------------------------------------------------------------------------------------
+# P7b — `_dwidth`, over EVERY codepoint
+# --------------------------------------------------------------------------------------
+#
+# Every other entry in this file is a corpus in the ordinary sense: a list of inputs chosen
+# for what each one breaks. This one is not a sample of the input space, it IS the input
+# space, and the reason is that `_dwidth` is the only function in P7b with no Node
+# equivalent at any rung of the ladder.
+#
+# `unicodedata.east_asian_width` and `unicodedata.combining` have no counterpart in
+# JavaScript. `RegExp` property escapes carry `\p{General_Category}` and `\p{Script}` but
+# not `East_Asian_Width`, `Intl.Segmenter` segments rather than measures, and no dependency
+# may be added. So `js/tui.mjs` carries hand-written range tables — and the failure mode of
+# a hand-written Unicode table is not "wrong", it is "right for every character anyone
+# thought to write a case for". `\p{Mn}|\p{Me}`, the obvious shortcut, was measured against
+# `combining(ch) != 0` before the tables were written: it disagrees on 897 codepoints
+# across 229 ranges. A case list would have found none of them.
+#
+# So the gate walks U+0000..U+2FFFF — the BMP, the SMP and the SIP, 196 608 codepoints —
+# on both sides and RUN-LENGTH ENCODES the widths. The RLE is what makes it affordable to
+# compare and to read: 196 608 answers become a few hundred runs, a run boundary appears
+# exactly where the width changes, and the two implementations agree if and only if their
+# run lists are identical. There is no input left in that space for a bad range to hide in.
+#
+# WHAT THIS IS NOT: a comparison against a table copied from the reference. The reference
+# side calls the LIVE `unicodedata` for every codepoint. The day Python's Unicode version
+# moves under `js/tui.mjs`'s tables, this test goes red and names the codepoint — which is
+# the whole difference between a gate and an agreement.
+#
+# The surrogate block (U+D800..U+DFFF) is INSIDE the swept range on purpose: `chr(0xD800)`
+# is a lone surrogate to Python and `String.fromCodePoint(0xD800)` is one to JavaScript, and
+# a port that reached for `Buffer`/`TextEncoder` anywhere in `_dwidth` would answer the
+# replacement character's width there instead. It is not text, and it is exactly the kind of
+# input a panel gets handed by a corrupt file.
+_DWIDTH_SWEEP = (0x0000, 0x30000)
+
+
+@unittest.skipIf(shutil.which("node") is None, "node is not on PATH")
+class TheDisplayWidthAgreesOnEveryCodepointThereIs(unittest.TestCase):
+    """`_dwidth` against `dwidth`, over the whole of U+0000..U+2FFFF."""
+
+    @classmethod
+    def setUpClass(cls):
+        case = [{"fn": "dwidth_rle", "args": list(_DWIDTH_SWEEP)}]
+        # One glyph mode only: `_dwidth` reads no tier constant, and the sweep is the
+        # expensive case in this file. That claim is not assumed — `test_the_width_does_not
+        # _read_the_display_tier` below runs the ASCII mode and compares.
+        cls.ref = _run([sys.executable, str(PY_PROBE)], case, False)[0]
+        cls.new = _run(["node", str(JS_PROBE)], case, False)[0]
+
+    def test_every_codepoint_gets_the_same_width(self):
+        """The comparison. On a failure the first differing RUN is reported, because a
+        message carrying 196 608 widths is a message nobody reads."""
+        if self.ref == self.new:
+            return
+        pairs = list(zip(self.ref, self.new))
+        for i, (a, b) in enumerate(pairs):
+            if a != b:
+                self.fail(f"run {i} differs: reference says width {a[1]} from U+{a[0]:04X}, "
+                          f"the port says width {b[1]} from U+{b[0]:04X}. "
+                          f"{len(self.ref)} reference runs vs {len(self.new)} ported.")
+        self.fail(f"the run lists agree on their first {len(pairs)} runs but differ in "
+                  f"length: {len(self.ref)} reference vs {len(self.new)} ported — "
+                  f"the extra runs start at "
+                  f"U+{(self.ref or self.new)[len(pairs)][0]:04X}")
+
+    def test_the_sweep_produced_all_three_widths(self):
+        """The positive control, and this gate needs one more than most: every assertion
+        above is an equality between two probes, and two implementations that both answered
+        1 for everything would satisfy it while getting every emoji and every CJK column
+        wrong. A sweep that cannot produce a 0 and a 2 is measuring nothing."""
+        widths = {w for _cp, w in self.ref}
+        self.assertEqual(widths, {0, 1, 2},
+                         "the reference sweep did not produce all three widths, so this "
+                         "gate cannot tell a working `_dwidth` from a constant function")
+        self.assertEqual({w for _cp, w in self.new}, {0, 1, 2})
+
+    def test_the_sweep_is_a_sweep_and_not_a_handful_of_runs(self):
+        """The second half of the control. A probe that returned only its first run would
+        pass the test above if that run were the right width, so the SHAPE is asserted too:
+        the sweep must start at the first codepoint and produce runs across the whole space,
+        including above the BMP where the reference's own `>= 0x1F000` rule takes over."""
+        self.assertEqual(self.ref[0][0], _DWIDTH_SWEEP[0])
+        self.assertGreater(len(self.ref), 200, "the reference sweep collapsed")
+        self.assertTrue(any(cp >= 0x1F000 for cp, _w in self.ref),
+                        "the sweep never reached the astral emoji rule")
+        self.assertTrue(any(cp >= 0x10000 for cp, w in self.ref if w == 0),
+                        "the sweep never reached a combining mark above the BMP, so the "
+                        "port's table is untested there")
+
+    def test_the_width_does_not_read_the_display_tier(self):
+        """`_dwidth` is swept in ONE glyph mode, and this is the assertion that licenses it.
+        A display width that changed with GENESEED_TUI_ASCII would make the sweep above a
+        half-measurement — and it is the kind of coupling a later phase could add by
+        accident, because every function beside it in that module reads the tier."""
+        case = [{"fn": "dwidth_rle", "args": list(_DWIDTH_SWEEP)}]
+        self.assertEqual(_run([sys.executable, str(PY_PROBE)], case, True)[0], self.ref)
+        self.assertEqual(_run(["node", str(JS_PROBE)], case, True)[0], self.new)
+
+
+@unittest.skipIf(shutil.which("node") is None, "node is not on PATH")
+class TheDisplayTiersAreThreeAndTheCorpusReachesTwo(unittest.TestCase):
+    """The absolute half of the tier corpus, and the honest note beside it.
+
+    `_run` varies `GENESEED_TUI_ASCII` only, so `_icon`/`_mark`/`_spin`/`_glyphs` are
+    compared across two of their three tiers. A cross-implementation equality is blind to a
+    fault both sides share — two ports that both ignored the tier entirely would agree on
+    every row — so this states what the REFERENCE must answer in each mode, and the
+    equality in `test_every_case_agrees_in_both_glyph_modes` carries it to the port.
+
+    The middle tier (`GENESEED_TUI_PLAIN`) is reached HERE, in one extra reference process,
+    rather than by adding a third axis to `_run`: the axis would cost a third probe process
+    per side for every case in the file, and what needs proving about the symbol tier is
+    that it is a distinct third answer — not that a hundred unrelated functions still agree
+    in it.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.cases = [{"fn": "icon", "args": ["agent"]}, {"fn": "mark", "args": ["ok"]},
+                     {"fn": "spin", "args": [1]}, {"fn": "logo_lines", "args": []}]
+        cls.emoji = _run([sys.executable, str(PY_PROBE)], cls.cases, False)
+        cls.ascii_ = _run([sys.executable, str(PY_PROBE)], cls.cases, True)
+        with tempfile.TemporaryDirectory() as td:
+            job = Path(td) / "job.json"
+            job.write_text(json.dumps({"cases": cls.cases}), encoding="utf-8")
+            env = dict(os.environ, PYTHONUTF8="1", GENESEED_TUI_PLAIN="1")
+            env.pop("GENESEED_TUI_ASCII", None)
+            proc = subprocess.run([sys.executable, str(PY_PROBE), str(job)],
+                                  capture_output=True, env=env, cwd=str(ROOT))
+            if proc.returncode != 0:
+                raise AssertionError(proc.stderr.decode("utf-8", "replace"))
+            cls.plain = json.loads(proc.stdout.decode("utf-8"))["results"]
+
+    def test_the_reference_answers_each_tier_differently(self):
+        self.assertEqual(self.emoji[:3], ["🤖", "✅", "⠙"])
+        # `·`, not a braille frame: `_TUI_ANIM` is `_TUI_EMOJI`, so the PLAIN tier is a
+        # CALM tier and not merely a de-emojified one. The first draft of this row asserted
+        # `⠙` here — the gate's own expectation, contradicting the tier contract asserted
+        # three rows below in this same class, and the reference caught it before a line of
+        # the port was under test.
+        self.assertEqual(self.plain[:3], ["◆", "✓", "·"])
+        self.assertEqual(self.ascii_[:3], ["@", "+", "-"])
+
+    def test_the_three_tiers_are_three_and_not_two(self):
+        """The control the row above needs: if PLAIN collapsed onto either neighbour the
+        assertions would still read as three named tiers while the code had two."""
+        self.assertNotEqual(self.emoji[:3], self.plain[:3])
+        self.assertNotEqual(self.plain[:3], self.ascii_[:3])
+
+    def test_the_spinner_is_static_outside_the_animated_tier(self):
+        """`_spin`'s tier contract: motion only in the emoji tier. Asserted absolutely
+        because it is a promise about what does NOT change between frames, and an equality
+        between two implementations that both animated would not notice."""
+        frames = [{"fn": "spin", "args": [i]} for i in range(4)]
+        with tempfile.TemporaryDirectory() as td:
+            job = Path(td) / "job.json"
+            job.write_text(json.dumps({"cases": frames}), encoding="utf-8")
+            env = dict(os.environ, PYTHONUTF8="1", GENESEED_TUI_PLAIN="1")
+            env.pop("GENESEED_TUI_ASCII", None)
+            proc = subprocess.run([sys.executable, str(PY_PROBE), str(job)],
+                                  capture_output=True, env=env, cwd=str(ROOT))
+            plain = json.loads(proc.stdout.decode("utf-8"))["results"]
+        self.assertEqual(plain, ["·", "·", "·", "·"])
+        self.assertEqual(_run([sys.executable, str(PY_PROBE)], frames, True),
+                         ["-", "-", "-", "-"])
+        # And the emoji tier DOES move — otherwise the two rows above are satisfied by a
+        # spinner that never spins in any tier.
+        self.assertEqual(len(set(_run([sys.executable, str(PY_PROBE)], frames, False))), 4)
+
+    def test_the_logo_changes_ink_with_the_tier(self):
+        self.assertIn("█", self.emoji[3][0])
+        self.assertIn("#", self.ascii_[3][0])
+        self.assertNotIn("█", self.ascii_[3][0])
 
 
 if __name__ == "__main__":

@@ -54,6 +54,7 @@ import { cmdMigrate } from '../js/migrate.mjs';
 import { pyInt } from '../js/lib/pyfs.mjs';
 import { cmdLink, cmdUnlink } from '../js/link.mjs';
 import { cmdHome, cmdMenu } from '../js/menu.mjs';
+import { cmdTui } from '../js/tui.mjs';
 import { cmdSetup } from '../js/setup.mjs';
 import { cmdStatus, cmdVersion } from '../js/status.mjs';
 import { cmdUninstall } from '../js/uninstall.mjs';
@@ -152,12 +153,22 @@ const VERBS = {
   },
   // P7a. Both are DISPATCHERS whose off-TTY arm is the whole of what a cell can reach, and
   // `menu`'s on-TTY arm falls back rather than opening a panel — `js/menu.mjs`'s header
-  // argues both, and `tui` is deliberately NOT here: it has no arm this entry can answer.
+  // argues both.
   menu: {
     fn: cmdMenu,
   },
   home: {
     fn: cmdHome,
+  },
+  // P7b, and it is the twenty-fifth and last. `cmd_tui`'s FIRST arm is `if not sys.stdin.
+  // isatty()`, so off a TTY — which is every cell there is — the verb is one line and an
+  // exit code, and that arm crosses byte for byte. The panel behind it is P7c's;
+  // `js/tui.mjs`'s header argues why this entry falls back to `cmd_tui`'s own
+  // panel-unavailable line rather than inventing a second full-screen UI, and
+  // `tests/test_tui_boundary.py` asserts that the arm it declares is genuinely unreachable
+  // here rather than merely untested.
+  tui: {
+    fn: cmdTui,
   },
 };
 

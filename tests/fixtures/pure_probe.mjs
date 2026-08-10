@@ -33,6 +33,10 @@ import {
   sliceSection, slugifyHeading, stripHarnessBlocks,
 } from '../../js/web/docs.mjs';
 import { webFirstOk } from '../../js/menu.mjs';
+import {
+  clamp, detailLines, dwidth, fit, glyphs, icon, logoLines, mark, progressBar, spin,
+  themeFlair, themePreview, truncd, tuiEntries,
+} from '../../js/tui.mjs';
 
 const FNS = {
   version_verdict: (a) => versionVerdict(a[0], a[1]),
@@ -98,6 +102,34 @@ const FNS = {
     const real = process.stdin.isTTY;
     process.stdin.isTTY = a[0];
     try { return webFirstOk(); } finally { process.stdin.isTTY = real; }
+  },
+
+  // ---- P7b: the TUI's pure half ------------------------------------------------------
+  glyphs: (a) => glyphs(a[0]),
+  dwidth: (a) => dwidth(a[0]),
+  truncd: (a) => truncd(a[0], a[1]),
+  fit: (a) => fit(a[0], a[1]),
+  icon: (a) => icon(a[0]),
+  mark: (a) => mark(a[0]),
+  spin: (a) => spin(a[0]),
+  logo_lines: () => logoLines(),
+  clamp: (a) => clamp(a[0], a[1], a[2]),
+  progress_bar: (a) => progressBar(...a),
+  theme_preview: (a) => themePreview(a[0]),
+  theme_flair: (a) => themeFlair(a[0]),
+  tui_entries: (a) => tuiEntries(a[0]),
+  detail_lines: (a) => detailLines(a[0], a[1], a[2]),
+  // The exhaustive one — see the reference probe's comment. `String.fromCodePoint` is the
+  // codepoint-wise constructor; `String.fromCharCode` would build a UTF-16 unit and answer
+  // for the wrong character everywhere above U+FFFF, which is where the emoji rule lives.
+  dwidth_rle: (a) => {
+    const runs = [];
+    let prev = null;
+    for (let cp = a[0]; cp < a[1]; cp += 1) {
+      const w = dwidth(String.fromCodePoint(cp));
+      if (w !== prev) { runs.push([cp, w]); prev = w; }
+    }
+    return runs;
   },
 };
 

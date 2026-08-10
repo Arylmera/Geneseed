@@ -39,8 +39,27 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import harness  # noqa: E402
 import harness_golden  # noqa: E402
+import golden  # noqa: E402
 
 NODE = shutil.which("node")
+
+
+def setUpModule() -> None:
+    """P7b. This module emits nothing, so `tests/test_home_sandbox.py`'s derivation does not
+    name it — and it was still reading the developer's machine, because the derivation
+    measures in-process WRITES and the defect here was a spawned child's READ.
+
+    A child inherits this process's environment, so a `subprocess.run` of a `bin/` entry
+    resolves `~` to the real home unless the home has already moved. Every verb that
+    consults the install state answers differently on a laptop with Geneseed installed than
+    on a clean one, and a test that does not care which is a test whose result is the
+    machine's. See `test_the_same_copy_with_the_file_present_runs` for the one that did.
+    """
+    golden.sandbox_process_home()
+
+
+def tearDownModule() -> None:
+    golden.restore_process_home()
 
 
 def _node_json(src: str, cwd: Path = ROOT) -> object:
@@ -221,15 +240,30 @@ class TheEntryRefusesWithoutIt(unittest.TestCase):
     def test_the_same_copy_with_the_file_present_runs(self):
         """The control this refusal needs, and the reason it is beside it: a copy that could
         not run ANY verb would produce the same exit code for a reason that has nothing to do
-        with `cli.json`."""
+        with `cli.json`.
+
+        ⚠ IT USED TO READ THE DEVELOPER'S MACHINE, and P7a found it. The verb was `exclude
+        list`, which exits 0 when a global install exists and 1 with `[geneseed] no global
+        install found.` when none does — so this control passed on a laptop with Geneseed
+        installed and failed everywhere else, including under this suite's own home sandbox.
+        A control whose answer depends on the machine is not a control.
+
+        `version` replaces it because its exit code is a property of the COPY: it reads the
+        copy's own `Harness/` and its source fingerprint, and answers 0 whether or not the
+        machine has anything installed. What the control has to prove is that the entry
+        PARSED a verb out of `cli.json` and dispatched it, and `version` proves that as well
+        as any verb with side effects would — better, since it has none.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "checkout"
             harness_golden._copy_checkout(copy, {})
-            r = subprocess.run([NODE, str(copy / "bin" / "geneseed-cli.mjs"), "exclude",
-                                "list"], cwd=str(copy), capture_output=True, text=True,
+            r = subprocess.run([NODE, str(copy / "bin" / "geneseed-cli.mjs"), "version"],
+                               cwd=str(copy), capture_output=True, text=True,
                                encoding="utf-8")
             self.assertEqual(r.returncode, 0, r.stderr[-800:])
             self.assertNotIn("cli.json describes no subcommand", r.stderr)
+            # The absolute half: it ran the verb rather than exiting 0 without doing so.
+            self.assertIn("[version]", r.stdout)
 
 
 if __name__ == "__main__":

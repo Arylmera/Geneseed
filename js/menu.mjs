@@ -6,18 +6,24 @@
  *
  * `cmd_menu` is a FORK, not a menu. Off a TTY it prints five lines of command list and
  * returns 0; on a TTY it hands control to `curses.wrapper(_main_menu)` — the full-screen
- * panel, which is P7b's and is not here. The fork's off-TTY arm is what every cell of this
+ * panel, which is P7c's and is not here. The fork's off-TTY arm is what every cell of this
  * port can reach, and it is ported byte for byte.
  *
  * ON A TTY, THIS ENTRY FALLS BACK RATHER THAN INVENTING A SECOND MENU. The reference already
- * has that behaviour and reaches it often: `import curses` fails on stock Windows Python
- * (`No module named '_curses'`), and `cmd_menu` catches it, writes `[menu] TUI unavailable
- * (<reason>)` to stderr and prints the same command list. Node's reason is permanent rather
- * than accidental, and it is stated as such. The alternative that was considered and
+ * has that behaviour: `cmd_menu` wraps the panel in `except Exception`, writes `[menu] TUI
+ * unavailable (<reason>)` to stderr and prints the same command list. Node's reason is
+ * permanent rather than accidental, and it is stated as such.
+ *
+ * ⚠ THE REASON THIS HEADER ORIGINALLY GAVE WAS WRONG, and P7b measured it: it said the
+ * reference reaches that arm often because "`import curses` fails on stock Windows Python".
+ * A bare `import curses` does fail here, but `rituals/_harness_core.py` installs
+ * `rituals/_winterm.py` under the name `curses` when it does — so inside the harness the
+ * import succeeds, the panel opens, and it is the PORT that has no window. The fallback is
+ * still the right shape; only its explanation moved. The alternative that was considered and
  * refused: building a numbered line-menu out of `js/setup.mjs`'s `askChoice`. That is not a
  * port of `_main_menu` — it is a THIRD user interface, differing from the reference on every
  * screen, unreachable from every cell (no cell has a TTY), and it would have to be deleted
- * the day P7b lands the real panel. The fallback is the reference's own contract for "no
+ * the day P7c lands the real panel. The fallback is the reference's own contract for "no
  * full-screen menu available here"; a new UI would not be.
  *
  * `cmd_home` is the default for a bare `geneseed`, and it crosses WHOLE. Its two arms are
@@ -85,6 +91,14 @@ export function cmdMenu() {
   if (!process.stdin.isTTY) return menuHelp();
   // The reference's own `except Exception` arm, with a reason that is permanent here rather
   // than machine-dependent. stderr, and CRLF on Windows, because `sys.stderr.write` does.
+  //
+  // P7b CORRECTED THE REASON RATHER THAN THE ARM. This module's header said the fallback was
+  // reached because "`import curses` fails on stock Windows Python", and P7b measured that
+  // to be false where it matters: `rituals/_harness_core.py` installs `rituals/_winterm.py`
+  // as `sys.modules["curses"]` when the stdlib module is missing, so the reference opens its
+  // panel on this machine and `tests/test_tui_boundary.py` drives it doing so. What is
+  // missing is on THIS side — there is no window implementation in the port — and that is
+  // what the message now says.
   pyPrintErr('[menu] TUI unavailable (the Node entry has no full-screen menu — run '
     + '`python rituals/harness.py menu` for it).\n');
   return menuHelp();

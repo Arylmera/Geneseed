@@ -180,6 +180,64 @@ def run(fn: str, args: list):
             if isinstance(e, str) and not Path(e).is_absolute() and Path(e).name == "AGENT.md":
                 return e
         return "AGENT.md"
+
+    # ---- P7b: the TUI's pure half ----------------------------------------------------
+    #
+    # Reached through `harness`, not through `_harness_tui_draw` directly, because the
+    # display tier is a MODULE CONSTANT read at import time and `harness` is what imports
+    # it — asking the submodule again would be a second import in some Python versions and
+    # a different constant in none of them, but the caller's view is the one under test.
+    if fn == "glyphs":
+        return harness._glyphs(args[0])
+    if fn == "dwidth":
+        return harness._dwidth(args[0])
+    if fn == "truncd":
+        return harness._truncd(args[0], args[1])
+    if fn == "fit":
+        return harness._fit(args[0], args[1])
+    if fn == "icon":
+        return harness._icon(args[0])
+    if fn == "mark":
+        return harness._mark(args[0])
+    if fn == "spin":
+        return harness._spin(args[0])
+    if fn == "logo_lines":
+        return harness._logo_lines()
+    if fn == "clamp":
+        return harness._clamp(args[0], args[1], args[2])
+    if fn == "progress_bar":
+        return harness._progress_bar(*args)
+    if fn == "theme_preview":
+        return [list(r) for r in harness._theme_preview(args[0])]
+    if fn == "theme_flair":
+        return harness._theme_flair(args[0])
+    if fn == "tui_entries":
+        return [list(r) for r in harness._tui_entries(args[0])]
+    if fn == "detail_lines":
+        return harness._detail_lines(args[0], args[1], args[2])
+    if fn == "dwidth_rle":
+        # THE EXHAUSTIVE ONE. `_dwidth` is the only function in this phase with no Node
+        # equivalent at any rung — `unicodedata.east_asian_width` and `unicodedata.
+        # combining` have no counterpart in JavaScript, whose `\p{...}` escapes carry
+        # neither property — so the port carries hand-written range tables, and a
+        # hand-written Unicode table is right until it is not.
+        #
+        # So this case is not a sample of the input space, it IS the input space: every
+        # codepoint in [lo, hi), run-length encoded. A run boundary appears wherever the
+        # width changes, so two implementations agree if and only if these lists are equal,
+        # and a range the port got wrong has no input left to hide behind.
+        #
+        # Measured against the LIVE `unicodedata` on this side rather than a table copied
+        # from it — the day the reference's Unicode version moves under the port's tables,
+        # this goes red and names the codepoint instead of agreeing with itself.
+        lo, hi = args
+        runs, prev = [], None
+        for cp in range(lo, hi):
+            w = harness._dwidth(chr(cp))
+            if w != prev:
+                runs.append([cp, w])
+                prev = w
+        return runs
     raise SystemExit(f"pure_probe: unknown fn {fn!r}")
 
 

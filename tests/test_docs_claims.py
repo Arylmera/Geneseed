@@ -111,18 +111,44 @@ class TheDocsNameTheVerbsThatStillNeedPython(unittest.TestCase):
     # not a sentence. A gate that fixes the grammar of a number fixes the number too — this
     # one silently stopped matching, and an unmatched MARKER is caught only because
     # `assertIsNotNone` is there. Number-agreement is the doc's business, not the gate's.
+    #
+    # P7b took the count to ZERO, and the sentence still has to exist. "0 commands have no
+    # Node twin" reads oddly and is the point: the claim is the one a reader deciding
+    # between an npm install and a checkout needs, so it is made explicitly rather than by
+    # the absence of a sentence — an absent claim and an unwritten one look identical, and
+    # `assertIsNotNone` below is what keeps a deletion from passing as "nothing to say".
     MARKER = re.compile(r"(\w+) commands? ha(?:ve|s) no Node twin[^\n]*?:([^\n.]*)")
 
-    def test_the_derived_set_is_not_empty_and_is_what_this_test_thinks_it_is(self):
-        """A positive control. Every assertion below compares against this set, so a
-        derivation that silently produced `set()` would make all of them vacuous —
-        the docs would satisfy a gate by naming nothing."""
-        left = _python_only_verbs()
-        self.assertTrue(left, "no Python-only verbs derived — the scrape found nothing, "
-                              "which would make every assertion in this class vacuous")
-        self.assertTrue(left <= {"home", "tui", "menu"},
-                        f"a verb outside P7's three has stopped crossing: {sorted(left)} — "
-                        "that is either a regression or a docs update this test wants")
+    def test_the_derivation_reads_both_sides_and_is_not_a_broken_scrape(self):
+        """The positive control, REBUILT IN P7B because the one it replaces stopped being
+        possible. It used to assert `_python_only_verbs()` is non-empty: with a non-empty
+        set, "the docs name exactly these" is a real requirement, and an empty one would
+        have let the docs satisfy the gate by naming nothing.
+
+        `tui` was the last verb, so the set is legitimately EMPTY now — and "assert it is
+        empty" is precisely the vacuous gate the old control existed to prevent, because a
+        scrape that found no `cli.json`, or that parsed neither entry table, produces the
+        same empty set for the opposite reason. So the control moved to the DERIVATION's
+        inputs instead of its output: both sides must be non-empty and they must PARTITION
+        the command list. A broken scrape fails that; a verb that genuinely stopped crossing
+        fails `test_each_doc_names_exactly_the_verbs_with_no_node_twin` and lands back in
+        the docs, which is where it belongs.
+        """
+        spec = json.loads((ROOT / "cli.json").read_text(encoding="utf-8"))
+        names = {c["name"] for c in spec["commands"]}
+        cli = _verbs_of(ROOT / "bin" / "geneseed-cli.mjs")
+        hook = _verbs_of(ROOT / "bin" / "geneseed-hook.mjs")
+        self.assertGreater(len(names), 20, "cli.json parsed to almost nothing")
+        self.assertGreater(len(cli), 20, "bin/geneseed-cli.mjs's verb table did not scrape")
+        self.assertEqual(len(hook), 4, f"the hook entry's verbs scraped as {sorted(hook)}")
+        # The partition: every name in `cli.json` is answered by one of the two entries, or
+        # is the `update` alias of one that is. This is the same statement as "the set is
+        # empty", made from the other direction — it cannot be satisfied by reading nothing.
+        self.assertEqual(names - cli - hook, set(),
+                         "cli.json has commands neither Node entry answers — P7b left the "
+                         "set empty, so this is a regression or a docs update this test "
+                         "wants")
+        self.assertEqual(_python_only_verbs(), set())
 
     def test_each_doc_names_exactly_the_verbs_with_no_node_twin(self):
         left = _python_only_verbs()
@@ -235,7 +261,10 @@ class TheDocsCountTheSubcommandsThatCrossed(unittest.TestCase):
         crossed, total = self._figures()
         self.assertEqual(total, 25, "the subparser count moved — every doc that states it "
                                     "needs a look, and so does this sanity floor")
-        self.assertLess(crossed, total)
+        # `<=`, not `<`, since P7b: `tui` was the last verb and the two halves are now
+        # EQUAL. The floor that matters is the other one — a numerator of 0, or one above
+        # the denominator, means the derivation broke rather than that the port finished.
+        self.assertLessEqual(crossed, total)
         self.assertGreater(crossed, 0)
 
     def test_every_present_tense_doc_states_both_halves_correctly(self):
