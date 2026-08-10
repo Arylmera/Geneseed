@@ -203,6 +203,21 @@ _WEB_STAMPS_WIDTH = (
 # a negative would be `kill(-1)` on POSIX, which signals every process the user owns.
 _DEAD_PID = 2000000000
 
+# The catalog's memory ordering, which is the PLATFORM'S ordering and not a preference.
+#
+# Both implementations sort through `os.path.normcase` / `normcase` — case-folded on Windows,
+# the identity on POSIX — so `MEMORY.md` files under `m` on Windows and under `M` (0x4D, ahead
+# of `a`) everywhere else. The two sides agree on either host; what could not be written once
+# is the ABSOLUTE assertion, and these two names are it. The first Linux run of this harness
+# reported both cells as VACUOUS, which is the correct report for an assertion that named one
+# platform's answer: the comparison passed and the claim about the reference did not.
+_MEM_CASE_FOLDED = sys.platform == "win32"
+_ORDER_MEM_ANOTHER = (r'"name": "another".*"name": "MEMORY"' if _MEM_CASE_FOLDED
+                      else r'"name": "MEMORY".*"name": "another"')
+_ORDER_MEM_ALL = (r'"name": "a-fact".*"name": "another".*"name": "MEMORY"'
+                  if _MEM_CASE_FOLDED
+                  else r'"name": "MEMORY".*"name": "a-fact".*"name": "another"')
+
 # `poll=True`'s budget. A job cell starts a REAL child process — P6g's is `doctor`, which
 # renders a theme, runs five emits and syntax-checks every plugin — so the wait is seconds,
 # not milliseconds. 240 × 0.25 s is four minutes per poll, which is long enough that
@@ -1233,7 +1248,17 @@ def _mutate_cells(cell) -> list[dict]:
              # catalog directory, and it found a live bug: the Node twin sorted with JS's
              # default comparator (UTF-16 code units), which puts `M` before `a`. Naming the
              # order here is what keeps the fix gated rather than incidental.
-             expect_re=[r'"name": "another".*"name": "MEMORY"'],
+             #
+             # THE ORDER IS THE PLATFORM'S, and both are right. `PurePath.__lt__` compares
+             # `os.path.normcase` parts, which folds case on Windows and is the identity on
+             # POSIX — so `MEMORY` sorts LAST on Windows (`m`) and FIRST on Linux (`M` is
+             # 0x4D, `a` is 0x61). `comparePaths` spells the same `normcase`, so the two
+             # implementations agree on both hosts and it is only this ABSOLUTE assertion
+             # that had to learn the second answer. Written as a conditional rather than
+             # relaxed to an unordered match, because the ordering is the whole reason the
+             # `expect_re` is here: `_exclude_cells`' `remove-a-case-differing-entry` is the
+             # same shape.
+             expect_re=[_ORDER_MEM_ANOTHER],
              expect_files=[f"{_OC}/memory/MEMORY.md", f"{_OC}/memory/another.md"],
              expect_absent_files=[f"{_OC}/memory/a-fact.md"]),
         cell("memory/a-reserved-or-climbing-name-is-refused-and-touches-nothing",
@@ -1478,7 +1503,8 @@ def _mutate_cells(cell) -> list[dict]:
                      '{"error": "not found: "}', "404 Not Found",
                      '"name": "a-fact"'],
              # The full three-name ordering, which the cell above can only show two of.
-             expect_re=[r'"name": "a-fact".*"name": "another".*"name": "MEMORY"'],
+             # Case-folded on Windows, code-point ordered on POSIX — see `_ORDER_MEM_ANOTHER`.
+             expect_re=[_ORDER_MEM_ALL],
              expect_files=[f"{_OC}/memory/a-fact.md", f"{_OC}/memory/MEMORY.md"]),
         cell("promote/with-no-memory-store-at-all-the-endpoint-says-so",
              [_req("POST", path="/api/rules/promote", token=True,

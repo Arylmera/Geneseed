@@ -467,7 +467,25 @@ class ThePortHasNoCursesArmToFallBackFrom(unittest.TestCase):
     is not "it refuses" but "there is no branch": the TTY path produces the LINE wizard.
     """
 
-    #: Six defaults, then DECLINE at `Proceed? (Y/n)`.
+    #: DECLINE EVERY PROMPT. Not "six defaults then n" — that spelling counted the wizard's
+    #: questions, and the count is not a constant. `_wizard` asks `Repo root to install into`
+    #: only for the four PROJECT emits and `Output dir for the bundle` only for `files`, so the
+    #: number of readers before `Proceed? (Y/n)` depends on which install mode is the default
+    #: on the machine under test. Measured, not reasoned about: this developer's Windows box
+    #: asks four `Choose` + one root prompt, and a Linux box asks five `Choose` and no root —
+    #: so the sixth `\n` landed on `Proceed?`, took its default (**yes**), and the `n` went to
+    #: `Run a health check (doctor) now?` instead. The wizard ran to completion and emitted a
+    #: full install into the sandbox HOME. That is `_DECLINE`'s own warning below happening a
+    #: second time, from a new direction, and the first Linux run of this suite is what found
+    #: it.
+    #:
+    #: `n` is a safe answer to every reader here and that is what makes the repetition sound:
+    #: `askChoice` falls back to its default for an unrecognised answer (no re-prompt loop),
+    #: `ask` returns the literal string for the two free-text prompts — never used, because
+    #: the run is cancelled — and `confirm` reads it as NO. Twelve is comfortably more than
+    #: the seven any path asks; the surplus is never read.
+    #:
+    #: The original note, which is still the reason this is spelled at all:
     #:
     #: ⚠ THE FIRST DRAFT PASSED `b""` AND RAN A 99-FILE BUILD INTO THE CHECKOUT. The reasoning
     #: was that an immediate EOF is the inert input and would cancel the wizard. It is the
@@ -478,7 +496,7 @@ class ThePortHasNoCursesArmToFallBackFrom(unittest.TestCase):
     #: costume — that one was "a null device reads as a TTY", this one is "no answer reads as
     #: the default answer" — and the general rule behind both is that **an interactive
     #: component has no inert input; declining is an ANSWER and has to be spelled.**
-    _DECLINE = b"\n" * 6 + b"n\n"
+    _DECLINE = b"n\n" * 12
 
     @classmethod
     def setUpClass(cls):
@@ -519,6 +537,22 @@ class ThePortHasNoCursesArmToFallBackFrom(unittest.TestCase):
         self.assertEqual(self.rc, 0)
         self.assertNotIn("Running:", self.stdout,
                          "the wizard reached the build — the decline is not declining")
+
+    def test_the_decline_does_not_depend_on_how_many_questions_are_asked(self):
+        """The structural half, and the one that would have caught the Linux failure without
+        a Linux machine. An empty line in this stream is not a neutral filler — it is the
+        DEFAULT answer, and the default at `Proceed?` is yes. So padding the stream with
+        newlines makes the safety of this class a function of how many questions the wizard
+        happens to ask on the host running it, which is not a constant. Every answer must be
+        an explicit `n`."""
+        answers = self._DECLINE.split(b"\n")
+        self.assertEqual(answers[-1], b"", "_DECLINE must end with a newline, or its last "
+                                           "answer is never submitted")
+        self.assertEqual(set(answers[:-1]), {b"n"},
+                         "a blank answer in _DECLINE is a DEFAULT, and one of the defaults "
+                         "this wizard offers is `Proceed? (Y/n)` -> yes. (Discarding every "
+                         "empty element before this comparison is exactly the mistake: the "
+                         "empties ARE the padding under test.)")
 
     def test_neither_module_contains_anything_that_could_paint_a_screen(self):
         """The structural half, in the shape P7b established for `js/tui.mjs` and P4e for the

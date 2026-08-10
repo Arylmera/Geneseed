@@ -194,6 +194,59 @@ def cells() -> list[dict]:
 
 
 # --------------------------------------------------------------------------------------
+# the platform-declared set
+# --------------------------------------------------------------------------------------
+#
+# ONE GROUP IN THIS FILE DIFFERS BY HOST, and the declaration is here rather than inside it
+# so that "what this run did not cover" is a fact about the SUITE and not a comment in a
+# function nobody opens. `link` and `unlink` are two different programs on the two platforms
+# — a `.cmd` shim plus a registry Path edit on Windows, a symlink plus an `export PATH` hint
+# on Unix — so no host can run both halves and the union is what the matrix claims.
+#
+# WHY IT IS A TABLE AND NOT A `sys.platform` CHECK LEFT WHERE IT WAS. `_link_cells` used to
+# `return []` on any non-Windows host. From Windows that is indistinguishable from a group
+# that has been written, and it stayed that way for ten phases; `docs/port-ledger.md` row 5
+# was the only thing that knew, and prose is not a gate. With the table:
+#
+#   * `main` PRINTS the half it is not running, so a run says out loud what it skipped.
+#   * `tests/test_hook_cli_parity.py::ThePlatformDeclaredCellsAreDeclared` asserts the table
+#     against the cells this host actually built — every declared id for THIS platform must
+#     be present, every id declared for the other must be absent, and no cell may be
+#     platform-specific without appearing here. Adding a cell to one arm and forgetting the
+#     other fails it, from either operating system.
+#
+# `expect`/`expect_re` that differ by platform are NOT in here: those cells run everywhere and
+# the difference is in what the reference says, which the cell states inline (see
+# `_exclude_cells`' `remove-a-case-differing-entry`). This table is only for cells that a
+# given host cannot run at all.
+PLATFORM_ONLY: "dict[str, str]" = {
+    "link/writes-the-shim-and-finds-the-dir-already-on-path": "win32",
+    "link/is-idempotent-when-the-shim-is-already-there": "win32",
+    "link/reports-a-manual-step-when-the-dir-is-not-on-path": "win32",
+    "unlink/unlink-removes-the-shim": "win32",
+    "unlink/unlink-with-nothing-linked-says-so": "win32",
+    "link/symlinks-the-launcher-and-finds-the-dir-already-on-path": "posix",
+    "link/reports-the-export-line-when-the-dir-is-not-on-path": "posix",
+    "link/a-path-entry-that-merely-contains-the-dir-is-not-a-match": "posix",
+    "link/an-explicit-dir-argument-is-used-instead-of-the-default": "posix",
+    "unlink/unlink-removes-a-symlink-it-made-and-leaves-a-foreign-one-alone": "posix",
+    # Distinct from the Windows one above on purpose: the two arms print different sentences
+    # (`found.` vs `found on PATH`) and a shared id would make the union unrepresentable.
+    "unlink/unlink-on-a-path-with-no-launcher-says-so": "posix",
+}
+
+
+def this_platform() -> str:
+    """The key `PLATFORM_ONLY` uses for the host running this file."""
+    return "win32" if sys.platform == "win32" else "posix"
+
+
+def not_run_here() -> "list[str]":
+    """The declared cell ids this host cannot run, sorted. Printed by `main`."""
+    return sorted(k for k, v in PLATFORM_ONLY.items() if v != this_platform())
+
+
+# --------------------------------------------------------------------------------------
 # context
 # --------------------------------------------------------------------------------------
 
@@ -3213,27 +3266,132 @@ _LINK_SHIM = "home/AppData/Local/Geneseed/bin/geneseed.cmd"
 
 
 def _link_cells() -> list[dict]:
-    """`link` / `unlink` — P10b, and the Windows arm is the only one this machine runs.
+    """`link` / `unlink` — P10b, and the ONE group in this file whose cells differ by host.
 
-    THE UNIX ARM IS UNREACHABLE FROM HERE and is declared rather than faked: it symlinks
-    `ROOT/geneseed` into `~/.local/bin`, and a Windows host has neither the symlink
-    privilege by default nor a `~/.local/bin` worth writing to. Its port is a straight
-    translation with NO divergence (both implementations name the same launcher file), so
-    the risk it carries is smaller than the Windows arm's — which is the one that writes a
-    shim naming an interpreter, and the one every cell below is aimed at.
+    The two arms are different programs. On Windows the verb writes a `.cmd` shim naming an
+    interpreter and edits the persistent user Path; on Unix it symlinks `ROOT/geneseed` into
+    a bin dir and prints an `export PATH=…` hint. Neither host can run the other's, so the
+    group is a UNION declared in `PLATFORM_ONLY` and the runner announces the half it is not
+    running. A group that quietly returned `[]` is what the Unix arm used to be — and it was
+    invisible from Windows, where it looked exactly like a group that had been written.
     """
-    def lk(name, argv, **kw):
-        kw.setdefault("world", {"repo/.keep": ""})
-        kw.setdefault("env", dict(_LINK_PATH))
-        # THE ID PREFIX IS THE VERB, not the group. `test_the_matrix_covers_every_verb_it
-        # _claims` reads the text before the `/` and requires it to equal the binary's verb
-        # table, so five cells all called `link/…` left `unlink` uncovered while the group
-        # looked complete. Caught by that gate, which is what it is for.
-        return dict(id=f"{argv[0]}/{name}", bin="cli",
-                    steps=[{"argv": list(argv), "cwd": "repo"}], **kw)
+    return _link_cells_win() if sys.platform == "win32" else _link_cells_posix()
 
-    if sys.platform != "win32":
-        return []
+
+def _lk(name, argv, **kw) -> dict:
+    kw.setdefault("world", {"repo/.keep": ""})
+    kw.setdefault("steps", [{"argv": list(argv), "cwd": "repo"}])
+    # THE ID PREFIX IS THE VERB, not the group. `test_the_matrix_covers_every_verb_it
+    # _claims` reads the text before the `/` and requires it to equal the binary's verb
+    # table, so five cells all called `link/…` left `unlink` uncovered while the group
+    # looked complete. Caught by that gate, which is what it is for.
+    return dict(id=f"{argv[0]}/{name}", bin="cli", **kw)
+
+
+#: The Unix launcher `link` symlinks, relative to the sandbox's HOME — `~/.local/bin/geneseed`.
+_LINK_SYMLINK = "home/.local/bin/geneseed"
+
+
+def _link_cells_posix() -> list[dict]:
+    """The Unix arm, which had NO CELL AT ALL until this suite was first run on Linux.
+
+    `docs/port-ledger.md` row 5 called it "declared rather than faked" and gave a reason that
+    was true of the machine and not of the code: a Windows host has no symlink privilege and
+    no `~/.local/bin` worth writing to. Nothing about the arm was hard to reach — the sandbox
+    already redirects HOME, which is the only input `Path.home() / '.local' / 'bin'` reads —
+    so on a Linux host these five cells are ordinary cells, and four of them exercise a
+    divergence risk the Windows arm does not carry:
+
+      * THE DIR ARGUMENT IS A `Path` ON ONE SIDE AND A STRING ON THE OTHER. The reference does
+        `Path(args.dir)` and prints `str(target_dir)`; the port keeps the raw argument. Those
+        two disagree the moment the argument is not already normalised — a trailing slash is
+        the cheap one — and `an-explicit-dir-argument` is spelled with one for that reason.
+      * THE PATH TEST IS A SPLIT, not a substring: `str(target_dir) in PATH.split(os.pathsep)`.
+        The Windows arm's is `.lower() in .lower()`, so the two halves of `link` fail
+        differently and only this one can catch a port that reached for `includes`.
+      * `unlink` WALKS PATH and follows `os.readlink` WITHOUT resolving it, so a symlink named
+        `geneseed` that points at something else must be left alone. That is the security-ish
+        clause of the verb and no Windows cell has an analogue for it.
+    """
+    # `{home}/.local/bin` on PATH, which is the arm that prints "is on PATH". Spelled with
+    # `{home}` rather than `~`: nothing expands a tilde inside PATH.
+    on_path = {"PATH": "{home}/.local/bin"}
+    return [
+        _lk("symlinks-the-launcher-and-finds-the-dir-already-on-path", ("link",),
+            env=dict(on_path),
+            # The arrow line names ROOT, which normalises to `<REPO>` on both sides, so the
+            # whole message is comparable — unlike the Windows shim, whose body bakes a
+            # runtime and has to be destamped.
+            expect=["geneseed: linked ", " -> ", "is on PATH — run 'geneseed' from anywhere."],
+            # The absolute half: the ELSE branch must not be what this cell is looking at.
+            expect_absent=["is not on your PATH", "export PATH="],
+            expect_files=[_LINK_SYMLINK]),
+        _lk("reports-the-export-line-when-the-dir-is-not-on-path", ("link",),
+            # A directory that EXISTS and holds nothing, so the split finds no match. The
+            # reference compares `str(Path)` against the split parts, so a port using a
+            # substring test would match `{sb}/nowhere` against nothing here either — which
+            # is why the next cell exists.
+            env={"PATH": "{sb}/nowhere"},
+            world={"repo/.keep": "", "nowhere/.keep": ""},
+            expect=["geneseed: linked ", "is not on your PATH. Add it, e.g.:",
+                    "export PATH="],
+            expect_absent=["is on PATH — run"],
+            expect_files=[_LINK_SYMLINK]),
+        _lk("a-path-entry-that-merely-contains-the-dir-is-not-a-match", ("link",),
+            # THE SPLIT, isolated. `{home}/.local/binaries` CONTAINS `{home}/.local/bin` as a
+            # substring and is not the same directory, so the reference prints the manual
+            # advice. A port spelling the test `PATH.includes(targetDir)` — the shape the
+            # Windows arm really does use — prints the opposite, and no other cell here can
+            # tell the two apart.
+            env={"PATH": "{home}/.local/binaries"},
+            expect=["is not on your PATH. Add it, e.g.:"],
+            expect_absent=["is on PATH — run"],
+            expect_files=[_LINK_SYMLINK]),
+        _lk("an-explicit-dir-argument-is-used-instead-of-the-default",
+            ("link", "{sb}/mybin/"),
+            # THE TRAILING SLASH IS THE POINT. `Path("/x/mybin/")` renders as `/x/mybin`, and
+            # a port that echoes the raw argument prints `/x/mybin/` — one byte, in two
+            # messages, on a path no other cell supplies. It also proves the default was not
+            # silently used: `~/.local/bin` must be absent from the tree afterwards.
+            env={"PATH": "{sb}/nowhere"},
+            world={"repo/.keep": "", "nowhere/.keep": ""},
+            expect=["geneseed: linked ", "is not on your PATH"],
+            expect_files=["mybin/geneseed"],
+            expect_absent_files=[_LINK_SYMLINK]),
+        _lk("unlink-removes-a-symlink-it-made-and-leaves-a-foreign-one-alone",
+            ("unlink",),
+            # BOTH directories are on PATH, so `unlink` really walks the decoy — a decoy the
+            # verb never looks at proves nothing (P6c).
+            env={"PATH": "{home}/.local/bin:{sb}/decoy"},
+            # TWO STEPS, because `world` seeds text files and this verb only removes SYMLINKS
+            # — a seeded regular file named `geneseed` is not what it is looking for. Step
+            # one makes the real link; only step two's streams are compared. The decoy is
+            # exactly that seeded regular file: same name, on PATH, and `is_symlink()` is
+            # what has to reject it.
+            world={"repo/.keep": "", "decoy/geneseed": "#!/bin/sh\nnot ours\n"},
+            steps=[{"argv": ["link"], "cwd": "repo"},
+                   {"argv": ["unlink"], "cwd": "repo"}],
+            expect=["geneseed: removed "],
+            expect_absent=["no linked launcher found on PATH"],
+            # The absolute half of a DELETION (P5h): without it two implementations that
+            # both stopped unlinking compare equal.
+            expect_absent_files=[_LINK_SYMLINK],
+            expect_files=["decoy/geneseed"]),
+        _lk("unlink-on-a-path-with-no-launcher-says-so", ("unlink",),
+            env={"PATH": "{sb}/nowhere"},
+            world={"repo/.keep": "", "nowhere/.keep": ""},
+            expect=["geneseed: no linked launcher found on PATH"],
+            expect_absent=["geneseed: removed "],
+            expect_absent_files=[_LINK_SYMLINK]),
+    ]
+
+
+def _link_cells_win() -> list[dict]:
+    """The Windows arm — the one that writes a shim naming an interpreter."""
+    def lk(name, argv, **kw):
+        kw.setdefault("env", dict(_LINK_PATH))
+        return _lk(name, argv, **kw)
+
     return [
         lk("writes-the-shim-and-finds-the-dir-already-on-path", ("link",),
            # The shim's ARGV LINE is destamped (see `_STAMPS`) because the two runtimes bake
@@ -4401,6 +4559,13 @@ def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1)
     shown = " · ".join(f"new[{k}]={' '.join(v)}" for k, v in sorted(new.items()))
     print(f"[harness-golden] {len(matrix)} cells · ref={' '.join(ref['hook'])} · {shown}"
           f" · jobs={jobs}")
+    # WHAT THIS RUN CANNOT COVER, said by the run itself. A suite that silently drops a
+    # group on one operating system reads exactly like a suite that never had it — which is
+    # what `link`/`unlink`'s Unix arm was for ten phases. See `PLATFORM_ONLY`.
+    skipped = not_run_here()
+    if skipped:
+        print(f"[harness-golden] {len(skipped)} cell(s) declared for the other platform and "
+              f"NOT run here ({this_platform()}): {', '.join(skipped)}")
     failures: list[str] = []
 
     def _pair(cell: dict) -> tuple:
@@ -4456,8 +4621,24 @@ def _resolve_cli(argv: list[str]) -> list[str]:
     compares against it, `learn` looks beside it for a memory store — so every cell runs
     from inside its own sandbox, where `bin/geneseed-hook.mjs` does not exist. Resolving
     once here keeps the acceptance command the same shape as golden's.
+
+    THE INTERPRETER IS RESOLVED TOO, and that is not cosmetic. PATH is a cell INPUT — the
+    `link`/`unlink` cells replace it wholesale to choose which branch of the verb runs — and
+    on POSIX a bare `node` is looked up in the CHILD's PATH, so those cells could not spawn
+    the candidate at all: `FileNotFoundError: 'node'`. Windows hid it, because `CreateProcess`
+    resolves the image name against the CALLING process's PATH and ignores the child env's.
+    This file's `link` section already asserted "the binaries are launched by absolute path";
+    until the first Linux run, that sentence was true only by accident of the platform.
     """
-    return [str(ROOT / tok) if (ROOT / tok).is_file() else tok for tok in argv]
+    out = []
+    for i, tok in enumerate(argv):
+        if (ROOT / tok).is_file():
+            out.append(str(ROOT / tok))
+        elif i == 0 and not Path(tok).is_absolute():
+            out.append(shutil.which(tok) or tok)
+        else:
+            out.append(tok)
+    return out
 
 
 def main(argv=None) -> int:

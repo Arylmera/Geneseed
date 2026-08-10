@@ -207,6 +207,86 @@ class TheVerbSetIsATable(unittest.TestCase):
         self.assertFalse(bad, f"cells with an unknown `bin`: {bad}")
 
 
+class ThePlatformDeclaredCellsAreDeclared(unittest.TestCase):
+    """`harness_golden.PLATFORM_ONLY` against the cells this host actually builds.
+
+    THE HOLE THIS CLOSES has a ten-phase history. `_link_cells` returned `[]` on any
+    non-Windows host, and from Windows — the only machine that ever ran the harnesses — an
+    empty group is indistinguishable from a group that was written and passes. Nothing failed;
+    `docs/port-ledger.md` row 5 said so in prose, and prose is not a gate. The first Linux run
+    found it through `test_the_matrix_covers_every_verb_it_claims`, which noticed that `link`
+    and `unlink` had stopped being covered at all — a gate that fires on the OTHER platform is
+    not a gate the developer ever sees.
+
+    So the union is a table and this checks it FROM EITHER SIDE: the ids this host must build,
+    the ids it must not, and — the direction that actually stops drift — that no cell can be
+    platform-specific without being in the table, because the table is the only place the
+    other platform's half is written down.
+    """
+
+    def setUp(self):
+        self.ids = {c["id"] for c in harness_golden.cells()}
+        self.here = harness_golden.this_platform()
+
+    def test_every_id_declared_for_this_platform_was_built(self):
+        missing = sorted(k for k, v in harness_golden.PLATFORM_ONLY.items()
+                         if v == self.here and k not in self.ids)
+        self.assertFalse(missing, f"PLATFORM_ONLY declares {missing} for {self.here} and "
+                                  "harness_golden.cells() did not produce them")
+
+    def test_every_id_declared_for_the_other_platform_is_absent(self):
+        """The direction that catches a rename: an id left in the table after its cell was
+        renamed passes the test above on the OTHER host and fails here."""
+        present = sorted(k for k in harness_golden.not_run_here() if k in self.ids)
+        self.assertFalse(present, f"{present} are declared as another platform's cells but "
+                                  f"this {self.here} run built them")
+
+    def test_the_table_is_exactly_the_union_of_the_two_arms(self):
+        """THE DIRECTION THAT ACTUALLY STOPS DRIFT, and the only one that can be checked from
+        a single host: both arms are ordinary functions, so a test can call them BOTH.
+
+        Without this, adding a cell to the arm the developer is not on is invisible — the
+        two tests above only ever compare the table against the half this host builds, so a
+        Windows session can add a POSIX cell, forget the table, and see green. Calling
+        `_link_cells_win()` and `_link_cells_posix()` directly makes the union a fact rather
+        than a promise, from either operating system."""
+        arms = {"win32": harness_golden._link_cells_win(),
+                "posix": harness_golden._link_cells_posix()}
+        built = {c["id"]: p for p, cs in arms.items() for c in cs}
+        self.assertEqual(built, harness_golden.PLATFORM_ONLY,
+                         "PLATFORM_ONLY and the two `link` arms disagree — every cell one "
+                         "platform can run and the other cannot has to be in the table, "
+                         "under the platform that runs it")
+        self.assertEqual(len(built), sum(len(cs) for cs in arms.values()),
+                         "the two arms share a cell id, so the union cannot represent both")
+
+    def test_the_declaration_is_not_empty_in_either_direction(self):
+        """The positive control. An empty table satisfies both tests above, and an empty
+        table is exactly the state this whole mechanism exists to make impossible."""
+        by_platform = {}
+        for k, v in harness_golden.PLATFORM_ONLY.items():
+            by_platform.setdefault(v, []).append(k)
+        self.assertEqual(sorted(by_platform), ["posix", "win32"],
+                         "PLATFORM_ONLY must name both halves of the partition — a table "
+                         "with one side is a declaration that one platform has no cells")
+        for platform, ids in sorted(by_platform.items()):
+            with self.subTest(platform=platform):
+                self.assertTrue(ids)
+        self.assertTrue(harness_golden.not_run_here(),
+                        "this host claims to run every cell there is, which would mean the "
+                        "two `link` arms had become one program")
+
+    def test_the_verb_table_gate_is_satisfied_by_both_halves(self):
+        """`test_the_matrix_covers_every_verb_it_claims` reads the verb before the `/`, so a
+        platform whose half covered only `link` would leave `unlink` uncovered — on that
+        platform only, where nobody is looking. Checked here for the union, from anywhere."""
+        for platform in ("win32", "posix"):
+            with self.subTest(platform=platform):
+                verbs = {k.split("/")[0] for k, v in harness_golden.PLATFORM_ONLY.items()
+                         if v == platform}
+                self.assertEqual(verbs, {"link", "unlink"}, verbs)
+
+
 @unittest.skipIf(NODE is None, "node is not on PATH")
 class TheAcceptanceHarnessIsNotVacuous(unittest.TestCase):
     """The harness is code, its expectations are code, and five consecutive phases of this

@@ -83,7 +83,18 @@ export const GLYPH = glyphs(TUI_ASCII);
 // compares the run lists — 196 608 inputs, and a range this table gets wrong has nowhere to
 // hide. The comparison is against Python's LIVE `unicodedata`, never against a copy of it,
 // so the day the reference's Unicode version moves under these tables the gate says so
-// instead of agreeing with itself. Generated against unidata 15.1.0.
+// instead of agreeing with itself.
+//
+// THE VERSION IS DECLARED, not left in a comment, and that changed on the day the gate fired
+// for real. `python3.14` ships unidata 16.0.0, which assigned U+0897 a combining class these
+// tables (built from 15.1.0) do not carry — so the sweep went red naming a codepoint, exactly
+// as designed, on a machine whose only difference was the interpreter. That is not a defect
+// in either implementation and it must not read as one: the sweep is a comparison against a
+// SPECIFIC Unicode version, and a comparison is meaningless against a different one. So the
+// version is a constant the test reads, `.github/workflows/ci.yml` pins the interpreter that
+// supplies it, and `tests/test_pure_function_parity.py` asserts the pin and the constant
+// still agree. Regenerating the tables means bumping all three together.
+export const DWIDTH_UNIDATA = '15.1.0';
 
 //: East_Asian_Width W or F, below U+1F000 — above it the reference's own `>= 0x1F000` rule
 //: already answers 2, so the table stops where that rule takes over.

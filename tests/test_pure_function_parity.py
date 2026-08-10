@@ -77,6 +77,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import unittest
 from pathlib import Path
 
@@ -1877,21 +1878,66 @@ class ThePureFunctionsAgreeOnEveryInputNoCellCanBuild(unittest.TestCase):
 # sets and what it unsets — otherwise a developer running this on an SSH session would be
 # measuring a different function from a developer running it locally.
 #
-# WHAT IS STILL NOT REACHED, and it is one branch: the Linux display-server test and the
-# browser lookup underneath it. Every row below answers False at `SSH_*` or True at the
-# browser test on a Windows or macOS machine, and `js/menu.mjs`'s `browserAvailable` declares
-# the divergence it carries there (the reference walks `webbrowser`'s registry; the port asks
-# whether `xdg-open` — the binary `openUrl` will actually run — is on PATH).
+# THE LAST TWO BRANCHES ARE SUPPLIED, NOT INHERITED — and the first Linux run of this suite
+# is why. `plain` used to leave `DISPLAY`, `WAYLAND_DISPLAY`, `BROWSER` and `PATH` to the
+# machine, which on Windows and macOS is harmless (both implementations short-circuit to True
+# before the browser lookup) and on Linux decides the answer. On this developer's WSL box the
+# reference answered True and the port answered False for that row: `webbrowser` found `gio`,
+# and `js/menu.mjs`'s `browserAvailable` asks only for `xdg-open` — the DECLARED divergence in
+# that function's docblock, unreachable from Windows and reached on the first Linux run. The
+# machine's browser is not the input this corpus is about, so it stops being one:
+#
+#   * `_XDG_STUB` puts an executable `xdg-open` on PATH, which BOTH sides find on Linux and
+#     neither consults on Windows or macOS. That is the browser test answering True, by
+#     construction, on every platform — and it is what keeps `test_the_corpus_produced_both
+#     _answers` honest on a headless CI runner instead of "expected to be vacuous there".
+#   * `no-display` unsets both display variables, which is the Linux-only refusal above the
+#     browser test. It answers False on Linux and True on Windows/macOS — the two
+#     implementations agree on BOTH, which is the point, and the row is a real branch on one
+#     platform rather than a row that vanishes on the others.
+#
+# STILL NOT REACHED: the Linux browser lookup answering FALSE. Reaching it means a PATH with
+# no `xdg-open` on it at all, and replacing PATH wholesale is not a thing a probe on Windows
+# survives. `docs/port-ledger.md` carries the row.
 
-#: (name, env-overrides) — `None` UNSETS. Each row is one probe process per side.
+#: A directory holding a stub `xdg-open`, prepended to PATH so the browser lookup has a known
+#: answer. Python's `webbrowser` registers `xdg-open` through `shutil.which` (and only when a
+#: display variable is set, which is why the rows that want True also set `DISPLAY`), and
+#: `pyWhich` is the port's same question — so one file decides both sides.
+def _xdg_stub_dir(base: Path) -> str:
+    d = base / "stubbin"
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / ("xdg-open.cmd" if sys.platform == "win32" else "xdg-open")
+    p.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    p.chmod(0o755)
+    return str(d)
+
+
+#: (name, env-overrides) — `None` UNSETS, and `{stub}` in a value is the stub-bin directory.
+#: Each row is one probe process per side.
 _WEB_FIRST_ENVS = [
-    # The baseline, with every knob the function reads explicitly absent.
-    ("plain", {"GENESEED_NO_WEB": None, "SSH_CONNECTION": None, "SSH_TTY": None}),
+    # The baseline, with every knob the function reads explicitly absent — and the two it
+    # reads on Linux explicitly PRESENT, so this row means the same thing on every host.
+    ("plain", {"GENESEED_NO_WEB": None, "SSH_CONNECTION": None, "SSH_TTY": None,
+               "DISPLAY": ":0", "WAYLAND_DISPLAY": None, "BROWSER": None,
+               "PATH": "{stub}" + os.pathsep + os.environ.get("PATH", "")}),
+    # The display-server refusal: Linux only, False there and True on the platforms that
+    # never ask. Both implementations spell the same `or` over the same two variables, so a
+    # port that read one of them would answer this row differently from the reference.
+    ("no-display", {"GENESEED_NO_WEB": None, "SSH_CONNECTION": None, "SSH_TTY": None,
+                    "DISPLAY": None, "WAYLAND_DISPLAY": None, "BROWSER": None,
+                    "PATH": "{stub}" + os.pathsep + os.environ.get("PATH", "")}),
     # `os.environ.get(...)` is truthy for any non-empty string, and an EMPTY one must NOT
     # opt out — `GENESEED_NO_WEB=` in a shell profile is a common way to write "not set".
     ("opted-out", {"GENESEED_NO_WEB": "1", "SSH_CONNECTION": None, "SSH_TTY": None}),
+    # This row is compared against `plain` BYTE FOR BYTE by `test_an_empty_opt_out_does_not
+    # _opt_out`, so it has to carry `plain`'s display and browser controls too — otherwise
+    # the two rows differ for a reason that has nothing to do with the empty opt-out, which
+    # is precisely how it failed on the first Linux run.
     ("opted-out-with-an-empty-value",
-     {"GENESEED_NO_WEB": "", "SSH_CONNECTION": None, "SSH_TTY": None}),
+     {"GENESEED_NO_WEB": "", "SSH_CONNECTION": None, "SSH_TTY": None,
+      "DISPLAY": ":0", "WAYLAND_DISPLAY": None, "BROWSER": None,
+      "PATH": "{stub}" + os.pathsep + os.environ.get("PATH", "")}),
     # The two SSH knobs are an `or`, so each needs its own row: a port that read only the
     # first would agree with the reference on every case where both are set.
     ("ssh-connection",
@@ -1906,15 +1952,18 @@ _WEB_FIRST_CASES = [{"fn": "web_first_ok", "args": [True]},
 
 @unittest.skipIf(shutil.which("node") is None, "node is not on PATH")
 class TheWebFirstDecisionAgreesOnAnInputNoCellCanGive(unittest.TestCase):
-    """`_web_first_ok`, over the five environments and both answers to `isatty()`."""
+    """`_web_first_ok`, over the six environments and both answers to `isatty()`."""
 
     @classmethod
     def setUpClass(cls):
         cls._tmp = tempfile.TemporaryDirectory()
         cls.home = Path(cls._tmp.name) / "home"
         cls.home.mkdir(parents=True, exist_ok=True)
+        stub = _xdg_stub_dir(Path(cls._tmp.name))
         cls.runs = {}
         for name, env in _WEB_FIRST_ENVS:
+            env = {k: (v.replace("{stub}", stub) if isinstance(v, str) else v)
+                   for k, v in env.items()}
             cls.runs[name] = (
                 _run_seeded([sys.executable, str(PY_PROBE)], _WEB_FIRST_CASES, cls.home,
                             b"", env),
@@ -1961,19 +2010,33 @@ class TheWebFirstDecisionAgreesOnAnInputNoCellCanGive(unittest.TestCase):
         self.assertEqual(self.runs["opted-out-with-an-empty-value"][1],
                          self.runs["plain"][1])
 
+    def test_the_display_refusal_is_linux_only_and_both_sides_know_it(self):
+        """The `no-display` row, absolutely, on whichever platform is running.
+
+        It is one row with two correct answers: a Linux box with no display server cannot
+        show a browser, and Windows and macOS never ask. Naming the platform here rather than
+        skipping the row is deliberate — a skipped row is a row that proves nothing, and the
+        thing worth proving is that BOTH implementations draw the line in the same place.
+        `_exclude_cells`' `remove-a-case-differing-entry` is the same shape."""
+        want = not sys.platform.startswith("linux")
+        for side, raw in zip(("ref", "new"), self.runs["no-display"]):
+            with self.subTest(side=side):
+                self.assertIs(self._results(raw)[0], want)
+
     def test_the_corpus_produced_both_answers(self):
         """The positive control, and this corpus needs one badly: every assertion above is
         satisfied by a function that returns False unconditionally.
 
-        The True comes from `plain` on a TTY. On a headless Linux box it will not, and that
-        is a true statement about that machine rather than a flaky test — the message says
-        so, because a corpus that can only produce one answer is measuring nothing."""
+        The True comes from `plain` on a TTY, and it is a True on EVERY host since the row
+        started supplying the display variable and an `xdg-open` of its own. It used to be
+        inherited, which made this control vacuous on exactly the machines the port is least
+        tested on — a headless Linux runner being the obvious one. A corpus that can only
+        produce one answer is measuring nothing, and one that produces both only on the
+        developer's laptop is measuring the laptop."""
         answers = {v for raw, _ in self.runs.values() for v in self._results(raw)}
         self.assertEqual(answers, {True, False},
                          "every row answered the same way, so this corpus cannot tell a "
-                         "working `_web_first_ok` from one that always refuses. On a "
-                         "headless Linux machine (no DISPLAY, no browser) that is expected "
-                         f"and the gate is vacuous there; this machine is {sys.platform}.")
+                         "working `_web_first_ok` from one that always refuses.")
         self.assertIs(self._results(self.runs["plain"][0])[0], True)
         self.assertIs(self._results(self.runs["plain"][1])[0], True)
 
@@ -2007,6 +2070,24 @@ class TheWebFirstDecisionAgreesOnAnInputNoCellCanGive(unittest.TestCase):
 # moves under `js/tui.mjs`'s tables, this test goes red and names the codepoint — which is
 # the whole difference between a gate and an agreement.
 #
+# AND THAT DAY ARRIVED, on the first Linux run of this suite. `python3.14` carries unidata
+# 16.0.0; the tables are 15.1.0; U+0897 became a combining mark between them and the sweep
+# reported it, correctly, as a divergence. Correctly, and uselessly: neither implementation
+# changed and neither is wrong. A comparison against a live Unicode database is only a
+# comparison at ONE version of it, so the version became a declared input:
+#
+#   * `js/tui.mjs` exports `DWIDTH_UNIDATA` beside the tables it describes.
+#   * The sweep runs only when the interpreter's `unicodedata.unidata_version` matches, and
+#     says out loud which two versions it saw when it does not. A skip is not a pass.
+#   * `.github/workflows/ci.yml` PINS the interpreter, because a floating `python-version`
+#     is a way to disable this gate without touching it, and
+#     `test_ci_pins_an_interpreter_whose_unicode_matches_the_tables` fails if the pin and the
+#     tables drift apart. That test reads both files and runs on every host, so the
+#     declaration is asserted from Windows too.
+#
+# Regenerating the tables for a newer Unicode means moving all three together — which is a
+# deliberate, reviewable change rather than a suite that quietly stops comparing.
+#
 # The surrogate block (U+D800..U+DFFF) is INSIDE the swept range on purpose: `chr(0xD800)`
 # is a lone surrogate to Python and `String.fromCodePoint(0xD800)` is one to JavaScript, and
 # a port that reached for `Buffer`/`TextEncoder` anywhere in `_dwidth` would answer the
@@ -2014,8 +2095,63 @@ class TheWebFirstDecisionAgreesOnAnInputNoCellCanGive(unittest.TestCase):
 # input a panel gets handed by a corrupt file.
 _DWIDTH_SWEEP = (0x0000, 0x30000)
 
+#: CPython minor version -> the `unicodedata.unidata_version` it ships. Only the versions this
+#: project's CI may pin need an entry; an unpinned or unknown one fails the gate below, which
+#: is the point — the mapping is not derivable from a workflow file and guessing it silently
+#: is how the sweep would come back to comparing two different Unicode databases.
+_PYTHON_UNIDATA = {"3.11": "14.0.0", "3.12": "15.0.0", "3.13": "15.1.0", "3.14": "16.0.0"}
+
+_CI_YML = ROOT / ".github" / "workflows" / "ci.yml"
+
+
+def _declared_dwidth_unidata() -> str:
+    """`js/tui.mjs`'s `DWIDTH_UNIDATA`, read out of the CODE beside the tables it describes.
+
+    A regex over the source rather than an import: this is a gate on a declaration, and the
+    only thing that must not be possible is for it to read the same literal the test wants."""
+    src = (ROOT / "js" / "tui.mjs").read_text(encoding="utf-8")
+    m = re.search(r"export const DWIDTH_UNIDATA = '([^']+)';", src)
+    if not m:
+        raise AssertionError("js/tui.mjs no longer declares DWIDTH_UNIDATA — the width "
+                             "tables are a snapshot of one Unicode version and have to say "
+                             "which one")
+    return m.group(1)
+
+
+class TheWidthTablesDeclareTheUnicodeTheyEncode(unittest.TestCase):
+    """The declaration, asserted on every host — including the ones that skip the sweep."""
+
+    def test_the_tables_name_a_unicode_version(self):
+        self.assertRegex(_declared_dwidth_unidata(), r"^\d+\.\d+\.\d+$")
+
+    def test_ci_pins_an_interpreter_whose_unicode_matches_the_tables(self):
+        """A floating `python-version: "3.x"` resolves to whatever is newest on the runner,
+        so the sweep would skip itself the first time CPython shipped a new Unicode — the
+        gate disabled without one line of it being edited. The pin is the fix and this is
+        what holds the pin to the tables."""
+        yml = _CI_YML.read_text(encoding="utf-8")
+        pins = set(re.findall(r'python-version:\s*"([^"]+)"', yml))
+        self.assertTrue(pins, f"{_CI_YML} sets no python-version")
+        for pin in sorted(pins):
+            with self.subTest(pin=pin):
+                self.assertIn(pin, _PYTHON_UNIDATA,
+                              f"ci.yml pins python {pin!r}, which _PYTHON_UNIDATA does not "
+                              "know. Add it — or, if it floats, pin it: the width sweep "
+                              "compares against ONE Unicode version.")
+                self.assertEqual(_PYTHON_UNIDATA[pin], _declared_dwidth_unidata(),
+                                 f"CI runs python {pin} (unidata "
+                                 f"{_PYTHON_UNIDATA[pin]}) but js/tui.mjs's width tables "
+                                 f"are {_declared_dwidth_unidata()} — the sweep would skip "
+                                 "itself on every CI run. Regenerate the tables or move "
+                                 "the pin.")
+
 
 @unittest.skipIf(shutil.which("node") is None, "node is not on PATH")
+@unittest.skipUnless(
+    unicodedata.unidata_version == _declared_dwidth_unidata(),
+    f"the width tables are unidata {_declared_dwidth_unidata()} and this interpreter carries "
+    f"{unicodedata.unidata_version} — a sweep across two Unicode versions compares the "
+    "databases, not the implementations (see this section's header)")
 class TheDisplayWidthAgreesOnEveryCodepointThereIs(unittest.TestCase):
     """`_dwidth` against `dwidth`, over the whole of U+0000..U+2FFFF."""
 

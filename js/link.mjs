@@ -77,7 +77,7 @@ import path from 'node:path';
 import os from 'node:os';
 
 import { ROOT } from './checkout.mjs';
-import { pyPrint, pyPrintErr, writeText } from './lib/pyfs.mjs';
+import { pyPathStr, pyPrint, pyPrintErr, writeText } from './lib/pyfs.mjs';
 
 const IS_WIN = process.platform === 'win32';
 
@@ -166,7 +166,14 @@ export function cmdLink(args) {
   // Unix: symlink the launcher into a bin dir (default ~/.local/bin, no sudo). NO
   // DIVERGENCE HERE — the reference symlinks `ROOT/geneseed`, the shell launcher, and so
   // does this: the target is a file, not an interpreter, so both implementations name it.
-  let targetDir = args.dir ? args.dir : null;
+  // `Path(args.dir)` — and `pyPathStr` is that conversion, not decoration. The reference
+  // builds a `Path` here and prints `str(target_dir)` twice (the PATH notice and the `export
+  // PATH=` line) as well as comparing it against `PATH.split(os.pathsep)`, so an argument
+  // that is not already normalised diverges in three places at once. A trailing slash is the
+  // cheapest one: `str(Path('/x/bin/'))` is `/x/bin` and the raw string is not.
+  // `harness_golden`'s `link/an-explicit-dir-argument-is-used-instead-of-the-default` passes
+  // one, and it is the cell that found this.
+  let targetDir = args.dir ? pyPathStr(args.dir) : null;
   if (targetDir === null) {
     const local = path.join(os.homedir(), '.local', 'bin');
     try {
