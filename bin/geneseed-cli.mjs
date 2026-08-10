@@ -36,7 +36,7 @@
  *
  * THE VERB SET IS SMALL AND REFUSES THE REST BY NAME, exactly as the hook entry does.
  * `harness.py` has 24 subparsers (25 invocable names — `update` aliases `upgrade`); this
- * file carries fifteen. `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two
+ * file carries sixteen of those names, which is fifteen subparsers plus that alias. `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two
  * tables from ever answering the same verb twice, since the shim bakes only one of them.
  *
  * P6h MADE THE DISPATCH ASYNCHRONOUS and put `js/web/` on this entry's import graph. Both
