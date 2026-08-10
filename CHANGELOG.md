@@ -11,11 +11,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Added
 - **`npx geneseed setup` is now the way in, and the README says exactly where that stops
   being true.** The install docs assume npm first: one command, no clone, no Python, on
-  macOS, Linux and Windows alike. **22 of the 25 commands** run from Node, along with all
+  macOS, Linux and Windows alike. **24 of the 25 commands** run from Node, along with all
   four hooks, every web-console endpoint and both generators, producing byte-identical
   output. Three things still need Python and each is now named in the README and the Setup
-  guide rather than discovered: the interactive front-ends `home`, `tui` and `menu` have no
-  Node twin; the self-update commands (`upgrade`, `update`, `sync-self`, `bootstrap`) are for
+  guide rather than discovered: the full-screen browse panel `tui` has no Node twin, and
+  neither does the full-screen menu behind `menu` on a terminal — `geneseed menu` from Node
+  says so and prints the command list, and `geneseed home` opens the web console exactly as
+  it does under Python; the self-update commands (`upgrade`, `update`, `sync-self`, `bootstrap`) are for
   a git checkout and now point an npm install at `npm install -g geneseed@latest` instead of
   telling it to re-clone; and **every bundle carries one Python script**, the `token-report`
   skill's own, which runs when the agent invokes that skill and at no other time. In the web

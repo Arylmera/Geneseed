@@ -1332,6 +1332,22 @@ renders it as the name in parentheses.
   FILENAME — so a rename breaks publishing while the workflow still runs and still mints a
   token. The file names its own filename in the instructions it carries, and the gate asserts
   the two agree, because that self-reference is the only local symptom that exists.
+- **P7a — `menu` and `home`, and the shim the test suite had been rewriting.** Twenty-four of
+  the twenty-five subcommands now run from Node. Both of these are DISPATCHERS, not screens:
+  `cmd_menu` prints a five-line command list off a TTY and hands a terminal to
+  `curses.wrapper(_main_menu)`, and `cmd_home` picks between the web console — already ported
+  — and `cmd_menu`. **On a terminal the Node entry FALLS BACK rather than inventing a second
+  menu**: the reference already has that arm (`import curses` fails on stock Windows Python,
+  and it prints the same list), so the port inherits an answer instead of writing a third user
+  interface that no cell could reach and P7b would delete.
+  **The corpus fakes the TTY**, because every cell's stdin is a pipe and `_web_first_ok`'s
+  four refusals past `isatty()` are executed and never varied — the branch is reachable and
+  the input is not, which is a different kind of hole from an unreachable branch.
+  Separately, and not a port matter at all: six test modules emitted with no `HOME` override
+  and had been rewriting the developer's machine-wide hook shim on every suite run. It left no
+  trace because `_write_hook_shim` skips an unchanged body, so nothing — not even an mtime —
+  moved. `golden.sandbox_process_home()` and `tests/test_home_sandbox.py` close it, and the
+  gate's first finding was a `setUpModule` shadowed by a second one further down the file.
 
 ## 🚫 Explicitly out of scope
 
