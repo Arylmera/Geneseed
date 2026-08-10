@@ -9,6 +9,22 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **`geneseed migrate` moves an existing install to the npm shape, in one pass.** If you
+  installed by cloning the repository, your hooks run through a small machine-wide shim that
+  hands every call to your checkout's Python; installing from npm changes where that code
+  lives. `migrate` surveys every install you already have, re-emits each one **in its own
+  theme, emit, footprint, posture and mode** — nothing is defaulted, so it can never quietly
+  change what you chose — and re-points the shim. `--dry-run` prints the plan and writes
+  nothing. Run it once; a second run says so and does nothing.
+  **It is all-or-nothing**: every settings file it will touch is copied first, and if any
+  install fails to rebuild, everything is put back. You are never left half on one shape and
+  half on the other. **It refuses rather than guesses**: an install whose marker names
+  something unrecognised stops the whole run with the offending path named, because
+  re-emitting an install as something its owner never chose is worse than stopping.
+  **And it does not touch what it did not write** — your own hooks, third-party hooks, and
+  the login autostart entry you created by hand are reported, never rewritten. See the new
+  *Migrate an existing install to npx* page in the docs. Your old clone keeps working for a
+  full release; there is no cliff.
 - **Geneseed is an npm package now — as a file on disk, not yet as something you can
   install.** The repository carries a `package.json` with three commands (`geneseed`,
   `geneseed-hook`, `geneseed-build`), a minimum Node version of 22.3.0, and an explicit list
