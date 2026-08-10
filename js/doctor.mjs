@@ -47,7 +47,7 @@ import {
 } from './native.mjs';
 import { PALETTE_ROLES, colorThemeFiles } from './opencode.mjs';
 import { STRUCTURE, renderAll } from './render.mjs';
-import { hookShimPath } from './settings.mjs';
+import { SHIM_ARGV, hookShimPath } from './settings.mjs';
 import { pySplitLines } from './lib/pydiff.mjs';
 import {
   comparePaths, normcase, parseJson, pyPrint, pyRepr, pyStr, pyWhich, readText,
@@ -529,9 +529,10 @@ export function shimProblems() {
   try { body = readText(p); } catch (e) {
     return [`[shim] ${p} exists but cannot be read (${e.message}) — hooks may be dead`];
   }
-  // The body is machine-generated; both forms quote the two paths and nothing else.
+  // The body is machine-generated and quotes the two baked paths — plus, on POSIX, the argv
+  // placeholder `"$@"`, which is not a path. `SHIM_ARGV` is the single owner of that pair.
   const quoted = [...body.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-  return quoted.filter((q) => !existsSync(q)).map(
+  return quoted.filter((q) => !SHIM_ARGV.has(q) && !existsSync(q)).map(
     (m) => `[shim] ${p} pointed at ${m}, which does not exist — every hook in every `
       + "install was dead (the checkout most likely moved). This run's own "
       + 'emit has refreshed it; no further action needed.',

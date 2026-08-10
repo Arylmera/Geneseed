@@ -208,6 +208,18 @@ def _normalise(data: bytes, roots: list[tuple[str, Path]]) -> bytes:
 # it directly instead — the shim has to exist and name files that exist.
 _SHIM_GLOB = "geneseed-hook"
 
+# The shim's argv placeholder, which is NOT a path — and the first thing the first Linux run
+# of this harness found. `_shim_health` reads every double-quoted token out of the body and
+# requires it to name an existing file. On Windows that rule could not be wrong: the body is
+# `"<runner>" "<entry>" %*` and `%*` is unquoted, so the only quoted tokens ARE the two baked
+# paths. The POSIX body forwards argv as `"$@"` — quoted, because the quoting is what keeps
+# an emitted `--root "<cfg>"` intact — so every hook-writing emit reported its own shim as
+# naming a missing `$@`, on BOTH sides, in 112 of 259 cells. A defect both implementations
+# "share" because it was never in either of them: the gate was the Windows-shaped thing.
+# Named as a set rather than filtered inline so the check stays a check on the two BAKED
+# values, and so `%*` is here too even though it can never match — the pair is the partition.
+_SHIM_ARGV = frozenset({"$@", "%*"})
+
 
 def _files(sandbox: Path) -> set[str]:
     """Every file a cell left behind, POSIX-relative to the sandbox, shim excluded.
@@ -270,7 +282,8 @@ def _shim_health(sandbox: Path, emit: str) -> "str | None":
             body = p.read_text(encoding="utf-8")
         except OSError as e:
             return f"shim {p.name} unreadable: {e}"
-        missing = [q for q in re.findall(r'"([^"]+)"', body) if not Path(q).exists()]
+        missing = [q for q in re.findall(r'"([^"]+)"', body)
+                   if q not in _SHIM_ARGV and not Path(q).exists()]
         if missing:
             return f"shim {p.name} names missing {missing[0]}"
     return None

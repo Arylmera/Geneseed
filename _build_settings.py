@@ -275,6 +275,20 @@ def _merge_opencode_json(path: Path, agent_path: str) -> Path:
 _SHIM_MARK = "geneseed-hook"
 _SHIM_REL = ("bin", _SHIM_MARK + (".cmd" if sys.platform == "win32" else ""))
 
+# The tokens in a shim body that are NOT paths — the argv placeholder, in both spellings.
+#
+# It has to be named because the body is read BACK by two gates that pull every quoted token
+# out of it and require each to be an existing file: `_harness_build._shim_problems` (doctor)
+# and `tests/golden.py:_shim_health`. On Windows that rule cannot be wrong — the body is
+# `"<runner>" "<entry>" %*` and `%*` is bare, so the only quoted tokens ARE the two paths, and
+# both gates carried a comment saying exactly that. The POSIX body forwards argv as `"$@"`,
+# QUOTED, because the quoting is what keeps an emitted `--root "<cfg>"` intact — so on every
+# Linux and macOS install `doctor` reported a healthy shim as "pointed at $@, which does not
+# exist — every hook in every install was dead", and `build --validate-only` failed with it.
+# Found by the first Linux run of the cell harnesses; unreachable from Windows by
+# construction. Both spellings live here so the pair is a partition rather than a POSIX patch.
+_SHIM_ARGV = frozenset({"$@", "%*"})
+
 
 def _shim_home() -> Path:
     """User-global Geneseed dir. GENESEED_HOME relocates it (mirrors the GENESEED_HARNESS

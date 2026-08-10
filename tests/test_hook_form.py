@@ -4,8 +4,10 @@ job, and '|| exit 0' would make a crashing gate fail OPEN — silently permissiv
 exactly the acts (commit/push, writing a rule or a memory) that need the user's word."""
 import contextlib
 import io
+import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -174,6 +176,58 @@ class HookShimTests(unittest.TestCase):
         probs = _harness_build._shim_problems()
         self.assertTrue(probs, "a shim pointing at a missing interpreter went unreported")
         self.assertTrue(all("[shim]" in x for x in probs), probs)
+
+    def test_neither_shim_shape_reports_its_own_argv_placeholder(self):
+        """BOTH bodies, on whatever host is running — and this is the gate for the bug that
+        the first Linux run of the cell harnesses found.
+
+        `_shim_problems` pulls every double-quoted token out of the body and requires each to
+        name an existing file. On Windows the body is `"<runner>" "<entry>" %*` and `%*` is
+        bare, so the rule cannot be wrong there; the POSIX body ends `"$@"`, QUOTED, because
+        the quoting is what keeps an emitted `--root "<cfg>"` intact. So every Linux and macOS
+        install had `doctor` reporting a perfectly healthy shim as `pointed at $@, which does
+        not exist — every hook in every install was dead`, and `build --validate-only` failed
+        on it. Both implementations, because the port copied the rule faithfully.
+
+        The shape under test is not the running platform's: the body is WRITTEN here, both
+        ways, so a Windows CI job gates the POSIX arm and a Linux one gates the Windows arm.
+        Otherwise this is the same test that could not see the bug for ten phases."""
+        sys.path.insert(0, str(_build_core.ROOT / "rituals"))
+        import _harness_build  # noqa: E402
+        p = _build_settings._hook_shim_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        runner, entry = _build_settings._hook_runner_entry()
+        bodies = {
+            "posix": f'#!/bin/sh\nexec "{runner}" "{entry}" "$@"\n',
+            "win32": f'@echo off\r\nsetlocal\r\n"{runner}" "{entry}" %*\r\nexit /b\r\n',
+        }
+        for name, body in bodies.items():
+            with self.subTest(shim=name):
+                p.write_text(body, encoding="utf-8", newline="")
+                self.assertEqual(_harness_build._shim_problems(), [],
+                                 f"the {name} shim shape reports itself as broken")
+        # THE POSITIVE CONTROL, in the same shape: the filter must exempt the placeholder and
+        # nothing else, so a POSIX body whose interpreter really is gone still reports — and
+        # reports the INTERPRETER, never the `$@` beside it.
+        p.write_text('#!/bin/sh\nexec "/gone/python" "/gone/harness.py" "$@"\n',
+                     encoding="utf-8", newline="")
+        probs = _harness_build._shim_problems()
+        self.assertEqual(len(probs), 2, probs)
+        self.assertNotIn("$@", " ".join(probs))
+
+    @unittest.skipIf(shutil.which("node") is None, "node is not on PATH")
+    def test_the_port_exempts_the_same_two_tokens(self):
+        """The cross-implementation half. `js/doctor.mjs` carried the identical rule and the
+        identical comment, so the bug is one both implementations share — the shape a byte
+        comparison is structurally blind to. Two literal sets are two places to be wrong; this
+        reads the port's out of the running module and requires it to equal Python's."""
+        out = subprocess.run(
+            ["node", "--input-type=module", "-e",
+             "const m = await import('file://' + process.argv[1]);"
+             "process.stdout.write(JSON.stringify([...m.SHIM_ARGV].sort()));",
+             "--", str(_build_core.ROOT / "js" / "settings.mjs")],
+            capture_output=True, text=True, encoding="utf-8", check=True)
+        self.assertEqual(json.loads(out.stdout), sorted(_build_settings._SHIM_ARGV))
 
     def test_doctor_gate_is_silent_when_no_shim_exists(self):
         """A source checkout that has never emitted owns no shim, and `_hook_prefix`

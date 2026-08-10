@@ -506,5 +506,38 @@ class AliasTests(unittest.TestCase):
         self.assertEqual(_update.main(["frobnicate"]), 2)
 
 
+class TheHandoffKeepsWhatWasAlreadyPrinted(unittest.TestCase):
+    """`_harness_lifecycle._reexec`, off a terminal, on whichever platform is running.
+
+    THE CONTRACT IS THE SAME ON BOTH AND ONLY ONE CAN BREAK IT. Windows has no `exec`, so
+    that branch runs the successor as a child and this process's buffers are flushed at exit
+    as usual. POSIX calls `os.execv`, which replaces the process IMAGE — Python's stdio
+    buffers go with it, and off a terminal stdout is block-buffered, so everything printed
+    since the last flush is discarded. `geneseed bootstrap > log.txt` lost `[geneseed] ✓
+    update complete.` on every Unix run, for as long as the verb has existed.
+
+    Written as a subprocess with a PIPE for stdout, because a terminal is exactly the
+    condition under which the bug does not happen: line buffering had already written the
+    line. The child is spelled with the real `_reexec` rather than a stand-in, and the
+    successor prints a second marker so a `_reexec` that silently did nothing fails too."""
+
+    def test_nothing_printed_before_the_handoff_is_lost(self):
+        script = (
+            "import sys, os\n"
+            f"sys.path.insert(0, {str(ROOT / 'rituals')!r})\n"
+            f"sys.path.insert(0, {str(ROOT)!r})\n"
+            "import _harness_lifecycle as L\n"
+            "print('BEFORE-THE-HANDOFF')\n"
+            "L._reexec([sys.executable, '-c', \"print('AFTER-THE-HANDOFF')\"])\n"
+        )
+        r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
+                           encoding="utf-8", env=dict(os.environ, PYTHONUTF8="1"))
+        self.assertIn("AFTER-THE-HANDOFF", r.stdout,
+                      f"the successor never ran: {r.stderr!r}")
+        self.assertIn("BEFORE-THE-HANDOFF", r.stdout,
+                      "the handoff discarded this process's buffered stdout — os.execv "
+                      f"replaces the image, buffers included. stderr was {r.stderr!r}")
+
+
 if __name__ == "__main__":
     unittest.main()

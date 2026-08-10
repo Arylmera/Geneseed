@@ -463,6 +463,16 @@ def _reexec(argv: list) -> None:
     over input — so run the child as a normal subprocess and exit with its code."""
     if sys.platform.startswith("win"):
         raise SystemExit(subprocess.run(argv).returncode)
+    # FLUSH FIRST. `os.execv` replaces this process IMAGE, and Python's own stdio buffers go
+    # with it — everything printed since the last flush is simply gone. Off a terminal stdout
+    # is block-buffered, so `geneseed bootstrap > log.txt` lost `[geneseed] ✓ update complete.`
+    # (and any diagnosis printed after the last spawn) on every Unix run. Invisible on
+    # Windows, which never reaches this line, and invisible from a terminal, where
+    # line-buffering had already written it. `tests/harness_golden.py`'s
+    # `bootstrap/without-no-setup-it-hands-off-to-a-FRESH-setup-process` is what caught it,
+    # the first time it ran on Linux.
+    sys.stdout.flush()
+    sys.stderr.flush()
     os.execv(argv[0], argv)
 
 

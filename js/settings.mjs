@@ -283,6 +283,17 @@ function pyOsError(e) {
 // and a relocated install's hooks must stay recognisable to `GENESEED_HOOK_SNIFF`.
 export const SHIM_MARK = 'geneseed-hook';
 
+/**
+ * `_build_settings._SHIM_ARGV` — the tokens in a shim body that are NOT paths.
+ *
+ * `shimProblems` reads every quoted token back out of the body and requires each to name an
+ * existing file. On Windows that is exactly the two baked paths (`%*` is bare); on POSIX the
+ * body forwards argv as `"$@"`, quoted, so both implementations' `doctor` reported a healthy
+ * shim as dead on every Linux and macOS host. A defect the port faithfully inherited, and
+ * one no Windows cell could see.
+ */
+export const SHIM_ARGV = new Set(['$@', '%*']);
+
 /** `_SHIM_REL`, with the platform as an argument.
  *
  * Python computes it at IMPORT time from `sys.platform`, which is what makes the other

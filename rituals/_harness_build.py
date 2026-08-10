@@ -709,9 +709,12 @@ def _shim_problems() -> list[str]:
         body = p.read_text(encoding="utf-8")
     except OSError as e:
         return [f"[shim] {p} exists but cannot be read ({e}) — hooks may be dead"]
-    # The body is machine-generated; both forms quote the two paths and nothing else.
+    # The body is machine-generated and quotes the two baked paths — plus, on POSIX, the
+    # argv placeholder `"$@"`, which is not a path and never was one. `build._SHIM_ARGV` is
+    # the single owner of that pair; see it for what this line reported on every non-Windows
+    # host until the harnesses were first run on Linux.
     quoted = re.findall(r'"([^"]+)"', body)
-    missing = [q for q in quoted if not Path(q).exists()]
+    missing = [q for q in quoted if q not in build._SHIM_ARGV and not Path(q).exists()]
     if missing:
         return [f"[shim] {p} pointed at {m}, which does not exist — every hook in every "
                 f"install was dead (the checkout most likely moved). This run's own "
