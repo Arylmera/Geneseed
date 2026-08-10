@@ -1260,6 +1260,40 @@ renders it as the name in parentheses.
   spells the field `githubSlug`; the wire format spells it `repo_is_github`. Reading the wire
   name off the record gives `undefined` — a perfectly plausible `false` that silently drops
   every github deep link on the page and changes nothing else.
+- **`link` and `unlink` cross — 21 of 24 — and the two defects only an INSTALL could see are
+  fixed in the RENDERER.** `npm install` renames every `.gitignore` to `.npmignore` on
+  extraction, and `npm pack` honours nested ignore files: so an npm-installed Geneseed emitted
+  bundles with no `memory/.gitignore` and no `notebook/.gitignore` (the agent's private stores,
+  committable in the user's repo, silently) and no `notebook/README.md` (loudly — 84 doctor
+  problems). The manifest, the pack report and the tarball were all clean; **only the extracted
+  tree disagreed.** The fix is four lines: the two source files are stored as `gitignore` and
+  `dest_rel` puts the dot back, beside the `AGENT.md.tmpl` rule that was already there — so the
+  emitted bytes are IDENTICAL and 259 golden cells stayed green across a change to the
+  renderer. The recommended alternative (assert them from constants) would have moved the file
+  COUNT in every cell; measuring is what said so. **The second call site is the one a review
+  misses**: `_global_memory`/`_global_notebook` seed from the SOURCE path, not the rendered
+  one, so a fix in `dest_rel` alone is right for `--emit files` and wrong for every global
+  emit. `private` came off, gated by a test that runs the INSTALLED generator and diffs its
+  bundle against the checkout's.
+  **The verbs ship because of the WEB CONSOLE, not the CLI.** npm's own bin linking already
+  puts `geneseed` on PATH, so under npm these two are near-vestigial — but the Settings page
+  POSTs them in both implementations, and emptying `NOT_PORTED_ACTIONS` meant either porting
+  the verbs or deleting two buttons and rebuilding the tracked `web/dist`. Deleting takes a
+  working feature from checkout users, for whom `link` is the only thing that puts `geneseed`
+  on PATH at all.
+  **The shim is P5b's divergence again — Node bakes node** — normalised by a fifth `_STAMPS`
+  entry with the debt paid absolutely per runtime; and the reference's `Path.write_text` turns
+  its own `\r\n` into `\r\r\n`, which the port reproduces because `writeText` already carries
+  that rule.
+  **`_win_user_path` edits the registry, so the CODE was shaped to be gateable rather than the
+  fixture stretched.** The PowerShell script builder is split out and compared over a corpus
+  (apostrophes, UNC roots, a `;` inside the path); the cells reach both branches by handing the
+  verb a `PATH` that is the sandbox bin dir and nothing else — `link` short-circuits, `unlink`
+  finds no `powershell`. The SUCCESS arm stays ungated in both implementations, and says so.
+  **Emptying the set cost a probe.** With no unported action left, `test_web_server.py`'s
+  running 501 probe had no target and none could be borrowed — every remaining action starts a
+  job or edits the real PATH — so the claim fell back to an `ast` check on the declaration,
+  which is strictly weaker. Named rather than quietly dropped.
 
 ## 🚫 Explicitly out of scope
 
