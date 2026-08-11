@@ -704,7 +704,7 @@ class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
     # no_python.test.mjs asserts it is empty. Until then README.md, SETUP.md and
     # SHIPPED.md say three, because saying one was false.
     PYTHON_IN_THE_PRODUCT_FILES = ["src/skills/token-report/scripts/token_report.py"]
-    PYTHON_IN_THE_PRODUCT_INVOCATIONS = [
+    PYTHON_IN_THE_PRODUCT_INVOCATIONS = [  # Unused until the phase that empties it (P4 and later).
         "src/skills/daydream/instructions.md",   # `python3 -c` for random sampling
         "src/skills/herdr.md",                   # `| python3 -c 'import sys,json; ...'` x2
     ]
@@ -712,13 +712,14 @@ class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
     # Python that is tracked in this repository but never rides inside a rendered
     # bundle: the reference implementation this port is replacing (`rituals/`, the root
     # `_build_*.py` facade, `build.py`, `_install_registry.py`), and `.claude/` — this
-    # repository's OWN deployed harness (WITHHELD above: "not the product"), which
-    # carries a second tracked copy of the token-report script because this repo is its
-    # own dogfooded install.
-    _NOT_THE_PRODUCT_PREFIXES = ("tests/", "rituals/", ".claude/")
+    # repository's OWN deployed harness (WITHHELD above: "not the product"). The `.claude/`
+    # directory is watched file-by-file rather than excluded by prefix, so a NEW Python file
+    # appearing there is caught rather than silently permitted.
+    _NOT_THE_PRODUCT_PREFIXES = ("tests/", "rituals/")
     _NOT_THE_PRODUCT_FILES = frozenset({
         "build.py", "_install_registry.py", "_build_core.py", "_build_emit.py",
         "_build_global.py", "_build_render.py", "_build_settings.py",
+        ".claude/skills/token-report/scripts/token_report.py",
     })
 
     def _found(self) -> set[str]:
