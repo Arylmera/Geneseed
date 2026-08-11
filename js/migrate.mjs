@@ -239,9 +239,13 @@ export function cmdMigrate(args = {}) {
 
   // Step 5 — what could NOT be fixed automatically. Reported, never rewritten: nothing in
   // this repository has ever written an autostart entry, so migrate does not own the file.
+  // The `start` ACTION is load-bearing, not decoration: bare `web` runs `serve()` in the
+  // FOREGROUND with `daemon=false`, which never writes the daemon record, so `web stop`,
+  // `web restart` and `web status` stay blind to the server this note just told someone to
+  // launch at every login. Derived, not trusted: `TheMigrateNoteAdvisesARealWebAction`.
   for (const p of autostartFindings()) {
     pyPrint(`[migrate] NOTE: the autostart entry at ${p} still names another checkout — `
-      + 'update it by hand to run: geneseed web --no-browser\n');
+      + 'update it by hand to run: geneseed web start --no-browser\n');
   }
   return 0;
 }

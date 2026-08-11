@@ -3688,7 +3688,7 @@ def _migrate_cells() -> list[dict]:
            dict(_claude_install(_REAL_CLAUDE_SETTINGS), **{_VBS_REL: _STARTUP_VBS}),
            expect=["[migrate] migrated 1 install(s).",
                    "still names another checkout",
-                   "geneseed web --no-browser"],
+                   "geneseed web start --no-browser"],
            # The file is in the snapshot, so the byte comparison is what proves it was not
            # rewritten — and it is seeded with a path this run cannot produce.
            expect_files=[_VBS_REL]),

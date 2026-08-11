@@ -5,7 +5,7 @@ already gates the counts that come out of `src/`: laws, agents, skills, themes a
 since P10e — plugins. This module gates the other kind of counting sentence, the one
 `src/` cannot answer: **what a reader is promised about the two runtimes.**
 
-Six claims, and each one was wrong at least once during this port:
+Seven claims, and each one was wrong at least once during this port:
 
 * **"these commands have no Node twin"** — derived from `cli.json`'s subparser list
   minus the two Node entry tables. Transcribing that list is exactly the
@@ -26,6 +26,9 @@ Six claims, and each one was wrong at least once during this port:
 * **the publish workflow** — see `ThePublishWorkflowIsDeliberate`. npm's trusted
   publisher is keyed on the workflow's FILENAME, so a rename silently breaks
   publishing in a way nothing local can detect.
+* **the argv `migrate` tells you to paste into a login item** — see
+  `TheMigrateNoteAdvisesARealWebAction`. A report string that hands the reader a
+  command is a doc, and it shipped wrong: it named no `web` action at all.
 
 None of this parses YAML: the harness is stdlib-only and always has been. The
 structural claims are made as text assertions over the file, and the real parse
@@ -33,6 +36,7 @@ happens where the file actually runs.
 """
 from __future__ import annotations
 
+import ast
 import json
 import re
 import unittest
@@ -490,6 +494,131 @@ class ThePublishWorkflowIsDeliberate(unittest.TestCase):
         wf = self._workflow()
         for i, line in enumerate(wf.read_text(encoding="utf-8").splitlines(), 1):
             self.assertNotIn("\t", line, f"{wf.name}:{i} contains a tab")
+
+
+class TheMigrateNoteAdvisesARealWebAction(unittest.TestCase):
+    """`migrate` hands the reader an argv to paste into a login item. That argv is a
+    doc, and it is gated here against the parser metadata both implementations already
+    read — never against a copy of the sentence.
+
+    It shipped wrong, on a real machine: the note advised `geneseed web --no-browser`,
+    which names **no action**, so it falls through `cmd_web`'s dispatch into
+    `serve(daemon=False)`. That path never writes the daemon record, so `web stop`,
+    `web restart` and `web status` cannot see the server the user was just told to
+    launch at every login — and a later `web start` orphans a second one on a taken
+    port. It is the exact failure `SETUP.md`'s autostart section exists to warn about.
+
+    **Why not just assert the corrected sentence.** A literal check only re-transcribes
+    the bug's shape: it is green for whatever string was typed last, so it says yes to
+    the next wrong one just as readily. These assertions derive what a valid `web`
+    invocation *is* — the launcher name from `package.json`'s `bin`, the verb, its
+    action `choices` and its option names from `cli.json`, and the branch that actually
+    daemonises from `cmd_web`'s own dispatch. Advice naming no action, an action that
+    is not offered, an unknown flag, or an action that does not daemonise each fails,
+    and each fails by name.
+
+    Every scrape below is fail-closed: finding nothing raises rather than passing.
+    """
+
+    # The advice, as it is written in each implementation. `harness_golden` proves the two
+    # print the same bytes; this reads the SOURCE, so it still holds for the arm no cell
+    # reaches, and it is what makes the two files' drift visible as drift.
+    _SOURCES = (Path("rituals") / "_harness_build.py", Path("js") / "migrate.mjs")
+    _ADVICE_RE = re.compile(r"update it by hand to run: (.+?)(?:\\n)?['\"]")
+
+    def _advice(self, rel: Path) -> str:
+        found = self._ADVICE_RE.findall(_read(ROOT / rel))
+        self.assertEqual(len(found), 1,
+                         f"{rel.as_posix()} should carry exactly one 'update it by hand "
+                         f"to run:' advice, found {len(found)} — a scrape that matches "
+                         "nothing must fail here, not pass silently")
+        return found[0].strip()
+
+    def test_both_implementations_advise_the_same_argv(self):
+        py, js = (self._advice(p) for p in self._SOURCES)
+        self.assertEqual(py, js, "the Python reference and js/migrate.mjs advise "
+                                 "different commands; harness_golden compares their "
+                                 "bytes, so one of them is about to go red")
+
+    def test_the_advice_names_a_launcher_this_package_installs(self):
+        """`cli.json`'s `prog` is `harness` — the launcher name is the npm `bin` key, so
+        that is where it is derived from."""
+        bins = json.loads(_read(ROOT / "package.json"))["bin"]
+        for rel in self._SOURCES:
+            token = self._advice(rel).split()[0]
+            self.assertIn(token, bins,
+                          f"{rel.as_posix()} advises running '{token}', which is not one "
+                          f"of the commands this package installs ({sorted(bins)})")
+
+    def test_the_advice_names_a_real_web_action(self):
+        """The regression itself: an argv that names no action is not a daemon."""
+        spec = json.loads(_read(ROOT / "cli.json"))
+        commands = {c["name"]: c for c in spec["commands"]}
+        self.assertGreater(len(commands), 20, "cli.json parsed to almost nothing")
+        for rel in self._SOURCES:
+            tokens = self._advice(rel).split()[1:]
+            verb, rest = tokens[0], tokens[1:]
+            self.assertIn(verb, commands, f"{rel.as_posix()} advises the verb '{verb}', "
+                                          "which cli.json does not declare")
+            cmd = commands[verb]
+            known = {n for o in cmd["options"] for n in o["names"]}
+            positional = [t for t in rest if not t.startswith("-")]
+            for flag in (t for t in rest if t.startswith("-")):
+                self.assertIn(flag, known, f"{rel.as_posix()} advises '{flag}', which is "
+                                           f"not an option of `{verb}`")
+            choices = [p["choices"] for p in cmd["positionals"] if p["choices"]]
+            self.assertEqual(len(choices), 1,
+                             f"`{verb}` no longer has exactly one positional with "
+                             "choices — this gate needs re-aiming, not deleting")
+            self.assertEqual(len(positional), 1,
+                             f"{rel.as_posix()} advises `{verb}` with {len(positional)} "
+                             f"action(s), {positional} — an autostart entry must name "
+                             f"one of {choices[0]}, or it runs the foreground path that "
+                             "writes no daemon record")
+            self.assertIn(positional[0], choices[0],
+                          f"{rel.as_posix()} advises the action '{positional[0]}', which "
+                          f"`{verb}` does not offer")
+
+    def test_the_advised_action_is_the_one_that_daemonises(self):
+        """Naming *an* action is not enough — `web stop --no-browser` would satisfy the
+        grammar. The branch the advice reaches must be the one that spawns the detached,
+        record-writing daemon, and that is read out of `cmd_web`'s own dispatch."""
+        dispatch = _web_dispatch()
+        for rel in self._SOURCES:
+            action = [t for t in self._advice(rel).split()[2:] if not t.startswith("-")][0]
+            self.assertIn(action, dispatch,
+                          f"cmd_web has no `action == {action!r}` branch — the advice in "
+                          f"{rel.as_posix()} reaches the fallthrough, which is "
+                          "`serve()` in the foreground")
+            self.assertTrue(any(n.endswith("start_daemon") for n in dispatch[action]),
+                            f"{rel.as_posix()} advises `web {action}`, whose branch calls "
+                            f"{sorted(dispatch[action])} — none of which starts the "
+                            "daemon that writes the record `web stop` reads")
+
+
+def _web_dispatch() -> dict[str, set[str]]:
+    """`cmd_web`'s action dispatch, read from the source: action -> the methods its
+    branch calls. Static because the alternative is importing the TUI module, which
+    pulls curses in on Windows for no gain here."""
+    tree = ast.parse(_read(ROOT / "rituals" / "_harness_tui.py"))
+    fns = [n for n in ast.walk(tree)
+           if isinstance(n, ast.FunctionDef) and n.name == "cmd_web"]
+    if len(fns) != 1:
+        raise AssertionError(f"expected one cmd_web in _harness_tui.py, found {len(fns)}")
+    out: dict[str, set[str]] = {}
+    for node in ast.walk(fns[0]):
+        if not (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)):
+            continue
+        test = node.test
+        if not (isinstance(test.left, ast.Name) and test.left.id == "action"
+                and len(test.ops) == 1 and isinstance(test.ops[0], ast.Eq)
+                and isinstance(test.comparators[0], ast.Constant)
+                and isinstance(test.comparators[0].value, str)):
+            continue
+        called = {c.func.attr for c in ast.walk(node)
+                  if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)}
+        out.setdefault(test.comparators[0].value, set()).update(called)
+    return out
 
 
 if __name__ == "__main__":
