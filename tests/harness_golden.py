@@ -4214,6 +4214,50 @@ _GIT_FIXTURE_ENV = {
 #: same belt-and-braces as `_web_cells`' port 1.)
 _NO_NETWORK_ENV = {"GIT_ALLOW_PROTOCOL": "file", "GIT_TERMINAL_PROMPT": "0"}
 
+#: NO BACKGROUND GIT, IN ANY REPOSITORY THIS FIXTURE CREATES.
+#:
+#: `validate (ubuntu-latest)` died once inside `_git_template`, on attempt 1 of a run whose
+#: attempt 2 — and whose sibling run at the same SHA — were both green:
+#:
+#:     fatal: failed to copy file to
+#:     '/tmp/gs-upgrade-tpl-…/origin.git/objects/99/fc2a…': No such file or directory
+#:
+#: That message comes from ONE place: `git clone`'s local copy path, which readdirs the
+#: source repository's loose object store and then links-or-copies the files one at a time.
+#: It says an object git had already enumerated was gone by the time the copy reached it,
+#: and the only thing that removes a loose object is a repack. The fixture starts one
+#: ITSELF, three times: each `git commit` ends in `git maintenance run --auto --quiet
+#: --detach`, which detaches and keeps running while the next fixture command does its
+#: work. `GIT_TRACE2_EVENT` over a real `_git_template()` names all three.
+#:
+#: WHAT IS MEASURED AND WHAT IS NOT, because this fixture does not get to assert a race it
+#: never reproduced. Measured on Linux: the seed holds 600 loose objects for a 545-file
+#: copy, git's `gc --auto` estimator samples `objects/17` and finds 4 against a threshold of
+#: 27, and the seed still holds 600 loose objects and no pack when the build returns — so
+#: on THIS git and THIS object count, auto-maintenance decides there is nothing to do, and
+#: 15 attempts at forcing the copy path to lose a file underneath it reproduced nothing. Not measured, and not knowable from here: what that estimator says on
+#: a different git, a different object count (`_copy_checkout` copies `--cached --others`,
+#: so an untracked file on the machine changes it) or a runner under load.
+#:
+#: So the fix is not a bet on the estimator's verdict — it REMOVES THE PROCESS. A repository
+#: whose own config says `gc.auto=0` never spawns the detached child at all, so there is
+#: nothing running against the object store the clone is reading, whatever git would have
+#: decided. It is written into the repo's OWN config at creation rather than passed at a
+#: call site, so it holds for every later invocation — including the ones the VERB under
+#: test makes: `upgrade` runs `git fetch`, and a fetch triggers the same detached child in
+#: the cell's own clone, where it is also a candidate author of the teardown race
+#: `tests/test_sandbox_paths.py::TheTeardownCannotRaise` exists for (a background git still
+#: writing into a checkout while `rmtree` walks it).
+#:
+#: Gated by `tests/test_sandbox_paths.py`, which reads the setting back out of all three
+#: repositories the fixture creates rather than checking how the flags were spelled.
+_AUTO_MAINTENANCE_OFF = (("gc.auto", "0"), ("maintenance.auto", "false"))
+
+#: The same two settings as `git clone` arguments. `clone -c <key>=<value>` writes them into
+#: the NEW repository's config, so a clone is one invocation rather than a clone plus two
+#: `git config` spawns per cell.
+_CLONE_MAINTENANCE_OFF = [a for k, v in _AUTO_MAINTENANCE_OFF for a in ("-c", f"{k}={v}")]
+
 _TEMPLATE: "dict | None" = None
 
 
@@ -4255,6 +4299,28 @@ def _git_template() -> dict:
                     reach it: doctor is what gates the pull, so a fixture with no failing
                     upstream cannot tell "validated" from "did not validate".
       * (`main` at its tip, unreset) = uptodate.
+
+    THE BARE CLONE IS `--no-local`, which is the second half of the CI flake above and the
+    only one of the two that is a claim about THIS code rather than about a process that
+    should not be running. `--no-local` sends the clone through git's transport — an
+    upload-pack negotiation and one pack — instead of the file-by-file walk of 600 loose
+    objects that produced `failed to copy file to …`. It is the reader's half: the config
+    above removes the concurrent writer, and this removes the code path that cannot survive
+    one.
+
+    IT ALSO COSTS NOTHING, MEASURED. The bare clone goes 0.01s -> 0.22s, ONCE per run, and
+    the origin it builds is a single pack instead of 600 loose files — which is what every
+    per-cell `git clone --local` then hardlinks, 3 files instead of 600, 0.04s -> 0.03s.
+    Across a group of upgrade cells the run gets the fifth of a second back and then some.
+    `GIT_ALLOW_PROTOCOL=file` is already in `_NO_NETWORK_ENV`, which is what lets the local
+    transport run at all — and it still refuses everything else, so the no-network proof is
+    untouched. The refs are the same either way (`refs/heads/main`, `refs/heads/broken`,
+    checked), so nothing downstream can tell the two clones apart.
+
+    The per-cell clone in `_clone_checkout` stays `--local`: it is the one that runs twice
+    per cell, hardlinks are why it is 0.03s, and nothing ever writes to the bare origin
+    after this function returns — so the race that killed the clone above has no author
+    there.
     """
     global _TEMPLATE
     if _TEMPLATE is not None:
@@ -4269,6 +4335,9 @@ def _git_template() -> dict:
     # the pulled files on one machine and LF on another, and `doctor` reads them.
     _fixture_git(seed, "config", "core.autocrlf", "false")
     _fixture_git(seed, "config", "core.fileMode", "false")
+    # Before the first commit, because a commit is what spawns the detached child.
+    for key, value in _AUTO_MAINTENANCE_OFF:
+        _fixture_git(seed, "config", key, value)
     _fixture_git(seed, "add", "-A", "--force")
     rc, out = _fixture_git(seed, "commit", "-q", "-m", "geneseed fixture: the base commit")
     if rc != 0:
@@ -4289,7 +4358,8 @@ def _git_template() -> dict:
     _fixture_git(seed, "commit", "-q", "-m", "upstream: a commit that fails validation")
     _fixture_git(seed, "checkout", "-q", "main")
     origin = tpl / "origin.git"
-    rc, out = _fixture_git(seed, "clone", "-q", "--bare", str(seed), str(origin))
+    rc, out = _fixture_git(seed, "clone", "-q", "--bare", "--no-local",
+                           *_CLONE_MAINTENANCE_OFF, str(seed), str(origin))
     if rc != 0 or not (origin / "HEAD").is_file():
         raise RuntimeError(f"the upgrade fixture could not build its bare origin: {out}")
     _TEMPLATE = {"dir": tpl, "origin": origin, "base": sha_a}
@@ -4313,7 +4383,7 @@ def _clone_checkout(dst: Path, state: str, faults: dict) -> None:
     tpl = _git_template()
     branch = "broken" if state == "broken" else "main"
     rc, out = _fixture_git(dst.parent, "clone", "--local", "-q", "--branch", branch,
-                           str(tpl["origin"]), str(dst))
+                           *_CLONE_MAINTENANCE_OFF, str(tpl["origin"]), str(dst))
     if rc != 0:
         raise RuntimeError(f"the upgrade fixture could not clone its template: {out}")
     _fixture_git(dst, "config", "core.autocrlf", "false")

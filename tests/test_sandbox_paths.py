@@ -19,7 +19,9 @@ code. Every test below refuses to run rather than pass vacuously if the alias it
 not actually a different spelling of the same directory.
 
 The third property is the teardown, which the Linux job found by dying of it: a cleanup
-race in a harness that had already finished comparing 318 cells.
+race in a harness that had already finished comparing 318 cells. The fourth is the same
+shape again — a Linux-only, load-dependent fixture race — and it is gated the only way a
+race can be: by asserting the CONFIGURATION that makes it unreachable.
 """
 import ast
 import ctypes
@@ -34,6 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import golden  # noqa: E402
+import harness_golden  # noqa: E402
 
 
 def _alias_of(real: str) -> "str | None":
@@ -214,6 +217,57 @@ class TheTeardownCannotRaise(unittest.TestCase):
             for lift in lifts:
                 lift()
             shutil.rmtree(kept, ignore_errors=True)
+
+
+class TheUpgradeFixtureStartsNoBackgroundGit(unittest.TestCase):
+    """`validate (ubuntu-latest)` died once in `_git_template`, and only once:
+
+        fatal: failed to copy file to '…/origin.git/objects/99/fc2a…': No such file or
+        directory
+
+    — `git clone`'s local copy path finding that an object it had enumerated a moment
+    earlier was gone when the copy reached it. Attempt 2 of that run and the sibling run at
+    the same SHA were both green, which is what a race is. The fixture's own commits are
+    what start the only other git process in that sequence: every `git commit` ends in
+    `git maintenance run --auto --quiet --detach`, which detaches and keeps running while
+    the next fixture command reads the object store. `harness_golden._AUTO_MAINTENANCE_OFF`
+    carries the reasoning and the measurements.
+
+    A RACE CANNOT BE GATED BY REPRODUCING IT, so this gates the configuration that makes it
+    unreachable — and it reads the setting back out of the repository rather than checking
+    that the invocation carried a flag, because the flags are spelled two different ways
+    already (a `git config` for the `git init`ed seed, a `clone -c` for the two clones) and
+    a third spelling should not be a red gate.
+
+    IT ASKS GIT WHAT THE SETTING MEANS, not what it says: `--type=bool` reads `false`, `0`
+    and `no` alike, so the gate survives a rewording of the value and still fails on its
+    absence. And it reads through `_fixture_git`, whose `GIT_CONFIG_GLOBAL`/`SYSTEM` are
+    `os.devnull` — so a value can only have come from the repository itself, never from the
+    `gc.auto` a developer or a runner image happens to have set globally."""
+
+    def _setting(self, repo, type_flag: str, key: str) -> str:
+        rc, out = harness_golden._fixture_git(repo, "config", type_flag, "--get", key)
+        self.assertEqual(rc, 0, f"`git config --get {key}` failed in {repo}: {out!r} — the "
+                                f"fixture repository has no such setting at all")
+        return out
+
+    def test_every_repository_the_fixture_creates_has_auto_maintenance_off(self):
+        tpl = harness_golden._git_template()
+        with golden.sandbox(prefix="gs-autogc-") as sb:
+            checkout = Path(sb) / "checkout"
+            harness_golden._clone_checkout(checkout, "ready", {})
+            for name, repo in (("the template seed", tpl["dir"] / "seed"),
+                               ("the bare origin", tpl["origin"]),
+                               ("a cell's own clone", checkout)):
+                with self.subTest(repo=name):
+                    self.assertEqual(
+                        self._setting(repo, "--type=int", "gc.auto"), "0",
+                        f"{name} would run `git gc --auto` — a detached repack racing "
+                        f"whatever reads its object store next")
+                    self.assertEqual(
+                        self._setting(repo, "--type=bool", "maintenance.auto"), "false",
+                        f"{name} would still spawn `git maintenance run --auto` after every "
+                        f"commit and every fetch")
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not on PATH")
