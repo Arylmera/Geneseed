@@ -133,6 +133,76 @@ function configDefaults() {
   return d;
 }
 
+/**
+ * The parser's tables, at MODULE scope so `usage` reads the same two objects the loop below
+ * dispatches on. They were local to `parseArgs` until `-h` arrived; a help text listing its
+ * own private copy of the flags is a second source that drifts silently the first time a
+ * flag is added to one and not the other, and nothing downstream would say so.
+ */
+const VALUED = {
+  '--theme': 'theme', '--posture': 'posture', '--mode': 'mode',
+  '--out': 'out', '--target': 'out', '--emit': 'emit',
+  '--footprint': 'footprint', '--root': 'root',
+};
+const FLAGS = {
+  '--sync-themes': 'syncThemes', '--validate-only': 'validateOnly',
+  '-v': 'verbose', '--verbose': 'verbose',
+};
+
+/**
+ * The four flags `choice` validates, as ONE table for the same anti-drift reason.
+ *
+ * A function and not a constant because two of the four read the checkout: `discoverNames`
+ * scans `postures/` and `modes/`, so the answer depends on the source tree this driver is
+ * standing in and cannot be frozen at import.
+ */
+function choicesFor() {
+  return {
+    '--emit': EMITS,
+    '--footprint': ['lean', 'full'],
+    '--posture': discoverNames('postures', 'peer'),
+    '--mode': discoverNames('modes', 'direct'),
+  };
+}
+
+/**
+ * `-h/--help` — the flag argparse hands `build.py` for free and this hand-rolled parser did
+ * not, so the two entry points disagreed: `python build.py --help` printed usage and exited
+ * 0 while `geneseed-build --help` died with `unrecognized arguments: --help` and exit 2.
+ *
+ * NO CELL COULD SEE IT. `golden.py`'s `_argv` builds every cell out of the render flags and
+ * never emits `--help`, so the byte comparison only ever ran inputs both implementations
+ * were built for — a flag missing from one side is invisible to a gate that never passes it.
+ * `test_the_help_text_names_every_flag_the_reference_takes` is the gate, and it reads
+ * `build.py`'s `add_argument` calls rather than this file, so it fails on drift from EITHER
+ * side rather than agreeing with whichever one it was copied from.
+ *
+ * The text is deliberately NOT argparse's byte-for-byte. Reproducing its wrapping would put
+ * a hand-written copy of the reference's output in a file no gate compares, which is the
+ * drift this whole docblock is about; the surface here is the npx one, in the same class as
+ * the `--sync-themes` and `--validate-only` refusals that already answer differently.
+ */
+function usage() {
+  const choices = choicesFor();
+  const metavar = (flag) => (choices[flag]
+    ? `{${choices[flag].join(',')}}`
+    : VALUED[flag].toUpperCase());
+  const valued = Object.keys(VALUED);
+  const bare = Object.keys(FLAGS);
+  return [
+    `usage: geneseed-build [-h] ${[...valued.map((f) => `[${f} ${metavar(f)}]`),
+      ...bare.map((f) => `[${f}]`)].join(' ')}`,
+    '',
+    'Render the Geneseed harness for a theme.',
+    '',
+    'options:',
+    '  -h, --help',
+    ...valued.map((f) => `  ${f} ${metavar(f)}`),
+    ...bare.map((f) => `  ${f}`),
+    '',
+  ].join('\n');
+}
+
 /** argparse's `--flag value` and `--flag=value`, plus the `--target` alias for `--out`. */
 function parseArgs(argv, defaults) {
   const args = {
@@ -140,19 +210,20 @@ function parseArgs(argv, defaults) {
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
     syncThemes: false, validateOnly: false, verbose: false,
   };
-  const VALUED = {
-    '--theme': 'theme', '--posture': 'posture', '--mode': 'mode',
-    '--out': 'out', '--target': 'out', '--emit': 'emit',
-    '--footprint': 'footprint', '--root': 'root',
-  };
-  const FLAGS = {
-    '--sync-themes': 'syncThemes', '--validate-only': 'validateOnly',
-    '-v': 'verbose', '--verbose': 'verbose',
-  };
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];
     const eq = tok.indexOf('=');
     const name = eq > 0 ? tok.slice(0, eq) : tok;
+    if (tok === '-h' || tok === '--help') {
+      process.stdout.write(usage());
+      // The same marker `die` throws, with a SUCCESS code: help is not a refusal, and
+      // `main`'s catch is what turns either into this process's exit status. A bare
+      // `process.exit(0)` here would be the P5f bug in reverse — it takes `rebuild-all`'s
+      // loop with it, and skips the stdout flush the text was just written to.
+      const e = new Error('help');
+      e.exitCode = 0;
+      throw e;
+    }
     if (VALUED[name]) {
       const val = eq > 0 ? tok.slice(eq + 1) : argv[i += 1];
       if (val === undefined) die(2, `argument ${name}: expected one argument`);
@@ -163,10 +234,8 @@ function parseArgs(argv, defaults) {
       die(2, `unrecognized arguments: ${tok}`);
     }
   }
-  choice('--emit', args.emit, EMITS);
-  choice('--footprint', args.footprint, ['lean', 'full']);
-  choice('--posture', args.posture, discoverNames('postures', 'peer'));
-  choice('--mode', args.mode, discoverNames('modes', 'direct'));
+  const choices = choicesFor();
+  for (const flag of Object.keys(choices)) choice(flag, args[VALUED[flag]], choices[flag]);
   return args;
 }
 

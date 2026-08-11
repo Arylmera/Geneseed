@@ -791,5 +791,70 @@ class NodeDriverSurface(unittest.TestCase):
                              "lean")
 
 
+@unittest.skipIf(NODE is None, "node is not on PATH")
+class TheHelpFlagAnswers(unittest.TestCase):
+    """`-h/--help`, the one flag the byte comparison structurally cannot reach.
+
+    `golden.py` builds every cell's argv out of the render flags, so `--help` is never
+    passed to either side and the two CLIs were free to disagree about it — which they did,
+    for the whole of P4: argparse gave `build.py` the flag for free, and the Node driver's
+    hand-rolled parser fell through to `unrecognized arguments: --help` and exit 2. A gate
+    that only ever runs inputs both implementations were built for cannot see a flag one of
+    them does not have.
+
+    The flag list is read from `build.py`'s `add_argument` calls, NOT from the driver. A
+    gate scraped from the file under test agrees with that file by construction; scraping
+    the REFERENCE means a flag added to either side alone fails this, which is the drift
+    the help text exists to prevent.
+    """
+
+    def _help(self, flag: str) -> subprocess.CompletedProcess:
+        r = run_cli([flag])
+        self.assertEqual(
+            r.returncode, 0,
+            f"`geneseed-build {flag}` exited {r.returncode}; the reference exits 0 and "
+            f"prints usage.\n  stderr: {r.stderr[:400]!r}")
+        self.assertEqual(r.stderr, "", f"help belongs on stdout: {r.stderr[:400]!r}")
+        return r
+
+    def test_the_help_text_names_every_flag_the_reference_takes(self):
+        source = (ROOT / "build.py").read_text(encoding="utf-8")
+        # `ap.add_argument("--theme", ...)` and `ap.add_argument("-v", "--verbose", ...)` —
+        # every quoted leading-dash token in the call's first arguments.
+        expected = set(re.findall(r'add_argument\(\s*"(-{1,2}[a-z-]+)"', source))
+        self.assertIn("--theme", expected,
+                      "scraping build.py found no flags at all, so this asserts nothing — "
+                      "the parser's shape changed and this regex did not follow it")
+
+        said = self._help("--help").stdout
+        missing = sorted(f for f in expected if f not in said)
+        self.assertFalse(
+            missing,
+            f"`geneseed-build --help` does not name {missing}, which `build.py` accepts")
+
+    def test_both_spellings_print_the_same_text(self):
+        """`-h` is argparse's other half; a parser that handles only `--help` is half-ported."""
+        self.assertEqual(self._help("-h").stdout, self._help("--help").stdout)
+
+    def test_the_choices_come_from_the_parser_not_a_copy(self):
+        """The four validated flags must show the SAME sets `choice` refuses against.
+
+        A help text with its own hardcoded list is the drift this is here to catch: it goes
+        stale the first time a theme dir gains a posture, and every other gate stays green.
+        """
+        said = self._help("--help").stdout
+        for flag in ("--emit", "--footprint", "--posture", "--mode"):
+            bad = f"{flag}-no-such-value"
+            r = run_cli([flag, bad])
+            self.assertEqual(r.returncode, 2, f"{flag} accepted {bad!r}: {r.stdout[:200]!r}")
+            # `argument --emit: invalid choice: 'x' (choose from 'files', 'opencode', ...)`
+            refused = re.search(r"choose from (.+)\)", r.stderr)
+            self.assertTrue(refused, f"no choice list in {flag}'s refusal: {r.stderr[:300]!r}")
+            for value in re.findall(r"'([^']+)'", refused.group(1)):
+                self.assertIn(
+                    value, said,
+                    f"{flag} accepts {value!r} but --help does not list it")
+
+
 if __name__ == "__main__":
     unittest.main()
