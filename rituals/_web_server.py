@@ -167,10 +167,21 @@ def make_handler(state: WebState, jm: JobManager, token: str, dist: Path, holder
                 # Graceful self-stop, used by the in-page Stop control and
                 # `geneseed web stop`. shutdown() must run off the request thread
                 # or it deadlocks against serve_forever().
+                #
+                # ANSWER FIRST, ASK SECOND, and the order is the whole contract.
+                # shutdown() unblocks serve_forever, run_web falls out of its
+                # `finally` and the interpreter exits — which kills THIS thread,
+                # a daemon one nothing joins, wherever it happens to be. Asking
+                # first left the entire response inside that window: the client
+                # read zero bytes and saw the connection drop. The bytes are on
+                # the wire before the flag is set, so the exit can only close a
+                # socket the kernel has already been handed a whole reply for.
+                self._send_json({"stopping": True})
+                self.wfile.flush()
                 srv = holder.get("srv") if holder else None
                 if srv is not None:
                     threading.Thread(target=srv.shutdown, daemon=True).start()
-                return self._send_json({"stopping": True})
+                return
             if path == "/api/restart":
                 # Hand off to a detached `web restart` (it stops us, then starts a
                 # fresh server on the same port) so the new daemon survives our exit.
