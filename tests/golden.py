@@ -222,6 +222,48 @@ def _normalise(data: bytes, roots: list[tuple[str, Path]]) -> bytes:
     return text.encode("utf-8")
 
 
+# `write_version` (`_build_render.py:757`) stamps `.geneseed-version` with
+# `source_fingerprint()` + today's date + the release label:
+# `f"{fp} (built {date}) [release {release}]\n"`. Both move for reasons that are not
+# regressions — the date at midnight, the fingerprint on any src/ or themes/ edit — so a
+# recorded corpus needs them blanked, same as `harness_golden._STAMPS` already blanks its
+# clock-carrying fields.
+#
+# `\r?` at the end is not defensive, it is OBSERVED: `write_text`/`fs.writeFileSync` both
+# write this file through a text-mode path, and on Windows that turns the trailing `\n`
+# into `\r\n`. `_destamp` splits the body on `b"\n"` before matching, so on this platform
+# every real line carries a `\r` as its last byte. Left out of the pattern, the assertion
+# below would fire on cell 1 of 259 rather than on a corrupted one — the exact silent-gate
+# failure mode this destamp exists to avoid, just inverted into a false positive instead
+# of a false negative.
+_VERSION_LINE = re.compile(
+    rb"^(?P<fp>[0-9a-f]{6,64}) \(built (?P<date>\d{4}-\d{2}-\d{2})\)"
+    rb"(?P<rel> \[release [^\]]+\])?(?P<cr>\r)?$")
+
+
+def _destamp(name: str, body: bytes) -> bytes:
+    """Blank the fields in `.geneseed-version` that move for reasons that are not
+    regressions: the source fingerprint and the build date.
+
+    ASSERTS THE SHAPE FIRST. A blind `re.sub` that is too aggressive silently blanks a
+    real difference — the failure mode where a gate stays green because it stopped
+    looking. If a line does not match `_VERSION_LINE`, this raises naming the file and
+    the offending line rather than passing the byte through unexamined."""
+    if not name.endswith(".geneseed-version"):
+        return body
+    out = []
+    for line in body.split(b"\n"):
+        if not line:
+            out.append(line)
+            continue
+        m = _VERSION_LINE.match(line)
+        assert m, f"{name}: version line did not match its declared shape: {line!r}"
+        out.append(b"<FP> (built <DATE>)"
+                   + (b" [release <REL>]" if m.group("rel") else b"")
+                   + (m.group("cr") or b""))
+    return b"\n".join(out)
+
+
 # The hook shim is deliberately NOT compared. It is install plumbing rather than
 # generated output: its body bakes the interpreter and checkout of whichever generator
 # wrote it, so a Node generator would differ from Python in every single cell and drown
@@ -267,7 +309,7 @@ def _snapshot(sandbox: Path, roots: list[tuple[str, Path]]) -> dict[str, bytes]:
     snap: dict[str, bytes] = {}
     for rel in sorted(_files(sandbox)):
         try:
-            snap[rel] = _normalise((sandbox / rel).read_bytes(), roots)
+            snap[rel] = _destamp(rel, _normalise((sandbox / rel).read_bytes(), roots))
         except OSError:
             continue
     return snap
@@ -498,8 +540,8 @@ def run_cell(gen: list[str], cell: dict, repeat: int = 1) -> "dict[str, bytes] |
         # and the emitted git-gate and rule-gate hooks signal their verdict on. Only the
         # LAST run's streams are kept, matching the snapshot, which is why they are
         # compared only when both sides ran the same number of times (see `compare`).
-        snap["<stdout>"] = _normalise(proc.stdout.encode("utf-8", "replace"), roots)
-        snap["<stderr>"] = _normalise(proc.stderr.encode("utf-8", "replace"), roots)
+        snap["<stdout>"] = _destamp("<stdout>", _normalise(proc.stdout.encode("utf-8", "replace"), roots))
+        snap["<stderr>"] = _destamp("<stderr>", _normalise(proc.stderr.encode("utf-8", "replace"), roots))
         return snap
 
 
