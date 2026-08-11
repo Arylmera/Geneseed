@@ -79,6 +79,17 @@ jobs:
       # CLI's, and P4a's finding was that a second driver does not inherit the first's proof.
       - name: golden — the emit matrix (Node generator vs build.py)
         run: python tests/golden.py --new "node bin/geneseed.mjs"
+      # The RECORDED corpus, replayed against the port. The step above compares two live
+      # implementations and dies with the reference; this one compares the port against bytes
+      # the reference wrote down, and is what survives the deletion. Both run while both exist,
+      # because a corpus that is committed but never replayed is inert — it would first be
+      # exercised on the day the reference is gone and re-recording is impossible. `--against`
+      # picks `emit/lf` or `emit/crlf` from `os.linesep`; this runner is Linux, so it reads the
+      # LF half, recorded by the `record-corpus` job on this same image.
+      - name: golden — the recorded corpus, replayed
+        run: >
+          python tests/golden.py --against tests/__snapshots__/emit
+          --new "node bin/geneseed.mjs"
       - name: golden — the prune, from both drivers
         run: |
           python tests/golden.py --ref "node bin/geneseed.mjs" --deletion
