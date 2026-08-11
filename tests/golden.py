@@ -240,6 +240,22 @@ _VERSION_LINE = re.compile(
     rb"^(?P<fp>[0-9a-f]{6,64}) \(built (?P<date>\d{4}-\d{2}-\d{2})\)"
     rb"(?P<rel> \[release [^\]]+\])?(?P<cr>\r)?$")
 
+# The SECOND declared shape, and it is a real one rather than an escape hatch: a marker whose
+# content is only whitespace. `cmd_version` reads the file as `txt.split()[0] if txt else None`,
+# so a whitespace-only marker is DEFINED to read as absent and the host walk carries on to the
+# next candidate — and `harness_golden._version_cells`'s `an-empty-marker-is-not-a-version`
+# seeds exactly `"   \n"` into `home/.config/opencode/.geneseed-version` to prove that branch
+# runs. `_destamp` is shared with that harness through `golden._snapshot`, and dc00083 was only
+# ever run against `tests/golden.py`, whose 259 emit cells never seed a marker — hence a gate
+# green on the matrix and dead on the verb harness, on BOTH platforms (Windows produced
+# `b'   \r'`; only the `cells` job is ubuntu-only, not the defect).
+#
+# Matched, not skipped, and passed through UNCHANGED rather than blanked: there is nothing in a
+# blank line that moves between two runs, so leaving the bytes alone keeps them under the byte
+# comparison in full. What is widened is the SHAPE assertion, and only to a shape that is named
+# and explained here — a version line of any other shape still raises.
+_VERSION_BLANK = re.compile(rb"^[ \t]*\r?$")
+
 
 def _destamp(name: str, body: bytes) -> bytes:
     """Blank the fields in `.geneseed-version` that move for reasons that are not
@@ -247,14 +263,16 @@ def _destamp(name: str, body: bytes) -> bytes:
 
     ASSERTS THE SHAPE FIRST. A blind `re.sub` that is too aggressive silently blanks a
     real difference — the failure mode where a gate stays green because it stopped
-    looking. If a line does not match `_VERSION_LINE`, this raises naming the file and
-    the offending line rather than passing the byte through unexamined."""
+    looking. A line must match one of the two declared shapes — `_VERSION_LINE` (stamped,
+    blanked) or `_VERSION_BLANK` (a whitespace-only marker, passed through as-is); anything
+    else raises naming the file and the offending line rather than passing the byte through
+    unexamined."""
     if not name.endswith(".geneseed-version"):
         return body
     out = []
     for line in body.split(b"\n"):
-        if not line:
-            out.append(line)
+        if not line or _VERSION_BLANK.match(line):
+            out.append(line)  # nothing in it moves — keep the bytes, keep them compared
             continue
         m = _VERSION_LINE.match(line)
         assert m, f"{name}: version line did not match its declared shape: {line!r}"

@@ -36,6 +36,35 @@ class TheVersionLineIsDestampedByShapeNotByGuess(unittest.TestCase):
         self.assertEqual(golden._destamp(".geneseed-version", body),
                          b"<FP> (built <DATE>) [release <REL>]\r\n")
 
+    def test_a_whitespace_only_marker_is_a_declared_shape_and_survives_verbatim(self):
+        # THE CELL THAT KILLED THE `cells` JOB, reduced to its bytes.
+        # `harness_golden._version_cells`'s `an-empty-marker-is-not-a-version` seeds
+        # `home/.config/opencode/.geneseed-version` with exactly `"   \n"` — three spaces —
+        # to exercise `cmd_version`'s `txt.split()[0] if txt else None`, where a
+        # whitespace-only marker reads as ABSENT and the host walk moves to the next
+        # candidate. That harness reuses `golden._snapshot`, so `_destamp` sees the seed.
+        # This is why the assertion has to be widened rather than deleted, and why the
+        # widening is a SECOND SHAPE and not a fall-through.
+        #
+        # PASSED THROUGH VERBATIM, never blanked: nothing in a blank line moves between two
+        # runs, so the bytes stay under the byte comparison. `\r` is the same file written
+        # by `Path.write_text` on Windows — the failure reproduces on both platforms
+        # (`b'   '` on Linux, `b'   \r'` here), it is only the ubuntu-only `cells` job that
+        # made it look POSIX-specific.
+        for body in (b"   \n", b"   \r\n", b"\t \n", b"   "):
+            with self.subTest(body=body):
+                self.assertEqual(golden._destamp(".geneseed-version", body), body)
+
+    def test_a_marker_with_junk_beside_the_whitespace_still_RAISES(self):
+        # The vacuity guard on the widening above: `_VERSION_BLANK` is anchored at both
+        # ends, so tolerating a blank line does not tolerate a line that merely starts or
+        # ends with blanks. Without this, "widen the shape" and "stop looking" are the same
+        # edit.
+        for body in (b"   junk\n", b"junk   \n", b"  deadbeef  \n"):
+            with self.subTest(body=body):
+                with self.assertRaises(AssertionError):
+                    golden._destamp(".geneseed-version", body)
+
 
 if __name__ == "__main__":
     unittest.main()
