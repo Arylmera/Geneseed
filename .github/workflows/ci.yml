@@ -7,6 +7,8 @@ name: ci
 on:
   push:
   pull_request:
+  # For `record-corpus` below, which is guarded to this trigger and never runs on a push.
+  workflow_dispatch:
 
 # THE PYTHON IS PINNED, not floating. `3.x` resolves to whatever the runner ships newest,
 # and one gate in this suite is a comparison against a specific Unicode database:
@@ -94,6 +96,44 @@ jobs:
       # The Node CLI's own doctor, on the platform the reference's was just proved on.
       - name: doctor, from the port
         run: node bin/geneseed-cli.mjs doctor
+
+  # RECORD THE LINUX CORPUS. Manual dispatch only — `if:` keeps it off every push, because it
+  # gates nothing and re-emits the whole 259-cell matrix.
+  #
+  # `tests/golden.py --record` writes the reference's answer down so the port keeps a
+  # regression gate after `build.py` is deleted. That corpus is PER-PLATFORM: `pyfs.writeText`
+  # emits `os.linesep`, so the cells committed under `tests/__snapshots__/emit/crlf/` were
+  # recorded on Windows and every one of them fails when replayed on Linux. Only a Linux
+  # machine can record `emit/lf/`, and after the reference is gone there will not be another
+  # chance — hence a job rather than a note.
+  #
+  # TO USE: dispatch this workflow, download the `snapshots-lf` artifact, and commit its
+  # `emit/lf/` directory. `golden.py` is the only harness with `--record` today; the
+  # `--idempotent` and `--deletion` corpora are separately scheduled.
+  record-corpus:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: record the emit matrix from the reference
+        run: python tests/golden.py --record tests/__snapshots__/emit
+      # A corpus that was never replayed is the defect this job exists to fix, one step over:
+      # committed, plausible, and unusable. Recording and replaying in the same run is what
+      # makes a green dispatch mean the artifact is worth committing.
+      - name: replay it against the port
+        run: >
+          python tests/golden.py --against tests/__snapshots__/emit
+          --new "node bin/geneseed.mjs"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-lf
+          path: tests/__snapshots__/
 
   # The web UI (web/) is a Vite/React app with its own toolchain, so it gets a
   # dedicated job: lint, format check, unit tests, and a production build. Linux

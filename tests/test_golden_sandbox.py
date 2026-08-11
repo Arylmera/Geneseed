@@ -180,6 +180,30 @@ class FlagWiringTests(unittest.TestCase):
         self.assertEqual(rc, 2, "--jobs 0 cannot build a pool and must be refused, not "
                                 "clamped — a corrected typo reads as an accepted setting")
 
+    def test_record_and_against_reach_compare_resolved_to_this_platform(self):
+        """`--record`/`--against` were threaded into `compare` and the mock above was widened
+        to accept them, but nothing asserted they arrive — and an unasserted wiring is how a
+        flag stops being connected without anything going red. `--record` degrades in the
+        worst available direction: `main` still exits 0, so a silent disconnection reads as a
+        successful recording of the reference's answers right up until the reference is gone.
+
+        The assertion is on the RESOLVED value, so it also pins the platform split. The corpus
+        a Windows run records is not the corpus a Linux run replays — `pyfs.writeText` emits
+        `os.linesep`, so every path's bytes differ — and `golden` picks the subdirectory
+        itself rather than trusting each caller to remember."""
+        expected = golden.PLATFORM_CORPUS
+        self.assertIn(expected, ("crlf", "lf"))
+        for flag in ("--record", "--against"):
+            with self.subTest(flag=flag):
+                _, seen = self._capture(["--quick", flag, "corpus-root",
+                                         "--new", "node bin/geneseed.mjs"])
+                key = flag.lstrip("-")
+                self.assertEqual(seen[key], str(Path("corpus-root") / expected),
+                                 f"{flag} did not reach compare, or did not resolve to this "
+                                 "platform's corpus subdirectory")
+                other = "against" if key == "record" else "record"
+                self.assertIsNone(seen[other], f"{flag} also set --{other}")
+
     def test_emits_narrows_the_matrix_and_refuses_an_unknown_mode(self):
         _, seen = self._capture(["--emits", "files"])
         self.assertEqual({c["emit"] for c in seen["matrix"]}, {"files"})

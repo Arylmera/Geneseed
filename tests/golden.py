@@ -620,6 +620,22 @@ VERBATIM_CELLS = {
 }
 
 
+# A RECORDED CORPUS IS PER-PLATFORM, and that is a property of the thing under test rather
+# than a convenience. `js/lib/pyfs.mjs`'s `writeText` translates "\n" to `os.linesep` — the
+# generator really does write CRLF on Windows and LF everywhere else — so every path in a
+# snapshot differs in sha256 AND in size between the two. A corpus recorded on Windows
+# replayed on Linux fails all 259 cells, which is exactly what `--record`/`--against` looked
+# like until this split existed: committed, never run by CI, and unusable on the platform CI
+# runs on.
+#
+# NOT NORMALISED AWAY. Blanking line endings inside the recorder would make one corpus serve
+# both platforms, and would also make the port's single most platform-specific behaviour
+# unobservable to the only gate that watches it — the same shape of hole that hid a live
+# CRLF/LF split from all 103 cells in P5b. `--record DIR` and `--against DIR` therefore
+# resolve to `DIR/<crlf|lf>`, and each platform replays what that platform recorded.
+PLATFORM_CORPUS = "crlf" if os.linesep == "\r\n" else "lf"
+
+
 def _cell_id(cell: dict) -> str:
     """The human label for one cell — shared by the byte comparison, `--record` and
     `--against`, so a recorded corpus and a live run can never disagree about a cell's
@@ -656,6 +672,15 @@ def compare(ref: list[str], new: list[str], quick: bool, limit: int,
     times = {1: "", 2: " ×2"}
     if record:
         print(f"[golden] {len(matrix)} cells · recording ref={' '.join(ref)} -> {record}")
+        # One flat file per cell, named `snapshot_io._safe(_cell_id(cell))`. Two cells whose
+        # IDS differ but whose FILENAMES collide would record 258 answers for 259 cells, and
+        # `--against` would then pass over a corpus quietly missing one. Asserted before the
+        # first write rather than after the last: a collision then costs no emit and leaves
+        # no half-written corpus behind.
+        names = {snapshot_io._safe(_cell_id(c)) for c in matrix}
+        assert len(names) == len(matrix), (
+            f"{len(matrix)} cells collapse onto {len(names)} corpus filenames — two distinct "
+            "cell ids map to one file, so the recorded corpus would be silently short")
     elif against:
         print(f"[golden] {len(matrix)} cells · new={' '.join(new)}{times.get(new_repeat, '')}"
               f" · against corpus {against} · jobs={jobs}")
@@ -838,17 +863,25 @@ def main(argv=None) -> int:
                          "compares — `--jobs 1` is the old serial run and reports "
                          "identically.")
     ap.add_argument("--record", metavar="DIR", default=None,
-                    help="write each cell's snapshot to DIR instead of comparing. Uses "
-                         "--ref alone; --new is ignored. This is how the reference's "
-                         "answer outlives the reference.")
+                    help="write each cell's snapshot to DIR/<crlf|lf> instead of comparing. "
+                         "Uses --ref alone; --new is ignored. This is how the reference's "
+                         "answer outlives the reference. The subdirectory is this platform's "
+                         "line ending, which the generator really does emit.")
     ap.add_argument("--against", metavar="DIR", default=None,
                     help="compare --new's live output against a corpus recorded earlier "
-                         "with --record, instead of a live --ref. A cell with no recorded "
-                         "snapshot is a FAILURE, not a skip.")
+                         "with --record into DIR/<crlf|lf>, instead of a live --ref. A cell "
+                         "with no recorded snapshot is a FAILURE, not a skip.")
     args = ap.parse_args(argv)
     if args.record and args.against:
         print("[golden] --record and --against are mutually exclusive")
         return 2
+    # Both flags name the corpus ROOT; the platform subdirectory is chosen here rather than
+    # by the caller, so a recording and a replay on the same machine can never land in
+    # different places. See PLATFORM_CORPUS for why the split is not a normalisation.
+    if args.record:
+        args.record = str(Path(args.record) / PLATFORM_CORPUS)
+    if args.against:
+        args.against = str(Path(args.against) / PLATFORM_CORPUS)
     # Refused rather than clamped, for `--repeat 0`'s reason: `ThreadPoolExecutor(0)` raises
     # and a negative one would too, but a flag that silently corrected itself would let a
     # typo'd `--jobs` read as an accepted setting.
