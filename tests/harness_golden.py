@@ -200,7 +200,7 @@ def cells() -> list[dict]:
 # ONE GROUP IN THIS FILE DIFFERS BY HOST, and the declaration is here rather than inside it
 # so that "what this run did not cover" is a fact about the SUITE and not a comment in a
 # function nobody opens. `link` and `unlink` are two different programs on the two platforms
-# — a `.cmd` shim plus a registry Path edit on Windows, a symlink plus an `export PATH` hint
+# — a `.cmd` shim plus a registry Path edit on Windows, a `sh` shim plus an `export PATH` hint
 # on Unix — so no host can run both halves and the union is what the matrix claims.
 #
 # WHY IT IS A TABLE AND NOT A `sys.platform` CHECK LEFT WHERE IT WAS. `_link_cells` used to
@@ -225,11 +225,11 @@ PLATFORM_ONLY: "dict[str, str]" = {
     "link/reports-a-manual-step-when-the-dir-is-not-on-path": "win32",
     "unlink/unlink-removes-the-shim": "win32",
     "unlink/unlink-with-nothing-linked-says-so": "win32",
-    "link/symlinks-the-launcher-and-finds-the-dir-already-on-path": "posix",
+    "link/writes-the-launcher-shim-and-finds-the-dir-already-on-path": "posix",
     "link/reports-the-export-line-when-the-dir-is-not-on-path": "posix",
     "link/a-path-entry-that-merely-contains-the-dir-is-not-a-match": "posix",
     "link/an-explicit-dir-argument-is-used-instead-of-the-default": "posix",
-    "unlink/unlink-removes-a-symlink-it-made-and-leaves-a-foreign-one-alone": "posix",
+    "unlink/unlink-removes-a-shim-it-made-and-leaves-a-foreign-one-alone": "posix",
     # Distinct from the Windows one above on purpose: the two arms print different sentences
     # (`found.` vs `found on PATH`) and a shared id would make the union unrepresentable.
     "unlink/unlink-on-a-path-with-no-launcher-says-so": "posix",
@@ -3269,11 +3269,12 @@ def _link_cells() -> list[dict]:
     """`link` / `unlink` — P10b, and the ONE group in this file whose cells differ by host.
 
     The two arms are different programs. On Windows the verb writes a `.cmd` shim naming an
-    interpreter and edits the persistent user Path; on Unix it symlinks `ROOT/geneseed` into
-    a bin dir and prints an `export PATH=…` hint. Neither host can run the other's, so the
-    group is a UNION declared in `PLATFORM_ONLY` and the runner announces the half it is not
-    running. A group that quietly returned `[]` is what the Unix arm used to be — and it was
-    invisible from Windows, where it looked exactly like a group that had been written.
+    interpreter and edits the persistent user Path; on Unix it writes a small `sh` shim
+    naming its own interpreter into a bin dir and prints an `export PATH=…` hint. Neither
+    host can run the other's, so the group is a UNION declared in `PLATFORM_ONLY` and the
+    runner announces the half it is not running. A group that quietly returned `[]` is what
+    the Unix arm used to be — and it was invisible from Windows, where it looked exactly
+    like a group that had been written.
     """
     return _link_cells_win() if sys.platform == "win32" else _link_cells_posix()
 
@@ -3288,8 +3289,8 @@ def _lk(name, argv, **kw) -> dict:
     return dict(id=f"{argv[0]}/{name}", bin="cli", **kw)
 
 
-#: The Unix launcher `link` symlinks, relative to the sandbox's HOME — `~/.local/bin/geneseed`.
-_LINK_SYMLINK = "home/.local/bin/geneseed"
+#: The Unix launcher `link` shim, relative to the sandbox's HOME — `~/.local/bin/geneseed`.
+_LINK_SHIM_POSIX = "home/.local/bin/geneseed"
 
 
 def _link_cells_posix() -> list[dict]:
@@ -3317,15 +3318,16 @@ def _link_cells_posix() -> list[dict]:
     # `{home}` rather than `~`: nothing expands a tilde inside PATH.
     on_path = {"PATH": "{home}/.local/bin"}
     return [
-        _lk("symlinks-the-launcher-and-finds-the-dir-already-on-path", ("link",),
+        _lk("writes-the-launcher-shim-and-finds-the-dir-already-on-path", ("link",),
             env=dict(on_path),
-            # The arrow line names ROOT, which normalises to `<REPO>` on both sides, so the
-            # whole message is comparable — unlike the Windows shim, whose body bakes a
-            # runtime and has to be destamped.
+            # The arrow line names the entry point, which is the SAME runner/entry stamp
+            # as the Windows shim's body — the reference bakes `sys.executable` +
+            # `rituals/harness.py`, the port bakes `process.execPath` + `bin/geneseed-cli.mjs`,
+            # and `_STAMPS` normalises both the file and this line the same way.
             expect=["geneseed: linked ", " -> ", "is on PATH — run 'geneseed' from anywhere."],
             # The absolute half: the ELSE branch must not be what this cell is looking at.
             expect_absent=["is not on your PATH", "export PATH="],
-            expect_files=[_LINK_SYMLINK]),
+            expect_files=[_LINK_SHIM_POSIX]),
         _lk("reports-the-export-line-when-the-dir-is-not-on-path", ("link",),
             # A directory that EXISTS and holds nothing, so the split finds no match. The
             # reference compares `str(Path)` against the split parts, so a port using a
@@ -3336,7 +3338,7 @@ def _link_cells_posix() -> list[dict]:
             expect=["geneseed: linked ", "is not on your PATH. Add it, e.g.:",
                     "export PATH="],
             expect_absent=["is on PATH — run"],
-            expect_files=[_LINK_SYMLINK]),
+            expect_files=[_LINK_SHIM_POSIX]),
         _lk("a-path-entry-that-merely-contains-the-dir-is-not-a-match", ("link",),
             # THE SPLIT, isolated. `{home}/.local/binaries` CONTAINS `{home}/.local/bin` as a
             # substring and is not the same directory, so the reference prints the manual
@@ -3346,7 +3348,7 @@ def _link_cells_posix() -> list[dict]:
             env={"PATH": "{home}/.local/binaries"},
             expect=["is not on your PATH. Add it, e.g.:"],
             expect_absent=["is on PATH — run"],
-            expect_files=[_LINK_SYMLINK]),
+            expect_files=[_LINK_SHIM_POSIX]),
         _lk("an-explicit-dir-argument-is-used-instead-of-the-default",
             ("link", "{sb}/mybin/"),
             # THE TRAILING SLASH IS THE POINT. `Path("/x/mybin/")` renders as `/x/mybin`, and
@@ -3357,17 +3359,17 @@ def _link_cells_posix() -> list[dict]:
             world={"repo/.keep": "", "nowhere/.keep": ""},
             expect=["geneseed: linked ", "is not on your PATH"],
             expect_files=["mybin/geneseed"],
-            expect_absent_files=[_LINK_SYMLINK]),
-        _lk("unlink-removes-a-symlink-it-made-and-leaves-a-foreign-one-alone",
+            expect_absent_files=[_LINK_SHIM_POSIX]),
+        _lk("unlink-removes-a-shim-it-made-and-leaves-a-foreign-one-alone",
             ("unlink",),
             # BOTH directories are on PATH, so `unlink` really walks the decoy — a decoy the
             # verb never looks at proves nothing (P6c).
             env={"PATH": "{home}/.local/bin:{sb}/decoy"},
-            # TWO STEPS, because `world` seeds text files and this verb only removes SYMLINKS
-            # — a seeded regular file named `geneseed` is not what it is looking for. Step
-            # one makes the real link; only step two's streams are compared. The decoy is
-            # exactly that seeded regular file: same name, on PATH, and `is_symlink()` is
-            # what has to reject it.
+            # TWO STEPS, because `world` seeds a plain text file and this verb only removes
+            # its OWN two shapes — a seeded regular file with no `GENESEED_LINK_SHIM` marker
+            # is not what it is looking for. Step one makes the real link; only step two's
+            # streams are compared. The decoy is exactly that seeded regular file: same
+            # name, on PATH, unmarked — the marker check is what has to reject it.
             world={"repo/.keep": "", "decoy/geneseed": "#!/bin/sh\nnot ours\n"},
             steps=[{"argv": ["link"], "cwd": "repo"},
                    {"argv": ["unlink"], "cwd": "repo"}],
@@ -3375,14 +3377,14 @@ def _link_cells_posix() -> list[dict]:
             expect_absent=["no linked launcher found on PATH"],
             # The absolute half of a DELETION (P5h): without it two implementations that
             # both stopped unlinking compare equal.
-            expect_absent_files=[_LINK_SYMLINK],
+            expect_absent_files=[_LINK_SHIM_POSIX],
             expect_files=["decoy/geneseed"]),
         _lk("unlink-on-a-path-with-no-launcher-says-so", ("unlink",),
             env={"PATH": "{sb}/nowhere"},
             world={"repo/.keep": "", "nowhere/.keep": ""},
             expect=["geneseed: no linked launcher found on PATH"],
             expect_absent=["geneseed: removed "],
-            expect_absent_files=[_LINK_SYMLINK]),
+            expect_absent_files=[_LINK_SHIM_POSIX]),
     ]
 
 
@@ -4054,6 +4056,19 @@ _STAMPS = (
     # `test_the_link_shim_names_each_runtimes_own_entry_point` in tests/test_hook_cli_parity.py,
     # which runs both binaries into a sandboxed HOME and asserts each shim absolutely.
     (re.compile(r'^"[^"\r\n]+" "[^"\r\n]+" %\*', re.M), '"<RUNNER>" "<ENTRY>" %*'),
+    # ---- the SAME rule again, for the Unix shim -------------------------------------------
+    #
+    # `link` on Unix writes `~/.local/bin/geneseed`, a `sh` script whose one real line is
+    # `exec "<runner>" "<entry>" "$@"` — the same runner/entry split as the Windows shim
+    # above, just POSIX syntax. Anchored at line start with two non-empty quoted values,
+    # `"$@"` itself left OUTSIDE the match so a side that stopped quoting it still shows up
+    # as a real difference rather than comparing equal through the stamp.
+    (re.compile(r'^exec "[^"\r\n]+" "[^"\r\n]+" "\$@"', re.M), 'exec "<RUNNER>" "<ENTRY>" "$@"'),
+    # `cmd_link`'s "linked <dest> -> <entry>" line names the same entry point a second time,
+    # in stdout rather than a file — `dest` is inside HOME and already comparable once
+    # normalised, only the `-> <entry>` tail needs the stamp. Anchored to the one message
+    # this verb prints, so it cannot reach any other `->` in the corpus.
+    (re.compile(r'^(geneseed: linked .+) -> .+$', re.M), r'\1 -> <ENTRY>'),
 )
 
 
