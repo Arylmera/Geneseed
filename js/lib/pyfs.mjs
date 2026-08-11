@@ -244,8 +244,19 @@ export function indexOfEq(arr, value) {
  * Two residual differences, both unreachable with this repo's ASCII filenames: Python
  * compares by code point where JS compares by UTF-16 code unit (differs only above the
  * BMP), and `str.lower()` is not `toLowerCase()` for a handful of characters.
+ *
+ * THE SEPARATOR CONVERSION IS NOT OPTIONAL, and it was missing until the byte-bearing
+ * corpus in `tests/test_pure_function_parity.py` asked. `ntpath.normcase` is
+ * `s.replace('/', '\\').lower()`, and `PurePath._str_normcase` gets the same conversion for
+ * free because `Path` has already done it — so BOTH readings of the reference fold slashes
+ * and this did not. Every sort call site feeds it `path.join` output or a bare `readdir`
+ * name, which is why no emitted byte ever moved; `fnTranslate(normcase(pattern))` in
+ * `js/hooks.mjs` is where it was reachable, because an exclude pattern is USER-WRITTEN and
+ * `memory/*` never matched a native `memory\x` the way `fnmatch` does.
  */
-export const normcase = process.platform === 'win32' ? (s) => s.toLowerCase() : (s) => s;
+export const normcase = process.platform === 'win32'
+  ? (s) => s.replaceAll('/', '\\').toLowerCase()
+  : (s) => s;
 
 /** `sorted()` over paths \u2014 one owner, so two call sites cannot drift apart. */
 export function comparePaths(a, b) {

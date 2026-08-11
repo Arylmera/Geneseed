@@ -15,6 +15,7 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 import urllib.parse
 from pathlib import Path
 
@@ -109,6 +110,41 @@ def run(fn: str, args: list):
         return shutil.which(args[0], path=args[1])
     if fn == "py_is_absolute":
         return Path(args[0]).is_absolute()
+
+    # ---- the primitives whose answers ARE the bytes on a user's disk -------------------
+    #
+    # Each one is spelled the way the REFERENCE spells it at its call sites, not the way the
+    # port's helper is named: `pyResolve` folds `expanduser` into itself because every Python
+    # caller writes `Path(x).expanduser().resolve()`, and `comparePaths` is a comparator for
+    # `sorted()` over PATH OBJECTS, whose `<` is `_str_normcase` and not a plain string `<`.
+    if fn == "py_path_str":
+        return str(Path(args[0]))
+    if fn == "py_resolve":
+        return str(Path(args[0]).expanduser().resolve())
+    if fn == "expanduser":
+        return str(Path(args[0]).expanduser())
+    if fn == "normcase":
+        return os.path.normcase(args[0])
+    if fn == "compare_paths":
+        a, b = Path(args[0]), Path(args[1])
+        return -1 if a < b else (1 if a > b else 0)
+    if fn == "json_dumps":
+        # The COMPACT container form — `ensure_ascii=True` AND the `', '` / `': '`
+        # separators, which are the two halves of what `JSON.stringify` gets wrong.
+        return json.dumps(args[0])
+    if fn == "parse_json_roundtrip":
+        return json.dumps(json.loads(args[0]))
+    if fn == "py_strip_space":
+        return args[0].strip()
+    if fn == "write_text_linesep":
+        # HEX, NOT TEXT. `write_text` opens in text mode with `newline=None`, so every `\n`
+        # becomes `os.linesep` on the way out — and reading it back through any text
+        # transport translates it straight back. That is the hole P5b measured: a CRLF/LF
+        # split invisible to 103 cells. The bytes are the answer, so the bytes travel.
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "t.txt"
+            p.write_text(args[0], encoding="utf-8")
+            return p.read_bytes().hex()
     if fn == "py_int":
         # `int(s)`, or None where it raises. The corpus never pads: `int` strips whitespace
         # and `pyInt` deliberately does not, because both of its callers have already run

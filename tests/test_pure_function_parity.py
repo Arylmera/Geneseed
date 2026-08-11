@@ -2374,5 +2374,82 @@ class TheDisplayTiersAreThreeAndTheCorpusReachesTwo(unittest.TestCase):
         self.assertNotIn("█", self.ascii_[3][0])
 
 
+def _byte_bearing_cases() -> list[dict]:
+    """The primitives whose answers ARE the bytes on a user's disk. Each entry below has a
+    reason: an entry that does not contain the character it is named for is a comment, not
+    a test (P6d found exactly that)."""
+    cases = []
+    # `str(Path(x))` — a trailing slash is the cheapest divergence and the one
+    # harness_golden's explicit-dir link cell found.
+    for p in ("/x/bin/", "/x/bin", "C:\\x\\bin\\", "~/bin", "", ".", "..",
+              "//server/share/", "a//b", "a/./b"):
+        cases.append({"fn": "py_path_str", "args": [p]})
+    # ensure_ascii: json.dumps escapes non-ASCII, JSON.stringify does not.
+    for o in ({"k": "é"}, {"k": "\u001c"}, {"k": "\ufeff"}, {"k": "😀"}, {"k": "a\\b"}):
+        cases.append({"fn": "json_dumps", "args": [o]})
+    # int vs float identity: JSON.parse collapses 1.0 to 1, python does not.
+    for s in ('{"a": 1.0}', '{"a": 1}', '{"a": 1e3}', '{"a": -0.0}'):
+        cases.append({"fn": "parse_json_roundtrip", "args": [s]})
+    # PY_SPACE: python \s minus U+FEFF plus U+001C..U+001F and U+0085.
+    for s in ("a\u001cb", "a\u0085b", "a\ufeffb", "a\u00a0b", " a\t\n\v\f\r b "):
+        cases.append({"fn": "py_strip_space", "args": [s]})
+    # os.linesep translation — the CRLF/LF split no cell saw until P5b.
+    for s in ("a\nb", "a\r\nb", "a\rb", "a\n", "", "a\n\n"):
+        cases.append({"fn": "write_text_linesep", "args": [s]})
+    for p in ("A/B", "a/b", "A\\B", "ä/b", "z/a", "a/z"):
+        cases.append({"fn": "normcase", "args": [p]})
+        cases.append({"fn": "compare_paths", "args": [p, "a/b"]})
+    # ⚠ `~unknownuser/x` IS EXPECTED TO FAIL ON WINDOWS, and it is left failing on purpose.
+    # `js/hosts.mjs`'s docblock says "Python does not expand `~user` on Windows the way a
+    # shell would" and that claim is false: `ntpath.expanduser` swaps the last component of
+    # USERPROFILE, so the reference answers `C:\Users\unknownuser\x` where the port answers
+    # the literal `~unknownuser\x` — which is a DIRECTORY THAT GETS CREATED, under that name,
+    # in whatever cwd the user ran from. Reachable from `--target`, `--dir`, `--bundle` and
+    # every config-dir env var. Not fixed here because whether the port should expand `~user`
+    # at all is a product decision the docblock made deliberately, and reproducing
+    # `ntpath`'s rule faithfully needs its own corpus. Recorded red rather than hidden green.
+    for p in ("~", "~/x", "~unknownuser/x", "x", ""):
+        cases.append({"fn": "expanduser", "args": [p]})
+    for p in (".", "..", "a/../b", "/tmp"):
+        cases.append({"fn": "py_resolve", "args": [p]})
+    return cases
+
+
+class TheByteBearingPrimitivesAgree(unittest.TestCase):
+    """The nine primitives that decide the bytes written into a user's harness bundle.
+
+    THE ONLY ORACLE THAT SURVIVES. Every one of these is exercised by the 259-cell emit
+    matrix today, and the migration deletes it — after which nothing on this machine can
+    answer "what does CPython do here" ever again. So they are recorded as a corpus while a
+    CPython is still present to ask.
+
+    `write_text_linesep` returns HEX and not text, and that is the load-bearing choice: a
+    text transport applies newline translation on the way back and normalises away the exact
+    property under test. That is how a real CRLF/LF split hid from 103 cells in P5b.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.cases = _byte_bearing_cases()
+        cls.py = _run([sys.executable, str(PY_PROBE)], cls.cases, ascii_mode=False)
+        cls.js = _run(["node", str(JS_PROBE)], cls.cases, ascii_mode=False)
+
+    def test_both_probes_answer_identically(self):
+        for c, a, b in zip(self.cases, self.py, self.js):
+            with self.subTest(fn=c["fn"], args=c["args"]):
+                self.assertEqual(a, b, f"{c['fn']}{c['args']!r}")
+
+    def test_the_linesep_corpus_records_this_platforms_translation(self):
+        """The positive control, and it is not decoration.
+
+        A comparison alone passes on two implementations that both write LF — which is the
+        RIGHT answer on POSIX and the wrong one on Windows, and the corpus cannot tell those
+        apart by comparing. So the reference's own answer for `"a\\nb"` is asserted against
+        `os.linesep` absolutely: the day either side stops translating, this names it."""
+        i = [c["fn"] for c in self.cases].index("write_text_linesep")
+        want = ("a" + os.linesep + "b").encode("utf-8").hex()
+        self.assertEqual(self.py[i], want)
+
+
 if __name__ == "__main__":
     unittest.main()
