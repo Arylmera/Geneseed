@@ -3,20 +3,20 @@
     "<dirs>": "6991901ebb4d90155b414709975b405b0ae9fa1aa5d80fecc11cdcad19bfa180",
     "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "<stdout>": "f4d67e3eaa777894e5b334390f91b3451002d6b34c22db3443ec2d1e33484688",
+    "<stdout>": "64bbc83853013b6641198642aec8fac8f2b4ebf636ee202fcb4be3777db12e32",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "sizes": {
     "<dirs>": 47,
     "<exit>": 1,
     "<stderr>": 0,
-    "<stdout>": 117,
+    "<stdout>": 116,
     "repo/.keep": 0
   },
   "verbatim": {
     "<dirs>": "cfg\nhome\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
     "<exit>": "1",
     "<stderr>": "",
-    "<stdout>": "[doctor] 1 problem(s) across 1 theme(s):\n  - [authoring] node --check failed for geneseed-learn.js: Node.js v22.17.0\n"
+    "<stdout>": "[doctor] 1 problem(s) across 1 theme(s):\n  - [authoring] node --check failed for geneseed-learn.js: Node.js v<NODE>\n"
   }
 }

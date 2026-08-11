@@ -99,5 +99,91 @@ class TheVersionLineIsDestampedByShapeNotByGuess(unittest.TestCase):
                          b"<FP> (built <DATE>) [release <REL>]\n0000000000000000\n")
 
 
+class TheToolchainStampsAreShapesAndNotBlindReplaces(unittest.TestCase):
+    """`golden.CORPUS_STAMPS`' last three entries — the MACHINE class.
+
+    A recorded corpus is the only regression gate left once the reference is deleted, so it
+    must not redden when GitHub bumps a Node patch release, when a developer's git lives
+    somewhere else, or when someone runs `build.py`. It must equally not go quiet: each of
+    these matches a DECLARED shape, and a value that stops fitting it keeps its bytes and
+    fails the cell. Both halves are asserted here, because a stamp with only the first half
+    tested is how a gate stops looking."""
+
+    def norm(self, text: bytes) -> bytes:
+        return golden.corpus_normalise({"<stdout>": text})["<stdout>"]
+
+    # ---- Node's crash banner ----------------------------------------------------------
+    def test_a_well_formed_node_banner_is_normalised(self):
+        line = (b"[doctor] 1 problem(s) across 1 theme(s):\n  - [authoring] node --check "
+                b"failed for geneseed-learn.js: Node.js v1.2.3\n")
+        self.assertEqual(self.norm(line), line.replace(b"v1.2.3", b"v<NODE>"))
+
+    def test_two_patch_releases_of_node_record_the_same_bytes(self):
+        # THE POINT OF THE ENTRY, stated as the CI failure that produced it: run 31543477435
+        # replayed a v22.23.1 recording on a v22.23.2 runner and reddened one cell of 319.
+        a = b"node --check failed for geneseed-learn.js: Node.js v22.23.1\n"
+        b = b"node --check failed for geneseed-learn.js: Node.js v22.23.2\n"
+        self.assertEqual(self.norm(a), self.norm(b))
+        self.assertIn(b"Node.js v<NODE>", self.norm(a))
+
+    def test_a_banner_of_another_shape_is_left_verbatim_and_still_compared(self):
+        # THE VACUITY GUARD. Two-segment version, a different wording, a bare version with no
+        # banner: none of these is the declared shape, so none is tagged — the bytes stay
+        # under the comparison and a cell carrying them still fails on a real change.
+        for line in (b"Node.js v22\n", b"node v1.2.3\n", b"Node.js version 1.2.3\n",
+                     b"v1.2.3\n", b"Node.js v1.2\n"):
+            with self.subTest(line=line):
+                self.assertEqual(self.norm(line), line)
+
+    def test_the_message_around_the_banner_is_still_compared(self):
+        # A port that reported the wrong FILE, or dropped the check entirely, must still be
+        # caught: only the version is tolerant, never the sentence carrying it.
+        a = b"node --check failed for geneseed-learn.js: Node.js v22.23.1\n"
+        b = b"node --check failed for geneseed-notify.js: Node.js v22.23.2\n"
+        self.assertNotEqual(self.norm(a), self.norm(b))
+
+    # ---- where `git` lives -------------------------------------------------------------
+    def test_the_resolved_git_executable_is_normalised_on_either_platform(self):
+        win = b"[geneseed] fetching from origin (git: C:\\Program Files\\Git\\mingw64\\bin\\" \
+              b"git.EXE, timeout: 45s) ...\n"
+        nix = b"[geneseed] fetching from origin (git: /usr/bin/git, timeout: 45s) ...\n"
+        self.assertEqual(self.norm(win), self.norm(nix))
+        self.assertIn(b"(git: <GIT>, timeout: 45s)", self.norm(nix))
+
+    def test_the_timeout_beside_it_is_still_compared(self):
+        # `timeout:` is OUTSIDE the tag on purpose — it is the one value on that line the
+        # port can get wrong, and 45s vs 120s partitions the bootstrap cells.
+        a = b"(git: /usr/bin/git, timeout: 45s) ...\n"
+        b = b"(git: /usr/bin/git, timeout: 120s) ...\n"
+        self.assertNotEqual(self.norm(a), self.norm(b))
+
+    def test_a_git_line_of_another_shape_is_left_verbatim(self):
+        # An EMPTY value (a side that stopped naming the executable), a missing `timeout:`
+        # tail, and a `git:` that is not inside the fetch message's parentheses.
+        for line in (b"(git: , timeout: 45s)\n", b"(git: /usr/bin/git)\n",
+                     b"git: /usr/bin/git, timeout: 45s\n", b"(git: /usr/bin/git\n"):
+            with self.subTest(line=line):
+                self.assertEqual(self.norm(line), line)
+
+    # ---- the operator's own build ------------------------------------------------------
+    def test_a_live_shaped_installed_fingerprint_is_normalised(self):
+        body = b'{"version_target": "x", "installed_fp": "240280e0c4d9"}'
+        self.assertEqual(self.norm(body),
+                         b'{"version_target": "x", "installed_fp": "<FP>"}')
+
+    def test_the_seeded_sixteen_hex_fixture_is_left_verbatim(self):
+        # `web_golden._VERSION` — a fingerprint no source render can produce, which is why
+        # the pattern is EXACTLY twelve rather than at-least-twelve.
+        body = b'{"installed_fp": "0000000000000000"}'
+        self.assertEqual(self.norm(body), body)
+
+    def test_the_other_spellings_of_a_fingerprint_are_untouched(self):
+        for line in (b"installed: deadbeef1234\n",         # the CLI status marker fixture
+                     b'{"installed_fp": null}\n',           # the runner's answer, a real state
+                     b'{"installed_fp": "0123456789abc"}'):  # thirteen, not twelve
+            with self.subTest(line=line):
+                self.assertEqual(self.norm(line), line)
+
+
 if __name__ == "__main__":
     unittest.main()

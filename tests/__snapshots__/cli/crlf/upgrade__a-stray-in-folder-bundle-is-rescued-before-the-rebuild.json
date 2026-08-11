@@ -3,7 +3,7 @@
     "<dirs>": "85ccab4f4fd4a6cfb5adb0b9656dafd23498c736cd0f8ecac204e56fa8a4889a",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "<stdout>": "212a030f88eaccdee10f51537571d6285394b57268e7e85a92ff9264d7f7b851",
+    "<stdout>": "3bb93f94295a890b6a7c64bf4faf1c23c1e96528c5a2e21d9c2fca9b3ffc4464",
     "bundle/.geneseed-emit": "5d22d2bd842f71414b1e487992eae4dc6b41fb4fc39e136446df90feca606fdd",
     "bundle/.geneseed-footprint": "f666ee8092bfccca7b4ae323ccee834205ad1547fcadd54d31b58b603a08770e",
     "bundle/.geneseed-srcdirs.json": "c5d411e18a431172b079824a95dcec055a8c6ba1b31977b9dd6a8e432fc59ec8",
@@ -116,14 +116,14 @@
     "bundle/skills/workflow.md": "e3c176b0c3ace0853202cf98a807968eb3cbec5a2cc0d2352a705152ef700d3a",
     "bundle/user-rules.md": "1c9b5bf7bdcbb22d94dc69adab386d243d6b0667f4729f5ca2d6ce71185ce85e",
     "bundle/wiki.jsonc": "650f0bcf6ef035d50e9ad9463c1c4577d4be460755bc1ef2d147396e7d673a26",
-    "home/.geneseed-install.log": "1cbe99ff56dc2538fdd99fdf71a82664048aa95caeebef405ecf7f2613f5b215",
+    "home/.geneseed-install.log": "3c3c3812413e0be4135db22d53a277865adba579df2571104e3bb12e78cd0422",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "sizes": {
     "<dirs>": 327,
     "<exit>": 1,
     "<stderr>": 0,
-    "<stdout>": 789,
+    "<stdout>": 754,
     "bundle/.geneseed-emit": 7,
     "bundle/.geneseed-footprint": 6,
     "bundle/.geneseed-srcdirs.json": 70,
@@ -236,13 +236,13 @@
     "bundle/skills/workflow.md": 3553,
     "bundle/user-rules.md": 1373,
     "bundle/wiki.jsonc": 1532,
-    "home/.geneseed-install.log": 697,
+    "home/.geneseed-install.log": 662,
     "repo/.keep": 0
   },
   "verbatim": {
     "<dirs>": "bundle\nbundle/agents\nbundle/laws\nbundle/memory\nbundle/modes\nbundle/notebook\nbundle/postures\nbundle/skills\nbundle/skills/daydream\nbundle/skills/daydream/.claude-plugin\nbundle/skills/react-view-transitions\nbundle/skills/react-view-transitions/references\nbundle/skills/token-report\nbundle/skills/token-report/scripts\ncfg\nhome\nrepo",
     "<exit>": "0",
     "<stderr>": "",
-    "<stdout>": "[geneseed] update source: https://github.com/Arylmera/Geneseed (branch: main)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: C:\\Program Files\\Git\\mingw64\\bin\\git.EXE, timeout: 120s) ...\n[geneseed] already up to date.\n[geneseed] rescued context.json from <REPO>\\Harness -> <SB>\\bundle\n[geneseed] rescued memory/ from <REPO>\\Harness -> <SB>\\bundle\n[geneseed] removing stray in-folder bundle <REPO>\\Harness (canonical: <SB>\\bundle)\n[geneseed] rebuilding bundle -> <SB>\\bundle (theme: neutral, emit: files) ...\n[geneseed] built theme 'neutral' -> <SB>\\bundle (99 files)\n[geneseed] refreshing every active install (rebuild-all) ...\n[rebuild-all] no active installs detected.\n[geneseed] ✓ upgrade complete. (full log: <HOME>\\.geneseed-install.log)\n"
+    "<stdout>": "[geneseed] update source: https://github.com/Arylmera/Geneseed (branch: main)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: <GIT>, timeout: 120s) ...\n[geneseed] already up to date.\n[geneseed] rescued context.json from <REPO>\\Harness -> <SB>\\bundle\n[geneseed] rescued memory/ from <REPO>\\Harness -> <SB>\\bundle\n[geneseed] removing stray in-folder bundle <REPO>\\Harness (canonical: <SB>\\bundle)\n[geneseed] rebuilding bundle -> <SB>\\bundle (theme: neutral, emit: files) ...\n[geneseed] built theme 'neutral' -> <SB>\\bundle (99 files)\n[geneseed] refreshing every active install (rebuild-all) ...\n[rebuild-all] no active installs detected.\n[geneseed] ✓ upgrade complete. (full log: <HOME>\\.geneseed-install.log)\n"
   }
 }

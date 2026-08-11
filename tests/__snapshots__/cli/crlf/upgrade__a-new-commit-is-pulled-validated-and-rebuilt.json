@@ -3,7 +3,7 @@
     "<dirs>": "feb0ad3d61d2ea0b0f1fabfc7a29722ba7dc19f0a88900bb51561231ac7b29cc",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "<stdout>": "7e7afe64a2c0e3664fd2e4f66852d16a2e0570252eaa16a9c234503afe09a9ff",
+    "<stdout>": "a2d600782c6fded30e1a43083bb3b70a41dd4d4cebbc5ed7d864bea24c1ed627",
     "bundle/.geneseed-emit": "5d22d2bd842f71414b1e487992eae4dc6b41fb4fc39e136446df90feca606fdd",
     "bundle/.geneseed-footprint": "f666ee8092bfccca7b4ae323ccee834205ad1547fcadd54d31b58b603a08770e",
     "bundle/.geneseed-srcdirs.json": "c5d411e18a431172b079824a95dcec055a8c6ba1b31977b9dd6a8e432fc59ec8",
@@ -115,14 +115,14 @@
     "bundle/skills/workflow.md": "e3c176b0c3ace0853202cf98a807968eb3cbec5a2cc0d2352a705152ef700d3a",
     "bundle/user-rules.md": "1c9b5bf7bdcbb22d94dc69adab386d243d6b0667f4729f5ca2d6ce71185ce85e",
     "bundle/wiki.jsonc": "650f0bcf6ef035d50e9ad9463c1c4577d4be460755bc1ef2d147396e7d673a26",
-    "home/.geneseed-install.log": "320986cd471bf4275675f66170a1a16652ed1ee3ce3cd262a0edaba1b67aa300",
+    "home/.geneseed-install.log": "0b88b7d17f0f8f89140ab0f00b6c0ec85ee74bebed56c70ab4831e5dbceb7ebd",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "sizes": {
     "<dirs>": 361,
     "<exit>": 1,
     "<stderr>": 0,
-    "<stdout>": 936,
+    "<stdout>": 901,
     "bundle/.geneseed-emit": 7,
     "bundle/.geneseed-footprint": 6,
     "bundle/.geneseed-srcdirs.json": 70,
@@ -234,13 +234,13 @@
     "bundle/skills/workflow.md": 3553,
     "bundle/user-rules.md": 1373,
     "bundle/wiki.jsonc": 1532,
-    "home/.geneseed-install.log": 846,
+    "home/.geneseed-install.log": 811,
     "repo/.keep": 0
   },
   "verbatim": {
     "<dirs>": "bundle\nbundle/agents\nbundle/laws\nbundle/memory\nbundle/modes\nbundle/notebook\nbundle/postures\nbundle/skills\nbundle/skills/daydream\nbundle/skills/daydream/.claude-plugin\nbundle/skills/react-view-transitions\nbundle/skills/react-view-transitions/references\nbundle/skills/token-report\nbundle/skills/token-report/scripts\ncfg\nhome\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
     "<exit>": "0",
     "<stderr>": "",
-    "<stdout>": "[geneseed] update source: https://github.com/Arylmera/Geneseed (branch: main)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: C:\\Program Files\\Git\\mingw64\\bin\\git.EXE, timeout: 120s) ...\n[geneseed] 1 new commit(s) upstream — updating ...\n[geneseed] fast-forwarding to upstream ...\n[geneseed] pulled:\n  <SHA> upstream: a new commit\n[geneseed] validating the pulled source (doctor — can take a minute) ...\n[doctor] ok — 14 theme(s) clean: no unresolved tokens, no dead links, nothing escapes the bundle; themes in parity; specs carry purpose lines; rendered bundle in sync\n[geneseed] rebuilding bundle -> <SB>\\bundle (theme: neutral, emit: files) ...\n[geneseed] built theme 'neutral' -> <SB>\\bundle (99 files)\n[geneseed] refreshing every active install (rebuild-all) ...\n[rebuild-all] no active installs detected.\n[geneseed] ✓ upgrade complete. (full log: <HOME>\\.geneseed-install.log)\n"
+    "<stdout>": "[geneseed] update source: https://github.com/Arylmera/Geneseed (branch: main)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: <GIT>, timeout: 120s) ...\n[geneseed] 1 new commit(s) upstream — updating ...\n[geneseed] fast-forwarding to upstream ...\n[geneseed] pulled:\n  <SHA> upstream: a new commit\n[geneseed] validating the pulled source (doctor — can take a minute) ...\n[doctor] ok — 14 theme(s) clean: no unresolved tokens, no dead links, nothing escapes the bundle; themes in parity; specs carry purpose lines; rendered bundle in sync\n[geneseed] rebuilding bundle -> <SB>\\bundle (theme: neutral, emit: files) ...\n[geneseed] built theme 'neutral' -> <SB>\\bundle (99 files)\n[geneseed] refreshing every active install (rebuild-all) ...\n[rebuild-all] no active installs detected.\n[geneseed] ✓ upgrade complete. (full log: <HOME>\\.geneseed-install.log)\n"
   }
 }

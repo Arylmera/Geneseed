@@ -713,6 +713,61 @@ CORPUS_STAMPS = (
     # template, so the live gate still compares these ids byte for byte and a port that
     # echoed the wrong commit is still caught there.
     (re.compile(rb"^ {2}[0-9a-f]{7,40} (?=\S)", re.M), b"  <SHA> "),
+
+    # ---- THE TOOLCHAIN, which is a fourth class and not a spelling of the first three -----
+    #
+    # Everything above moves because of a CLOCK, a CHECKOUT or a FIXTURE. These two move
+    # because of the MACHINE: what is installed on it, and where. Neither side of a live cell
+    # can disagree about them — one machine, one PATH, one `node` — so the live gate compares
+    # both verbatim and a port that reported a different runtime or resolved a different git
+    # is still caught there. A corpus is replayed from another machine on another day.
+    #
+    # 1. NODE'S CRASH BANNER. `_harness_build._authoring_problems`
+    #    (`rituals/_harness_build.py:581`) and `js/doctor.mjs:924` report the LAST stderr line
+    #    of `node --check` for a plugin that does not parse, and that line is Node's own
+    #    version. `.github/workflows/ci.yml` pins `node-version: "22"`, which floats within
+    #    the major: CI run 31543477435 replayed a corpus recorded against v22.23.1 on a runner
+    #    that had moved to v22.23.2, and `doctor/a-plugin-that-does-not-parse` — the one cell
+    #    of 319 that spawns node at all — was the whole diff, 117 bytes against 117 bytes.
+    #
+    #    THE SHAPE IS DECLARED, `v<major>.<minor>.<patch>` and nothing else, for the reason
+    #    `_destamp` above exists: a banner that stops matching (a pre-release suffix, a
+    #    reworded tail, a side that stopped reporting it at all) leaves NO tag, keeps its
+    #    bytes under the comparison, and reddens the cell — rather than being quietly blanked
+    #    into agreement. Swept over all three corpora before it was written: `Node.js v` occurs
+    #    exactly twice, once per platform half of that one cell, and nowhere in `src/` prose.
+    (re.compile(rb"Node\.js v\d+\.\d+\.\d+"), b"Node.js v<NODE>"),
+    # 2. WHERE `git` LIVES. `_update.py:548` / `js/update.mjs:650` echo `shutil.which('git')`
+    #    (`pyWhich('git')`) into the fetch line so an operator can see which git ran. That is a
+    #    PATH lookup: `C:\Program Files\Git\mingw64\bin\git.EXE` on this laptop,
+    #    `/usr/bin/git` on the runner, and something with a username in it on the next
+    #    machine. 16 cells across `bootstrap/*`, `upgrade/*` and `sync-self/*` carry it, and it
+    #    is the second-largest thing the crlf/lf corpus diff turns up after the separators.
+    #
+    #    ANCHORED ON THE MESSAGE AND REQUIRING A NON-EMPTY, SINGLE-LINE VALUE, the same rule
+    #    `harness_golden._STAMPS` already applies to `command: <ARGV>` and to the shim's
+    #    `"<RUNNER>" "<ENTRY>"`: a side that stopped naming the executable, or dropped the
+    #    `timeout:` that follows it, leaves the line untagged and fails.
+    (re.compile(rb"(\(git: )[^,\r\n]+(, timeout: )"), rb"\1<GIT>\2"),
+    # 3. THE FINGERPRINT OF THE OPERATOR'S OWN BUILD. `_status_data`'s candidate walk
+    #    (`_harness_status.py:68-74`) ends at `ROOT / "Harness"` — the CHECKOUT's bundle, which
+    #    no sandbox can fence off (there is no env hook for `ROOT`). `setup/an-undeployed-
+    #    target-says-so` seeds no host dir on purpose, so the walk leaves the sandbox and
+    #    `installed_fp` records whatever this machine last built: `240280e0c4d9` here, `null`
+    #    on the runner, and a different twelve hex digits after the next `build.py`.
+    #
+    #    EXACTLY TWELVE HEX, which is what keeps the seeded fixtures out of reach — the same
+    #    discrimination the `source ` rule above relies on. `"installed_fp":
+    #    "0000000000000000"` is sixteen and stays byte-compared, and `installed: deadbeef1234`
+    #    is a different spelling this pattern cannot see.
+    #
+    #    THE OTHER THREE FIELDS OF THAT CELL ARE NOT TAGGED, deliberately. `version_target`,
+    #    `version_verdict` and `emit` also answer about the checkout rather than the sandbox,
+    #    but they move only if the operator's `Harness/` appears or disappears — not on every
+    #    rebuild — and each is either a whole SENTENCE or a field ~50 other cells assert. A
+    #    stamp wide enough to cover them would cost more comparison than the rot is worth; the
+    #    fix for those is to pin the walk, not to blank its answer. See task-8c-report.md.
+    (re.compile(rb'("installed_fp": ")[0-9a-f]{12}(?=")'), rb"\1<FP>"),
 )
 
 # `learn`'s bullet, `- <today>: <lesson>` (`_harness_learn.py:44`) — the one stamp that needs
