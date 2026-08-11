@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "b3065e3f4ed7b6996e47d10d7c00186dd65fe6702c2ce16b40dbf78d56242a61",
+    "home/.geneseed-install.log": "9ba2f42a8658e282fa068595dd37b03aeca05b96e33f08d39a50555358e469ee",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 13,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 705,
+    "home/.geneseed-install.log": 628,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo",
+    "<exit>": "1",
+    "<stderr>": "",
+    "<stdout>": "[geneseed] step 1/1: Update & rebuild ...\n[geneseed] update source: https://127.0.0.1/owner/repo (branch: main)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: /usr/bin/git, timeout: 45s) ...\n[geneseed]   fatal: transport 'https' not allowed\n[geneseed] ✗ could not reach the remote: fatal: transport 'https' not allowed\n[geneseed]   If `git pull` works in your terminal but not here, this daemon likely lacks your shell's environment (VPN/proxy vars, SSO or Kerberos credentials). Restart it from that terminal: `geneseed web restart`.\n[geneseed] ✗ step 1/1 FAILED (exit 1): Update & rebuild\n[geneseed] ── full install log: <HOME>/.geneseed-install.log\n"
+  }
+}

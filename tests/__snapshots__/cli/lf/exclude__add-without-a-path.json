@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "206617ac96b91fc95909c25c40f7616c7aafd92258ff18d2974f3ca9419418dd",
+    "<exit>": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+    "<stderr>": "38a88fc4b63b3bbadc0ffbcf2769be683f07f1f203d8d8b77dec4f2daea33fc5",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "home/.claude/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 26,
+    "<exit>": 1,
+    "<stderr>": 51,
+    "<stdout>": 0,
+    "home/.claude/.geneseed-manifest.json": 14,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.claude\nrepo",
+    "<exit>": "2",
+    "<stderr>": "[geneseed] exclude add/remove needs a folder path.\n",
+    "<stdout>": ""
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "paths": {
+    "<daemon-record>": "380b7a62b3ee76b2c04092e2b9174c525c61d4b23153e032d8defe2188600377",
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<r1 body>": "f56d94fe5c441e7335be255b55589503ac64d6d8ef0cb609956ec65d5675c174",
+    "<r1 headers>": "9f979e9aacecc5f52d6c8ddf0f0f2626c824477e9689d242e45add7526d88724",
+    "<r1 status>": "58404bdf6dc25c24fedd979469e69bfb8dc9ebca64a469929a858a12b12b9c30",
+    "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<server stdout>": "a2220f17b666a38e07f807abe1b4f584b70e0176ecd80a8f7a43d34a7fa9a06c"
+  },
+  "sizes": {
+    "<daemon-record>": 120,
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<r1 body>": 27,
+    "<r1 headers>": 49,
+    "<r1 status>": 13,
+    "<server stderr>": 0,
+    "<server stdout>": 205
+  },
+  "verbatim": {
+    "<daemon-record>": "{\"pid\": <PID>, \"port\": <PORT>, \"started\": <T>, \"theme\": \"neutral\", \"token\": \"<TOKEN>\", \"url\": \"http://127.0.0.1:<PORT>\"}",
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "0",
+    "<r1 body>": "{\"error\": \"forbidden host\"}",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 27",
+    "<r1 status>": "403 Forbidden",
+    "<server stderr>": "",
+    "<server stdout>": "[web] no deployed harness at <HOME>/.config/opencode.\n      Run `geneseed setup` first — serving anyway (read-only UI).\n[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: neutral)\n[web] daemon ready.\n"
+  }
+}

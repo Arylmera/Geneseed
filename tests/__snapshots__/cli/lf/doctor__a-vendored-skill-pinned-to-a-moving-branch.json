@@ -1,0 +1,22 @@
+{
+  "paths": {
+    "<dirs>": "6991901ebb4d90155b414709975b405b0ae9fa1aa5d80fecc11cdcad19bfa180",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "338bd4e0a1b751a1316f96eb8ef554c01874ee8f1f21eb2eacd7e66d2aff335a",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 47,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 160,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
+    "<exit>": "1",
+    "<stderr>": "",
+    "<stdout>": "[doctor] 1 problem(s) across 1 theme(s):\n  - [authoring] skills/react-view-transitions/VENDOR.md pins 'main', a moving branch — record the commit sha instead\n"
+  }
+}

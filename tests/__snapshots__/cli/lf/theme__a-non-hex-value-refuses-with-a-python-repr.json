@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "9797ba8ed80981bf26924efa86d097be9c7e4f868e9dab67bf6170a90e6951b7",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "p.json": "6b92d7c90c2e47dd7a8014e0a16aad70c8d98fbb64118ec34d3b077f2d4fab1a",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 13,
+    "<exit>": 1,
+    "<stderr>": 52,
+    "<stdout>": 0,
+    "p.json": 42,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo",
+    "<exit>": "1",
+    "<stderr>": "[theme] non-#rrggbb value(s): bg=7, accent='112233'\n",
+    "<stdout>": ""
+  }
+}

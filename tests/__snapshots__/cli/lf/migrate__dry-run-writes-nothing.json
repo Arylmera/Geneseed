@@ -1,0 +1,34 @@
+{
+  "paths": {
+    "<dirs>": "415fb462be7630e1982f5851b98f232cb35b9e98ec3364433424e2fafc70e0ed",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "17dfab31c6018867c11f991a5be53548b051f8db880789023302b20eed8cbb5e",
+    "home/.claude/.geneseed-emit": "9db22d9e7cbec2d92fa51ab57b633cf21a090af3d92c587dcb5ba37e69822989",
+    "home/.claude/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.claude/.geneseed-theme": "1a3376a1e42e75f0d137b6a8baa4b46fad019cb3d13a6dccdd4d944903bd0791",
+    "home/.claude/settings.json": "11854879ed70dc0dd23acdb879af7cf188b5c473e4912ba4f0d7e0df624380ac",
+    "home/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/geneseed-web.vbs": "c914724dddb72b816a338dff8f201e4fa8c2baf2695290fa02e2106a582d5d7c",
+    "home/Library/LaunchAgents/dev.geneseed.web.plist": "138c8ebb768b1c1e1e190074a62e7bb7cf6463a2a47c0c41477a40f5943a5a1b",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 379,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 371,
+    "home/.claude/.geneseed-emit": 14,
+    "home/.claude/.geneseed-manifest.json": 14,
+    "home/.claude/.geneseed-theme": 8,
+    "home/.claude/settings.json": 715,
+    "home/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/geneseed-web.vbs": 180,
+    "home/Library/LaunchAgents/dev.geneseed.web.plist": 284,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.claude\nhome/.geneseed\nhome/.geneseed/bin\nhome/AppData\nhome/AppData/Roaming\nhome/AppData/Roaming/Microsoft\nhome/AppData/Roaming/Microsoft/Windows\nhome/AppData/Roaming/Microsoft/Windows/Start Menu\nhome/AppData/Roaming/Microsoft/Windows/Start Menu/Programs\nhome/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup\nhome/Library\nhome/Library/LaunchAgents\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[migrate] 1 install(s), wiring shape: legacy\n[migrate] would re-emit claude:global (<HOME>/.claude)\n[migrate] would report the autostart entry at <HOME>/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/geneseed-web.vbs\n[migrate] would report the autostart entry at <HOME>/Library/LaunchAgents/dev.geneseed.web.plist\n[migrate] --dry-run: nothing was written.\n"
+  }
+}

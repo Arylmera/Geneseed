@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
+    "<exit>": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "b1507b2344eb4ce77756386e6222251d14c8ae2fcc5501a87b680ba6d946a1ff",
+    "home/.geneseed-install.log": "b1507b2344eb4ce77756386e6222251d14c8ae2fcc5501a87b680ba6d946a1ff",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 13,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 393,
+    "home/.geneseed-install.log": 393,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo",
+    "<exit>": "3",
+    "<stderr>": "",
+    "<stdout>": "[geneseed] ⚠️  ref 'v1.2.3' is IGNORED — updates follow the checkout's current branch (tag/branch pinning was removed with the zip path).\n[geneseed] update source: https://github.com/Arylmera/Geneseed\n[geneseed] preflight: checking the local checkout ...\n[geneseed] This Geneseed install isn't a git checkout — update it with `npm install -g geneseed@latest`, or re-clone it with git.\n"
+  }
+}

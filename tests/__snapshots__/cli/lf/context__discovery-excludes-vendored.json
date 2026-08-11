@@ -1,0 +1,38 @@
+{
+  "paths": {
+    "<dirs>": "693c61378c35019cf369f06b5b8feef7eeb1a908c0b3afb08b510a9a19c966b0",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "9387ecd72f9fe01760f6c98b216646c41a6cdadb3acb0be90cec906673b260b2",
+    "repo/CLAUDE.md": "53d20c0e6fbe71fc945d358cd9d1cc12c0e9152ffd851c4efd31a9a5e1c43c5e",
+    "repo/NOTES.md": "5e9c7c4fe256296152f7127299c293280a6463090365d9892bfd85b66257842d",
+    "repo/README.md": "7cafa743210710a71f82c91489f66e6627f5af7923068eb03ce0a1be23ef13ab",
+    "repo/apps/site/README.md": "e7c3baee7f92465597364cb23d3f7c353b2df2e7644cffa9665f43d010950c12",
+    "repo/docs/architecture.md": "2e7cb38229f7877e569cc05dd9c8fb71b30954ad2c9978328d69f5d377f81505",
+    "repo/docs/nested/deep.md": "9fb2d7f661bff67ff024138a50246d2a16fe4dfa4e69b6cabfdf592db271e4f9",
+    "repo/docs/node_modules/vendored.md": "af4944865fe3aecf3f8f01a17cba99d752cf7836efaabd9a7e250164b8e198c1",
+    "repo/packages/widget/README.md": "5ebfc63436cdb90363ee1b1dfefe12691f0c5eedaa055649528a059f2eb5f824",
+    "repo/packages/widget/index.js": "43d1573168ae2bb5f910fa58831fec535d21a867cc3ab87396eeb256f64a4a94"
+  },
+  "sizes": {
+    "<dirs>": 123,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 371,
+    "repo/CLAUDE.md": 28,
+    "repo/NOTES.md": 40,
+    "repo/README.md": 23,
+    "repo/apps/site/README.md": 7,
+    "repo/docs/architecture.md": 15,
+    "repo/docs/nested/deep.md": 7,
+    "repo/docs/node_modules/vendored.md": 21,
+    "repo/packages/widget/README.md": 9,
+    "repo/packages/widget/index.js": 16
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo\nrepo/apps\nrepo/apps/site\nrepo/docs\nrepo/docs/nested\nrepo/docs/node_modules\nrepo/packages\nrepo/packages/widget",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "=== PROJECT CONTEXT — binding for this repo per Rule XVIII (via auto-discovery [<SB>/repo]) ===\n\n----- CLAUDE.md -----\n# Instructions\n\nBe careful.\n\n----- README.md -----\n# Project\n\nThe readme.\n\n--- Lazy entries (load only when the task needs them) ---\n  - NOTES.md\n  - docs/architecture.md\n  - docs/nested/deep.md\n  - packages/widget/README.md\n  - apps/site/README.md\n\n"
+  }
+}

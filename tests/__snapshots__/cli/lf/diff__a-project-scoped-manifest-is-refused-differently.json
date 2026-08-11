@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "9a1b7ff66031735e1786a2722eb1a9103609a455818e3dd78d37cec48215ec8c",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "home/.config/opencode/.geneseed-manifest.json": "5459e06453f549587c3d02da39f8e37027460a5975941f3c9e83d149b298d948",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<stderr>": 329,
+    "<stdout>": 0,
+    "home/.config/opencode/.geneseed-manifest.json": 33,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "1",
+    "<stderr>": "[diff] <HOME>/.config/opencode is a PROJECT install — diff only compares GLOBAL installs against a fresh render (a project layer is diffed against its own repo, which this command does not do). Pass --target at a global config dir (opencode-global/claude-global/bob-global/copilot-global), or omit --target to use the default.\n",
+    "<stdout>": ""
+  }
+}

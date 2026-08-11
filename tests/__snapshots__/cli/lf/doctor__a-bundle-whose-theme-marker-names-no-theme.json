@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "0e2930a7406ef6d3f3c4bd446d8f6fe15bf91883c364b1b483c9fd67a17636f9",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "bdc2c0ae92ff96fe31a181ff2175a991600def4193721217290c2a9951c7e35e",
+    "bundle/.geneseed-theme": "537a1083ddda359d81879cac2fb41f0f7032d60416b71598a467fc449a8358d3",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 54,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 102,
+    "bundle/.geneseed-theme": 12,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "bundle\ncfg\nhome\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
+    "<exit>": "1",
+    "<stderr>": "",
+    "<stdout>": "[doctor] 1 problem(s) across 1 theme(s):\n  - [rendered] cannot render theme 'nosuchtheme' for bundle/\n"
+  }
+}

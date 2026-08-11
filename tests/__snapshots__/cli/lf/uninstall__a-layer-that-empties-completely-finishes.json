@@ -1,0 +1,26 @@
+{
+  "paths": {
+    "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "044045be3f14ec49758e24159a8e14d141ab2d9c3fc48c5be23b99e41f8d39df",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/README.md": "197fab1a6da905e18c2a6b9fcb0242798b22d3d01277f4d3b04b1001e51bd7ab",
+    "repo/opencode.json": "cc60db4ac7f8c4c57b563bf4df0c162728605b762c9b76e666698ae72e0cb3fa"
+  },
+  "sizes": {
+    "<dirs>": 13,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 370,
+    "repo/.keep": 0,
+    "repo/README.md": 21,
+    "repo/opencode.json": 46
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[uninstall] target: <SB>/repo (opencode:project)\n[uninstall] removes: AGENT.md, .opencode/, laws/, agents/, skills/, and the opencode.json instructions entry.\n[uninstall] memory/ and notebook/ are kept in place (never deleted here).\n[uninstall] done — removed 5 file(s); opencode.json updated where needed; memory/notebook kept in place. Start a new session to apply.\n"
+  }
+}

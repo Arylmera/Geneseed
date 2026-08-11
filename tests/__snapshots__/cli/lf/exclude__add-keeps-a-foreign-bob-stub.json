@@ -1,0 +1,28 @@
+{
+  "paths": {
+    "<dirs>": "f9ab7228de4de42d567a492886e3eb72ebc56e8d8b30c33a24093071fa060ce5",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "052bdc5dda016f9621164f7f16fae454cb6da166ec1f597885fe65c9409173ab",
+    "<stdout>": "1f97fed25e17141211cea9fa7b689a7ba5668019b42b09b58246ebec4ae46798",
+    "home/.bob/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.bob/excludes.json": "25a12d9a46fb0f91814b1800a364fa1418eae6bad1be5d603952aafa1576215f",
+    "repo/.bob/rules/geneseed.md": "d8f838182cbd8a2249b1b9f169575a4954d83e61e2422d9c560e4dd0cf6eccf4",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 49,
+    "<exit>": 1,
+    "<stderr>": 66,
+    "<stdout>": 31,
+    "home/.bob/.geneseed-manifest.json": 14,
+    "home/.bob/excludes.json": 318,
+    "repo/.bob/rules/geneseed.md": 15,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.bob\nrepo\nrepo/.bob\nrepo/.bob/rules",
+    "<exit>": "0",
+    "<stderr>": "[geneseed] bob: rules/geneseed.md already exists (kept, not ours)\n",
+    "<stdout>": "[geneseed] <SB>/repo excluded.\n"
+  }
+}

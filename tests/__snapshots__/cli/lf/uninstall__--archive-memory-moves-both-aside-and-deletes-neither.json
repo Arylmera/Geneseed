@@ -1,0 +1,32 @@
+{
+  "paths": {
+    "<dirs>": "18729e82f1683d861aaa2ecc9af26bd584dec9f6cc682d7174e4608abb8c13cb",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "2790709f1f377a9fed55697f095c0d12497a75d88fec566533a4d85102b27197",
+    "home/.config/opencode/MY-OWN.md": "397e6df04c7bbea70a62e7c02979b65d61385140405c365e72cc52a6752f3650",
+    "home/.config/opencode/archived-memory/<STAMP>/fact.md": "e62532967916c97e8ba5a00f63d56877e0d69c8ea87550cca44ffd5fb4d59053",
+    "home/.config/opencode/archived-notebook/<STAMP>/note.md": "4874464a2b14eef4bf671cccfe7fbbfb60bc99c5fd166c320299c59f5e1061f6",
+    "home/.config/opencode/opencode.json": "6a4372c240efb59a2bdb9e02458679a587227ae17563b53ad74892f2e238ad6e",
+    "home/.config/opencode/prompts/mine.md": "613d52a4737992b97d4e37658b94cf788a5f322067ea08598f33868c470419c4",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 250,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 623,
+    "home/.config/opencode/MY-OWN.md": 23,
+    "home/.config/opencode/archived-memory/<STAMP>/fact.md": 49,
+    "home/.config/opencode/archived-notebook/<STAMP>/note.md": 7,
+    "home/.config/opencode/opencode.json": 113,
+    "home/.config/opencode/prompts/mine.md": 25,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/archived-memory\nhome/.config/opencode/archived-memory/<STAMP>\nhome/.config/opencode/archived-notebook\nhome/.config/opencode/archived-notebook/<STAMP>\nhome/.config/opencode/prompts\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[uninstall] target: <HOME>/.config/opencode (opencode:global)\n[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the opencode.json instructions entry.\n[uninstall] memory/ and notebook/ are kept in place (never deleted here) — --archive-memory sets both aside.\n[uninstall] memory + notebook: will be ARCHIVED to a sibling archived-<name>/<timestamp>/ (never deleted)\n[uninstall] done — removed 2 file(s); opencode.json updated where needed; memory/notebook archived -> <HOME>/.config/opencode/archived-memory/<STAMP>, <HOME>/.config/opencode/archived-notebook/<STAMP>. Start a new session to apply.\n"
+  }
+}

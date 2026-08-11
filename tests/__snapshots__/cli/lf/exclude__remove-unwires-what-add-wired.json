@@ -1,0 +1,32 @@
+{
+  "paths": {
+    "<dirs>": "b86ec5a340a93e85f8fa4362ed8a7be9b9f67c4ffc708c1366b2af5e9d91a797",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "35261f9b4219bf711b589cada92219e8a157fc917108792619c2cebd340fcf1b",
+    "home/.bob/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.bob/excludes.json": "eae7e0517241455ccd556dbf73086ae275f19dbe350c2041b5d92435e27b3b85",
+    "home/.claude/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.claude/excludes.json": "eae7e0517241455ccd556dbf73086ae275f19dbe350c2041b5d92435e27b3b85",
+    "repo/.claude/settings.local.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 59,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 34,
+    "home/.bob/.geneseed-manifest.json": 14,
+    "home/.bob/excludes.json": 219,
+    "home/.claude/.geneseed-manifest.json": 14,
+    "home/.claude/excludes.json": 219,
+    "repo/.claude/settings.local.json": 3,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.bob\nhome/.claude\nrepo\nrepo/.bob\nrepo/.claude",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[geneseed] <SB>/repo re-included.\n"
+  }
+}

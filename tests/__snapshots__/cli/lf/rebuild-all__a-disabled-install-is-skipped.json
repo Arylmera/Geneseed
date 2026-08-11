@@ -1,0 +1,28 @@
+{
+  "paths": {
+    "<dirs>": "8d28d02334bd1e22d7f6c430aea23d5c496d1bae837041b1753717ff29c21f2f",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "e853b67763eabc4a82a7394523d845e6cb5070dd8e63a76c1a6992622e8767b6",
+    "home/.config/opencode/.geneseed-disabled/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "home/.config/opencode/.geneseed-emit": "cf0ce6c78cf13e6a015d67cdcabc6bb1e6ff362b41a3e370381cbc61aa97720a",
+    "home/.config/opencode/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 89,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 43,
+    "home/.config/opencode/.geneseed-disabled/.keep": 0,
+    "home/.config/opencode/.geneseed-emit": 16,
+    "home/.config/opencode/.geneseed-manifest.json": 14,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/.geneseed-disabled\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[rebuild-all] no active installs detected.\n"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "paths": {
+    "<daemon-record>": "001626a30ef917ebc601ee099fe891e89bb3ffb8e6481b562b263a0b4d50ce84",
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<r1 body>": "0c6b636d2921a3e7e791c8d09791b04df982ccd3d187a7c11cbcf1548ff88174",
+    "<r1 headers>": "1a5815f3b8a1a0c8e020901159f03a83ee83852d8eaef5b4241d1ede91f03461",
+    "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
+    "home/.config/opencode/.geneseed-emit": "cf0ce6c78cf13e6a015d67cdcabc6bb1e6ff362b41a3e370381cbc61aa97720a",
+    "home/.config/opencode/.geneseed-manifest.json": "b3ec7b19ffccaae42455096759e00977f6e8582c527b00b805d9cfe6abfd531f",
+    "home/.config/opencode/.geneseed-theme": "d2447a19db93c012ed802df17310eee0626aa1fd640170bf5df7623848da4caf",
+    "home/.config/opencode/.geneseed-version": "fcdb4b423f4e5283afa249d762ef6aef150e91fccd810d43e5e719d14512dec7",
+    "home/.config/opencode/AGENT.md": "f99c3ab290845fe9b644495455ac193d9092f9ada6d875353b216fb14db8d764",
+    "home/.config/opencode/user-rules.md": "3fa37c5662ba9fa13c3cae76de41eafd00f1fb20aca5220f5da02486d09fc9a9",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<daemon-record>": 121,
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<r1 body>": 930,
+    "<r1 headers>": 50,
+    "<r1 status>": 6,
+    "<server stderr>": 0,
+    "<server stdout>": 84,
+    "home/.config/opencode/.geneseed-emit": 16,
+    "home/.config/opencode/.geneseed-manifest.json": 23,
+    "home/.config/opencode/.geneseed-theme": 9,
+    "home/.config/opencode/.geneseed-version": 16,
+    "home/.config/opencode/AGENT.md": 67,
+    "home/.config/opencode/user-rules.md": 331,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<daemon-record>": "{\"pid\": <PID>, \"port\": <PORT>, \"started\": <T>, \"theme\": \"imperial\", \"token\": \"<TOKEN>\", \"url\": \"http://127.0.0.1:<PORT>\"}",
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "0",
+    "<r1 body>": "{\"exists\": true, \"path\": \"<HOME>/.config/opencode/user-rules.md\", \"rules\": [{\"id\": 1, \"title\": \"Always run the tests\", \"scope\": \"project\", \"source\": \"a session\", \"trial_until\": \"<DATE>\", \"status\": \"trial\", \"overdue\": true, \"body\": \"Run the suite before you claim it works.\"}, {\"id\": 2, \"title\": \"Prefer the stdlib\", \"scope\": \"user\", \"source\": \"\", \"trial_until\": \"\", \"status\": \"active\", \"overdue\": false, \"body\": \"Reach for a dependency last.\"}, {\"id\": 3, \"title\": \"On probation\", \"scope\": \"project\", \"source\": \"\", \"trial_until\": \"<DATE>\", \"status\": \"trial\", \"overdue\": false, \"body\": \"Not overdue yet.\"}, {\"id\": 2, \"title\": \"a duplicate id\", \"scope\": \"project\", \"source\": \"\", \"trial_until\": \"\", \"status\": \"active\", \"overdue\": false, \"body\": \"No metadata line at all.\"}], \"warnings\": [\"duplicate rule id R2\"], \"fingerprint\": \"a1927eeaa2b464c3\", \"stats\": {\"rules\": 4, \"lines\": 16, \"tokens\": 82, \"max_rules\": 15, \"max_tokens\": 1500}}",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 953",
+    "<r1 status>": "200 OK",
+    "<server stderr>": "",
+    "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"
+  }
+}

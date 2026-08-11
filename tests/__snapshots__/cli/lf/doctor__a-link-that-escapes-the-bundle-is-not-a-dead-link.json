@@ -1,0 +1,22 @@
+{
+  "paths": {
+    "<dirs>": "6991901ebb4d90155b414709975b405b0ae9fa1aa5d80fecc11cdcad19bfa180",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "8a82a163d5ae88bd49afc6f657494ba08c5acdb7756a6f9eeb98b495ab3afbd1",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 47,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 1614,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
+    "<exit>": "1",
+    "<stderr>": "",
+    "<stdout>": "[doctor] 18 problem(s) across 1 theme(s):\n  - [neutral bob] non-hermetic absolute link '/etc/passwd' in .bob/memory/README.md\n  - [neutral bob] non-hermetic absolute link '~/x.md' in .bob/memory/README.md\n  - [neutral bob] non-hermetic link '../../../..' escapes the bundle in .bob/memory/README.md\n  - [neutral claude] non-hermetic absolute link '/etc/passwd' in .claude/memory/README.md\n  - [neutral claude] non-hermetic absolute link '~/x.md' in .claude/memory/README.md\n  - [neutral claude] non-hermetic link '../../../..' escapes the bundle in .claude/memory/README.md\n  - [neutral copilot] non-hermetic absolute link '/etc/passwd' in .github/memory/README.md\n  - [neutral copilot] non-hermetic absolute link '~/x.md' in .github/memory/README.md\n  - [neutral copilot] non-hermetic link '../../../..' escapes the bundle in .github/memory/README.md\n  - [neutral global/full] non-hermetic absolute link '/etc/passwd' in memory/README.md\n  - [neutral global/full] non-hermetic absolute link '~/x.md' in memory/README.md\n  - [neutral global/full] non-hermetic link '../../../..' escapes the bundle in memory/README.md\n  - [neutral global/lean] non-hermetic absolute link '/etc/passwd' in memory/README.md\n  - [neutral global/lean] non-hermetic absolute link '~/x.md' in memory/README.md\n  - [neutral global/lean] non-hermetic link '../../../..' escapes the bundle in memory/README.md\n  - [neutral] non-hermetic absolute link '/etc/passwd' in memory/README.md\n  - [neutral] non-hermetic absolute link '~/x.md' in memory/README.md\n  - [neutral] non-hermetic link '../../../..' escapes the bundle in memory/README.md\n"
+  }
+}

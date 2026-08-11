@@ -1,0 +1,26 @@
+{
+  "paths": {
+    "<dirs>": "206617ac96b91fc95909c25c40f7616c7aafd92258ff18d2974f3ca9419418dd",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "508fc40f3a3f0949e884453861cc8a31c8ccaa474f8a9a005a46c22d5bca744b",
+    "<stdout>": "e7b3601880f905f348d1a85e01d09142c0d174932659288f6e26103e1d8f865a",
+    "home/.claude/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.claude/excludes.json": "e59e85ba5b9c547b1e661de9d8db0d341d22d62dcc8c0ce3dec1d3c9079cc4a0",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 26,
+    "<exit>": 1,
+    "<stderr>": 64,
+    "<stdout>": 32,
+    "home/.claude/.geneseed-manifest.json": 14,
+    "home/.claude/excludes.json": 280,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.claude\nrepo",
+    "<exit>": "0",
+    "<stderr>": "[geneseed] warning: <SB>/ghost does not exist (excluded anyway)\n",
+    "<stdout>": "[geneseed] <SB>/ghost excluded.\n"
+  }
+}

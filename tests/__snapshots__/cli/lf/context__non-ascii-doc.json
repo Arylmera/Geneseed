@@ -1,0 +1,22 @@
+{
+  "paths": {
+    "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "9b2f11ca67ff0e97cd35a3f0ab0191c0fb929e91805cf1513337e05834157504",
+    "repo/README.md": "ef25f82bb994e865c3bb21d9a7d0983775908b44dad29076e4c8f1e1d915093a"
+  },
+  "sizes": {
+    "<dirs>": 13,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 179,
+    "repo/README.md": 57
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "=== PROJECT CONTEXT — binding for this repo per Rule XVIII (via auto-discovery [<SB>/repo]) ===\n\n----- README.md -----\n# Dépôt — résumé\n\nAccented ✓ and an em dash —.\n\n"
+  }
+}
