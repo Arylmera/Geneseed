@@ -220,6 +220,80 @@ class TheRestartRouteIsDeclaredBecauseItCannotBeProbed(unittest.TestCase):
                          "nothing left to declare")
 
 
+def _shutdown_branch():
+    """The statements under `if path == "/api/shutdown":` in the reference, in order."""
+    tree = ast.parse(WEB_SERVER_PY.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)
+                and any(isinstance(c, ast.Constant) and c.value == "/api/shutdown"
+                        for c in node.test.comparators)):
+            return node.body
+    return []
+
+
+def _stmt_indexes(body, attr):
+    """Indexes of the top-level statements whose subtree calls `.<attr>`."""
+    return [i for i, stmt in enumerate(body)
+            if any(isinstance(n, ast.Attribute) and n.attr == attr
+                   for n in ast.walk(stmt))]
+
+
+class TheStopEndpointAnswersBeforeItStops(unittest.TestCase):
+    """The ordering `web_golden`'s shutdown cell names but can only catch by luck.
+
+    That cell is the behavioural gate, and it is a RACE gate: it fails only when the
+    scheduler happens to lose the response, which on an idle machine is never. Measured on
+    a 16-core WSL box under twelve CPU spinners and eight concurrent cells, the reference
+    lost 5 responses in 40 runs — in two shapes, `RemoteDisconnected` (nothing written) and
+    `IncompleteRead(0 of 18)` (the headers written, the body not), which is what a response
+    split across `end_headers()` and `wfile.write(body)` looks like when the process dies
+    between them. A CI run that reproduces a 12% flake proves the bug exists; a CI run that
+    does not proves nothing. So the ORDER is asserted here, deterministically, in both
+    implementations, and the cell stays as the proof the order is the one that matters.
+
+    The two implementations reach the same guarantee by different means, so each is
+    asserted absolutely against its own runtime rather than against the other:
+
+      * The reference must write the response BEFORE it starts the `srv.shutdown()` thread.
+        `serve_forever()` returning ends `main()` and so the process, and
+        `ThreadingHTTPServer`'s request threads are DAEMON threads `server_close()` never
+        joins — anything still unwritten on one is simply killed.
+      * The twin must close INSIDE the `finish` handler, never inline. `sendJson` only
+        queues; a `close()`/`closeAllConnections()` on the same tick would destroy the
+        socket under a response that has not reached it.
+    """
+
+    def test_the_reference_writes_the_response_before_it_starts_the_stopper(self):
+        body = _shutdown_branch()
+        self.assertTrue(body, 'no `if path == "/api/shutdown":` branch in the reference')
+        send = _stmt_indexes(body, "_send_json")
+        stop = _stmt_indexes(body, "shutdown")
+        self.assertEqual(len(send), 1, "expected exactly one _send_json in the branch")
+        self.assertEqual(len(stop), 1, "expected exactly one srv.shutdown in the branch")
+        self.assertLess(
+            send[0], stop[0],
+            "/api/shutdown starts srv.shutdown() before writing its response — the request "
+            "thread is a daemon thread nothing joins, so the process can exit mid-response "
+            "and the client sees RemoteDisconnected instead of {\"stopping\": true}")
+
+    def test_the_twin_closes_inside_the_finish_handler_and_never_inline(self):
+        text = SERVER_JS.read_text(encoding="utf-8")
+        branch = text.split("if (path === '/api/shutdown') {", 1)
+        self.assertEqual(len(branch), 2, "no /api/shutdown branch in the twin")
+        branch = branch[1].split("if (path === '/api/restart')", 1)[0]
+        self.assertRegex(
+            branch,
+            r"res\.on\('finish', \(\) => \{\s*holder\.srv\.close\(\);\s*"
+            r"holder\.srv\.closeAllConnections\(\);\s*\}\);\s*"
+            r"return sendJson\(res, \{ stopping: true \}",
+            "the twin must close the server from the response's `finish` handler and answer "
+            "last — closing on the same tick destroys the socket under an unflushed response")
+        # And nothing closes it outside that handler: one `close()`, one
+        # `closeAllConnections()`, both the ones the regex above just placed.
+        self.assertEqual(branch.count("holder.srv.close()"), 1, branch)
+        self.assertEqual(branch.count("holder.srv.closeAllConnections()"), 1, branch)
+
+
 class TheDaemonLauncherReExecutesItselfAndNeverPython(unittest.TestCase):
     """The passthrough question, asked of the one spawn `web` adds.
 
