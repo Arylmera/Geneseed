@@ -3,22 +3,22 @@
     "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
     "<exit>": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "<stdout>": "6a543b1f188ec0c99c683eba4b5f1573b078a4cf0d9a9df84ad57c19e1da51d0",
-    "home/.geneseed-install.log": "6a543b1f188ec0c99c683eba4b5f1573b078a4cf0d9a9df84ad57c19e1da51d0",
+    "<stdout>": "a010d79748595fbc37f5c3f3a4fb7fffe959bfa2a92b6507dab4d3f40c26e374",
+    "home/.geneseed-install.log": "a010d79748595fbc37f5c3f3a4fb7fffe959bfa2a92b6507dab4d3f40c26e374",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "sizes": {
     "<dirs>": 13,
     "<exit>": 1,
     "<stderr>": 0,
-    "<stdout>": 313,
-    "home/.geneseed-install.log": 313,
+    "<stdout>": 306,
+    "home/.geneseed-install.log": 306,
     "repo/.keep": 0
   },
   "verbatim": {
     "<dirs>": "cfg\nhome\nrepo",
     "<exit>": "3",
     "<stderr>": "",
-    "<stdout>": "[geneseed] update source: https://github.com/Arylmera/Geneseed (branch: rewritten)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: /usr/bin/git, timeout: 120s) ...\n[geneseed] Upstream history was rewritten; back up local work, then re-clone or `git reset --hard @{u}`.\n"
+    "<stdout>": "[geneseed] update source: https://github.com/Arylmera/Geneseed (branch: rewritten)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: <GIT>, timeout: 120s) ...\n[geneseed] Upstream history was rewritten; back up local work, then re-clone or `git reset --hard @{u}`.\n"
   }
 }

@@ -3,7 +3,7 @@
     "<dirs>": "85ccab4f4fd4a6cfb5adb0b9656dafd23498c736cd0f8ecac204e56fa8a4889a",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "<stdout>": "590026b7f1c0fa65be1b444eb52986ed7257f833a09a3e81d57ad60565a5d2e0",
+    "<stdout>": "2e9c409eb556526fdffaf03f77d6c8dc4eac03e4e1dbe1bcca7fbe428e3c3582",
     "bundle/.geneseed-emit": "43807f5b6bd11fa19ebb9234650fa77106a86dac8ad70406d50b7b3d865f9a9a",
     "bundle/.geneseed-footprint": "bb3cb41b3af51ee06b911f551be1ba3055665a65326ad55fcb36c2871ca86634",
     "bundle/.geneseed-srcdirs.json": "c5eba3c7ef77be6afa1428008842c725ee285af76d829181a1eadff3bfa09877",
@@ -115,14 +115,14 @@
     "bundle/skills/workflow.md": "fca8d0d71de7915ece70fa0943c61a1bbd847407c10bdf2003cf333ac9f50c18",
     "bundle/user-rules.md": "5c2e92fb1acde041e02d9ebf158460d8ff7a07cbc2b447859631604610130721",
     "bundle/wiki.jsonc": "cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8",
-    "home/.geneseed-install.log": "c684b7f124f70844b695d229ae03d735f7a376ee789aa9d4caa4e659f8912fdb",
+    "home/.geneseed-install.log": "30d62325577108174f3e23fcdc99f9935ba5852958752dde8344a6063cec81fd",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "sizes": {
     "<dirs>": 327,
     "<exit>": 1,
     "<stderr>": 0,
-    "<stdout>": 549,
+    "<stdout>": 542,
     "bundle/.geneseed-emit": 6,
     "bundle/.geneseed-footprint": 5,
     "bundle/.geneseed-srcdirs.json": 65,
@@ -234,13 +234,13 @@
     "bundle/skills/workflow.md": 3515,
     "bundle/user-rules.md": 1346,
     "bundle/wiki.jsonc": 1499,
-    "home/.geneseed-install.log": 447,
+    "home/.geneseed-install.log": 440,
     "repo/.keep": 0
   },
   "verbatim": {
     "<dirs>": "bundle\nbundle/agents\nbundle/laws\nbundle/memory\nbundle/modes\nbundle/notebook\nbundle/postures\nbundle/skills\nbundle/skills/daydream\nbundle/skills/daydream/.claude-plugin\nbundle/skills/react-view-transitions\nbundle/skills/react-view-transitions/references\nbundle/skills/token-report\nbundle/skills/token-report/scripts\ncfg\nhome\nrepo",
     "<exit>": "0",
     "<stderr>": "",
-    "<stdout>": "[geneseed] update source: https://github.com/Arylmera/Geneseed (branch: main)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: /usr/bin/git, timeout: 120s) ...\n[geneseed] already up to date.\n[geneseed] rebuilding bundle -> <SB>/bundle (theme: neutral, emit: files) ...\n[geneseed] built theme 'neutral' -> <SB>/bundle (99 files)\n[geneseed] refreshing every active install (rebuild-all) ...\n[rebuild-all] no active installs detected.\n[geneseed] ✓ upgrade complete. (full log: <HOME>/.geneseed-install.log)\n"
+    "<stdout>": "[geneseed] update source: https://github.com/Arylmera/Geneseed (branch: main)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: <GIT>, timeout: 120s) ...\n[geneseed] already up to date.\n[geneseed] rebuilding bundle -> <SB>/bundle (theme: neutral, emit: files) ...\n[geneseed] built theme 'neutral' -> <SB>/bundle (99 files)\n[geneseed] refreshing every active install (rebuild-all) ...\n[rebuild-all] no active installs detected.\n[geneseed] ✓ upgrade complete. (full log: <HOME>/.geneseed-install.log)\n"
   }
 }

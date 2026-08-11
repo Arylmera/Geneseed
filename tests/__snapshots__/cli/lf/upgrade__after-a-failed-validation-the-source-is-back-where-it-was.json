@@ -4,7 +4,7 @@
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<stdout>": "bef8d8c35379c20fe27010559c28dedd7b0f396ef6bf2ad2779d07d65c9099b7",
-    "home/.geneseed-install.log": "47a188c780360190109862f56e15511e52dccb99d311e7076a2ed2216d28abec",
+    "home/.geneseed-install.log": "91e7c2d8eee20dd369918db644185e3c83aa4db83ba1fb35e1befc0abae050d9",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "sizes": {
@@ -12,7 +12,7 @@
     "<exit>": 1,
     "<stderr>": 0,
     "<stdout>": 121,
-    "home/.geneseed-install.log": 6751,
+    "home/.geneseed-install.log": 6744,
     "repo/.keep": 0
   },
   "verbatim": {

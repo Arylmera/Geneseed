@@ -3,7 +3,7 @@
     "<dirs>": "06943ec5f2d6402a6d4b340b1d5d68adcb084cba4ccc3a78fb9ccab2d6c7934e",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "<stdout>": "be2dfb4d62233a304fb7971a43bc2e756471d23deff180a19953ab534b4937b3",
+    "<stdout>": "3320ba3a8c37083e30b6ef5d62ce94e84905b5eb4a1693155c754c335728ce01",
     "home/.config/opencode/.geneseed-emit": "cf0ce6c78cf13e6a015d67cdcabc6bb1e6ff362b41a3e370381cbc61aa97720a",
     "home/.config/opencode/.geneseed-footprint": "bb3cb41b3af51ee06b911f551be1ba3055665a65326ad55fcb36c2871ca86634",
     "home/.config/opencode/.geneseed-manifest.json": "84657b24e7c6d0f48064768bb99387ee69e8fcdf90863dd691be7ccb45494ad7",
@@ -139,14 +139,14 @@
     "home/.config/opencode/workflows/dispatch.js": "c89f0974dd6a7d79f85c31afd189caba4ae70edd144f5e7c843889efe760f7e9",
     "home/.config/opencode/workflows/research-plan-implement.js": "6b7de53445ab2b7ff4bdcba34fa10f7594b9954cf27f8eb7a6c9de32ca7dfb39",
     "home/.config/opencode/workflows/review.js": "fc1bf759fdf7bd32f40097b37d1f30bf2a857eeb9fc95dfcbd6f84ba33310e43",
-    "home/.geneseed-install.log": "8eb4b5211358805112dfc88a4244fd6411e1b5e7d206e622ae7f3335f260a2b9",
+    "home/.geneseed-install.log": "8cb2d5aba0588c6aca93fda89f7dd3bee5df4ae82a30ad19b9100e45895946b6",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "sizes": {
     "<dirs>": 2440,
     "<exit>": 1,
     "<stderr>": 0,
-    "<stdout>": 1223,
+    "<stdout>": 1216,
     "home/.config/opencode/.geneseed-emit": 16,
     "home/.config/opencode/.geneseed-footprint": 5,
     "home/.config/opencode/.geneseed-manifest.json": 4441,
@@ -282,13 +282,13 @@
     "home/.config/opencode/workflows/dispatch.js": 4300,
     "home/.config/opencode/workflows/research-plan-implement.js": 1863,
     "home/.config/opencode/workflows/review.js": 2846,
-    "home/.geneseed-install.log": 459,
+    "home/.geneseed-install.log": 452,
     "repo/.keep": 0
   },
   "verbatim": {
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/agents\nhome/.config/opencode/command\nhome/.config/opencode/laws\nhome/.config/opencode/memory\nhome/.config/opencode/notebook\nhome/.config/opencode/plugins\nhome/.config/opencode/skills\nhome/.config/opencode/skills/brainstorm\nhome/.config/opencode/skills/clarify\nhome/.config/opencode/skills/codebase-design\nhome/.config/opencode/skills/commit\nhome/.config/opencode/skills/council\nhome/.config/opencode/skills/crash-course\nhome/.config/opencode/skills/daydream\nhome/.config/opencode/skills/daydream/.claude-plugin\nhome/.config/opencode/skills/debug\nhome/.config/opencode/skills/decode\nhome/.config/opencode/skills/develop\nhome/.config/opencode/skills/document-project\nhome/.config/opencode/skills/domain-modeling\nhome/.config/opencode/skills/drill\nhome/.config/opencode/skills/feynman\nhome/.config/opencode/skills/forge-mcp\nhome/.config/opencode/skills/fresh-eyes\nhome/.config/opencode/skills/frontend-design\nhome/.config/opencode/skills/gap-detector\nhome/.config/opencode/skills/geneseed\nhome/.config/opencode/skills/geneseed-code-review\nhome/.config/opencode/skills/git-archaeology\nhome/.config/opencode/skills/git-rescue\nhome/.config/opencode/skills/handoff\nhome/.config/opencode/skills/herdr\nhome/.config/opencode/skills/ingest\nhome/.config/opencode/skills/learning-path\nhome/.config/opencode/skills/migrate\nhome/.config/opencode/skills/opencode-theme\nhome/.config/opencode/skills/parallel-agents\nhome/.config/opencode/skills/pipeline\nhome/.config/opencode/skills/plan\nhome/.config/opencode/skills/ponytail\nhome/.config/opencode/skills/profile\nhome/.config/opencode/skills/prose\nhome/.config/opencode/skills/prototype\nhome/.config/opencode/skills/react-view-transitions\nhome/.config/opencode/skills/react-view-transitions/references\nhome/.config/opencode/skills/refactor\nhome/.config/opencode/skills/release\nhome/.config/opencode/skills/repo-map\nhome/.config/opencode/skills/research\nhome/.config/opencode/skills/review-response\nhome/.config/opencode/skills/roast-me\nhome/.config/opencode/skills/rule\nhome/.config/opencode/skills/ship\nhome/.config/opencode/skills/tdd\nhome/.config/opencode/skills/tickets\nhome/.config/opencode/skills/token-report\nhome/.config/opencode/skills/token-report/scripts\nhome/.config/opencode/skills/wayfinder\nhome/.config/opencode/skills/wiki\nhome/.config/opencode/skills/workflow\nhome/.config/opencode/themes\nhome/.config/opencode/workflows\nrepo",
     "<exit>": "0",
     "<stderr>": "",
-    "<stdout>": "[geneseed] update source: https://github.com/Arylmera/Geneseed (branch: main)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: /usr/bin/git, timeout: 120s) ...\n[geneseed] already up to date.\n[geneseed] rebuilding bundle -> <SB>/bundle (theme: cyberpunk, emit: opencode-global) ...\n[geneseed] opencode-global -> <HOME>/.config/opencode: 17 subagents, 47 skills, 7 plugin(s), 5 workflow file(s), AGENT.md, seeded memory/, seeded notebook/, opencode.json (no context.json) + 1 command(s). The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.\n[geneseed] refreshing every active install (rebuild-all) ...\n[rebuild-all] opencode:global (<HOME>/.config/opencode): theme=cyberpunk emit=opencode-global footprint=lean posture=peer mode=direct\n[geneseed] opencode-global -> <HOME>/.config/opencode: 17 subagents, 47 skills, 7 plugin(s), 5 workflow file(s), AGENT.md, kept memory/, kept notebook/, opencode.json (no context.json) + 1 command(s). The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.\n[rebuild-all] rebuilt 1 install(s).\n[geneseed] ✓ upgrade complete. (full log: <HOME>/.geneseed-install.log)\n"
+    "<stdout>": "[geneseed] update source: https://github.com/Arylmera/Geneseed (branch: main)\n[geneseed] preflight: checking the local checkout ...\n[geneseed] fetching from origin (git: <GIT>, timeout: 120s) ...\n[geneseed] already up to date.\n[geneseed] rebuilding bundle -> <SB>/bundle (theme: cyberpunk, emit: opencode-global) ...\n[geneseed] opencode-global -> <HOME>/.config/opencode: 17 subagents, 47 skills, 7 plugin(s), 5 workflow file(s), AGENT.md, seeded memory/, seeded notebook/, opencode.json (no context.json) + 1 command(s). The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.\n[geneseed] refreshing every active install (rebuild-all) ...\n[rebuild-all] opencode:global (<HOME>/.config/opencode): theme=cyberpunk emit=opencode-global footprint=lean posture=peer mode=direct\n[geneseed] opencode-global -> <HOME>/.config/opencode: 17 subagents, 47 skills, 7 plugin(s), 5 workflow file(s), AGENT.md, kept memory/, kept notebook/, opencode.json (no context.json) + 1 command(s). The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.\n[rebuild-all] rebuilt 1 install(s).\n[geneseed] ✓ upgrade complete. (full log: <HOME>/.geneseed-install.log)\n"
   }
 }
