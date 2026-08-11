@@ -49,6 +49,7 @@ import { PALETTE_ROLES, colorThemeFiles } from './opencode.mjs';
 import { STRUCTURE, renderAll } from './render.mjs';
 import { SHIM_ARGV, hookShimPath } from './settings.mjs';
 import { pySplitLines } from './lib/pydiff.mjs';
+import { NO_WINDOW } from './lib/pyproc.mjs';
 import {
   comparePaths, normcase, parseJson, pyPrint, pyRepr, pyStr, pyWhich, readText,
 } from './lib/pyfs.mjs';
@@ -926,7 +927,10 @@ export function authoringProblems() {
     for (const js of globSorted(PLUGIN_SRC, (n) => n.endsWith('.js'))) {
       // THE ONE SPAWN. `node --check` and nothing else — see the module header, and
       // `test_the_cli_spawns_only_a_node_syntax_check`, which names this argv.
-      const r = spawnSync(node, ['--check', js], { encoding: 'utf-8' });
+      // `NO_WINDOW` because the reference's `run()` folds `CREATE_NO_WINDOW` into every
+      // CAPTURING spawn and this is one — and because this loop is the burst a user sees:
+      // one console window per plugin, every time the web daemon runs the doctor.
+      const r = spawnSync(node, ['--check', js], { encoding: 'utf-8', ...NO_WINDOW });
       if (r.status !== 0) {
         // `(stderr.strip().splitlines() or ["syntax error"])[-1]` — node's LAST line, which
         // is its version banner rather than the SyntaxError. Faithful, and surprising enough

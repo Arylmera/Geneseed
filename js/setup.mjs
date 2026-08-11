@@ -55,6 +55,7 @@ import {
   defaultMode, defaultPosture, defaultTheme, installedDefaults, themeFiles,
 } from './installs.mjs';
 import { pyInt, pyPrint, pyPrintErr, pyWhich } from './lib/pyfs.mjs';
+import { NO_WINDOW } from './lib/pyproc.mjs';
 
 // --------------------------------------------------------------------------------------
 // the three readers
@@ -342,7 +343,12 @@ export function lspPrereqs() {
     try {
       // `capture_output=True, text=True` — the banner goes to STDERR on every JVM, which is
       // why the Python reads `.stderr` and not `.stdout`.
-      const out = spawnSync(java, ['-version'], { encoding: 'utf8' }).stderr;
+      // `NO_WINDOW` on BOTH sides as of this commit. The reference reached for a bare
+      // `subprocess.run` here rather than `_harness_core.run`, so the flag was missing from
+      // the Python too and the java probe flashed a console from the web's setup action —
+      // a defect the two implementations SHARED, which is exactly what a cross-
+      // implementation comparison cannot report. Fixed in `_harness_setup.py` beside this.
+      const out = spawnSync(java, ['-version'], { encoding: 'utf8', ...NO_WINDOW }).stderr;
       ok = javaMajorOk(out ?? '');
     } catch { ok = false; }
   }

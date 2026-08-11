@@ -49,6 +49,7 @@ import {
   PY_SPACE, appendText, copyFile, pyInt, pyPathStr, pyPrint, pyPrintErr, pyStripSpace, pyWhich,
   readText, writeText,
 } from './lib/pyfs.mjs';
+import { NO_WINDOW } from './lib/pyproc.mjs';
 import { restartDaemon } from './web/server.mjs';
 
 /**
@@ -66,19 +67,9 @@ export function redactUrlCreds(text) {
   return (text || '').replace(CREDS_RE, '$1');
 }
 
-/**
- * `_NO_WINDOW` — `CREATE_NO_WINDOW`, whose Node spelling is `windowsHide`.
- *
- * ONLY ON THE CAPTURING SPAWNS, and that asymmetry is the reference's own (P5e, and the one
- * call site it missed is fixed in `rituals/_update.py` in this same commit). Python sets
- * `STARTF_USESTDHANDLES` only when a stream is redirected, so the flag on an INHERITING
- * spawn hands the child a fresh hidden console and discards everything it prints. Node's
- * libuv always sets that flag, so `windowsHide` on an inheriting spawn would be harmless
- * here — which is precisely why it is left off: reproducing the flag would make the two
- * implementations differ in what they PRINT on Windows, and the port's job is the behaviour,
- * not the flag.
- */
-const NO_WINDOW = { windowsHide: process.platform === 'win32' };
+// `_NO_WINDOW` was defined here and PRIVATE to this module, which is how `js/doctor.mjs`
+// and `js/hooks.mjs` came to spawn without it — see `js/lib/pyproc.mjs` for the flag, the
+// capturing-only rule behind it, and why a miss here is invisible to every byte gate.
 
 /** `subprocess.run(..., capture_output=True, encoding="utf-8")` reads in UNIVERSAL NEWLINES. */
 function universal(s) {

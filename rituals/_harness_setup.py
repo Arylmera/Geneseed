@@ -360,12 +360,16 @@ def _lsp_prereqs() -> list[tuple[str, bool, str]]:
     self-install. Today that's just a JDK 21+ for jdtls; the JS-runtime servers
     (typescript, pyright) self-download and SQL is uncovered by design. Returns a
     list so a future prereq drops in without changing callers."""
-    import shutil, subprocess
+    import shutil
     java = shutil.which("java")
     ok = False
     if java:
         try:
-            out = subprocess.run([java, "-version"], capture_output=True, text=True).stderr
+            # `_harness_core.run`, not a bare `subprocess.run`: the wrapper is what folds
+            # CREATE_NO_WINDOW into a capturing spawn, and without it this probe flashed a
+            # console every time the web's setup action reached it from the windowless
+            # daemon. The Node twin (js/setup.mjs) had inherited the same miss.
+            out = run([java, "-version"], capture_output=True, text=True).stderr
             ok = _java_major_ok(out)
         except Exception:
             ok = False

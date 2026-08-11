@@ -37,6 +37,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readText, writeText, jsonDumpsCompact, normcase, comparePaths, pyPathStr, pyPrint,
   pyPrintErr } from './lib/pyfs.mjs';
+import { NO_WINDOW } from './lib/pyproc.mjs';
 // `harness status` reports the memory store, and `bin/geneseed-cli.mjs` cannot import THIS
 // module to find it: the CLI is under a hard transitive `child_process` ban and `learn`
 // spawns. So the resolver has one owner in `js/hosts.mjs` rather than a second copy — and
@@ -868,8 +869,11 @@ export function consolidateMemory(memDir) {
  */
 function runLlm(llm, prompt) {
   const argv = pyWords(llm);
+  // `_harness_learn.py:85` runs this through the wrapped `run(..., capture_output=True)`,
+  // which folds in `CREATE_NO_WINDOW`; a model CLI invoked from the windowless daemon
+  // otherwise pops a console for as long as it takes to answer.
   const proc = spawnSync(argv[0], [...argv.slice(1), prompt],
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...NO_WINDOW });
   // Universal newlines, because Python reads the pipe in TEXT mode: a model CLI that is
   // itself a Python script emits CRLF on Windows, `subprocess` folds it to `\n`, and
   // `write_text` expands it again on the way into the memory file. Node hands back the raw

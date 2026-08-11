@@ -271,9 +271,12 @@ def _bootstrap_plain(here, ref) -> bool:
             sub = cmd[2] if len(cmd) > 2 else ""
             probe = ""
             if sub in ("upgrade", "sync-self"):
-                pr = subprocess.run([sys.executable, hp, sub, "--help"],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    text=True, encoding="utf-8", errors="replace")
+                # `run`, not `subprocess.run`: this captures, so the wrapper's
+                # CREATE_NO_WINDOW applies and the probe does not flash a console when the
+                # diagnosis runs under the windowless web daemon.
+                pr = run([sys.executable, hp, sub, "--help"],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, encoding="utf-8", errors="replace")
                 if pr.returncode != 0:
                     probe = pr.stdout or ""
             for ln in _diagnose_failed_step(i + 1, len(steps), title, cmd, rc, probe):
