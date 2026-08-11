@@ -1,0 +1,53 @@
+{
+  "paths": {
+    "<daemon-record>": "380b7a62b3ee76b2c04092e2b9174c525c61d4b23153e032d8defe2188600377",
+    "<dirs>": "4393c8dcd6c9330ae5cbf7d5f8dfc4456c9796b6d4291e8865f5fed9410ebcba",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<r1 body>": "fc458240ef1bd03153d29513e4f8be2ee253eaed06b127b4e173974f4c5da9ce",
+    "<r1 headers>": "f05d619a577ed5436d4bb45589a991b80d29b606aa524fdbc7dc21c4776b83ab",
+    "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<r2 body>": "197a295a3bac0eb2199d2d5396e909ba3b38693aec1a85f6a799bb857dcf5d70",
+    "<r2 headers>": "138f3ada4711ce99a6f54739d2c4796c8b41b4965387fbbea5d8ce1919b82350",
+    "<r2 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<server stdout>": "1bc93415824d62fe66f8626932cc78809c451e1094b35c6a6ddbef3494fe0143",
+    "home/.claude/.geneseed-emit": "d5a4d4bd01e992aeea97c9287481d9bde746edc2fd2d49c0366d8a5351902721",
+    "home/.claude/.geneseed-manifest.json": "63f72141549b7c65bf3adf9fc2cf7eb5cef0c35042602a246111774a2cef5204",
+    "home/.claude/.geneseed-theme": "d9250b2ff7e162caad9a743dba65df7842248948701948891c6476d988831a00",
+    "home/.claude/.geneseed-version": "fcdb4b423f4e5283afa249d762ef6aef150e91fccd810d43e5e719d14512dec7",
+    "home/.claude/settings.json": "b56c9265773cc456d686833a5102f34eae5da1dba76a822276974d1c5f7fa4d9",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<daemon-record>": 120,
+    "<dirs>": 132,
+    "<exit>": 1,
+    "<r1 body>": 42,
+    "<r1 headers>": 49,
+    "<r1 status>": 6,
+    "<r2 body>": 903,
+    "<r2 headers>": 51,
+    "<r2 status>": 6,
+    "<server stderr>": 0,
+    "<server stdout>": 205,
+    "home/.claude/.geneseed-emit": 15,
+    "home/.claude/.geneseed-manifest.json": 142,
+    "home/.claude/.geneseed-theme": 10,
+    "home/.claude/.geneseed-version": 16,
+    "home/.claude/settings.json": 21,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<daemon-record>": "{\"pid\": <PID>, \"port\": <PORT>, \"started\": <T>, \"theme\": \"neutral\", \"token\": \"<TOKEN>\", \"url\": \"http://127.0.0.1:<PORT>\"}",
+    "<dirs>": "cfg\nhome\nhome/.claude\nhome/.claude/.geneseed-disabled\nhome/.claude/.geneseed-disabled/claude\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "0",
+    "<r1 body>": "{\"ok\": true, \"kind\": \"claude\", \"moved\": 0}",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 42",
+    "<r1 status>": "200 OK",
+    "<r2 body>": "{\"installs\": [{\"id\": \"opencode:global\", \"host\": \"opencode\", \"scope\": \"global\", \"path\": \"<HOME>\\\\.config\\\\opencode\", \"state\": \"absent\", \"theme\": null, \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": true}, {\"id\": \"claude:global\", \"host\": \"claude\", \"scope\": \"global\", \"path\": \"<HOME>\\\\.claude\", \"state\": \"disabled\", \"theme\": \"imperial\", \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": false}, {\"id\": \"bob:global\", \"host\": \"bob\", \"scope\": \"global\", \"path\": \"<HOME>\\\\.bob\", \"state\": \"absent\", \"theme\": null, \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": false}, {\"id\": \"copilot:global\", \"host\": \"copilot\", \"scope\": \"global\", \"path\": \"<HOME>\\\\.copilot\", \"state\": \"absent\", \"theme\": null, \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": false}], \"postures\": [\"peer\", \"artisan\", \"assistant\", \"expert\", \"mentor\"], \"modes\": [\"direct\", \"foreman\"]}",
+    "<r2 headers>": "Content-Type: application/json\nContent-Length: 1107",
+    "<r2 status>": "200 OK",
+    "<server stderr>": "",
+    "<server stdout>": "[web] no deployed harness at <HOME>\\.config\\opencode.\n      Run `geneseed setup` first — serving anyway (read-only UI).\n[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: neutral)\n[web] daemon ready.\n"
+  }
+}

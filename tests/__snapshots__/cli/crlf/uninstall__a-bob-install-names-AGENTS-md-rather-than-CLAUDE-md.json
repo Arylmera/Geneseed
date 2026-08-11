@@ -1,0 +1,22 @@
+{
+  "paths": {
+    "<dirs>": "2986a6ed8511960b0b8c9860df472d04ad2002d4efb08954bcb0c5926032dcd7",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "424d14143cb598e741f25810a1d3889d924e6a9221cf87d3634831880cd4a0b1",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 23,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 409,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.bob\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[uninstall] target: <HOME>\\.bob (bob:global)\n[uninstall] removes: agents/, skills/, markers, the AGENTS.md managed block, and Geneseed's settings.json hooks/excludes (your own keys/hooks are kept).\n[uninstall] memory/ and notebook/ are kept in place (never deleted here).\n[uninstall] done — removed 1 file(s); settings.json updated where needed; memory/notebook kept in place. Start a new session to apply.\n"
+  }
+}

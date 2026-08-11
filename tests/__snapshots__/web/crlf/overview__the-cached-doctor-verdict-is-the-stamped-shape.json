@@ -1,0 +1,53 @@
+{
+  "paths": {
+    "<daemon-record>": "001626a30ef917ebc601ee099fe891e89bb3ffb8e6481b562b263a0b4d50ce84",
+    "<dirs>": "6622b117a82211d456df9c16e06c36016234dc16ce469cd0828e956984d61e5b",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<r1 body>": "1eeac6a3e7b769388dc57fd6a99577e41048ea3af9639f8afb38ad21ed239cff",
+    "<r1 headers>": "30fa2f81e3a5d2b2c1b338faae7495fdf29e9d33efc85874dbd691f53386e4ca",
+    "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<r2 body>": "2445a002a1e9d33aa4471e40955cfeac0484c66d6abf9d2404101e53e3b0359f",
+    "<r2 headers>": "9226c69813de565c90cecba5b16d774bf59cfdc5f4546ac88d2f23b40cfc44e9",
+    "<r2 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
+    "home/.config/opencode/.geneseed-emit": "de98185a41c839961b783c5d0703a020e29ba9469a4a7112743c67f4eb9acd6b",
+    "home/.config/opencode/.geneseed-manifest.json": "b3ec7b19ffccaae42455096759e00977f6e8582c527b00b805d9cfe6abfd531f",
+    "home/.config/opencode/.geneseed-theme": "d9250b2ff7e162caad9a743dba65df7842248948701948891c6476d988831a00",
+    "home/.config/opencode/.geneseed-version": "fcdb4b423f4e5283afa249d762ef6aef150e91fccd810d43e5e719d14512dec7",
+    "home/.config/opencode/AGENT.md": "2ce332423c8fd74e458e2a83f1878a4278f0d581b92dadb050da7569f889c3a4",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<daemon-record>": 121,
+    "<dirs>": 82,
+    "<exit>": 1,
+    "<r1 body>": 712,
+    "<r1 headers>": 50,
+    "<r1 status>": 6,
+    "<r2 body>": 497,
+    "<r2 headers>": 50,
+    "<r2 status>": 6,
+    "<server stderr>": 0,
+    "<server stdout>": 84,
+    "home/.config/opencode/.geneseed-emit": 17,
+    "home/.config/opencode/.geneseed-manifest.json": 23,
+    "home/.config/opencode/.geneseed-theme": 10,
+    "home/.config/opencode/.geneseed-version": 16,
+    "home/.config/opencode/AGENT.md": 70,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<daemon-record>": "{\"pid\": <PID>, \"port\": <PORT>, \"started\": <T>, \"theme\": \"imperial\", \"token\": \"<TOKEN>\", \"url\": \"http://127.0.0.1:<PORT>\"}",
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
+    "<exit>": "0",
+    "<r1 body>": "{\"themes\": [\"imperial\"], \"ok\": true, \"problems\": [], \"groups\": [{\"check\": \"build\", \"label\": \"Build scan (imperial)\", \"problems\": []}, {\"check\": \"global\", \"label\": \"Global install (imperial)\", \"problems\": []}, {\"check\": \"claude_bob\", \"label\": \"Claude/Bob/Copilot per-repo emit (imperial)\", \"problems\": []}, {\"check\": \"parity\", \"label\": \"Theme parity\", \"problems\": []}, {\"check\": \"colors\", \"label\": \"Colour themes\", \"problems\": []}, {\"check\": \"authoring\", \"label\": \"Authoring gates\", \"problems\": []}, {\"check\": \"shim\", \"label\": \"Hook shim\", \"problems\": []}, {\"check\": \"cli\", \"label\": \"CLI reference\", \"problems\": []}, {\"check\": \"bundle\", \"label\": \"Committed bundle drift\", \"problems\": []}], \"checked_at\": \"<WHEN>\"}",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 722",
+    "<r1 status>": "200 OK",
+    "<r2 body>": "{\"theme\": \"imperial\", \"accent\": \"yellow\", \"emit\": \"opencode-global\", \"footprint\": \"full\", \"install\": {\"host\": \"opencode\", \"scope\": \"global\", \"path\": \"<HOME>\\\\.config\\\\opencode\", \"footprint\": \"full\"}, \"target\": \"<HOME>\\\\.config\\\\opencode\", \"deployed\": true, \"counts\": {\"agents\": 0, \"skills\": 0, \"laws\": 37, \"memory\": 0, \"notebook\": 0, \"wiki\": 0, \"config\": 0}, \"doctor\": {\"ok\": true, \"problems\": [], \"checked_at\": \"<WHEN>\"}, \"diff\": {\"edited\": 2, \"added\": 0, \"missing\": 116}, \"build_time\": \"<WHEN>\"}",
+    "<r2 headers>": "Content-Type: application/json\nContent-Length: 619",
+    "<r2 status>": "200 OK",
+    "<server stderr>": "",
+    "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"
+  }
+}

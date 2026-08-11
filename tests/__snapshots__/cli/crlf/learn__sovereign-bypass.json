@@ -1,0 +1,28 @@
+{
+  "paths": {
+    "<dirs>": "705fa763a838969673ca03420e442fa634f732b6357099c0b08d1d3c5e69e1cd",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "cfg/excludes.json": "1c2156143cd1d69017972748449b092927f8c6c4941c2129bffda8db71efb61b",
+    "cfg/memory/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "reply/out.md": "14049d04a19d6b19138621b19f3399f1a3265376d8bb9798a50fec33e0cab138",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 30,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 0,
+    "cfg/excludes.json": 39,
+    "cfg/memory/.keep": 0,
+    "reply/out.md": 143,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\ncfg/memory\nhome\nreply\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": ""
+  }
+}

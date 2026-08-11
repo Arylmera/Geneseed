@@ -636,6 +636,122 @@ VERBATIM_CELLS = {
 PLATFORM_CORPUS = "crlf" if os.linesep == "\r\n" else "lf"
 
 
+# WHAT A RECORDED CORPUS CANNOT KEEP — and the reason this is not `_destamp`.
+#
+# Every stamp in the three harnesses so far exists because the two SIDES of a cell disagree.
+# These exist because two RUNS do, which is a threat that did not exist until `--record` did.
+# A live pair shares one clock and one checkout: the build date and the source fingerprint are
+# equal on both sides and are compared in full, including the cross-implementation claim that
+# `sourceFingerprint()` answers exactly what `source_fingerprint()` does. A corpus is compared
+# against a run made on ANOTHER DAY from ANOTHER TREE. Recorded raw, ten `status/*` cells and
+# six `version/*` cells redden on any edit to `src/` or `themes/`, and the `build`, `learn` and
+# `promote` cells redden at midnight — for reasons that are not the port. A gate that reddens
+# for reasons that are not the thing it gates is a gate that gets switched off.
+#
+# APPLIED ONLY IN `_record_cell` AND `_against_cell`, symmetrically, so the live byte
+# comparison keeps every one of these fields and owes no debt for them. It is the corpus that
+# is tolerant, and only about values that provably move.
+#
+# EACH PATTERN IS ANCHORED ON THE MESSAGE THAT EMITS IT, never on the shape of the value
+# alone: `installed: deadbeef1234` and `"installed_fp": "0000000000000000"` are seeded
+# fixtures, constant across days and implementations, and stay byte-compared. That a pattern
+# written against the reference's bytes also matches the port's is not an assumption — the
+# live gate above proves the two are byte-identical, which is what licenses recording either.
+#
+# FOUND BY SCANNING A RECORDING, not by reading for them. The first draft of this table
+# covered `.geneseed-version` and `[version] source:`; a scan of the resulting 318-cell corpus
+# for the live fingerprint turned up ten more `status/*` cells (the TUI panel is a second
+# caller of `source_fingerprint()`) and the web scan turned up the `promote` dates and the
+# `"source_fp"` field. A destamp table is a claim about every caller, and only a corpus can
+# check it.
+CORPUS_STAMPS = (
+    # `_build_render.write_version`: `<fp> (built <date>) [release <rel>]`. The release LABEL
+    # is left verbatim — it moves only when a human bumps it, which is a real output change a
+    # corpus SHOULD redden on. Un-anchored, because this line is also quoted inside a `diff`
+    # response body (`"-c81317fdc842 (built 2026-08-11) [release 1.0.0]"`), where it is not at
+    # the start of a line at all.
+    (re.compile(rb"[0-9a-f]{6,64} \(built \d{4}-\d{2}-\d{2}\)"), b"<FP> (built <DATE>)"),
+    # `cmd_version`'s first line — `_harness_status.py:40`, `js/status.mjs:100`.
+    (re.compile(rb"(\[version\] source: +)[0-9a-f]{6,64}"), rb"\1<FP>"),
+    # The `status` panel's version row, `<installed>  ·  source <fp>` —
+    # `_harness_status.py:80`, `js/status.mjs:241`. EXACTLY twelve hex digits, because
+    # `source_fingerprint()` is `hexdigest()[:12]`, so the `installed` fingerprint beside it
+    # (a fixture) is out of reach. The tag is shorter than the value, so this row's box-drawing
+    # right edge is ragged in the recorded text; the row's PADDING is computed before the
+    # normalisation and is still compared, so a port that padded the panel differently is
+    # still caught.
+    (re.compile(rb"(\bsource )[0-9a-f]{12}(?![0-9a-f])"), rb"\1<FP>"),
+    # `_status_data()`'s JSON, which the web console's Settings page serves verbatim.
+    (re.compile(rb'("source_fp": ")[0-9a-f]{6,64}(?=")'), rb"\1<FP>"),
+    # `api_rules_promote`'s two dates (`_web_actions.py:207-215`, `js/web/actions.mjs:424`),
+    # in the JSON body and in the `user-rules.md` block it writes. `web_golden._clock_repl`
+    # deliberately does NOT destamp these — they are the one rule that endpoint owns (a month
+    # of probation, not a week and not none) and each cell asserts them absolutely against its
+    # own `now`. Both of those properties are untouched: this runs after the cells have been
+    # adjudicated, on the way into the corpus.
+    (re.compile(rb"(, promoted )\d{4}-\d{2}-\d{2}"), rb"\1<DATE>"),
+    (re.compile(rb'("trial_until": ")\d{4}-\d{2}-\d{2}'), rb"\1<DATE>"),
+    (re.compile(rb"(trial until: )\d{4}-\d{2}-\d{2}"), rb"\1<DATE>"),
+    # `_update.py:319-323`'s pulled-commit echo, `  <short-sha> <subject>`, and it is the one
+    # entry here that a corpus needs for a reason no clock and no checkout explains.
+    #
+    # `_GIT_FIXTURE_ENV` pins the fixture's author, committer AND both dates precisely so
+    # these ids hold still between runs — but a commit id is a hash of its TREE, and
+    # `_tracked_files()` builds that tree from `git ls-files --cached --others
+    # --exclude-standard`, the WORKING tree. So the id moves when any file in the checkout
+    # does, including an untracked one, including THIS CORPUS: recording 318 cells creates
+    # 318 untracked files, which land in the fixture's commit, which changes the id that the
+    # recording just wrote down. A snapshot that changes its own value cannot be replayed
+    # even once — the first replay after this table was written found exactly these three
+    # `upgrade/*` cells differing, `974835a` against `070e84e`, same length, nothing else.
+    #
+    # MEASURED, NOT GUESSED. Swept over the verbatim text of all three recorded corpora —
+    # 691 cells — it fires exactly twice, on the two `upgrade/*` stdouts that carry a
+    # `[geneseed] pulled:` block, and nowhere in the emit or web matrices. (The third cell's
+    # copy lives in `home/.geneseed-install.log`, which is a hashed file rather than verbatim
+    # text; the replay is what confirms that one.) Both sides of a live cell clone ONE
+    # template, so the live gate still compares these ids byte for byte and a port that
+    # echoed the wrong commit is still caught there.
+    (re.compile(rb"^ {2}[0-9a-f]{7,40} (?=\S)", re.M), b"  <SHA> "),
+)
+
+# `learn`'s bullet, `- <today>: <lesson>` (`_harness_learn.py:44`) — the one stamp that needs
+# the FILE it sits in and not just the line it is on. `src/memory/README.md:93` DOCUMENTS this
+# format with a fixed example (`- 2026-07-04: this repo's tests double as docs...`), that line
+# is rendered into the memory store of every emit, and it is a CONSTANT: blanking it costs
+# four bytes of comparison in every cell that emits a bundle and buys nothing. It also made
+# the 259 already-committed emit snapshots stale on sight, which is how it was found — a
+# re-record of the untouched emit matrix came back differing in one file, `out/.bob/memory/
+# README.md`, 5264 bytes against 5260.
+#
+# The lessons file always opens with the header `_harness_learn.py:47` writes, so that header
+# is the anchor and the README can never match it.
+_LESSONS_FILE = re.compile("^# .+ — lessons".encode("utf-8"))
+_LESSON_BULLET = re.compile(rb"^- \d{4}-\d{2}-\d{2}: ", re.M)
+
+
+def corpus_normalise(snap):
+    """One snapshot, with the values that move between RUNS tagged. See `CORPUS_STAMPS`.
+
+    Values only. A KEY that carried a moving value would make the same cell report MISSING
+    and EXTRA for one file, which is louder rather than quieter — and the harnesses already
+    destamp the two filenames that move (`improvements-<STAMP>.md`,
+    `archived-memory/<STAMP>`) because the live comparison needed it first. Re-checked by
+    scanning a full recording of both matrices, keys included: nothing else moves.
+
+    An error string passes through, so the callers' `isinstance` checks still see it."""
+    if isinstance(snap, str):
+        return snap
+    out = {}
+    for k, v in snap.items():
+        for pat, repl in CORPUS_STAMPS:
+            v = pat.sub(repl, v)
+        if _LESSONS_FILE.match(v):
+            v = _LESSON_BULLET.sub(b"- <DATE>: ", v)
+        out[k] = v
+    return out
+
+
 def _cell_id(cell: dict) -> str:
     """The human label for one cell — shared by the byte comparison, `--record` and
     `--against`, so a recorded corpus and a live run can never disagree about a cell's
@@ -709,7 +825,7 @@ def compare(ref: list[str], new: list[str], quick: bool, limit: int,
         for i, (cell, (a, b)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
             cid = _cell_id(cell)
             if record:
-                _record_cell(record, cid, a, failures)
+                _record_cell(record, cid, a, failures, VERBATIM_CELLS.get(cid, set()))
             elif against:
                 _against_cell(against, cid, b, failures)
             else:
@@ -730,15 +846,28 @@ def compare(ref: list[str], new: list[str], quick: bool, limit: int,
     return 1
 
 
-def _record_cell(record_dir: str, cid: str, snap, failures: list[str]) -> None:
+def _record_cell(record_dir: str, cid: str, snap, failures: list[str],
+                 extra: "set[str]" = frozenset()) -> None:
     """One cell's half of `--record`: write its snapshot down, or fail loudly if the
     reference generator itself crashed — a corpus entry silently missing its own cell
-    is worse than no corpus at all."""
+    is worse than no corpus at all.
+
+    SHARED BY ALL THREE HARNESSES, which is why the verbatim rule lives here rather than
+    at each call site. Every key a harness invents for something that is not a file is
+    spelled `<...>` — `<stdout>`, `<stderr>`, `<exit>`, `<dirs>`, `<daemon-record>`,
+    `<r3 body>` — and a filename can never begin with `<` on Windows, which is the
+    platform half of the corpus this rule is recorded on. Those keys ARE the payload of a
+    CLI or web cell, and a corpus that can only say "the body changed" without saying how
+    makes every regeneration a blind blessing. Real files stay hashed, because the emit
+    matrix is 122 MB raw; `extra` is how the emit matrix names the handful of carrier
+    files it keeps verbatim anyway (see `VERBATIM_CELLS`).
+    """
     if isinstance(snap, str):
-        failures.append(f"  {cid}: ref generator failed, nothing recorded: {snap}")
+        failures.append(f"  {cid}: reference run failed, nothing recorded: {snap}")
         return
-    verbatim = VERBATIM_CELLS.get(cid, set()) | {"<stdout>", "<stderr>", "<exit>"}
-    snapshot_io.write(Path(record_dir), cid, snap, verbatim=verbatim)
+    snap = corpus_normalise(snap)
+    snapshot_io.write(Path(record_dir), cid, snap,
+                      verbatim={k for k in snap if k.startswith("<")} | set(extra))
 
 
 def _against_cell(against_dir: str, cid: str, snap, failures: list[str]) -> None:
@@ -746,14 +875,14 @@ def _against_cell(against_dir: str, cid: str, snap, failures: list[str]) -> None
     recorded earlier. A cell present in this run but absent from the corpus is a
     FAILURE — see the module docstring on why a silent skip is not acceptable here."""
     if isinstance(snap, str):
-        failures.append(f"  {cid}: new generator failed: {snap}")
+        failures.append(f"  {cid}: candidate run failed: {snap}")
         return
     recorded = snapshot_io.read(Path(against_dir), cid)
     if recorded is None:
         failures.append(f"  {cid}: NO RECORDED SNAPSHOT in {against_dir} — a cell present "
                         "in this run but absent from the corpus is a failure, not a skip")
         return
-    problems = snapshot_io.compare(recorded, snap)
+    problems = snapshot_io.compare(recorded, corpus_normalise(snap))
     if problems:
         failures.append(f"  {cid}: {len(problems)} differ from the recorded corpus:\n"
                         + "\n".join(problems[:10]))

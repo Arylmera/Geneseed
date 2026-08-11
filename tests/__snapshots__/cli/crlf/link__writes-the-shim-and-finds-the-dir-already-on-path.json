@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "7a9e4fbe4cd27d1800b234eac65919ab5631026a799d52c796b97a861e321fed",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "e0c2671ed0cac180f4c20a6ab642a3ea51f5d6996ad70d949ad323718105ae3a",
+    "home/AppData/Local/Geneseed/bin/geneseed.cmd": "b1e92e9bb941dc58d6312fea47afb2c2e81a6853a9ddef042b13469ac21677c5",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 105,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 181,
+    "home/AppData/Local/Geneseed/bin/geneseed.cmd": 38,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/AppData\nhome/AppData/Local\nhome/AppData/Local/Geneseed\nhome/AppData/Local/Geneseed/bin\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "geneseed: wrote shim <HOME>\\AppData\\Local\\Geneseed\\bin\\geneseed.cmd\ngeneseed: '<HOME>\\AppData\\Local\\Geneseed\\bin' is on your user PATH — open a NEW terminal, then run `geneseed`.\n"
+  }
+}

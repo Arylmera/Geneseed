@@ -1,0 +1,34 @@
+{
+  "paths": {
+    "<daemon-record>": "380b7a62b3ee76b2c04092e2b9174c525c61d4b23153e032d8defe2188600377",
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<r1 body>": "0fd2152aa36ede372015902dd4b4aac4faccc8591acfc6b89113cb6477b767d4",
+    "<r1 headers>": "939e080b8f2fd6d4d35711f27b292211824a863e91de9f8e575526cd1460bf05",
+    "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<server stdout>": "1bc93415824d62fe66f8626932cc78809c451e1094b35c6a6ddbef3494fe0143",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<daemon-record>": 120,
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<r1 body>": 91,
+    "<r1 headers>": 50,
+    "<r1 status>": 6,
+    "<server stderr>": 0,
+    "<server stdout>": 205,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<daemon-record>": "{\"pid\": <PID>, \"port\": <PORT>, \"started\": <T>, \"theme\": \"neutral\", \"token\": \"<TOKEN>\", \"url\": \"http://127.0.0.1:<PORT>\"}",
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "0",
+    "<r1 body>": "{\"deployed\": false, \"target\": \"<HOME>\\\\.config\\\\opencode\", \"theme\": \"neutral\", \"files\": []}",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 142",
+    "<r1 status>": "200 OK",
+    "<server stderr>": "",
+    "<server stdout>": "[web] no deployed harness at <HOME>\\.config\\opencode.\n      Run `geneseed setup` first — serving anyway (read-only UI).\n[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: neutral)\n[web] daemon ready.\n"
+  }
+}

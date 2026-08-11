@@ -96,6 +96,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import golden            # noqa: E402  (needs tests/ on the path first)
 import harness_golden    # noqa: E402
+import snapshot_io       # noqa: E402
 
 ROOT = golden.ROOT
 
@@ -2690,6 +2691,65 @@ def _dyn_stamps(record: dict, port: int, pid: int) -> list[tuple[bytes, bytes]]:
     return out
 
 
+def _corpus_stamps(now: int) -> list[tuple[bytes, bytes]]:
+    """The per-run values a RECORDED corpus cannot keep, and that no static pattern in
+    `golden.CORPUS_STAMPS` can name because they are this run's own.
+
+    `_dyn_stamps` above covers the SERVER's port, pid, token and started-second, because the
+    two SIDES of a cell disagree about them. These four are the HARNESS's: the clock
+    `_clock_repl` seeds worlds from (`{now}`, `{older}`, `{stale}`) and `os.getpid()`, which
+    `_activity_world` seeds as the pid of a process that is definitely alive. Both sides of a
+    live cell share them, so the live gate compares them in full and needs nothing here — but
+    a corpus recorded on Tuesday is replayed by a different process on Thursday.
+
+    TARGETED, not global, for `_dyn_stamps`' reason one step further: `os.getpid()` is four
+    or five digits and a bare replacement would rewrite any byte count that happened to
+    contain them, so each value is replaced only where it is syntactically the field it
+    belongs to. That also keeps the DELIBERATE constants beside them — `"pid": 0`,
+    `"pid": "not-a-pid"`, `_DEAD_PID` — byte-compared, which is what the `_is_live` cells are
+    for: tagging those would make the live/dead partition unreadable in the corpus.
+    """
+    pid = os.getpid()
+    out = [(f'"{field}": {value}'.encode(), f'"{field}": <{tag}>'.encode())
+           for field in ("updated_at", "turn_started_at")
+           for value, tag in ((now, "NOW"), (now - 600, "OLDER"), (now - 3600, "STALE"))]
+    out.append((f'"pid": {pid}'.encode(), b'"pid": <HARNESS-PID>'))
+    out.append((f'"pid": "{pid}"'.encode(), b'"pid": "<HARNESS-PID>"'))
+    return out
+
+
+# THE HASH OF A VALUE THE OTHER TABLE JUST TAGGED, which is the one rot a normaliser cannot
+# reach by naming a field. `api_rules_*` answer with `"fingerprint"`, a hash of the WHOLE
+# `user-rules.md`, and `api_rules_promote` writes two dates into that file from the server's
+# own clock. `golden.CORPUS_STAMPS` tags the dates; a hash taken over them before they were
+# tagged cannot be, so a corpus recorded on one day and replayed on the next differs in one
+# 16-hex field and in nothing else. Found by a recording crossing a real midnight between the
+# `--record` run and the `--against` run, not by reading — the two `promote/*` cells were the
+# only two of 114 that moved.
+#
+# SCOPED TO THE CELLS THAT CAUSE IT rather than to the field, and the difference matters: 14
+# web cells carry a `"fingerprint"`, only the 2 that PROMOTE move, and one of the other twelve
+# is `rules/a-stale-fingerprint-is-409-and-never-clobbers`, where that value IS the subject of
+# the test. So the trigger is the evidence that this cell dated its own rules file — which
+# also means a promote cell written later is covered without anyone remembering to name it.
+_PROMOTED = re.compile(rb", promoted \d{4}-\d{2}-\d{2}")
+_RULES_FINGERPRINT = re.compile(rb'("fingerprint": ")[0-9a-f]{16}(?=")')
+
+
+def _corpus_normalise(snap, now: int):
+    """`golden.corpus_normalise`'s per-cell half — see `_corpus_stamps`. An error string
+    passes through so the callers' `isinstance` checks still see it."""
+    if isinstance(snap, str):
+        return snap
+    stamps = _corpus_stamps(now)
+    out = {k: _apply(v, stamps) for k, v in snap.items()}
+    # Runs BEFORE `golden.corpus_normalise` (which happens inside `_record_cell`), so the
+    # trigger is the raw provenance line rather than the `<DATE>` tag it becomes.
+    if any(_PROMOTED.search(v) for v in out.values()):
+        out = {k: _RULES_FINGERPRINT.sub(rb"\1<RULES-FP>", v) for k, v in out.items()}
+    return out
+
+
 def _decode_body(body: bytes, encoding: str) -> bytes:
     """A gzipped response, compared as the bytes a CLIENT ends up with.
 
@@ -3095,9 +3155,32 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
 
 
 def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int,
-            jobs: int = 1) -> int:
-    print(f"[web-golden] {len(matrix)} cells · ref={' '.join(ref)} · new={' '.join(new)}"
-          f" · jobs={jobs}")
+            jobs: int = 1, record: "str | None" = None,
+            against: "str | None" = None) -> int:
+    """Plain / `record` / `against` — the same three modes as `golden.compare`, sharing one
+    runner and one corpus format.
+
+    WHAT A RECORDED WEB CELL HOLDS. Every response body in it is the DECODED body, because
+    that is what `run_cell` snapshots: `_drive` inflates through `_decode_body` before the
+    bytes ever reach the observation dict. The distinction is not cosmetic — P6a measured
+    two zlib builds emitting 753 and 751 bytes for the same 1.5 kB input, and no normaliser
+    can reach inside a compressed stream to destamp it. A corpus of wire bytes would be a
+    recording of this machine's zlib, replayable nowhere.
+    """
+    if record:
+        print(f"[web-golden] {len(matrix)} cells · recording ref={' '.join(ref)} -> "
+              f"{record} · jobs={jobs}")
+        # See `golden.compare`: one flat file per cell, asserted before the first write.
+        names = {snapshot_io._safe(c["id"]) for c in matrix}
+        assert len(names) == len(matrix), (
+            f"{len(matrix)} cells collapse onto {len(names)} corpus filenames — two distinct "
+            "cell ids map to one file, so the recorded corpus would be silently short")
+    elif against:
+        print(f"[web-golden] {len(matrix)} cells · new={' '.join(new)} · against corpus "
+              f"{against} · jobs={jobs}")
+    else:
+        print(f"[web-golden] {len(matrix)} cells · ref={' '.join(ref)} · new={' '.join(new)}"
+              f" · jobs={jobs}")
     failures: list[str] = []
 
     def _pair(cell: dict) -> tuple:
@@ -3111,15 +3194,26 @@ def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int,
 
         Every cell binds `--port 0`, so the OS hands each server its own free port and two
         cells running at once can no more collide than a cell and the developer's own
-        daemon could."""
+        daemon could.
+
+        Or just the ONE side `--record`/`--against` needs. `now` is still sampled here and
+        still returned, because it is what `check_expectations` reads."""
         now = int(time.time())
+        if record:
+            return run_cell(ref, cell, now), None, now
+        if against:
+            return None, run_cell(new, cell, now), now
         return run_cell(ref, cell, now), run_cell(new, cell, now), now
 
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
     with pool:
         for i, (cell, (a, b, now)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
             cid = cell["id"]
-            if isinstance(a, str) or isinstance(b, str):
+            if record:
+                golden._record_cell(record, cid, _corpus_normalise(a, now), failures)
+            elif against:
+                golden._against_cell(against, cid, _corpus_normalise(b, now), failures)
+            elif isinstance(a, str) or isinstance(b, str):
                 failures.append(f"  {cid}: server failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                                 f"\n    new: {b if isinstance(b, str) else 'ok'}")
             elif (vacuous := check_expectations(cell, a, now)):
@@ -3137,7 +3231,10 @@ def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int,
             if i % 5 == 0 or i == len(matrix):
                 print(f"[web-golden]   {i}/{len(matrix)} ({len(failures)} failing)")
     if not failures:
-        print(f"[web-golden] ok — {len(matrix)} cells identical")
+        if record:
+            print(f"[web-golden] recorded {len(matrix)} cells to {record}")
+        else:
+            print(f"[web-golden] ok — {len(matrix)} cells identical")
         return 0
     print(f"\n[web-golden] {len(failures)}/{len(matrix)} cells DIFFER:\n")
     for f in failures[:limit]:
@@ -3163,9 +3260,31 @@ def main(argv=None) -> int:
                          "machine). Each cell starts its own server on its own OS-chosen "
                          "port inside its own sandbox, so this changes only how long the "
                          "gate takes, never what it compares.")
+    ap.add_argument("--record", metavar="DIR", default=None,
+                    help="run ONLY the reference server and write each cell's snapshot to "
+                         "DIR/<crlf|lf>, instead of comparing. Response bodies are recorded "
+                         "DECODED — see `compare`.")
+    ap.add_argument("--against", metavar="DIR", default=None,
+                    help="compare the candidate's live output against a corpus recorded "
+                         "earlier with --record into DIR/<crlf|lf>, instead of a live "
+                         "--ref. A cell with no recorded snapshot is a FAILURE, not a skip.")
     args = ap.parse_args(argv)
     if args.jobs < 1:
         print(f"[web-golden] --jobs must be at least 1, got {args.jobs}")
+        return 2
+    if args.record and args.against:
+        print("[web-golden] --record and --against are mutually exclusive")
+        return 2
+    # The corpus root, plus the platform subdirectory `golden.PLATFORM_CORPUS` names — chosen
+    # here rather than by the caller, so a recording and a replay on the same machine cannot
+    # land in different places. See that constant for why the split is not a normalisation.
+    if args.record:
+        args.record = str(Path(args.record) / golden.PLATFORM_CORPUS)
+    if args.against:
+        args.against = str(Path(args.against) / golden.PLATFORM_CORPUS)
+    if args.against and not args.new:
+        print("[web-golden] --against needs --new: with no candidate server it would replay "
+              "the REFERENCE against the reference's own recording, which always passes.")
         return 2
 
     ref = harness_golden._resolve_cli(golden._split(args.ref)) if args.ref else [
@@ -3179,7 +3298,8 @@ def main(argv=None) -> int:
             print(f"[web-golden] --only {','.join(keep)} selected 0 cells — nothing would "
                   f"be compared, which is not a pass.")
             return 2
-    return compare(ref, new, matrix, args.limit, jobs=args.jobs)
+    return compare(ref, new, matrix, args.limit, jobs=args.jobs,
+                   record=args.record, against=args.against)
 
 
 if __name__ == "__main__":

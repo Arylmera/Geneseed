@@ -83,6 +83,7 @@ from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import golden  # noqa: E402  (needs tests/ on the path first)
+import snapshot_io  # noqa: E402
 
 ROOT = golden.ROOT
 FAKE_LLM = ROOT / "tests" / "fixtures" / "fake_llm.py"
@@ -4094,6 +4095,12 @@ _STAMPS = (
     # this verb prints, so it cannot reach any other `->` in the corpus.
     (re.compile(r'^(geneseed: linked .+) -> .+$', re.M), r'\1 -> <ENTRY>'),
 )
+# The build date and the live source fingerprint are NOT destamped here, and that is
+# deliberate. They are identical on both sides of a live cell — one clock, one checkout —
+# so this gate compares them in full, including the cross-implementation claim that
+# `sourceFingerprint()` answers what `source_fingerprint()` does. They move only between
+# two RUNS, which is a threat to a recorded corpus and to nothing else, so they are
+# normalised there and only there: see `golden.CORPUS_STAMPS`.
 
 
 def _destamp(data: bytes) -> bytes:
@@ -4663,11 +4670,38 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     return problems
 
 
-def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1) -> int:
-    """`ref` and `new` map a cell's `bin` ("hook"/"cli") to the command that answers it."""
+def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1,
+            record: "str | None" = None, against: "str | None" = None) -> int:
+    """`ref` and `new` map a cell's `bin` ("hook"/"cli") to the command that answers it.
+
+    Three things this can do to the matrix, sharing one runner — the same three
+    `golden.compare` does, wired the same way and writing the same corpus format.
+
+    Plain (record and against both None): run BOTH sides of every cell and compare every
+    byte either one wrote. The original gate, and it dies with the reference.
+    `record`: run ONLY `ref` and write each cell's snapshot to `record`. This is how the
+    reference's answer to 318 CLI cells outlives `rituals/harness.py`.
+    `against`: run ONLY `new` and compare it to a corpus recorded earlier. A cell the
+    corpus has no entry for is a FAILURE, not a skip — see `golden._against_cell`.
+    """
     shown = " · ".join(f"new[{k}]={' '.join(v)}" for k, v in sorted(new.items()))
-    print(f"[harness-golden] {len(matrix)} cells · ref={' '.join(ref['hook'])} · {shown}"
-          f" · jobs={jobs}")
+    if record:
+        print(f"[harness-golden] {len(matrix)} cells · recording "
+              f"ref={' '.join(ref['hook'])} -> {record} · jobs={jobs}")
+        # See `golden.compare`: one flat file per cell, so two cell ids that collapse onto
+        # one corpus FILENAME would record 317 answers for 318 cells and `--against` would
+        # then pass over a corpus quietly missing one. Asserted before the first write, so a
+        # collision costs no run and leaves no half-written corpus on disk.
+        names = {snapshot_io._safe(c["id"]) for c in matrix}
+        assert len(names) == len(matrix), (
+            f"{len(matrix)} cells collapse onto {len(names)} corpus filenames — two distinct "
+            "cell ids map to one file, so the recorded corpus would be silently short")
+    elif against:
+        print(f"[harness-golden] {len(matrix)} cells · {shown} · against corpus {against}"
+              f" · jobs={jobs}")
+    else:
+        print(f"[harness-golden] {len(matrix)} cells · ref={' '.join(ref['hook'])} · {shown}"
+              f" · jobs={jobs}")
     # WHAT THIS RUN CANNOT COVER, said by the run itself. A suite that silently drops a
     # group on one operating system reads exactly like a suite that never had it — which is
     # what `link`/`unlink`'s Unix arm was for ten phases. See `PLATFORM_ONLY`.
@@ -4683,8 +4717,15 @@ def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1)
         that sandbox — it shares nothing with another cell and depends on no ordering, which
         is what makes running them at once a change to the clock and not to the gate. The
         `doctor` cells are why it is worth doing: each one copies 511 tracked files TWICE
-        (see `_copy_checkout`) on top of two ~2 s runs of the verb."""
+        (see `_copy_checkout`) on top of two ~2 s runs of the verb.
+
+        Or just the ONE side `--record`/`--against` needs, which is also why each of those
+        two runs in roughly half the wall clock of the plain gate."""
         which = cell.get("bin", "hook")
+        if record:
+            return run_cell(ref[which], cell), None
+        if against:
+            return None, run_cell(new[which], cell)
         return run_cell(ref[which], cell), run_cell(new[which], cell)
 
     # `pool.map` yields in submission order, so the failure list and the `--limit` cut read
@@ -4694,7 +4735,11 @@ def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1)
     with pool:
         for i, (cell, (a, b)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
             cid = cell["id"]
-            if isinstance(a, str) or isinstance(b, str):
+            if record:
+                golden._record_cell(record, cid, a, failures)
+            elif against:
+                golden._against_cell(against, cid, b, failures)
+            elif isinstance(a, str) or isinstance(b, str):
                 failures.append(f"  {cid}: CLI failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                                 f"\n    new: {b if isinstance(b, str) else 'ok'}")
             elif (vacuous := check_expectations(cell, a)):
@@ -4712,7 +4757,10 @@ def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1)
             if i % 20 == 0 or i == len(matrix):
                 print(f"[harness-golden]   {i}/{len(matrix)} ({len(failures)} failing)")
     if not failures:
-        print(f"[harness-golden] ok — {len(matrix)} cells identical")
+        if record:
+            print(f"[harness-golden] recorded {len(matrix)} cells to {record}")
+        else:
+            print(f"[harness-golden] ok — {len(matrix)} cells identical")
         return 0
     print(f"\n[harness-golden] {len(failures)}/{len(matrix)} cells DIFFER:\n")
     for f in failures[:limit]:
@@ -4770,10 +4818,32 @@ def main(argv=None) -> int:
                     help="cells to run CONCURRENTLY (default: %(default)s on this "
                          "machine). A cell is a self-contained sandbox, so this changes "
                          "only how long the gate takes, never what it compares.")
+    ap.add_argument("--record", metavar="DIR", default=None,
+                    help="run ONLY the reference and write each cell's snapshot to "
+                         "DIR/<crlf|lf>, instead of comparing. This is how the "
+                         "reference's answer outlives rituals/harness.py.")
+    ap.add_argument("--against", metavar="DIR", default=None,
+                    help="compare the candidate's live output against a corpus recorded "
+                         "earlier with --record into DIR/<crlf|lf>, instead of a live "
+                         "--ref. A cell with no recorded snapshot is a FAILURE, not a skip.")
     args = ap.parse_args(argv)
     if args.jobs < 1:
         print(f"[harness-golden] --jobs must be at least 1, got {args.jobs}")
         return 2
+    if args.record and args.against:
+        print("[harness-golden] --record and --against are mutually exclusive")
+        return 2
+    # Both flags name the corpus ROOT; `golden.PLATFORM_CORPUS` picks the subdirectory here
+    # rather than leaving it to the caller, so a recording and a replay on the same machine
+    # can never land in different places. The split is not a normalisation — see that
+    # constant. It bites harder here than on the emit matrix: this harness's cells write
+    # shims, install logs and memory stores through the same `os.linesep` text path, AND
+    # `PLATFORM_ONLY` already gives Windows and POSIX different `link`/`unlink` cells, so
+    # the two corpora do not even hold the same cell IDS.
+    if args.record:
+        args.record = str(Path(args.record) / golden.PLATFORM_CORPUS)
+    if args.against:
+        args.against = str(Path(args.against) / golden.PLATFORM_CORPUS)
 
     ref = _resolve_cli(golden._split(args.ref)) if args.ref else [
         sys.executable, str(ROOT / "rituals" / "harness.py")]
@@ -4790,6 +4860,16 @@ def main(argv=None) -> int:
     # binary was not supplied would silently compare the reference against ITSELF and pass,
     # which reads exactly like a ported verb — the same failure mode as `--only` matching
     # nothing, and refused the same way.
+    # `--against` REPLAYS THE CANDIDATE, so a missing candidate is not a default here. With
+    # neither binary supplied both keys below fall back to `ref`, and the run would compare
+    # the reference against its own recording — a determinism self-check wearing the
+    # regression gate's name, green by construction. Same refusal, and the same reason, as
+    # the `--new`-without-`--new-cli` check below and as `--only` matching nothing.
+    if args.against and not args.new:
+        print("[harness-golden] --against needs --new (and --new-cli): with no candidate "
+              "binary it would replay the REFERENCE against the reference's own recording, "
+              "which always passes.")
+        return 2
     new = {"hook": _resolve_cli(golden._split(args.new)) if args.new else ref,
            "cli": _resolve_cli(golden._split(args.new_cli)) if args.new_cli else ref}
     if args.new and not args.new_cli:
@@ -4800,7 +4880,8 @@ def main(argv=None) -> int:
                   f"({needs[0]}, ...). They would have been compared against the reference "
                   f"itself, which always passes. Pass --new-cli, or --only the hook verbs.")
             return 2
-    return compare({"hook": ref, "cli": ref}, new, matrix, args.limit, jobs=args.jobs)
+    return compare({"hook": ref, "cli": ref}, new, matrix, args.limit, jobs=args.jobs,
+                   record=args.record, against=args.against)
 
 
 if __name__ == "__main__":

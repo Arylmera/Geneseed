@@ -1,0 +1,28 @@
+{
+  "paths": {
+    "<dirs>": "f4dc0127641af34992e3cb8949f417d5841ba1a52ef9983ae45cc57d8bba552e",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "0fb573dd2684aeac887429ee4c25a713a2f7690fe2ed922319e71c682c503405",
+    "<stdout>": "a78a1b05d082c25e2b6f25c64eee26de14ee427c95b68c379e95d0239a38d1fb",
+    "home/.claude/.geneseed-manifest.json": "4d2855c2eef8884d8183701314da8789bdb132115edbf6adf3e5e641dc7b1de7",
+    "home/.claude/excludes.json": "060743f12488bd64c41e27ffd4451a9c686705440416535000276ebf9196c8eb",
+    "repo/.claude/settings.local.json": "a574f355625f5c723f034464e7671cda9135a7a220545d78e4c6920fec594a5d",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 39,
+    "<exit>": 1,
+    "<stderr>": 59,
+    "<stdout>": 31,
+    "home/.claude/.geneseed-manifest.json": 15,
+    "home/.claude/excludes.json": 378,
+    "repo/.claude/settings.local.json": 68,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.claude\nrepo\nrepo/.claude",
+    "<exit>": "0",
+    "<stderr>": "[geneseed] claude: claudeMdExcludes already present (kept)\n",
+    "<stdout>": "[geneseed] <SB>\\repo excluded.\n"
+  }
+}

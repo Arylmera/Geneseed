@@ -25,6 +25,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
 sys.path.insert(0, str(ROOT))
 import golden  # noqa: E402
+import harness_golden  # noqa: E402
+import web_golden  # noqa: E402
+import snapshot_io  # noqa: E402
 import _build_core  # noqa: E402
 
 
@@ -210,6 +213,115 @@ class FlagWiringTests(unittest.TestCase):
         self.assertTrue(seen["matrix"], "--emits files selected nothing")
         rc, _ = self._capture(["--emits", "nosuchemit"])
         self.assertEqual(rc, 2, "an unknown --emits value must refuse, not select nothing")
+
+
+class CorpusFlagWiringTests(unittest.TestCase):
+    """The same wiring assertion as `FlagWiringTests`, for the two harnesses that grew
+    `--record`/`--against` second — and it is the assertion those flags need most.
+
+    `--record` degrades in the worst available direction: `main` still exits 0, so a silent
+    disconnection reads as a successful recording of the reference's 318 CLI answers and 114
+    web answers right up until `rituals/harness.py` is gone and nobody can record them again.
+    `--against` degrades the other way and just as quietly — it becomes a plain live
+    comparison, which passes for as long as the reference is still there to compare against.
+
+    The assertion is on the RESOLVED value, so one test covers the wiring AND the platform
+    split: a corpus recorded on Windows is not the corpus a Linux run replays (`pyfs.writeText`
+    emits `os.linesep`, and `PLATFORM_ONLY` gives the two platforms different `link`/`unlink`
+    cells), and each harness picks the subdirectory itself rather than trusting a caller.
+    """
+
+    def _capture(self, mod, argv, keys=("record", "against")):
+        seen = {}
+
+        def fake_compare(*args, **kw):
+            seen.update({k: kw.get(k) for k in keys})
+            return 0
+
+        real, mod.compare = mod.compare, fake_compare
+        try:
+            rc = mod.main(argv)
+        finally:
+            mod.compare = real
+        return rc, seen
+
+    def test_record_and_against_reach_each_harnesses_compare(self):
+        expected = golden.PLATFORM_CORPUS
+        self.assertIn(expected, ("crlf", "lf"))
+        # The candidate binaries every harness demands before it will replay anything. They
+        # are never spawned here — `compare` is intercepted — but `main` refuses without them.
+        candidate = {harness_golden: ["--new", "node bin/geneseed-hook.mjs",
+                                      "--new-cli", "node bin/geneseed-cli.mjs"],
+                     web_golden: ["--new", "node js/web/server.mjs"]}
+        for mod in (harness_golden, web_golden):
+            for flag in ("--record", "--against"):
+                with self.subTest(harness=mod.__name__, flag=flag):
+                    _, seen = self._capture(mod, [flag, "corpus-root", *candidate[mod]])
+                    key = flag.lstrip("-")
+                    self.assertEqual(
+                        seen[key], str(Path("corpus-root") / expected),
+                        f"{mod.__name__}: {flag} did not reach compare, or did not resolve "
+                        "to this platform's corpus subdirectory")
+                    other = "against" if key == "record" else "record"
+                    self.assertIsNone(seen[other],
+                                      f"{mod.__name__}: {flag} also set --{other}")
+
+    def test_the_two_flags_are_mutually_exclusive(self):
+        for mod in (harness_golden, web_golden):
+            with self.subTest(harness=mod.__name__):
+                rc, _ = self._capture(mod, ["--record", "a", "--against", "b"])
+                self.assertEqual(rc, 2, f"{mod.__name__}: recording and replaying in one run "
+                                        "has no meaning and must be refused")
+
+    def test_against_without_a_candidate_is_refused(self):
+        """With no candidate binary both harnesses fall back to the reference, and the run
+        replays the REFERENCE against the reference's own recording — a determinism
+        self-check wearing the regression gate's name, green by construction. `ci.yml` warns
+        about the same shape for the live gate; this is the corpus half of it."""
+        for mod in (harness_golden, web_golden):
+            with self.subTest(harness=mod.__name__):
+                rc, _ = self._capture(mod, ["--against", "corpus-root"])
+                self.assertEqual(rc, 2, f"{mod.__name__}: --against with no --new compares "
+                                        "the reference against itself and always passes")
+
+
+class ACellMissingFromTheCorpusIsAFailure(unittest.TestCase):
+    """The property that makes a recorded corpus a GATE rather than a filter, asserted on
+    the helper all three harnesses share.
+
+    A cell added after the recording — a new verb, a new endpoint, a `link` cell on the
+    platform whose corpus was recorded on the other one — has no entry. Skipping it silently
+    is the failure this is here to refuse: the run still prints `ok`, the new cell is
+    compared against nothing, and the corpus quietly stops covering the thing it was grown
+    for."""
+
+    def test_an_unrecorded_cell_fails_rather_than_being_skipped(self):
+        failures = []
+        golden._against_cell("no-such-corpus-dir", "verb/a-cell-nobody-recorded",
+                             {"<stdout>": b"anything"}, failures)
+        self.assertEqual(len(failures), 1)
+        self.assertIn("NO RECORDED SNAPSHOT", failures[0])
+
+    def test_a_recorded_cell_round_trips_and_a_changed_byte_is_reported(self):
+        """The vacuity guard on the test above: "always fails" and "fails when it should"
+        are the same output until something passes."""
+        import tempfile
+        snap = {"<stdout>": b"hello\n", "out/AGENT.md": b"body\n"}
+        with tempfile.TemporaryDirectory() as td:
+            golden._record_cell(td, "verb/a-cell", snap, failures := [])
+            self.assertEqual(failures, [])
+            golden._against_cell(td, "verb/a-cell", snap, failures)
+            self.assertEqual(failures, [], "an identical replay must pass")
+            golden._against_cell(td, "verb/a-cell", {**snap, "<stdout>": b"hellp\n"},
+                                 failures)
+            self.assertEqual(len(failures), 1, "a changed byte must be reported")
+            self.assertIn("<stdout>", failures[0])
+            # VERBATIM, not just a hash: the recorded text is what makes the diff reviewable
+            # in a pull request, and it is the whole reason the pseudo-files are not hashed.
+            self.assertIn("hello", failures[0])
+            self.assertEqual(sorted(snapshot_io.read(Path(td), "verb/a-cell")["verbatim"]),
+                             ["<stdout>"], "a real file must stay hashed, a pseudo-file must "
+                                           "be recorded verbatim")
 
 
 if __name__ == "__main__":

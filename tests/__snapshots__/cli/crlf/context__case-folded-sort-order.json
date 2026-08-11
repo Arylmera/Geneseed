@@ -1,0 +1,28 @@
+{
+  "paths": {
+    "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "360ca0ecaf95eea79573f32af78ccc5ce7d076a93e56769c0aeb6abd593a3e35",
+    "repo/Beta.md": "679e273f78fc8f8ba114db23c2dce80cc77c91083939825ca830152f2f080d08",
+    "repo/README.md": "eab45286fa3677be359e46bdb2e71b06966bb9eb3e44d08a4d977bf1577d437e",
+    "repo/Zebra.md": "ae7c791a527d756a15cdb11de8c13feefd266a81ea9671d3e65f1e7da00e2e5e",
+    "repo/alpha.md": "8e4621379786ef42a4fec155cd525c291dd7db3c1fde3478522f4f61c03fd1bd"
+  },
+  "sizes": {
+    "<dirs>": 13,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 226,
+    "repo/Beta.md": 3,
+    "repo/README.md": 8,
+    "repo/Zebra.md": 3,
+    "repo/alpha.md": 3
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "=== PROJECT CONTEXT — binding for this repo per Rule XVIII (via auto-discovery [<SB>\\repo]) ===\n\n----- README.md -----\n# root\n\n--- Lazy entries (load only when the task needs them) ---\n  - alpha.md\n  - Beta.md\n  - Zebra.md\n\n"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "paths": {
+    "<dirs>": "693c61378c35019cf369f06b5b8feef7eeb1a908c0b3afb08b510a9a19c966b0",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "8feae00010e89c189bcb06a5f6ec236c3cb2332c85537b24724a589b661b3af3",
+    "repo/CLAUDE.md": "5e255bdd8b983e9d4558989fe883356c8a5e3109654b988b910256f26674120d",
+    "repo/NOTES.md": "894358ec999367b00a42d2dfe5d5f64ad71bf39da22c3ff1997b3690e88bdbdb",
+    "repo/README.md": "258d094d4908e5e032aa3310159a10196a3831cab790a204ed8c5e8a0bc4cbb8",
+    "repo/apps/site/README.md": "e274103b012fe52cf81da4eec326159c7b36e92acf3347ba85399ea9356a7ac7",
+    "repo/context.json": "9f8ad08b0499be766674331a4b9dcd8728b53a1a01dbacb6851018908678317a",
+    "repo/docs/architecture.md": "5d472ba6d9421aebb8bff0f0926029c18d01261dd928ded83377e1097c85a446",
+    "repo/docs/nested/deep.md": "6127ad80669055d7ceabacbef139facb535043f9d471ea9dbe3981db60010ee0",
+    "repo/docs/node_modules/vendored.md": "ed1795482a6428d8a672ff598156b4f15a123c6e4e5b4b08c1437bc2a0e3135f",
+    "repo/packages/widget/README.md": "2a2e9b11de3d8365476e1fedfe22d8b1829cdc09f0c3966c433880e942a7ae5d",
+    "repo/packages/widget/index.js": "cd67dfd90cdcfd5fe01eeee80c849f05f363e39f528040e63d077bff8e145c4d"
+  },
+  "sizes": {
+    "<dirs>": 123,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 270,
+    "repo/CLAUDE.md": 31,
+    "repo/NOTES.md": 41,
+    "repo/README.md": 26,
+    "repo/apps/site/README.md": 8,
+    "repo/context.json": 178,
+    "repo/docs/architecture.md": 16,
+    "repo/docs/nested/deep.md": 8,
+    "repo/docs/node_modules/vendored.md": 22,
+    "repo/packages/widget/README.md": 10,
+    "repo/packages/widget/index.js": 17
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo\nrepo/apps\nrepo/apps/site\nrepo/docs\nrepo/docs/nested\nrepo/docs/node_modules\nrepo/packages\nrepo/packages/widget",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "=== PROJECT CONTEXT — binding for this repo per Rule XVIII (via <SB>\\repo\\context.json) ===\n\n----- README.md — the front door -----\n# Project\n\nThe readme.\n\n--- Lazy entries (load only when the task needs them) ---\n  - docs/architecture.md — how it hangs together\n\n"
+  }
+}
