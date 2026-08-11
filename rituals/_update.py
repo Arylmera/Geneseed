@@ -232,6 +232,29 @@ def _fetch_streaming(log=None):
 
     t = threading.Thread(target=_reader, daemon=True)
     t.start()
+
+    def _tail() -> str:
+        """The last five lines — AFTER the reader has finished draining the pipe.
+
+        `p.poll()` answers when the PROCESS exits; the pipe it wrote to still holds
+        whatever `_reader` has not consumed yet. Reading `lines` at that moment is a race
+        the reader usually wins and sometimes does not, and it is widest for a git that
+        fails INSTANTLY — which is the only kind this ever reports on. When the reader
+        loses, `tail` is empty and the caller prints "git fetch hung without any output"
+        over an error git stated plainly.
+
+        The `finally` below already joins, but a `return` expression is evaluated BEFORE
+        the `finally` runs, so that join has never once happened in time to matter.
+
+        CI is what said so: `upgrade/a-tokened-origin-is-redacted-out-of-every-line` went
+        red on ubuntu against `fatal: transport 'https' not allowed` while the same cell
+        passed on the same SHA minutes earlier. The port is not affected — `js/update.mjs`
+        awaits `child.on('close')`, which fires only after the stdio streams flush — so
+        only one side could ever lose, and a cross-implementation byte comparison holds a
+        race exactly as well as it holds a defect both sides share, which is not at all.
+        """
+        t.join(timeout=5)
+        return "\n".join(lines[-5:])
     start = time.monotonic()
     next_beat = 15.0
     # The pipe is closed on EVERY exit, including the timeout one. Nothing here is
@@ -250,12 +273,12 @@ def _fetch_streaming(log=None):
                     pass
                 if log:
                     log(f"[geneseed] ✗ fetch produced nothing for {timeout}s — killed it.")
-                return (None, "\n".join(lines[-5:]))
+                return (None, _tail())
             if log and elapsed >= next_beat:
                 log(f"[geneseed]   ... still fetching ({int(elapsed)}s elapsed)")
                 next_beat += 15.0
             time.sleep(0.25)
-        return (p.returncode, "\n".join(lines[-5:]))
+        return (p.returncode, _tail())
     finally:
         # Join FIRST: the reader is iterating this pipe, and closing it underneath the
         # thread is how a clean shutdown turns into a traceback on a daemon thread.

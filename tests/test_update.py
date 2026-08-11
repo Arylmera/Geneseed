@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -356,6 +357,64 @@ class FetchStreamingTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("Receiving objects", tail)
         self.assertTrue(any("Receiving objects" in m for m in logged))
+        self._assert_pipe_closed(spawned)
+
+    class _SlowPipe:
+        """The real pipe, withholding its first line for `delay` seconds.
+
+        This is the "make the starvation deterministic" technique the `/api/shutdown` race
+        was pinned with: the bug is a thread losing a race it usually wins, and a test that
+        reproduces it only sometimes is worse than none. Widening the window to two seconds
+        makes the old code fail every run and the fixed code pass every run, with the same
+        delay in the same place.
+        """
+
+        def __init__(self, real, delay):
+            self._real, self._delay = real, delay
+
+        def __iter__(self):
+            time.sleep(self._delay)
+            return iter(self._real)
+
+        def close(self):
+            self._real.close()
+
+        @property
+        def closed(self):
+            return self._real.closed
+
+    def test_the_tail_waits_for_the_reader_to_drain_the_pipe(self):
+        """git can fail and exit before its output has been READ, and it usually does.
+
+        `p.poll()` answers about the PROCESS; the pipe still holds what the reader thread
+        has not consumed. Building the tail at that moment loses git's own message and the
+        caller prints "git fetch hung without any output" over `fatal: transport 'https'
+        not allowed` — which is exactly what CI reported on ubuntu for
+        `upgrade/a-tokened-origin-is-redacted-out-of-every-line`, at a SHA whose only
+        changes were console-window flags.
+
+        The port never had it (`js/update.mjs` awaits `child.on('close')`, which fires
+        after the streams flush), so only the reference could lose and no cross-
+        implementation cell could adjudicate it — the same blind spot as a defect both
+        sides share.
+        """
+        which, popen, spawned = self._popen_stub(
+            "import sys; print(\"fatal: transport 'https' not allowed\"); sys.exit(128)")
+
+        def slow_popen(cmd, **kw):
+            p = popen(cmd, **kw)
+            p.stdout = self._SlowPipe(p.stdout, 2.0)
+            return p
+
+        logged = []
+        with mock.patch.object(_update.shutil, "which", which), \
+             mock.patch.object(_update.subprocess, "Popen", slow_popen):
+            rc, tail = _update._fetch_streaming(logged.append)
+        self.assertEqual(rc, 128)
+        self.assertIn(
+            "transport 'https' not allowed", tail,
+            "the tail was built before the reader drained the pipe, so git's own error "
+            "was dropped and the caller will claim the fetch produced nothing")
         self._assert_pipe_closed(spawned)
 
     def test_timeout_kills_and_returns_none(self):
