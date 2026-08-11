@@ -98,7 +98,17 @@ export function cliReferenceProblems() {
     return ['[cli] cli.json is missing or unreadable — regenerate it from a checkout '
       + 'with `python tests/gen_cli_reference.py`'];
   }
-  if (data.source_sha256 !== cliSourceDigest()) {
+  // The digest reads a SECOND file, and the migration that deletes it must leave doctor
+  // able to say so. An unreadable parser source is the same class of fault as an
+  // unreadable cli.json: a report, never a throw.
+  let digest;
+  try {
+    digest = cliSourceDigest();
+  } catch {
+    return ['[cli] rituals/harness.py is missing or unreadable — cli.json cannot be '
+      + 'checked for staleness'];
+  }
+  if (data.source_sha256 !== digest) {
     return ['[cli] cli.json is stale: rituals/harness.py has changed since it was '
       + 'generated — regenerate it from a checkout with '
       + '`python tests/gen_cli_reference.py`'];
