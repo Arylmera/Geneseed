@@ -2399,16 +2399,13 @@ def _byte_bearing_cases() -> list[dict]:
     for p in ("A/B", "a/b", "A\\B", "ä/b", "z/a", "a/z"):
         cases.append({"fn": "normcase", "args": [p]})
         cases.append({"fn": "compare_paths", "args": [p, "a/b"]})
-    # ⚠ `~unknownuser/x` IS EXPECTED TO FAIL ON WINDOWS, and it is left failing on purpose.
-    # `js/hosts.mjs`'s docblock says "Python does not expand `~user` on Windows the way a
-    # shell would" and that claim is false: `ntpath.expanduser` swaps the last component of
-    # USERPROFILE, so the reference answers `C:\Users\unknownuser\x` where the port answers
-    # the literal `~unknownuser\x` — which is a DIRECTORY THAT GETS CREATED, under that name,
-    # in whatever cwd the user ran from. Reachable from `--target`, `--dir`, `--bundle` and
-    # every config-dir env var. Not fixed here because whether the port should expand `~user`
-    # at all is a product decision the docblock made deliberately, and reproducing
-    # `ntpath`'s rule faithfully needs its own corpus. Recorded red rather than hidden green.
-    for p in ("~", "~/x", "~unknownuser/x", "x", ""):
+    # `~unknownuser/x` is NOT here. It was, until `921384f`'s widened corpus caught a false
+    # docblock claim ("Python does not expand `~user` on Windows") and the project decided
+    # the port should REFUSE the form rather than reproduce `ntpath`'s guess-a-home-dir rule.
+    # A comparison is the wrong gate for a divergence that is now deliberate — see
+    # `TheTildeUserFormIsADeliberateDivergence` below, which asserts each side absolutely
+    # instead of comparing them.
+    for p in ("~", "~/x", "x", ""):
         cases.append({"fn": "expanduser", "args": [p]})
     for p in (".", "..", "a/../b", "/tmp"):
         cases.append({"fn": "py_resolve", "args": [p]})
@@ -2449,6 +2446,52 @@ class TheByteBearingPrimitivesAgree(unittest.TestCase):
         i = [c["fn"] for c in self.cases].index("write_text_linesep")
         want = ("a" + os.linesep + "b").encode("utf-8").hex()
         self.assertEqual(self.py[i], want)
+
+
+class TheTildeUserFormIsADeliberateDivergence(unittest.TestCase):
+    """`~unknownuser/x` — a byte-bearing case UNTIL the project decided the port should not
+    reproduce `ntpath`'s rule for it (see `js/hosts.mjs`'s `expanduser` docblock). Pulled out
+    of `_byte_bearing_cases()` above because `TheByteBearingPrimitivesAgree` is a COMPARISON,
+    and comparing two implementations that are now deliberately different would either fail
+    forever (right answer, wrong gate) or need to be silenced (which is how the false "Python
+    does not expand ~user" claim survived undetected in the first place). Each side gets its
+    own ABSOLUTE assertion instead, so the divergence stays a stated fact instead of becoming
+    an unstated one again.
+    """
+
+    def test_python_reference_still_expands_it_via_the_platform_rule(self):
+        """Names the shape rather than comparing `expanduser` to itself on this input.
+
+        `home.parent / "unknownuser" / "x"` is independently derived from the well-tested
+        bare-`~` case above (`home = Path("~").expanduser()`), not from calling `expanduser`
+        on the divergent input a second time — so this is a real assertion about ntpath's
+        swap-the-last-component rule, not a tautology.
+
+        POSIX takes a DIFFERENT branch of the SAME reference: `posixpath.expanduser` looks
+        "unknownuser" up via `pwd.getpwnam`, finds no such account, and returns the path
+        UNCHANGED — so the two OS families disagree with each other before the port even
+        enters the picture.
+        """
+        home = Path(os.path.expanduser("~"))
+        if os.name == "nt":
+            expected = str(home.parent / "unknownuser" / "x")
+        else:
+            expected = "~unknownuser/x"
+        self.assertEqual(str(Path("~unknownuser/x").expanduser()), expected)
+
+    def test_the_port_refuses_rather_than_guess_a_home_directory(self):
+        """The Node probe's `expanduser` case throws for this input (`js/hosts.mjs`), and
+        nothing in `pure_probe.mjs`'s dispatch loop catches it — an uncaught exception exits
+        the process non-zero, which `_run` turns into this `AssertionError`. That crash IS
+        the refusal: unlike the old behaviour (silently returning `~unknownuser/x`, which
+        `--target` would then use to create a literal `~unknownuser` directory in cwd), a
+        non-zero exit with a message is a normal, catchable CLI error.
+        """
+        with self.assertRaises(AssertionError) as ctx:
+            _run(["node", str(JS_PROBE)], [{"fn": "expanduser", "args": ["~unknownuser/x"]}],
+                 ascii_mode=False)
+        self.assertIn("~unknownuser/x", str(ctx.exception))
+        self.assertIn("refusing", str(ctx.exception))
 
 
 if __name__ == "__main__":

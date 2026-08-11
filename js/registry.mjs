@@ -87,7 +87,13 @@ export function registryRoots() {
     // print a backslash path while a raw `expanduser` prints the entry verbatim and leaves
     // installs.json alone. Invisible to every cell before P5h, because `rebuild-all`'s
     // registry cells seed native spellings; `uninstall`'s inventory prints the root.
-    const root = pyPathStr(expanduser(s));
+    // `expanduser` now REFUSES a `~user` entry (js/hosts.mjs's docblock) instead of passing
+    // it through. This loop scans STORED registry rows, not a fresh CLI argument — a single
+    // bad row (hand-edited, or written before this refusal existed) must not abort the scan
+    // for every other install, so it is dropped exactly like any other dead row rather than
+    // propagated. `rebuild-all`'s contract is "one broken install never blocks the rest".
+    let root;
+    try { root = pyPathStr(expanduser(s)); } catch { continue; }
     let key;
     try { key = existsSync(root) ? realpathSync.native(root) : root; } catch { key = root; }
     if (seen.has(key)) continue;
