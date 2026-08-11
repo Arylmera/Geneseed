@@ -151,11 +151,34 @@ def _resolve_context_sets(root: Path) -> tuple[list[dict], list[dict], str]:
         return e, l, f"auto-discovery [{root}]"
 
     try:
-        data = json.loads(manifest.read_text(encoding="utf-8"))
-        entries = data.get("context", []) or []
+        raw = manifest.read_text(encoding="utf-8")
+    except OSError as exc:
+        # A read failure is not a syntax error and must not be reported as one — the file
+        # passed is_file() a moment ago, so this is a permission problem or a race.
+        sys.stderr.write(f"[context] could not read {manifest}: {exc}\n")
+        return [], [], str(manifest)
+    try:
+        data = json.loads(raw)
+        # The manifest is a file the USER owns, and a hook must never crash on one — the
+        # same contract sovereign_bypass states for excludes.json. Valid JSON of the wrong
+        # SHAPE used to raise straight out of a SessionStart hook: a top-level list has no
+        # .get, a "context" that is an object iterates to strings, and a string entry has
+        # no .get either. Each is a traceback where a shrug is wanted.
+        data = data if isinstance(data, dict) else {}
+        entries = data.get("context") or []
+        entries = entries if isinstance(entries, list) else []
         extend = bool(data.get("extend"))
-    except (json.JSONDecodeError, OSError) as exc:
-        sys.stderr.write(f"[context] could not parse {manifest}: {exc}\n")
+    except json.JSONDecodeError:
+        # The decoder's own message is deliberately NOT quoted. It was, and it is the one
+        # line in these four verbs that no second implementation can reproduce: Python and
+        # V8 disagree on the wording AND on the offset for the commonest typos — a trailing
+        # comma points at the comma in one and at the character after it in the other, and
+        # V8's `Unexpected token 'x'` carries no offset at all. Measured across twenty
+        # malformed documents before this line was rewritten. The wording follows the
+        # precedent already set for a malformed settings.json (_build_settings.py), which
+        # was decided for the same reason.
+        sys.stderr.write(f"[context] {manifest} is not valid JSON — no context was "
+                         f"loaded (fix the syntax, then re-run).\n")
         return [], [], str(manifest)
 
     if not entries and not extend:
@@ -177,7 +200,10 @@ def _resolve_context_sets(root: Path) -> tuple[list[dict], list[dict], str]:
             put(x["path"], "lazy", "")
 
     for entry in entries:
-        raw = (entry.get("path") or "").strip()
+        if not isinstance(entry, dict):
+            continue
+        raw = entry.get("path")
+        raw = raw.strip() if isinstance(raw, str) else ""
         if not raw:
             continue
         load = entry.get("load", "eager")

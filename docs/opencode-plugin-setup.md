@@ -17,7 +17,7 @@ by default — create it the first time.
 The bundle is used from every repo, so install once into OpenCode's global
 config dir. **Run this from inside the Geneseed folder** — the `*.js` glob
 copies all seven plugins, and `GENESEED_HARNESS` is pointed at the sibling
-bundle `upgrade.sh` builds at `../Harness`:
+bundle `geneseed upgrade` builds at `../Harness`:
 
 ```
 mkdir -p ~/.config/opencode/plugins

@@ -117,8 +117,46 @@ NO_WINDOW: dict = (
 
 
 def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
-    if NO_WINDOW and "creationflags" not in kw:
+    """`subprocess.run` with the no-console-flash flag — but ONLY when the caller is
+    redirecting the child's streams.
+
+    "while still allowing piped stdout/stderr" above is true exactly when the caller
+    PIPES. `subprocess` sets `STARTF_USESTDHANDLES` only if at least one stream is
+    redirected; with all three left inherited, CREATE_NO_WINDOW gives the child a fresh
+    hidden console instead of the parent's handles and **everything it prints is
+    discarded**. Measured, not reasoned about: `geneseed build > log.txt` wrote an empty
+    log on Windows while the same command in a terminal worked, because a terminal parent
+    has a console for the child to inherit and a redirected one does not.
+
+    That made every inheriting call site silently lossy — `build`, `rebuild-all`, and the
+    web's "build all" job, whose log showed the harness's own lines and none of the
+    generator's. The flag stays where it was actually needed: the doctor's per-theme sweep
+    captures, so the Doctor page is still flash-free.
+
+    Found by the npx port (P5e) — `harness build` printed nothing where `node
+    bin/geneseed-cli.mjs build` printed the generator's summary line, and asking which of
+    the two was right is a different question from asking what the code does.
+
+    AND THE PARENT'S OWN BUFFER IS FLUSHED FIRST, for an inheriting child (P5f). Python
+    block-buffers stdout when it is not a terminal, so a parent that PRINTS and then spawns
+    a child sharing the same handle has its own line arrive after the child's — the whole of
+    `rebuild-all`'s output, redirected to a file, came out as every generator summary
+    followed by every `[rebuild-all]` label, so each label named the install BELOW it instead
+    of the one it introduced. Invisible in a terminal, where line buffering keeps the order,
+    and wrong in the web UI's "build all" job log, which is the same consumer the
+    CREATE_NO_WINDOW bug above was hiding output from. Fixed at the shared `run()` for the
+    same reason that one was: every present and future caller that prints before spawning has
+    it, and none of them should have to remember.
+    """
+    redirected = (kw.get("capture_output")
+                  or kw.get("stdout") is not None or kw.get("stderr") is not None)
+    if NO_WINDOW and redirected and "creationflags" not in kw:
         kw.update(NO_WINDOW)
+    if not redirected:
+        # Only when the child INHERITS: a captured child writes into a pipe this process
+        # reads, so there is no shared handle for the two to interleave on.
+        sys.stdout.flush()
+        sys.stderr.flush()
     return subprocess.run(cmd, **kw)
 
 

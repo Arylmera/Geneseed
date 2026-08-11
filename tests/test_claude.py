@@ -16,7 +16,22 @@ sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
 import harness  # noqa: E402
+import _build_core  # noqa: E402  (the single owner of ROOT/SRC/THEMES — see its docstring)
+import _build_emit  # noqa: E402  (hook shim path + the Geneseed-hook marker tuple)
+import _build_settings  # noqa: E402  (the host-config wiring layer)
 import _harness_build  # noqa: E402  (monkeypatched directly for the rebuild-all test)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import golden  # noqa: E402  (the process-home sandbox)
+
+
+def setUpModule():
+    # This module emits IN-PROCESS, and `_write_hook_shim()` targets the ENVIRONMENT's home
+    # rather than the emit's own `--out` or `cfg=`. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
+
+
+def tearDownModule():
+    golden.restore_process_home()
 
 
 def _read(p):
@@ -26,6 +41,19 @@ def _read(p):
 def _hook_cmds(settings: dict):
     return [h["command"] for ev in (settings.get("hooks") or {}).values()
             for g in ev for h in g["hooks"]]
+
+
+def _geneseed_cmds(settings: dict):
+    """Geneseed's own hook commands, recognised the way PRODUCTION recognises them.
+
+    Deliberately not a literal: these tests used to grep for "harness.py", which the
+    emitted command stopped containing the moment hooks moved behind the shim. Three
+    assertTrue sites would have failed loudly (fine) — but three assertFalse sites would
+    have started passing VACUOUSLY, quietly certifying "hooks removed" for hooks that
+    were never removed. Keying off the production marker tuple means a future change to
+    the emitted shape can never silently hollow these assertions out again."""
+    return [c for c in _hook_cmds(settings)
+            if any(m in c for m in _build_settings._GENESEED_HOOK_SNIFF)]
 
 
 class ClaudeEmitTests(unittest.TestCase):
@@ -52,11 +80,17 @@ class ClaudeEmitTests(unittest.TestCase):
         # A read-only agent maps the deny-tree to disallowedTools.
         explorer = _read(self.cfg / "agents" / "explorer.md")
         self.assertIn("disallowedTools:", explorer)
-        # settings.json hooks call harness.py by ABSOLUTE path (hook cwd is the project).
+        # settings.json hooks reach the harness by ABSOLUTE path (hook cwd is the
+        # project, so nothing relative would resolve). That path is the stable shim,
+        # NOT this checkout — which is the whole point: the emitted config must survive
+        # the checkout moving. Assert both halves so neither can regress silently.
         s = json.loads(_read(self.cfg / "settings.json"))
-        gen = [c for c in _hook_cmds(s) if "harness.py" in c]
+        gen = _geneseed_cmds(s)
         self.assertTrue(gen)
-        self.assertTrue(all(str(build.ROOT) in c for c in gen))
+        shim = str(_build_settings._hook_shim_path())
+        self.assertTrue(all(shim in c for c in gen), gen)
+        self.assertFalse(any(str(_build_core.ROOT) in c for c in gen),
+                         f"emitted hooks still name the checkout: {gen}")
         # No cat AGENT.md at global scope; plugins dir never written.
         self.assertFalse(any("cat AGENT.md" in c for c in _hook_cmds(s)))
         self.assertFalse((self.cfg / "plugins").exists())
@@ -316,7 +350,7 @@ class ClaudeSafetyTests(unittest.TestCase):
         s = json.loads(_read(self.cfg / "settings.json"))
         self.assertEqual(s["model"], "opus")
         self.assertIn("echo mine", _hook_cmds(s))
-        self.assertFalse(any("harness.py" in c for c in _hook_cmds(s)), "geneseed hooks not removed")
+        self.assertFalse(_geneseed_cmds(s), "geneseed hooks not removed")
         # Geneseed's own agents are gone; markers gone.
         self.assertFalse((self.cfg / "agents" / "reviewer.md").exists())
         self.assertFalse((self.cfg / build.GLOBAL_MANIFEST).exists())
@@ -369,7 +403,7 @@ class ClaudeActivationTests(unittest.TestCase):
         self.assertNotIn("<!-- BEGIN GENESEED -->", cm)
         self.assertIn("keep", cm)
         s = json.loads(_read(self.cfg / "settings.json"))
-        self.assertFalse(any("harness.py" in c for c in _hook_cmds(s)))
+        self.assertFalse(_geneseed_cmds(s))
         # markers stay put
         self.assertTrue((self.cfg / build.VERSION_MARKER).is_file())
 
@@ -381,7 +415,7 @@ class ClaudeActivationTests(unittest.TestCase):
         self.assertIn("<!-- BEGIN GENESEED -->", cm)
         self.assertIn("keep", cm)
         s = json.loads(_read(self.cfg / "settings.json"))
-        self.assertTrue(any("harness.py" in c for c in _hook_cmds(s)))
+        self.assertTrue(_geneseed_cmds(s))
         self.assertFalse((self.cfg / ".geneseed-disabled").exists(), "stash not cleaned")
 
     def test_reactivate_discards_stash_after_reemit_while_disabled(self):
@@ -585,7 +619,7 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         s = self._settings(repo)
         # claudeMdExcludes suppresses the GLOBAL ~/.claude/CLAUDE.md, and only that.
         # Posix spelling: the entries are glob patterns, where a backslash escapes.
-        want = (build._claude_config_dir() / "CLAUDE.md").resolve().as_posix()
+        want = (_build_core._claude_config_dir() / "CLAUDE.md").resolve().as_posix()
         self.assertIn(want, s.get("claudeMdExcludes", []))
         # context hook is scope-aware: --root points at the project's own .claude.
         ctx = [c for c in _hook_cmds(s) if "context" in c]
@@ -674,7 +708,7 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
         # strip it (and drop it from the manifest) rather than carry it forward.
         repo = (self.tmp / "bobrepo2").resolve(); repo.mkdir()
         build.emit_bob("neutral", repo)
-        stale = str((build._bob_config_dir() / "AGENTS.md").resolve())
+        stale = str((_build_core._bob_config_dir() / "AGENTS.md").resolve())
         sp = repo / ".bob" / "settings.json"
         s = json.loads(_read(sp)); s["claudeMdExcludes"] = [stale]
         sp.write_text(json.dumps(s, indent=2) + "\n", encoding="utf-8")
@@ -718,10 +752,10 @@ class ProjectBypassesGlobalTests(unittest.TestCase):
 
         build.emit_claude("neutral", repo)
         s_shared = json.loads(_read(cfg / "settings.json"))
-        self.assertFalse(any("harness.py" in c for c in _hook_cmds(s_shared)),
+        self.assertFalse(_geneseed_cmds(s_shared),
                          "hooks left in the team-shared settings.json")
         s_local = self._settings(repo)
-        self.assertTrue(any("harness.py" in c for c in _hook_cmds(s_local)))
+        self.assertTrue(_geneseed_cmds(s_local))
         man = json.loads(_read(cfg / build.GLOBAL_MANIFEST))
         self.assertEqual(man["managed"].get("settings_file"), "settings.local.json")
 
@@ -933,7 +967,7 @@ class GitGateRootTests(unittest.TestCase):
         """The emitted git-gate hook command includes --root with the cfg path."""
         import _build_emit
         cfg = self.tmp / "dotclaude"
-        groups = _build_emit._claude_hook_groups(cfg)
+        groups = _build_settings._claude_hook_groups(cfg)
         cmd = groups["PreToolUse"][0]["hooks"][0]["command"]
         self.assertIn("git-gate", cmd)
         self.assertIn(f'--root "{cfg}"', cmd)
@@ -944,7 +978,7 @@ class GitGateRootTests(unittest.TestCase):
         positionally. --root is what scopes the memory/ match to this install."""
         import _build_emit
         cfg = self.tmp / "dotclaude"
-        groups = _build_emit._claude_hook_groups(cfg)
+        groups = _build_settings._claude_hook_groups(cfg)
         rule = [g for g in groups["PreToolUse"]
                 if "rule-gate" in g["hooks"][0]["command"]]
         self.assertEqual(len(rule), 1, "expected exactly one rule-gate group")
@@ -960,14 +994,14 @@ class GitGateRootTests(unittest.TestCase):
         cfg = self.tmp / "settings_test"
         cfg.mkdir()
         py = f'"{sys.executable}"'
-        h = f'"{_build_emit.ROOT / "rituals" / "harness.py"}"'
+        h = f'"{_build_core.ROOT / "rituals" / "harness.py"}"'
         old_group = {"matcher": "Bash",
                      "hooks": [{"type": "command", "command": f"{py} {h} git-gate"}]}
         settings = cfg / "settings.json"
         settings.write_text(json.dumps({"hooks": {"PreToolUse": [old_group]}}),
                             encoding="utf-8")
         prior = [{"event": "PreToolUse", "group": old_group}]
-        _, managed = _build_emit._merge_claude_settings(settings, "global", prior_hooks=prior)
+        _, managed = _build_settings._merge_claude_settings(settings, "global", prior_hooks=prior)
         data = json.loads(settings.read_text(encoding="utf-8"))
         cmds = [hk["command"] for g in data["hooks"]["PreToolUse"] for hk in g["hooks"]]
         self.assertTrue(all("--root" in c for c in cmds if "git-gate" in c),

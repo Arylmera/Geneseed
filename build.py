@@ -21,7 +21,10 @@ import tempfile
 # build.py is a thin facade mirroring harness.py: it owns the CLI entry (main)
 # and the import-time wiring. The render/emit/global pipelines live in
 # _build_{render,emit,global}.py; foundational imports and constants in
-# _build_core.py. After importing the submodules we link them into ONE shared
+# _build_core.py; the host-config wiring the user co-owns (settings.json /
+# opencode.json merges, JSONC, the hook shim, managed blocks) in _build_settings.py,
+# split out because it is the half of the emit that cannot change host language and
+# because the runtime drives it directly. After importing the submodules we link them into ONE shared
 # namespace so cross-module calls resolve as in the original flat file, and the
 # `import build` surface (harness, web, tests) stays byte-for-byte unchanged.
 #
@@ -30,37 +33,56 @@ import tempfile
 # here would be circular; that is also why this merge exists instead of build
 # simply reusing a shared facade helper from the harness tree.
 import _build_core
+import _build_settings
 import _build_render
 import _build_emit
 import _build_global
 
-_SUBMODULES = (_build_core, _build_render, _build_emit, _build_global)
+_SUBMODULES = (_build_core, _build_settings, _build_render, _build_emit, _build_global)
+# _build_core._OWNED is deliberately held back from the splice. Those names are the
+# generator's MUTABLE configuration (source/theme roots, posture/mode); copying them
+# into four namespaces is what forced the old attribute mirror below, and a copy is
+# also what makes a redirect silently miss. _build_core owns the single binding, every
+# reader spells it `_build_core.X`, and a bare `SRC` left behind anywhere raises
+# NameError instead of quietly reading a stale value.
 _SHARED = {}
 for _m in _SUBMODULES:
-    _SHARED.update({k: v for k, v in vars(_m).items() if not k.startswith('__')})
+    _SHARED.update({k: v for k, v in vars(_m).items()
+                    if not k.startswith('__') and k not in _build_core._OWNED})
 for _m in _SUBMODULES:
     vars(_m).update(_SHARED)
 globals().update(_SHARED)
 del _m
 
-# A function reads module-level config (ROOT/SRC/THEMES/CONFIG/...) from the
-# namespace it was DEFINED in, not from this facade. So that `build.SRC = tmp`
-# (the long-standing way tests redirect the source/theme roots) keeps reaching
-# the render/emit code after the split, mirror every attribute write on the
-# facade out to the submodules — restoring the single-global behaviour of the
-# original flat module without leaking the submodule layout into callers.
+# The facade READS the owned names through to their owner, so the `import build` surface
+# is unchanged for the runtime (`build.SRC`, `build.THEMES`, `build.CONFIG`, ... all still
+# resolve). Writes are refused, and that asymmetry is deliberate:
+#
+#   `mock.patch.object(build, "ROOT", tmp)` decides at patch time whether the attribute
+#   lives in the target's own __dict__. A delegated name does not, so mock records it as
+#   inherited and on exit calls delattr() instead of restoring — leaving the redirect in
+#   place for the whole rest of the process. Under the old mirror that silently poisoned
+#   every later test that read a source root (the failure looked like "theme 'imperial'
+#   went missing"). A write path that can leak like that is worse than no write path:
+#   patch `_build_core` — the single owner — and the patch is exactly as wide as it looks.
 import types as _types
 
 
 class _BuildFacade(_types.ModuleType):
+    def __getattr__(self, name):
+        # Only reached for names absent from this module's dict — i.e. the owned set,
+        # which the splice above skipped. Everything else resolves normally.
+        if name in _build_core._OWNED:
+            return getattr(_build_core, name)
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
     def __setattr__(self, name, value):
+        if name in _build_core._OWNED:
+            raise AttributeError(
+                f"build.{name} is a read-only view of _build_core.{name}, the single "
+                f"owner of the generator's source roots and posture/mode selection. "
+                f"Set _build_core.{name} instead (see _build_core's module docstring).")
         super().__setattr__(name, value)
-        # Only mirror names a submodule already exports, so redirecting a real
-        # shared constant (build.SRC = tmp) reaches the code that reads it while
-        # a typo (build.ROOTS = ...) can't silently poison every submodule.
-        for _sub in _SUBMODULES:
-            if hasattr(_sub, name):
-                setattr(_sub, name, value)
 
 
 sys.modules[__name__].__class__ = _BuildFacade
@@ -106,7 +128,7 @@ def _validate_is_vendored(rel: Path) -> bool:
     those per-repo layers too, so it must recognise the same vendored exemption there."""
     parts = rel.parts
     for i, part in enumerate(parts[:-1]):
-        if part == "skills" and i + 1 < len(parts) and parts[i + 1] in VENDORED_SKILL_DIRS:
+        if part == "skills" and i + 1 < len(parts) and parts[i + 1] in _build_core.VENDORED_SKILL_DIRS:
             return True
     return False
 
@@ -244,7 +266,7 @@ def _validate_only(args: argparse.Namespace) -> int:
     # already live fully-tested in the harness tree — shelling to `doctor` reuses them
     # exactly rather than re-deriving them here (build.py cannot import harness; see
     # the module docstring). Mirrors how doctor itself already shells to build.py.
-    harness_cli = ROOT / "rituals" / "harness.py"
+    harness_cli = _build_core.ROOT / "rituals" / "harness.py"
     doctor_argv = [sys.executable, str(harness_cli), "doctor", "--theme", args.theme,
                    "--no-bundle"]
     # encoding="utf-8" (not text=True's locale default): harness.py reconfigures its
@@ -253,7 +275,7 @@ def _validate_only(args: argparse.Namespace) -> int:
     # this codebase already guards against elsewhere (an em dash/checkmark in the
     # child's doctor output would otherwise come back mojibake'd).
     r = subprocess.run(doctor_argv, capture_output=True, text=True, encoding="utf-8",
-                       cwd=ROOT, **_NO_WINDOW)
+                       cwd=_build_core.ROOT, **_NO_WINDOW)
     if r.stdout.strip():
         print(r.stdout.strip())
     if r.stderr.strip():
@@ -285,16 +307,17 @@ def main() -> None:
     default_theme = "neutral"
     default_posture = "peer"
     default_mode = "direct"
-    if CONFIG.exists():
+    if _build_core.CONFIG.exists():
         # A truncated/corrupt config must not brick the CLI — fall back to neutral.
         try:
-            data = json.loads(CONFIG.read_text(encoding="utf-8"))
+            data = json.loads(_build_core.CONFIG.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 default_theme = data.get("theme", "neutral")
                 default_posture = data.get("posture", "peer")
                 default_mode = data.get("mode", "direct")
         except (OSError, json.JSONDecodeError):
-            print(f"[geneseed] WARN: {CONFIG.name} is unreadable — using theme 'neutral'.",
+            print(f"[geneseed] WARN: {_build_core.CONFIG.name} is unreadable — using theme "
+                  "'neutral'.",
                   file=sys.stderr)
 
     ap = argparse.ArgumentParser(description="Render the Geneseed harness for a theme.")
@@ -361,11 +384,11 @@ def main() -> None:
                          "per-layer counts.")
     args = ap.parse_args()
     # Posture is a build-wide selection read by _build_render.effective_theme (like
-    # SRC/THEMES), not threaded through every emit signature. Set it on the facade so
-    # it mirrors into every submodule before any render runs.
-    _build_render.POSTURE = args.posture
+    # SRC/THEMES), not threaded through every emit signature. It lives in _build_core,
+    # the single owner, so this one write is what every reader sees.
+    _build_core.POSTURE = args.posture
     # Mode mirrors posture exactly — a build-wide selection read by effective_theme.
-    _build_render.MODE = args.mode
+    _build_core.MODE = args.mode
 
     if args.sync_themes:
         # Non-zero when files were CHANGED (0 == already in sync), so CI can run
@@ -397,18 +420,18 @@ def main() -> None:
     else:
         build(args.theme, out, args.footprint)
 
-    # Persist the emit mode + theme (host state) so a later bare `./upgrade.sh` keeps
+    # Persist the emit mode + theme (host state) so a later bare `geneseed upgrade` keeps
     # deploying the same way and the setup wizard can detect the install. A global emit
     # renders into the config dir without calling build(), so its markers go there;
     # other modes' go in `out`. The emit name disambiguates the target — no --host flag.
     if args.emit == "opencode-global":
-        marker_dir = _opencode_config_dir()
+        marker_dir = _build_core._opencode_config_dir()
     elif args.emit == "claude-global":
-        marker_dir = _claude_config_dir()
+        marker_dir = _build_core._claude_config_dir()
     elif args.emit == "bob-global":
-        marker_dir = _bob_config_dir()
+        marker_dir = _build_core._bob_config_dir()
     elif args.emit == "copilot-global":
-        marker_dir = _copilot_config_dir()
+        marker_dir = _build_core._copilot_config_dir()
     else:
         marker_dir = out
     try:

@@ -14,7 +14,11 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
+import _build_core  # noqa: E402  (owner of the source roots / host config dirs — see its docstring)
 import web  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import golden  # noqa: E402  (the process-home sandbox)
+
 
 # A WebState built with no explicit target resolves to the machine's own OpenCode
 # config dir — so these tests used to read whatever harness the developer happened
@@ -32,6 +36,13 @@ _ORIG_CONFIG_DIR = None
 
 def setUpModule():
     global _FIXTURE_TD, _FIXTURE, _ORIG_CONFIG_DIR
+    # FIRST, and in this process: the fixture below moves the CHILD's home, but this module
+    # also emits IN-PROCESS (`build.emit_bob`, `emit_copilot*`, `emit_opencode_global`), and
+    # `_write_hook_shim()` targets the ENVIRONMENT's home rather than the emit's `--out`.
+    # Without this the suite rewrites the developer's machine-wide hook shim. It runs before
+    # the subprocess so the child inherits the sandboxed GENESEED_HOME too — which the env
+    # dict below never set, since it predates the shim. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
     _FIXTURE_TD = tempfile.TemporaryDirectory()
     home = Path(_FIXTURE_TD.name)
     env = {
@@ -49,15 +60,16 @@ def setUpModule():
         cwd=str(ROOT), env=env, check=True,
         capture_output=True, text=True, encoding="utf-8")
     _FIXTURE = home / ".config" / "opencode"
-    _ORIG_CONFIG_DIR = build._opencode_config_dir
-    build._opencode_config_dir = lambda: _FIXTURE
+    _ORIG_CONFIG_DIR = _build_core._opencode_config_dir
+    _build_core._opencode_config_dir = lambda: _FIXTURE
 
 
 def tearDownModule():
     if _ORIG_CONFIG_DIR is not None:
-        build._opencode_config_dir = _ORIG_CONFIG_DIR
+        _build_core._opencode_config_dir = _ORIG_CONFIG_DIR
     if _FIXTURE_TD is not None:
         _FIXTURE_TD.cleanup()
+    golden.restore_process_home()
 
 
 class LocalHostGuardTests(unittest.TestCase):
@@ -1659,7 +1671,7 @@ class DeployTests(unittest.TestCase):
         import tempfile, build
         from unittest import mock
         with tempfile.TemporaryDirectory() as d:
-            with mock.patch.object(build, "_opencode_config_dir", lambda: Path(d)):
+            with mock.patch.object(_build_core, "_opencode_config_dir", lambda: Path(d)):
                 res = web.api_deploy_cmd(self.state, {"host": "opencode", "path": d})
         self.assertIn("global config dir", res.get("error", ""))
 
@@ -1761,7 +1773,7 @@ class DeployTests(unittest.TestCase):
             self.assertEqual(web.harness._mcp_servers_key("copilot"), "mcpServers")
             self.assertIsNone(web.harness._mcp_config_for("copilot", "project", root))
             self.assertEqual(web.harness._mcp_config_for("copilot", "global", root),
-                             build._copilot_config_dir() / "mcp-config.json")
+                             _build_core._copilot_config_dir() / "mcp-config.json")
             off = web.harness._install_deactivate(root, "copilot", "project")
             self.assertTrue(off["ok"])
             self.assertEqual(web.harness._install_state(root, "copilot", "project"), "disabled")

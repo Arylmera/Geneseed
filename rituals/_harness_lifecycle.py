@@ -271,9 +271,12 @@ def _bootstrap_plain(here, ref) -> bool:
             sub = cmd[2] if len(cmd) > 2 else ""
             probe = ""
             if sub in ("upgrade", "sync-self"):
-                pr = subprocess.run([sys.executable, hp, sub, "--help"],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    text=True, encoding="utf-8", errors="replace")
+                # `run`, not `subprocess.run`: this captures, so the wrapper's
+                # CREATE_NO_WINDOW applies and the probe does not flash a console when the
+                # diagnosis runs under the windowless web daemon.
+                pr = run([sys.executable, hp, sub, "--help"],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, encoding="utf-8", errors="replace")
                 if pr.returncode != 0:
                     probe = pr.stdout or ""
             for ln in _diagnose_failed_step(i + 1, len(steps), title, cmd, rc, probe):
@@ -311,7 +314,8 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
 
 def cmd_sync_self(args: argparse.Namespace) -> int:
     """Refresh the orchestration layer (launchers + update scripts) that `upgrade` does
-    not touch. Cross-platform — replaces sync-self.sh; the wrapper now delegates here."""
+    not touch. Cross-platform, and an alias of `upgrade` since one `git pull` refreshes the
+    launchers and the factory together — the subcommand is kept for the stable contract."""
     import _update
     return _update.sync_self(args.ref)
 
@@ -325,26 +329,39 @@ def _win_bin_dir() -> Path:
     return Path(base) / "Geneseed" / "bin"
 
 
+def _win_user_path_script(action: str, directory: str) -> str:
+    """The PowerShell one-liner `_win_user_path` runs — BUILT SEPARATELY FROM RUNNING IT.
+
+    Split out in P10b so the port has something it can gate. Everything that can be wrong
+    here is in this string: the single-quote escape (a user called O'Brien has an
+    apostrophe in `%LOCALAPPDATA%`), the `;` split that must drop empty segments so a
+    trailing separator does not append an empty entry, and the `-notcontains` that keeps
+    `link` idempotent. RUNNING it edits the persistent USER Path in the registry, which no
+    test in this repo may do — so `tests/test_win_user_path.py` runs this function over a
+    corpus and byte-compares it against the JS twin, and the spawn below stays ungated.
+    """
+    directory = directory.replace("'", "''")   # PS single-quote escape (O'Brien)
+    if action == "add":
+        return (f"$d='{directory}';"
+                "$p=[Environment]::GetEnvironmentVariable('Path','User');"
+                "if (-not $p) {$p=''};"
+                "$parts=$p.Split(';') | Where-Object {$_ -ne ''};"
+                "if ($parts -notcontains $d) {"
+                "  $np=(@($parts)+$d) -join ';';"
+                "  [Environment]::SetEnvironmentVariable('Path',$np,'User')}")
+    return (f"$d='{directory}';"
+            "$p=[Environment]::GetEnvironmentVariable('Path','User');"
+            "if ($p) {"
+            "  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');"
+            "  [Environment]::SetEnvironmentVariable('Path',$np,'User')}")
+
+
 def _win_user_path(action: str, directory: str) -> bool:
     """Add/remove `directory` from the persistent USER Path via PowerShell (operates on
     the user scope only, so it never truncates the system PATH). Returns success."""
-    directory = directory.replace("'", "''")   # PS single-quote escape (O'Brien)
-    if action == "add":
-        ps = (f"$d='{directory}';"
-              "$p=[Environment]::GetEnvironmentVariable('Path','User');"
-              "if (-not $p) {$p=''};"
-              "$parts=$p.Split(';') | Where-Object {$_ -ne ''};"
-              "if ($parts -notcontains $d) {"
-              "  $np=(@($parts)+$d) -join ';';"
-              "  [Environment]::SetEnvironmentVariable('Path',$np,'User')}")
-    else:
-        ps = (f"$d='{directory}';"
-              "$p=[Environment]::GetEnvironmentVariable('Path','User');"
-              "if ($p) {"
-              "  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');"
-              "  [Environment]::SetEnvironmentVariable('Path',$np,'User')}")
     try:
-        return run(["powershell", "-NoProfile", "-Command", ps]).returncode == 0
+        return run(["powershell", "-NoProfile", "-Command",
+                    _win_user_path_script(action, directory)]).returncode == 0
     except OSError:
         return False
 
@@ -449,6 +466,16 @@ def _reexec(argv: list) -> None:
     over input — so run the child as a normal subprocess and exit with its code."""
     if sys.platform.startswith("win"):
         raise SystemExit(subprocess.run(argv).returncode)
+    # FLUSH FIRST. `os.execv` replaces this process IMAGE, and Python's own stdio buffers go
+    # with it — everything printed since the last flush is simply gone. Off a terminal stdout
+    # is block-buffered, so `geneseed bootstrap > log.txt` lost `[geneseed] ✓ update complete.`
+    # (and any diagnosis printed after the last spawn) on every Unix run. Invisible on
+    # Windows, which never reaches this line, and invisible from a terminal, where
+    # line-buffering had already written it. `tests/harness_golden.py`'s
+    # `bootstrap/without-no-setup-it-hands-off-to-a-FRESH-setup-process` is what caught it,
+    # the first time it ran on Linux.
+    sys.stdout.flush()
+    sys.stderr.flush()
     os.execv(argv[0], argv)
 
 
@@ -478,7 +505,17 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     if not args.no_setup:
         # Re-exec the freshly-updated harness so setup uses the new code (this running
         # process still holds the pre-update modules in memory).
-        _reexec([sys.executable, str(Path(__file__).resolve()), "setup"])
+        #
+        # `harness.py`, NOT `__file__`. This module is imported normally (harness.py splices
+        # the submodules' namespaces together after importing them), so `__file__` here is
+        # `rituals/_harness_lifecycle.py` — a module with no `__main__` block, which as a
+        # script imports its dependencies, defines its functions and exits 0 in silence. So
+        # `geneseed bootstrap` updated and then SKIPPED THE WIZARD, on the front door's own
+        # default path (`./geneseed` bare -> bootstrap -> setup), reporting success. The two
+        # re-execs in `_harness_menu.py` always named `harness.py`; this one was the outlier.
+        # Found by the npx port's `bootstrap` cell naming setup's refusal and the reference
+        # not printing it.
+        _reexec([sys.executable, str(Path(__file__).resolve().parent / "harness.py"), "setup"])
     # Scripted `bootstrap --no-setup` must not exit 0 over a failed update.
     return 1 if failed else 0
     return 0

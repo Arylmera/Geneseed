@@ -77,10 +77,13 @@ differs, the discipline does not.
 
 At **project** scope the hooks land in `.bob/settings.json`, and Bob documents no
 personal `settings.local.json` variant (Claude uses one precisely to keep this
-out of shared git). Those hook commands embed **machine-absolute paths** (this
-machine's Python interpreter + checkout). If you commit `.bob/settings.json`, a
-teammate inherits hooks pointing at *your* filesystem. **Add `.bob/settings.json`
-to `.gitignore`** on a team repo, or keep the Bob install personal/global.
+out of shared git). Those hook commands name the **per-user hook shim**
+(`~/.geneseed/bin/geneseed-hook`) — no longer this machine's interpreter and
+checkout, but still a path under *your* home, and now also OS-specific (`.cmd` on
+Windows, extensionless elsewhere). If you commit `.bob/settings.json`, a teammate
+still inherits hooks pointing at a path they do not have. **Add
+`.bob/settings.json` to `.gitignore`** on a team repo, or keep the Bob install
+personal/global.
 
 ## MCP
 

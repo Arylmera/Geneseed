@@ -307,7 +307,7 @@ canonical):
    clobbers a user-edited config — merges the `instructions` entry only.
 7. **No** `context.json` (auto-discovery is the default).
 8. `.geneseed-emit` marker written in `<cfg>` (build.py persists it regardless of
-   entrypoint), so a later bare `./upgrade.sh` keeps emitting globally.
+   entrypoint), so a later bare `geneseed upgrade` keeps emitting globally.
 
 ### 9.1 Skills → native `skills/` (decided)
 
@@ -336,8 +336,7 @@ Skills emit as **native OpenCode skills**, not slash commands:
 `<cfg>` resolution: `$OPENCODE_CONFIG_DIR` if set (lets the harness live in a
 git-tracked folder), else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`.
 
-`upgrade.sh` / `geneseed upgrade`: add `GENESEED_EMIT=opencode-global` to re-render
-globally on upgrade.
+`geneseed upgrade`: add `GENESEED_EMIT=opencode-global` to re-render globally on upgrade.
 
 > **Windows config path: confirmed.** Modern OpenCode uses the same homedir-relative
 > location on every OS, so `~/.config/opencode` resolves to `C:\Users\<user>\.config\opencode`
@@ -355,11 +354,11 @@ globally on upgrade.
    self-contained:
    ```bash
    cd /path/to/Geneseed
-   GENESEED_EMIT=opencode-global ./upgrade.sh main imperial    # or any other theme
+   GENESEED_EMIT=opencode-global ./geneseed upgrade imperial   # or any other theme
    ```
    This populates `~/.config/opencode/{AGENT.md,agents/,skills/,plugins/,memory/}`,
    wires `opencode.json` to the absolute `AGENT.md`, and remembers the mode in
-   `<cfg>/.geneseed-emit` — so every later bare `./upgrade.sh` stays global.
+   `<cfg>/.geneseed-emit` — so every later bare `geneseed upgrade` stays global.
    (Direct equivalent: `python build.py --emit opencode-global`.)
 
    **Windows (PowerShell)** — same flow, no bash:

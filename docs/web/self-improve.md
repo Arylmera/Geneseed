@@ -1,6 +1,6 @@
 ---
 group: howto
-order: 8
+order: 9
 title: "The self-improvement loop"
 kind: "concept"
 link: {"hash": "#/diff", "label": "Open the diff page →"}

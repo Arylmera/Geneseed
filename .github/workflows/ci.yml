@@ -8,6 +8,17 @@ on:
   push:
   pull_request:
 
+# THE PYTHON IS PINNED, not floating. `3.x` resolves to whatever the runner ships newest,
+# and one gate in this suite is a comparison against a specific Unicode database:
+# `tests/test_pure_function_parity.py`'s width sweep runs only when the interpreter's
+# `unicodedata.unidata_version` matches the tables in `js/tui.mjs`. A floating version is
+# therefore a way to switch that gate off without editing a line of it — CPython 3.14 carries
+# unidata 16.0.0 and the tables are 15.1.0. `test_ci_pins_an_interpreter_whose_unicode_matches
+# _the_tables` reads THIS FILE and fails if the pin and the tables drift apart, so the two
+# move together or not at all. Spelled out at each `setup-python` rather than hoisted into an
+# `env:` — that test reads the literal, and a workflow-level variable it would have to resolve
+# is a level of indirection between the gate and the thing it gates.
+
 jobs:
   validate:
     strategy:
@@ -19,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.13"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -32,6 +43,57 @@ jobs:
       # file is picked up without editing this workflow. Needs Node >= 21.
       - name: node test suites (workflow runtime + plugins)
         run: node --test "tests/**/*.test.mjs"
+
+  # The three CELL HARNESSES, which until now had only ever run on one developer's Windows
+  # laptop. They are the gate the Python -> Node port is measured against: `golden.py` over
+  # the 259-cell emit matrix, `harness_golden.py` over the CLI verbs, `web_golden.py` over the
+  # web console — each running both implementations and comparing every byte either one wrote,
+  # both streams and the exit code.
+  #
+  # LINUX ONLY, and that is a budget decision rather than a claim. Each harness defaults
+  # `--jobs` to `min(8, cpu_count())`, so a 4-core runner parallelises without a flag here;
+  # the whole set is a few minutes of wall clock on ubuntu-latest, and the same set on
+  # windows-latest is roughly four times that, which is more than this repo's runner budget
+  # can spend on every push. The `validate` job above still runs doctor, the unit suite (which
+  # carries every cross-implementation gate that is not a cell) and the Node suites on BOTH
+  # operating systems, and `docs/port-ledger.md` records what each platform's run does and
+  # does not reach. The first Linux run of these three found five defects, one of them a
+  # user-visible `doctor` bug on every non-Windows install — which is the argument for the job
+  # existing at all.
+  cells:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # `--new` is what makes this a REGRESSION gate rather than a determinism self-check:
+      # with no candidate binary each harness runs the reference against itself and passes by
+      # construction. Both drivers are exercised because they are different programs —
+      # `bin/geneseed.mjs` is the generator's entry and `bin/geneseed-cli.mjs web` is the
+      # CLI's, and P4a's finding was that a second driver does not inherit the first's proof.
+      - name: golden — the emit matrix (Node generator vs build.py)
+        run: python tests/golden.py --new "node bin/geneseed.mjs"
+      - name: golden — the prune, from both drivers
+        run: |
+          python tests/golden.py --ref "node bin/geneseed.mjs" --deletion
+          python tests/golden.py --deletion
+      - name: golden — idempotence
+        run: python tests/golden.py --idempotent
+      - name: harness_golden — every CLI verb
+        run: >
+          python tests/harness_golden.py --new "node bin/geneseed-hook.mjs"
+          --new-cli "node bin/geneseed-cli.mjs"
+      - name: web_golden — the console, from both entries
+        run: |
+          python tests/web_golden.py --new "node js/web/server.mjs"
+          python tests/web_golden.py --new "node bin/geneseed-cli.mjs web"
+      # The Node CLI's own doctor, on the platform the reference's was just proved on.
+      - name: doctor, from the port
+        run: node bin/geneseed-cli.mjs doctor
 
   # The web UI (web/) is a Vite/React app with its own toolchain, so it gets a
   # dedicated job: lint, format check, unit tests, and a production build. Linux

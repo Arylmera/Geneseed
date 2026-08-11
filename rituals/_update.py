@@ -17,6 +17,7 @@ seam, which is which-guarded, credential-scrubbed, and never raises.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -121,7 +122,11 @@ Preflight = namedtuple("Preflight", ["ok", "code", "kind", "message"])
 
 _PRE_MSG = {
     "no_git_exe": ("info", "git is not installed or not on PATH — install git to enable updates."),
-    "not_git":    ("info", "This Geneseed install isn't a git checkout — re-clone it with git to enable updates."),
+    # Names BOTH routes rather than detecting which one this is. Since the npm package,
+    # the commonest way to reach this arm is an `npm i -g geneseed` install, for which
+    # "re-clone it with git" was exactly the wrong instruction; and telling the two apart
+    # would be a detection this message does not need to carry.
+    "not_git":    ("info", "This Geneseed install isn't a git checkout — update it with `npm install -g geneseed@latest`, or re-clone it with git."),
     "detached":   ("info", "HEAD is detached (a tag/commit is checked out). Run `git checkout <branch>` to re-enable updates."),
     "no_upstream": ("info", "Your branch has no upstream — set one with `git branch --set-upstream-to`."),
     "dirty":      ("info", "You have local changes in the Geneseed folder. Commit or stash them, then update."),
@@ -227,25 +232,59 @@ def _fetch_streaming(log=None):
 
     t = threading.Thread(target=_reader, daemon=True)
     t.start()
+
+    def _tail() -> str:
+        """The last five lines — AFTER the reader has finished draining the pipe.
+
+        `p.poll()` answers when the PROCESS exits; the pipe it wrote to still holds
+        whatever `_reader` has not consumed yet. Reading `lines` at that moment is a race
+        the reader usually wins and sometimes does not, and it is widest for a git that
+        fails INSTANTLY — which is the only kind this ever reports on. When the reader
+        loses, `tail` is empty and the caller prints "git fetch hung without any output"
+        over an error git stated plainly.
+
+        The `finally` below already joins, but a `return` expression is evaluated BEFORE
+        the `finally` runs, so that join has never once happened in time to matter.
+
+        CI is what said so: `upgrade/a-tokened-origin-is-redacted-out-of-every-line` went
+        red on ubuntu against `fatal: transport 'https' not allowed` while the same cell
+        passed on the same SHA minutes earlier. The port is not affected — `js/update.mjs`
+        awaits `child.on('close')`, which fires only after the stdio streams flush — so
+        only one side could ever lose, and a cross-implementation byte comparison holds a
+        race exactly as well as it holds a defect both sides share, which is not at all.
+        """
+        t.join(timeout=5)
+        return "\n".join(lines[-5:])
     start = time.monotonic()
     next_beat = 15.0
-    while p.poll() is None:
-        elapsed = time.monotonic() - start
-        if elapsed >= timeout:
-            _kill_tree(p)
-            try:
-                p.wait(timeout=5)     # reap — the daemon is long-lived
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-            if log:
-                log(f"[geneseed] ✗ fetch produced nothing for {timeout}s — killed it.")
-            return (None, "\n".join(lines[-5:]))
-        if log and elapsed >= next_beat:
-            log(f"[geneseed]   ... still fetching ({int(elapsed)}s elapsed)")
-            next_beat += 15.0
-        time.sleep(0.25)
-    t.join(timeout=5)
-    return (p.returncode, "\n".join(lines[-5:]))
+    # The pipe is closed on EVERY exit, including the timeout one. Nothing here is
+    # short-lived: this runs inside `geneseed web`'s daemon, which stays up for weeks, so
+    # a read end leaked per upgrade is a file descriptor leaked per upgrade. It surfaced
+    # as `ResourceWarning: unclosed file` in the unit suite — a warning about the daemon,
+    # printed by the tests, and true of both.
+    try:
+        while p.poll() is None:
+            elapsed = time.monotonic() - start
+            if elapsed >= timeout:
+                _kill_tree(p)
+                try:
+                    p.wait(timeout=5)     # reap — the daemon is long-lived
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+                if log:
+                    log(f"[geneseed] ✗ fetch produced nothing for {timeout}s — killed it.")
+                return (None, _tail())
+            if log and elapsed >= next_beat:
+                log(f"[geneseed]   ... still fetching ({int(elapsed)}s elapsed)")
+                next_beat += 15.0
+            time.sleep(0.25)
+        return (p.returncode, _tail())
+    finally:
+        # Join FIRST: the reader is iterating this pipe, and closing it underneath the
+        # thread is how a clean shutdown turns into a traceback on a daemon thread.
+        t.join(timeout=5)
+        with contextlib.suppress(OSError):
+            p.stdout.close()
 
 
 def _measure_upstream(log=None):
@@ -297,7 +336,7 @@ def _pull_and_validate(log) -> tuple[bool, str, str]:
 
 def _logfile() -> Path:
     """Persistent install log, overridable with $GENESEED_LOG. Falls back to the temp
-    dir if the home location is not writable (parity with upgrade.sh)."""
+    dir if the home location is not writable."""
     env = os.environ.get("GENESEED_LOG")
     if env:
         return Path(env)
@@ -455,11 +494,23 @@ def _rebuild_installs(here: Path, log: _Log) -> int:
     """Refresh every registered ACTIVE install (opencode/claude/bob/copilot, global and
     project scope) via `harness.py rebuild-all`. The emit-marker rebuild only covers
     THIS checkout's own bundle — without this pass a claude-global or bob install
-    keeps serving the OLD render after every upgrade, silently."""
+    keeps serving the OLD render after every upgrade, silently.
+
+    NO `_NO_WINDOW` HERE, AND THAT IS THE FIX P5e MADE EVERYWHERE ELSE. `subprocess` sets
+    `STARTF_USESTDHANDLES` only when at least one stream is redirected; with all three
+    inherited, CREATE_NO_WINDOW hands the child a fresh hidden console instead of this
+    process's handles and **everything it prints is discarded on Windows**.
+    `_harness_core.run` learned that in P5e and its docstring names `rebuild-all` by name —
+    but this module deliberately does not import it (it stays standalone so a stale factory
+    can self-heal), so it kept its own copy of the flag and its own copy of the bug. Every
+    `[rebuild-all]` line an upgrade produced was thrown away, including the FAILED rows the
+    error two frames up tells the user to look for ("details above"). Found by
+    `upgrade/already-up-to-date-...`'s absolute half, which named a line the reference was
+    not printing."""
     log("[geneseed] refreshing every active install (rebuild-all) ...")
     proc = subprocess.run(
         [sys.executable, str(here / "rituals" / "harness.py"), "rebuild-all"],
-        cwd=str(here), **_NO_WINDOW)
+        cwd=str(here))
     return proc.returncode
 
 

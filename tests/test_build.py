@@ -14,6 +14,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
+import _build_core  # noqa: E402  (owner of the source roots / posture / mode — see its docstring)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import golden  # noqa: E402  (the process-home sandbox)
+
+
+def setUpModule():
+    # This module emits IN-PROCESS, and `_write_hook_shim()` targets the ENVIRONMENT's home
+    # rather than the emit's own `--out` or `cfg=`. Without this, running the suite rewrites
+    # the developer's machine-wide hook shim. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
+
+
+def tearDownModule():
+    golden.restore_process_home()
 
 
 class SubstituteTests(unittest.TestCase):
@@ -179,9 +193,9 @@ class BuildRoundTripTests(unittest.TestCase):
     def test_posture_selection_switches_the_inlined_body(self):
         """Setting the build-wide POSTURE inlines that posture instead of peer."""
         tmp = Path(tempfile.mkdtemp())
-        old = build.POSTURE
+        old = _build_core.POSTURE
         try:
-            build.POSTURE = "expert"          # facade mirrors into _build_render
+            _build_core.POSTURE = "expert"          # the single owner _build_render reads
             build.build("neutral", tmp)
             agent = (tmp / "AGENT.md").read_text(encoding="utf-8")
             self.assertIn("**Expert**", agent)
@@ -189,7 +203,7 @@ class BuildRoundTripTests(unittest.TestCase):
             # The full catalogue always ships regardless of the active posture.
             self.assertTrue((tmp / "postures" / "peer.md").is_file())
         finally:
-            build.POSTURE = old
+            _build_core.POSTURE = old
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_posture_names_discovers_files_peer_first(self):
@@ -213,9 +227,9 @@ class BuildRoundTripTests(unittest.TestCase):
     def test_mode_selection_switches_the_inlined_body(self):
         """Setting the build-wide MODE inlines that mode instead of direct."""
         tmp = Path(tempfile.mkdtemp())
-        old = build.MODE
+        old = _build_core.MODE
         try:
-            build.MODE = "foreman"          # facade mirrors into _build_render
+            _build_core.MODE = "foreman"          # the single owner _build_render reads
             build.build("neutral", tmp)
             agent = (tmp / "AGENT.md").read_text(encoding="utf-8")
             self.assertIn("**Foreman**", agent)
@@ -223,7 +237,7 @@ class BuildRoundTripTests(unittest.TestCase):
             # The full catalogue always ships regardless of the active mode.
             self.assertTrue((tmp / "modes" / "direct.md").is_file())
         finally:
-            build.MODE = old
+            _build_core.MODE = old
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_mode_names_discovers_files_direct_first(self):
@@ -476,14 +490,14 @@ class CircularIncludeTests(unittest.TestCase):
 
     def _render_in_temp_src(self, files: dict, entry: str) -> str:
         tmp = Path(tempfile.mkdtemp())
-        orig = build.SRC
+        orig = _build_core.SRC
         try:
-            build.SRC = tmp
+            _build_core.SRC = tmp
             for name, body in files.items():
                 (tmp / name).write_text(body, encoding="utf-8")
             return build.render_file(tmp / entry, {})
         finally:
-            build.SRC = orig
+            _build_core.SRC = orig
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_mutual_cycle_is_marked(self):
@@ -879,16 +893,16 @@ class OpencodeJsonMergeFailureTests(unittest.TestCase):
 
 class SyncThemesTests(unittest.TestCase):
     """build.sync_themes(): the maintainer assist for the theme-parity gate. Redirects
-    build.THEMES to a temp dir per test (mirrors test_harness.ThemeParityTests) so the
+    _build_core.THEMES to a temp dir per test (mirrors test_harness.ThemeParityTests) so the
     real themes/ tree is never touched."""
 
     def _with_temp_themes(self, files: dict):
         tmp = Path(tempfile.mkdtemp())
-        orig = build.THEMES
+        orig = _build_core.THEMES
         try:
             for name, text in files.items():
                 (tmp / name).write_text(text, encoding="utf-8")
-            build.THEMES = tmp
+            _build_core.THEMES = tmp
             import contextlib
             import io
             out = io.StringIO()
@@ -898,7 +912,7 @@ class SyncThemesTests(unittest.TestCase):
                      for p in tmp.glob("*.json")}
             return changed, out.getvalue(), after
         finally:
-            build.THEMES = orig
+            _build_core.THEMES = orig
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_fills_missing_key_from_template(self):
@@ -959,7 +973,7 @@ class SyncThemesTests(unittest.TestCase):
         most a comma on its predecessor. This is the churn guarantee: re-dumping the
         whole file rewrote ~170 lines per theme for a single added key."""
         tmp = Path(tempfile.mkdtemp())
-        orig = build.THEMES
+        orig = _build_core.THEMES
         try:
             (tmp / "_TEMPLATE.json").write_text(
                 '{\n  "A": "<a>",\n  "B": "<b>",\n  "C": "<c>"\n}\n', encoding="utf-8")
@@ -967,14 +981,14 @@ class SyncThemesTests(unittest.TestCase):
             # preserve both, so byte-identity here proves the edit is textual.
             before = '{\n  "A": "hello — caf\\u00e9",\n  "C": "world"\n}\n'
             (tmp / "mytheme.json").write_text(before, encoding="utf-8")
-            build.THEMES = tmp
+            _build_core.THEMES = tmp
             import contextlib
             import io
             with contextlib.redirect_stdout(io.StringIO()):
                 changed = build.sync_themes()
             after = (tmp / "mytheme.json").read_text(encoding="utf-8")
         finally:
-            build.THEMES = orig
+            _build_core.THEMES = orig
             shutil.rmtree(tmp, ignore_errors=True)
         self.assertEqual(changed, 1)
         self.assertEqual(
@@ -985,19 +999,19 @@ class SyncThemesTests(unittest.TestCase):
         """An in-sync theme must not be rewritten AT ALL — same bytes, even when the
         formatting could not survive a dumps round-trip (mixed raw/escaped Unicode)."""
         tmp = Path(tempfile.mkdtemp())
-        orig = build.THEMES
+        orig = _build_core.THEMES
         try:
             (tmp / "_TEMPLATE.json").write_text('{\n  "A": "<a>"\n}\n', encoding="utf-8")
             before = '{\n  "A": "caf\\u00e9 — raw"\n}\n'
             (tmp / "mytheme.json").write_text(before, encoding="utf-8")
-            build.THEMES = tmp
+            _build_core.THEMES = tmp
             import contextlib
             import io
             with contextlib.redirect_stdout(io.StringIO()):
                 changed = build.sync_themes()
             after = (tmp / "mytheme.json").read_text(encoding="utf-8")
         finally:
-            build.THEMES = orig
+            _build_core.THEMES = orig
             shutil.rmtree(tmp, ignore_errors=True)
         self.assertEqual(changed, 0)
         self.assertEqual(after, before)
@@ -1010,12 +1024,12 @@ class SyncThemesTests(unittest.TestCase):
         from unittest import mock
 
         tmp = Path(tempfile.mkdtemp())
-        orig = build.THEMES
+        orig = _build_core.THEMES
         try:
             (tmp / "_TEMPLATE.json").write_text('{\n  "A": "<a>",\n  "B": "<b>"\n}\n',
                                                 encoding="utf-8")
             (tmp / "mytheme.json").write_text('{\n  "A": "hello"\n}\n', encoding="utf-8")
-            build.THEMES = tmp
+            _build_core.THEMES = tmp
             argv = ["build.py", "--sync-themes"]
             with mock.patch.object(sys, "argv", argv), \
                  contextlib.redirect_stdout(io.StringIO()):
@@ -1026,25 +1040,25 @@ class SyncThemesTests(unittest.TestCase):
                     build.main()                           # second run: already in sync
                 self.assertEqual(ctx.exception.code, 0)
         finally:
-            build.THEMES = orig
+            _build_core.THEMES = orig
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_sync_makes_shipped_themes_parity_clean(self):
         """A theme with a genuinely missing key, once synced, must stop tripping the
         real parity gate (integration check between Task 5 and the Task-5-adjacent
         parity gate the task doc points at)."""
-        good = json.loads((build.THEMES / "neutral.json").read_text(encoding="utf-8"))
+        good = json.loads((_build_core.THEMES / "neutral.json").read_text(encoding="utf-8"))
         broken = dict(good)
         broken.pop("VOICE")
         tmp = Path(tempfile.mkdtemp())
-        orig_themes = build.THEMES
+        orig_themes = _build_core.THEMES
         try:
             (tmp / "_TEMPLATE.json").write_text(
                 json.dumps(json.loads((orig_themes / "_TEMPLATE.json").read_text(encoding="utf-8"))),
                 encoding="utf-8")
             (tmp / "neutral.json").write_text(json.dumps(good), encoding="utf-8")
             (tmp / "broken.json").write_text(json.dumps(broken), encoding="utf-8")
-            build.THEMES = tmp
+            _build_core.THEMES = tmp
             import contextlib
             import io
             with contextlib.redirect_stdout(io.StringIO()):
@@ -1052,7 +1066,7 @@ class SyncThemesTests(unittest.TestCase):
             after = json.loads((tmp / "broken.json").read_text(encoding="utf-8"))
             self.assertIn("VOICE", after)
         finally:
-            build.THEMES = orig_themes
+            _build_core.THEMES = orig_themes
             shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -1098,7 +1112,7 @@ class DescBlockTests(unittest.TestCase):
 
     def test_real_specs_all_pass(self):
         for folder in ("agents", "skills"):
-            d = build.SRC / folder
+            d = _build_core.SRC / folder
             for spec in sorted(d.glob("*.md")):
                 if spec.name.startswith("_"):
                     continue
@@ -1264,7 +1278,7 @@ class ValidateOnlyTests(unittest.TestCase):
         """_validate_is_vendored must exempt vendored skill folders wherever the
         `skills` segment sits: flat bundle root (files/opencode-global) AND the
         one-level-deeper per-repo native layers (.opencode/.claude/.bob/.github)."""
-        vendored = build.VENDORED_SKILL_DIRS[0]   # e.g. 'react-view-transitions'
+        vendored = _build_core.VENDORED_SKILL_DIRS[0]   # e.g. 'react-view-transitions'
         for rel, want in [
             (Path(f"skills/{vendored}/README.md"), True),
             (Path(f".opencode/skills/{vendored}/SKILL.md"), True),

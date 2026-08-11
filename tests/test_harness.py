@@ -2,6 +2,8 @@
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import contextlib
+import io
 import json
 import os
 import re
@@ -15,7 +17,20 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "rituals"))
 sys.path.insert(0, str(ROOT))
 import build  # noqa: E402
+import _build_core  # noqa: E402  (owner of the source roots / posture / mode — see its docstring)
 import harness  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import golden  # noqa: E402  (the process-home sandbox)
+
+
+def setUpModule():
+    # This module emits IN-PROCESS, and `_write_hook_shim()` targets the ENVIRONMENT's home
+    # rather than the emit's own `--out` or `cfg=`. See tests/test_home_sandbox.py.
+    golden.sandbox_process_home()
+
+
+def tearDownModule():
+    golden.restore_process_home()
 
 
 class PromptParityTests(unittest.TestCase):
@@ -23,7 +38,7 @@ class PromptParityTests(unittest.TestCase):
     extracts it — this test fails the moment the two drift."""
 
     def test_extracted_head_matches_plugin_literal(self):
-        js = (build.PLUGIN_SRC / "geneseed-learn.js").read_text(encoding="utf-8")
+        js = (_build_core.PLUGIN_SRC / "geneseed-learn.js").read_text(encoding="utf-8")
         m = re.search(r"const LEARN_PROMPT_HEAD = `([\s\S]*?)`", js)
         self.assertIsNotNone(m, "could not find LEARN_PROMPT_HEAD literal in plugin")
         self.assertEqual(harness.LEARN_PROMPT_HEAD, m.group(1))
@@ -106,18 +121,18 @@ class DoctorCatchesThemeDriftTests(unittest.TestCase):
 
     def _with_temp_themes(self, files: dict) -> list:
         tmp = Path(tempfile.mkdtemp())
-        orig = build.THEMES
+        orig = _build_core.THEMES
         try:
             for name, text in files.items():
                 (tmp / name).write_text(text, encoding="utf-8")
-            build.THEMES = tmp
+            _build_core.THEMES = tmp
             return harness._theme_parity_problems()
         finally:
-            build.THEMES = orig
+            _build_core.THEMES = orig
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_missing_key_is_flagged(self):
-        good = json.loads((build.THEMES / "neutral.json").read_text(encoding="utf-8"))
+        good = json.loads((_build_core.THEMES / "neutral.json").read_text(encoding="utf-8"))
         broken = dict(good)
         broken.pop("VOICE")
         problems = self._with_temp_themes({
@@ -128,7 +143,7 @@ class DoctorCatchesThemeDriftTests(unittest.TestCase):
         self.assertTrue(any("VOICE" in p and "broken" in p for p in problems), problems)
 
     def test_malformed_json_is_flagged(self):
-        good = json.loads((build.THEMES / "neutral.json").read_text(encoding="utf-8"))
+        good = json.loads((_build_core.THEMES / "neutral.json").read_text(encoding="utf-8"))
         problems = self._with_temp_themes({
             "neutral.json": json.dumps(good),
             "broken.json": "{ not valid json",
@@ -138,7 +153,7 @@ class DoctorCatchesThemeDriftTests(unittest.TestCase):
     def test_underscore_scaffold_is_ignored(self):
         """A `_`-prefixed scaffold (e.g. _TEMPLATE.json) is skipped, so an intentionally
         partial template never trips the gate."""
-        good = json.loads((build.THEMES / "neutral.json").read_text(encoding="utf-8"))
+        good = json.loads((_build_core.THEMES / "neutral.json").read_text(encoding="utf-8"))
         problems = self._with_temp_themes({
             "neutral.json": json.dumps(good),
             "imperial.json": json.dumps(good),
@@ -157,7 +172,7 @@ class CountTableGateTests(unittest.TestCase):
 
     def test_gate_flags_table_and_badge_drift(self):
         tmp = Path(tempfile.mkdtemp())
-        orig = build.SRC
+        orig = _build_core.SRC
         try:
             for sub in ("agents", "skills", "laws"):
                 (tmp / sub).mkdir()
@@ -166,11 +181,11 @@ class CountTableGateTests(unittest.TestCase):
             (tmp / "agents" / "reviewer.md").write_text("> p", encoding="utf-8")
             (tmp / "skills" / "commit.md").write_text("> p", encoding="utf-8")
             (tmp / "laws" / "universal.md").write_text("### {{LAW}} I — x\n", encoding="utf-8")
-            shutil.copy(build.SRC / "AGENT.md.tmpl", tmp / "AGENT.md.tmpl")
-            build.SRC = tmp
+            shutil.copy(_build_core.SRC / "AGENT.md.tmpl", tmp / "AGENT.md.tmpl")
+            _build_core.SRC = tmp
             problems = harness._count_table_problems()
         finally:
-            build.SRC = orig
+            _build_core.SRC = orig
             shutil.rmtree(tmp, ignore_errors=True)
         self.assertTrue(problems)
         self.assertTrue(any("badge" in p for p in problems), problems)
@@ -229,18 +244,18 @@ class CountTableGateTests(unittest.TestCase):
         """A law numeral parsed from universal.md but absent from LAW_CLASS must be
         flagged — the gate that would have caught the Law XXXV 'craft' fallback."""
         tmp = Path(tempfile.mkdtemp())
-        orig = build.SRC
+        orig = _build_core.SRC
         try:
             for sub in ("agents", "skills", "laws"):
                 (tmp / sub).mkdir()
             # XL is not a key in LAW_CLASS, so it must trip the completeness gate.
             (tmp / "laws" / "universal.md").write_text(
                 "### {{LAW}} I — a\n### {{LAW}} XL — z\n", encoding="utf-8")
-            shutil.copy(build.SRC / "AGENT.md.tmpl", tmp / "AGENT.md.tmpl")
-            build.SRC = tmp
+            shutil.copy(_build_core.SRC / "AGENT.md.tmpl", tmp / "AGENT.md.tmpl")
+            _build_core.SRC = tmp
             problems = harness._count_table_problems()
         finally:
-            build.SRC = orig
+            _build_core.SRC = orig
             shutil.rmtree(tmp, ignore_errors=True)
         self.assertTrue(
             any("XL" in p and "LAW_CLASS" in p for p in problems), problems)
@@ -262,7 +277,7 @@ class CountTableGateTests(unittest.TestCase):
         without one and rendered with a blank description; this is the gate for it."""
         from _harness_tui import LAW_CLASS, LAW_CLASSES
         nums = re.findall(r"(?m)^### \{\{LAW\}\} ([IVXLCDM]+)\b",
-                          (build.SRC / "laws" / "universal.md").read_text(encoding="utf-8"))
+                          (_build_core.SRC / "laws" / "universal.md").read_text(encoding="utf-8"))
         self.assertEqual(harness._law_meta_problems(nums, LAW_CLASS, LAW_CLASSES), [])
 
     def test_gate_flags_law_missing_from_law_meta(self):
@@ -289,7 +304,7 @@ class CountTableGateTests(unittest.TestCase):
         self.assertIsNotNone(block, "LAW_META literal not found in Laws.jsx")
         rows = harness._LAW_META_ROW.findall(block.group(1))
         nums = re.findall(r"(?m)^### \{\{LAW\}\} ([IVXLCDM]+)\b",
-                          (build.SRC / "laws" / "universal.md").read_text(encoding="utf-8"))
+                          (_build_core.SRC / "laws" / "universal.md").read_text(encoding="utf-8"))
         self.assertEqual(len(rows), len(nums))
         for _, _, _, _, principle in rows:
             self.assertTrue(principle.strip(), rows)
@@ -563,7 +578,7 @@ class VersionTests(unittest.TestCase):
 
     def test_release_version_read_from_config(self):
         self.assertEqual(build.source_release_version(),
-                          json.loads(build.CONFIG.read_text(encoding="utf-8"))["version"])
+                          json.loads(_build_core.CONFIG.read_text(encoding="utf-8"))["version"])
 
     def test_write_version_stamps_release_bracket(self):
         d = Path(tempfile.mkdtemp())
@@ -842,7 +857,7 @@ class ProjectUninstallResolveTests(unittest.TestCase):
         # OpenCode global config dir, exactly as before this task.
         os.chdir(self.tmp)   # an empty dir carries no project marker
         hit = harness._uninstall_resolve(None)
-        self.assertEqual(hit, ("opencode", "global", build._opencode_config_dir()))
+        self.assertEqual(hit, ("opencode", "global", _build_core._opencode_config_dir()))
 
     def test_plain_non_geneseed_claude_dir_does_not_hijack_default(self):
         # A repo with someone's OWN .claude/ (no Geneseed manifest, no emit marker) is
@@ -853,7 +868,7 @@ class ProjectUninstallResolveTests(unittest.TestCase):
         (repo / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
         os.chdir(repo)
         hit = harness._uninstall_resolve(None)
-        self.assertEqual(hit, ("opencode", "global", build._opencode_config_dir()))
+        self.assertEqual(hit, ("opencode", "global", _build_core._opencode_config_dir()))
         self.assertIsNone(harness._uninstall_resolve(str(repo)))
         self.assertIsNone(harness._uninstall_resolve(str(repo / ".claude")))
 
@@ -1092,6 +1107,63 @@ class RenderedCheckTests(unittest.TestCase):
 
     def test_absent_bundle_is_noop(self):
         self.assertEqual(harness._rendered_problems(ROOT / "does-not-exist"), [])
+
+    # The two tests above build the PORTABLE bundle, which is the only dialect a
+    # `build.build()` fixture can produce — so for as long as they were the whole
+    # coverage, a bundle emitted for a host that catalogues natively was unreachable and
+    # the check's dialect-blindness could not be seen. It reported a freshly emitted
+    # OpenCode bundle as stale on every run, with no rebuild able to clear it.
+
+    def _opencode_bundle(self, d: Path, footprint: str = "lean") -> None:
+        """A real OpenCode project bundle, with the markers a deployed one carries.
+        `.geneseed-emit` is written by build.py's main(), not by the emit function, so a
+        test that calls the emitter directly has to write it exactly as an install has."""
+        with contextlib.redirect_stdout(io.StringIO()):
+            build.emit_opencode("neutral", d, root=d, footprint=footprint)
+        (d / ".geneseed-theme").write_text("neutral\n", encoding="utf-8")
+        (d / ".geneseed-footprint").write_text(footprint + "\n", encoding="utf-8")
+        (d / ".geneseed-emit").write_text("opencode\n", encoding="utf-8")
+
+    def test_opencode_bundle_is_not_drift(self):
+        """An OpenCode bundle straight out of the emitter is not drifted. Its AGENT.md
+        differs from `render_all`'s output by construction — the catalogue tables are
+        collapsed to a pointer and the per-row spec links are stripped — so a check that
+        renders the portable shape flags it forever."""
+        d = Path(tempfile.mkdtemp())
+        try:
+            self._opencode_bundle(d)
+            self.assertEqual(harness._rendered_problems(d), [])
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_opencode_bundle_still_detects_real_drift(self):
+        """...and the dialect awareness must not have bought that by switching the check
+        off. A hand-edited AGENT.md in an OpenCode bundle is still drift."""
+        d = Path(tempfile.mkdtemp())
+        try:
+            self._opencode_bundle(d)
+            agent_md = d / "AGENT.md"
+            agent_md.write_text(agent_md.read_text(encoding="utf-8") + "\ntampered\n",
+                                encoding="utf-8")
+            probs = harness._rendered_problems(d)
+            self.assertTrue(any("AGENT.md" in p and "stale" in p for p in probs),
+                            f"real drift in an OpenCode bundle went unreported: {probs}")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_opencode_bundle_detects_drift_in_a_de_linked_file(self):
+        """The de-linking carve-out is scoped to AGENT.md alone. A tampered agent spec —
+        a file the carve-out must not cover — is still drift."""
+        d = Path(tempfile.mkdtemp())
+        try:
+            self._opencode_bundle(d)
+            spec = d / "agents" / "reviewer.md"
+            spec.write_text("tampered", encoding="utf-8")
+            probs = harness._rendered_problems(d)
+            self.assertTrue(any("reviewer.md" in p and "stale" in p for p in probs),
+                            f"drift in a non-AGENT.md file went unreported: {probs}")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 class McpServerTests(unittest.TestCase):
@@ -1371,7 +1443,7 @@ class AuthoringGateTests(unittest.TestCase):
         the OLD (pre-Task-6) check pass — that drift is exactly what let desc_of()
         silently extract the wrong description."""
         tmp = Path(tempfile.mkdtemp())
-        orig = build.SRC
+        orig = _build_core.SRC
         try:
             for sub in ("agents", "skills", "laws"):
                 (tmp / sub).mkdir()
@@ -1380,10 +1452,10 @@ class AuthoringGateTests(unittest.TestCase):
                 "# {{SKILL}}: commit\n\nSome prose that is NOT the description.\n\n"
                 "> {{DESC_COMMIT}}\n", encoding="utf-8")
             (tmp / "laws" / "universal.md").write_text("### {{LAW}} I — x\n", encoding="utf-8")
-            build.SRC = tmp
+            _build_core.SRC = tmp
             problems = harness._authoring_problems()
         finally:
-            build.SRC = orig
+            _build_core.SRC = orig
             shutil.rmtree(tmp, ignore_errors=True)
         self.assertTrue(
             any("skills/commit.md" in p and "not a '>' blockquote" in p for p in problems),
@@ -1684,16 +1756,16 @@ class SourceCompletenessGateTests(unittest.TestCase):
         real paths on teardown — so a removed spec never touches the real repo."""
         work = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, work, ignore_errors=True)
-        shutil.copytree(build.SRC, work / "src")
-        shutil.copytree(build.THEMES, work / "themes")
-        shutil.copytree(build.PLUGIN_SRC, work / "plugins")
-        shutil.copytree(build.WORKFLOW_SRC, work / "workflows")
-        saved = (build.ROOT, build.SRC, build.THEMES, build.PLUGIN_SRC, build.CONFIG,
-                 build.WORKFLOW_SRC)
-        self.addCleanup(lambda: setattr_many(build, saved))
-        build.ROOT, build.SRC, build.THEMES = work, work / "src", work / "themes"
-        build.PLUGIN_SRC, build.CONFIG = work / "plugins", work / "harness.config.json"
-        build.WORKFLOW_SRC = work / "workflows"
+        shutil.copytree(_build_core.SRC, work / "src")
+        shutil.copytree(_build_core.THEMES, work / "themes")
+        shutil.copytree(_build_core.PLUGIN_SRC, work / "plugins")
+        shutil.copytree(_build_core.WORKFLOW_SRC, work / "workflows")
+        saved = (_build_core.ROOT, _build_core.SRC, _build_core.THEMES, _build_core.PLUGIN_SRC, _build_core.CONFIG,
+                 _build_core.WORKFLOW_SRC)
+        self.addCleanup(lambda: setattr_many(_build_core, saved))
+        _build_core.ROOT, _build_core.SRC, _build_core.THEMES = work, work / "src", work / "themes"
+        _build_core.PLUGIN_SRC, _build_core.CONFIG = work / "plugins", work / "harness.config.json"
+        _build_core.WORKFLOW_SRC = work / "workflows"
         return work
 
     def test_complete_source_passes_gate(self):
@@ -2069,6 +2141,8 @@ def test_cmd_exclude_list_no_installs(monkeypatch, capsys):
 
 
 def setattr_many(mod, saved):
+    """Restore the generator's source roots. `mod` is always _build_core — the single
+    owner; the facade refuses writes precisely so a restore cannot silently miss."""
     mod.ROOT, mod.SRC, mod.THEMES, mod.PLUGIN_SRC, mod.CONFIG, mod.WORKFLOW_SRC = saved
 
 
@@ -2359,7 +2433,7 @@ class SurvivingProjectInventoryTests(unittest.TestCase):
         os.environ["XDG_CONFIG_HOME"] = str(self.tmp / "xdg")
         # _uninstall_resolve's _global_hit only recognises a --target that IS the
         # host's own config_dir() — so the fixture's "global install" must actually
-        # live where build._opencode_config_dir() looks, not just wherever the emit
+        # live where _build_core._opencode_config_dir() looks, not just wherever the emit
         # was told to write.
         os.environ["OPENCODE_CONFIG_DIR"] = str(self.tmp / "gcfg")
 
@@ -3028,13 +3102,13 @@ class ClaudeBobDoctorCoverageTests(unittest.TestCase):
         prefixed link form) via monkeypatch — no source-tree seeding needed, since the
         dead link is a property of the RENDER, not a file on disk — and confirm the
         new doctor check flags it."""
-        saved = build.CAPABILITY_LINK_RE
-        build.CAPABILITY_LINK_RE = re.compile(
+        saved = _build_core.CAPABILITY_LINK_RE
+        _build_core.CAPABILITY_LINK_RE = re.compile(
             r"\[([^\]]+)\]\((?:agents|skills)/[A-Za-z0-9_-]+\.md\)")
         try:
             problems = harness._claude_bob_emit_problems("neutral")
         finally:
-            build.CAPABILITY_LINK_RE = saved
+            _build_core.CAPABILITY_LINK_RE = saved
         self.assertTrue(any("dead link" in p and "skills/" in p for p in problems),
                         f"expected a seeded dead skill link, got: {problems[:5]}")
 
@@ -3077,7 +3151,7 @@ class PerAgentMemoryTests(unittest.TestCase):
             shutil.rmtree(mem, ignore_errors=True)
 
     def test_agent_lesson_prompt_matches_plugin_literal(self):
-        js = (build.PLUGIN_SRC / "geneseed-learn.js").read_text(encoding="utf-8")
+        js = (_build_core.PLUGIN_SRC / "geneseed-learn.js").read_text(encoding="utf-8")
         m = re.search(r"const AGENT_LESSON_PROMPT = `([\s\S]*?)`", js)
         self.assertIsNotNone(m, "could not find AGENT_LESSON_PROMPT literal in plugin")
         self.assertEqual(harness.AGENT_LESSON_PROMPT, m.group(1))

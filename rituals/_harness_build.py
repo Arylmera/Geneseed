@@ -65,6 +65,245 @@ def cmd_rebuild_all(args: argparse.Namespace) -> int:
     return 0
 
 
+def _known_emits() -> frozenset:
+    """Every emit name the generator answers to — the set an unrecognised marker is NOT in.
+
+    A FUNCTION rather than a module-level constant on purpose: `_EMIT_HOST_SCOPE` lives in
+    `_harness_mcp` and cross-submodule names are linked by `harness.py`'s splice AFTER every
+    submodule has been imported, so evaluating it at import time raises NameError. Every
+    other cross-module reference in this file is inside a function body for the same reason."""
+    return frozenset(_EMIT_HOST_SCOPE)
+
+
+def _hook_settings_file(root: Path, host: str, scope: str) -> "Path | None":
+    """The settings file a host wires hook COMMANDS into, or None for a host with none.
+
+    Only Claude and Bob carry hook commands. OpenCode's hooks are a PLUGIN (emitted JS that
+    runs in the host's own process and names neither the shim nor harness.py) and Copilot has
+    no hook mechanism at all, so both classify as 'none' and their whole migration is the
+    re-emit — the same re-emit, in the same change, on all three hosts."""
+    if host not in ("claude", "bob"):
+        return None
+    name = "settings.local.json" if scope == "project" and host != "bob" else "settings.json"
+    return root / name
+
+
+def _hook_commands_of(file: Path) -> "list[str]":
+    """Every hook command string in a settings file; [] when unreadable or unparseable.
+
+    `build._read_jsonc`, NOT `json.loads`. A hand-edited settings.json carrying comments and
+    a trailing comma is the one shape no machine in this project writes, and strict JSON
+    rejects it — which would classify a wired install as `none` and make `migrate` skip the
+    machine silently. `_merge_claude_settings` already reads through comments for exactly
+    this reason and `_settings_integrity_check`'s docblock says so out loud: the one settings
+    state emit refuses to touch is precisely the one that must not escape verification.
+    Found by the JSONC corpus fixture, which is the case a generated one would have hidden."""
+    try:
+        loaded, _had_comments = build._read_jsonc(file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(loaded, dict) or not isinstance(loaded.get("hooks"), dict):
+        return []
+    out: "list[str]" = []
+    for groups in loaded["hooks"].values():
+        if not isinstance(groups, list):
+            continue
+        for g in groups:
+            if not isinstance(g, dict) or not isinstance(g.get("hooks"), list):
+                continue
+            out.extend(h["command"] for h in g["hooks"]
+                       if isinstance(h, dict) and isinstance(h.get("command"), str))
+    return out
+
+
+def _migrate_stamp_path() -> Path:
+    """`<GENESEED_HOME>/.migrated` — the ROOT the last successful migration installed from."""
+    return build._shim_home() / ".migrated"
+
+
+def _migrate_stash_dir() -> Path:
+    return build._shim_home() / ".migrate-backup"
+
+
+def _migrate_survey() -> dict:
+    """Classify every active install WITHOUT touching anything.
+
+    A refusal raised here is free — nothing has been written, so "refuse and report" needs no
+    rollback. That ordering is the cheapest atomicity there is, and it is why the survey is a
+    separate pass rather than a check inside the re-emit loop."""
+    rows, commands, unrecognised = [], [], []
+    for host, scope, root in _install_targets():
+        if _install_state(root, host, scope) != "active":
+            continue
+        em = root / ".geneseed-emit"
+        marker = em.read_text(encoding="utf-8").strip() if em.is_file() else ""
+        # An unrecognised marker is a REFUSAL, not a default. `cmd_rebuild_all` coerces here.
+        if marker and marker not in _known_emits():
+            unrecognised.append((host, scope, root, marker))
+            continue
+        file = _hook_settings_file(root, host, scope)
+        if file is not None:
+            commands.extend(_hook_commands_of(file))
+        rows.append((host, scope, root, marker, file))
+    try:
+        shim_body = build._hook_shim_path().read_text(encoding="utf-8")
+    except OSError:
+        shim_body = ""
+    shape = build._migrate_shape(commands, shim_body)
+    try:
+        stamped = _migrate_stamp_path().read_text(encoding="utf-8").strip()
+    except OSError:
+        stamped = ""
+    # THE TRIGGER IS THE STAMP, AND THE SHAPE IS REPORTED. The first draft had it the other
+    # way round and the ref-vs-ref self-check killed it in one run: `shape == "legacy"` cannot
+    # be a trigger, because what "current" MEANS is "the shim body names the .mjs entry", and
+    # THIS implementation bakes python + harness.py by design (`_hook_runner_entry`). A
+    # migration run from the reference could never reach `current`, its second run would
+    # re-emit forever, and the two implementations would diverge on idempotence by
+    # construction. The stamp is a value both sides write and read identically.
+    return {"rows": rows, "unrecognised": unrecognised, "shape": shape,
+            "needed": stamped != str(ROOT)}
+
+
+def _autostart_findings() -> "list[Path]":
+    """Hand-written login entries naming another checkout. Reported, never rewritten."""
+    out = []
+    for p in build._autostart_paths():
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if build._autostart_stale(text, ROOT):
+            out.append(p)
+    return out
+
+
+def _stash_key(p: Path) -> str:
+    """A backup name that cannot collide across drives and is legal on both platforms."""
+    return re.sub(r"[\\/:]", "_", str(p))
+
+
+def cmd_migrate(args: argparse.Namespace) -> int:
+    """Move this machine from the git-checkout install shape to the npm shim shape.
+
+    P10d, AND IT IS NOT A PORT — new behaviour, written on both implementations in the same
+    change so `tests/harness_golden.py` (a CROSS-implementation gate) has a reference side.
+
+    IT IS NOT `rebuild-all` EITHER, and that was checked before being discarded. The re-emit
+    is the same engine and is reused; four behaviours differ, and each is a cell:
+
+      * an unrecognised emit marker  — rebuild-all COERCES to a default; migrate REFUSES.
+        Coercion is right for a rebuild and is *guessing what the user installed* here.
+      * a failing root — rebuild-all continues (one broken install must not block the rest);
+        migrate ROLLS EVERYTHING BACK, because a half-migrated machine is the failure this
+        verb exists to prevent.
+      * an already-migrated machine — rebuild-all re-emits; migrate writes NOTHING.
+      * stale autostart entries — not a rebuild's subject; surveyed and reported here.
+
+    TWO TRIGGERS, AND IT TAKES BOTH. Work is needed when the wiring is `legacy` (and shapes 2
+    and 3 differ only inside the shim BODY, never in the settings file — see
+    `build._migrate_shape`) OR when the stamp does not name this ROOT. Neither alone is
+    enough: an OpenCode-only machine wires no hooks, so its shape is permanently 'none' and a
+    shape-only trigger re-emits it forever; and a user who reinstalls the old Python build
+    flips the shape back to 'legacy' while the stamp still matches, and must migrate again."""
+    survey = _migrate_survey()
+    rows, unrecognised = survey["rows"], survey["unrecognised"]
+
+    if unrecognised:
+        # Refuse the WHOLE run. Skipping the row we did not understand and migrating the rest
+        # is exactly the half-migrated machine this verb exists to prevent.
+        sys.stderr.write("[migrate] REFUSED — unrecognised install marker(s):\n")
+        for host, scope, root, marker in unrecognised:
+            sys.stderr.write(f"[migrate]   {host}:{scope} ({root}) has .geneseed-emit "
+                             f"'{marker}', which is not an emit this generator answers to.\n")
+        sys.stderr.write("[migrate] Nothing was changed. Fix or delete the marker, "
+                         "then re-run.\n")
+        return 3
+
+    if not rows:
+        print("[migrate] no active installs detected.")
+        return 0
+
+    if not survey["needed"]:
+        print(f"[migrate] already on the npm shape ({len(rows)} install(s)); nothing to do.")
+        return 0
+
+    print(f"[migrate] {len(rows)} install(s), wiring shape: {survey['shape']}")
+    if args.dry_run:
+        for host, scope, root, _marker, _file in rows:
+            print(f"[migrate] would re-emit {host}:{scope} ({root})")
+        for p in _autostart_findings():
+            print(f"[migrate] would report the autostart entry at {p}")
+        print("[migrate] --dry-run: nothing was written.")
+        return 0
+
+    # Stash every file the re-emit can touch, so the rollback below can put it all back.
+    stash, saved = _migrate_stash_dir(), []
+    try:
+        shutil.rmtree(stash, ignore_errors=True)
+        stash.mkdir(parents=True, exist_ok=True)
+        targets = [f for _h, _s, _r, _m, f in rows if f is not None]
+        for p in targets + [build._hook_shim_path()]:
+            if not p.exists():
+                continue
+            dest = stash / _stash_key(p)
+            shutil.copyfile(p, dest)
+            saved.append((p, dest))
+    except OSError as e:
+        sys.stderr.write(f"[migrate] could not stage a backup ({e}); nothing was changed.\n")
+        return 1
+
+    def _restore() -> None:
+        for orig, dest in saved:
+            try:
+                shutil.copyfile(dest, orig)
+            except OSError:
+                pass          # best effort — the failure is reported by the caller regardless
+        shutil.rmtree(stash, ignore_errors=True)
+
+    for host, scope, root, marker, _file in rows:
+        if marker and _EMIT_HOST_SCOPE.get(marker, ("", ""))[0] != host:
+            marker = ""
+        emit = marker or _DEFAULT_EMIT.get((host, scope), "opencode-global")
+        theme = _theme_of_dir(root) or _default_theme()
+        out = None if scope == "global" else str(root)
+        argv = _setup_build_args(theme, emit, out, out, _footprint_of_dir(root),
+                                 _posture_of_dir(root) or _default_posture(),
+                                 _mode_of_dir(root) or _default_mode())
+        label = f"{host}:{scope} ({root})"
+        print(f"[migrate] re-emitting {label}: theme={theme} emit={emit}")
+        rc = run([sys.executable, str(BUILD), *argv]).returncode
+        if rc != 0:
+            # ALL OR NOTHING. `cmd_rebuild_all` continues here on purpose; a migration must
+            # not, or the machine is left half on each shape.
+            sys.stderr.write(f"[migrate] FAILED {label} (exit {rc}) — rolling back.\n")
+            _restore()
+            sys.stderr.write(f"[migrate] rolled back {len(saved)} file(s); "
+                             "the install is unchanged.\n")
+            return 1
+
+    shutil.rmtree(stash, ignore_errors=True)
+    try:
+        stamp = _migrate_stamp_path()
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(f"{ROOT}\n", encoding="utf-8")
+    except OSError:
+        pass      # an unwritable stamp costs a redundant re-emit next run, never correctness
+
+    print(f"[migrate] migrated {len(rows)} install(s).")
+
+    # What could NOT be fixed automatically. Reported, never rewritten: nothing in this
+    # repository has ever written an autostart entry, so migrate does not own the file.
+    # The `start` ACTION is load-bearing, not decoration: bare `web` runs `serve()` in the
+    # FOREGROUND with `daemon=False`, which never calls `write_daemon`, so `web stop`,
+    # `web restart` and `web status` stay blind to the server this note just told someone to
+    # launch at every login. Derived, not trusted: `TheMigrateNoteAdvisesARealWebAction`.
+    for p in _autostart_findings():
+        print(f"[migrate] NOTE: the autostart entry at {p} still names another checkout — "
+              "update it by hand to run: geneseed web start --no-browser")
+    return 0
+
+
 def _link_problems(md: Path, text: str, out: Path, rel: Path) -> list[str]:
     """Dead links AND non-hermetic links — any target that leaves the bundle.
     Hermeticity (DESIGN Decision 5) is the invariant that lets the bundle be
@@ -245,9 +484,26 @@ def _rendered_problems(bundle: Path) -> list[str]:
     # with, read from its own marker — exactly as the theme is read above. Assuming
     # a footprint here would report every file as drifted the moment the build
     # default moved, which is a diagnosis about this function, not about the bundle.
+    #
+    # ...and in the DIALECT it was emitted in, read from its own `.geneseed-emit`
+    # marker, for the same reason again. A bundle is not always the portable one: a host
+    # that catalogues skills and agents to the model itself gets AGENT.md's tables
+    # collapsed to a pointer (`native_catalog`), and the OpenCode emits additionally
+    # strip the per-row spec links. Rendering the portable shape and comparing it against
+    # an OpenCode bundle reports AGENT.md as stale on EVERY run, and no rebuild can ever
+    # clear it — the emit puts the difference back by design. `harness.py diff` already
+    # avoids this exact trap (see `_harness_diff._diff_collect`); this check did not.
+    # An absent or unrecognised marker means the portable `files` bundle, which is what
+    # `native_catalog=False` and no stripping describe.
+    try:
+        emit = (bundle / ".geneseed-emit").read_text(encoding="utf-8").strip()
+    except OSError:
+        emit = ""
+    host = _EMIT_HOST_SCOPE.get(emit, ("", ""))[0]
     try:
         _theme, items = build.render_all(theme_name,
-                                         _footprint_of_dir(bundle))
+                                         _footprint_of_dir(bundle),
+                                         native_catalog=build.host_catalogs_natively(host))
     except SystemExit:
         return [f"[rendered] cannot render theme '{theme_name}' for {bundle.name}/"]
     problems: list[str] = []
@@ -260,6 +516,11 @@ def _rendered_problems(bundle: Path) -> list[str]:
         elif rel.parts[0] == nb_dirname and rel.name != ".gitignore":
             continue   # seed-once, agent-owned: a rewrite is not drift
         elif text is not None:
+            # The OpenCode emits de-link AGENT.md's per-row agent/skill table entries
+            # after rendering (OpenCode never follows those hrefs), so the bundle on disk
+            # legitimately differs from `render_all`'s output for this one file.
+            if host == "opencode" and out_rel == "AGENT.md":
+                text = build._strip_capability_links(text)
             if dest.read_text(encoding="utf-8") != text:
                 problems.append(f"[rendered] {bundle.name}/{out_rel} stale (differs from a fresh render) — rebuild")
         elif dest.read_bytes() != src.read_bytes():
@@ -430,6 +691,41 @@ def _secret_problems() -> list[str]:
     return problems
 
 
+def _shim_problems() -> list[str]:
+    """The hook shim must exist and must point at a harness.py that is actually there.
+
+    This gate exists because the shim DISARMED an accidental safety net. When the
+    emitted hook command still carried the checkout path, moving the checkout made that
+    command non-canonical, so the next emit's prune-and-rewire repaired every install by
+    itself. Now the config is invariant under a move and the stale path lives in the shim
+    body — which no other gate reads, since the build scan only walks *.md. Without this
+    check a moved checkout would leave every gate silently dead: the hooks still fire,
+    the shim still runs, and the interpreter reports "no such file" into a channel
+    nobody reads.
+
+    Absent shim is NOT a problem: a source checkout that has never emitted anything has
+    no reason to own one, and `_hook_prefix` falls back to the direct form when it cannot
+    write one. Only a shim that exists and is broken is worth reporting."""
+    p = build._hook_shim_path()
+    if not p.is_file():
+        return []
+    try:
+        body = p.read_text(encoding="utf-8")
+    except OSError as e:
+        return [f"[shim] {p} exists but cannot be read ({e}) — hooks may be dead"]
+    # The body is machine-generated and quotes the two baked paths — plus, on POSIX, the
+    # argv placeholder `"$@"`, which is not a path and never was one. `build._SHIM_ARGV` is
+    # the single owner of that pair; see it for what this line reported on every non-Windows
+    # host until the harnesses were first run on Linux.
+    quoted = re.findall(r'"([^"]+)"', body)
+    missing = [q for q in quoted if q not in build._SHIM_ARGV and not Path(q).exists()]
+    if missing:
+        return [f"[shim] {p} pointed at {m}, which does not exist — every hook in every "
+                f"install was dead (the checkout most likely moved). This run's own "
+                f"emit has refreshed it; no further action needed." for m in missing]
+    return []
+
+
 _HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
 # Refs that move under the pin. Re-copying the folder months later would then change the
 # shipped skill with nothing in the diff to explain it.
@@ -560,11 +856,23 @@ def _prose_mirror_problems(readme: str, web: str, counts: dict[str, int],
     crafted drift without touching the tree."""
     problems: list[str] = []
     laws, agents, skills = counts["laws"], counts["agents"], counts["skills"]
+    plugins = counts.get("plugins")
 
     # README prose: "N universal laws".
     for n in re.findall(r"(\d+) universal laws", readme):
         if int(n) != laws:
             problems.append(f"[authoring] README prose says '{n} universal laws' but src has {laws}")
+    # README prose: "N plugins". This one had drifted — the overview sentence said six
+    # while seven shipped, and the row below it listed all seven. The project's OTHER
+    # plugin count, the web docs' {N_PLUGINS}, reads a DEPLOYED plugins dir, which a
+    # markdown file in this repository never has; so this mirror had no derived source
+    # and nothing to notice it. `plugins` is optional in `counts` because the corpus
+    # predates it.
+    if plugins is not None:
+        for n in re.findall(r"(\d+) \*{0,2}plugins", readme):
+            if int(n) != plugins:
+                problems.append(f"[authoring] README prose says '{n} plugins' but "
+                                f"adapters/opencode/plugins has {plugins}")
     # README "What you get" table rows: **🤖 Agents** (N) and **🛠 Skills** (N).
     for label, want in (("Agents", agents), ("Skills", skills)):
         m = re.search(rf"{label}\*\*\s*\((\d+)\)", readme)
@@ -669,6 +977,9 @@ def _count_table_problems() -> list[str]:
         "skills": len(_src_stems("skills")),
         "laws": len(law_nums),
         "themes": len(build.theme_files()),
+        # Last on purpose: the badge loop below walks this dict in order and the message
+        # sequence is compared byte for byte against the Node implementation.
+        "plugins": len(list(build.PLUGIN_SRC.glob("geneseed-*.js"))),
     }
     try:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -765,6 +1076,193 @@ def _claude_bob_emit_problems(theme_name: str) -> list[str]:
     return problems
 
 
+# ----------------------------------------------------------------- the CLI reference
+#
+# `harness.build_argparser()` is 24 subparsers (25 invocable names — `update` aliases
+# `upgrade`) and 43 `add_argument` calls, and it is the only description of the CLI either
+# implementation has. Node cannot introspect argparse, so the metadata is GENERATED from the
+# parser into `cli.json` and BOTH sides read that file: the web console's `cli` docs page
+# (`_web_docs._cli_reference`) and `bin/geneseed-cli.mjs`'s own argument parser, whose `VERBS`
+# table used to carry a second hand-written transcription of the same 43 calls.
+#
+# WHAT STOPS IT ROTTING is `_cli_reference_problems`, reported by doctor on BOTH binaries:
+# the file records a digest of the file the parser lives in, and a parser that moved without a
+# regeneration is a doctor problem rather than a page quietly describing a CLI nobody has.
+#
+# THE DIGEST, RATHER THAN THE STRONGER "REGENERATE AND COMPARE" A PYTHON DOCTOR COULD RUN, is
+# the whole design. `tests/harness_golden.py` compares the two doctors byte for byte, so a
+# check only one of them can perform is a check the other passes SILENTLY — P4e's fifth
+# coverage hole, wearing a partition as a disguise. Hashing one file is something Node does as
+# well as Python does, so the fault that matters (the parser moved) reddens both binaries with
+# the same sentence. The residue — a hand-edited `cli.json` whose digest still matches — is
+# `tests/test_cli_reference.py`'s, where being Python-only costs nothing and the acceptance
+# loop runs it anyway.
+
+CLI_JSON = ROOT / "cli.json"
+_HARNESS_PY = ROOT / "rituals" / "harness.py"
+
+#: The keys the docs PAGE has always carried, per argument. `_cli_arg` produces two more for
+#: `bin/geneseed-cli.mjs` (`type`, `hidden`) and the page is filtered back to exactly this set
+#: so the response the tracked `web/dist` renders is byte-for-byte what it was before.
+_PAGE_ARG_KEYS = ("names", "dest", "metavar", "help", "choices", "default",
+                  "required", "nargs", "is_flag")
+
+
+def cli_source_digest(path: "Path | None" = None) -> str:
+    """sha256 of the parser's own file, NEWLINE-NORMALISED.
+
+    `.gitattributes` asks for `eol=lf` and `js/doctor.mjs` is CRLF on disk regardless — an
+    attribute governs a checkout, not a working tree that predates it. A digest sensitive to
+    the line ending would report drift on a machine that has none, and the recorded value
+    was computed on whichever machine last regenerated the file.
+
+    `path` EXISTS BECAUSE THE NORMALISATION IS OTHERWISE UNREACHABLE. `rituals/harness.py` is
+    LF in this working tree, so a twin that dropped `.replace()` would agree with this one on
+    every input either has — a green mutation that is a question about the corpus of inputs
+    before it is a question about the code. `tests/test_cli_reference.py` runs both
+    implementations over a CRLF file through this argument."""
+    import hashlib
+    src = path if path is not None else _HARNESS_PY
+    return hashlib.sha256(src.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def _cli_arg(a) -> dict:
+    return {
+        "names": list(a.option_strings),
+        "dest": a.dest,
+        "metavar": a.metavar,
+        "help": "" if a.help is argparse.SUPPRESS else (a.help or ""),
+        "choices": list(a.choices) if a.choices else None,
+        "default": None if a.default is None else
+                   (a.default if isinstance(a.default, (str, int, float, bool))
+                    else str(a.default)),
+        "required": bool(getattr(a, "required", False)),
+        "nargs": str(a.nargs) if a.nargs is not None else None,
+        "is_flag": bool(a.option_strings) and a.nargs == 0,
+        # The two fields the page never needed and the Node entry cannot work without.
+        # `type=int` is what makes `--port abc` a refusal instead of a silent fallback to
+        # 4747; `hidden` is `help=argparse.SUPPRESS`, and the walk used to DROP those
+        # arguments entirely — four of which bind real values (`upgrade ref`, `sync-self
+        # ref`, `bootstrap extra`, `web --daemon-internal`, the last passed 95 times a run
+        # by tests/web_golden.py).
+        "type": getattr(a.type, "__name__", None) if a.type is not None else None,
+        "hidden": a.help is argparse.SUPPRESS,
+    }
+
+
+def build_cli_reference(parser: argparse.ArgumentParser) -> dict:
+    """Walk an argparser into a JSON-able shape: one entry per subcommand, with its help
+    text, positionals, options and mutually-exclusive groups.
+
+    Takes the parser rather than calling `harness.build_argparser()` itself, and that is not
+    style: `rituals/harness.py` runs as `__main__`, so an `import harness` from one of its own
+    submodules would load the module a SECOND time under its real name and re-run the splice.
+    Nothing inside the harness process needs this function — the generator and the tests do,
+    and both reach it through a normal `import harness`.
+
+    THE FULL PARSER, hidden arguments included; `load_cli_reference` is what filters it down
+    to the page. `sub.choices` carries argparse's ALIASES as keys of their own, so `update`
+    appears beside `upgrade` with an empty help — the help text lives on the parent's
+    pseudo-action, which is registered under the canonical name only. That is what this walk
+    has always produced and both readers depend on it: the Node entry dispatches `update` as
+    a row of its own."""
+    sub_action = next((a for a in parser._actions
+                       if isinstance(a, argparse._SubParsersAction)), None)
+    if sub_action is None:
+        return {"prog": parser.prog, "commands": []}
+
+    commands = []
+    for name, sp in sub_action.choices.items():
+        positionals, options = [], []
+        for a in sp._actions:
+            if isinstance(a, argparse._HelpAction):
+                continue
+            (positionals if not a.option_strings else options).append(_cli_arg(a))
+        # The help text we attached via sub.add_parser(..., help=...) lives on the
+        # subparser action, not on sp itself — read it back from the parent.
+        help_text = ""
+        for action in sub_action._choices_actions:
+            if action.dest == name:
+                help_text = action.help or ""
+                break
+        # `add_mutually_exclusive_group()`. Group membership lives on the GROUP, not on the
+        # action, so it cannot be part of `_cli_arg`. Only `theme` has one, and without this
+        # the Node entry would accept `--solid-only --transparent-only` where argparse
+        # refuses it. Declaration order, not sorted: it is the order the refusal names them
+        # in.
+        mutex = [[o for ga in g._group_actions for o in ga.option_strings]
+                 for g in sp._mutually_exclusive_groups]
+        commands.append({
+            "name": name,
+            "help": help_text,
+            "description": sp.description or "",
+            "positionals": positionals,
+            "options": options,
+            "mutex": [m for m in mutex if m],
+        })
+    commands.sort(key=lambda c: c["name"])
+    return {"prog": parser.prog, "commands": commands}
+
+
+def write_cli_reference(parser: argparse.ArgumentParser) -> bool:
+    """Generate `cli.json`. True when the bytes changed, so a caller can exit non-zero and
+    be usable as a CI drift check — `sync_themes`' contract, for the same reason.
+
+    `write_bytes`, not `write_text`: the file is `text=auto eol=lf` and Python's text mode
+    would put CRLF in it on Windows, leaving the tree permanently dirty."""
+    data = {"source_sha256": cli_source_digest(), **build_cli_reference(parser)}
+    raw = (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    # BYTES on both sides of the comparison too. `read_text` translates newlines, so a file
+    # that had somehow been written with CRLF would compare EQUAL to the LF it is about to be
+    # replaced with and this would report "already in sync" while rewriting it.
+    old = CLI_JSON.read_bytes() if CLI_JSON.is_file() else None
+    CLI_JSON.write_bytes(raw)
+    return old != raw
+
+
+def load_cli_reference() -> dict:
+    """`cli.json` as the docs page consumes it: the generated file minus the arguments
+    argparse hides, minus the generator's own bookkeeping.
+
+    THE PAGE IS A VIEW OF THE FILE, not the other way round. `bin/geneseed-cli.mjs` needs the
+    hidden arguments and the page must not show them, so the file carries everything and each
+    reader filters. An unreadable file answers with the empty reference rather than a 500 —
+    doctor is what reports it, on both binaries."""
+    try:
+        data = json.loads(CLI_JSON.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"prog": "harness", "commands": []}
+    return {
+        "prog": data.get("prog", "harness"),
+        "commands": [{
+            "name": c.get("name", ""),
+            "help": c.get("help", ""),
+            "description": c.get("description", ""),
+            "positionals": _page_args(c.get("positionals", [])),
+            "options": _page_args(c.get("options", [])),
+        } for c in data.get("commands", [])],
+    }
+
+
+def _page_args(args: list) -> list:
+    return [{k: a.get(k) for k in _PAGE_ARG_KEYS} for a in args if not a.get("hidden")]
+
+
+def _cli_reference_problems() -> list[str]:
+    """`cli.json` must still describe the parser it was generated from — doctor's half of the
+    contract, and the half that runs on a user's machine where the test suite does not."""
+    try:
+        data = json.loads(CLI_JSON.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ["[cli] cli.json is missing or unreadable — regenerate it from a checkout "
+                "with `python tests/gen_cli_reference.py`"]
+    if data.get("source_sha256") != cli_source_digest():
+        return ["[cli] cli.json is stale: rituals/harness.py has changed since it was "
+                "generated — regenerate it from a checkout with "
+                "`python tests/gen_cli_reference.py`"]
+    return []
+
+
 def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
                     on_progress=None, groups=None):
     """Run every doctor check; return (themes, sorted_unique_problems). on_progress
@@ -790,6 +1288,10 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
     # Only probe the deployed install when we actually need it (no theme / not --all).
     detected = None if (theme or all_themes) else _installed_defaults().get("theme")
     themes = _themes_to_check(theme, all_themes, detected, available)
+    # Sampled HERE, before the emit loop below — every emit rewrites the hook shim, so a
+    # check placed after them could only ever observe the freshly repaired file and would
+    # be dead code that always reports clean. Reported in its usual slot further down.
+    shim_probs = _shim_problems()
     total = len(themes) + 1
     problems: list[str] = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -814,6 +1316,8 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
     problems += _ran("parity", "Theme parity", _theme_parity_problems())
     problems += _ran("colors", "Colour themes", _color_theme_problems())
     problems += _ran("authoring", "Authoring gates", _authoring_problems())
+    problems += _ran("shim", "Hook shim", shim_probs)
+    problems += _ran("cli", "CLI reference", _cli_reference_problems())
     if not no_bundle:
         b = Path(bundle).expanduser().resolve() if bundle else ROOT / "Harness"
         problems += _ran("bundle", "Committed bundle drift", _rendered_problems(b))

@@ -123,6 +123,14 @@ def build_argparser() -> argparse.ArgumentParser:
                              "theme+emit), best-effort — continue past failures")
     rb.set_defaults(fn=cmd_rebuild_all)
 
+    mg = sub.add_parser("migrate",
+                        help="move this machine from the git-checkout install shape to the "
+                             "npm one: re-emit every registered install, re-bake the hook "
+                             "shim, and report what must be fixed by hand")
+    mg.add_argument("--dry-run", action="store_true",
+                    help="survey and print the plan; write nothing")
+    mg.set_defaults(fn=cmd_migrate)
+
     th = sub.add_parser("theme", help="create a user OpenCode colour theme (solid + transparent) "
                                       "in the live themes dir; survives rebuilds")
     th.add_argument("name", help="theme name (auto-prefixed 'geneseed-'; selected as /theme geneseed-<name>)")
@@ -264,7 +272,7 @@ def build_argparser() -> argparse.ArgumentParser:
     up.set_defaults(fn=cmd_upgrade)
 
     ss = sub.add_parser("sync-self", help="refresh the orchestration layer — launchers + update "
-                                          "scripts (cross-platform; replaces sync-self.sh)")
+                                          "scripts (cross-platform; an alias of upgrade)")
     ss.add_argument("ref", nargs="?", default=None, help=argparse.SUPPRESS)  # ignored; git follows the current branch
     ss.set_defaults(fn=cmd_sync_self)
 

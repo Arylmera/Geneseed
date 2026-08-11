@@ -611,7 +611,16 @@ def _tui_loop(stdscr, inv: dict, focus: str | None = None) -> None:
             put(2, dx + 2, f"no matches for '{query}'", C_TITLE)
         else:
             kind, label, data = entries[sel]
-            wrapped = _wrap_lines(_detail_lines(kind, label, data), riw)
+            # `or []` — an EMPTY TREE CRASHED THE PANEL ON ITS FIRST FRAME. `_detail_lines`
+            # returns None for a `head` row and `_wrap_lines` iterates its argument. Line 556
+            # normally moves `sel` onto the first selectable row, but line 554 is
+            # `if not selectable: sel = 0` and row 0 is always the AGENTS header — so an
+            # inventory with no agents, no skills and no laws (a broken or half-synced src/)
+            # raised `TypeError: 'NoneType' object is not iterable` instead of drawing an
+            # empty state. Found by the npx port's P7b corpus, fixed here with the port that
+            # owns this loop. The guard is at the CALL SITE and not in `_detail_lines`: None
+            # for a head row is that function's gated contract, and this is its only caller.
+            wrapped = _wrap_lines(_detail_lines(kind, label, data) or [], riw)
             detail_top = _clamp(detail_top, len(wrapped), ch_h)
             for i in range(ch_h):
                 di = detail_top + i

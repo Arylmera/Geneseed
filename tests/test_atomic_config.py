@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import _build_emit as emit
+import _build_settings  # noqa: E402  (the host-config wiring layer owns _atomic_write_json)
 
 
 class AtomicWriteJsonTests(unittest.TestCase):
@@ -16,7 +16,7 @@ class AtomicWriteJsonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "settings.json"
             p.write_text('{"old": true}\n', encoding="utf-8")
-            emit._atomic_write_json(p, {"new": 1})
+            _build_settings._atomic_write_json(p, {"new": 1})
             self.assertEqual(json.loads(p.read_text(encoding="utf-8")), {"new": 1})
             # no temp-file litter left beside the target
             self.assertEqual([f.name for f in Path(td).iterdir()], ["settings.json"])
@@ -24,7 +24,7 @@ class AtomicWriteJsonTests(unittest.TestCase):
     def test_creates_file_when_missing(self):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "opencode.json"
-            emit._atomic_write_json(p, {"instructions": ["AGENT.md"]})
+            _build_settings._atomic_write_json(p, {"instructions": ["AGENT.md"]})
             self.assertEqual(
                 json.loads(p.read_text(encoding="utf-8")),
                 {"instructions": ["AGENT.md"]},
@@ -34,17 +34,17 @@ class AtomicWriteJsonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "settings.json"
             p.write_text('{"old": true}\n', encoding="utf-8")
-            real_replace = emit.os.replace
+            real_replace = _build_settings.os.replace
 
             def boom(src, dst):
                 raise OSError("disk full")
 
-            emit.os.replace = boom
+            _build_settings.os.replace = boom
             try:
                 with self.assertRaises(OSError):
-                    emit._atomic_write_json(p, {"new": 1})
+                    _build_settings._atomic_write_json(p, {"new": 1})
             finally:
-                emit.os.replace = real_replace
+                _build_settings.os.replace = real_replace
             # the original survives the failed write, byte-identical
             self.assertEqual(json.loads(p.read_text(encoding="utf-8")), {"old": True})
 
@@ -54,16 +54,16 @@ class WireClaudeExcludesAtomicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "settings.json"
             p.write_text('{"old": true}\n', encoding="utf-8")
-            real_replace = emit.os.replace
+            real_replace = _build_settings.os.replace
 
             def boom(src, dst):
                 raise OSError("disk full")
 
-            emit.os.replace = boom
+            _build_settings.os.replace = boom
             try:
-                added = emit._wire_claude_excludes(p, ["/abs/CLAUDE.md"])
+                added = _build_settings._wire_claude_excludes(p, ["/abs/CLAUDE.md"])
             finally:
-                emit.os.replace = real_replace
+                _build_settings.os.replace = real_replace
             # no crash, nothing reported as wired, original untouched
             self.assertEqual(added, [])
             self.assertEqual(json.loads(p.read_text(encoding="utf-8")), {"old": True})

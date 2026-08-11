@@ -9,6 +9,454 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **`npx geneseed setup` is now the way in, and the README says exactly where that stops
+  being true.** The install docs assume npm first: one command, no clone, no Python, on
+  macOS, Linux and Windows alike. **All 25 commands** run from Node, along with all
+  four hooks, every web-console endpoint and both generators, producing byte-identical
+  output. Three things still need Python and each is now named in the README and the Setup
+  guide rather than discovered: the full-screen browse panel that `tui` and `menu` open on a
+  terminal is still Python — from Node both refuse the panel by name and print the command
+  list, while off a terminal the two runtimes print the same bytes, and `geneseed home` opens
+  the web console exactly as it does under Python; the self-update commands (`upgrade`, `update`, `sync-self`, `bootstrap`) are for
+  a git checkout and now point an npm install at `npm install -g geneseed@latest` instead of
+  telling it to re-clone; and **every bundle carries one Python script**, the `token-report`
+  skill's own, which runs when the agent invokes that skill and at no other time. In the web
+  console, the "browse…" folder picker needs an OS-native dialog and reports itself
+  unavailable on the Node server — the path field beside it stays editable.
+  A publishing workflow ships with it, using npm's trusted publishing (OIDC): no long-lived
+  token in the repository, manual trigger only, and it explains the one step that has to be
+  done by hand on the npm side. Nothing has been published.
+- **`geneseed migrate` moves an existing install to the npm shape, in one pass.** If you
+  installed by cloning the repository, your hooks run through a small machine-wide shim that
+  hands every call to your checkout's Python; installing from npm changes where that code
+  lives. `migrate` surveys every install you already have, re-emits each one **in its own
+  theme, emit, footprint, posture and mode** — nothing is defaulted, so it can never quietly
+  change what you chose — and re-points the shim. `--dry-run` prints the plan and writes
+  nothing. Run it once; a second run says so and does nothing.
+  **It is all-or-nothing**: every settings file it will touch is copied first, and if any
+  install fails to rebuild, everything is put back. You are never left half on one shape and
+  half on the other. **It refuses rather than guesses**: an install whose marker names
+  something unrecognised stops the whole run with the offending path named, because
+  re-emitting an install as something its owner never chose is worse than stopping.
+  **And it does not touch what it did not write** — your own hooks, third-party hooks, and
+  the login autostart entry you created by hand are reported, never rewritten. See the new
+  *Migrate an existing install to npx* page in the docs. Your old clone keeps working for a
+  full release; there is no cliff.
+- **Geneseed is an npm package now — as a file on disk, not yet as something you can
+  install.** The repository carries a `package.json` with three commands (`geneseed`,
+  `geneseed-hook`, `geneseed-build`), a minimum Node version of 22.3.0, and an explicit list
+  of what a release would contain. Packing it and installing the result works today: all
+  three commands run, and `geneseed-build` renders a full bundle from the installed copy.
+  Two problems had to be fixed first, both found by installing it rather than by reading it:
+  npm rewrote the two `.gitignore` files that guard the agent's `memory/` and `notebook/`
+  directories, which would have let an agent's private notes be committed into your
+  repository, and the notebook's charter page went missing from the bundle. Both are fixed at
+  the source — those two files are stored without their leading dot and the renderer puts it
+  back — so nothing an install produces differs from what a git clone produces, byte for byte.
+  Nothing has been published yet.
+- **The web console's CLI reference page works without Python, and the harness's command
+  surface now has exactly one description.** The Docs page that lists every command and every
+  flag used to be readable only from Python, because it walked the harness's own argument
+  parser — 24 commands, 43 arguments. That metadata is now generated into a tracked
+  `cli.json` that both runtimes read, so the page works on either, and `geneseed doctor`
+  reports it as a problem — on either runtime — when the file and the parser part company.
+  The page itself is unchanged. What changed is that there is no longer a second,
+  hand-maintained copy of the command list that could quietly disagree with the commands you
+  actually have.
+- **`geneseed bootstrap`, `geneseed sync-self` and `geneseed update` have Node twins, and the
+  web console's Update button works without Python.** Nineteen of the harness's 24 commands
+  now run from `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. The
+  About page in the web console works there too — it reads your install's own git origin, so
+  the links on it point at the repository your updates actually come from.
+- **A real fix in `geneseed bootstrap`: it now runs the setup wizard again.** `bootstrap`
+  updates everything and then hands off to `setup` — and that handoff was pointed at an
+  internal module instead of the harness, so it did nothing at all and exited 0. `./geneseed`
+  with no arguments takes that path. If bootstrap has been "succeeding" without ever showing
+  you the wizard, this is why.
+
+### Removed
+- **`upgrade.sh` and `sync-self.sh` are gone.** Each was a few lines of bash that found a
+  Python interpreter and then ran `rituals/harness.py upgrade` (or `sync-self`) — the same
+  command every launcher already runs, on every OS, and one that native Windows could never
+  reach through a `.sh` file at all. Use `./geneseed upgrade` (or `.\geneseed.cmd upgrade`,
+  `.\geneseed.ps1 upgrade`, `python rituals/harness.py upgrade`, or the web console's Update
+  button) — all of which is what they did. Nothing else changes: the launchers' self-repair
+  path for a factory too old to know the subcommand never went through either script and is
+  untouched.
+
+- **`geneseed upgrade` has a Node twin — the one command a "no Python needed" install could
+  not do without Python.** Seventeen of the harness's 24 commands now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`, and this is the
+  one that mattered most: an install that shelled out to Python to update ITSELF would have
+  had Python as a hard requirement of the only command you must always be able to run.
+  Everything about the update is unchanged — it still fast-forwards your own checkout's
+  origin and never pushes, still refuses to touch a dirty tree, a detached HEAD or a branch
+  with no upstream, still validates the pulled source with `doctor` before trusting it and
+  **rolls the checkout back to the previous commit if that validation fails**, and still
+  rebuilds the bundle plus every registered install afterwards. Local edits you made to a
+  deployed harness are still exported to an improvements file first, so a rebuild cannot
+  quietly overwrite them.
+  **One real fix rides with it, on Windows.** The `[rebuild-all]` lines an upgrade printed
+  while refreshing your other installs were being discarded — including the FAILED rows the
+  error message tells you to look for. They now appear, in the terminal and in
+  `~/.geneseed-install.log` both.
+- **The port's nineteenth piece: `geneseed setup` has a Node twin — and it is the first one
+  that ASKS YOU QUESTIONS.** Fifteen of the harness's 24 commands now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. The wizard behaves
+  the same: the same five questions, the same menus, each one pre-selecting what you already
+  have installed rather than a stock default, the same plan printed before anything is
+  written, and the same "nothing is written until you confirm". It still refuses outright
+  when there is no terminal to ask on, and still offers a health check at the end.
+  **One thing you can see is different, on macOS and Linux only.** The Python version tries a
+  full-screen version of the wizard first and falls back to plain prompts when it cannot; the
+  Node one goes straight to the prompts. On Windows that is what the Python has always done
+  too. The full-screen console is a later piece of the port and will bring its own wizard
+  with it.
+  **What is genuinely better: the pre-selected answers.** The install detector had been
+  reporting only the theme and install mode of what it found; the wizard also asks about
+  posture, mode and footprint, so those three questions had been quietly offering the
+  configured default instead of what is actually deployed. All five now come from the
+  install.
+  **And the checking had to grow a new shape.** A wizard cannot be tested by running the
+  command — it refuses without a terminal, which is exactly what a test gives it. So the two
+  implementations are now driven by a *file of answers* fed to them as if typed, and their
+  entire output compared character for character: every prompt, every menu line, every
+  default marker, the plan, and the choices they came back with. That immediately caught a
+  real bug in the new code — an answer containing a non-ASCII character (an accent, a
+  non-Latin digit) was being mangled before anything read it.
+- **The port's eighteenth piece: `geneseed uninstall` has a Node twin — and it is the first
+  one that DELETES.** Fourteen of the harness's 24 commands now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. Nothing about what
+  `uninstall` does has changed: it still removes only what the install's manifest claims,
+  still leaves your own files where they are, still never deletes `memory/` or `notebook/`
+  (`--archive-memory` moves them aside to a timestamped sibling), and still refuses to
+  proceed without `--yes` when it cannot ask.
+  **What changed is how it is checked.** Every earlier verb was proved by comparing what the
+  two implementations *wrote*. A removal needs the opposite question, and two implementations
+  that had both stopped deleting would have agreed perfectly in every test forever. So the
+  test harness grew two things: a record of every *directory* in the sandbox — an empty
+  leftover folder was invisible to all 219 previous cases, and cleaning up after itself is
+  half of what this command is for — and a way to state that a file or folder must be
+  **gone**. Thirty-five new cases, each of which also seeds a file the manifest does *not*
+  own and insists it survives: the difference between "removed the install" and "removed the
+  directory" is not a comment, it is a control.
+  **Two things the checking found, both in the existing Python.** When a file you own keeps
+  one of Geneseed's directories alive, the uninstall reports INCOMPLETE and tells you the
+  install marker was kept so you can retry — but for a *global* install the marker is already
+  gone by then, so the retry reports no install at all. And any unclaimed file under
+  `agents/` or `skills/` triggers that report even when everything Geneseed owned was removed
+  cleanly. Both are recorded as behaviour both implementations must share, not quietly fixed
+  on one side; the fix belongs to a change that can be reviewed on its own.
+- **The port's seventeenth piece: `geneseed doctor` has a Node twin.** Thirteen of the
+  harness's 24 commands now run from `node bin/geneseed-cli.mjs` as well as from
+  `python rituals/harness.py`: the one that validates the build — unresolved tokens, dead
+  links, links that escape the bundle, theme-key parity, colour palettes, the authoring gates
+  on every spec, the credential sweep, the vendored-skill pins, the count mirrors in the
+  README and the web pages, the hook shim, and whether a committed bundle still matches a
+  fresh render of the source.
+  **Checking it was harder than porting it, and that is the news.** `doctor` prints
+  `[doctor] ok` when all fifteen of its checks find nothing, so two versions that had both
+  stopped checking would agree perfectly. Ten of the fifteen read the checkout itself, which
+  no sandboxed test could write to. So each test now gets its own copy of the checkout, breaks
+  exactly one thing in it, and runs both versions from that copy — 30 checks, one planted
+  fault at a time.
+
+- **The port's sixteenth piece: `geneseed diff` and `geneseed rebuild-all` have Node twins.**
+  Twelve of the harness's 24 commands now run from `node bin/geneseed-cli.mjs` as well as from
+  `python rituals/harness.py`: the drift report that shows what your deployed harness has that
+  a fresh render of the source does not (and exports it as a file you can hand to an agent to
+  back-port), and the sweep that re-emits every active install in place. 21 new side-by-side
+  checks compare everything either one can be observed doing — for `rebuild-all` that includes
+  every file of every rebuilt install.
+  **Your diffs are the same diffs.** Python's `difflib` makes specific choices about how to
+  line two files up, so the Node side reproduces it rather than using a different diff that
+  would also be correct and would not match. 176 generated cases check that, including files
+  long enough to trigger the heuristic Python applies only past 200 lines.
+  **Both commands preserve what an install already is.** A rebuild re-emits each install in
+  its own theme, host, footprint, posture and mode, read back off the install itself; `diff`
+  renders its "expected" copy the same way, so themed wording and a lean footprint are not
+  reported as your local edits.
+
+### Fixed
+- **`rebuild-all`'s progress lines came out in the wrong order when its output was redirected
+  to a file or a log** — every `[rebuild-all] <install>` line appeared *after* the build it
+  introduced, so each one named the wrong install. Only visible outside a terminal, which is
+  where the web UI's "build all" job log lives. Same helper, and the same shape, as the
+  swallowed-output fix in the previous release.
+- **The Node builder's console output now ends its lines the way the Python one does on
+  Windows.** Nothing you could see on screen, and a difference if you piped it into anything
+  that counts bytes.
+
+- **The port's fifteenth piece: `geneseed build`, `geneseed prompt` and `geneseed theme`
+  have Node twins.** Ten of the harness's 24 commands now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`: rendering the
+  bundle, writing the self-contained install prompt, and creating a custom OpenCode colour
+  theme. 23 new side-by-side checks compare everything either one can be observed doing —
+  for `build` that includes the whole rendered tree, file for file.
+  **`build` does not start a second program.** The Python version runs the builder as a
+  separate process; the Node one calls it directly, because it is already part of the same
+  program. Nothing about the bundle you get changes.
+  **Three commands deliberately did not move.** `sync-self` is an alias for `update`, which
+  the self-update work replaces outright rather than translating. `link` and `unlink` put
+  `geneseed` on your PATH, and that is exactly what installing from npm will do for you — so
+  they belong with the packaging work, not here. They keep working as they always have.
+
+- **The port's fourteenth piece: `geneseed status` and `geneseed version` have Node twins.**
+  The install dashboard — theme, install mode, how many agents/skills/laws you have, where
+  your memory store is and how many facts are in it, and whether the installed build matches
+  the source — and the fingerprint comparison behind it now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. The panel is
+  compared line for line, in colour and in plain ASCII, against the Python one.
+  **Colour still works on a real terminal**, and that took a different kind of test to
+  prove. Every side-by-side check captures output through a pipe, and a pipe is never a
+  terminal, so the coloured panel is invisible to all of them — a version that quietly
+  dropped every escape code would have looked perfect. The panel renderer is called directly
+  instead, on both sides, over a list of made-up dashboards, which also covers three other
+  things no ordinary check can reach.
+  **A real bug came out of it, in something already shipped.** The Node hook had its own
+  private copy of a path helper, under a different name from the shared one, and the two had
+  drifted: an exclusion entry written by hand with a `..` in it would make the Node hook go
+  quiet for a repository the Python one still watches. There is now one copy, and a check
+  for exactly that entry.
+- **The port's thirteenth piece, and the first command that is not a hook: `geneseed exclude`
+  has a Node twin.** `exclude add`, `exclude remove` and `exclude list` — the sovereign-repo
+  exclusions, the folders where your global install goes quiet — now run from
+  `node bin/geneseed-cli.mjs` as well as from `python rituals/harness.py`. Both maintain the
+  same `excludes.json` in every global install, both wire the same per-host suppression into
+  the excluded folder, and 22 side-by-side checks compare everything either one can be
+  observed doing.
+  **Why a new command file rather than an existing one.** The hook launcher is deliberately
+  tiny — it runs on *every* tool call — and the builder is under a rule that it may not start
+  other programs, which is half of what proves it is a real second implementation. Neither
+  was the right home for an ordinary CLI command, so there is now a third: the hook launcher,
+  the builder, and this. Nothing you have installed changes.
+  **Nothing about your existing exclusions changes**, and the Python command is still there —
+  the web UI's exclusions page calls straight into it, so both stay until that page moves too.
+- **The port's twelfth piece: an install built with `node bin/geneseed.mjs` no longer needs
+  Python at all.** The hooks it wires now launch the Node twin, so building and running a
+  Claude or Bob install is Python-free end to end. Building one used to stop with an error
+  if no Python could be found; there is nothing left to find, so that error is gone.
+  **One thing worth knowing if you have several installs on one machine.** The small
+  launcher your hooks go through (`~/.geneseed/bin/geneseed-hook`, or `.cmd` on Windows) is
+  *shared* — one file for the whole machine, not one per install. It always was, and while
+  both commands wrote the same thing into it that made no difference. It does now: whichever
+  command you ran **last** decides what every install's hooks launch. Both answer the four
+  hook commands identically, and a check enforces that they keep doing so, so in practice
+  you should see nothing — but if you mix `python build.py` and `node bin/geneseed.mjs`,
+  that is the rule.
+  Also fixed on the way: on Windows the Node hooks ended their lines differently from the
+  Python ones. No host was affected — they all read JSON or plain text — but it was a real
+  difference in the one place the side-by-side checks structurally could not see, so it is
+  fixed and now checked in raw bytes.
+- **The port's eleventh piece, and the first that is not the builder: the four hooks your
+  install runs every session have a Node twin.** `context` (the one that injects your repo's
+  docs at session start), `git-gate` and `rule-gate` (the two that make the host ask before a
+  commit or a memory write), and `learn` (the one that distils a session into memory) all now
+  run from `node bin/geneseed-hook.mjs` as well as from `python rituals/harness.py`.
+  **At the time, nothing about your installs changed.** Wiring the new twin in was kept a
+  separate step, deliberately — an install's hooks are the part that fails *silently* when it
+  is wrong, so it moved once and with the evidence in hand. That step is the entry above.
+  What is in hand: 103 side-by-side checks covering both, comparing everything either one can
+  be observed doing — what it prints, what it warns, the exit code it returns, and every file
+  it writes. Discovery with and without a `context.json`, globs, `extend`, the
+  project-bypasses-global stand-down, sovereign-repo exclusions, malformed payloads, memory
+  dedup, transcripts, per-agent lessons and `--consolidate`.
+- **Fixed on the way: a distilled memory containing an accent or an em dash could be
+  corrupted as it was stored.** `learn` read the model CLI's reply using the console's legacy
+  code page on Windows rather than UTF-8, and the mangled text was then written into your
+  memory store — so the damage outlived the run. It now reads UTF-8 on both paths.
+- **Changed: a `context.json` with a syntax error now names the file and tells you to fix it,
+  instead of quoting the JSON parser's own message.** The old message came straight from
+  Python's decoder, and no second implementation can reproduce it — the two engines disagree
+  about both the wording and where the error is. An unreadable (as opposed to invalid) file is
+  now reported separately, which it never was.
+- **The port's tenth piece: every install mode now works from `node bin/geneseed.mjs`,
+  including the four that install hooks.** `claude`, `claude-global`, `bob` and `bob-global`
+  were the last four on Python, and they were last because of one honest problem: a hook is
+  a small script that launches the Python harness, so whatever writes one has to name a
+  Python interpreter on your machine — and the Node command has no way to inherit the answer
+  the Python command simply knows about itself.
+  **At the time it found one, and refused to build if it could not** — superseded by the
+  twelfth piece above, where the hooks stopped being Python and there was no longer anything
+  to find. It looked at `$PYTHON` first (the
+  same variable the `geneseed` launchers honour), then for `py`, `python` and `python3` on
+  your `PATH`, and stopped with a clear message having written nothing if none was there.
+  That refusal was the point rather than a limitation: hooks that name a missing interpreter
+  do not fail loudly, they simply never fire, and an install that looks finished with six
+  dead hooks is worse than a build that stopped and told you.
+  On Windows it deliberately stepped past the Microsoft Store's `python.exe` placeholder, the
+  one that opens the Store instead of running anything.
+  Everything else is unchanged and verified: same files, same console output, same exit
+  codes as `python build.py`, across every theme, both footprints, all five postures and
+  both modes — and now with nothing narrowed out of that comparison. The emitted hooks are
+  checked to actually run, not merely to exist.
+  Still no `package.json` and no published package; that remains a later phase. What exists
+  today is a runnable script in the checkout.
+- **The port's ninth piece, and the first one you can run without Python: `node
+  bin/geneseed.mjs` builds the bundle.** Everything before this rendered *inside* a build
+  that Python started; this is a second front door. `node bin/geneseed.mjs --theme imperial`
+  produces the same bundle, the same console output and the same exit code as `python
+  build.py --theme imperial` — verified byte-for-byte over every theme, both footprints, all
+  five postures and both modes.
+  **Five modes worked this way when this entry was written** — the plain bundle (`--emit
+  files`), both OpenCode installs (`opencode`, `opencode-global`) and both Copilot ones
+  (`copilot`, `copilot-global`) — including the parts that only happen on your *second*
+  build: the Node driver reads the previous manifest, removes what the layer no longer owns,
+  and rewrites the manifest exactly as Python does. `$OPENCODE_CONFIG_DIR` and
+  `$COPILOT_CONFIG_DIR` relocate the global targets on the Node side too, so keeping your
+  harness in a git-tracked folder works unchanged. (The remaining four followed — see the
+  entry above.) Nothing about the Python command changes at any point: it is still the one
+  the wizard, the web console, doctor and upgrade all use.
+  Two flags are deliberately *not* coming to the Node side. `--sync-themes` edits this
+  repository's own theme files — maintainer tooling, not something an installed copy should
+  carry — and `--validate-only` needs the Python doctor to do its second half. Both say so
+  and point you at `python build.py`.
+  There is no `package.json` and no published package yet; that is a later phase. What
+  exists today is a runnable script in the checkout.
+- **The port's eighth piece: `--emit opencode-global` renders through Node too, and now
+  *every* emit does — counted this time, not claimed.** It was the one mode still on
+  Python, which the entry below corrects the record about; it now takes the same path as
+  the other eight, so the same promise applies: same files, same console output, same exit
+  code, and no Node means nothing changes at all.
+  What is worth knowing is what it took to say "every" honestly. The test that counts the
+  modes refuses one that crosses with no comparison behind it — and this mode had never
+  been compared between the two runtimes at all, only against itself. So it arrived with
+  six new cases: a plain install and the rebuild over it; the lean footprint's standalone
+  laws file; the opt-in primary agent and slash commands; an old harness to carry a memory
+  store over from; a config dir you already keep your own agents, wiki and exclude list in,
+  with the stores then edited between the two builds — the only way a byte comparison can
+  tell "kept your memory" from "re-seeded it"; and an `opencode.jsonc` you have commented.
+  One thing that reads like a detail and is not: `--out` is **not** where this emit writes.
+  It renders into your OpenCode config dir and takes `--out` only as an old bundle to carry
+  a memory or notebook store over from. Every earlier test left those two the same
+  directory, so nothing could tell them apart.
+- **The port's seventh piece: the code that edits *your* config files is now the code that
+  runs when you build with Node.** The twin added last time was proven and unused; it is
+  wired in now, so a build merges your `settings.json` / `settings.local.json` hooks, the
+  managed block in your `CLAUDE.md`, and your `opencode.json` in the same Node process that
+  renders. As with the six pieces before it, you should not be able to tell: same files,
+  same console output, same exit code, and no Node means nothing changes at all.
+  Two things stay on the Python side, and both are deliberate. The **check that runs after
+  every build** — the one that re-reads your settings file and warns if the hooks did not
+  actually land — now verifies Node's work from the other implementation, on every build,
+  which is a stronger guarantee than either half could give alone. And the **hook shim**
+  still pointed at Python and `harness.py` at that stage, because the hooks themselves were
+  still Python — so nothing already deployed changed. (It points at Node as of the twelfth
+  piece above.) That last one used to be invisible to every test — the shim is deliberately
+  excluded from the byte comparison so a version-to-version run is not drowned in noise —
+  so the boundary test now compares it directly.
+  Newly watched, because nothing reached them before: a `settings.local.json` you have
+  added comments to (left untouched, and it says so), an `opencode.jsonc` likewise, and an
+  install that has accumulated more than one recorded exclude — where the *order* they are
+  recorded in is part of the file and one entry was never enough to notice.
+- **A count in these notes and in DESIGN.md was wrong for two releases: `--emit
+  opencode-global` never rendered through Node.** "Every emit now renders through Node" was
+  eight of the nine. That mode still runs the Python, exactly as it always has, so nothing
+  about it has changed or broken — but the sentence claiming otherwise has, and there is now
+  a test that counts the modes instead of trusting the prose.
+- **The port's sixth piece: the layer that edits *your* config files now has a Node twin
+  too — proven, not yet wired in.** Nothing about your builds changes with this; the new
+  code is not called yet. What changes is that the merging into `settings.json`, the
+  `opencode.json` wiring, the managed block in `CLAUDE.md` and the hook shim are now
+  compared byte for byte between the two runtimes, across states no ordinary build ever
+  reaches: a settings file carrying your own hooks beside Geneseed's, one with comments in
+  it (which the harness refuses to rewrite, and says so), one that is not valid JSON, and
+  an older install whose hooks were wired into a different file and have to be unwired
+  there. These are the paths `deactivate`, `remerge`, `reactivate`, `uninstall` and
+  `exclude` run on a real machine, and nothing had ever compared them.
+- **The rebuild's clean-up of files it no longer produces is now actually tested.** The
+  build removes what a previous build owned and this one does not — a dropped skill, a
+  footprint switch, a theme change. The acceptance harness re-emitted the *same*
+  configuration twice, so there was never anything to remove and the clean-up ran empty
+  every time. It now builds one configuration, builds a different one on top, and checks
+  the result matches a fresh build of the second — which catches both a clean-up that
+  leaves stale files behind and one that deletes files the new build still needs.
+- **The port's fifth piece: eight of the nine emits now render through Node when you have
+  it — Claude, Bob and Copilot included, per-repo and global.** Before this, only `build`
+  and `--emit opencode` did; six more moved here. (This entry originally said "every emit"
+  and "the other six"; it was seven that remained, and `--emit opencode-global` is the one
+  still on Python. Corrected in the seventh piece above.) As with the last four
+  pieces, the whole point is that you cannot tell: same files, same console output, same
+  exit code. No Node, or `GENESEED_NO_JS=1`, and nothing changes at all.
+  What is worth knowing is what the new tests now watch, because these emits touch files
+  you co-own and files you own outright. Your `settings.json` / `settings.local.json` hook
+  merge and the managed block inside `CLAUDE.md` / `AGENTS.md` are compared byte for byte
+  between the two runtimes for the first time, and so are the cases that only happen on a
+  real machine: an install migrating a `memory/` or `notebook/` store in from an older
+  bundle, a project `.claude/` where you already put your own agent or `.gitignore`, and
+  every seeded-once file — `excludes.json`, `user-rules.md`, `PROFILE.md`, `wiki.jsonc`,
+  your memory index — **edited between two builds**, which is the only way a comparison can
+  prove a rebuild left them alone instead of rewriting them with the same bytes.
+- **The port's fourth piece, and the first one you actually run: if you have Node
+  installed, `geneseed build` and `--emit opencode` now render through it.** This is the
+  first change in the port that touches your machine, and the point is that you should not
+  be able to tell — the bundle is byte-for-byte what Python produced, down to the progress
+  lines. No Node, or `GENESEED_NO_JS=1`, and the Python path runs exactly as before; there
+  is nothing to install and nothing to configure either way.
+  The new gate is what makes that claim checkable: it builds the same target twice, once
+  each way, and compares the files, both output streams and the exit code — including
+  cases a normal build never produces, like a second build over an existing one, a
+  hand-edited `.geneseed-srcdirs.json` pointing outside the bundle, and files you edited
+  between two builds that the harness promises never to overwrite. The build-comparison
+  harness now checks the console output too, which nothing had ever compared.
+- **The port's third piece: the OpenCode extras — colour themes, the opt-in primary agent
+  and slash commands, the plugin and workflow copies, and the `agent-overrides.json`
+  stub.** Still nothing changes about running Geneseed; Python remains what builds your
+  harness. The point again is what the new test reaches. Two of these layers only exist
+  when `GENESEED_PRIMARY` or `GENESEED_COMMANDS` is set, so a normal build never writes
+  them and no build-and-compare test ever had — they are now checked in both languages
+  with the flags on and off, along with the "your overrides predate an upgrade" notice in
+  each of its four states.
+- **The port's second piece: the layer that writes your host-native agents and skills now
+  exists in JavaScript too, with a test that covers the cases a normal build never
+  reaches.** Nothing about running Geneseed changes yet — Python still builds your harness.
+  What is new is the gate. Until now every acceptance test emitted into an empty folder with
+  an empty `agent-overrides.json`, so three behaviours had never been checked in either
+  language: what happens when you *have* overrides, what happens when a file already exists
+  that Geneseed did not write (it is left alone, and you are told), and what the three host
+  dialects do differently. `tests/test_native_layer_parity.py` runs all of them in both
+  languages and compares the files, the ownership record and the warnings.
+- **A bug this found before anyone hit it:** an `agent-overrides.json` setting
+  `"temperature": 1.0` would have emitted `temperature: 1.0` from Python and
+  `temperature: 1` from JavaScript, because JavaScript has one number type where Python has
+  two. No build-and-compare test could have caught it — the build always writes an *empty*
+  overrides file, so no such test has ever had an override to render. Fixed, and pinned by a
+  test that compares number formatting directly.
+- **The generator's render core now exists in JavaScript as well as Python, and a test
+  proves the two produce identical bytes.** Nothing about running Geneseed changes yet —
+  Python is still what builds your harness — but this is the first piece of the runtime to
+  be ported, and it lands with the gate that will keep the rest honest:
+  `tests/test_render_parity.py` renders every theme in both languages, on every footprint,
+  catalogue, posture and mode axis, writes both trees to disk and compares them byte for
+  byte. Writing to disk rather than comparing strings is deliberate: on Windows, Python's
+  text writer silently turns every `\n` into `\r\n` and Node's does not, so a port that
+  skipped that detail would differ in every single file while looking correct in a diff
+  viewer.
+- **Every emit now runs its stages in one fixed order** — render everything Geneseed owns,
+  then reconcile the files you co-own (`settings.json`, `opencode.json`, the CLAUDE.md
+  block), then prune, then record the manifest, then verify. Three emits used to interleave
+  those stages differently. Output is unchanged, byte for byte, on all 259 theme × host ×
+  footprint combinations; what changes is that there is now a single seam between "files
+  Geneseed writes wholesale" and "files you co-own", which is what lets the render half
+  move to another language without the merge logic following it.
+- **Emitted hooks now go through a stable shim, so moving the checkout no longer kills
+  every install at once.** Until now each of the four Claude/Bob hook commands embedded
+  two machine-absolute paths — this machine's Python interpreter and this clone's
+  `rituals/harness.py` — directly in your `settings.json`. Relocating or replacing the
+  checkout therefore broke the gates in every deployed install simultaneously, and the
+  only repair was re-emitting every config. The emit now writes one small shim at
+  `~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows, relocatable with
+  `GENESEED_HOME`) and points every hook at that single stable path; the shim holds the
+  two volatile paths instead. Re-pointing every install at a new checkout is now one
+  file write. The shim is refreshed on every emit — that refresh is what replaces the
+  accidental self-heal the old form had, since a config that no longer names the
+  checkout can no longer detect that the checkout moved — and a new `doctor` gate reads
+  it back and reports a shim that points at nothing. The shim is deliberately silent:
+  `git-gate` and `rule-gate` return success on every path and signal their verdict as
+  JSON on **stdout**, so a single stray byte would turn a blocking gate into a silently
+  permissive one. Existing installs migrate on their next build — the manifest-driven
+  prune replaces the old hook groups exactly, and the orphan scan now recognises both
+  the legacy and the shim shape so a stranded hook still surfaces.
 - **The `rule` skill becomes the front door to both durable stores, behind a Law VI
   gate**: nothing reaches `user-rules.md` or `memory/` on the agent's own initiative
   any more. The skill now opens on a fork it must put to the user — *a standing rule,
@@ -89,6 +537,29 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   file is never regenerated.
 
 ### Fixed
+- **On Windows, `geneseed build > log.txt` wrote an empty log.** Anything the harness ran as
+  a child process — the builder behind `build` and `rebuild-all`, and the same builder behind
+  the web UI's "build all" — had its output silently thrown away whenever the harness's own
+  output was redirected to a file or a pipe rather than going straight to a terminal. In a
+  terminal it looked fine, which is why it survived: the flag that suppresses console
+  pop-ups also hands the child a fresh hidden console to print into when nobody has asked
+  for the output to be piped. It is now applied only when the harness is capturing the child
+  itself, which is the case it was added for; console pop-ups are still suppressed there.
+  Found by the Node port — the same command printed the builder's summary line on one side
+  and nothing on the other.
+- **The golden acceptance harness could render into your real install.** `tests/golden.py`
+  runs the generator over 259 cells, ~126 of which are `*-global` emits whose whole job is
+  to write into a host's global config dir, and it sandboxes them by redirecting `HOME`
+  and `XDG_CONFIG_HOME`. That was not enough: each host resolver checks its own relocation
+  variable *first* and returns before ever consulting those paths, so anyone with
+  `OPENCODE_CONFIG_DIR` set — the documented way to keep the harness in a git-tracked
+  folder — had every global cell rendering straight into the real target. Reproduced
+  against the pre-fix code: a single `opencode-global` cell wrote 135 files outside the
+  sandbox. The cell environment now clears `OPENCODE_CONFIG_DIR`, `BOB_CONFIG_DIR` and
+  `COPILOT_CONFIG_DIR`, plus every `GENESEED_*` knob except the one it sets itself —
+  cleared by prefix, so a knob added later is neutralised by default. Four tests pin it,
+  including one that re-derives the variable list from `_build_core`'s own source rather
+  than trusting a hand-written list to stay current.
 - **Every login launcher told you to start the web UI in the foreground**: the VBS,
   the `schtasks` task and the macOS LaunchAgent in SETUP.md (and its `autostart`
   web slice) all ran `geneseed web --no-browser`. Only `web start` daemonizes and
@@ -164,6 +635,38 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   reporting the old verdict.
 
 ### Changed
+- **The host-config wiring moved into its own module, `_build_settings.py`.** The emit was
+  doing two unrelated jobs in one file: computing bundle content, and reconciling
+  Geneseed's claim inside files you also edit — `settings.json`, `opencode.json`, the
+  managed `CLAUDE.md` block — through JSONC parsing and surgical merges. The second job is
+  not really part of generation at all: nine of its ten entry points are called by the
+  *runtime* (deactivate, remerge, reactivate, uninstall, plus `exclude` and `mcp`), not by
+  a build. Splitting them takes `_build_emit.py` from 1466 lines to 734 and leaves a layer
+  whose dependency closure points one way only — nothing in it calls back into the render
+  or emit code. Nothing moved namespace: `build.py` splices the new module alongside the
+  others, so every existing call site resolves unchanged, and emitted output is identical
+  across all 259 golden cells. If you monkeypatch any of it, patch `_build_settings` —
+  patching another submodule's spliced copy binds a copy the real caller never reads, and
+  a test now fails on that shape.
+- **The generator's configuration now has one owner instead of five copies.** `build.py`
+  splices its four `_build_*` submodules into a shared namespace, which gave each of them
+  its own copy of `SRC`, `THEMES`, `ROOT`, `CONFIG`, `PLUGIN_SRC`, `WORKFLOW_SRC`,
+  `COLOR_THEMES`, `CAPABILITY_LINK_RE`, `VENDORED_SKILL_DIRS`, the four
+  `_<host>_config_dir` resolvers and the posture/mode selection — and forced a facade
+  `__setattr__` that mirrored every write out to all four so that redirecting one
+  actually reached the render code. `_build_core` now owns those names outright: they are
+  held back from both its `__all__` and the splice, so no copy exists, and the mirror is
+  deleted. Emitted output is unchanged — verified byte-for-byte against the previous
+  revision across the full 259-cell matrix (14 themes × 9 emit modes × 2 footprints, plus
+  every posture and mode). Two consequences for anyone working on the generator: read
+  them as `_build_core.SRC`, not a bare `SRC` (a bare one now raises `NameError` instead
+  of silently reading a stale copy), and redirect them by writing `_build_core.SRC` —
+  `build.SRC` still reads but refuses writes, because `mock.patch.object(build, "SRC", …)`
+  deleted rather than restored the attribute on exit and leaked the redirect into every
+  later test in the process. A test now walks the suite and fails on any redirect of a
+  shared-but-unowned name, the shape that quietly stops covering what it claims to —
+  `_opencode_config_dir` was already in that state, one missing `cfg=` argument away from
+  sending a global emit into the developer's own `~/.config/opencode`.
 - **`docs/specs/`, `docs/reviews/`, and `docs/superpowers/` are local working docs
   now**: untracked from git and added to `.gitignore`. They are per-machine work
   artifacts (dated specs are drafted, executed, then dropped — the existing

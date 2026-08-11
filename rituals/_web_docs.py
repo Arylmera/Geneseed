@@ -220,54 +220,17 @@ def _slice_section(body: str, anchor: str) -> "tuple[str, bool]":
 
 
 def _cli_reference() -> dict:
-    """Walk the harness argparser into a JSON-able shape: one entry per
-    subcommand, each carrying its help text, positional args, and options.
-    The frontend renders each as a card."""
-    parser = harness.build_argparser()
-    sub_action = next((a for a in parser._actions
-                       if isinstance(a, argparse._SubParsersAction)), None)
-    if sub_action is None:
-        return {"prog": parser.prog, "commands": []}
+    """One entry per subcommand, each carrying its help text, positional args and options.
+    The frontend renders each as a card.
 
-    def _arg(a) -> dict:
-        return {
-            "names": list(a.option_strings),
-            "dest": a.dest,
-            "metavar": a.metavar,
-            "help": (a.help or "") if a.help is not argparse.SUPPRESS else "",
-            "choices": list(a.choices) if a.choices else None,
-            "default": None if a.default is None else
-                       (a.default if isinstance(a.default, (str, int, float, bool)) else str(a.default)),
-            "required": bool(getattr(a, "required", False)),
-            "nargs": str(a.nargs) if a.nargs is not None else None,
-            "is_flag": not a.option_strings is None and len(a.option_strings) > 0 and a.nargs == 0,
-        }
-
-    commands = []
-    for name, sp in sub_action.choices.items():
-        positionals, options = [], []
-        for a in sp._actions:
-            if isinstance(a, argparse._HelpAction):
-                continue
-            if a.help is argparse.SUPPRESS:
-                continue
-            (positionals if not a.option_strings else options).append(_arg(a))
-        # The help text we attached via sub.add_parser(..., help=...) lives on
-        # the subparser action, not on sp itself — read it back from the parent.
-        help_text = ""
-        for action in sub_action._choices_actions:
-            if action.dest == name:
-                help_text = action.help or ""
-                break
-        commands.append({
-            "name": name,
-            "help": help_text,
-            "description": sp.description or "",
-            "positionals": positionals,
-            "options": options,
-        })
-    commands.sort(key=lambda c: c["name"])
-    return {"prog": parser.prog, "commands": commands}
+    THIS USED TO WALK `harness.build_argparser()` LIVE, and P10c is where it stopped. Node
+    cannot introspect argparse, so a Node twin of this page could only be a hand-written copy
+    of 24 subparsers and 43 `add_argument` calls — the largest copy-of-a-value-under-test the
+    port would have contained, describing verbs `bin/geneseed-cli.mjs` cannot even run. The
+    parser's metadata is generated into `cli.json` instead and both implementations read that
+    one file; `harness._cli_reference_problems` is what makes a stale one a doctor problem
+    rather than a page that quietly lies. The payload is unchanged, key for key."""
+    return harness.load_cli_reference()
 
 
 def _glossary(state: WebState) -> dict:

@@ -4,7 +4,13 @@ the bundle structure + stubs, render_all, versioning, and source-completeness ch
 Part of the build CLI (see build.py). Imports the shared toolset from _build_core."""
 from __future__ import annotations
 
+import _build_core
 from _build_core import *  # noqa: F401,F403  shared stdlib + constants
+
+# _build_core owns the source/theme roots, the host config-dir resolvers and the
+# posture/mode selection outright (its `_OWNED` tuple) — they are NOT star-imported and
+# NOT spliced, so they are spelled `_build_core.SRC` here rather than held as a local
+# copy that a redirect would silently miss. See _build_core's module docstring.
 
 
 def is_vendored_path(rel) -> bool:
@@ -12,7 +18,7 @@ def is_vendored_path(rel) -> bool:
     (skills/<vendored>/…). DIR_SKILLS is always the neutral 'skills', so the second
     segment is the skill name — match it against the vendored set."""
     parts = Path(rel).parts
-    return len(parts) >= 2 and parts[0] == "skills" and parts[1] in VENDORED_SKILL_DIRS
+    return len(parts) >= 2 and parts[0] == "skills" and parts[1] in _build_core.VENDORED_SKILL_DIRS
 
 
 def theme_files() -> list[Path]:
@@ -20,11 +26,12 @@ def theme_files() -> list[Path]:
     (e.g. `_TEMPLATE.json`) — the same convention skills/_template.md uses. Every
     theme enumeration (load, parity, doctor, setup wizard, web gallery, tests) goes
     through here so a scaffold is never mistaken for a real theme."""
-    return sorted(p for p in THEMES.glob("*.json") if not p.name.startswith("_"))
+    return sorted(p for p in _build_core.THEMES.glob("*.json")
+                  if not p.name.startswith("_"))
 
 
 def load_theme(name: str) -> dict:
-    path = THEMES / f"{name}.json"
+    path = _build_core.THEMES / f"{name}.json"
     if not path.exists():
         available = ", ".join(p.stem for p in theme_files())
         sys.exit(f"[geneseed] unknown theme '{name}'. available: {available}")
@@ -106,7 +113,7 @@ def sync_themes() -> int:
     Returns the number of themes actually modified (0 == already in sync). The CLI
     maps that to the exit code (non-zero when files changed), so CI can run
     `build.py --sync-themes` as a check."""
-    tmpl_path = THEMES / "_TEMPLATE.json"
+    tmpl_path = _build_core.THEMES / "_TEMPLATE.json"
     try:
         tmpl = json.loads(tmpl_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
@@ -243,7 +250,7 @@ def render_file(path: Path, theme: dict, footprint: str = "full",
 
     def inline(m: re.Match) -> str:
         rel = m.group("path")
-        target = (SRC / rel).resolve()
+        target = (_build_core.SRC / rel).resolve()
         if not target.exists():
             return f"<!-- MISSING INCLUDE: {rel} -->"
         if target == here or target in _visiting:
@@ -288,14 +295,15 @@ STRUCTURE = {
 # section. A build-wide selection (like SRC/THEMES), set by build.py from --posture so
 # it need not thread through every emit signature; effective_theme reads it. Default
 # 'peer'. Posture is orthogonal to theme: theme = voice, posture = relationship.
-POSTURE = "peer"
+# The value itself lives in _build_core (see its `_OWNED` tuple) so a redirect has one
+# binding to hit; only the code that reads it lives here.
 
 
 def posture_names() -> list[str]:
     """Discovered posture names (src/postures/*.md, minus README), 'peer' first — the
     single source for the CLI choices and the wizard picker, so a new posture file
     appears everywhere with no code change."""
-    names = sorted(p.stem for p in (SRC / "postures").glob("*.md")
+    names = sorted(p.stem for p in (_build_core.SRC / "postures").glob("*.md")
                    if p.stem.lower() != "readme")
     names.sort(key=lambda n: (n != "peer", n))
     return names or ["peer"]
@@ -306,8 +314,8 @@ def _posture_body(theme: dict) -> str:
     AGENT.md's {{POSTURE_BODY}} token. Falls back to 'peer', then to empty, so a bad
     --posture degrades to the default rather than breaking the build. Rendered through
     the theme so a posture may use themed tokens ({{LAW}}, {{PACT}}, ...)."""
-    for name in (POSTURE, "peer"):
-        path = SRC / "postures" / f"{name}.md"
+    for name in (_build_core.POSTURE, "peer"):
+        path = _build_core.SRC / "postures" / f"{name}.md"
         if path.is_file():
             return substitute(path.read_text(encoding="utf-8"), theme).strip()
     return ""
@@ -317,15 +325,15 @@ def _posture_body(theme: dict) -> str:
 # AGENT.md's Mode section. A build-wide selection (like SRC/THEMES/POSTURE), set by
 # build.py from --mode so it need not thread through every emit signature; effective_theme
 # reads it. Default 'direct'. Mode is orthogonal to theme and posture: theme = voice,
-# posture = relationship, mode = how work gets executed.
-MODE = "direct"
+# posture = relationship, mode = how work gets executed. Like POSTURE, the value lives
+# in _build_core so there is exactly one binding to redirect.
 
 
 def mode_names() -> list[str]:
     """Discovered mode names (src/modes/*.md, minus README), 'direct' first — the
     single source for the CLI choices and the wizard picker, so a new mode file
     appears everywhere with no code change."""
-    names = sorted(p.stem for p in (SRC / "modes").glob("*.md")
+    names = sorted(p.stem for p in (_build_core.SRC / "modes").glob("*.md")
                    if p.stem.lower() != "readme")
     names.sort(key=lambda n: (n != "direct", n))
     return names or ["direct"]
@@ -336,8 +344,8 @@ def _mode_body(theme: dict) -> str:
     {{MODE_BODY}} token. Falls back to 'direct', then to empty, so a bad --mode
     degrades to the default rather than breaking the build. Rendered through the
     theme so a mode may use themed tokens ({{LAW}}, {{SKILL}}, ...)."""
-    for name in (MODE, "direct"):
-        path = SRC / "modes" / f"{name}.md"
+    for name in (_build_core.MODE, "direct"):
+        path = _build_core.SRC / "modes" / f"{name}.md"
         if path.is_file():
             return substitute(path.read_text(encoding="utf-8"), theme).strip()
     return ""
@@ -633,9 +641,30 @@ def themed_rel(rel: Path, theme: dict) -> Path:
 
 
 def dest_rel(rel: Path) -> Path:
-    # AGENT.md.tmpl -> AGENT.md ; everything else keeps its name.
+    # AGENT.md.tmpl -> AGENT.md ; gitignore -> .gitignore ; everything else keeps its name.
+    #
+    # WHY THE IGNORE FILES ARE STORED WITHOUT THE DOT. `src/memory/.gitignore` and
+    # `src/notebook/.gitignore` are product CONTENT that renders into every bundle — and
+    # under their real names two OTHER tools also read them, neither of which we invited:
+    #
+    #   * `npm install` renames EVERY `.gitignore` to `.npmignore` on extraction, with no
+    #     opt-out. A bundle emitted from an npm-installed Geneseed therefore carried
+    #     `memory/.npmignore` + `notebook/.npmignore` and NO `.gitignore` at all — the
+    #     user's agent memory and notebook, committable in their repository, silently.
+    #   * `npm pack` honours nested ignore files, so `src/notebook/.gitignore`'s `*` hid
+    #     its own sibling `README.md` — the notebook charter — from the tarball.
+    #
+    # Neither is fixable from `package.json` (five `files` spellings and a root
+    # `.npmignore` were each measured and each failed), and both die here: a file named
+    # `gitignore` is invisible to git, to npm-packlist and to npm's extract rename, and
+    # the renderer puts the dot back on the way out. The emitted bytes are unchanged,
+    # which is why 259 golden cells stayed green across this fix rather than being
+    # regenerated. `_build_global._global_memory`/`_global_notebook` seed from the SOURCE
+    # path rather than from this one, so they call it too.
     if rel.name == "AGENT.md.tmpl":
         return rel.with_name("AGENT.md")
+    if rel.name == "gitignore":
+        return rel.with_name(".gitignore")
     return rel
 
 
@@ -661,10 +690,10 @@ def render_all(theme_name: str, footprint: str = "full",
     the text in a single self-contained prompt) so the two never drift."""
     theme = effective_theme(theme_name)
     items: list[tuple[str, str | None, Path]] = []
-    for path in sorted(SRC.rglob("*")):
+    for path in sorted(_build_core.SRC.rglob("*")):
         if path.is_dir() or "__pycache__" in path.parts:
             continue
-        rel = path.relative_to(SRC)
+        rel = path.relative_to(_build_core.SRC)
         out_rel = dest_rel(themed_rel(rel, theme)).as_posix()
         if path.suffix in TEXT_SUFFIXES:
             items.append((out_rel, render_file(path, theme, footprint, laws_prefix,
@@ -681,12 +710,13 @@ def source_fingerprint() -> str:
     the source it was built from (see `harness version`). Stdlib only."""
     h = hashlib.sha256()
     files: list[Path] = []
-    for r in (SRC, THEMES, PLUGIN_SRC, WORKFLOW_SRC):
+    for r in (_build_core.SRC, _build_core.THEMES, _build_core.PLUGIN_SRC,
+              _build_core.WORKFLOW_SRC):
         if r.is_dir():
             files += [p for p in r.rglob("*")
                       if p.is_file() and "__pycache__" not in p.parts]
-    for p in sorted(files, key=lambda x: x.relative_to(ROOT).as_posix()):
-        h.update(p.relative_to(ROOT).as_posix().encode("utf-8") + b"\0")
+    for p in sorted(files, key=lambda x: x.relative_to(_build_core.ROOT).as_posix()):
+        h.update(p.relative_to(_build_core.ROOT).as_posix().encode("utf-8") + b"\0")
         h.update(p.read_bytes() + b"\0")
     return h.hexdigest()[:12]
 
@@ -803,7 +833,17 @@ def build(theme_name: str, out: Path, footprint: str = "full",
     `notebook/` (the agent's sovereign space — seeded once, never re-emitted; only
     its `.gitignore` is re-asserted), and `context.json` — written once, beside
     AGENT.md, and never touched again. The build therefore cleans its own footprint
-    without ever destroying the user's repository or data."""
+    without ever destroying the user's repository or data.
+
+    RENDER runs in Node when one is available (`js/emit.mjs`'s `build`), and in the body
+    below otherwise. The two are held byte-identical by `tests/golden.py` and
+    `tests/test_emit_boundary.py`; see `_build_core.run_node` for the protocol and
+    `js/emit.mjs` for why the child's stdout is not its progress stream."""
+    if _build_core.js_render_available():
+        _build_core.run_node({"kind": "build", "cfg": _build_core.js_cfg(),
+                              "theme": theme_name, "out": str(out),
+                              "footprint": footprint, "nativeCatalog": native_catalog})
+        return
     theme, items = render_all(theme_name, footprint,
                               native_catalog=native_catalog)
     assert_source_complete(items, context=f"theme '{theme_name}'")
@@ -971,13 +1011,13 @@ def _missing_referenced_specs(items=None) -> list[str]:
     tables, so the check is host-independent — as a source-completeness gate should
     be. `items` is accepted for call-site compatibility and no longer read."""
     try:
-        tmpl = (SRC / "AGENT.md.tmpl").read_text(encoding="utf-8")
+        tmpl = (_build_core.SRC / "AGENT.md.tmpl").read_text(encoding="utf-8")
     except OSError:
         return []
     missing = [f"{kind.lower()}/{name}.md"
                for kind, name in _TMPL_SPEC_RE.findall(tmpl)
                if name != "_template"
-               and not (SRC / kind.lower() / f"{name}.md").is_file()]
+               and not (_build_core.SRC / kind.lower() / f"{name}.md").is_file()]
     return sorted(set(missing))
 
 

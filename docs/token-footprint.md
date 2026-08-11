@@ -1,8 +1,13 @@
 # Token footprint
 
-What a deployed harness costs in context-window tokens, per host. Measured on a
-`--footprint full` build of the neutral theme (41 skills, 17 agents); token
-counts are chars/4 estimates and shift a little with theme and version.
+What a deployed harness costs in context-window tokens, per host. Token counts are
+chars/4 estimates and shift a little with theme and version.
+
+**Treat every number below as a floor, not a reading.** They were measured on a
+`--footprint full` build of the neutral theme when the tree carried 41 skills and 17
+agents; it carries more skills than that now, and nothing re-measures this page
+automatically. For a live figure on your own install, ask the agent for the
+`token-report` skill — that is what it is for.
 
 ## Always-on cost per session
 

@@ -1,10 +1,15 @@
-"""Geneseed build — the global OpenCode emit: config-dir resolution, the install
-manifest, global memory/notebook seeding, emit_opencode_global.
+"""Geneseed build — the global emits: the install manifest, global memory/notebook
+seeding, the HOSTS registry, and emit_{opencode,claude,bob,copilot}[_global].
 
 Part of the build CLI (see build.py). Imports the shared toolset from _build_core."""
 from __future__ import annotations
 
+import _build_core
 from _build_core import *  # noqa: F401,F403  shared stdlib + constants
+
+# The source/theme roots, the host config-dir resolvers and the posture/mode selection
+# belong to _build_core alone (its `_OWNED` tuple) — never star-imported, never spliced,
+# always `_build_core.X`.
 
 
 def _write_manifest_atomic(path: Path, data: dict) -> None:
@@ -16,24 +21,11 @@ def _write_manifest_atomic(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
-def _opencode_config_dir() -> Path:
-    """OpenCode's global config dir. Precedence: $OPENCODE_CONFIG_DIR (relocates the
-    whole dir — use it to keep the harness in a git-tracked folder) > $XDG_CONFIG_HOME
-    /opencode > ~/.config/opencode."""
-    env = os.environ.get("OPENCODE_CONFIG_DIR")
-    if env:
-        return Path(env).expanduser().resolve()
-    xdg = os.environ.get("XDG_CONFIG_HOME")
-    base = Path(xdg).expanduser() if xdg else Path.home() / ".config"
-    return (base / "opencode").resolve()
-
-
-def _claude_config_dir() -> Path:
-    """Claude Code's global/user config dir: ~/.claude (Windows: %USERPROFILE%\\.claude,
-    which Path.home() resolves). Unlike OpenCode there is no documented env var that
-    relocates it, so — by design — this resolver is simpler than its sibling: no env
-    branch. (configuration: https://code.claude.com/docs/en/configuration)"""
-    return (Path.home() / ".claude").resolve()
+# The four `_<host>_config_dir` resolvers moved to _build_core, which owns them along
+# with the source roots (see its `_OWNED` tuple and the membership note there): a global
+# emit falls back to `cfg or _<host>_config_dir()`, so a test that redirects one and
+# reaches only some copies renders into the developer's real install. Read them as
+# `_build_core._claude_config_dir()`.
 
 
 def host_catalogs_natively(host: str) -> bool:
@@ -41,28 +33,6 @@ def host_catalogs_natively(host: str) -> bool:
     registry (defined below, resolved at call time) so the capability is declared
     in exactly one place. Unknown host -> False, the shape that keeps the tables."""
     return bool(HOSTS.get(host, {}).get("native_catalog", False))
-
-
-def _bob_config_dir() -> Path:
-    """IBM Bob's global config dir: ~/.bob (its global skills live at ~/.bob/skills per
-    bob.ibm.com/docs/ide). $BOB_CONFIG_DIR relocates it (mirrors the OpenCode env knob),
-    so a CI/locked-down setup can point it at a git-tracked folder."""
-    env = os.environ.get("BOB_CONFIG_DIR")
-    if env:
-        return Path(env).expanduser().resolve()
-    return (Path.home() / ".bob").resolve()
-
-
-def _copilot_config_dir() -> Path:
-    """GitHub Copilot's personal config dir: ~/.copilot — the CLI auto-loads
-    copilot-instructions.md there and discovers skills/ and agents/ natively
-    (docs.github.com/copilot/how-tos/copilot-cli). $COPILOT_CONFIG_DIR relocates it
-    (Geneseed's knob, mirroring $BOB_CONFIG_DIR — Copilot documents no such env var,
-    but tests/doctor and locked-down setups still need to re-point the target)."""
-    env = os.environ.get("COPILOT_CONFIG_DIR")
-    if env:
-        return Path(env).expanduser().resolve()
-    return (Path.home() / ".copilot").resolve()
 
 
 GLOBAL_MANIFEST = ".geneseed-manifest.json"
@@ -74,7 +44,12 @@ GLOBAL_MANIFEST = ".geneseed-manifest.json"
 # filename-keyed match would suppress the project's own AGENTS.md too), so Bob's bypass
 # rides on its rules folder instead — the workspace rules/geneseed.md overrides the
 # global one (see _emit_claude_core).
-_PREAMBLE_CONFIG_DIR = {"CLAUDE.md": _claude_config_dir}
+# Late-bound on purpose: binding `_build_core._claude_config_dir` itself would capture the
+# function OBJECT at import, giving the resolver a second binding that redirecting the
+# owner cannot reach — the exact "reaches only some copies" failure `_OWNED` exists to
+# prevent. This dict feeds the claudeMdExcludes path written into a real settings file, so
+# a missed redirect bakes the developer's own home into an emitted config.
+_PREAMBLE_CONFIG_DIR = {"CLAUDE.md": lambda: _build_core._claude_config_dir()}
 
 # The workspace rules stub a PROJECT Bob emit ships as .bob/rules/geneseed.md. Its only
 # job is to exist under the same name as the global ~/.bob/rules/geneseed.md so Bob's
@@ -118,9 +93,12 @@ def _global_memory(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
                         shutil.copy2(f, dest)
                 return f"migrated {nm}/ -> {mem_name}/"
     for _out_rel, text, src in items:
-        sp = src.relative_to(SRC).as_posix().split("/")
+        sp = src.relative_to(_build_core.SRC).as_posix().split("/")
         if sp[0] == "memory" and len(sp) > 1:
-            dest = mem_dir / Path(*sp[1:])
+            # `dest_rel`, because this seeds from the SOURCE path and not from `_out_rel`
+            # (which is themed, and `memory/` never is). Without it the store would be
+            # seeded with the on-disk name `gitignore` — see `_build_render.dest_rel`.
+            dest = mem_dir / dest_rel(Path(*sp[1:]))
             dest.parent.mkdir(parents=True, exist_ok=True)
             if text is not None:
                 dest.write_text(text, encoding="utf-8")
@@ -154,9 +132,10 @@ def _global_notebook(cfg: Path, theme: dict, items, legacy: Path | None) -> str:
                     shutil.copy2(f, dest)
             return f"migrated {nb_name}/"
     for _out_rel, text, src in items:
-        sp = src.relative_to(SRC).as_posix().split("/")
+        sp = src.relative_to(_build_core.SRC).as_posix().split("/")
         if sp[0] == nb_name and len(sp) > 1:
-            dest = nb_dir / Path(*sp[1:])
+            # `dest_rel` — same reason as `_global_memory` above.
+            dest = nb_dir / dest_rel(Path(*sp[1:]))
             dest.parent.mkdir(parents=True, exist_ok=True)
             if text is not None:
                 dest.write_text(text, encoding="utf-8")
@@ -181,51 +160,33 @@ def _ship_lean_laws(items, theme, cfg: Path, owned: list) -> None:
             owned.append(rel)
 
 
-def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | None = None,
-                         footprint: str = "full") -> None:
-    """Render the harness straight into OpenCode's GLOBAL config dir — the
-    "everything global, zero per-repo" deployment (GLOBAL-HARNESS-SPEC.md).
+def _opencode_global_render_py(theme_name: str, cfg: Path, out: Path | None,
+                               footprint: str, native_catalog: bool,
+                               old_owned: list) -> dict:
+    """RENDER — everything `emit_opencode_global` writes that Geneseed owns WHOLESALE,
+    and the reference implementation of `js/emit.mjs`'s `opencode-global` job.
 
-    Self-contained: it writes ONLY into <cfg> and builds NO sibling Harness bundle.
-    AGENT.md is rendered straight to <cfg>/AGENT.md, and the memory store lives at
-    <cfg>/<memory|anamnesis> (migrated once from a legacy Harness if present, else
-    seeded). Point the learn plugin at it with GENESEED_HARNESS=<cfg>.
+    Split out at P3c, which is the whole of that phase's structural work: unlike
+    `emit_opencode` and `_emit_claude_core` this emit had NO `_render_py`/`_wire_py` pair
+    to port into — it was one 137-line body with the merge in the middle of it. The split
+    is what gives the seam a single Python body to be the reference for, and what leaves
+    `tests/test_emit_phase_order.py` a statement sequence to walk: `run_node` classifies as
+    RENDER, so an emit whose two dispatch statements were folded into one would be
+    perfectly monotone, would render, would manifest, and would wire nothing the gate can
+    see.
 
-    The target dir is shared with the user's own OpenCode config, so it is NEVER
-    wiped. A `.geneseed-manifest.json` tracks exactly the files this layer owns
-    (AGENT.md, agents/, skills/, plugins/ — NOT memory or notebook); on re-emit,
-    files we previously wrote but no longer produce are removed, and the user's own
-    agents/skills/plugins (and the memory + notebook stores) are left untouched.
+    The manifest is deliberately NOT read here — the caller reads it, prunes against it
+    and writes it, so one process owns that file and `old_owned` arrives as an argument
+    the way `emit_opencode`'s does.
 
-    Writes: <cfg>/AGENT.md, <cfg>/agents/*.md, <cfg>/skills/<name>/SKILL.md,
-    <cfg>/plugins/*.js (single copy — kills the double-injection), the memory and
-    notebook stores, a one-time empty wiki.jsonc (machine-level, user-owned, never
-    overwritten or pruned), and merges <cfg>/opencode.json to point `instructions`
-    at the absolute <cfg>/AGENT.md. It does NOT write context.json — project docs
-    are auto-discovered by the context plugin. `out`, if given, is only a migration source for an
-    existing memory store (the legacy bundle location); nothing is built there.
-    `cfg` overrides the target dir (default: the resolved OpenCode config dir) — used
-    by `harness.py diff` to render an 'expected' copy into a temp dir for comparison."""
-    cfg = cfg or _opencode_config_dir()
+    `out` is NOT the target and is not `<cfg>`'s parent either: it is the LEGACY BUNDLE
+    `_global_memory` / `_global_notebook` migrate a store from, and nothing is written
+    there. The CLI's `--out` defaults to a directory this emit never touches."""
     # laws_prefix='' — the standalone laws dir sits beside AGENT.md in <cfg>, so the
     # lean pointer's relative `laws/universal.md` resolves with no prefix.
-    theme, items = render_all(theme_name, footprint,
-                              native_catalog=host_catalogs_natively("opencode"))
+    theme, items = render_all(theme_name, footprint, native_catalog=native_catalog)
     assert_source_complete(items, context="opencode-global")
     cfg.mkdir(parents=True, exist_ok=True)
-
-    # Files this layer owned on a previous run — read now, but pruned only AFTER the new
-    # set is fully written (below). Write-before-delete: a failed or partial write can
-    # never remove a still-needed file, so a re-emit can only improve the install, never
-    # degrade it. (With assert_source_complete above, an incomplete source aborts before
-    # this point and never touches the existing bundle.)
-    manifest_path = cfg / GLOBAL_MANIFEST
-    old_owned: list[str] = []
-    if manifest_path.exists():
-        try:
-            old_owned = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", [])
-        except (json.JSONDecodeError, OSError):
-            old_owned = []
 
     owned: list[str] = []
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
@@ -274,10 +235,149 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
 
     write_version(cfg)
     owned.append(VERSION_MARKER)
-    cfg_name = _merge_opencode_json(cfg / "opencode.json", (cfg / "AGENT.md").as_posix()).name
 
     if footprint == "lean":
         _ship_lean_laws(items, theme, cfg, owned)
+
+    return {"owned": owned,
+            "stats": {"nAgents": n_agents, "nSkills": n_skills, "nPlugins": n_plugins,
+                      "nWorkflows": n_workflows, "nCommands": len(commands),
+                      "primary": bool(primary)},
+            "memStatus": mem_status, "nbStatus": nb_status}
+
+
+def _opencode_global_render(theme_name: str, cfg: Path, out: Path | None, footprint: str,
+                            native_catalog: bool, old_owned: list,
+                            agent_path: str) -> dict:
+    """RENDER — one spawn into Node when there is one, the Python body otherwise.
+
+    The ninth and last emit to cross. Until P3c this mode spawned Node ZERO times while
+    four documents said all nine crossed; golden covered it, but with no seam to cross it
+    compared Python against Python there and proved determinism, not parity.
+
+    Three values arrive DECIDED rather than re-derived, and each is a boundary question
+    asked rather than assumed:
+
+    * `cfg` — the target dir, resolved by the entry point from `_opencode_config_dir`,
+      which is `_OWNED` precisely because the suite and `harness diff` redirect it at a
+      sandbox. A child that resolved it would write into the developer's real install.
+      Fourth instance of the rule (`STRUCTURE` P2d, `CAPABILITY_LINK_RE` P2e,
+      `_PREAMBLE_CONFIG_DIR` P3b): **send the decision, never the resolver.**
+    * `native_catalog` — `HOSTS['opencode']['native_catalog']`; the registry stays Python.
+    * `agent_path` — WIRE's one input, `Path.as_posix()` on the Python side by design,
+      exactly as `_opencode_render`'s is.
+
+    `out` is passed through unchanged and is neither of the above: it is the legacy bundle
+    to migrate a store from, not the target and not derivable from `cfg`.
+
+    The spawn runs the WIRE half too — one child per emit is the contract. The wiring
+    still gets its own statement at the call site (`_opencode_global_wire` below)."""
+    if _build_core.js_render_available():
+        return _build_core.run_node({
+            "kind": "opencode-global",
+            "cfg": {**_build_core.js_cfg(), "primaryAgentSrc": str(PRIMARY_AGENT_SRC)},
+            "theme": theme_name, "cfgDir": str(cfg),
+            "out": str(out) if out is not None else None,
+            "footprint": footprint, "nativeCatalog": native_catalog,
+            "oldOwned": old_owned, "agentPath": agent_path})
+    return _opencode_global_render_py(theme_name, cfg, out, footprint, native_catalog,
+                                      old_owned)
+
+
+def _opencode_global_wire_py(cfg: Path, agent_path: str) -> str:
+    """WIRE — the one file of this emit the user co-owns. Returns the target's BASENAME,
+    which is all the caller consumes (`opencode.json` or the `.jsonc` sibling when that is
+    what is on disk). Reference implementation of the `opencode-global` job's wire half.
+
+    Note the target: `<cfg>/opencode.json`, NOT `<root>/opencode.json`. Same merge as
+    `_opencode_wire_py`, a different file under a different root — which is why the
+    commented-`.jsonc` boundary cell had to be written twice."""
+    return _merge_opencode_json(cfg / "opencode.json", agent_path).name
+
+
+def _opencode_global_wire(rendered: dict, cfg: Path, agent_path: str) -> str:
+    """WIRE — already done by the child that rendered, or run here against Python.
+
+    Same shape as `_build_emit._opencode_wire`, and for the same reason: one spawn per
+    emit means this stage cannot dispatch on its own, so the payload carrying `cfgName` IS
+    the signal that Node already wired.
+
+    Losing that signal leaves the TREE byte-identical — `_merge_opencode_json` is
+    idempotent, so a second merge writes the same bytes — and the only trace anywhere is
+    the refusal warning printed twice, which none of the 14 other opencode-global states
+    makes print at all. Measured rather than reasoned: dropping `cfgName` from the payload
+    fails exactly two assertions, both fed by `opencode-global/commented-jsonc`, and
+    neither is a file. The boundary gate sees it as a STDOUT divergence (Node's side warns
+    twice, `GENESEED_NO_JS` once) and the wire-cell guard counts the warnings directly."""
+    cfg_name = rendered.get("cfgName")
+    if cfg_name is not None:
+        return cfg_name
+    return _opencode_global_wire_py(cfg, agent_path)
+
+
+def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | None = None,
+                         footprint: str = "full") -> None:
+    """Render the harness straight into OpenCode's GLOBAL config dir — the
+    "everything global, zero per-repo" deployment (GLOBAL-HARNESS-SPEC.md).
+
+    Self-contained: it writes ONLY into <cfg> and builds NO sibling Harness bundle.
+    AGENT.md is rendered straight to <cfg>/AGENT.md, and the memory store lives at
+    <cfg>/<memory|anamnesis> (migrated once from a legacy Harness if present, else
+    seeded). Point the learn plugin at it with GENESEED_HARNESS=<cfg>.
+
+    The target dir is shared with the user's own OpenCode config, so it is NEVER
+    wiped. A `.geneseed-manifest.json` tracks exactly the files this layer owns
+    (AGENT.md, agents/, skills/, plugins/ — NOT memory or notebook); on re-emit,
+    files we previously wrote but no longer produce are removed, and the user's own
+    agents/skills/plugins (and the memory + notebook stores) are left untouched.
+
+    Writes: <cfg>/AGENT.md, <cfg>/agents/*.md, <cfg>/skills/<name>/SKILL.md,
+    <cfg>/plugins/*.js (single copy — kills the double-injection), the memory and
+    notebook stores, a one-time empty wiki.jsonc (machine-level, user-owned, never
+    overwritten or pruned), and merges <cfg>/opencode.json to point `instructions`
+    at the absolute <cfg>/AGENT.md. It does NOT write context.json — project docs
+    are auto-discovered by the context plugin. `out`, if given, is only a migration source for an
+    existing memory store (the legacy bundle location); nothing is built there.
+    `cfg` overrides the target dir (default: the resolved OpenCode config dir) — used
+    by `harness.py diff` to render an 'expected' copy into a temp dir for comparison.
+
+    This is the only manifest carrying NEITHER a `managed` claim set nor a `scope` (the
+    Claude engine writes both; `emit_opencode` writes `scope`): the one file this emit
+    wires, opencode.json, is never unwired by any teardown path, so there is no claim to
+    record. That is why the payload needs `cfgName` and nothing else, and why there is no
+    VERIFY stage here — nothing was claimed, so there is nothing to re-read and match."""
+    cfg = cfg or _build_core._opencode_config_dir()
+
+    # Files this layer owned on a previous run — read now, but pruned only AFTER the new
+    # set is fully written (below). Write-before-delete: a failed or partial write can
+    # never remove a still-needed file, so a re-emit can only improve the install, never
+    # degrade it. (RENDER's assert_source_complete aborts an incomplete source before it
+    # has written anything, so the existing bundle is never touched by a refused emit.)
+    manifest_path = cfg / GLOBAL_MANIFEST
+    old_owned: list[str] = []
+    if manifest_path.exists():
+        try:
+            old_owned = json.loads(manifest_path.read_text(encoding="utf-8")).get("owned", [])
+        except (json.JSONDecodeError, OSError):
+            old_owned = []
+
+    # WIRE's one input, computed before the seam and sent into it (see the dispatcher).
+    agent_path = (cfg / "AGENT.md").as_posix()
+
+    # ---- RENDER* -> WIRE* -> PRUNE -> MANIFEST ------------------------------------
+    # The order is load-bearing; see `_emit_claude_core` for the argument. This emit has
+    # no VERIFY: it writes no settings file, so there is nothing to re-read.
+    render = _opencode_global_render(theme_name, cfg, out, footprint,
+                                     host_catalogs_natively("opencode"), old_owned,
+                                     agent_path)
+    owned: list[str] = render["owned"]
+    stats = render["stats"]
+    mem_status, nb_status = render["memStatus"], render["nbStatus"]
+
+    # WIRE — the last render is now behind us, so this is the first stage that touches a
+    # file the user co-owns. Performed by the render child when there was one; by
+    # `_opencode_global_wire_py` otherwise.
+    cfg_name = _opencode_global_wire(render, cfg, agent_path)
 
     # Now that the whole current set is on disk, remove only what we owned before but
     # no longer produce (a removed agent/skill, a disabled primary/command). Everything
@@ -306,30 +406,39 @@ def emit_opencode_global(theme_name: str, out: Path | None = None, cfg: Path | N
                     "stores are NOT listed — they are never deleted.",
         "owned": sorted(owned)})
 
-    extras = (["primary agent"] if primary else []) + ([f"{len(commands)} command(s)"] if commands else [])
+    extras = (["primary agent"] if stats["primary"] else []) + \
+             ([f"{stats['nCommands']} command(s)"] if stats["nCommands"] else [])
     extra = (" + " + ", ".join(extras)) if extras else ""
-    print(f"[geneseed] opencode-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
-          f"{n_plugins} plugin(s), {n_workflows} workflow file(s), AGENT.md, {mem_status}, {nb_status}, "
+    print(f"[geneseed] opencode-global -> {cfg}: {stats['nAgents']} subagents, "
+          f"{stats['nSkills']} skills, {stats['nPlugins']} plugin(s), "
+          f"{stats['nWorkflows']} workflow file(s), AGENT.md, {mem_status}, {nb_status}, "
           f"{cfg_name} (no context.json){extra}. "
           f"The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to override.")
 
 
-def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
-                      out: Path | None = None, footprint: str = "full",
-                      host: str = "claude") -> tuple:
-    """Shared engine for the Claude-shaped emits (Claude global → ~/.claude, folder →
-    <repo>/.claude; Bob and Copilot ride the same engine — see their emit_* wrappers).
-    Mirrors emit_opencode_global's manifest + write-before-delete prune, but for the
-    Claude layout: CLAUDE.md as a managed block (auto-loaded by Claude), agents in the
-    Claude subagent dialect, byte-identical skills, settings.json hooks merged
-    surgically. NO plugins/workflows/colour-themes (Claude has no analogue; its
-    plugins/ dir is a managed marketplace, never written). User content is never
-    clobbered: agents/skills collide → claim-on-create skip; CLAUDE.md → block merge;
-    settings.json → surgical, recorded hook merge. memory/notebook/wiki are host state,
-    never tracked, never deleted. `host` names the dialect ('claude' | 'bob' |
-    'copilot') — it can no longer be inferred from the carrier filename, since Bob and
-    Copilot both use a repo-root AGENTS.md at project scope. Returns
-    (n_agents, n_skills, n_hook_groups, mem_status, nb_status, managed)."""
+def _claude_render_py(theme_name: str, cfg: Path, claude_md: Path, scope: str,
+                      out: Path | None, footprint: str, host: str,
+                      native_catalog: bool, old_owned: list) -> dict:
+    """RENDER — everything the Claude-shaped emits write that Geneseed owns WHOLESALE,
+    and the reference implementation of `js/emit.mjs`'s `claude` job.
+
+    This is the Python side of the process seam: `_claude_render` runs this body or
+    spawns Node, and `_emit_claude_core` (below) keeps WIRE, PRUNE, MANIFEST and VERIFY
+    whichever ran. The manifest is deliberately NOT read here — the driver reads it,
+    prunes against it and writes it, so one process owns that file and `old_owned`
+    arrives as an argument the way `emit_opencode`'s does.
+
+    The payload carries one item that is not a file on disk: **`claudeMdText`**, the
+    exact bytes WIRE puts inside CLAUDE.md's managed block. It has to be computed here
+    because it is a *render* — `_prefixed_agent_text` re-renders AGENT.md with every
+    store dir prefixed — while the merge that folds it into a file the user co-owns is
+    wiring. `emit_opencode`'s payload needed nothing of the kind: its one wired file,
+    opencode.json, is derived from a path rather than from a render.
+
+    `hasAgentText` travels beside it because the two are not the same predicate. The
+    excludes stage asks "did this run emit a preamble at all?", which is true for Bob at
+    global scope — where no managed block is written and `claudeMdText` is therefore
+    None."""
     # Lean footprint: the standalone laws file lands under <cfg> (e.g. <repo>/.claude),
     # but CLAUDE.md/AGENTS.md sits at claude_md's own dir (the repo root for a project
     # install). The lean §1 pointer must be RELATIVE to the instructions file, so prefix
@@ -338,7 +447,7 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     rel_cfg = os.path.relpath(cfg, claude_md.parent).replace(os.sep, "/")
     laws_prefix = "" if rel_cfg == "." else rel_cfg + "/"
     theme, items = render_all(theme_name, footprint, laws_prefix,
-                              native_catalog=host_catalogs_natively(host))
+                              native_catalog=native_catalog)
     assert_source_complete(items, context=f"claude-{scope}")
     cfg.mkdir(parents=True, exist_ok=True)
 
@@ -362,49 +471,13 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
         # Same catalogue decision as the render_all above — a re-render that
         # forgot it would quietly put the stripped tables back.
         return render_file(src_tmpl, ptheme, footprint,
-                           native_catalog=host_catalogs_natively(host))
-
-    manifest_path = cfg / GLOBAL_MANIFEST
-    old_owned: list[str] = []
-    old_managed: dict = {}
-    if manifest_path.exists():
-        try:
-            data = json.loads(manifest_path.read_text(encoding="utf-8"))
-            old_owned = data.get("owned", []) or []
-            om = data.get("managed")
-            old_managed = om if isinstance(om, dict) else {}
-        except (json.JSONDecodeError, OSError):
-            old_owned, old_managed = [], {}
+                           native_catalog=native_catalog)
 
     owned: list[str] = []
-    managed: dict = {}
 
-    # CLAUDE.md — Claude auto-loads it by location; merge as a delimited block so any
-    # user prose around it survives. `whole` (Geneseed created the file) sticks across
-    # re-emits so uninstall knows whether to delete the file or just excise the block.
-    # Exception — Bob GLOBAL: Bob never auto-loads a global ~/.bob/AGENTS.md (its
-    # always-injected channel is rules/geneseed.md, below), so a global copy is pure
-    # disk weight; none is written, and a re-emit self-heals the one an older install
-    # carries (excise the managed block, or delete the file when Geneseed created it).
     agent_text = next((t for r, t, _s in items if r == "AGENT.md" and t is not None), None)
     is_bob = host == "bob"
     is_copilot = host == "copilot"
-    if agent_text is not None and not (is_bob and scope == "global"):
-        # Project scope: the carrier sits at the repo root, the stores under <cfg> —
-        # render its store pointers with the marker-dir prefix (.claude//.bob/).
-        _managed_block_write(claude_md, _strip_capability_links(
-            _prefixed_agent_text(laws_prefix) or agent_text))
-        # No sticky "whole" flag: teardown always excises the block and deletes the
-        # file only when nothing else remains — a whole-file delete would eat prose
-        # the user added AFTER Geneseed created the file. (Old manifests may still
-        # carry the key; every remove site now ignores it.)
-        managed["claude_md"] = {
-            "rel": os.path.relpath(claude_md, cfg).replace(os.sep, "/"),
-        }
-    elif is_bob and scope == "global" and old_managed.get("claude_md"):
-        old_cm = old_managed["claude_md"] if isinstance(old_managed["claude_md"], dict) else {}
-        victim = (cfg / (old_cm.get("rel") or claude_md.name)).resolve()
-        _managed_block_remove(victim)
 
     # IBM Bob's only documented always-injected channel is the rules folder (project
     # .bob/rules/*.md, global ~/.bob/rules/*.md — bob.ibm.com/docs/ide/configuration/rules).
@@ -463,6 +536,119 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
     write_version(cfg)
     owned.append(VERSION_MARKER)
 
+    if footprint == "lean":
+        _ship_lean_laws(items, theme, cfg, owned)
+
+    # The last render of the emit, and the only one whose product is not written here:
+    # WIRE folds it into CLAUDE.md's managed block. Computed in this position (rather
+    # than at the merge) so the RENDER stage stays contiguous and the sequence of
+    # renders is identical either side of the seam. Bob at GLOBAL scope gets no managed
+    # block at all — see the merge — so nothing is rendered for it.
+    claude_md_text = None
+    if agent_text is not None and not (is_bob and scope == "global"):
+        # Project scope: the carrier sits at the repo root, the stores under <cfg> —
+        # render its store pointers with the marker-dir prefix (.claude//.bob/).
+        claude_md_text = _strip_capability_links(
+            _prefixed_agent_text(laws_prefix) or agent_text)
+
+    return {"owned": owned,
+            "stats": {"nAgents": n_agents, "nSkills": n_skills},
+            "memStatus": mem_status, "nbStatus": nb_status,
+            "hasAgentText": agent_text is not None,
+            "claudeMdText": claude_md_text}
+
+
+def _preamble_exclude(claude_md: Path) -> "str | None":
+    """The `claudeMdExcludes` entry a PROJECT install writes to suppress the GLOBAL
+    preamble of the same host — or None for a host that gets none (everything but Claude).
+
+    Its own function because this value has to CROSS THE SEAM, and deriving it on the far
+    side would be wrong. `_PREAMBLE_CONFIG_DIR` resolves through
+    `_build_core._claude_config_dir`, which is an `_OWNED` name precisely because the suite
+    redirects it at a sandbox — and a redirect that stops at a subprocess half-works in
+    silence (`STRUCTURE` at P2d, `CAPABILITY_LINK_RE` at P2e, this at P3b). Computing it
+    HERE and sending the answer keeps the redirect a single write, the same way
+    `nativeCatalog` arrives decided rather than re-derived. The failure mode if it did not
+    travel is not subtle: a test running against a sandbox would write the developer's real
+    ~/.claude/CLAUDE.md into an exclude list, and suppress it.
+
+    as_posix: claudeMdExcludes entries are glob patterns, where a backslash is an escape —
+    the Windows-native spelling risks never matching."""
+    cfgdir = _PREAMBLE_CONFIG_DIR.get(claude_md.name)
+    return (cfgdir() / claude_md.name).resolve().as_posix() if cfgdir else None
+
+
+def _claude_render(theme_name: str, cfg: Path, claude_md: Path, scope: str,
+                   out: Path | None, footprint: str, host: str,
+                   native_catalog: bool, old_owned: list, old_managed: dict) -> dict:
+    """RENDER — one spawn into Node when there is one, the Python body otherwise.
+
+    Six of the nine emits (claude, bob, copilot × project/global) route through here, so
+    this one call is what puts two thirds of the matrix on the seam; before it they
+    compared Python against Python and touched the boundary at all.
+
+    Since P3b the spawn runs the WIRE half too — ONE child per emit is the contract, and
+    a second spawn to wire would double the cost of every emit for nothing. The wiring
+    still gets its own statement at the call site (`_claude_wire` below), because that is
+    what keeps the emit reading as RENDER -> WIRE and keeps `test_emit_phase_order.py`
+    able to check the order of both halves rather than one opaque call."""
+    if _build_core.js_render_available():
+        runner, entry = _hook_runner_entry()
+        return _build_core.run_node({
+            "kind": "claude", "cfg": _build_core.js_cfg(),
+            "theme": theme_name, "cfgDir": str(cfg), "claudeMd": str(claude_md),
+            "scope": scope, "out": str(out) if out is not None else None,
+            "footprint": footprint, "host": host, "nativeCatalog": native_catalog,
+            "oldOwned": old_owned,
+            # WIRE's inputs. `oldManaged` is the previous manifest's claim set; the two
+            # hook values are the interpreter and entry point the shim bakes, which the
+            # child cannot compute (its own `process.execPath` is node, and the hooks it
+            # is wiring are Python) — see `_build_settings._hook_runner_entry`.
+            "oldManaged": old_managed, "preambleExclude": _preamble_exclude(claude_md),
+            "hookOpts": {"runner": runner, "entry": entry}})
+    return _claude_render_py(theme_name, cfg, claude_md, scope, out, footprint, host,
+                             native_catalog, old_owned)
+
+
+def _claude_wire_py(cfg: Path, claude_md: Path, scope: str, host: str, old_managed: dict,
+                    claude_md_text: "str | None", agent_text_present: bool,
+                    preamble_exclude: "str | None") -> dict:
+    """WIRE — the files the Claude-shaped emits do NOT own: the CLAUDE.md/AGENTS.md managed
+    block and settings(.local).json. Reference implementation of `js/emit.mjs`'s wire half.
+
+    Everything the RENDER stage wrote, it wrote wholesale. Everything here reconciles
+    Geneseed's claim with content it did not write, reading what is already on disk and
+    merging into it. Returns `managed` — the claim set the manifest records so every
+    teardown path unwires exactly what was wired, which is why WIRE must precede MANIFEST.
+
+    Split out of `_emit_claude_core` at P3b so the seam has a single Python body to be the
+    reference for, exactly as `_claude_render_py` is for the render half. It runs only
+    under `GENESEED_NO_JS=1` and `golden.py --ref <old worktree>`; see P2d's note on where
+    the Python path's coverage went."""
+    is_bob, is_copilot = host == "bob", host == "copilot"
+    managed: dict = {}
+
+    # CLAUDE.md — Claude auto-loads it by location; merge as a delimited block so any
+    # user prose around it survives. `claude_md_text` is the render half's product; it
+    # is None exactly when no block is to be written.
+    # Exception — Bob GLOBAL: Bob never auto-loads a global ~/.bob/AGENTS.md (its
+    # always-injected channel is rules/geneseed.md), so a global copy is pure disk
+    # weight; none is written, and a re-emit self-heals the one an older install
+    # carries (excise the managed block, or delete the file when Geneseed created it).
+    if claude_md_text is not None:
+        _managed_block_write(claude_md, claude_md_text)
+        # No sticky "whole" flag: teardown always excises the block and deletes the
+        # file only when nothing else remains — a whole-file delete would eat prose
+        # the user added AFTER Geneseed created the file. (Old manifests may still
+        # carry the key; every remove site now ignores it.)
+        managed["claude_md"] = {
+            "rel": os.path.relpath(claude_md, cfg).replace(os.sep, "/"),
+        }
+    elif is_bob and scope == "global" and old_managed.get("claude_md"):
+        old_cm = old_managed["claude_md"] if isinstance(old_managed["claude_md"], dict) else {}
+        victim = (cfg / (old_cm.get("rel") or claude_md.name)).resolve()
+        _managed_block_remove(victim)
+
     # Hooks embed machine-absolute paths (interpreter + checkout). At PROJECT scope
     # for Claude they go into settings.local.json — the personal, untracked settings
     # file — never the team-shared settings.json, which would hand every teammate
@@ -502,11 +688,8 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
         # bypass is the same-named workspace rules file.
         prior_excl = old_managed.get("settings_excludes")
         prior_excl = prior_excl if isinstance(prior_excl, list) else []
-        cfgdir = _PREAMBLE_CONFIG_DIR.get(claude_md.name)
-        if scope == "project" and agent_text is not None and cfgdir:
-            # as_posix: claudeMdExcludes entries are glob patterns, where a backslash is
-            # an escape — the Windows-native spelling risks never matching.
-            want_excl = [(cfgdir() / claude_md.name).resolve().as_posix()]
+        if scope == "project" and agent_text_present and preamble_exclude:
+            want_excl = [preamble_exclude]
             if os.environ.get("GENESEED_STACK_GLOBAL"):
                 _unwire_claude_excludes(settings_path, want_excl)
                 managed["settings_excludes"] = []
@@ -524,9 +707,90 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
             _unwire_claude_excludes(settings_path, prior_excl)
         elif prior_excl:
             managed["settings_excludes"] = prior_excl
+    return managed
 
-    if footprint == "lean":
-        _ship_lean_laws(items, theme, cfg, owned)
+
+def _claude_wire(rendered: dict, cfg: Path, claude_md: Path, scope: str, host: str,
+                 old_managed: dict) -> dict:
+    """WIRE — already done by the child that rendered, or run here against Python.
+
+    This stage cannot dispatch on its own: one spawn per emit is the contract, so when
+    Node ran, it wired inside the SAME child and the claim set came back in the payload.
+
+    `is not None` rather than a truthiness test, and the distinction is UNOBSERVABLE today
+    — measured, not assumed. The first draft of this docstring claimed a Copilot emit could
+    produce `{}`; it cannot. Every shape was checked: copilot (project and global) records
+    `claude_md`, bob-global records `settings_file` + `settings_hooks`, and everything else
+    records more, because `claude_md_text` is None only when AGENT.md renders to None and
+    `assert_source_complete` refuses that source before this runs. So `if managed:` behaves
+    identically and the mutation stays green.
+
+    The spelling stays `is not None` anyway, because it does not DEPEND on that fact. A
+    host that legitimately wires nothing — the next Copilot-shaped one — would silently
+    re-run this whole stage in Python against a tree Node had already wired, and the two
+    passes are idempotent enough that nothing would report it. Recorded here rather than
+    left to look load-bearing, the way `themed_rel` and `lstripNewlines` are."""
+    managed = rendered.get("managed")
+    if managed is not None:
+        return managed
+    return _claude_wire_py(cfg, claude_md, scope, host, old_managed,
+                           rendered["claudeMdText"], rendered["hasAgentText"],
+                           _preamble_exclude(claude_md))
+
+
+def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
+                      out: Path | None = None, footprint: str = "full",
+                      host: str = "claude") -> tuple:
+    """Shared engine for the Claude-shaped emits (Claude global → ~/.claude, folder →
+    <repo>/.claude; Bob and Copilot ride the same engine — see their emit_* wrappers).
+    Mirrors emit_opencode_global's manifest + write-before-delete prune, but for the
+    Claude layout: CLAUDE.md as a managed block (auto-loaded by Claude), agents in the
+    Claude subagent dialect, byte-identical skills, settings.json hooks merged
+    surgically. NO plugins/workflows/colour-themes (Claude has no analogue; its
+    plugins/ dir is a managed marketplace, never written). User content is never
+    clobbered: agents/skills collide → claim-on-create skip; CLAUDE.md → block merge;
+    settings.json → surgical, recorded hook merge. memory/notebook/wiki are host state,
+    never tracked, never deleted. `host` names the dialect ('claude' | 'bob' |
+    'copilot') — it can no longer be inferred from the carrier filename, since Bob and
+    Copilot both use a repo-root AGENTS.md at project scope. Returns
+    (n_agents, n_skills, n_hook_groups, mem_status, nb_status, managed)."""
+    manifest_path = cfg / GLOBAL_MANIFEST
+    old_owned: list[str] = []
+    old_managed: dict = {}
+    if manifest_path.exists():
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            old_owned = data.get("owned", []) or []
+            om = data.get("managed")
+            old_managed = om if isinstance(om, dict) else {}
+        except (json.JSONDecodeError, OSError):
+            old_owned, old_managed = [], {}
+
+    is_copilot = host == "copilot"
+
+    # ---- RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY ----------------------------
+    # The order is load-bearing, not tidiness, and it is why the two stages below are two
+    # statements even though Node runs both in ONE child. WIRE must precede MANIFEST
+    # because it is what fills `managed` (settings_file/settings_hooks/settings_excludes),
+    # which the manifest records so every teardown path unwires exactly what was wired;
+    # and no RENDER may follow a WIRE, because a render writes files Geneseed owns
+    # WHOLESALE while a wire reconciles files the USER co-owns. Before this order existed
+    # the managed block was written first and `_ship_lean_laws` last; both moved.
+    # tests/test_emit_phase_order.py is the gate, and it walks these two statements.
+    #
+    # RENDER — one process seam. Everything Geneseed owns wholesale, plus the managed
+    # block's TEXT, which is a render (`_prefixed_agent_text`) even though merging it is a
+    # wire.
+    render = _claude_render(theme_name, cfg, claude_md, scope, out, footprint, host,
+                            host_catalogs_natively(host), old_owned, old_managed)
+    owned: list[str] = render["owned"]
+    n_agents = render["stats"]["nAgents"]
+    n_skills = render["stats"]["nSkills"]
+    mem_status, nb_status = render["memStatus"], render["nbStatus"]
+
+    # WIRE — the CLAUDE.md/AGENTS.md managed block and settings(.local).json. Performed by
+    # the render child when there was one; by `_claude_wire_py` otherwise.
+    managed = _claude_wire(render, cfg, claude_md, scope, host, old_managed)
 
     # Write-before-delete prune: now that the whole current set is on disk, remove only
     # what we owned before but no longer produce. A live file is never momentarily absent.
@@ -552,10 +816,20 @@ def _emit_claude_core(theme_name: str, cfg: Path, claude_md: Path, scope: str,
                     "deleted. `managed` records the CLAUDE.md block + settings.json "
                     "hooks so uninstall removes exactly those.",
         "owned": sorted(owned), "managed": managed, "scope": scope})
-    # Verify the merge actually stuck (a commented file, a mid-flight external edit, or
-    # a bug in the merge itself would otherwise go unnoticed until the hooks silently
-    # don't fire) — loud warning only, never fatal to the emit.
+    # VERIFY — that the merge actually stuck (a commented file, a mid-flight external edit,
+    # or a bug in the merge itself would otherwise go unnoticed until the hooks silently
+    # don't fire). Loud warning only, never fatal to the emit.
+    #
+    # This stage stays in PYTHON, and not by omission. It runs after MANIFEST, and MANIFEST
+    # is Python, so with one spawn per emit there is no child left to run it in. That turns
+    # out to be worth having rather than merely tolerable: `_settings_integrity_check` never
+    # writes, so what happens on every Claude-shaped emit now is that PYTHON re-reads the
+    # settings file NODE just wrote and compares it against the claims NODE just returned.
+    # Two implementations of the wiring layer coexist while the runtime is still Python, and
+    # this is the check that makes them prove they agree on a real file, on every build,
+    # rather than only under a parity harness.
     if not is_copilot:
+        settings_path = cfg / (managed.get("settings_file") or "settings.json")
         _settings_integrity_check(settings_path, managed, expect="present")
     return n_agents, n_skills, len(managed.get("settings_hooks", [])), mem_status, nb_status, managed
 
@@ -569,7 +843,7 @@ def emit_claude_global(theme_name: str, out: Path | None = None, cfg: Path | Non
     gains Geneseed's hooks with ABSOLUTE harness.py paths (hooks run with the project
     cwd, not the config dir). `cfg` overrides the target (used by tests / doctor to
     render an expected copy into a temp dir)."""
-    cfg = cfg or _claude_config_dir()
+    cfg = cfg or _build_core._claude_config_dir()
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
         theme_name, cfg, cfg / "CLAUDE.md", "global", out, footprint)
     print(f"[geneseed] claude-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
@@ -668,7 +942,7 @@ def emit_bob_global(theme_name: str, out: Path | None = None, cfg: Path | None =
     matching check: the project's own `rules/geneseed.md` shadow stub is written
     specifically so the workspace copy always wins over the global one by filename,
     regardless of which was emitted first — see `_BOB_RULES_STUB`."""
-    cfg = cfg or _bob_config_dir()
+    cfg = cfg or _build_core._bob_config_dir()
     _warn_bob_global_over_project(cfg)
     n_agents, n_skills, n_hooks, mem_status, nb_status, _ = _emit_claude_core(
         theme_name, cfg, cfg / "AGENTS.md", "global", out, footprint, host="bob")
@@ -743,7 +1017,7 @@ def emit_copilot_global(theme_name: str, out: Path | None = None, cfg: Path | No
     (tests/doctor). Warns (non-blocking) when project-scoped Copilot installs are
     already registered — the two preambles stack; see
     `_warn_copilot_global_over_project`."""
-    cfg = cfg or _copilot_config_dir()
+    cfg = cfg or _build_core._copilot_config_dir()
     _warn_copilot_global_over_project(cfg)
     n_agents, n_skills, _n_hooks, mem_status, nb_status, _ = _emit_claude_core(
         theme_name, cfg, cfg / "copilot-instructions.md", "global", out, footprint,
@@ -801,7 +1075,7 @@ def emit_copilot(theme_name: str, out: Path, root: Path | None = None,
 #                    model, so the Agents table is load-bearing.
 HOSTS = {
     "opencode": {
-        "config_dir": _opencode_config_dir,
+        "config_dir": lambda: _build_core._opencode_config_dir(),
         "config_file": "opencode.json",
         "project_marker": ".opencode",
         "agent_file": "AGENT.md",
@@ -809,7 +1083,7 @@ HOSTS = {
         "native_catalog": True,
     },
     "claude": {
-        "config_dir": _claude_config_dir,
+        "config_dir": lambda: _build_core._claude_config_dir(),
         "config_file": "settings.json",
         "project_marker": ".claude",
         "agent_file": "CLAUDE.md",
@@ -817,7 +1091,7 @@ HOSTS = {
         "native_catalog": True,
     },
     "bob": {
-        "config_dir": _bob_config_dir,
+        "config_dir": lambda: _build_core._bob_config_dir(),
         "config_file": "settings.json",
         "project_marker": ".bob",
         "agent_file": "AGENTS.md",
@@ -825,7 +1099,7 @@ HOSTS = {
         "native_catalog": False,
     },
     "copilot": {
-        "config_dir": _copilot_config_dir,
+        "config_dir": lambda: _build_core._copilot_config_dir(),
         "config_file": "mcp-config.json",
         "project_marker": ".github",
         "agent_file": "AGENTS.md",

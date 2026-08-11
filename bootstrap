@@ -8,10 +8,10 @@
 #     ./bootstrap [--no-setup] [ref]
 #
 # Delegates to the Python orchestrator (rituals/harness.py bootstrap), which runs the
-# update steps — sync-self.sh then upgrade.sh — inside a curses progress screen, then
-# re-execs a fresh `setup` so the wizard runs the just-updated code. Kept as a script
-# so the launcher and sync-self can find it. `exec` replaces this process, so it is
-# safe for sync-self to overwrite this file mid-run.
+# update step — `harness.py upgrade`, one `git pull` that refreshes the launchers AND the
+# factory together — inside a curses progress screen, then re-execs a fresh `setup` so the
+# wizard runs the just-updated code. Kept as a script so the launcher can find it. `exec`
+# replaces this process, so it is safe for the update to overwrite this file mid-run.
 
 set -eo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
