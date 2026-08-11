@@ -128,9 +128,9 @@ class FlagWiringTests(unittest.TestCase):
         seen = {}
 
         def fake_compare(ref, new, quick, limit, ref_repeat=1, new_repeat=1, matrix=None,
-                         jobs=1):
-            seen.update(ref=ref, new=new, ref_repeat=ref_repeat,
-                        new_repeat=new_repeat, matrix=matrix, jobs=jobs)
+                         jobs=1, record=None, against=None):
+            seen.update(ref=ref, new=new, ref_repeat=ref_repeat, new_repeat=new_repeat,
+                        matrix=matrix, jobs=jobs, record=record, against=against)
             return 0
 
         real, golden.compare = golden.compare, fake_compare

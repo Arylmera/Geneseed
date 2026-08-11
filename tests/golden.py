@@ -72,6 +72,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import snapshot_io
+
 ROOT = Path(__file__).resolve().parent.parent
 
 # THE PROCESS'S TEMP BASE, CANONICALISED, FOR EVERY MODULE THAT IMPORTS THIS ONE.
@@ -591,6 +593,43 @@ def run_cell(gen: list[str], cell: dict, repeat: int = 1) -> "dict[str, bytes] |
         return snap
 
 
+# Six anchor cells keep their carrier file VERBATIM — one per --emit target that produces
+# one. Everything else is hashes. A corpus that can only say "a path moved" makes every
+# regeneration a blind blessing.
+#
+# CORRECTED FROM THE BRIEF, TWICE OVER. The brief's draft named the cell ids "claude/neutral"
+# etc. — reversed and missing the footprint segment; the real id, as `_cell_id` builds it, is
+# "{theme}/{emit}/{footprint}". It also named the carrier FILES as bare filenames
+# ("CLAUDE.md", "AGENT.md", "opencode.jsonc", ".github/copilot-instructions.md") — but a
+# snapshot's keys are sandbox-relative ("out/...", "home/.../cfg/..."), so a bare name never
+# intersects `set(snap)` and the verbatim text silently recorded empty for all six. Reading
+# the actual recorded snapshots (`tests/__snapshots__/emit/neutral__*__lean.json`) turned up
+# three more wrong names, not just the missing prefix: opencode's root file is `AGENT.md`
+# (singular) and its config is `opencode.json`, not `AGENTS.md`/`opencode.jsonc`; bob's and
+# copilot's root file is `AGENTS.md` (plural), not `AGENT.md`; copilot never writes
+# `.github/copilot-instructions.md` at all — its one root carrier is `out/AGENTS.md`, same
+# name as bob's for a different emit. Verified by running `golden.cells()` and reading each
+# cell's actual `paths` keys back (see task-7-report.md).
+VERBATIM_CELLS = {
+    "neutral/claude/lean": {"out/CLAUDE.md", "out/.claude/settings.local.json"},
+    "neutral/opencode/lean": {"out/AGENT.md", "out/opencode.json"},
+    "neutral/opencode-global/lean": {"home/.config/opencode/AGENT.md"},
+    "neutral/files/lean": {"out/AGENT.md"},
+    "neutral/bob/lean": {"out/AGENTS.md"},
+    "neutral/copilot/lean": {"out/AGENTS.md"},
+}
+
+
+def _cell_id(cell: dict) -> str:
+    """The human label for one cell — shared by the byte comparison, `--record` and
+    `--against`, so a recorded corpus and a live run can never disagree about a cell's
+    name."""
+    return cell.get("label") or (
+        f"{cell['theme']}/{cell['emit']}/{cell['footprint']}"
+        + (f"/{cell['posture']}" if cell.get("posture") else "")
+        + (f"/{cell['mode']}" if cell.get("mode") else ""))
+
+
 def _diff(name: str, a: bytes, b: bytes) -> str:
     try:
         la, lb = a.decode("utf-8").splitlines(), b.decode("utf-8").splitlines()
@@ -602,18 +641,38 @@ def _diff(name: str, a: bytes, b: bytes) -> str:
 
 def compare(ref: list[str], new: list[str], quick: bool, limit: int,
             ref_repeat: int = 1, new_repeat: int = 1,
-            matrix: "list[dict] | None" = None, jobs: int = 1) -> int:
+            matrix: "list[dict] | None" = None, jobs: int = 1,
+            record: "str | None" = None, against: "str | None" = None) -> int:
+    """The three things this file can do to a matrix, sharing one runner.
+
+    Plain (record and against both None): run BOTH generators, byte-compare — the
+    original gate.
+    `record`: run ONLY `ref`, write each cell's snapshot to `record` instead of
+    comparing. This is how the reference's answer outlives the reference.
+    `against`: run ONLY `new`, and compare it against a corpus recorded earlier
+    instead of a live `ref`. A cell the corpus has no entry for is a FAILURE, not a
+    skip — a silently-ignored new cell is not a gate."""
     matrix = cells(quick) if matrix is None else matrix
     times = {1: "", 2: " ×2"}
-    print(f"[golden] {len(matrix)} cells · ref={' '.join(ref)}{times.get(ref_repeat, '')}"
-          f" · new={' '.join(new)}{times.get(new_repeat, '')} · jobs={jobs}")
+    if record:
+        print(f"[golden] {len(matrix)} cells · recording ref={' '.join(ref)} -> {record}")
+    elif against:
+        print(f"[golden] {len(matrix)} cells · new={' '.join(new)}{times.get(new_repeat, '')}"
+              f" · against corpus {against} · jobs={jobs}")
+    else:
+        print(f"[golden] {len(matrix)} cells · ref={' '.join(ref)}{times.get(ref_repeat, '')}"
+              f" · new={' '.join(new)}{times.get(new_repeat, '')} · jobs={jobs}")
     failures: list[str] = []
 
     def _pair(cell: dict) -> tuple:
-        """Both sides of ONE cell. The reference side of a deletion cell is the AFTER
-        configuration emitted into a clean sandbox — the tree the prune is supposed to
-        reproduce."""
+        """Both sides of ONE cell — or just the one side `record`/`against` needs. The
+        reference side of a deletion cell is the AFTER configuration emitted into a
+        clean sandbox — the tree the prune is supposed to reproduce."""
         ref_cell = {k: v for k, v in cell.items() if k != "before"}
+        if record:
+            return run_cell(ref, ref_cell, ref_repeat), None
+        if against:
+            return None, run_cell(new, cell, new_repeat)
         return run_cell(ref, ref_cell, ref_repeat), run_cell(new, cell, new_repeat)
 
     # `pool.map` yields in SUBMISSION order, so the failure list, the `--limit` cut and the
@@ -623,15 +682,20 @@ def compare(ref: list[str], new: list[str], quick: bool, limit: int,
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
     with pool:
         for i, (cell, (a, b)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
-            cid = cell.get("label") or (
-                f"{cell['theme']}/{cell['emit']}/{cell['footprint']}"
-                + (f"/{cell['posture']}" if cell.get("posture") else "")
-                + (f"/{cell['mode']}" if cell.get("mode") else ""))
-            _compare_cell(cid, cell, a, b, ref_repeat, new_repeat, failures)
+            cid = _cell_id(cell)
+            if record:
+                _record_cell(record, cid, a, failures)
+            elif against:
+                _against_cell(against, cid, b, failures)
+            else:
+                _compare_cell(cid, cell, a, b, ref_repeat, new_repeat, failures)
             if i % 25 == 0 or i == len(matrix):
                 print(f"[golden]   {i}/{len(matrix)} ({len(failures)} failing)")
     if not failures:
-        print(f"[golden] ok — {len(matrix)} cells byte-identical")
+        if record:
+            print(f"[golden] recorded {len(matrix)} cells to {record}")
+        else:
+            print(f"[golden] ok — {len(matrix)} cells byte-identical")
         return 0
     print(f"\n[golden] {len(failures)}/{len(matrix)} cells DIFFER:\n")
     for f in failures[:limit]:
@@ -639,6 +703,35 @@ def compare(ref: list[str], new: list[str], quick: bool, limit: int,
     if len(failures) > limit:
         print(f"[golden] ... and {len(failures) - limit} more (raise --limit to see them)")
     return 1
+
+
+def _record_cell(record_dir: str, cid: str, snap, failures: list[str]) -> None:
+    """One cell's half of `--record`: write its snapshot down, or fail loudly if the
+    reference generator itself crashed — a corpus entry silently missing its own cell
+    is worse than no corpus at all."""
+    if isinstance(snap, str):
+        failures.append(f"  {cid}: ref generator failed, nothing recorded: {snap}")
+        return
+    verbatim = VERBATIM_CELLS.get(cid, set()) | {"<stdout>", "<stderr>", "<exit>"}
+    snapshot_io.write(Path(record_dir), cid, snap, verbatim=verbatim)
+
+
+def _against_cell(against_dir: str, cid: str, snap, failures: list[str]) -> None:
+    """One cell's half of `--against`: replay the live (`new`) side against the corpus
+    recorded earlier. A cell present in this run but absent from the corpus is a
+    FAILURE — see the module docstring on why a silent skip is not acceptable here."""
+    if isinstance(snap, str):
+        failures.append(f"  {cid}: new generator failed: {snap}")
+        return
+    recorded = snapshot_io.read(Path(against_dir), cid)
+    if recorded is None:
+        failures.append(f"  {cid}: NO RECORDED SNAPSHOT in {against_dir} — a cell present "
+                        "in this run but absent from the corpus is a failure, not a skip")
+        return
+    problems = snapshot_io.compare(recorded, snap)
+    if problems:
+        failures.append(f"  {cid}: {len(problems)} differ from the recorded corpus:\n"
+                        + "\n".join(problems[:10]))
 
 
 def _compare_cell(cid: str, cell: dict, a, b, ref_repeat: int, new_repeat: int,
@@ -744,7 +837,18 @@ def main(argv=None) -> int:
                          "this changes only how long the gate takes, never what it "
                          "compares — `--jobs 1` is the old serial run and reports "
                          "identically.")
+    ap.add_argument("--record", metavar="DIR", default=None,
+                    help="write each cell's snapshot to DIR instead of comparing. Uses "
+                         "--ref alone; --new is ignored. This is how the reference's "
+                         "answer outlives the reference.")
+    ap.add_argument("--against", metavar="DIR", default=None,
+                    help="compare --new's live output against a corpus recorded earlier "
+                         "with --record, instead of a live --ref. A cell with no recorded "
+                         "snapshot is a FAILURE, not a skip.")
     args = ap.parse_args(argv)
+    if args.record and args.against:
+        print("[golden] --record and --against are mutually exclusive")
+        return 2
     # Refused rather than clamped, for `--repeat 0`'s reason: `ThreadPoolExecutor(0)` raises
     # and a negative one would too, but a flag that silently corrected itself would let a
     # typo'd `--jobs` read as an accepted setting.
@@ -793,7 +897,8 @@ def main(argv=None) -> int:
     m = _keep(cells(args.quick))
     return 2 if m is None else compare(ref, new, args.quick, args.limit, matrix=m,
                                        ref_repeat=args.repeat, new_repeat=args.repeat,
-                                       jobs=args.jobs)
+                                       jobs=args.jobs, record=args.record,
+                                       against=args.against)
 
 
 if __name__ == "__main__":
