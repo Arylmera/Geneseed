@@ -447,6 +447,30 @@ def _context_cells() -> list[dict]:
                 "cfg/excludes.json": '{"excludes": [{"path": "{repo/}/../repo"}]}\n'}),
             steps=[{"argv": ["context", "--root", "{cfg}"], "cwd": "repo"}],
             expect=["PROJECT CONTEXT"]),
+        ctx(id="context/sovereign-bypass-does-not-match-a-tilde-user-entry",
+            # The direct sequel to the `..` cell above, and the same defect class: a
+            # `str(Path(entry).expanduser())` the two implementations did not share. The hook
+            # had a PRIVATE `expanduser` returning `~user` untouched while `js/hosts.mjs`'s
+            # single owner REFUSES the form — so the hook was quietly exempt from an
+            # adjudicated decision (`TheTildeUserFormIsADeliberateDivergence`) by owning a
+            # second copy. Importing the owner makes the refusal THROW, and the reference
+            # raises RuntimeError on the same input on POSIX, so both sides now guard the
+            # entry and skip it.
+            #
+            # WHAT THIS CELL SEES, PER HOST, and neither half is the whole gate:
+            #   * win32 — the reference never raises (`ntpath` guesses `C:\\Users\\nosuch`,
+            #     which is not the sandbox cwd, so: no bypass). The port would CRASH without
+            #     its guard, and a crashing hook exits non-zero with a stack trace where the
+            #     reference exits 0 with the context. That is what makes it discriminating
+            #     here.
+            #   * posix — the REFERENCE crashes without its guard. Unverified on this
+            #     machine; only a Linux run closes that half.
+            # Either way the asserted behaviour is one sentence: a `~user` entry grants no
+            # bypass, and the hook still injects.
+            world=dict(_DOCS_WORLD, **{
+                "cfg/excludes.json": '{"excludes": [{"path": "~nosuchuser/repo"}]}\n'}),
+            steps=[{"argv": ["context", "--root", "{cfg}"], "cwd": "repo"}],
+            expect=["PROJECT CONTEXT"]),
         ctx(id="context/sovereign-malformed-degrades-to-off",
             world=dict(_DOCS_WORLD, **{"cfg/excludes.json": "{not json\n"}),
             steps=[{"argv": ["context", "--root", "{cfg}"], "cwd": "repo"}],

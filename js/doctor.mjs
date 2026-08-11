@@ -52,6 +52,7 @@ import { pySplitLines } from './lib/pydiff.mjs';
 import { NO_WINDOW } from './lib/pyproc.mjs';
 import {
   comparePaths, normcase, parseJson, pyPrint, pyRepr, pyStr, pyWhich, readText,
+  withDiscardableStderr,
 } from './lib/pyfs.mjs';
 
 // --------------------------------------------------------------------------------------
@@ -111,27 +112,10 @@ function rglob(dir) {
   return out.sort(comparePaths);
 }
 
-/**
- * Hold `fn`'s stderr, and emit it only if `fn` returns.
- *
- * The reproduction of `except SystemExit` for a port that writes its refusal at the raise
- * site. See `renderedProblems`, its only caller — a general helper would invite a second
- * caller that wanted "silence the noise", which is a different thing from "this message
- * belonged to an exception nobody let escape".
- */
-function withDiscardableStderr(fn) {
-  const real = process.stderr.write.bind(process.stderr);
-  const held = [];
-  process.stderr.write = (chunk) => { held.push(chunk); return true; };
-  try {
-    const value = fn();
-    process.stderr.write = real;
-    for (const chunk of held) real(chunk);
-    return value;
-  } finally {
-    process.stderr.write = real;
-  }
-}
+// `withDiscardableStderr` was defined here while `renderedProblems` was its only caller.
+// `js/hooks.mjs` became the second and third when the hook started CATCHING `expanduser`'s
+// refusal, so it moved beside `pyPrintErr` in `js/lib/pyfs.mjs` — the writes it intercepts —
+// and its docblock carries the "not for silencing noise" warning with it.
 
 /** `Path.stem` — the basename with its last suffix removed. */
 const stemOf = (p) => path.basename(p, path.extname(p));

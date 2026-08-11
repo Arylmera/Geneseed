@@ -479,6 +479,39 @@ export const pyPrint = (s) => process.stdout.write(xlate(s));
 export const pyPrintErr = (s) => process.stderr.write(xlate(s));
 
 /**
+ * Hold `fn`'s stderr, and emit it only if `fn` RETURNS.
+ *
+ * The reproduction of `except SystemExit` for a port that writes its refusal at the raise
+ * site (`js/generate.mjs`'s `sysExit` docblock states the convention). `sys.exit(msg)`
+ * attaches the message to the EXCEPTION and the interpreter prints it on the way out, so a
+ * Python caller that catches sees no output at all — which makes write-at-the-raise-site
+ * identical for every caller that lets the throw propagate, and wrong for every caller that
+ * catches.
+ *
+ * MOVED HERE beside `pyPrintErr`, whose writes it intercepts, when the hook became the
+ * second and third such caller: `js/hosts.mjs`'s `expanduser` refuses a `~user` path by
+ * printing and throwing, and `js/hooks.mjs` catches it twice — once per `excludes.json`
+ * entry and once around `$GENESEED_ROOT`/`--root`. Its old docblock in `js/doctor.mjs`
+ * warned that a general helper "would invite a second caller that wanted silence the
+ * noise". That warning stands and is the contract: this is for a message that belonged to
+ * an exception NOBODY LET ESCAPE, never for quieting output a call legitimately makes —
+ * which is why the held chunks are replayed in full on the success path.
+ */
+export function withDiscardableStderr(fn) {
+  const real = process.stderr.write.bind(process.stderr);
+  const held = [];
+  process.stderr.write = (chunk) => { held.push(chunk); return true; };
+  try {
+    const value = fn();
+    process.stderr.write = real;
+    for (const chunk of held) real(chunk);
+    return value;
+  } finally {
+    process.stderr.write = real;
+  }
+}
+
+/**
  * The same rule applied to a whole CALL rather than to one string — `bin/geneseed.mjs`'s
  * answer to the newline item P5e recorded and could not gate.
  *

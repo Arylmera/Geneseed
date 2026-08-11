@@ -32,17 +32,16 @@
 import { existsSync, statSync, readFileSync, readdirSync, mkdirSync, realpathSync }
   from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readText, writeText, jsonDumpsCompact, normcase, comparePaths, pyPathStr, pyPrint,
-  pyPrintErr } from './lib/pyfs.mjs';
+  pyPrintErr, withDiscardableStderr } from './lib/pyfs.mjs';
 import { NO_WINDOW } from './lib/pyproc.mjs';
 // `harness status` reports the memory store, and `bin/geneseed-cli.mjs` cannot import THIS
 // module to find it: the CLI is under a hard transitive `child_process` ban and `learn`
 // spawns. So the resolver has one owner in `js/hosts.mjs` rather than a second copy — and
 // with it went this file's private `opencodeConfigDir`, whose only caller it was.
-import { resolveMemoryDir } from './hosts.mjs';
+import { resolveMemoryDir, expanduser } from './hosts.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -65,13 +64,16 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // reproduces a language primitive, wherever it is used". `pyfs.mjs` carries no
 // `child_process` and costs nothing at hook latency. What stays local is what is genuinely
 // only the hook's (`fnmatch`, the transcript readers, `pyOsError`'s errno table).
-
-/** `Path.expanduser()` — a LEADING `~` only, as Python does it. */
-function expanduser(p) {
-  if (p === '~') return os.homedir();
-  if (p.startsWith('~/') || p.startsWith('~\\')) return path.join(os.homedir(), p.slice(2));
-  return p;
-}
+//
+// AND `expanduser` WAS THE SECOND VIOLATION, closed here. This file carried its own, which
+// returned a `~user` path UNCHANGED while `js/hosts.mjs`'s single owner REFUSES the form —
+// an adjudicated product decision (`TheTildeUserFormIsADeliberateDivergence`) that the hook
+// was quietly exempt from because it had a private copy. It now imports the owner. The
+// refusal throws, so `sovereignBypass` and `cmdContext` below contain it per entry / per
+// call: a hook that CRASHES reports success, because these gates exit 0 and signal on
+// stdout, so "the gate blew up" and "the gate found nothing" are the same observation to
+// Claude. `pyResolve` just below is the THIRD copy of a primitive `js/hosts.mjs` also
+// exports, and is the next item in this series.
 
 /**
  * `Path(p).resolve()` — absolute, symlinks followed, and the filesystem's OWN casing.
@@ -270,9 +272,25 @@ export function sovereignBypass(root) {
   for (const entry of entries) {
     const raw = (entry && typeof entry === 'object' ? entry.path : entry) || '';
     if (typeof raw !== 'string' || !raw.trim()) continue;
-    // `.rstrip("\\/")` AFTER normcase, exactly as the Python orders it, so the separator
-    // test below cannot be fooled by a trailing slash in the user's file.
-    const base = normcase(pyPathStr(expanduser(raw.trim()))).replace(/[\\/]+$/, '');
+    let base;
+    try {
+      // `.rstrip("\\/")` AFTER normcase, exactly as the Python orders it, so the separator
+      // test below cannot be fooled by a trailing slash in the user's file.
+      //
+      // `withDiscardableStderr` because `expanduser` writes its refusal at the RAISE SITE
+      // and this caller catches: the reference prints nothing here, so replaying the
+      // message would be a stderr divergence on every hook call for one bad entry.
+      base = withDiscardableStderr(
+        () => normcase(pyPathStr(expanduser(raw.trim()))).replace(/[\\/]+$/, ''));
+    } catch {
+      // PER ENTRY, and the loop continues. One unusable line in a file the USER hand-edits
+      // must not decide the whole function — `expanduser` refuses a `~user` form, and the
+      // reference's `Path.expanduser()` raises RuntimeError on the same input on POSIX.
+      // Skipping errs toward the gate staying ACTIVE, which is the safe direction: this
+      // feeds `git-gate`/`rule-gate`, which exit 0 and signal on stdout, so a crash here
+      // would read as a clean pass while gating nothing.
+      continue;
+    }
     if (cwd === base || cwd.startsWith(base + path.sep)) return true;
   }
   return false;
@@ -450,8 +468,21 @@ export function resolveContextSets(root) {
 export function cmdContext(args) {
   // Discovery runs against the project root the hook was launched from — Claude runs
   // SessionStart hooks with cwd = repo root — not the harness package dir.
-  const root = pyResolve(process.env.GENESEED_ROOT || process.cwd());
-  const hookRoot = args.root ? pyResolve(args.root) : null;
+  // The only two `pyResolve` calls in this file whose argument can be a `~user` path the
+  // user typed — `$GENESEED_ROOT` and `--root` — and `pyResolve` expands, so both can now
+  // throw. Every other caller either builds its argument by `path.join` from an absolute
+  // root (so no leading tilde survives) or already sits inside a `try`. Refused input
+  // injects nothing, which is the same degrade as "nothing to load" below.
+  let root;
+  let hookRoot;
+  try {
+    ({ root, hookRoot } = withDiscardableStderr(() => ({
+      root: pyResolve(process.env.GENESEED_ROOT || process.cwd()),
+      hookRoot: args.root ? pyResolve(args.root) : null,
+    })));
+  } catch {
+    return 0;
+  }
   if (hookRoot && sovereignBypass(hookRoot)) return 0;
   if (hookRoot && !process.env.GENESEED_STACK_GLOBAL
       && globalHookStandingDown(hookRoot, root)) return 0;
