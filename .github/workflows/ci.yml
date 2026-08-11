@@ -119,3 +119,11 @@ jobs:
         run: npm test
       - name: production build
         run: npm run build
+      - name: dist is fresh
+        # web/dist is TRACKED and hand-committed, and it is in package.json's files[]. A
+        # web/src change that was never rebuilt ships a console that does not match its
+        # source: the daemon serves stale code, then fails hard on MIME after the next
+        # rebuild. `npm run build` above is a compile check; this is the freshness check.
+        # Run from the repo root, because dist lives outside this job's working-directory.
+        working-directory: .
+        run: git diff --exit-code --stat -- web/dist
