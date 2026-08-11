@@ -79,10 +79,14 @@ import sys
 import tempfile
 import unicodedata
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import golden  # noqa: E402
+# For `this_platform()` only — the platform KEY is shared with `harness_golden.PLATFORM_ONLY`
+# on purpose, so the two platform-declared mechanisms in this suite cannot drift into
+# spelling the same host two different ways.
+import harness_golden  # noqa: E402
 
 ROOT = golden.ROOT
 PY_PROBE = ROOT / "tests" / "fixtures" / "pure_probe.py"
@@ -2374,15 +2378,58 @@ class TheDisplayTiersAreThreeAndTheCorpusReachesTwo(unittest.TestCase):
         self.assertNotIn("█", self.ascii_[3][0])
 
 
+#: The `str(Path(x))` corpus, NAMED because `PLATFORM_EXPECTED` below is a claim about it
+#: and a second copy of the list would let the two drift apart silently.
+#:
+#: A trailing slash is the cheapest divergence and the one `harness_golden`'s explicit-dir
+#: `link` cell found. Every entry runs on BOTH platforms; the answers differ on seven of
+#: them, which is what the table declares.
+#:
+#: `C:\x\bin\` and `//server/share/` are here because a drive path and a UNC root are what
+#: the reference parses on Windows — and because the SAME two strings are a one-component
+#: filename and a POSIX double-slash root on Linux. That pair is what found the
+#: platform-shaped bug in `pyPathStr`, which reproduced `ntpath` on both platforms.
+#: `a\b` and `\\srv\share\` are their POSIX twins, added with the fix: a backslash is an
+#: ordinary character there, so the reference returns both verbatim and the port now does
+#: too. Nothing was moved to one platform — all eleven are compared on both.
+#:
+#: `//` and `///x` are deliberately ABSENT. `PureWindowsPath` answers `\\` and `\\\x` and
+#: the port answers `\` and `\x`: a real WINDOWS divergence, an incomplete UNC prefix that
+#: needs ntpath's share-name parsing, and out of scope for the platform fix. It is written
+#: down here and in `pyPathStr`'s docblock rather than left as a silent gap.
+_PY_PATH_STR_CORPUS = ("/x/bin/", "/x/bin", "C:\\x\\bin\\", "~/bin", "", ".", "..",
+                       "//server/share/", "a//b", "a/./b", "a\\b", "\\\\srv\\share\\")
+
+#: What `str(Path(x))` ANSWERS, per operating system, for every input above whose answer
+#: depends on which one you are running. Mirrors `harness_golden.PLATFORM_ONLY` — the
+#: declaration lives beside the corpus so that "what this run did not cover" is a fact about
+#: the suite rather than a comment in a function nobody opens — with one difference forced by
+#: the subject: `PLATFORM_ONLY` names CELLS a host cannot run at all, and these inputs all
+#: run everywhere. What is platform-specific is the ANSWER, so the table carries both.
+#:
+#: WHY AN ABSOLUTE TABLE AT ALL, next to a comparison that already passes. A
+#: cross-implementation equality is blind to a fault BOTH sides share — this file has found
+#: that five times — and `TheByteBearingPrimitivesAgree` had exactly one absolute assertion
+#: in it (`os.linesep`). Two implementations that both answered `''` for every path would
+#: agree on all eleven rows. The table says what they must agree ON, and the port inherits
+#: it through the equality rather than through a second probe process.
+PLATFORM_EXPECTED: "dict[str, dict[str, str]]" = {
+    "/x/bin/":         {"win32": "\\x\\bin",             "posix": "/x/bin"},
+    "/x/bin":          {"win32": "\\x\\bin",             "posix": "/x/bin"},
+    "C:\\x\\bin\\":    {"win32": "C:\\x\\bin",           "posix": "C:\\x\\bin\\"},
+    "~/bin":           {"win32": "~\\bin",               "posix": "~/bin"},
+    "//server/share/": {"win32": "\\\\server\\share\\",  "posix": "//server/share"},
+    "a//b":            {"win32": "a\\b",                 "posix": "a/b"},
+    "a/./b":           {"win32": "a\\b",                 "posix": "a/b"},
+}
+
+
 def _byte_bearing_cases() -> list[dict]:
     """The primitives whose answers ARE the bytes on a user's disk. Each entry below has a
     reason: an entry that does not contain the character it is named for is a comment, not
     a test (P6d found exactly that)."""
     cases = []
-    # `str(Path(x))` — a trailing slash is the cheapest divergence and the one
-    # harness_golden's explicit-dir link cell found.
-    for p in ("/x/bin/", "/x/bin", "C:\\x\\bin\\", "~/bin", "", ".", "..",
-              "//server/share/", "a//b", "a/./b"):
+    for p in _PY_PATH_STR_CORPUS:
         cases.append({"fn": "py_path_str", "args": [p]})
     # ensure_ascii: json.dumps escapes non-ASCII, JSON.stringify does not.
     for o in ({"k": "é"}, {"k": "\u001c"}, {"k": "\ufeff"}, {"k": "😀"}, {"k": "a\\b"}):
@@ -2448,6 +2495,84 @@ class TheByteBearingPrimitivesAgree(unittest.TestCase):
         self.assertEqual(self.py[i], want)
 
 
+class ThePlatformSensitiveAnswersAreDeclared(unittest.TestCase):
+    """`PLATFORM_EXPECTED` against what `str(Path(x))` actually answers.
+
+    THE HOLE THIS CLOSES. `_PY_PATH_STR_CORPUS` is compared between two implementations, and
+    a comparison cannot say what the right answer IS — only that both sides give the same
+    one. Every absolute statement about these paths lived in a comment. So the answers are a
+    table, and this checks it FROM EITHER SIDE, the same five directions
+    `tests/test_hook_cli_parity.py::ThePlatformDeclaredCellsAreDeclared` checks
+    `harness_golden.PLATFORM_ONLY` in:
+
+      * the live reference on THIS host must answer this platform's declared string;
+      * the other platform's half is PRINTED, so a green run says what it did not assert;
+      * the table must be EXACTLY the inputs whose answer is platform-sensitive — checkable
+        from one host because `PureWindowsPath` and `PurePosixPath` both import anywhere,
+        which is this file's analogue of calling both `_link_cells_*` arms directly;
+      * every declared input must still be IN the corpus, so a row cannot rot after an edit;
+      * neither half may be empty, which is the state the mechanism exists to prevent.
+
+    The PORT is not run here. `TheByteBearingPrimitivesAgree` already asserts py == js for
+    every one of these inputs and this asserts py == declared, so js == declared follows —
+    a second probe process would buy nothing.
+    """
+
+    def setUp(self):
+        self.here = harness_golden.this_platform()
+        self.other = "posix" if self.here == "win32" else "win32"
+
+    def test_the_reference_answers_what_this_platform_declares(self):
+        for src, want in sorted(PLATFORM_EXPECTED.items()):
+            with self.subTest(input=src):
+                self.assertEqual(str(Path(src)), want[self.here])
+
+    def test_the_other_platforms_answers_are_declared_and_not_asserted(self):
+        """Skipped, never dropped — and said out loud. A half that is silently not run is
+        indistinguishable from a half that does not exist, which is the ten-phase history
+        behind `PLATFORM_ONLY`."""
+        rows = [f"{src!r} -> {want[self.other]!r}"
+                for src, want in sorted(PLATFORM_EXPECTED.items())]
+        print(f"\n[pure-parity] {len(rows)} `str(Path(x))` answers belong to {self.other} "
+              f"and were NOT asserted on this {self.here} run:")
+        for row in rows:
+            print(f"    {row}")
+        self.assertTrue(rows, "the other platform's half is empty")
+
+    def test_the_table_is_exactly_the_inputs_whose_answer_differs_by_platform(self):
+        """THE DIRECTION THAT STOPS DRIFT, and the only one checkable from a single host.
+
+        Both parsers are ordinary classes, so a test can call BOTH. Without this, adding a
+        corpus entry that happens to be platform-sensitive and forgetting the table is
+        invisible from either machine — the row above only checks the half this host runs.
+        """
+        differ = {p for p in _PY_PATH_STR_CORPUS
+                  if str(PureWindowsPath(p)) != str(PurePosixPath(p))}
+        self.assertEqual(set(PLATFORM_EXPECTED), differ,
+                         "PLATFORM_EXPECTED and the corpus disagree — every input whose "
+                         "`str(Path(x))` depends on the operating system has to be in the "
+                         "table, and every input in the table has to be one of them")
+        for src, want in sorted(PLATFORM_EXPECTED.items()):
+            with self.subTest(input=src):
+                self.assertEqual({"win32": str(PureWindowsPath(src)),
+                                  "posix": str(PurePosixPath(src))}, want,
+                                 "a hand-written expectation the parsers disown")
+
+    def test_every_declared_input_is_still_in_the_corpus(self):
+        orphans = sorted(set(PLATFORM_EXPECTED) - set(_PY_PATH_STR_CORPUS))
+        self.assertFalse(orphans, f"{orphans} are declared but no longer probed")
+
+    def test_the_declaration_is_not_empty_in_either_direction(self):
+        """The positive control. An empty table satisfies every test above, and an empty
+        table is exactly what this mechanism exists to make impossible."""
+        self.assertTrue(PLATFORM_EXPECTED, "the table is empty")
+        for src, want in sorted(PLATFORM_EXPECTED.items()):
+            with self.subTest(input=src):
+                self.assertEqual(sorted(want), ["posix", "win32"],
+                                 "a row naming one platform is a declaration that the "
+                                 "other has no answer for this input")
+
+
 class TheTildeUserFormIsADeliberateDivergence(unittest.TestCase):
     """`~unknownuser/x` — a byte-bearing case UNTIL the project decided the port should not
     reproduce `ntpath`'s rule for it (see `js/hosts.mjs`'s `expanduser` docblock). Pulled out
@@ -2457,35 +2582,80 @@ class TheTildeUserFormIsADeliberateDivergence(unittest.TestCase):
     does not expand ~user" claim survived undetected in the first place). Each side gets its
     own ABSOLUTE assertion instead, so the divergence stays a stated fact instead of becoming
     an unstated one again.
+
+    AND THE SECOND ARM WAS WRONG IN ITS TURN, which is why the reference's answer is now
+    declared per platform instead of guessed inline. This class asserted that POSIX "returns
+    the path UNCHANGED". `posixpath.expanduser` does exactly that — but the reference does
+    not call `posixpath.expanduser`, it calls `Path.expanduser`, which refuses a home
+    directory it could not determine:
+
+        homedir = os.path.expanduser(self._tail[0])
+        if homedir[:1] == "~":
+            raise RuntimeError("Could not determine home directory.")
+
+    So on POSIX the reference RAISES for an unknown account, and the first Linux run reported
+    this test as an ERROR rather than a failure — that RuntimeError escaping, not a
+    comparison going red. Which moves the divergence this class is named for: it is
+    WINDOWS-ONLY. There `ntpath` guesses `C:\\Users\\unknownuser` and pathlib hands it back
+    happily. On POSIX the reference and the port already agree in KIND — both refuse — and
+    differ only in which exception says so.
     """
 
-    def test_python_reference_still_expands_it_via_the_platform_rule(self):
+    #: The input, and what the REFERENCE does with it on each platform. Both halves are
+    #: written down for `PLATFORM_ONLY`'s reason: the arm that cannot run here is precisely
+    #: the arm that was wrong, and an undeclared arm is one nobody re-reads.
+    INPUT = "~unknownuser/x"
+    REFERENCE = {
+        "win32": "expands — ntpath swaps the last component of %USERPROFILE%",
+        "posix": "raises RuntimeError — pathlib refuses a home it cannot determine",
+    }
+
+    def test_the_reference_follows_this_platforms_rule(self):
         """Names the shape rather than comparing `expanduser` to itself on this input.
 
         `home.parent / "unknownuser" / "x"` is independently derived from the well-tested
         bare-`~` case above (`home = Path("~").expanduser()`), not from calling `expanduser`
-        on the divergent input a second time — so this is a real assertion about ntpath's
-        swap-the-last-component rule, not a tautology.
-
-        POSIX takes a DIFFERENT branch of the SAME reference: `posixpath.expanduser` looks
-        "unknownuser" up via `pwd.getpwnam`, finds no such account, and returns the path
-        UNCHANGED — so the two OS families disagree with each other before the port even
-        enters the picture.
+        on the divergent input a second time — so the Windows arm is a real assertion about
+        ntpath's swap-the-last-component rule, not a tautology.
         """
+        if harness_golden.this_platform() != "win32":
+            with self.assertRaises(RuntimeError):
+                Path(self.INPUT).expanduser()
+            return
         home = Path(os.path.expanduser("~"))
-        if os.name == "nt":
-            expected = str(home.parent / "unknownuser" / "x")
+        # ntpath guesses ONLY when the current account is the last component of
+        # %USERPROFILE%; on a renamed profile it returns the path untouched and pathlib then
+        # raises — the POSIX outcome, on a Windows host. Stating the precondition is what
+        # keeps the arm an assertion about the rule rather than about this machine.
+        if os.environ.get("USERNAME") == home.name:
+            self.assertEqual(str(Path(self.INPUT).expanduser()),
+                             str(home.parent / "unknownuser" / "x"))
         else:
-            expected = "~unknownuser/x"
-        self.assertEqual(str(Path("~unknownuser/x").expanduser()), expected)
+            with self.assertRaises(RuntimeError):
+                Path(self.INPUT).expanduser()
+
+    def test_the_other_platforms_rule_is_declared_and_not_run(self):
+        here = harness_golden.this_platform()
+        other = "posix" if here == "win32" else "win32"
+        print(f"\n[pure-parity] `{self.INPUT}` on {other} — declared, not run on this "
+              f"{here} host: {self.REFERENCE[other]}")
+        self.assertEqual(sorted(self.REFERENCE), ["posix", "win32"],
+                         "both operating systems' rules have to be written down — a table "
+                         "with one side is how the POSIX arm stayed wrong")
+        for platform, rule in sorted(self.REFERENCE.items()):
+            with self.subTest(platform=platform):
+                self.assertTrue(rule.strip())
 
     def test_the_port_refuses_rather_than_guess_a_home_directory(self):
-        """The Node probe's `expanduser` case throws for this input (`js/hosts.mjs`), and
-        nothing in `pure_probe.mjs`'s dispatch loop catches it — an uncaught exception exits
-        the process non-zero, which `_run` turns into this `AssertionError`. That crash IS
-        the refusal: unlike the old behaviour (silently returning `~unknownuser/x`, which
-        `--target` would then use to create a literal `~unknownuser` directory in cwd), a
-        non-zero exit with a message is a normal, catchable CLI error.
+        """ABSOLUTE, AND ON EVERY PLATFORM — `js/hosts.mjs`'s refusal has no `os` branch in
+        it, so unlike the reference above this arm needs no table.
+
+        The Node probe's `expanduser` case throws for this input, and nothing in
+        `pure_probe.mjs`'s dispatch loop catches it — an uncaught exception exits the process
+        non-zero, which `_run` turns into this `AssertionError`. That crash IS the refusal:
+        unlike the old behaviour (silently returning `~unknownuser/x`, which `--target` would
+        then use to create a literal `~unknownuser` directory in cwd), a non-zero exit with a
+        message is a normal, catchable CLI error.
         """
         with self.assertRaises(AssertionError) as ctx:
             _run(["node", str(JS_PROBE)], [{"fn": "expanduser", "args": ["~unknownuser/x"]}],

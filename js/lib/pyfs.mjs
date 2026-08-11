@@ -713,13 +713,40 @@ export function pyInt(s) {
   return Number(sign === -1 ? -value : value);
 }
 
+/**
+ * `str(Path(x))` — and it is PLATFORM-SHAPED, because `Path` is.
+ *
+ * `Path` is `WindowsPath` on Windows and `PosixPath` everywhere else, and the two parsers
+ * disagree about the two things below. A body that is right on one host is therefore wrong
+ * on the other, which is exactly how this one passed a whole Windows suite and failed two
+ * cases on the first Linux run of `tests/test_pure_function_parity.py`:
+ *
+ *   * SEPARATORS. `ntpath` treats `\` and `/` alike; `posixpath` treats `\` as an ordinary
+ *     filename character. `str(PurePosixPath('C:\\x\\bin\\'))` is that string VERBATIM —
+ *     one component, trailing backslash and all — where splitting on both answered
+ *     `C:/x/bin`. A backslash is legal in a Linux filename, so this is not academic.
+ *   * THE DOUBLE-SLASH ROOT. POSIX gives EXACTLY two leading slashes an
+ *     implementation-defined meaning and `PurePosixPath` preserves them; three or more
+ *     collapse to one. `path.posix.parse` reports a one-character root for every case, so
+ *     `//server/share` came back as `/server/share`.
+ *
+ * NOT reproduced, and named here rather than left as a gap nobody wrote down: `//` and
+ * `///x` on WINDOWS, where `PureWindowsPath` answers `\\` and `\\\x` and this answers `\`
+ * and `\x`. Those are incomplete UNC prefixes and matching them needs ntpath's share-name
+ * parsing; both inputs are kept OUT of the corpus in `tests/test_pure_function_parity.py`
+ * instead of sitting in it wrong.
+ *
+ * The root's separators are still rewritten ONE AT A TIME, never `replace(/[\\/]+/g, sep)`:
+ * a UNC root's leading pair is part of it, so collapsing runs turns `//server/share/x` into
+ * `\server\share\x`.
+ */
 export function pyPathStr(s) {
-  const raw = path.parse(s).root;
-  // Each separator individually, never `replace(/[\\/]+/g, sep)`: a UNC root's LEADING pair
-  // is part of it, so collapsing runs turns `//server/share/x` into `\server\share\x`.
-  // Measured against `str(Path(...))` over a 25-path corpus; that was the one that differed.
+  const win = path.sep === '\\';
+  let raw = path.parse(s).root;
+  if (!win && raw && /^\/\/(?!\/)/.test(s)) raw = '//';
   const root = raw.replace(/[\\/]/g, path.sep);
-  const parts = s.slice(raw.length).split(/[\\/]+/).filter((p) => p !== '' && p !== '.');
+  const seps = win ? /[\\/]+/ : /\/+/;
+  const parts = s.slice(raw.length).split(seps).filter((p) => p !== '' && p !== '.');
   const tail = parts.join(path.sep);
   if (!root) return tail || '.';
   return root + tail;
