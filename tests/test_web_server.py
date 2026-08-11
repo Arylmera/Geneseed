@@ -64,7 +64,14 @@ class WebServerHTTPTests(unittest.TestCase):
         return {"Host": f"127.0.0.1:{port}", **extra}
 
     def _conn(self):
-        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        # 10s was too tight for /api/doctor on a contended CI Windows runner: the
+        # sweep walks the whole bundle, so it is filesystem-bound, and it measures
+        # ~2.3s locally against a runner that took 323s for a suite this laptop
+        # runs in ~290s. Seen once as TimeoutError while the SAME commit passed in
+        # the sibling run — load, not a hang. This is a CLIENT read timeout, not a
+        # service-level assertion: a server that genuinely hangs still fails here,
+        # just later. Nothing asserts a latency bound, so nothing is being relaxed.
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=60)
         self.addCleanup(c.close)
         return c
 
