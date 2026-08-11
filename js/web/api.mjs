@@ -73,7 +73,7 @@ import { firstBlockquote } from '../native.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../setup.mjs';
 import { accentFor, statusData } from '../status.mjs';
 import {
-  comparePaths, normcase, pyStripSpace, pyUnquote, readText, within,
+  comparePaths, normcase, pyStripSpace, pyUnquote, readText, withDiscardableStderr, within,
 } from '../lib/pyfs.mjs';
 import { readJsonc } from '../settings.mjs';
 import { apiActivity, apiActivityDetail } from './activity.mjs';
@@ -377,13 +377,48 @@ export function configItems(state) {
 export const WIKI_FILE_CAP = 5000;
 
 /**
+ * `pyResolve` for a path that came out of a HAND-MAINTAINED manifest — `null`, never a throw.
+ *
+ * The three wiki sites below are the only request-path callers of `expanduser`, and it now
+ * REFUSES a `~user` form by printing and throwing (`js/hosts.mjs`'s docblock). None of them
+ * may let that escape: `js/web/server.mjs` wraps the whole GET in a blanket `catch` → a JSON
+ * 500, so an unguarded refusal would turn ONE bad line in a file the user hand-edits into a
+ * dead Knowledge section. That is the same argument `sovereignBypass` makes in `js/hooks.mjs`
+ * — contain the refusal per entry and take the site's OWN degrade — and each of the three
+ * already has one: `[]`, `continue`, `continue`-into-404. The reference reaches those same
+ * three degrades for a `~user` path, from the other direction: `ntpath.expanduser` expands
+ * `~nosuchuser` to `C:\Users\nosuchuser\…`, which does not exist, so `is_file()`/`is_dir()`
+ * answer False. `_wiki_path` in `_web_catalog.py` is the guard that makes POSIX agree, where
+ * the same call raises RuntimeError instead.
+ *
+ * `withDiscardableStderr` because `expanduser` writes its refusal at the RAISE SITE and this
+ * caller catches — the reference prints nothing here, and `<server stderr>` is compared as
+ * bytes by `tests/web_golden.py`, so replaying it would be a divergence on every cell.
+ *
+ * DELIBERATE, ADJUDICATED RESIDUE: if `C:\Users\<other-user>\…` really exists, the reference
+ * on Windows READS ANOTHER ACCOUNT'S FILE where this refuses. Refusing is the settled product
+ * decision — the reference is the side that is wrong — and the reference is being deleted.
+ */
+function wikiPath(p) {
+  try {
+    return withDiscardableStderr(() => pyResolve(p));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * `_web_catalog._wiki_manifest` — `$GENESEED_WIKI` first, else `wiki.jsonc` beside the
  * deployed bundle, read with the harness's generic JSONC loader.
+ *
+ * `pyResolve` where the reference only `expanduser()`s. NOT OBSERVABLE, so it stays: `p` is
+ * consumed by `isFile` and `mcpLoad` and never reaches a response body, and both of those
+ * follow symlinks and resolve a relative path against the same cwd anyway.
  */
 function wikiManifest(state) {
   const cand = process.env.GENESEED_WIKI;
-  const p = cand ? pyResolve(cand) : path.join(state.target, 'wiki.jsonc');
-  if (!isFile(p)) return [];
+  const p = cand ? wikiPath(cand) : path.join(state.target, 'wiki.jsonc');
+  if (!p || !isFile(p)) return [];
   const cfg = mcpLoad(p);
   const wikis = cfg.wikis;
   return Array.isArray(wikis) ? wikis : [];
@@ -428,8 +463,12 @@ export function wikiItems(state) {
   for (const w of wikiManifest(state)) {
     if (!w || typeof w !== 'object' || Array.isArray(w)) continue;
     const wname = String(dget(w, 'name', null) || 'wiki');
-    const root = pyResolve(String(dget(w, 'path', null) || ''));
-    if (!isDir(root)) continue;
+    // PER ENTRY, and the loop continues — one unusable `path` in the manifest must not blank
+    // every OTHER vault in it. `pyResolve` where the reference only `expanduser()`s is again
+    // unobservable: `root` is only ever joined against or used as the base of a `relative()`
+    // whose other operand was built FROM it, and `source` is `.resolve()`d on both sides.
+    const root = wikiPath(String(dget(w, 'path', null) || ''));
+    if (!root || !isDir(root)) continue;
     const entries = (dget(w, 'entries', null) || [])
       .filter((e) => e && typeof e === 'object' && !Array.isArray(e));
     const excludes = entries.filter((e) => dget(e, 'load', null) === 'exclude')
@@ -469,7 +508,11 @@ export function apiWikiItem(state, name) {
   for (const w of wikiManifest(state)) {
     if (!w || typeof w !== 'object' || Array.isArray(w)) continue;
     if (String(dget(w, 'name', null) || 'wiki') !== wname) continue;
-    const root = pyResolve(String(dget(w, 'path', null) || ''));
+    // The reference is `.expanduser().resolve()` here, so this site matches on resolve and
+    // differs only on the refusal — which falls through to the `NotFound` below, exactly
+    // where the reference lands when the expanded root turns out not to exist.
+    const root = wikiPath(String(dget(w, 'path', null) || ''));
+    if (!root) continue;
     const p = pyResolve(path.join(root, rel));
     if (rel && path.extname(p) === '.md' && within(p, root) && isFile(p)) {
       const body = readMaybe(p) ?? '';

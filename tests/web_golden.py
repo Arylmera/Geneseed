@@ -1959,6 +1959,38 @@ def _catalog_cells(cell) -> list[dict]:
              # is what says the CONFIG item goes through the same loader.
              expect=['"name": "vault:notes/two.md"', '"desc": "just one"',
                      '"manifest": {"kind": "wiki", "wikis": [{"name": "vault"']),
+        cell("catalog/a-tilde-user-wiki-manifest-degrades-to-an-empty-section",
+             [_req(path="/api/catalog/wiki")], world=_full(),
+             env={"GENESEED_WIKI": "~nosuchuser/wiki.jsonc"},
+             # THE REFUSAL MUST NOT REACH THE REQUEST PATH. `expanduser` refuses a `~user`
+             # form by printing and throwing, and `do_GET`/`server.mjs` wrap the whole GET in
+             # a blanket catch -> a JSON 500, so an unguarded refusal turns one bad env var
+             # into a dead Knowledge section. Both sides answer the section's own degrade
+             # instead: the empty list. The reference gets there the other way — `ntpath`
+             # expands `~nosuchuser` to a path that does not exist and `is_file()` says no —
+             # which is why this is stated absolutely and not merely compared.
+             expect=['{"section": "wiki", "items": []}', "200 OK"],
+             # The name of an account nobody has must appear NOWHERE: not in a body, and not
+             # on the daemon's stderr, where `expanduser` writes at the RAISE SITE. Without
+             # `withDiscardableStderr` around the catch this is the assertion that fires.
+             expect_absent=["nosuchuser", "refusing"]),
+        cell("catalog/a-tilde-user-vault-skips-only-that-entry",
+             [_req(path="/api/catalog/wiki"),
+              _req(path="/api/item/wiki/ghost:notes%2Fone.md")],
+             world=_full(**{f"{_OC}/wiki.jsonc": json.dumps({"wikis": [
+                 {"name": "ghost", "path": "~nosuchuser/vault",
+                  "entries": [{"path": "notes"}]},
+                 {"name": "vault", "path": "{sb/}/vault",
+                  "entries": [{"path": "notes", "description": "my notes"}]}]})}),
+             # PER ENTRY, and the good vault SURVIVES — the positive control is the whole
+             # cell. A guard that bailed out of the loop instead of continuing would answer
+             # an empty section here and look identical to the cell above. `ghost` is FIRST
+             # so the skip has to happen before the entry that must still be listed.
+             expect=['"name": "vault:notes/one.md"', '"group": "vault"',
+                     # The reader's own degrade: it falls through to `NotFound`, which is
+                     # where the reference lands when the expanded root does not exist.
+                     '{"error": "not found: ghost:notes/one.md"}', "404 Not Found"],
+             expect_absent=["nosuchuser", "refusing", '"group": "ghost"']),
         cell("catalog/an-unknown-section-is-a-404",
              [_req(path="/api/catalog/nope")], world=_full(),
              # The `NotFound` → 404 convention, first exercised here. `SECTIONS` is a

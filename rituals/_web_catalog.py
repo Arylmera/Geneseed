@@ -178,13 +178,30 @@ WIKI_FILE_CAP = 5000  # per manifest entry — safety valve only; names are chea
 # web list renders 50 at a time and filters client-side, so a big vault is fine
 
 
+def _wiki_path(cand: str):
+    """`Path(cand).expanduser()`, or None when there is no home to expand.
+
+    PARITY GUARD, matching js/web/api.mjs's `wikiPath`. On POSIX `expanduser()` raises
+    RuntimeError for a `~user` naming an account the password database does not know,
+    and all three callers below sit on a web request path that `_web_server.do_GET`
+    wraps in a blanket `except` -> a JSON 500. So one bad line in a file the user
+    hand-edits killed the whole Knowledge section, while the SAME input on Windows
+    expanded to a path that merely does not exist and degraded quietly to []/skip/404.
+    Returning None reaches those degrades on both platforms.
+    """
+    try:
+        return Path(cand).expanduser()
+    except RuntimeError:
+        return None
+
+
 def _wiki_manifest(state: WebState) -> list:
     """The wiki manifest's `wikis` list, resolved like the context plugin does:
     $GENESEED_WIKI first, else wiki.jsonc beside the deployed bundle."""
     import os
     cand = os.environ.get("GENESEED_WIKI")
-    p = Path(cand).expanduser() if cand else state.target / "wiki.jsonc"
-    if not p.is_file():
+    p = _wiki_path(cand) if cand else state.target / "wiki.jsonc"
+    if p is None or not p.is_file():
         return []
     cfg = harness._mcp_load(p)   # the harness's generic JSONC dict loader
     wikis = cfg.get("wikis")
@@ -200,8 +217,9 @@ def _wiki_items(state: WebState) -> list[dict]:
         if not isinstance(w, dict):
             continue
         wname = str(w.get("name") or "wiki")
-        root = Path(str(w.get("path") or "")).expanduser()
-        if not root.is_dir():
+        # Per entry: one unusable `path` must not blank every other vault in the manifest.
+        root = _wiki_path(str(w.get("path") or ""))
+        if root is None or not root.is_dir():
             continue
         entries = [e for e in (w.get("entries") or []) if isinstance(e, dict)]
         excludes = [str(e.get("path") or "").strip("/").replace("\\", "/")
@@ -241,7 +259,10 @@ def api_wiki_item(state: WebState, name: str) -> dict:
     rel = rel.strip("/").replace("\\", "/")
     for w in _wiki_manifest(state):
         if isinstance(w, dict) and str(w.get("name") or "wiki") == wname:
-            root = Path(str(w.get("path") or "")).expanduser().resolve()
+            root = _wiki_path(str(w.get("path") or ""))
+            if root is None:
+                continue
+            root = root.resolve()
             p = (root / rel).resolve()
             if rel and p.suffix == ".md" and harness._within(p, root) and p.is_file():
                 body = p.read_text(encoding="utf-8", errors="replace")
