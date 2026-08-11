@@ -240,45 +240,73 @@ _VERSION_LINE = re.compile(
     rb"^(?P<fp>[0-9a-f]{6,64}) \(built (?P<date>\d{4}-\d{2}-\d{2})\)"
     rb"(?P<rel> \[release [^\]]+\])?(?P<cr>\r)?$")
 
-# The SECOND declared shape, and it is a real one rather than an escape hatch: a marker whose
-# content is only whitespace. `cmd_version` reads the file as `txt.split()[0] if txt else None`,
-# so a whitespace-only marker is DEFINED to read as absent and the host walk carries on to the
-# next candidate — and `harness_golden._version_cells`'s `an-empty-marker-is-not-a-version`
-# seeds exactly `"   \n"` into `home/.config/opencode/.geneseed-version` to prove that branch
-# runs. `_destamp` is shared with that harness through `golden._snapshot`, and dc00083 was only
-# ever run against `tests/golden.py`, whose 259 emit cells never seed a marker — hence a gate
-# green on the matrix and dead on the verb harness, on BOTH platforms (Windows produced
-# `b'   \r'`; only the `cells` job is ubuntu-only, not the defect).
+# WHAT A NON-CANONICAL LINE IS ALLOWED TO CARRY — and the reason this is a property test
+# rather than a third declared shape.
 #
-# Matched, not skipped, and passed through UNCHANGED rather than blanked: there is nothing in a
-# blank line that moves between two runs, so leaving the bytes alone keeps them under the byte
-# comparison in full. What is widened is the SHAPE assertion, and only to a shape that is named
-# and explained here — a version line of any other shape still raises.
-_VERSION_BLANK = re.compile(rb"^[ \t]*\r?$")
+# dc00083 required every line of every `.geneseed-version` to match the canonical shape and
+# raised otherwise. That was the wrong axis. These harnesses SEED synthetic markers as fixtures,
+# each deliberately odd, and each new one bolted on another declared shape: `"   \n"` at
+# `harness_golden.py:1182` (`an-empty-marker-is-not-a-version` — `cmd_version` reads the file as
+# `txt.split()[0] if txt else None`, so a whitespace-only marker is DEFINED to read as absent and
+# the host walk moves to the next candidate) forced shape two, and `web_golden.py:339`'s
+# `_VERSION = "0000000000000000"` (a fingerprint no source render can produce, so the version
+# verdict is the stable "differs" arm) would have forced shape three. Shape three implies shape
+# four: the shape of a fixture is not a property this file can enumerate.
+#
+# The property that actually matters is much narrower. A recorded corpus only needs blanking for
+# content that MOVES between runs. A synthetic fixture value is constant across both
+# implementations and across days, so leaving it VERBATIM is strictly better than blanking it —
+# the bytes stay under the byte comparison in full. So: canonical line → blanked; anything else →
+# verbatim, after PROVING it holds nothing that can rot. That keeps dc00083's discipline (a
+# normaliser must be able to complain) while pointing the complaint at the corpus's real threat.
+_ROTS = (
+    # A BUILD DATE. `write_version` stamps today's, so a `YYYY-MM-DD` anywhere outside the
+    # canonical `(built ...)` bracket is a field that turns a recorded corpus stale at midnight.
+    re.compile(rb"\d{4}-\d{2}-\d{2}"),
+    # A LIVE SOURCE FINGERPRINT, tested by the exact length both implementations produce:
+    # `source_fingerprint()` is `sha256(...).hexdigest()[:12]` (`_build_render.py:721`) and
+    # `sourceFingerprint()` is `digest('hex').slice(0, 12)` (`js/emit.mjs:375`) — EXACTLY twelve
+    # lowercase hex characters, never more, never fewer.
+    #
+    # The lookarounds demand a non-hex neighbour on BOTH sides, so the token has to BE twelve
+    # long rather than merely contain twelve. That is what separates the two cases honestly:
+    # `0000000000000000` is sixteen, every twelve-run inside it is flanked by another hex digit,
+    # so the fixture passes — while a real fingerprint, which is always twelve, is caught the
+    # moment it appears outside the canonical line (a legacy fingerprint-only marker, say). The
+    # test is the length the code actually emits, not a guess about how random the digits look.
+    re.compile(rb"(?<![0-9a-f])[0-9a-f]{12}(?![0-9a-f])"),
+)
 
 
 def _destamp(name: str, body: bytes) -> bytes:
     """Blank the fields in `.geneseed-version` that move for reasons that are not
     regressions: the source fingerprint and the build date.
 
-    ASSERTS THE SHAPE FIRST. A blind `re.sub` that is too aggressive silently blanks a
-    real difference — the failure mode where a gate stays green because it stopped
-    looking. A line must match one of the two declared shapes — `_VERSION_LINE` (stamped,
-    blanked) or `_VERSION_BLANK` (a whitespace-only marker, passed through as-is); anything
-    else raises naming the file and the offending line rather than passing the byte through
-    unexamined."""
+    ASSERTS BEFORE PASSING ANYTHING THROUGH. A blind `re.sub` that is too aggressive silently
+    blanks a real difference — the failure mode where a gate stays green because it stopped
+    looking. Two rules, and neither is a fall-through:
+
+      1. A line matching `_VERSION_LINE` is the stamp, and is blanked.
+      2. Any other line is passed through VERBATIM — but only after `_ROTS` proves it carries
+         no date and no live-shaped fingerprint. A line that does raises, naming the file, the
+         offending token and the whole line, rather than letting a moving field into a corpus
+         that is about to be recorded."""
     if not name.endswith(".geneseed-version"):
         return body
     out = []
     for line in body.split(b"\n"):
-        if not line or _VERSION_BLANK.match(line):
-            out.append(line)  # nothing in it moves — keep the bytes, keep them compared
-            continue
         m = _VERSION_LINE.match(line)
-        assert m, f"{name}: version line did not match its declared shape: {line!r}"
-        out.append(b"<FP> (built <DATE>)"
-                   + (b" [release <REL>]" if m.group("rel") else b"")
-                   + (m.group("cr") or b""))
+        if m:
+            out.append(b"<FP> (built <DATE>)"
+                       + (b" [release <REL>]" if m.group("rel") else b"")
+                       + (m.group("cr") or b""))
+            continue
+        for rot in _ROTS:
+            hit = rot.search(line)
+            assert not hit, (
+                f"{name}: a line outside the canonical stamp carries {hit.group()!r}, "
+                f"which moves between runs and would rot a recorded corpus: {line!r}")
+        out.append(line)  # nothing in it moves — keep the bytes, keep them compared
     return b"\n".join(out)
 
 
