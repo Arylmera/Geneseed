@@ -1078,52 +1078,32 @@ def _claude_bob_emit_problems(theme_name: str) -> list[str]:
 
 # ----------------------------------------------------------------- the CLI reference
 #
-# `harness.build_argparser()` is 24 subparsers (25 invocable names — `update` aliases
-# `upgrade`) and 43 `add_argument` calls, and it is the only description of the CLI either
-# implementation has. Node cannot introspect argparse, so the metadata is GENERATED from the
-# parser into `cli.json` and BOTH sides read that file: the web console's `cli` docs page
-# (`_web_docs._cli_reference`) and `bin/geneseed-cli.mjs`'s own argument parser, whose `VERBS`
-# table used to carry a second hand-written transcription of the same 43 calls.
+# `harness.build_argparser()` is 25 subparsers (26 invocable names — `update` aliases
+# `upgrade`) and 46 `add_argument` calls, and it USED to be the only description of the CLI
+# either implementation had. Node cannot introspect argparse, so P10c made the metadata a FILE
+# both sides read: the web console's `cli` docs page (`_web_docs._cli_reference`) and
+# `bin/geneseed-cli.mjs`'s own argument parser, whose `VERBS` table used to carry a second
+# hand-written transcription of the same calls.
 #
-# WHAT STOPS IT ROTTING is `_cli_reference_problems`, reported by doctor on BOTH binaries:
-# the file records a digest of the file the parser lives in, and a parser that moved without a
-# regeneration is a doctor problem rather than a page quietly describing a CLI nobody has.
+# P2 MOVED THAT FILE AND CHANGED ITS OWNER. It is `js/cli-table.json` now — a product path,
+# because `package.json`'s `files[]` already ships `js/` and a document npm ships does not
+# belong in `tests/` — and it is no longer GENERATED from this parser. It is the owned
+# document, and this module is one of its READERS, on the same footing as `js/cli.mjs`.
 #
-# THE DIGEST, RATHER THAN THE STRONGER "REGENERATE AND COMPARE" A PYTHON DOCTOR COULD RUN, is
-# the whole design. `tests/harness_golden.py` compares the two doctors byte for byte, so a
-# check only one of them can perform is a check the other passes SILENTLY — P4e's fifth
-# coverage hole, wearing a partition as a disguise. Hashing one file is something Node does as
-# well as Python does, so the fault that matters (the parser moved) reddens both binaries with
-# the same sentence. The residue — a hand-edited `cli.json` whose digest still matches — is
-# `tests/test_cli_reference.py`'s, where being Python-only costs nothing and the acceptance
-# loop runs it anyway.
+# WHAT WENT WITH THE MOVE. `cli_source_digest`/`_cli_reference_problems` hashed
+# `rituals/harness.py` and doctor reported drift on both binaries when the parser moved without
+# a regeneration. That digest was a claim about the file this migration deletes, and there is no
+# generator left to fall behind. `tests/test_cli_reference.py` holds the argparse-vs-table
+# EQUALITY — the gate a digest never could, since it also sees a hand edit — for as long as the
+# parser is here to be walked. After that the table is simply the source of truth.
 
-CLI_JSON = ROOT / "cli.json"
-_HARNESS_PY = ROOT / "rituals" / "harness.py"
+CLI_JSON = ROOT / "js" / "cli-table.json"
 
 #: The keys the docs PAGE has always carried, per argument. `_cli_arg` produces two more for
 #: `bin/geneseed-cli.mjs` (`type`, `hidden`) and the page is filtered back to exactly this set
 #: so the response the tracked `web/dist` renders is byte-for-byte what it was before.
 _PAGE_ARG_KEYS = ("names", "dest", "metavar", "help", "choices", "default",
                   "required", "nargs", "is_flag")
-
-
-def cli_source_digest(path: "Path | None" = None) -> str:
-    """sha256 of the parser's own file, NEWLINE-NORMALISED.
-
-    `.gitattributes` asks for `eol=lf` and `js/doctor.mjs` is CRLF on disk regardless — an
-    attribute governs a checkout, not a working tree that predates it. A digest sensitive to
-    the line ending would report drift on a machine that has none, and the recorded value
-    was computed on whichever machine last regenerated the file.
-
-    `path` EXISTS BECAUSE THE NORMALISATION IS OTHERWISE UNREACHABLE. `rituals/harness.py` is
-    LF in this working tree, so a twin that dropped `.replace()` would agree with this one on
-    every input either has — a green mutation that is a question about the corpus of inputs
-    before it is a question about the code. `tests/test_cli_reference.py` runs both
-    implementations over a CRLF file through this argument."""
-    import hashlib
-    src = path if path is not None else _HARNESS_PY
-    return hashlib.sha256(src.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
 def _cli_arg(a) -> dict:
@@ -1204,25 +1184,17 @@ def build_cli_reference(parser: argparse.ArgumentParser) -> dict:
     return {"prog": parser.prog, "commands": commands}
 
 
-def write_cli_reference(parser: argparse.ArgumentParser) -> bool:
-    """Generate `cli.json`. True when the bytes changed, so a caller can exit non-zero and
-    be usable as a CI drift check — `sync_themes`' contract, for the same reason.
-
-    `write_bytes`, not `write_text`: the file is `text=auto eol=lf` and Python's text mode
-    would put CRLF in it on Windows, leaving the tree permanently dirty."""
-    data = {"source_sha256": cli_source_digest(), **build_cli_reference(parser)}
-    raw = (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-    # BYTES on both sides of the comparison too. `read_text` translates newlines, so a file
-    # that had somehow been written with CRLF would compare EQUAL to the LF it is about to be
-    # replaced with and this would report "already in sync" while rewriting it.
-    old = CLI_JSON.read_bytes() if CLI_JSON.is_file() else None
-    CLI_JSON.write_bytes(raw)
-    return old != raw
+#: The exact bytes `js/cli-table.json` carries for a given parser — the serialisation
+#: `tests/test_cli_reference.py` compares the committed table against. It is a FUNCTION and not
+#: a comment because the equality is over bytes, not over a parsed dict: key order and
+#: indentation are part of what a hand edit can break.
+def serialise_cli_reference(parser: argparse.ArgumentParser) -> str:
+    return json.dumps(build_cli_reference(parser), indent=2, ensure_ascii=False) + "\n"
 
 
 def load_cli_reference() -> dict:
-    """`cli.json` as the docs page consumes it: the generated file minus the arguments
-    argparse hides, minus the generator's own bookkeeping.
+    """The CLI table as the docs page consumes it: the file minus the arguments argparse
+    hides, minus the two fields the page never carried.
 
     THE PAGE IS A VIEW OF THE FILE, not the other way round. `bin/geneseed-cli.mjs` needs the
     hidden arguments and the page must not show them, so the file carries everything and each
@@ -1246,21 +1218,6 @@ def load_cli_reference() -> dict:
 
 def _page_args(args: list) -> list:
     return [{k: a.get(k) for k in _PAGE_ARG_KEYS} for a in args if not a.get("hidden")]
-
-
-def _cli_reference_problems() -> list[str]:
-    """`cli.json` must still describe the parser it was generated from — doctor's half of the
-    contract, and the half that runs on a user's machine where the test suite does not."""
-    try:
-        data = json.loads(CLI_JSON.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return ["[cli] cli.json is missing or unreadable — regenerate it from a checkout "
-                "with `python tests/gen_cli_reference.py`"]
-    if data.get("source_sha256") != cli_source_digest():
-        return ["[cli] cli.json is stale: rituals/harness.py has changed since it was "
-                "generated — regenerate it from a checkout with "
-                "`python tests/gen_cli_reference.py`"]
-    return []
 
 
 def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
@@ -1317,7 +1274,9 @@ def _doctor_collect(theme=None, all_themes=False, bundle=None, no_bundle=False,
     problems += _ran("colors", "Colour themes", _color_theme_problems())
     problems += _ran("authoring", "Authoring gates", _authoring_problems())
     problems += _ran("shim", "Hook shim", shim_probs)
-    problems += _ran("cli", "CLI reference", _cli_reference_problems())
+    # P10c's `cli` check is GONE — it hashed `rituals/harness.py` against a digest baked into
+    # `cli.json`, and P2 made the table the owned document with no generator behind it. See
+    # the CLI reference section above; `js/doctor.mjs` carries the same note.
     if not no_bundle:
         b = Path(bundle).expanduser().resolve() if bundle else ROOT / "Harness"
         problems += _ran("bundle", "Committed bundle drift", _rendered_problems(b))

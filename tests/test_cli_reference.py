@@ -1,16 +1,21 @@
-"""`cli.json` — the gates a doctor check and a cell cannot give.
+"""`js/cli-table.json` — the gates a doctor check and a cell cannot give.
 
 P10c made `harness.build_argparser()`'s metadata a FILE both implementations read, because
 Node cannot introspect argparse and a hand-written twin would have been the largest
-copy-of-a-value-under-test in the port. Three things then have to be true, and each is true
-for a different reason and needs a different gate:
+copy-of-a-value-under-test in the port. P2 moved that file to a product path and made it the
+OWNED document: nothing generates it any more, and doctor's digest of `rituals/harness.py`
+went with the generator, because a digest is a claim about a file this migration deletes.
 
-  * **the file describes the parser.** `doctor` checks a DIGEST of `rituals/harness.py`, on
-    both binaries, because that is the check Node can also perform — but a digest cannot see
-    a hand-edited `cli.json`, and hand-editing it is the exact failure the arrangement exists
-    to prevent. So the REGENERATE-AND-COMPARE lives here. It is Python-only by nature and
-    that costs nothing: `python -m unittest discover -s tests` is in the acceptance loop
-    beside both doctors.
+THIS MODULE IS WHAT THE DIGEST WAS STANDING IN FOR, and it is strictly stronger. Three things
+have to be true, each for a different reason and each needing a different gate:
+
+  * **the table still describes the parser.** The ARGPARSE-VS-TABLE EQUALITY below is the only
+    one of these gates that walks `build_argparser()` — it is what catches a wrong `nargs` on
+    a flag no recorded cell exercises, and unlike a digest it also sees a HAND EDIT. It is
+    Python-only by nature and that costs nothing: `python -m unittest discover -s tests` is in
+    the acceptance loop beside both doctors. It must exist before `rituals/harness.py` goes,
+    and this is the phase that can still write it. After the parser is deleted the table is
+    simply the source of truth and is edited directly.
   * **both implementations read it the same way.** `tests/web_golden.py` compares the `cli`
     docs page, but both sides answer it out of one file, so that comparison is close to
     vacuous by construction. The payload equality below is the direct cross-implementation
@@ -19,8 +24,8 @@ for a different reason and needs a different gate:
   * **`bin/geneseed-cli.mjs` cannot parse anything without it.** That dependency is the price
     of not having a second transcription, and it is a real divergence from the reference,
     which has argparse compiled in. No `harness_golden` cell can hold it — a copy with no
-    `cli.json` has the Node side refusing the verb and the reference running it — so the
-    refusal is asserted here, absolutely, against a checkout copy with the file removed.
+    table has the Node side refusing the verb and the reference running it — so the refusal is
+    asserted here, absolutely, against a checkout copy with the file removed.
 """
 from __future__ import annotations
 
@@ -97,55 +102,61 @@ def _node_json(src: str, cwd: Path = ROOT) -> object:
 
 
 class TheFileIsWhatTheParserProduces(unittest.TestCase):
-    def test_the_committed_file_is_what_the_parser_produces(self):
-        """The gate a digest cannot be. Regenerate in memory and byte-compare.
+    def test_the_committed_table_is_what_the_parser_describes(self):
+        """THE ARGPARSE-VS-TABLE EQUALITY — the gate P2's design would have deleted, and the
+        one that has to exist before `rituals/harness.py` does not.
 
-        This is what makes `cli.json` a GENERATED file rather than a hand-written one that
-        happens to have been generated once. `tests/gen_cli_reference.py` writes exactly
-        these bytes, so a failure here has one fix and the message names it."""
-        want = {"source_sha256": harness.cli_source_digest(),
-                **harness.build_cli_reference(harness.build_argparser())}
-        text = json.dumps(want, indent=2, ensure_ascii=False) + "\n"
-        got = harness.CLI_JSON.read_text(encoding="utf-8")
-        self.assertEqual(text, got,
-                         "cli.json no longer matches rituals/harness.py's parser — run "
-                         "`python tests/gen_cli_reference.py` and commit the result")
+        A digest of the parser's FILE could only ever say "the source moved". This walks the
+        parser itself, so it also sees a hand edit to the table — and it is the only thing in
+        the tree that catches a wrong `nargs` on a flag no recorded cell exercises, since
+        `nargs` only shows up in behaviour when a user spells the argument that way.
 
-    def test_the_digest_names_the_file_the_parser_lives_in(self):
-        """The positive control for doctor's check, and the reason it is not vacuous.
-
-        `_cli_reference_problems` returns `[]` on a clean tree, and so would a stub. This
-        asserts the two halves it compares are really the committed digest and a live hash of
-        `rituals/harness.py` — the file `build_argparser` is defined in."""
-        recorded = json.loads(harness.CLI_JSON.read_text(encoding="utf-8"))["source_sha256"]
-        self.assertEqual(recorded, harness.cli_source_digest())
-        self.assertEqual(len(recorded), 64)
-        self.assertEqual(harness._cli_reference_problems(), [])
-        # And it MOVES with the parser: a byte appended to harness.py must change the digest.
-        # Computed from the bytes rather than by writing to the checkout.
-        import hashlib
-        moved = hashlib.sha256(
-            (ROOT / "rituals" / "harness.py").read_bytes().replace(b"\r\n", b"\n")
-            + b"\n# drift\n").hexdigest()
-        self.assertNotEqual(moved, recorded)
+        BOTH DIRECTIONS, AND FIELD FOR FIELD FIRST. The byte equality at the end is the
+        stricter claim (key order and indentation are part of what a hand edit breaks), but a
+        900-line text diff names nothing; the per-command comparisons above it fail with the
+        verb in the message."""
+        want = harness.build_cli_reference(harness.build_argparser())
+        got = json.loads(harness.CLI_JSON.read_text(encoding="utf-8"))
+        fix = ("— `js/cli-table.json` is the owned document now, so edit it to match the "
+               "parser (or, after `rituals/harness.py` is gone, edit it and delete this gate)")
+        self.assertEqual(got.get("prog"), want["prog"], f"the table's `prog` moved {fix}")
+        self.assertEqual([c["name"] for c in got.get("commands", [])],
+                         [c["name"] for c in want["commands"]],
+                         f"the table and the parser disagree on which commands exist {fix}")
+        for w, g in zip(want["commands"], got["commands"]):
+            with self.subTest(command=w["name"]):
+                self.assertEqual(g, w, f"`{w['name']}` in the table is not what "
+                                       f"`build_argparser()` describes {fix}")
+        # The bytes, so the serialisation cannot drift even when every field agrees.
+        self.assertEqual(harness.CLI_JSON.read_text(encoding="utf-8"),
+                         harness.serialise_cli_reference(harness.build_argparser()),
+                         f"the table's fields match but its BYTES do not {fix}")
 
     def test_the_file_carries_the_arguments_argparse_hides(self):
         """The FILE is the whole parser; the PAGE is a view of it. This is the direction the
         payload comparison cannot state, and the one the Node CLI breaks without.
 
-        `help=argparse.SUPPRESS` arguments used to be dropped by the walk entirely. Four of
-        them bind real values, and `bin/geneseed-cli.mjs` mis-parses every one of these
-        spellings without them: `upgrade v1 imperial`, `sync-self v1`,
-        `bootstrap main imperial`, `web --daemon-internal` (which tests/web_golden.py passes
-        95 times a run)."""
+        `help=argparse.SUPPRESS` arguments used to be dropped by the walk entirely. Each binds
+        a real value, and `bin/geneseed-cli.mjs` mis-parses every one of these spellings
+        without them: `upgrade v1 imperial`, `sync-self v1`, `bootstrap main imperial`,
+        `web --daemon-internal` (which tests/web_golden.py passes 95 times a run).
+
+        FIVE, NOT FOUR, AND THEREFORE AN EQUALITY. This suite asserted the four by CONTAINMENT
+        from P10c until P1's recording, and containment could not see that `update` carries
+        `upgrade`'s hidden `ref` as well — argparse's alias is a second command ROW with its
+        own copy of both positionals, and a reader that dropped it would mis-parse
+        `geneseed update v1 imperial` while `upgrade` stayed correct. The equality lived on
+        the recording until P2 made the table the single document; it lives here now."""
         data = json.loads(harness.CLI_JSON.read_text(encoding="utf-8"))
         by_name = {c["name"]: c for c in data["commands"]}
-        hidden = {(c["name"], a["dest"])
-                  for c in data["commands"]
-                  for a in c["positionals"] + c["options"] if a["hidden"]}
-        for want in (("upgrade", "ref"), ("sync-self", "ref"),
-                     ("bootstrap", "extra"), ("web", "daemon_internal")):
-            self.assertIn(want, hidden, f"{want} is not in cli.json as a hidden argument")
+        hidden = sorted((c["name"], a["dest"])
+                        for c in data["commands"]
+                        for a in c["positionals"] + c["options"] if a["hidden"])
+        self.assertEqual(hidden, [("bootstrap", "extra"), ("sync-self", "ref"),
+                                  ("update", "ref"), ("upgrade", "ref"),
+                                  ("web", "daemon_internal")],
+                         "a hidden argument was dropped from the table, or an unexpected "
+                         "one appeared")
         # And the two fields the old walk never carried, each with exactly one consumer.
         port = next(a for a in by_name["web"]["options"] if a["dest"] == "port")
         self.assertEqual(port["type"], "int", "`--port` must be typed, or `--port abc` "
@@ -190,18 +201,6 @@ class TheRecordingIsWhatTheParserAnswers(unittest.TestCase):
 
     SNAP = ROOT / "tests" / "__snapshots__"
 
-    def test_the_recorded_reference_is_cli_json_minus_the_deleted_files_digest(self):
-        live = json.loads(harness.CLI_JSON.read_text(encoding="utf-8"))
-        recorded = json.loads((self.SNAP / "cli_reference.json").read_text(encoding="utf-8"))
-        self.assertIn("source_sha256", live)
-        self.assertNotIn("source_sha256", recorded,
-                         "the recording froze a digest of `rituals/harness.py`, a file this "
-                         "migration deletes — the claim would outlive its subject")
-        del live["source_sha256"]
-        self.assertEqual(recorded, live,
-                         "the recording is stale — run `python tests/record_help.py "
-                         "tests/__snapshots__` and commit the result")
-
     def test_the_recorded_help_is_still_what_the_parser_prints(self):
         """The gate that keeps the corpus from quietly going stale.
 
@@ -227,28 +226,6 @@ class TheRecordingIsWhatTheParserAnswers(unittest.TestCase):
                 (self.SNAP / "help" / f"{name}.txt").read_text(encoding="utf-8"),
                 f"`{name} --help` has moved since it was recorded — re-record with "
                 f"`python tests/record_help.py tests/__snapshots__`")
-
-    def test_the_recorded_reference_carries_the_hidden_surface(self):
-        """What a careless transcription drops, asserted on the RECORDING rather than on the
-        live file — the recording is what P2 reads, and a gate on the live file says nothing
-        about the copy that outlives it.
-
-        FIVE, NOT FOUR. The four `help=argparse.SUPPRESS` arguments this suite has asserted by
-        CONTAINMENT since P10c are `upgrade ref`, `sync-self ref`, `bootstrap extra` and
-        `web daemon_internal` — and `update` carries a fifth, because argparse's alias is a
-        second command row in `cli.json` with its own copy of `upgrade`'s positionals. An
-        equality found it; four `assertIn`s could not."""
-        rec = json.loads((self.SNAP / "cli_reference.json").read_text(encoding="utf-8"))
-        hidden = sorted((c["name"], a["dest"]) for c in rec["commands"]
-                        for a in c["positionals"] + c["options"] if a["hidden"])
-        self.assertEqual(hidden, [("bootstrap", "extra"), ("sync-self", "ref"),
-                                  ("update", "ref"), ("upgrade", "ref"),
-                                  ("web", "daemon_internal")])
-        by_name = {c["name"]: c for c in rec["commands"]}
-        port = next(a for a in by_name["web"]["options"] if a["dest"] == "port")
-        self.assertEqual(port["type"], "int", "`--port` must be typed, or `--port abc` "
-                                              "silently binds the default 4747")
-        self.assertEqual(by_name["theme"]["mutex"], [["--solid-only", "--transparent-only"]])
 
     @unittest.skipIf(NODE is None, "node is not on PATH")
     def test_the_ports_line_breaker_is_textwrap_at_every_width(self):
@@ -440,38 +417,22 @@ class TheRecordingIsWhatTheParserAnswers(unittest.TestCase):
 
 @unittest.skipIf(NODE is None, "node is not on PATH")
 class BothImplementationsReadTheSameFile(unittest.TestCase):
-    def test_the_two_digests_agree(self):
-        """The primitive, compared directly. Both sides normalise CRLF before hashing, and a
-        side that forgot would report drift on a machine that has none — invisible in this
-        working tree, where `rituals/harness.py` happens to be LF."""
-        got = _node_json("import {cliSourceDigest} from './js/cli.mjs';"
-                         "process.stdout.write(JSON.stringify(cliSourceDigest()));")
-        self.assertEqual(got, harness.cli_source_digest())
-
-    def test_the_two_digests_agree_on_a_crlf_file(self):
-        """The corpus the working tree cannot be.
-
-        `rituals/harness.py` is LF here, so the test above passes for an implementation that
-        never normalises anything — the mutation is green for a reason that is about the
-        INPUTS, not the code. A CRLF file and its LF twin must hash the SAME on both sides,
-        and the reference's own answer is what both are checked against. Without this, a
-        Windows checkout whose `.py` files came out CRLF would see doctor report permanent
-        drift against a digest recorded on an LF machine, and no gate would have said so."""
-        body = "def build_argparser():\n    pass\n# é\n"
-        with tempfile.TemporaryDirectory() as tmp:
-            lf = Path(tmp) / "lf.py"
-            crlf = Path(tmp) / "crlf.py"
-            lf.write_bytes(body.encode("utf-8"))
-            crlf.write_bytes(body.replace("\n", "\r\n").encode("utf-8"))
-            want = harness.cli_source_digest(lf)
-            self.assertEqual(harness.cli_source_digest(crlf), want,
-                             "the reference's digest is line-ending sensitive")
-            got = _node_json(
-                "import {cliSourceDigest} from './js/cli.mjs';"
-                f"process.stdout.write(JSON.stringify([{json.dumps(str(lf))},"
-                f" {json.dumps(str(crlf))}].map(cliSourceDigest)));")
-            self.assertEqual(got, [want, want],
-                             "the port's digest disagrees with the reference on a CRLF file")
+    def test_both_sides_read_the_same_path(self):
+        """The one thing a payload equality cannot state: that the two readers are looking at
+        the SAME FILE. Both would agree on an empty reference if both had lost it, and P2 moved
+        the path, so this is the assertion that says the move landed on both sides."""
+        got = _node_json("import {cliReference} from './js/cli.mjs';"
+                         "import {readFileSync} from 'node:fs';"
+                         "import path from 'node:path';"
+                         "import {ROOT} from './js/checkout.mjs';"
+                         "const p = path.join(ROOT, 'js', 'cli-table.json');"
+                         "process.stdout.write(JSON.stringify("
+                         "  [JSON.parse(readFileSync(p, 'utf-8')).commands.length,"
+                         "   cliReference().commands.length]));")
+        self.assertEqual(harness.CLI_JSON, ROOT / "js" / "cli-table.json",
+                         "the reference reads a different file from the port")
+        self.assertEqual(got, [26, 26], "the port's table is not the 26-row document the "
+                                        "reference reads")
 
     def test_the_two_readers_produce_the_same_page(self):
         got = _node_json("import {cliReference} from './js/cli.mjs';"
@@ -489,7 +450,7 @@ class BothImplementationsReadTheSameFile(unittest.TestCase):
             "import {cliSpec} from './js/cli.mjs';"
             f"const vs = {json.dumps(verbs)};"
             "process.stdout.write(JSON.stringify(vs.filter((v) => cliSpec(v) === null)));")
-        self.assertEqual(got, [], "cli.json describes no subcommand for these verbs")
+        self.assertEqual(got, [], "js/cli-table.json describes no subcommand for these verbs")
 
 
 def harness_golden_cli_verbs() -> set[str]:
@@ -502,33 +463,33 @@ def harness_golden_cli_verbs() -> set[str]:
 class TheEntryRefusesWithoutIt(unittest.TestCase):
     """The divergence the port bought, asserted where a cell cannot reach it.
 
-    The reference compiles its parser in; this entry reads it. So a tree with no `cli.json`
-    is the one state where the two answer differently ON PURPOSE, and a `harness_golden` cell
-    would only report the difference as a failure. What must hold is that the Node side
-    REFUSES — loudly, with the fix in the message — rather than parsing with an empty spec,
-    which would accept every token and bind none of them: `uninstall --target X` would run
-    against the default target while the operator believes they named one.
+    The reference compiles its parser in; this entry reads it. So a tree with no
+    `js/cli-table.json` is the one state where the two answer differently ON PURPOSE, and a
+    `harness_golden` cell would only report the difference as a failure. What must hold is that
+    the Node side REFUSES — loudly, with the fix in the message — rather than parsing with an
+    empty spec, which would accept every token and bind none of them: `uninstall --target X`
+    would run against the default target while the operator believes they named one.
     """
 
     def test_the_entry_refuses_when_the_parser_metadata_is_absent(self):
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "checkout"
-            harness_golden._copy_checkout(copy, {"cli.json": None})
-            self.assertFalse((copy / "cli.json").exists())
+            harness_golden._copy_checkout(copy, {"js/cli-table.json": None})
+            self.assertFalse((copy / "js" / "cli-table.json").exists())
             r = subprocess.run(
                 [NODE, str(copy / "bin" / "geneseed-cli.mjs"), "uninstall", "--target", "X"],
                 cwd=str(copy), capture_output=True, text=True, encoding="utf-8")
             self.assertEqual(r.returncode, 2, f"expected a refusal, got {r.returncode}: "
                                               f"{r.stdout[-500:]}{r.stderr[-500:]}")
-            self.assertIn("cli.json describes no subcommand 'uninstall'", r.stderr)
-            self.assertIn("python tests/gen_cli_reference.py", r.stderr)
+            self.assertIn("js/cli-table.json describes no subcommand 'uninstall'", r.stderr)
+            self.assertIn("npm i -g geneseed@latest", r.stderr)
             # The absolute half: it refused rather than proceeding with no rules.
             self.assertNotIn("[uninstall]", r.stdout)
 
     def test_the_same_copy_with_the_file_present_runs(self):
         """The control this refusal needs, and the reason it is beside it: a copy that could
         not run ANY verb would produce the same exit code for a reason that has nothing to do
-        with `cli.json`.
+        with `js/cli-table.json`.
 
         ⚠ IT USED TO READ THE DEVELOPER'S MACHINE, and P7a found it. The verb was `exclude
         list`, which exits 0 when a global install exists and 1 with `[geneseed] no global
@@ -539,7 +500,7 @@ class TheEntryRefusesWithoutIt(unittest.TestCase):
         `version` replaces it because its exit code is a property of the COPY: it reads the
         copy's own `Harness/` and its source fingerprint, and answers 0 whether or not the
         machine has anything installed. What the control has to prove is that the entry
-        PARSED a verb out of `cli.json` and dispatched it, and `version` proves that as well
+        PARSED a verb out of the table and dispatched it, and `version` proves that as well
         as any verb with side effects would — better, since it has none.
         """
         with tempfile.TemporaryDirectory() as tmp:
@@ -549,7 +510,7 @@ class TheEntryRefusesWithoutIt(unittest.TestCase):
                                cwd=str(copy), capture_output=True, text=True,
                                encoding="utf-8")
             self.assertEqual(r.returncode, 0, r.stderr[-800:])
-            self.assertNotIn("cli.json describes no subcommand", r.stderr)
+            self.assertNotIn("describes no subcommand", r.stderr)
             # The absolute half: it ran the verb rather than exiting 0 without doing so.
             self.assertIn("[version]", r.stdout)
 

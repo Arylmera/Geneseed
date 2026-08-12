@@ -1804,7 +1804,7 @@ def _docs_cells(cell) -> list[dict]:
         cell("docs/the-cli-page-is-the-parser-minus-what-argparse-hides",
              [_req(path="/api/docs/page/cli")], world=_full(),
              # P6d'S DEFERRAL, PAID IN P10c — and the cell has to earn more than "200 now",
-             # because both implementations answer this page out of ONE FILE (`cli.json`).
+             # because both answer this page out of ONE FILE (`js/cli-table.json`).
              # The byte comparison is therefore close to vacuous here by construction, which
              # is exactly the case discipline #8 covers: a tolerant comparison owes an
              # absolute assertion, and so does an over-agreeable one.

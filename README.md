@@ -246,7 +246,7 @@ Geneseed/
 ├── bin/                  the Node entry points — geneseed-cli.mjs (the CLI), geneseed-hook.mjs
 │                         (the four hook verbs), geneseed.mjs (the generator driver)
 ├── js/                   the Node harness — generator, hooks, web server, doctor, installs
-├── cli.json              the argument parser as data; both runtimes read it
+│                         (js/cli-table.json is the CLI as data; both runtimes read it)
 ├── build.py              generator (stdlib only)
 ├── geneseed              launcher (bash): bare `./geneseed` = interactive main menu; + subcommands
 │                         (`./geneseed link` puts it on PATH so `geneseed` runs from anywhere)
@@ -336,7 +336,7 @@ Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Aryl
 
 Three things that bite when you don't know them:
 
-- **`rituals/harness.py` and `cli.json` change together.** The argument parser is data now: `cli.json` carries it, `bin/geneseed-cli.mjs` cannot parse a single verb without it, and `doctor` compares a sha256 of `rituals/harness.py` against the digest inside the file. Edit the parser, then run `python tests/gen_cli_reference.py` (it exits non-zero when it changed the file, so it doubles as a drift check) and commit both. A mismatch is a loud doctor problem on **both** binaries — which is the intended failure, not a surprise.
+- **`js/cli-table.json` IS the CLI.** The argument parser is data, and that file is the owned document — not a generated one. `bin/geneseed-cli.mjs` cannot parse a single verb without it, `bin/geneseed-hook.mjs` renders `--help` from it, and the console's `cli` docs page is a filtered view of it. While `rituals/harness.py` still exists, `tests/test_cli_reference.py` asserts that its argparse tree and this table describe the same CLI field for field — so edit the parser and the table together, or that test names the command that disagrees.
 - **The version has one owner: `harness.config.json`.** `package.json` mirrors it and a test fails the fork. Never `npm version` — it edits one of the two.
 - **Publishing is deliberate and manual.** `.github/workflows/publish.yml` uses npm trusted publishing (OIDC); there is no `NPM_TOKEN` in this repository and there must not be one. It runs only from Actions → publish → Run workflow, and the npm-side trusted publisher is keyed on that workflow's **filename** — renaming the file breaks publishing with no local symptom, which is why the file names itself in its own header and a test asserts the two agree.
 

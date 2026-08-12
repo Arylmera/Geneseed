@@ -1,64 +1,67 @@
 /**
- * `cli.json` — the harness parser's metadata, and the one place either implementation
- * describes the CLI.
+ * `js/cli-table.json` — the CLI as data, and the one place either implementation describes it.
  *
- * WHY THIS FILE EXISTS. `rituals/harness.py`'s `build_argparser()` is 24 subparsers (25
- * invocable names — `update` aliases `upgrade`) and 43 `add_argument` calls. Node cannot
+ * WHY THIS FILE EXISTS. `rituals/harness.py`'s `build_argparser()` was 25 subparsers (26
+ * invocable names — `update` aliases `upgrade`) and 46 `add_argument` calls. Node cannot
  * introspect argparse, and P6d deferred the console's `cli` docs page for exactly that
  * reason: a Node twin could only be a hand-written copy of the whole CLI surface, describing
  * verbs `bin/geneseed-cli.mjs` cannot even run. This port's standing rule is that a copy of a
  * value under test stops being the value under test, and that would have been the largest
  * copy in it.
  *
- * P10c's answer is that the metadata becomes DATA. `tests/gen_cli_reference.py` walks the
- * parser and writes `cli.json`; this module reads it, and it has THREE readers, which is the
- * point:
+ * P10c's answer was to make the metadata DATA — generated into `cli.json` at the repo root by
+ * `tests/gen_cli_reference.py` and read by both sides. P2 finishes the thought: the table is
+ * no longer GENERATED from anything, it is the OWNED document, and it lives here on a product
+ * path because that is where a document npm ships belongs. `package.json`'s `files[]` already
+ * carries `js/`, so it needs no row of its own, and nothing has to import out of `tests/`.
  *
- *   * `cliReference()` — `js/web/docs.mjs`'s `cli` kind, the page P6d deferred;
+ * ITS READERS, and each one takes a different view of the same rows:
+ *
+ *   * `cliReference()` — `js/web/docs.mjs`'s `cli` kind, the page P6d deferred. STRIPS the
+ *     hidden arguments and the two fields the page never carried;
  *   * `cliSpec()` — `bin/geneseed-cli.mjs`'s argument parser. That table used to carry its
- *     OWN hand-written transcription of the same 43 calls, gated against the subparsers by
- *     name only, and P10c's brief was explicit that a data file which did not subsume it
- *     would make THREE transcriptions of one parser. So `VERBS` is now `{ fn }` per row and
- *     everything argparse-shaped is derived here;
- *   * `cliReferenceProblems()` — doctor's drift check, on BOTH binaries.
+ *     OWN hand-written transcription of the same `add_argument` calls, gated against the
+ *     subparsers by name only, so `VERBS` is now `{ fn }` per row and everything
+ *     argparse-shaped is derived here. KEEPS the hidden arguments, `--port`'s int type and
+ *     `theme`'s mutex group, none of which the page may show;
+ *   * `cliCommand()`/`printHelp()` — `--help` on BOTH entry points, so the table is a 26-row
+ *     obligation rather than a 22-row one.
  *
- * THE DRIFT CHECK IS A DIGEST AND NOT A REGENERATE-AND-COMPARE, deliberately. Python could
- * regenerate and compare; Node cannot, and `tests/harness_golden.py` compares the two doctors
- * byte for byte — so a check only one of them performs is a check the other passes SILENTLY,
- * which is P4e's fifth coverage hole wearing a partition as a disguise. Hashing one file is
- * something both do equally well, so the fault that matters (the parser moved and nobody
- * regenerated) reddens BOTH binaries with the same sentence. The residue a digest cannot see
- * — a hand-edited `cli.json` whose digest still matches — belongs to
- * `tests/test_cli_reference.py`, where being Python-only costs nothing.
+ * THE STORED SHAPE IS THE UNION AND MUST STAY ONE. Neither reader's shape can be the file's:
+ * a file filtered for the page breaks the CLI, and a file in `cliSpec`'s shape cannot render
+ * the docs. It stays exactly what the argparse walk produced.
  *
- * THE COST, NAMED: this entry cannot parse anything without `cli.json`. It is tracked, it is
- * in `package.json`'s `files`, and an absent one is a refusal that names itself rather than a
- * wrong parse. `js/checkout.mjs` already reads `harness.config.json` at import for every
- * render, so a tracked data document the code needs is not a new shape here — and this is not
- * the hook entry, whose latency budget is `bin/geneseed-hook.mjs`'s and is untouched.
+ * WHAT USED TO GUARD IT, AND WHAT DOES NOW. While the parser existed, `cliReferenceProblems()`
+ * hashed `rituals/harness.py` and doctor reported drift on both binaries. That digest was over
+ * a file this migration deletes, so it is gone; `tests/test_cli_reference.py` holds the
+ * argparse-vs-table EQUALITY for as long as the parser is here, and after that the table is
+ * simply the source of truth and is edited directly.
+ *
+ * THE COST, NAMED: this entry cannot parse anything without this file. `js/checkout.mjs`
+ * already reads `harness.config.json` at import for every render, so a tracked data document
+ * the code needs is not a new shape here — and this is not the hook entry, whose latency
+ * budget is `bin/geneseed-hook.mjs`'s and is untouched.
  */
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { ROOT } from './checkout.mjs';
 import { pyInt, pyStripSpace } from './lib/pyfs.mjs';
 
-const CLI_JSON = path.join(ROOT, 'cli.json');
-const HARNESS_PY = path.join(ROOT, 'rituals', 'harness.py');
+const CLI_JSON = path.join(ROOT, 'js', 'cli-table.json');
 
 /** The keys the docs page has always carried, per argument — `type` and `hidden` are ours. */
 const PAGE_ARG_KEYS = ['names', 'dest', 'metavar', 'help', 'choices', 'default',
   'required', 'nargs', 'is_flag'];
 
 /**
- * `cli.json`, parsed. An unreadable file is the empty reference; doctor reports it.
+ * `js/cli-table.json`, parsed. An unreadable file is the empty reference; the entry points
+ * turn that into a refusal that names itself rather than a parse with no rules.
  *
  * NOT MEMOISED, and the first draft was. `harness.load_cli_reference` re-reads the file on
- * every call, so a cache here would make a regenerated `cli.json` visible to the reference's
- * running daemon and invisible to this one until it restarted — a divergence no cell can
- * reach (nothing regenerates mid-run) and no reviewer would look for. 23 kB per request is
- * not a cost worth buying that with.
+ * every call, so a cache here would make an edited table visible to the reference's running
+ * daemon and invisible to this one until it restarted — a divergence no cell can reach and no
+ * reviewer would look for. 24 kB per request is not a cost worth buying that with.
  */
 function load() {
   try {
@@ -66,55 +69,6 @@ function load() {
   } catch {
     return { prog: 'harness', commands: [] };
   }
-}
-
-/**
- * `harness.cli_source_digest` — sha256 of the parser's own file, NEWLINE-NORMALISED.
- *
- * `.gitattributes` asks for `eol=lf` and this very directory has CRLF files on disk anyway —
- * an attribute governs a checkout, not a working tree that predates it. A digest sensitive to
- * the line ending would report drift on a machine that has none.
- */
-export function cliSourceDigest(file = HARNESS_PY) {
-  // `readFileSync(…, 'utf-8')` + `update(…, 'utf-8')` round-trips the bytes for any valid
-  // UTF-8 document, BOM included, so this is `read_bytes()` with a newline replace on it.
-  //
-  // `file` is the reference's `path=` argument and exists for the same reason: with
-  // `rituals/harness.py` LF in this working tree, a twin that dropped the `replaceAll` would
-  // agree with the reference on every input either of them has. The corpus in
-  // `tests/test_cli_reference.py` is what reaches it.
-  return createHash('sha256')
-    .update(readFileSync(file, 'utf-8').replaceAll('\r\n', '\n'), 'utf-8')
-    .digest('hex');
-}
-
-/**
- * `harness._cli_reference_problems` — doctor's `cli` check, word for word with the reference.
- */
-export function cliReferenceProblems() {
-  let data;
-  try {
-    data = JSON.parse(readFileSync(CLI_JSON, 'utf-8'));
-  } catch {
-    return ['[cli] cli.json is missing or unreadable — regenerate it from a checkout '
-      + 'with `python tests/gen_cli_reference.py`'];
-  }
-  // The digest reads a SECOND file, and the migration that deletes it must leave doctor
-  // able to say so. An unreadable parser source is the same class of fault as an
-  // unreadable cli.json: a report, never a throw.
-  let digest;
-  try {
-    digest = cliSourceDigest();
-  } catch {
-    return ['[cli] rituals/harness.py is missing or unreadable — cli.json cannot be '
-      + 'checked for staleness'];
-  }
-  if (data.source_sha256 !== digest) {
-    return ['[cli] cli.json is stale: rituals/harness.py has changed since it was '
-      + 'generated — regenerate it from a checkout with '
-      + '`python tests/gen_cli_reference.py`'];
-  }
-  return [];
 }
 
 const pageArgs = (args) => (args ?? [])
@@ -144,7 +98,7 @@ export function cliReference() {
 }
 
 /**
- * `-h/--help`, which `cli.json` does NOT carry.
+ * `-h/--help`, which the table does NOT carry.
  *
  * argparse adds it at parser construction, before any `add_argument` the walk can see, so it
  * is absent from every command in the file and present in every help text the reference
@@ -198,7 +152,7 @@ function actionInvocation(a, positional) {
 //
 // A GREEDY SPACE-ONLY WRAP WAS THE FIRST DRAFT AND THE GATE REFUSED IT. `textwrap` splits a
 // hyphenated word into two chunks, so it can break a line inside `back-compat` where a
-// space-only wrap cannot. Measured before deciding: all 38 help strings in `cli.json` disagree
+// space-only wrap cannot. Measured before deciding: all 38 help strings in the table disagree
 // with a greedy wrap at some width, the widest being 175 — so "the branch is dead" was simply
 // false, and `test_the_ports_line_breaker_is_textwrap_at_every_width` said so on the run that
 // first asserted it. The rules are transcribed instead.
@@ -462,13 +416,13 @@ export function helpWidth() {
   return (process.stdout.columns > 0 ? process.stdout.columns : 80) - 2;
 }
 
-/** One command's raw row — everything `cli.json` knows, unlike the page's filtered view. */
+/** One command's raw row — everything the table knows, unlike the page's filtered view. */
 export function cliCommand(verb) {
   return (load().commands ?? []).find((c) => c.name === verb) ?? null;
 }
 
 /**
- * `<verb> --help` for whichever binary asked, or `null` for a verb `cli.json` does not
+ * `<verb> --help` for whichever binary asked, or `null` for a verb the table does not
  * describe — the caller already owns that refusal and its message.
  *
  * ONE OWNER FOR TWO ENTRIES. `bin/geneseed-cli.mjs` carries 22 verbs and

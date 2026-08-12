@@ -215,7 +215,6 @@ jobs:
           rc=0
           diff /tmp/xplat/dwidth.json tests/__snapshots__/dwidth.json || rc=1
           diff /tmp/xplat/win_user_path.json tests/__snapshots__/win_user_path.json || rc=1
-          diff /tmp/xplat/help/cli_reference.json tests/__snapshots__/cli_reference.json || rc=1
           diff -r /tmp/xplat/help/help tests/__snapshots__/help || rc=1
           # THE FOURTH CLAIM, and the sharpest one this file makes about an oracle. The
           # committed `textwrap.json` was recorded on a PRE-gh-139065 interpreter with the

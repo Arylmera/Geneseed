@@ -34,7 +34,6 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { CONFIG, PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC, makeCfg } from './checkout.mjs';
-import { cliReferenceProblems } from './cli.mjs';
 import { main as driverMain, emitGlobalInto, emitProjectInto } from '../bin/geneseed.mjs';
 import { stripCapabilityLinks } from './emit.mjs';
 import { hostCatalogsNatively, pyResolve } from './hosts.mjs';
@@ -1095,11 +1094,13 @@ export function doctorCollect({
   problems = problems.concat(ran('colors', 'Colour themes', colorThemeProblems()));
   problems = problems.concat(ran('authoring', 'Authoring gates', authoringProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
-  // P10c. The ONE check in this file whose fault neither implementation can construct from
-  // its own state — `cli.json` is generated from a Python parser — and the only one both
-  // perform by hashing the same file rather than by re-deriving the value. See `js/cli.mjs`
-  // for why it is a digest and not a regenerate-and-compare.
-  problems = problems.concat(ran('cli', 'CLI reference', cliReferenceProblems()));
+  // P10c's `cli` check is GONE, and the reason is not that it stopped mattering. It hashed
+  // `rituals/harness.py` and compared that against a digest baked into `cli.json`, to catch a
+  // parser edited without regenerating the table. P2 made the table the OWNED document
+  // (`js/cli-table.json`), so there is no generator to fall behind and no second file to hash
+  // — the digest was a claim about a file this migration deletes. What replaces it is
+  // `tests/test_cli_reference.py`'s argparse-vs-table equality, for as long as the parser is
+  // still here to walk.
   if (!noBundle) {
     // `Path(bundle).expanduser().resolve()`, which `pyResolve` already IS — the default is
     // deliberately NOT resolved, because the Python's `ROOT / "Harness"` is not either and

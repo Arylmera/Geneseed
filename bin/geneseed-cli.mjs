@@ -67,7 +67,7 @@ import { cmdWeb } from '../js/web/server.mjs';
  * Every row used to carry its own `positionals` / `options` / `flags` / `optValue` / `ints` /
  * `mutex` / `variadic`, transcribed by hand from `rituals/harness.py`: 18 rows describing 43
  * `add_argument` calls, gated against the subparsers by NAME only. When
- * `_web_docs._cli_reference` stopped walking the parser and started reading `cli.json`,
+ * `_web_docs._cli_reference` stopped walking the parser and started reading the CLI table,
  * keeping that would have made THREE transcriptions of one parser — the parser, the file, and
  * here. So the argument surface comes from `js/cli.mjs`'s `cliSpec()`, derived from the same
  * file the docs page serves, and what is left in a row is the one thing a data file cannot
@@ -183,8 +183,8 @@ function die(code, msg) {
  * `argparse`'s surface for the verbs here, and only theirs: ordered positionals, some
  * optional, some with `choices`.
  *
- * `spec` comes from `js/cli.mjs`'s `cliSpec()` since P10c — derived from `cli.json`, which is
- * generated from `harness.build_argparser()`. This function's rules are unchanged; what
+ * `spec` comes from `js/cli.mjs`'s `cliSpec()` since P10c — derived from `js/cli-table.json`,
+ * which P2 made the owned document. This function's rules are unchanged; what
  * changed is that the table they run over is no longer written out by hand beside them. Every
  * argparse feature named below is a row of that derivation.
  *
@@ -314,22 +314,21 @@ async function main(argv) {
       + 'bin/geneseed-hook.mjs, and every other harness subcommand is still Python — run '
       + `\`python rituals/harness.py ${verb}\`.`);
   }
-  // `cli.json`, generated from `harness.build_argparser()`. A verb this table dispatches and
-  // the file does not describe is a REFUSAL and not a parse with no rules: an empty spec
-  // would accept every token and bind none of them, so `geneseed uninstall --target X` would
-  // run against the default target while the operator believes they named one. Doctor reports
-  // the same fault on both binaries; this is what a user hits first.
+  // `js/cli-table.json`, the CLI as data. A verb this table dispatches and the file does not
+  // describe is a REFUSAL and not a parse with no rules: an empty spec would accept every
+  // token and bind none of them, so `geneseed uninstall --target X` would run against the
+  // default target while the operator believes they named one.
   const argSpec = cliSpec(verb);
   if (argSpec === null) {
-    return die(2, `cli.json describes no subcommand '${verb}' — this install's parser `
-      + 'metadata is missing or stale. Run `geneseed doctor`, and regenerate it from a '
-      + 'checkout with `python tests/gen_cli_reference.py`.');
+    return die(2, `js/cli-table.json describes no subcommand '${verb}' — this install's CLI `
+      + 'table is missing or damaged. Reinstall with `npm i -g geneseed@latest`, or restore '
+      + 'the file from a checkout.');
   }
   // BEFORE `parse`, because `-h`/`--help` is not in any subcommand's spec and never can be:
-  // argparse owns it at the parser, not in the argument table `cli.json` walks — so `parse`
+  // argparse owned it at the parser, not in the argument table the walk produced — so `parse`
   // answers `unrecognized arguments: --help`, which is what this entry did on all 26 verbs
   // until Task 10 compared the two implementations' help for the first time. AFTER the spec
-  // lookup, so a stale `cli.json` still refuses with the sentence that names the fix rather
+  // lookup, so a damaged table still refuses with the sentence that names the fix rather
   // than printing half a help text. Anything else on the line is ignored, which is argparse's
   // own rule: `harness diff --nope --help` prints the help.
   if (argv.slice(1).some((t) => t === '-h' || t === '--help')) return printHelp('geneseed', verb);

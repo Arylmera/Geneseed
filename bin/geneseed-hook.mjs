@@ -114,7 +114,7 @@ function main(argv) {
   // `<verb> --help`, for the same reason and by the same owner as `bin/geneseed-cli.mjs`:
   // argparse holds `-h` at the parser, so this entry's `parse` calls it an unrecognized
   // argument. The four hook verbs are four of the reference's 26 and had the same gap.
-  // `js/cli.mjs` reads `cli.json` lazily, inside its functions, so importing it costs this
+  // `js/cli.mjs` reads the CLI table lazily, inside its functions, so importing it costs this
   // entry a module parse and no file read on the hook path.
   if (argv.slice(1).some((t) => t === '-h' || t === '--help')) {
     const rc = printHelp('geneseed-hook', verb);

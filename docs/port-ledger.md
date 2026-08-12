@@ -116,15 +116,19 @@ recordings this branch took. They are here rather than in a phase note because t
 is per-machine and the decision has a deadline — the window in which both implementations
 exist.
 
-1. **`cli.json` is now a frozen oracle as well as a runtime table, and P2 takes it back.**
-   `tests/cli_help.test.mjs` asserts `deepEqual` between `tests/__snapshots__/cli_reference.json`
-   and the live `cli.json` (minus `source_sha256`), and two further tests read the live file. So
-   the first byte P2 changes in it — a reshaped spec, a dropped field the JS table does not
-   need, a new flag — turns that test red, and the only regeneration path is
-   `tests/record_help.py`, which does `import harness` and calls `harness.build_argparser()`.
-   P2 has to decide up front which of the file's three roles (runtime arg table, `--help`
-   renderer input, frozen oracle) survives the takeover, and re-point the equality at the new
-   owner **while the reference still exists**.
+1. ~~**`cli.json` is now a frozen oracle as well as a runtime table, and P2 takes it back.**~~
+   **SETTLED IN P2.** The three roles were split rather than ranked. The file MOVED — `git mv`,
+   byte for byte, minus `source_sha256` — to **`js/cli-table.json`**, a product path
+   `package.json`'s `files[]` already ships, and it is now the OWNED document: nothing generates
+   it, `tests/gen_cli_reference.py` is gone, and so are `cliSourceDigest`/`cliReferenceProblems`
+   and doctor's `cli` row, which hashed a file this migration deletes. The FROZEN ORACLE role
+   was retired outright — `tests/__snapshots__/cli_reference.json` was byte-identical to the
+   table, and a second copy that only `import harness` could ever re-record would have made
+   every legitimate future edit an unblessable red. What replaces it is stronger while the
+   parser lives: `tests/test_cli_reference.py` walks `build_argparser()` and asserts it equals
+   the table field for field, catching a wrong `nargs` on a flag no cell exercises and a hand
+   edit a digest could never see. Point 2 below is unchanged and is now the only role with a
+   deadline.
 2. **After P4 the 26 help fixtures cannot be re-recorded.** Adding or rewording a single CLI
    flag changes `formatHelp`'s output and reddens `tests/cli_help.test.mjs`, with no argparse
    left to ask. Either the CLI's help text becomes effectively immutable, or the fixtures get

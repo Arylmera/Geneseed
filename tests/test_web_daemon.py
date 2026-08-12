@@ -67,7 +67,7 @@ def _cli_web_spec() -> dict:
     transcription of the same subparser this file reads with `ast` — and the phase's whole
     subject was that `harness.build_argparser()` may have exactly ONE description. The row is
     `{ fn: cmdWeb }` now and the surface comes from `js/cli.mjs`'s `cliSpec()`, derived from
-    the generated `cli.json`.
+    `js/cli-table.json`.
 
     So the gate moved with it, and it moved in the direction rule 7 asks for: a scrape reads
     a DECLARATION, and this asks the module the entry point itself calls. A `cliSpec` that
