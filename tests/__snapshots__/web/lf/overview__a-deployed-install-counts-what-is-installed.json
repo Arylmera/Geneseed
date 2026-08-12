@@ -4,7 +4,7 @@
     "<dirs>": "5b12c501302c4ec1ab5630c39bb97c842d641623176831fb68ea324dc35eef65",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<r1 body>": "3e97f307eecd16829efdd8b6d9598d5fe07729787ba6802d517b003537d432ff",
-    "<r1 headers>": "0fca0d3027b5347eca2c28d1ae76078b01a2c9e3c51567d4b6b748c7f84e2b26",
+    "<r1 headers>": "d84087239b3ba7afadb8ad08ffc8f3eabee1db0fc234cdf728374aa40a7f454a",
     "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -48,7 +48,7 @@
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/agents\nhome/.config/opencode/memory\nhome/.config/opencode/notebook\nhome/.config/opencode/skills\nhome/.config/opencode/skills/mine\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
     "<exit>": "0",
     "<r1 body>": "{\"theme\": \"imperial\", \"accent\": \"yellow\", \"emit\": \"opencode-global\", \"footprint\": \"full\", \"install\": {\"host\": \"opencode\", \"scope\": \"global\", \"path\": \"<HOME>/.config/opencode\", \"footprint\": \"full\"}, \"target\": \"<HOME>/.config/opencode\", \"deployed\": true, \"counts\": {\"agents\": 1, \"skills\": 1, \"laws\": 37, \"memory\": 1, \"notebook\": 1, \"wiki\": 0, \"config\": 1}, \"doctor\": {\"ok\": true, \"problems\": [], \"checked_at\": \"<WHEN>\"}, \"diff\": {\"edited\": 3, \"added\": 0, \"missing\": 115}, \"build_time\": \"<WHEN>\"}",
-    "<r1 headers>": "Content-Type: application/json\nContent-Length: 543",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 493",
     "<r1 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

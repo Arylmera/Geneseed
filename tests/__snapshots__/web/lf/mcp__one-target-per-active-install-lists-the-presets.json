@@ -4,7 +4,7 @@
     "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<r1 body>": "e46f205665451d77e097178c198e47c4d6177b9c61af5f228fe26486be57b6d4",
-    "<r1 headers>": "757461ded51650b9418b2afe1b235908f5c58f5fc94dcd0f0a6e8c9488268382",
+    "<r1 headers>": "ffe0cf341da2742b9b476def1cd6cd28bf574b2906dc5cfd528ebd56a329c5f6",
     "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -36,7 +36,7 @@
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
     "<exit>": "0",
     "<r1 body>": "{\"targets\": [{\"label\": \"global config\", \"path\": \"<HOME>/.config/opencode/opencode.json\", \"host\": \"opencode\", \"root\": \"<HOME>/.config/opencode\", \"exists\": false, \"commented\": false, \"servers\": [{\"name\": \"markitdown\", \"label\": \"MarkItDown\", \"desc\": \"PDF / Office / HTML -> Markdown for the ingest skill. Runs via `uvx` (needs uv; zero-install, fetches on first call). No uv? Switch the command to [\\\"markitdown-mcp\\\"] after `pipx install markitdown-mcp`. Exposes one tool: convert_to_markdown(uri).\", \"preset\": true, \"state\": \"absent\"}, {\"name\": \"gitlab\", \"label\": \"GitLab\", \"desc\": \"GitLab repo / MR / issue / CI tools via @zereight/mcp-gitlab (npx, no install). Edit GITLAB_PERSONAL_ACCESS_TOKEN (scopes: api, read_repository) and GITLAB_API_URL before use. Add a second entry (gitlab-2) for another instance.\", \"preset\": true, \"state\": \"absent\"}, {\"name\": \"gitlab-2\", \"label\": \"GitLab (2nd instance)\", \"desc\": \"A second GitLab instance (e.g. a self-hosted server) via the same @zereight/mcp-gitlab command. Point GITLAB_API_URL at the other instance and give it that instance's own token.\", \"preset\": true, \"state\": \"absent\"}, {\"name\": \"filesystem\", \"label\": \"Filesystem\", \"desc\": \"Read/write files under explicitly allowed directories via @modelcontextprotocol/server-filesystem (npx, no install). Replace the trailing path arg(s) with only the dir(s) the agent may touch (least-privilege).\", \"preset\": true, \"state\": \"absent\"}]}], \"default\": 0}",
-    "<r1 headers>": "Content-Type: application/json\nContent-Length: 1477",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 1447",
     "<r1 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

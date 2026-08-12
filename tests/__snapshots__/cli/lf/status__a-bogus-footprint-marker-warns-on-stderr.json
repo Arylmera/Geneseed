@@ -3,7 +3,7 @@
     "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<stderr>": "68f1d6f5cdc510de2dcf1fb0fc8905457fbced1b152bfb7b21c41958b97b08c4",
-    "<stdout>": "6895f24625ae9f938319211363cec50f469ebf9c884d3b81f650fed5b778c09d",
+    "<stdout>": "d1ab778e6b902532d55626043a91c4d04726f1197ecc971dcf22dba13a86d5c7",
     "home/.config/opencode/.geneseed-emit": "cf0ce6c78cf13e6a015d67cdcabc6bb1e6ff362b41a3e370381cbc61aa97720a",
     "home/.config/opencode/.geneseed-footprint": "52a795a8fe7faec486276899d66dec63ff57b6ac4c63db4767209210e403a1d1",
     "home/.config/opencode/.geneseed-theme": "d2447a19db93c012ed802df17310eee0626aa1fd640170bf5df7623848da4caf",
@@ -15,7 +15,7 @@
     "<dirs>": 48,
     "<exit>": 1,
     "<stderr>": 141,
-    "<stdout>": 1646,
+    "<stdout>": 1617,
     "home/.config/opencode/.geneseed-emit": 16,
     "home/.config/opencode/.geneseed-footprint": 9,
     "home/.config/opencode/.geneseed-theme": 9,
@@ -27,6 +27,6 @@
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
     "<exit>": "0",
     "<stderr>": "[geneseed] WARN: <HOME>/.config/opencode/.geneseed-footprint holds unknown footprint 'enormous' — reading it as 'full'. Known: lean, full.\n",
-    "<stdout>": "┌─ ◆ Geneseed — status ────────────────────────────────────────────────────────────────────────────────┐\n│  theme        imperial  (accent: yellow)                                                             │\n│  install      opencode-global                                                                        │\n│  components   17 agents · 47 skills · 37 laws                                                        │\n│  memory       (not found)  (0 facts)                                                                 │\n│  version      deadbeef1234  ·  source <FP>                                                   │\n│  AGENT.md     <HOME>/.config/opencode/AGENT.md  (present)                             │\n├──────────────────────────────────────────────────────────────────────────────────────────────────────┤\n│  ! installed build differs from the current source — run `./geneseed update` (or rebuild) to apply it│\n└──────────────────────────────────────────────────────────────────────────────────────────────────────┘\n"
+    "<stdout>": "┌─ ◆ Geneseed — status ────────────────────────────────────────────────────────────────────────────────┐\n│  theme        imperial  (accent: yellow)                                                             │\n│  install      opencode-global                                                                        │\n│  components   17 agents · 47 skills · 37 laws                                                        │\n│  memory       (not found)  (0 facts)                                                                 │\n│  version      deadbeef1234  ·  source <FP>                                                   │\n│  AGENT.md     <HOME>/.config/opencode/AGENT.md  (present)│\n├──────────────────────────────────────────────────────────────────────────────────────────────────────┤\n│  ! installed build differs from the current source — run `./geneseed update` (or rebuild) to apply it│\n└──────────────────────────────────────────────────────────────────────────────────────────────────────┘\n"
   }
 }

@@ -4,7 +4,7 @@
     "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<r1 body>": "9ae19d3851cf08b17a7bdf82c77ab6725a0cecc66e223e13267545ccb66a1627",
-    "<r1 headers>": "204175bf383d2865471537451b0979ac68f6bce4105d68e4acde4c5cf5e0417f",
+    "<r1 headers>": "f14b7da0331023bfc3336f7342a3a4c3e35b279819df6bed6a08d5861c11a0bc",
     "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -36,7 +36,7 @@
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
     "<exit>": "0",
     "<r1 body>": "{\"exists\": false, \"path\": \"<HOME>/.config/opencode/user-rules.md\", \"rules\": [], \"warnings\": [], \"fingerprint\": \"\", \"stats\": {\"rules\": 0, \"lines\": 0, \"tokens\": 0, \"max_rules\": 15, \"max_tokens\": 1500}}",
-    "<r1 headers>": "Content-Type: application/json\nContent-Length: 214",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 199",
     "<r1 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

@@ -25,7 +25,7 @@
     "<r7 headers>": "5d20e76214a7e004d9b89378b055294f2043dfaef60c696549643deefd22215a",
     "<r7 status>": "3290109709a4ec715d72d9f6d1d903b5de76f8d5d44a65ec1c708e922e9d2da9",
     "<r8 body>": "9ae19d3851cf08b17a7bdf82c77ab6725a0cecc66e223e13267545ccb66a1627",
-    "<r8 headers>": "204175bf383d2865471537451b0979ac68f6bce4105d68e4acde4c5cf5e0417f",
+    "<r8 headers>": "f14b7da0331023bfc3336f7342a3a4c3e35b279819df6bed6a08d5861c11a0bc",
     "<r8 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -99,7 +99,7 @@
     "<r7 headers>": "Content-Type: application/json\nContent-Length: 43",
     "<r7 status>": "500 Internal Server Error",
     "<r8 body>": "{\"exists\": false, \"path\": \"<HOME>/.config/opencode/user-rules.md\", \"rules\": [], \"warnings\": [], \"fingerprint\": \"\", \"stats\": {\"rules\": 0, \"lines\": 0, \"tokens\": 0, \"max_rules\": 15, \"max_tokens\": 1500}}",
-    "<r8 headers>": "Content-Type: application/json\nContent-Length: 214",
+    "<r8 headers>": "Content-Type: application/json\nContent-Length: 199",
     "<r8 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

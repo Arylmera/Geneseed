@@ -7,7 +7,7 @@
     "<r1 headers>": "d12fbbcc5c0854bac95380b1808d1813c73f93a1e337809c21919ded203624c9",
     "<r1 status>": "c7b003871d7d406397b2d163039a21643ddd9e0cfd2b0b89b7d9fe55eca57d01",
     "<r2 body>": "02839f89931763be93c50bacced643ef66aaa9b9bac8f1fc36e818351ad1d1ef",
-    "<r2 headers>": "cdbd7f487ae9c8693d73f5a192ef19bfcf7b7f76f2897af8a7f014822b3159f9",
+    "<r2 headers>": "1ea8e1816299e02ef88bb31ccadc3c20ce55ee03b57c94653599d1d83af98285",
     "<r2 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -47,7 +47,7 @@
     "<r1 headers>": "Content-Type: application/json\nContent-Length: 47",
     "<r1 status>": "409 Conflict",
     "<r2 body>": "{\"installs\": [{\"id\": \"opencode:global\", \"host\": \"opencode\", \"scope\": \"global\", \"path\": \"<HOME>/.config/opencode\", \"state\": \"active\", \"theme\": \"imperial\", \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": true}, {\"id\": \"claude:global\", \"host\": \"claude\", \"scope\": \"global\", \"path\": \"<HOME>/.claude\", \"state\": \"absent\", \"theme\": null, \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": false}, {\"id\": \"bob:global\", \"host\": \"bob\", \"scope\": \"global\", \"path\": \"<HOME>/.bob\", \"state\": \"absent\", \"theme\": null, \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": false}, {\"id\": \"copilot:global\", \"host\": \"copilot\", \"scope\": \"global\", \"path\": \"<HOME>/.copilot\", \"state\": \"absent\", \"theme\": null, \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": false}], \"postures\": [\"peer\", \"artisan\", \"assistant\", \"expert\", \"mentor\"], \"modes\": [\"direct\", \"foreman\"]}",
-    "<r2 headers>": "Content-Type: application/json\nContent-Length: 956",
+    "<r2 headers>": "Content-Type: application/json\nContent-Length: 896",
     "<r2 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"
