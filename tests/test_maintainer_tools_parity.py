@@ -152,9 +152,16 @@ def corpus() -> "list[dict]":
     # `splitlines()` breaks on U+2028, `split('\\n')` does not. The joined text then carries a
     # raw newline inside a string literal, the reparse fails, and the fallback answers — so
     # the two implementations agree only if BOTH split there.
+    #
+    # THE `\\u00e9` IS LOAD-BEARING AND WAS ADDED AFTER A MUTATION SURVIVED. Without it the
+    # case reached the fallback and proved nothing: a one-key indent-2 theme re-dumps to
+    # EXACTLY what the surgical insert would have written, so a port that never split on
+    # U+2028 produced identical bytes. A legacy escape is the one spelling a re-dump cannot
+    # reproduce (`ensure_ascii=False` turns it into the raw character), which is what makes
+    # "reached the fallback" and "took the surgical path" tell each other apart at all.
     case("a-line-separator-inside-a-value-reaches-the-reparse-safety-net", {
         "_TEMPLATE.json": _tmpl(A="<a>", B="<b>"),
-        "mytheme.json": '{\n  "A": "before after"\n}\n',
+        "mytheme.json": '{\n  "A": "caf\\u00e9 before after"\n}\n',
     })
     # int vs float: `json.dumps(1)` is `1` and `json.dumps(1.0)` is `1.0`, a distinction
     # `JSON.parse` loses and `parseJson` keeps.
