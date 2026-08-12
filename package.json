@@ -53,8 +53,6 @@
     "registry.json",
     "geneseed",
     "geneseed.cmd",
-    "geneseed.ps1",
-    "bootstrap",
     "CHANGELOG.md",
     "DESIGN.md",
     "QUICKSTART.md",

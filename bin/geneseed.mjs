@@ -752,10 +752,17 @@ function emitClaudeGlobal(cfg, args, out) {
     cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'global', host: 'claude', out,
     hookOpts,
   });
+  // "Hooks call the harness by absolute path", not `harness.py` — and this one was already
+  // WRONG on this side rather than merely about to be: P5b made this driver bake `<node>
+  // bin/geneseed-hook.mjs` into the hooks it writes, so the sentence named a file its own
+  // emit does not use. The two drivers bake different entries and printed the same claim;
+  // the neutral wording is true of both, and stays true when only one is left. It is frozen
+  // in the `claude-global` cells' recorded stdout, which is why it moves here rather than in
+  // the deletion phase, which may not move a recorded byte.
   process.stdout.write(`[geneseed] claude-global -> ${cfgDir}: ${r.nAgents} subagents, `
     + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
     + `${r.memStatus}, ${r.nbStatus}. No plugins/workflows/themes (no Claude analogue); `
-    + '~/.claude/plugins is never touched. Hooks call harness.py by absolute path; set '
+    + '~/.claude/plugins is never touched. Hooks call the harness by absolute path; set '
     + 'GENESEED_HARNESS only to relocate memory.\n');
   return cfgDir;
 }
@@ -973,8 +980,11 @@ function run(argv) {
   // a tenth emit added to `EMITS` and not to `PORTED` refuses loudly here instead of falling
   // through the dispatch's `else` and silently building a plain bundle.
   if (!PORTED.has(args.emit)) {
-    die(3, `--emit ${args.emit} has not crossed to the Node driver yet (only `
-      + `${[...PORTED].join(', ')} has). Run: python build.py --emit ${args.emit}`);
+    // The `Run: python build.py --emit <e>` tail is gone. It named the fallback for an emit
+    // this driver could not do, and there is no longer a second driver to fall back TO — the
+    // partition is now "known" vs "not a thing", and only the refusal is left to say so.
+    die(3, `--emit ${args.emit} is not one this driver builds (only `
+      + `${[...PORTED].join(', ')} are).`);
   }
 
   const out = resolveOut(args.out);

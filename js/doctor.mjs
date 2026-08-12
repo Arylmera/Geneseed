@@ -901,11 +901,14 @@ export function authoringProblems() {
   let m = null;
   try { m = LEARN_PROMPT_RE.exec(readText(plugin)); } catch { m = null; }
   if (!m) {
+    // "the harness", not `harness.py`: both implementations load this literal, and the file
+    // the old wording named is the one this migration deletes. Moved on both sides at once —
+    // these two strings are byte-compared by the live doctor comparison.
     problems.push('[authoring] LEARN_PROMPT_HEAD literal not found in '
-      + 'geneseed-learn.js — harness.py would fall back (single source broken)');
+      + 'geneseed-learn.js — the harness would fall back (single source broken)');
   } else if (m[1] !== loadLearnPromptHead()) {
     problems.push('[authoring] LEARN_PROMPT_HEAD drifted between geneseed-learn.js '
-      + "and harness.py's loaded copy");
+      + "and the harness's loaded copy");
   }
   const node = pyWhich('node');
   if (node) {
@@ -1149,8 +1152,15 @@ export function cmdDoctor(args) {
         + '`./geneseed update` (or re-sync src/), then re-check.\n');
     }
     if (problems.some((p) => p.startsWith('[themes]') && p.includes('missing key'))) {
+      // `./geneseed build --sync-themes`, and the spelling is a one-shot decision frozen in
+      // two fixtures, so it is argued here. The FRONT DOOR, not an interpreter and a file:
+      // `build` forwards its extra arguments to the generator on both sides, so the tip names
+      // a command that works today AND after the Python is deleted — which the old
+      // `python build.py --sync-themes` would not. The `./` prefix matches the sibling tip
+      // five lines up (`./geneseed update`) and is honest about the audience: this problem is
+      // only reachable while authoring themes in a checkout, which is where `./geneseed` is.
       pyPrint('  tip: a theme is missing a key another theme defines — run '
-        + '`python build.py --sync-themes` to fill it from _TEMPLATE.json, '
+        + '`./geneseed build --sync-themes` to fill it from _TEMPLATE.json, '
         + 'then restyle the added key(s) and re-check.\n');
     }
     if (note) pyPrint(`${note}\n`);

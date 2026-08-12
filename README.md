@@ -83,10 +83,10 @@ cd Geneseed
 git clone https://github.com/Arylmera/Geneseed.git
 cd Geneseed
 .\geneseed.cmd setup      # the wizard — or bare .\geneseed.cmd for the main menu
-# PowerShell-native twin: .\geneseed.ps1 [setup]
+# PowerShell runs a .cmd directly, so this is the PowerShell spelling too
 ```
 
-The launcher finds Python on its own (the `py` launcher, else `python` on PATH); if `python3` is missing on macOS, `xcode-select --install` or Homebrew provides it. The full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+ `conhost` — via a stdlib-only ANSI backend; an older console degrades gracefully to the same wizard as plain text prompts.
+Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PATH`, and nothing else. Set `GENESEED_NODE` to an absolute path if `node` is not on `PATH` — under a version manager that only patches interactive shells, say. The full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+ `conhost` — via a stdlib-only ANSI backend; an older console degrades gracefully to the same wizard as plain text prompts.
 
 **Already installed from a clone?** `geneseed migrate` moves every install you have onto the npm shape in one pass, all-or-nothing, without touching hooks or login items it did not write. Your old clone keeps working for a full release — there is no cliff. See [Migrate an existing install](docs/web/migrate.md).
 
@@ -248,11 +248,10 @@ Geneseed/
 ├── js/                   the Node harness — generator, hooks, web server, doctor, installs
 │                         (js/cli-table.json is the CLI as data; both runtimes read it)
 ├── build.py              generator (stdlib only)
-├── geneseed              launcher (bash): bare `./geneseed` = interactive main menu; + subcommands
+├── geneseed              launcher (bash): a shim over bin/geneseed-cli.mjs — bare `./geneseed`
+│                         = interactive main menu; + every subcommand the CLI carries
 │                         (`./geneseed link` puts it on PATH so `geneseed` runs from anywhere)
-├── geneseed.cmd          native Windows launcher (cmd.exe) — same subcommands, no bash
-├── geneseed.ps1          native Windows launcher (PowerShell) — same subcommands, no bash
-├── bootstrap             one-shot: update everything (sync + upgrade), then run setup
+├── geneseed.cmd          the same shim for cmd.exe / PowerShell — no bash needed
 ├── harness.config.json   default theme + metadata (the one owner of the version)
 ├── src/                  canonical source — edit here
 │   ├── AGENT.md.tmpl     the entrypoint, rendered to AGENT.md

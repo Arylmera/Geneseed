@@ -327,7 +327,7 @@ def cmd_menu(args: argparse.Namespace) -> int:
     """Interactive main menu — the default for a bare `./geneseed`. Falls back to a
     one-line command list off a TTY / when no VT console / if curses is unavailable."""
     def _menu_help() -> int:
-        print("Geneseed — no interactive menu here. Get started with:  python harness.py setup")
+        print("Geneseed — no interactive menu here. Get started with:  geneseed setup")
         print("Other commands:  bootstrap · update · build · doctor · diff · tui · web")
         print("On a VT-capable terminal, a bare `./geneseed` opens the interactive menu of these.")
         return 0

@@ -366,7 +366,10 @@ renders it as the name in parentheses.
   **Then the interpreter question had to be answered, and the answer was to refuse — until
   P5b deleted the question.** (What follows describes P4e; the shim bakes Node now, and
   neither the discovery nor the refusal survives. Kept because the *reasoning* is why the
-  flip could only land once the hook verbs had crossed.) The four
+  flip could only land once the hook verbs had crossed. It describes the LAUNCHERS as they
+  then were, too: `$PYTHON`/`%PYTHON%` and the "first candidate that actually runs" probe
+  were their contract until the de-Python migration replaced both front doors with Node
+  shims, whose one knob is `$GENESEED_NODE`.) The four
   hook-writing emits discovered a Python rather than inheriting one: `$PYTHON` first (the
   documented contract of both front doors), then `py`, `python`, `python3` on `PATH`. When
   none is found the emit **exits 4 having written nothing**, because a shim naming an absent

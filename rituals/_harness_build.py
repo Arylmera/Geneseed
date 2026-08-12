@@ -569,10 +569,10 @@ def _authoring_problems() -> list[str]:
         m = None
     if not m:
         problems.append("[authoring] LEARN_PROMPT_HEAD literal not found in "
-                        "geneseed-learn.js — harness.py would fall back (single source broken)")
+                        "geneseed-learn.js — the harness would fall back (single source broken)")
     elif m.group(1) != LEARN_PROMPT_HEAD:
         problems.append("[authoring] LEARN_PROMPT_HEAD drifted between geneseed-learn.js "
-                        "and harness.py's loaded copy")
+                        "and the harness's loaded copy")
     node = shutil.which("node")
     if node:
         for js in sorted(build.PLUGIN_SRC.glob("*.js")):
@@ -1308,7 +1308,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                   "`./geneseed update` (or re-sync src/), then re-check.")
         if any(p.startswith("[themes]") and "missing key" in p for p in problems):
             print("  tip: a theme is missing a key another theme defines — run "
-                  "`python build.py --sync-themes` to fill it from _TEMPLATE.json, "
+                  "`./geneseed build --sync-themes` to fill it from _TEMPLATE.json, "
                   "then restyle the added key(s) and re-check.")
         if note:
             print(note)

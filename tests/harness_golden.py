@@ -1972,7 +1972,7 @@ def _doctor_cells() -> list[dict]:
         dr("the-learn-prompt-literal-is-gone-from-the-plugin", src_only,
            {"adapters/opencode/plugins/geneseed-learn.js": "// nothing to extract\n"},
            expect=["[authoring] LEARN_PROMPT_HEAD literal not found in geneseed-learn.js "
-                   "— harness.py would fall back (single source broken)"],
+                   "— the harness would fall back (single source broken)"],
            expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
         dr("the-loaded-copy-follows-the-plugin-rather-than-a-constant", src_only,
            {"adapters/opencode/plugins/geneseed-learn.js":
@@ -2668,7 +2668,7 @@ def _uninstall_cells() -> list[dict]:
 
 #: Both lines of the refusal, exactly as `cmd_setup` writes them in one `sys.stderr.write`.
 _SETUP_REFUSAL = ["[setup] needs an interactive terminal. Non-interactive? e.g.:",
-                  "  python build.py --emit opencode-global --theme neutral"]
+                  "  geneseed build --emit opencode-global --theme neutral"]
 
 
 def _setup_cells() -> list[dict]:
@@ -2907,7 +2907,7 @@ def _menu_cells() -> list[dict]:
     return [
         mb("off-a-tty-prints-the-command-list", ["menu"],
            expect=["Geneseed — no interactive menu here. Get started with:  "
-                   "python harness.py setup",
+                   "geneseed setup",
                    "Other commands:  bootstrap · update · build · doctor · diff · tui · web",
                    "On a VT-capable terminal, a bare `./geneseed` opens the interactive "
                    "menu of these."],
@@ -2931,12 +2931,12 @@ def _home_cells() -> list[dict]:
            # bearing half: a port that started the daemon anyway would print the opening
            # line, spawn a detached server on port 4747 and leave it running.
            expect=["Geneseed — no interactive menu here. Get started with:  "
-                   "python harness.py setup"],
+                   "geneseed setup"],
            expect_absent=["opening the web console", "Geneseed UI on", "already running on"]),
         hb("the-opt-out-knob-refuses-before-anything-else", ["home"],
            env={"GENESEED_NO_WEB": "1"},
            expect=["Geneseed — no interactive menu here. Get started with:  "
-                   "python harness.py setup"],
+                   "geneseed setup"],
            expect_absent=["opening the web console"]),
     ]
 

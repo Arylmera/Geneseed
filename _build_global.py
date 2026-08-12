@@ -849,7 +849,7 @@ def emit_claude_global(theme_name: str, out: Path | None = None, cfg: Path | Non
     print(f"[geneseed] claude-global -> {cfg}: {n_agents} subagents, {n_skills} skills, "
           f"CLAUDE.md, {n_hooks} hook group(s), settings.json, {mem_status}, {nb_status}. "
           f"No plugins/workflows/themes (no Claude analogue); ~/.claude/plugins is never touched. "
-          f"Hooks call harness.py by absolute path; set GENESEED_HARNESS only to relocate memory.")
+          f"Hooks call the harness by absolute path; set GENESEED_HARNESS only to relocate memory.")
 
 
 def emit_claude(theme_name: str, out: Path, root: Path | None = None,

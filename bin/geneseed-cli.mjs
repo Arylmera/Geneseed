@@ -332,10 +332,13 @@ async function main(argv) {
   }
   const spec = VERBS[verb];
   if (!spec) {
+    // "and every other harness subcommand is still Python — run `python rituals/harness.py
+    // <verb>`" is GONE, and its removal is not cosmetic: with the four hook verbs named, the
+    // two entry points now cover every subcommand there is, so the clause was not just about
+    // to become false — it was already claiming a third place for verbs that do not exist.
     return die(2, `invalid choice: '${verb}'. This entry point carries only `
       + `${Object.keys(VERBS).join(', ')}; the four hook verbs live in `
-      + 'bin/geneseed-hook.mjs, and every other harness subcommand is still Python — run '
-      + `\`python rituals/harness.py ${verb}\`.`);
+      + 'bin/geneseed-hook.mjs.');
   }
   // `js/cli-table.json`, the CLI as data. A verb this table dispatches and the file does not
   // describe is a REFUSAL and not a parse with no rules: an empty spec would accept every

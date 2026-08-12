@@ -1104,7 +1104,13 @@ class TheEntryRefusesRatherThanNoOps(unittest.TestCase):
                 r = run_hook([verb])
                 self.assertEqual(r.returncode, 2,
                                  f"{verb} must refuse with exit 2, got {r.returncode}")
-                self.assertIn("python rituals/harness.py", r.stderr,
+                # `geneseed <verb>`, not `python rituals/harness.py <verb>`: this package's
+                # `bin` entry for the CLI, which answers every non-hook verb and survives
+                # the deletion of the Python the old text named. The assertion is still on
+                # the COMMAND and not merely on the verb, because "names the command that
+                # does work" is the property — a refusal that only repeats the verb back is
+                # the dead end this test exists to forbid.
+                self.assertIn(f"run `geneseed {verb}`", r.stderr,
                               "the refusal must name the command that does work")
                 self.assertFalse(r.stdout,
                                  "a refusal must print nothing on stdout: that is the "

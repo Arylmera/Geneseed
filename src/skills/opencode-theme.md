@@ -24,7 +24,7 @@ them at `--theme` / the setup wizard, not this {{SKILL}}.
    flavours into the live themes dir (per-repo `.opencode/themes/`, else the global
    config dir), using the same logic as the shipped themes:
    ```
-   python rituals/harness.py theme <name> --from <shipped> --palette <file.json>
+   geneseed theme <name> --from <shipped> --palette <file.json>
    ```
    Use `--from` alone to clone-and-rename, `--palette` alone for a from-scratch palette,
    or both (palette overrides the cloned base). `--solid-only` / `--transparent-only` to

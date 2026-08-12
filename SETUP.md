@@ -858,11 +858,11 @@ it does the same job:
 echo 'geneseed() { "'"$PWD"'/geneseed" "$@"; }' >> ~/.zshrc   # or ~/.bashrc
 ```
 
-**Windows** — use the native launcher `geneseed.cmd` (cmd) or `geneseed.ps1` (PowerShell),
-which route to the same Python CLI with no bash:
+**Windows** — use the native launcher `geneseed.cmd`, which routes to the same Node CLI with
+no bash. PowerShell runs a `.cmd` directly, so it is the PowerShell spelling too:
 
 ```powershell
-.\geneseed.cmd setup            # or: .\geneseed.ps1 setup
+.\geneseed.cmd setup
 .\geneseed.cmd link             # writes a geneseed.cmd shim into %LOCALAPPDATA%\Geneseed\bin
                                 # and adds that dir to your user PATH (no admin / symlink needed)
 ```

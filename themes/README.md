@@ -35,8 +35,8 @@ English); the others range from `imperial` (Warhammer 40k) to community voices.
 3. **Validate:**
 
    ```bash
-   python rituals/harness.py doctor --theme mytheme   # this theme only
-   python rituals/harness.py doctor --all             # every theme + parity
+   ./geneseed doctor --theme mytheme   # this theme only
+   ./geneseed doctor --all             # every theme + parity
    ```
 
    `doctor` fails on any missing key, unresolved `{{TOKEN}}`, or dead link.
@@ -44,7 +44,7 @@ English); the others range from `imperial` (Warhammer 40k) to community voices.
 4. **Preview / use it:**
 
    ```bash
-   python build.py --theme mytheme        # render the bundle
+   ./geneseed build --theme mytheme       # render the bundle
    ```
 
    or pick it in the TUI/web wizard, or with `--theme mytheme` on any emit.
@@ -66,4 +66,4 @@ English); the others range from `imperial` (Warhammer 40k) to community voices.
   reaching emitted frontmatter.
 
 Folder names, file paths, and law *numbers* are **never** themed — they live in
-the `STRUCTURE` map in `build.py`, laid over every render, so tooling never breaks.
+the `STRUCTURE` map in the generator, laid over every render, so tooling never breaks.

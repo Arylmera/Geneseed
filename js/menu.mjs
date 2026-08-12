@@ -42,7 +42,7 @@ import { startDaemon } from './web/server.mjs';
 
 /** `_menu_help` — the off-TTY arm, and the fallback both TTY arms end in. */
 export function menuHelp() {
-  pyPrint('Geneseed — no interactive menu here. Get started with:  python harness.py setup\n');
+  pyPrint('Geneseed — no interactive menu here. Get started with:  geneseed setup\n');
   pyPrint('Other commands:  bootstrap · update · build · doctor · diff · tui · web\n');
   pyPrint('On a VT-capable terminal, a bare `./geneseed` opens the interactive menu of these.\n');
   return 0;
@@ -99,8 +99,11 @@ export function cmdMenu() {
   // panel on this machine and `tests/test_tui_boundary.py` drives it doing so. What is
   // missing is on THIS side — there is no window implementation in the port — and that is
   // what the message now says.
-  pyPrintErr('[menu] TUI unavailable (the Node entry has no full-screen menu — run '
-    + '`python rituals/harness.py menu` for it).\n');
+  // NOTHING TO POINT AT ANY MORE. The message used to end "run `python rituals/harness.py
+  // menu` for it", and P2 took the pointer out rather than re-aiming it: the panel it named
+  // is the Python this migration deletes, and a refusal that sends a user to a file which
+  // will not be there is worse than one that simply says the screen does not exist.
+  pyPrintErr('[menu] TUI unavailable (this entry has no full-screen menu).\n');
   return menuHelp();
 }
 

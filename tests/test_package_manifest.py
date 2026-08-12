@@ -229,13 +229,19 @@ SHIPS: tuple[tuple[str, str], ...] = (
     # P7b RE-ARGUED THIS ROW, and its first clause is now GONE rather than narrowed: `tui`
     # was the last subcommand, so no subcommand is Python-only. What replaces it is not a
     # verb but a SCREEN — the full-screen panel behind `tui`'s TTY arm is `rituals/
-    # _harness_tui*.py` + `rituals/_winterm.py`, the Node entry declares it (js/tui.mjs's
-    # header) and falls back by pointing the operator at `python rituals/harness.py tui`. A
-    # package without `rituals/` would make that message a dead end. The second clause is
-    # untouched and would carry the row on its own.
-    ("rituals/", "no subcommand is Python-only since P7b, but the full-screen PANEL is: "
-                 "js/tui.mjs refuses and names `python rituals/harness.py tui`, which has "
-                 "to be there for the fallback to mean anything"),
+    # _harness_tui*.py` + `rituals/_winterm.py`.
+    #
+    # P2 TASK 4 KNOCKED OUT THE POINTER, not the panel. The row used to say the Node entry
+    # "falls back by pointing the operator at `python rituals/harness.py tui`", and that
+    # sentence is now false in both implementations: the refusals in `js/tui.mjs` and
+    # `js/menu.mjs` name no file, because the file they named is the one the deletion phase
+    # removes and a fallback to a missing file is worse than an honest "no screen here".
+    # So the row no longer stands on a MESSAGE. It stands on the panel itself, which is real
+    # and Python for as long as `rituals/` ships — and it is the second clause below, always
+    # able to carry the row alone, that is now the whole of it.
+    ("rituals/", "no subcommand is Python-only since P7b, but the full-screen PANEL still "
+                 "is — it is `rituals/_harness_tui*.py` + `rituals/_winterm.py`, and a "
+                 "package without `rituals/` cannot open it at all"),
     # P2. `cli.json` HAD A ROW HERE and no longer needs one: the CLI table moved to
     # `js/cli-table.json`, which the `js/` row above already ships. That is the whole reason
     # the product path was chosen over `tests/__snapshots__/` — a table imported out of
@@ -260,15 +266,27 @@ SHIPS: tuple[tuple[str, str], ...] = (
     # README, QUICKSTART and SETUP all ship and all tell the reader to run `./geneseed`, so
     # dropping these is three shipped documents that lie — plus the panel, which is the one
     # thing `./geneseed tui` still reaches that the Node entry does not. Four small files.
-    # When P7c lands the panel, only the documents' clause is left, and at that point the
-    # honest move is to fix the documents rather than to keep re-arguing the row.
-    ("geneseed", "the bash front door; the shipped README/QUICKSTART/SETUP name it, and it "
-                 "is the route to the full-screen panel, which is still Python (P7c). NOT "
-                 "the updater under npm (`npm i -g geneseed@latest` is), and NOT what "
-                 "`link` puts on PATH any more — re-argue when P7c lands"),
+    #
+    # P2 TASK 4 RE-ARGUED IT A THIRD TIME, and cut it from four files to two. The panel
+    # clause is gone: `js/tui.mjs` refuses and the Python that answered is being deleted, so
+    # `./geneseed tui` reaches nothing the Node entry does not. What is LEFT is two grounds,
+    # both about installs this repository does not control:
+    #   * the three shipped documents, unchanged — and rewriting them to `node
+    #     bin/geneseed-cli.mjs` is a worse instruction and a bigger diff than the shims;
+    #   * a PRE-P0 install, where `link` wrote `~/.local/bin/geneseed` as a SYMLINK to
+    #     `ROOT/geneseed`. Both implementations now write a marker-carrying shim naming an
+    #     interpreter and an entry instead, so the symlink is legacy — but it is live on
+    #     every machine that linked before that change, and deleting the target breaks it
+    #     with `No such file or directory` and no hint. The launcher's readlink loop is what
+    #     keeps those working; it is the only branch either shim still has.
+    # The PowerShell twin and the bootstrap script did NOT survive that cut — see
+    # `tests/deleted_launchers.test.mjs`, which is the gate on their absence (and which
+    # names them, so it is the one file that scan excludes).
+    ("geneseed", "the bash front door; the shipped README/QUICKSTART/SETUP name it, and a "
+                 "pre-P0 install still has ~/.local/bin/geneseed symlinked to it. NOT the "
+                 "updater under npm (`npm i -g geneseed@latest` is), and NOT what `link` "
+                 "puts on PATH any more"),
     ("geneseed.cmd", "the Windows front door, same argument"),
-    ("geneseed.ps1", "the Windows front door, same argument"),
-    ("bootstrap", "`geneseed bootstrap` execs it; still referenced by all three launchers"),
     ("README.md", "npm adds it regardless of `files`; doctor also reads its badges"),
     ("LICENSE", "npm adds it regardless of `files`"),
     ("SHIPPED.md", "doctor's proseMirrorProblems reads it"),
@@ -538,9 +556,10 @@ class TheBinMapIsTheThreeEntryPoints(unittest.TestCase):
     `bin/geneseed.mjs` IS `build.py`'s `main()` — the generator, whose argv is
     `--theme/--emit/--out`, not a verb. Mapping the bare name `geneseed` to it would put
     the generator behind every `geneseed doctor` in the README. The bare name goes to the
-    harness CLI, which is what the bash launcher has always run
-    (`python rituals/harness.py <cmd>`), and the generator gets an explicit
-    `geneseed-build`. The disjointness of the hook and CLI verb sets is
+    harness CLI, which is now literally what the bash launcher runs — since P2 Task 4 both
+    front doors are shims over `bin/geneseed-cli.mjs`, so `./geneseed <cmd>` in a checkout
+    and `geneseed <cmd>` after `npm i -g` are the same program. The generator gets an
+    explicit `geneseed-build`. The disjointness of the hook and CLI verb sets is
     `test_hook_cli_parity.py`'s; what is asserted here is that all three files have a
     name at all, since the shim bakes one of them by absolute path and a file with no bin
     entry is one nobody can invoke after `npm i -g`.
@@ -662,10 +681,13 @@ class TheManifestInventsNoFacts(unittest.TestCase):
 
 
 class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
-    """"No Python needed" is false in exactly one declared place — freeze it there.
+    """"No Python needed" is now true of the product with NO declared exception — freeze it.
 
     Scanned over `src/` and `adapters/`, the two trees every bundle is rendered from, so
-    the answer covers every theme, host and footprint without emitting anything.
+    the answer covers every theme, host and footprint without emitting anything. The
+    declaration dict below is empty as of P2 Task 4; `test_no_declared_row_has_quietly_been_
+    fixed` is what keeps it honest in the other direction, so a row cannot linger after the
+    file it names has been cleaned.
     """
 
     # `python3 -c '...'` is an invocation too, and the first draft of this pattern could
@@ -679,18 +701,20 @@ class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
         r"|#!.*python"
         r"|\buv run\b")
 
-    PYTHON_IN_THE_PRODUCT: dict[str, str] = {
-        "src/agents/_template.md": "authoring template; documents `python rituals/harness.py`",
-        "src/skills/_template.md": "authoring template; documents `python rituals/harness.py`",
-        "src/skills/opencode-theme.md": "documents `python rituals/harness.py`",
-        "adapters/claude-code/README.md": "adapter prose naming the Python front door",
-        "adapters/claude-code/settings.json":
-            "the Claude settings TEMPLATE names `python rituals/harness.py`. The emitted "
-            "hook commands are built by js/hooks.mjs and point at the machine-wide shim "
-            "(P5b), not at this string — test_hook_form.py gates the emitted shape.",
-        "adapters/opencode/README.md": "adapter prose naming `python build.py`",
-        "adapters/opencode/GLOBAL-HARNESS-SPEC.md": "adapter prose naming `python build.py`",
-    }
+    # EMPTY SINCE P2 TASK 4, and emptying it is the point of that task rather than a side
+    # effect. The seven rows were every INVOCATION a bundle carried: three authoring
+    # templates under `src/`, the Claude settings sample a user copies by hand, and three
+    # adapter documents. All seven now name `geneseed build` / `geneseed theme` /
+    # `./geneseed doctor` / `node bin/geneseed-hook.mjs` — commands that work TODAY on both
+    # implementations and keep working when the Python is deleted.
+    #
+    # WHY HERE AND NOT IN THE DELETION PHASE, which is where a reader would look for it:
+    # `src/` and `adapters/` are the two trees every bundle renders from, so each of these
+    # files is a KEY with a sha256 and a size in all 518 emit cells. The deletion phase may
+    # not move a recorded byte — and its recorder cannot re-record, because it runs the
+    # reference. So the choice was to edit them here, with both implementations still
+    # present to be compared and re-recorded together, or never.
+    PYTHON_IN_THE_PRODUCT: dict[str, str] = {}
 
     # THE ACTUAL PYTHON SURFACE OF THE PRODUCT. EMPTY, as of P2 Task 3 — `token_report.py`
     # became `token_report.mjs`, and `daydream` and `herdr` call `node -e` where they

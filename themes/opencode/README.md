@@ -4,7 +4,7 @@ Curated, full-palette colour themes for OpenCode's TUI — **separate** from the
 themes in `../`. A voice theme changes how the agent *speaks*; these change how the TUI
 *looks*. Pick them independently.
 
-Each `<name>.json` here is **one palette**. On any OpenCode emit (`build.py --emit
+Each `<name>.json` here is **one palette**. On any OpenCode emit (`geneseed build --emit
 opencode` or `opencode-global`) every palette is written out in **two flavours**:
 
 - `geneseed-<name>-solid` — opaque panel backgrounds.
@@ -19,8 +19,8 @@ Select one in OpenCode with e.g. `/theme geneseed-tokyonight-transparent`.
 You don't edit this dir to make a personal theme — it ships with the harness. Instead:
 
 ```bash
-python rituals/harness.py theme mytheme --from tokyonight   # clone a palette, rename
-python rituals/harness.py theme mytheme --palette mine.json # or supply your own palette
+geneseed theme mytheme --from tokyonight   # clone a palette, rename
+geneseed theme mytheme --palette mine.json # or supply your own palette
 ```
 
 This writes `geneseed-mytheme.json` + `geneseed-mytheme-transparent.json` (the name is
@@ -50,7 +50,7 @@ The two dirs are distinct: **shipped palettes** here (re-emitted as `geneseed-<n
    | `addBg` `delBg` | diff added/removed line backgrounds (kept tinted even when transparent) |
 
 3. Every value must be a `#rrggbb` hex string. Dark-only for now.
-4. Validate: `python rituals/harness.py doctor --all` (runs the `colours` gate).
+4. Validate: `./geneseed doctor --all` (runs the `colours` gate).
 5. Borrow a proven palette rather than inventing hues — credit it in the `credit` field.
 
 The shared slot→role mapping lives in `_build_emit.py` (`_SLOT_ROLE`), so a new theme is

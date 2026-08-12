@@ -4,13 +4,13 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "python rituals/harness.py git-gate" }
+          { "type": "command", "command": "node bin/geneseed-hook.mjs git-gate" }
         ]
       },
       {
         "matcher": "Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
-          { "type": "command", "command": "python rituals/harness.py rule-gate" }
+          { "type": "command", "command": "node bin/geneseed-hook.mjs rule-gate" }
         ]
       }
     ],
@@ -19,27 +19,27 @@
         "matcher": "startup|clear",
         "hooks": [
           { "type": "command", "command": "node -e \"process.stdout.write(require('fs').readFileSync('AGENT.md','utf8'))\"" },
-          { "type": "command", "command": "python rituals/harness.py context" }
+          { "type": "command", "command": "node bin/geneseed-hook.mjs context" }
         ]
       },
       {
         "matcher": "resume",
         "hooks": [
-          { "type": "command", "command": "python rituals/harness.py context" }
+          { "type": "command", "command": "node bin/geneseed-hook.mjs context" }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "python rituals/harness.py learn || exit 0" }
+          { "type": "command", "command": "node bin/geneseed-hook.mjs learn || exit 0" }
         ]
       }
     ],
     "SubagentStop": [
       {
         "hooks": [
-          { "type": "command", "command": "python rituals/harness.py learn || exit 0" }
+          { "type": "command", "command": "node bin/geneseed-hook.mjs learn || exit 0" }
         ]
       }
     ]

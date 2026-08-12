@@ -289,7 +289,7 @@ This is the "rely on the rule" path — kept as a safety net, not the main mecha
 
 Add an emit target so the factory can render straight into the global dir.
 
-`python build.py --emit opencode-global [--theme NAME]` — **self-contained**: it
+`geneseed build --emit opencode-global [--theme NAME]` — **self-contained**: it
 writes ONLY into `<cfg>` and builds **no sibling `Harness/`** (plural subdir names —
 canonical):
 
@@ -359,13 +359,13 @@ git-tracked folder), else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`
    This populates `~/.config/opencode/{AGENT.md,agents/,skills/,plugins/,memory/}`,
    wires `opencode.json` to the absolute `AGENT.md`, and remembers the mode in
    `<cfg>/.geneseed-emit` — so every later bare `geneseed upgrade` stays global.
-   (Direct equivalent: `python build.py --emit opencode-global`.)
+   (Direct equivalent: `geneseed build --emit opencode-global`.)
 
    **Windows (PowerShell)** — same flow, no bash:
    ```powershell
    cd C:\path\to\Geneseed
    $env:GENESEED_EMIT = "opencode-global"
-   .\geneseed.cmd upgrade main imperial      # or: python rituals\harness.py upgrade main imperial
+   .\geneseed.cmd upgrade main imperial      # PowerShell runs a .cmd directly
    ```
    This populates `C:\Users\<user>\.config\opencode\{AGENT.md,agents,skills,plugins,memory}`.
 
