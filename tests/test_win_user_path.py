@@ -226,10 +226,22 @@ def record(dest: Path) -> Path:
     """
     import _harness_lifecycle
     build = _harness_lifecycle._win_user_path_script
+    # EVERY FIELD HERE IS RE-RECORDED ON LINUX AND `diff`ED AGAINST THIS FILE — that is
+    # `record-corpus`'s "the platform-independent corpora are platform-independent" step, and
+    # it is the whole gate behind `platform_independent` below. So a field whose CORRECT value
+    # differs per recorder cannot live in this document: you may keep the value or the claim,
+    # not both.
+    #
+    # Two of them did. `"recorded_on": sys.platform` said `win32` here and `linux` there, and
+    # `platform.python_version()` said `3.13.5` here and `3.13.15` there. Only the second was
+    # ever reported, because the step runs under `bash -e` and aborted on the FIRST diff — the
+    # `dwidth.json` one — so `recorded_on` was a leak of the same class hiding behind a leak.
+    # `recorded_on` is gone (it was read by two failure messages and no gate; the corpus is
+    # PowerShell for the Windows PATH verb whoever types it) and `python` is major.minor: see
+    # `_recorded_with` in tests/test_pure_function_parity.py for the full argument.
     doc = {
         "corpus": "win_user_path",
-        "recorded_on": sys.platform,
-        "recorded_with": {"python": platform.python_version(),
+        "recorded_with": {"python": ".".join(platform.python_version_tuple()[:2]),
                           "implementation": platform.python_implementation()},
         "platform_independent": True,
         "actions": list(ACTIONS),
@@ -270,8 +282,8 @@ class TheRecordedCorpusStillMatchesTheReference(unittest.TestCase):
                     _harness_lifecycle._win_user_path_script(case["action"],
                                                              case["directory"]),
                     case["script"],
-                    f"{case['action']}/{case['row']} no longer builds what was recorded on "
-                    f"{self.doc['recorded_on']}")
+                    f"{case['action']}/{case['row']} no longer builds what the reference "
+                    "recorded")
 
     def test_the_recording_covers_every_row_of_the_live_corpus(self):
         """A recording is only a gate over what it recorded. Without this, deleting a row

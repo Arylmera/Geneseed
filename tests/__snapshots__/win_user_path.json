@@ -1,8 +1,7 @@
 {
  "corpus": "win_user_path",
- "recorded_on": "win32",
  "recorded_with": {
-  "python": "3.13.5",
+  "python": "3.13",
   "implementation": "CPython"
  },
  "platform_independent": true,

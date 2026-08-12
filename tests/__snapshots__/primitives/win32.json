@@ -2,7 +2,7 @@
  "corpus": "primitives",
  "platform": "win32",
  "recorded_with": {
-  "python": "3.13.5",
+  "python": "3.13",
   "implementation": "CPython",
   "os_linesep": "0d0a"
  },

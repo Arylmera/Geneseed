@@ -2968,6 +2968,36 @@ def _refuse_machine_state(doc: dict) -> None:
                      for p in prose)))
 
 
+def _recorded_with(**extra) -> dict:
+    """WHAT PRODUCED THESE ANSWERS, at the granularity that is a property OF THEM.
+
+    MAJOR.MINOR, AND THE PATCH DIGIT IS THE BUG. `platform.python_version()` answers `3.13.5`
+    on this laptop and `3.13.15` on the ubuntu runner, and `record-corpus` re-records
+    `dwidth.json` and `win_user_path.json` there and `diff`s them against the committed
+    copies. Run 31554447437 failed on that one line — a 196 608-codepoint sweep that hashed
+    identically either side, refused for the security release the recorder happened to be on.
+    That is provenance that had wandered into an equality check, the same class as the
+    `Node.js v<NODE>` banner `tests/golden.py` stamps out of the CLI cells.
+
+    `3.13` IS NOT A TRUNCATION FOR TIDINESS. It is what `.github/workflows/ci.yml` pins, what
+    `_PYTHON_UNIDATA` above is keyed by, and the granularity at which the one toolchain input
+    that actually gates these corpora — `unicodedata.unidata_version` — is decided. CPython
+    does not ship a new Unicode database in a bugfix release; if it ever did, the RUNS would
+    differ and the diff would say so, which is the check that was doing the work all along.
+
+    IT STAYS COMPARED, and that is the argument against the other shape. A provenance block
+    excluded from the comparison keeps the digit at the cost of a value nothing checks — and
+    a recorded value nothing checks is a claim nothing keeps true, which is how `recorded_on`
+    (`tests/test_win_user_path.py`) sat in a cross-diffed file declaring itself
+    platform-independent. Every field these documents carry is either compared or absent.
+    """
+    return {"python": ".".join(platform.python_version_tuple()[:2]),
+            # KEPT, AND KEPT COMPARED. `difflib`'s autojunk, `ntpath`'s answers and
+            # `unicodedata`'s tables are THIS implementation's; a PyPy recording is a
+            # different oracle wearing the same filename and should redden.
+            "implementation": platform.python_implementation(), **extra}
+
+
 def _write_doc(path: Path, doc: dict) -> Path:
     """`indent=1` rather than `snapshot_io`'s 2: the diff corpus alone is tens of thousands
     of one-character strings, and every one of them gets its own line either way. Same
@@ -3017,9 +3047,7 @@ def record_primitives(dest_dir: Path) -> Path:
     doc = {
         "corpus": "primitives",
         "platform": harness_golden.this_platform(),
-        "recorded_with": {"python": platform.python_version(),
-                          "implementation": platform.python_implementation(),
-                          "os_linesep": os.linesep.encode("utf-8").hex()},
+        "recorded_with": _recorded_with(os_linesep=os.linesep.encode("utf-8").hex()),
         "normalised": NORMALISED,
         "cases": rows,
     }
@@ -3079,8 +3107,7 @@ def record_dwidth(dest: Path) -> Path:
         "unidata_version": unicodedata.unidata_version,
         "declared_by": {"file": "js/tui.mjs", "const": "DWIDTH_UNIDATA",
                         "value": _declared_dwidth_unidata()},
-        "recorded_with": {"python": platform.python_version(),
-                          "implementation": platform.python_implementation()},
+        "recorded_with": _recorded_with(),
         # Platform-independent by construction: `unicodedata` is a compiled-in database and
         # `_dwidth` reads nothing else. No {win32,posix} split, and the replay proves that
         # claim by running this same file on both.

@@ -194,13 +194,21 @@ jobs:
       # measurement on the second operating system instead of a reading of the source. This
       # is Task 8c's method — the residual diff between two machines IS the machine-state
       # detector — aimed at a claim rather than at a corpus.
+      #
+      # BOTH DIFFS RUN, AND THAT IS NOT TIDINESS. The step is `bash -e`: run 31554447437
+      # aborted on the first `diff` (a `python: 3.13.5` against `3.13.15` that nothing reads)
+      # and never reached the second, where `win_user_path.json`'s `recorded_on: win32` was a
+      # leak of the same class waiting behind it. A gate that reports one finding per run
+      # takes one run per finding.
       - name: the platform-independent corpora are platform-independent
         run: |
           mkdir -p /tmp/xplat
           python tests/test_pure_function_parity.py --record-dwidth /tmp/xplat/dwidth.json
           python tests/test_win_user_path.py --record /tmp/xplat/win_user_path.json
-          diff /tmp/xplat/dwidth.json tests/__snapshots__/dwidth.json
-          diff /tmp/xplat/win_user_path.json tests/__snapshots__/win_user_path.json
+          rc=0
+          diff /tmp/xplat/dwidth.json tests/__snapshots__/dwidth.json || rc=1
+          diff /tmp/xplat/win_user_path.json tests/__snapshots__/win_user_path.json || rc=1
+          exit $rc
       # Recorded and replayed in the same run, for the reason the emit corpus gives above: a
       # corpus that was never replayed is committed, plausible and unusable.
       - name: replay the three CPython-oracle corpora against the port

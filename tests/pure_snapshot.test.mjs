@@ -174,6 +174,41 @@ test('the recorded corpus is the shape it claims to be', { skip: primitives ? fa
   for (const c of noted) assert.match(c.note, /docs\/port-ledger\.md/);
 });
 
+test('every corpus names a patch-independent interpreter', () => {
+  // THE TOOLCHAIN IS NOT THE CODE UNDER TEST. `recorded_with` is written by three recorders
+  // and read by no gate, so its only comparison is the whole-file `diff` that `record-corpus`
+  // runs after re-recording `dwidth.json` and `win_user_path.json` on ubuntu — and `3.13.5`
+  // against `3.13.15` was the entire failure of run 31554447437, over a 196 608-codepoint
+  // sweep that hashed identically on both machines. Major.minor is what ci.yml pins and the
+  // granularity `unicodedata.unidata_version` is decided at; the patch digit is provenance no
+  // second machine can reproduce.
+  //
+  // THE RULE IS SPELT IN TWO FILES, so this is what stops one of them drifting back — the
+  // recorders cannot import each other, and a shared helper for two lines would be the
+  // abstraction, not the gate.
+  const docs = [[`primitives/${PLATFORM}.json`, primitives], ['dwidth.json', dwidth],
+    ['win_user_path.json', winUserPath]].filter(([, d]) => d);
+  assert.ok(docs.length, 'no corpus is recorded on this platform — nothing was checked');
+  for (const [name, doc] of docs) {
+    assert.match(doc.recorded_with.python, /^\d+\.\d+$/,
+      `${name} records the interpreter as ${JSON.stringify(doc.recorded_with.python)}. A patch `
+      + 'digit makes a corpus disagree with itself across two machines that both recorded it '
+      + 'correctly, which is a red CI for a fact about neither implementation.');
+    // The half that IS a property of the answers: `difflib`'s autojunk, `ntpath`'s spellings
+    // and `unicodedata`'s tables are CPython's. A PyPy recording is a different oracle.
+    assert.equal(doc.recorded_with.implementation, 'CPython',
+      `${name} was recorded by ${doc.recorded_with.implementation}`);
+  }
+  // The companion leak, found behind the first one because the CI step runs under `bash -e`
+  // and never reached the second `diff`: this document is re-recorded on Linux and compared
+  // byte for byte, so it may not name the platform that typed it.
+  if (winUserPath) {
+    assert.ok(!('recorded_on' in winUserPath),
+      'win_user_path.json declares platform_independent and records the recorder\'s platform. '
+      + 'One of the two is false on every machine that is not the one that wrote it.');
+  }
+});
+
 test('the width sweep still produces the recorded runs', { skip: dwidth ? false
   : 'tests/__snapshots__/dwidth.json has not been recorded' }, () => {
   // THE PIN, CHECKED WITHOUT AN INTERPRETER. While the reference exists, the sweep runs live
@@ -236,7 +271,7 @@ test('winUserPathScript still builds every recorded script', { skip: winUserPath
     assert.equal(winUserPathScript(c.action, c.directory), c.script,
       `case ${i}: winUserPathScript(${JSON.stringify(c.action)}, `
       + `${JSON.stringify(c.directory)}) [row ${c.row}] disagrees with the script the `
-      + `reference built on ${winUserPath.recorded_on}`);
+      + 'reference recorded');
   }
   // The severity assertion, carried over from the reference's own suite so it survives the
   // deletion: `'Machine'` needs admin AND truncates the system PATH for every user on the box.
