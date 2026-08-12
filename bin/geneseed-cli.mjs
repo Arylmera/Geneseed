@@ -47,7 +47,8 @@
  */
 import { cliSpec, printHelp } from '../js/cli.mjs';
 import { cmdDiff } from '../js/diff.mjs';
-import { cmdDoctor } from '../js/doctor.mjs';
+import { cmdDoctor, cmdValidate } from '../js/doctor.mjs';
+import { parseDriverArgs } from './geneseed.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
 import { cmdMigrate } from '../js/migrate.mjs';
@@ -306,6 +307,28 @@ async function main(argv) {
   if (!verb || verb === '-h' || verb === '--help') {
     return die(2, `the following arguments are required: cmd (one of ${
       Object.keys(VERBS).join(', ')})`);
+  }
+  // `validate` — `build.py --validate-only`, and the one verb this entry answers that is NOT
+  // in the table above. It is dispatched here, before the lookup, for a reason that is a
+  // property of the gates rather than a preference:
+  //
+  //   * `VERBS` is asserted to be the twin of `rituals/harness.py`'s SUBPARSERS
+  //     (`test_every_entry_verb_is_a_real_harness_subcommand`), and `--validate-only` is a
+  //     GENERATOR flag — `harness.py` has never had a `validate` subcommand to be a twin of;
+  //   * `test_the_matrix_covers_every_verb_it_claims` demands a recorded cell group per table
+  //     row, and a cell has an `lf` half this host cannot produce.
+  //
+  // So a row would have meant amending two gates and recording a corpus half blind. It takes
+  // the generator's own parser (see `parseDriverArgs`) because its flags are the generator's,
+  // and it is on THIS binary — not on `bin/geneseed.mjs` — because it runs the doctor, which
+  // starts a process the driver is banned from reaching.
+  if (verb === 'validate') {
+    try {
+      return cmdValidate(parseDriverArgs(argv.slice(1)));
+    } catch (e) {
+      if (e && e.exitCode !== undefined) return e.exitCode;
+      throw e;
+    }
   }
   const spec = VERBS[verb];
   if (!spec) {

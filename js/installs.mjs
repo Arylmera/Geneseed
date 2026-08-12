@@ -38,7 +38,7 @@ import path from 'node:path';
 import { CONFIG, THEMES, discoverNames } from './checkout.mjs';
 import { GLOBAL_MANIFEST, HOSTS, pyResolve } from './hosts.mjs';
 import { registryRoots } from './registry.mjs';
-import { pyPrintErr, pyRepr, readText } from './lib/pyfs.mjs';
+import { comparePaths, pyPrintErr, pyRepr, readText } from './lib/pyfs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
@@ -93,12 +93,25 @@ export const defaultMode = () => configuredDefault('mode', 'direct');
 
 // ---- theme, footprint, posture, mode, read back off a deployed tree -----------------------
 
-/** `_build_render.theme_files` — shipped themes, `_`-prefixed scaffolds excluded. */
-export function themeFiles() {
+/**
+ * `_build_render.theme_files` — shipped themes, `_`-prefixed scaffolds excluded.
+ *
+ * `dir` defaults to the checkout's own `themes/`, which is every caller but one: P2's
+ * `syncThemes` is driven over a FIXTURE directory by the cross-implementation corpus in
+ * `tests/test_maintainer_tools_parity.py`, because the tool it belongs to rewrites committed
+ * files and cannot be gated against the real ones. A parameter, not a second enumeration —
+ * a scaffold mistaken for a theme is exactly what this function exists to prevent, once.
+ *
+ * Sorted with `comparePaths` and not `.sort()`: the Python sorts `Path` objects, which compare
+ * through `_str_normcase`, so on Windows `Cyberpunk.json` sorts before `bar.json` there and
+ * after it under a bare code-unit sort. No shipped theme has an upper-case name, so no
+ * emitted byte moves — it is the fixture corpus that can reach a name that does.
+ */
+export function themeFiles(dir = THEMES) {
   let names;
-  try { names = readdirSync(THEMES); } catch { return []; }
-  return names.filter((n) => n.endsWith('.json') && !n.startsWith('_')).sort()
-    .map((n) => path.join(THEMES, n));
+  try { names = readdirSync(dir); } catch { return []; }
+  return names.filter((n) => n.endsWith('.json') && !n.startsWith('_'))
+    .map((n) => path.join(dir, n)).sort(comparePaths);
 }
 
 /** `_harness_setup._theme_from_agent` — match a theme's unique LOADED_SIGIL in a carrier. */

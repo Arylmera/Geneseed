@@ -288,8 +288,9 @@ part: it copies any key the template has but a theme is missing into that theme
 which keys were added so you can restyle them in that theme's voice. It never deletes
 a key a theme has that the template doesn't — those are only reported. The edit is
 surgical (only the inserted lines change; nothing is reformatted), and the exit code
-doubles as a CI drift check: non-zero when it had to change files, `0` when every
-theme was already in sync.
+doubles as a CI drift check: `1` when it had to change files, `0` when every theme was
+already in sync, and `2` when `_TEMPLATE.json` itself is missing or unreadable — the one
+case where a `0` would have meant "in sync" without having checked anything.
 
 ### Footprint (lean vs full)
 
@@ -325,11 +326,15 @@ the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wiza
 remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
 host (OpenCode, Claude Code, Bob, Copilot).
 
-### Dry-run a build (`--validate-only`)
+### Dry-run a build (`validate`)
 
 ```
-python build.py --validate-only --theme imperial --emit opencode --out /path/to/repo/Harness
+geneseed validate --theme imperial --emit opencode --out /path/to/repo/Harness
 ```
+
+(It is a verb on the CLI rather than a flag on the generator because it runs `doctor`, and
+the generator is deliberately unable to start a process. `python build.py --validate-only
+…` is the same tool with the same flags.)
 
 Renders and emits the requested `--theme`/`--emit`/`--out`/`--root`/`--footprint`
 combination into a throwaway sandbox — nothing under the real `--out`/`--root` is

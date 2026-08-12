@@ -258,11 +258,31 @@ export const normcase = process.platform === 'win32'
   ? (s) => s.replaceAll('/', '\\').toLowerCase()
   : (s) => s;
 
-/** `sorted()` over paths \u2014 one owner, so two call sites cannot drift apart. */
+/**
+ * `sorted()` over paths \u2014 one owner, so two call sites cannot drift apart.
+ *
+ * COMPONENT-WISE, and that was a flat string compare until P2 measured it. `PurePath.__lt__`
+ * compares `_parts_normcase` \u2014 a TUPLE of path components \u2014 so the separator never takes part
+ * in the comparison, and the two readings disagree in BOTH directions:
+ *
+ *     sorted    : skills/geneseed/SKILL.md  <  skills/geneseed-code-review/SKILL.md
+ *     flat cmp  : the reverse, because '-' (0x2d) sorts before the separator '\\' (0x5c)
+ *     sorted    : x/a/b.md  <  x/a.md          (component 'a' < 'a.md')
+ *     flat cmp  : the reverse again
+ *
+ * Nothing in the emitted tree could see it: `js/render.mjs` sorts a list whose members share
+ * a directory depth, and `golden.py` compares CONTENT rather than order. It became visible
+ * the first time a full path list was PRINTED \u2014 `geneseed validate -v` \u2014 against a real
+ * skills tree that happens to contain both `skills/geneseed/` and `skills/geneseed-code-review/`.
+ * `tests/test_maintainer_tools_parity.py` is the gate that found it and the one that holds it.
+ */
 export function comparePaths(a, b) {
-  const A = normcase(a);
-  const B = normcase(b);
-  return A < B ? -1 : A > B ? 1 : 0;
+  const A = normcase(a).split(/[\\/]/);
+  const B = normcase(b).split(/[\\/]/);
+  for (let i = 0; i < Math.min(A.length, B.length); i += 1) {
+    if (A[i] !== B[i]) return A[i] < B[i] ? -1 : 1;
+  }
+  return A.length - B.length;
 }
 
 /**
@@ -856,8 +876,28 @@ export const PY_SPACE = '\t\n\v\f\r \u001c-\u001f\u0085\u00a0\u1680'
   + '\u2000-\u200a\u2028\u2029\u202f\u205f\u3000';
 
 const PY_STRIP_RE = new RegExp(`^[${PY_SPACE}]+|[${PY_SPACE}]+$`, 'g');
+const PY_LSTRIP_RE = new RegExp(`^[${PY_SPACE}]+`);
+const PY_RSTRIP_RE = new RegExp(`[${PY_SPACE}]+$`);
 
 /** `str.strip()` — Python's whitespace set, which `String.trim()`'s is not. */
 export function pyStripSpace(s) {
   return s.replace(PY_STRIP_RE, '');
+}
+
+/**
+ * `str.lstrip()` / `str.rstrip()` — the ONE-SIDED halves, over the same `PY_SPACE`.
+ *
+ * P2 added them for `_build_render._insert_theme_keys`, which uses all three spellings within
+ * four lines (`lines[0].strip()`, `ln.lstrip().startswith('"')`,
+ * `lines[pred].rstrip().endswith(",")`). They are here rather than in `js/themes.mjs` for the
+ * reason this file exists at all: `js/settings.mjs` already carries a private second copy of
+ * the character class, and a THIRD one — in the module that decides where a comma goes in a
+ * committed theme file — is how the three drift apart. One owner of the set, three views of it.
+ */
+export function pyLStripSpace(s) {
+  return s.replace(PY_LSTRIP_RE, '');
+}
+
+export function pyRStripSpace(s) {
+  return s.replace(PY_RSTRIP_RE, '');
 }

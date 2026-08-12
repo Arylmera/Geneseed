@@ -112,13 +112,21 @@ def sync_themes() -> int:
 
     Returns the number of themes actually modified (0 == already in sync). The CLI
     maps that to the exit code (non-zero when files changed), so CI can run
-    `build.py --sync-themes` as a check."""
+    `build.py --sync-themes` as a check.
+
+    A missing or unreadable `_TEMPLATE.json` REFUSES with exit 2 rather than returning 0.
+    Returning 0 there meant "already in sync" — a false green in the one job this tool
+    exists for, produced by the single input that makes the whole run vacuous. The message
+    deliberately does not interpolate the exception: `json.JSONDecodeError`'s wording and
+    offset are not reproducible in another language, and this branch is compared against the
+    Node port byte-for-byte by `tests/test_maintainer_tools_parity.py`."""
     tmpl_path = _build_core.THEMES / "_TEMPLATE.json"
     try:
         tmpl = json.loads(tmpl_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        print(f"[sync-themes] {tmpl_path.name} unreadable: {e}")
-        return 0
+    except (OSError, json.JSONDecodeError):
+        print(f"[sync-themes] {tmpl_path.name} is missing or unreadable — there is nothing "
+              f"to sync against.")
+        raise SystemExit(2)
     tmpl_keys = list(tmpl.keys())
     changed = 0
     for p in theme_files():
