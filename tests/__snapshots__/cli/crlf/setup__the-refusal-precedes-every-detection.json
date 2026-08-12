@@ -2,7 +2,7 @@
   "paths": {
     "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
     "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
-    "<stderr>": "798cbe101e6ca76d6a23701f3630a8d2029f61c72d5a0f209cb605dbc65e7cad",
+    "<stderr>": "158a1bdbfcaf92598fb09bd58b15373bd0c2aa986b67751aa491edf6ef0cceba",
     "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "home/.config/opencode/.geneseed-emit": "de98185a41c839961b783c5d0703a020e29ba9469a4a7112743c67f4eb9acd6b",
     "home/.config/opencode/.geneseed-footprint": "d029da490df6e456fedad8259b161518c53b2915257d168362a2c9ede885448a",
@@ -13,7 +13,7 @@
   "sizes": {
     "<dirs>": 48,
     "<exit>": 1,
-    "<stderr>": 119,
+    "<stderr>": 118,
     "<stdout>": 0,
     "home/.config/opencode/.geneseed-emit": 17,
     "home/.config/opencode/.geneseed-footprint": 6,
@@ -24,7 +24,7 @@
   "verbatim": {
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
     "<exit>": "1",
-    "<stderr>": "[setup] needs an interactive terminal. Non-interactive? e.g.:\n  python build.py --emit opencode-global --theme neutral\n",
+    "<stderr>": "[setup] needs an interactive terminal. Non-interactive? e.g.:\n  geneseed build --emit opencode-global --theme neutral\n",
     "<stdout>": ""
   }
 }
