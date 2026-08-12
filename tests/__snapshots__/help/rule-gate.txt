@@ -1,0 +1,6 @@
+usage: harness rule-gate [-h] [--root ROOT]
+
+options:
+  -h, --help   show this help message and exit
+  --root ROOT  the install's own dir (set by the emitted hook); scopes the
+               memory/ match and enables the sovereign-repo bypass

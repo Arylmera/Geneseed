@@ -1,0 +1,6 @@
+usage: harness version [-h] [--target TARGET]
+
+options:
+  -h, --help       show this help message and exit
+  --target TARGET  deployed dir to check (default: the OpenCode global config
+                   dir)

@@ -200,15 +200,31 @@ jobs:
       # and never reached the second, where `win_user_path.json`'s `recorded_on: win32` was a
       # leak of the same class waiting behind it. A gate that reports one finding per run
       # takes one run per finding.
+      #
+      # THE HELP CORPUS IS THE THIRD SUCH CLAIM (Task 10). `tests/record_help.py` calls
+      # `parser.format_help()` in process rather than capturing 26 subprocesses, so no newline
+      # translation reaches it, and it pins `COLUMNS` so argparse's wrap column cannot come
+      # from the recorder's terminal. Both of those are DECLARATIONS until a second operating
+      # system records the same bytes, which is what the `diff -r` below makes them.
       - name: the platform-independent corpora are platform-independent
         run: |
           mkdir -p /tmp/xplat
           python tests/test_pure_function_parity.py --record-dwidth /tmp/xplat/dwidth.json
           python tests/test_win_user_path.py --record /tmp/xplat/win_user_path.json
+          python tests/record_help.py /tmp/xplat/help
           rc=0
           diff /tmp/xplat/dwidth.json tests/__snapshots__/dwidth.json || rc=1
           diff /tmp/xplat/win_user_path.json tests/__snapshots__/win_user_path.json || rc=1
+          diff /tmp/xplat/help/cli_reference.json tests/__snapshots__/cli_reference.json || rc=1
+          diff -r /tmp/xplat/help/help tests/__snapshots__/help || rc=1
           exit $rc
+      # RECORD TWICE, DIFF — the rot detector Task 8 added and 8c found the limit of. Two
+      # recordings minutes apart on one image agree unless the corpus embeds a clock or a
+      # per-run temp name; the step above is the one that catches a machine.
+      - name: recording the help corpus twice gives the same bytes
+        run: |
+          python tests/record_help.py /tmp/xplat/help2
+          diff -r /tmp/xplat/help2 /tmp/xplat/help
       # Recorded and replayed in the same run, for the reason the emit corpus gives above: a
       # corpus that was never replayed is committed, plausible and unusable.
       - name: replay the three CPython-oracle corpora against the port

@@ -1,0 +1,5 @@
+usage: harness build [-h] [--theme THEME]
+
+options:
+  -h, --help     show this help message and exit
+  --theme THEME

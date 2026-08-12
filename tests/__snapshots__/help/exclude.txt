@@ -1,0 +1,8 @@
+usage: harness exclude [-h] {add,remove,list} [path]
+
+positional arguments:
+  {add,remove,list}
+  path               folder to exclude / re-include (absolute or relative)
+
+options:
+  -h, --help         show this help message and exit

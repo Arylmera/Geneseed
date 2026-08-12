@@ -1,0 +1,9 @@
+usage: harness bootstrap [-h] [--no-setup] [ref]
+
+positional arguments:
+  ref         accepted for back-compat; ignored (git follows the current
+              branch)
+
+options:
+  -h, --help  show this help message and exit
+  --no-setup  update only; skip the setup wizard

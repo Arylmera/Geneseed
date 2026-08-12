@@ -38,6 +38,7 @@
  * are the same observation.
  */
 import { cmdContext, cmdGitGate, cmdRuleGate, cmdLearn } from '../js/hooks.mjs';
+import { printHelp } from '../js/cli.mjs';
 
 const VERBS = {
   context: { fn: cmdContext, flags: { '--root': 'root' } },
@@ -109,6 +110,15 @@ function main(argv) {
     return die(2, `invalid choice: '${verb}'. This entry point carries only the four HOOK `
       + `verbs (${Object.keys(VERBS).join(', ')}); every other harness subcommand lives `
       + 'elsewhere — run `python rituals/harness.py ' + verb + '`.');
+  }
+  // `<verb> --help`, for the same reason and by the same owner as `bin/geneseed-cli.mjs`:
+  // argparse holds `-h` at the parser, so this entry's `parse` calls it an unrecognized
+  // argument. The four hook verbs are four of the reference's 26 and had the same gap.
+  // `js/cli.mjs` reads `cli.json` lazily, inside its functions, so importing it costs this
+  // entry a module parse and no file read on the hook path.
+  if (argv.slice(1).some((t) => t === '-h' || t === '--help')) {
+    const rc = printHelp('geneseed-hook', verb);
+    if (rc !== null) return rc;
   }
   const parsed = parse(spec, argv.slice(1));
   if (parsed.error) return die(2, parsed.error);

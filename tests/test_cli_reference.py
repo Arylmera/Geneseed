@@ -150,6 +150,122 @@ class TheFileIsWhatTheParserProduces(unittest.TestCase):
         self.assertEqual(alias["help"], "")
 
 
+class TheRecordingIsWhatTheParserAnswers(unittest.TestCase):
+    """`tests/__snapshots__/` — what P2's transcription has to reproduce once this file's
+    subject is deleted.
+
+    Everything here is Python-only BY NATURE and that costs nothing, exactly as the
+    regenerate-and-compare above: the oracle is argparse, and the point of the recording is to
+    outlive it. `tests/cli_help.test.mjs` replays the same fixtures against the port from
+    `node --test`, on both runners. What lives HERE is only what needs the reference alive:
+    that the recording still matches the parser, and that the port's one simplification is
+    still standing on a dead branch.
+    """
+
+    SNAP = ROOT / "tests" / "__snapshots__"
+
+    def test_the_recorded_reference_is_cli_json_minus_the_deleted_files_digest(self):
+        live = json.loads(harness.CLI_JSON.read_text(encoding="utf-8"))
+        recorded = json.loads((self.SNAP / "cli_reference.json").read_text(encoding="utf-8"))
+        self.assertIn("source_sha256", live)
+        self.assertNotIn("source_sha256", recorded,
+                         "the recording froze a digest of `rituals/harness.py`, a file this "
+                         "migration deletes — the claim would outlive its subject")
+        del live["source_sha256"]
+        self.assertEqual(recorded, live,
+                         "the recording is stale — run `python tests/record_help.py "
+                         "tests/__snapshots__` and commit the result")
+
+    def test_the_recorded_help_is_still_what_the_parser_prints(self):
+        """The gate that keeps the corpus from quietly going stale.
+
+        A help string edited in `rituals/harness.py` changes what argparse renders and changes
+        nothing else in this suite — `tests/harness_golden.py` has zero `--help` cells, which
+        is why this surface had never been compared at all. Without this, the fixtures would
+        stop describing the parser on the first such edit and no run would say so."""
+        import record_help  # noqa: PLC0415 — the recorder is the owner of the COLUMNS pin
+        meta = json.loads((self.SNAP / "help" / "_recorded_with.json")
+                          .read_text(encoding="utf-8"))
+        self.assertEqual(record_help.COLUMNS, meta["columns"],
+                         "the recorder's pinned width has moved since the recording")
+        subs = record_help._subparsers(harness.build_argparser())
+        self.assertEqual(sorted(subs), sorted(meta["verbs"]))
+        self.assertEqual(len(meta["verbs"]), 26)
+        # Through the recorder's own fenced helper, so this comparison renders at the width the
+        # corpus was recorded at rather than at whatever the test runner's terminal is.
+        live = record_help.help_texts(subs, meta["verbs"])
+        for name in meta["verbs"]:
+            self.assertEqual(subs[name].prog, meta["progs"][name])
+            self.assertEqual(
+                live[name],
+                (self.SNAP / "help" / f"{name}.txt").read_text(encoding="utf-8"),
+                f"`{name} --help` has moved since it was recorded — re-record with "
+                f"`python tests/record_help.py tests/__snapshots__`")
+
+    def test_the_recorded_reference_carries_the_hidden_surface(self):
+        """What a careless transcription drops, asserted on the RECORDING rather than on the
+        live file — the recording is what P2 reads, and a gate on the live file says nothing
+        about the copy that outlives it.
+
+        FIVE, NOT FOUR. The four `help=argparse.SUPPRESS` arguments this suite has asserted by
+        CONTAINMENT since P10c are `upgrade ref`, `sync-self ref`, `bootstrap extra` and
+        `web daemon_internal` — and `update` carries a fifth, because argparse's alias is a
+        second command row in `cli.json` with its own copy of `upgrade`'s positionals. An
+        equality found it; four `assertIn`s could not."""
+        rec = json.loads((self.SNAP / "cli_reference.json").read_text(encoding="utf-8"))
+        hidden = sorted((c["name"], a["dest"]) for c in rec["commands"]
+                        for a in c["positionals"] + c["options"] if a["hidden"])
+        self.assertEqual(hidden, [("bootstrap", "extra"), ("sync-self", "ref"),
+                                  ("update", "ref"), ("upgrade", "ref"),
+                                  ("web", "daemon_internal")])
+        by_name = {c["name"]: c for c in rec["commands"]}
+        port = next(a for a in by_name["web"]["options"] if a["dest"] == "port")
+        self.assertEqual(port["type"], "int", "`--port` must be typed, or `--port abc` "
+                                              "silently binds the default 4747")
+        self.assertEqual(by_name["theme"]["mutex"], [["--solid-only", "--transparent-only"]])
+
+    @unittest.skipIf(NODE is None, "node is not on PATH")
+    def test_the_ports_line_breaker_is_textwrap_at_every_width(self):
+        """`js/cli.mjs`'s `pyTextWrap` against the `textwrap.wrap` argparse calls, over the help
+        strings this parser actually carries, at every width the renderer can choose.
+
+        THE FIRST DRAFT OF THIS WAS A GREEDY SPACE-ONLY WRAP AND THIS TEST REFUSED IT. `textwrap`
+        splits a hyphenated word into two chunks, so it can break a line inside `back-compat`
+        where a space-only wrap cannot. 26 recorded fixtures at width 78 could not see it —
+        every one of them still matched — and the sweep below found all 38 help strings
+        disagreeing somewhere, the widest at 175. A corpus at ONE width is not evidence about
+        an algorithm; this is P5c's rule for a language primitive, and the answer is the same:
+        reproduce it, gate it with a corpus rather than a cell.
+
+        The width band is the renderer's whole range: `_format_action`'s help column floors at
+        11, and 198 is what a 200-column terminal gives. The recorded corpus only ever exercises
+        54..64 of it."""
+        import re
+        import textwrap
+
+        data = json.loads(harness.CLI_JSON.read_text(encoding="utf-8"))
+        texts = ["show this help message and exit"]  # argparse's own, absent from the file
+        for c in data["commands"]:
+            texts += [a["help"] for a in c["positionals"] + c["options"] if a["help"]]
+        # `_whitespace_matcher` is `re.ASCII`, so this is the string `_split_lines` is handed.
+        cases = [t for t in (re.sub(r"\s+", " ", raw, flags=re.ASCII).strip() for raw in texts)
+                 if t]
+        self.assertGreater(len(cases), 30, "the corpus collapsed, so this measured nothing")
+        widths = list(range(11, 199))
+        want = [[textwrap.wrap(t, w) for w in widths] for t in cases]
+        got = _node_json(
+            "import {pyTextWrap} from './js/cli.mjs';"
+            f"const cases = {json.dumps(cases)}, widths = {json.dumps(widths)};"
+            "process.stdout.write(JSON.stringify("
+            "  cases.map((t) => widths.map((w) => pyTextWrap(t, w)))));")
+        for i, t in enumerate(cases):
+            for j, w in enumerate(widths):
+                self.assertEqual(got[i][j], want[i][j],
+                                 f"width {w}: the port's line breaker disagrees with "
+                                 f"textwrap.wrap on {t!r}")
+        self.assertGreater(len(cases) * len(widths), 1000)
+
+
 @unittest.skipIf(NODE is None, "node is not on PATH")
 class BothImplementationsReadTheSameFile(unittest.TestCase):
     def test_the_two_digests_agree(self):

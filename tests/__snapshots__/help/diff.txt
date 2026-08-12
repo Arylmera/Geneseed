@@ -1,0 +1,13 @@
+usage: harness diff [-h] [--target TARGET] [--theme THEME] [--full]
+                    [--out [FILE]]
+
+options:
+  -h, --help       show this help message and exit
+  --target TARGET  deployed config dir (default: $OPENCODE_CONFIG_DIR /
+                   ~/.config/opencode)
+  --theme THEME    theme the deployment used (default: auto-detected from the
+                   deployed marker/sigil)
+  --full           show unified diffs, not just the file-level summary
+  --out [FILE]     also write the drift as a markdown improvements file — the
+                   artifact to hand to an agent to back-port edits into src/
+                   (bare --out picks a timestamped file under improvements/)

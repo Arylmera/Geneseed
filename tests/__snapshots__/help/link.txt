@@ -1,0 +1,7 @@
+usage: harness link [-h] [dir]
+
+positional arguments:
+  dir         bin dir to install into (Unix; default ~/.local/bin)
+
+options:
+  -h, --help  show this help message and exit

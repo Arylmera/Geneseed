@@ -1,0 +1,19 @@
+usage: harness theme [-h] [--from SHIPPED] [--palette FILE] [--dir DIR]
+                     [--global] [--solid-only | --transparent-only]
+                     name
+
+positional arguments:
+  name                theme name (auto-prefixed 'geneseed-'; selected as
+                      /theme geneseed-<name>)
+
+options:
+  -h, --help          show this help message and exit
+  --from SHIPPED      seed the full palette from a shipped theme (e.g.
+                      tokyonight), then tweak
+  --palette FILE      JSON palette to apply: {"palette":{…}} or a bare
+                      role->#hex map
+  --dir DIR           explicit themes dir (default: auto-detect repo/global)
+  --global            write to OpenCode's global themes dir even inside a repo
+                      with .opencode/
+  --solid-only        write only the opaque flavour
+  --transparent-only  write only the transparent flavour

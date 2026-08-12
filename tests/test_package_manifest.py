@@ -212,6 +212,11 @@ SHIPS: tuple[tuple[str, str], ...] = (
     # that list. `docs/specs/` is gitignored, so a ledger kept only in a phase note is a
     # per-machine file — this is the tracked home for it.
     ("docs/port-ledger.md", "docs/*.md — what the Node port does not prove"),
+    # P10 (Task 10), and its neighbour above says why it belongs in the package rather than in
+    # a phase note: `docs/port-ledger.md` lists what the port does not PROVE, and this lists
+    # where the port deliberately does not AGREE. Both are statements a reader holding two
+    # implementations is owed, and both would otherwise live in gitignored `docs/specs/`.
+    ("docs/declined.md", "docs/*.md — where the port deliberately diverges, and why"),
     ("web/dist/", "TRACKED and load-bearing: js/web/server.mjs serves it, and _npm_build is a "
                   "first-run-from-a-partial-checkout path no cell reaches"),
     ("web/src/pages/Laws.jsx", "doctor's lawMetaProblems reads this ONE file out of web/src; "
