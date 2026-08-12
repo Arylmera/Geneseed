@@ -242,8 +242,17 @@ export function pyTextWrap(text, width) {
     }
     // `_handle_long_word`: a chunk too wide for any line is cut to what is left of this one —
     // after the last hyphen inside that room, if there is one with something before it.
-    if (chunks.length && chunks[chunks.length - 1].length > width) {
-      const room = width < 1 ? 1 : width - len;
+    //
+    // `room > 0` IS CPython's gh-139065 fix — `if self.break_long_words and space_left > 0:`,
+    // landed on main as 1c598e0 and cherry-picked to 3.13 as b1bc743, first shipped in 3.13.14.
+    // Without it a line already exactly `width` long gets `chunk.slice(0, 0)` — an EMPTY string
+    // — appended, and that empty chunk then absorbs the single trailing-whitespace `pop` below,
+    // so the real whitespace chunk survives and the line keeps a trailing space. This machine's
+    // 3.13.5 predates the fix, so the sweep gate agreed with the unguarded port here and
+    // disagreed on CI's 3.13.14. `room <= 0` needs no `elif not cur_line` arm: an empty line has
+    // `len === 0`, so `room` is `width` (or 1 when `width < 1`) and is never <= 0 there.
+    const room = width < 1 ? 1 : width - len;
+    if (room > 0 && chunks.length && chunks[chunks.length - 1].length > width) {
       const chunk = chunks[chunks.length - 1];
       let end = room;
       if (chunk.length > room) {

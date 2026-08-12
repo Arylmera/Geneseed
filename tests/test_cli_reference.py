@@ -239,9 +239,40 @@ class TheRecordingIsWhatTheParserAnswers(unittest.TestCase):
 
         The width band is the renderer's whole range: `_format_action`'s help column floors at
         11, and 198 is what a 200-column terminal gives. The recorded corpus only ever exercises
-        54..64 of it."""
+        54..64 of it.
+
+        THE ORACLE IS PINNED TO POST-gh-139065 `textwrap`, BECAUSE THE PATCH DIGIT IS NOT AN
+        ANSWER. This sweep computes `want` from the RUNNING interpreter's `textwrap`, and
+        `textwrap` is not frozen: gh-139065 (main 1c598e0, 3.13 backport b1bc743, first shipped
+        in 3.13.14) stopped `_handle_long_word` appending an empty chunk to a line that is
+        already exactly `width` long, which changed whether the line keeps its trailing space.
+        `ci.yml` pins `python-version: "3.13"`, which setup-python resolves to the newest patch,
+        so an unpinned oracle reported OK on a 3.13.5 workstation and named a real divergence on
+        CI's 3.13.14 — the same gate, two verdicts, and neither machine at fault. The port
+        targets FIXED `textwrap` (the old behaviour is the bug CPython fixed), so on an
+        interpreter older than the fix the upstream one-liner is applied here. Detected by
+        BEHAVIOUR rather than by `sys.version_info`, so a distro backport is read correctly."""
         import re
         import textwrap
+
+        class _Gh139065(textwrap.TextWrapper):
+            """`if self.break_long_words and space_left > 0:` — the whole of the upstream fix.
+
+            Returning early is exactly equivalent to failing that condition: the `elif not
+            cur_line` arm below it is unreachable when `space_left <= 0`, because an empty
+            `cur_line` has `cur_len == 0` and so `space_left == width` (or 1 when width < 1)."""
+
+            def _handle_long_word(self, reversed_chunks, cur_line, cur_len, width):
+                if (1 if width < 1 else width - cur_len) <= 0:
+                    return
+                super()._handle_long_word(reversed_chunks, cur_line, cur_len, width)
+
+        # A line of exactly `width` followed by a word too long for any line: 'ab ' pre-fix.
+        pre_fix = textwrap.wrap("ab cdefgh", 3)[0] == "ab "
+        wrapper = _Gh139065 if pre_fix else textwrap.TextWrapper
+        self.assertEqual(wrapper(width=3).wrap("ab cdefgh"), ["ab", "cde", "fgh"],
+                         "the oracle is not post-gh-139065, so this sweep measures the "
+                         "interpreter's patch digit rather than the port")
 
         data = json.loads(harness.CLI_JSON.read_text(encoding="utf-8"))
         texts = ["show this help message and exit"]  # argparse's own, absent from the file
@@ -252,7 +283,7 @@ class TheRecordingIsWhatTheParserAnswers(unittest.TestCase):
                  if t]
         self.assertGreater(len(cases), 30, "the corpus collapsed, so this measured nothing")
         widths = list(range(11, 199))
-        want = [[textwrap.wrap(t, w) for w in widths] for t in cases]
+        want = [[wrapper(width=w).wrap(t) for w in widths] for t in cases]
         got = _node_json(
             "import {pyTextWrap} from './js/cli.mjs';"
             f"const cases = {json.dumps(cases)}, widths = {json.dumps(widths)};"
