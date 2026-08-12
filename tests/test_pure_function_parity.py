@@ -2712,6 +2712,10 @@ NORMALISED = {
     "<CWD>": "the probe's working directory, which is this checkout's root",
     "<CWD_PARENT>": "its parent, so WHERE the repo is cloned stops being a recorded input",
     "<HOME>": "the user's home directory, as `Path('~').expanduser()` answers it",
+    "<TMP>": "the system temp directory, as `tempfile.gettempdir()` answers it. On Windows "
+             "it sits INSIDE the home directory, so `<HOME>` would have rewritten any answer "
+             "bearing it without ever being told about a temp directory; on POSIX `/tmp` is "
+             "not under `$HOME` and the first Linux recording was refused for naming it",
 }
 
 
@@ -2719,14 +2723,29 @@ def _machine_prefixes() -> "list[tuple[str, str]]":
     """LONGEST FIRST, and the ordering is load-bearing rather than tidy: a normal checkout
     lives UNDER the user's home, so substituting `<HOME>` first would turn the working
     directory into `<HOME>/Documents/git/Geneseed` and leave the clone location in the
-    corpus. Both spellings of the separator, because a path that came back through a
-    `.as_posix()` or a URL is the same machine state with different bytes."""
-    pairs = []
+    corpus. The same ordering is what makes `<TMP>` safe to add on Windows, where the temp
+    directory is a LONGER path under the home directory and would otherwise come back as
+    `<HOME>/AppData/Local/Temp`.
+
+    THREE SPELLINGS OF EVERY ONE, because one directory can be named three ways and a table
+    that knows one of them misses the leak entirely:
+
+      * separators — a path that came back through an `.as_posix()` or a URL is the same
+        machine state in different bytes;
+      * `realpath` — POSIX `/tmp` is a symlink on macOS (`/private/tmp`), a home directory
+        can live under one (`/home` → an automount), and Windows can hand back `%TEMP%` as
+        an 8.3 short form. `py_resolve` answers with the RESOLVED path, so the unresolved
+        spelling alone would not match what the recording actually contains.
+
+    `<TMP>` IS WHY THIS FILE'S FIRST POSIX RECORDING WAS REFUSED. Windows was clean by
+    accident, not by design — see `_refuse_machine_state`."""
+    pairs: "list[tuple[str, str]]" = []
     for literal, token in ((str(ROOT), "<CWD>"), (str(ROOT.parent), "<CWD_PARENT>"),
-                           (str(Path.home()), "<HOME>")):
-        pairs.append((literal, token))
-        if "\\" in literal:
-            pairs.append((literal.replace("\\", "/"), token))
+                           (str(Path.home()), "<HOME>"), (tempfile.gettempdir(), "<TMP>")):
+        for spelling in (literal, os.path.realpath(literal)):
+            for sep_spelling in (spelling, spelling.replace("\\", "/")):
+                if sep_spelling and (sep_spelling, token) not in pairs:
+                    pairs.append((sep_spelling, token))
     return sorted(pairs, key=lambda p: -len(p[0]))
 
 
@@ -2801,23 +2820,138 @@ def _note_for(fn: str, answer) -> "str | None":
     return None
 
 
-def _refuse_machine_state(text: str) -> None:
+#: The keys whose values are text THIS FILE wrote rather than answers the machine gave: the
+#: token dictionary, a frozen bug's note, a swept codepoint's reason. They are corpus content
+#: exactly as an argument is, and they get the argument's test — measured, and not guessed:
+#: `<TMP>`'s own description has to be allowed to say `/tmp`, and on a POSIX recording that
+#: is a verbatim hit on `tempfile.gettempdir()`.
+_AUTHORED_KEYS = ("args", "normalised", "note", "why")
+
+
+def _split_by_provenance(doc: dict) -> "tuple[list[str], list[str]]":
+    """The document cut where PROVENANCE cuts it: what this machine ANSWERED, and what the
+    corpus WROTE DOWN. The two need different tests and one test for both is unsound in one
+    direction or the other.
+
+      * An answer is produced here. A machine path in one is a leak the substitution table
+        missed, full stop — no exemption, no argument.
+      * An argument (and the authored text beside it) is source in this very file, and it
+        travels verbatim because the replay feeds it back in. `py_resolve('/tmp')` puts the
+        POSIX temp directory in the corpus BY NAME, on purpose, and a scan that cannot tell
+        that from a leak refuses a recording that is correct. That is `_guard_for`'s clause
+        one level up: the literal came from the corpus, not from this machine — and it stays
+        CHECKED rather than assumed, because the exemption demands this file's source say so.
+
+    THE VALUES, DECODED — never the serialised text, and that is the second half of why
+    Windows looked clean. `json.dumps` writes a Windows path as `"C:\\\\Users\\\\me"`, two
+    backslash characters where the literal has one, so the old scan's raw `C:\\Users\\me`
+    could not match it and every un-normalised Windows path in a recording was INVISIBLE to
+    the detector. Its separator hid inside JSON's escape exactly as its temp directory hid
+    under its home. Keys are collected too: a key is a recorded value (`dwidth`'s `sample` is
+    keyed by codepoint)."""
+    answers: "list[str]" = []
+    authored: "list[str]" = []
+
+    def walk(value, into: "list[str]") -> None:
+        if isinstance(value, str):
+            into.append(value)
+        elif isinstance(value, list):
+            for v in value:
+                walk(v, into)
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                into.append(k)
+                walk(v, authored if k in _AUTHORED_KEYS else into)
+
+    walk(doc, answers)
+    return answers, authored
+
+
+def _machine_probes() -> "list[tuple[str, str]]":
+    """The paths the residual scan looks for — WRITTEN OUT AGAIN rather than read off
+    `_machine_prefixes()`, and the duplication is the whole point.
+
+    A control that shares its list with the thing it controls cannot fail independently of
+    it: measured, on the mutation that removed `<HOME>` from the substitution table, a scan
+    reusing that table stopped looking for the home directory in the same edit that stopped
+    substituting it, and the leak was only caught because this machine's login name happens
+    to be a component of its home path. On a build agent whose checkout is not under `$HOME`
+    the same mutation would have recorded silently. So this list is spelled out separately —
+    "a mutation control must share nothing with what is mutated" — and every source is
+    registered in all four of its spellings for `_machine_prefixes`'s reasons."""
+    out: "list[tuple[str, str]]" = []
+    for name, literal in (("the working directory", str(ROOT)),
+                          ("its parent", str(ROOT.parent)),
+                          ("the home directory", str(Path.home())),
+                          ("the temp directory", tempfile.gettempdir())):
+        for spelling in (literal, os.path.realpath(literal)):
+            for sep_spelling in (spelling, spelling.replace("\\", "/")):
+                if len(sep_spelling) > 2 and (name, sep_spelling) not in out:
+                    out.append((name, sep_spelling))
+    return out
+
+
+def _login_names() -> "list[str]":
+    """Every spelling of WHO and WHERE, because one call answers one of them.
+
+    `getpass.getuser()` returns the first of LOGNAME/USER/LNAME/USERNAME that is set and only
+    then consults the password database, so a machine where those disagree has a name the
+    single call cannot see. `Path.home().name` is a fifth spelling and it is the one that
+    actually reaches an answer, through `~`. The host name is included in both its full and
+    its short form: a POSIX `platform.node()` can be an FQDN whose first label is what a path
+    or a UNC share would carry."""
+    node = platform.node()
+    names = [getpass.getuser(), Path.home().name, node, node.split(".")[0]]
+    names += [os.environ.get(k) for k in ("USER", "LOGNAME", "LNAME", "USERNAME", "HOSTNAME")]
+    return sorted({n for n in names if n and len(n) > 2})
+
+
+def _refuse_machine_state(doc: dict) -> None:
     """RECORD, THEN MEASURE — the detector that earned its place in Task 8.
 
     Every machine-state vector this project has found in a corpus was found by measuring a
     recording, not by reading the code that produced it. So the negative is asserted
     directly: a substitution table that MISSED something is exactly as plausible as one that
-    covered everything, and only this can tell them apart."""
-    probes = [("the working directory", str(ROOT)),
-              ("its parent", str(ROOT.parent)),
-              ("the home directory", str(Path.home())),
-              ("the temp directory", tempfile.gettempdir()),
-              ("the login name", getpass.getuser()),
-              ("the host name", platform.node())]
-    probes += [(f"{n} (posix-spelled)", v.replace("\\", "/"))
-               for n, v in probes if "\\" in v]
-    leaks = [f"    {name}: {literal!r}" for name, literal in probes
-             if literal and len(literal) > 2 and literal in text]
+    covered everything, and only this can tell them apart.
+
+    A NAME IS NOT A PATH, and the first POSIX recording is what taught this file the
+    difference. Dispatched on ubuntu, a plain substring test for the login name `runner`
+    fired on `netrunner` and `speedrunner` — words in `themes/cyberpunk.json` and
+    `themes/gamer.json` that `theme_options` and `theme_preview` read out of the COMMITTED
+    TREE. Substituting a token there would have been the rot vector: `net<USER>` recorded on
+    a machine called `runner` and `netrunner` everywhere else is a corpus whose bytes depend
+    on who typed `python`. So a bare name is machine state only where it stands as a path
+    COMPONENT — which is the only route it has into an answer, since no recorded primitive
+    calls `getuser`, `getlogin` or `os.uname`: it arrives through `$HOME`, `%USERPROFILE%`, a
+    temp path or `~user`, and every one of those puts a separator immediately before it. A
+    prose collision is REPORTED instead, because a detector that says nothing on a hit it
+    decided to allow is indistinguishable from one that never looked."""
+    answers, authored = _split_by_provenance(doc)
+    source = Path(__file__).read_text(encoding="utf-8")
+    leaks, exempt, prose = [], [], []
+    paths = _machine_probes()
+    for name, literal in paths:
+        if any(literal in s for s in answers):
+            leaks.append(f"    a recorded ANSWER still names {name}: {literal!r}"
+                         "\n        the substitution table missed it — a spelling it does "
+                         "not know, or an answer it never reached")
+        if any(literal in s for s in authored):
+            if literal in source:
+                exempt.append(f"{literal!r} ({name}) — {Path(__file__).name} writes it down, "
+                              "so it is corpus text and not this machine")
+            else:
+                leaks.append(f"    corpus text names {name}: {literal!r}"
+                             "\n        and this file's source does not write it down, so "
+                             "it did not come from the corpus")
+    every = answers + authored
+    for name in _login_names():
+        bounded = re.compile(r"[/\\~]" + re.escape(name) + r"(?![0-9A-Za-z_-])")
+        where = [s for s in every if bounded.search(s)]
+        if where:
+            leaks.append(f"    a path component is this machine's name: {name!r}"
+                         f"\n        in {where[0][:120]!r}")
+        elif any(name in s for s in every):
+            prose.append(f"{name!r} × {sum(s.count(name) for s in every)}")
     if leaks:
         raise SystemExit(
             "REFUSING TO RECORD — this machine is still in the corpus:\n"
@@ -2825,6 +2959,13 @@ def _refuse_machine_state(text: str) -> None:
             + "\nA recorded answer that names this laptop is a rot vector, not a gate: it "
               "reddens on the next machine for a reason that is not a defect. Normalise it, "
               "guard it, or take the case out and say why.")
+    # SILENT ON SUCCESS IS THE SAME SHAPE AS BROKEN. What was probed, and every hit that was
+    # deliberately not refused, is stated out loud on every recording.
+    print(f"[machine-state] {len(paths)} path spellings and {len(_login_names())} names "
+          f"probed over {len(answers)} answer strings and {len(authored)} corpus-text strings"
+          + ("".join(f"\n[machine-state] allowed in CORPUS TEXT: {e}" for e in exempt))
+          + ("".join(f"\n[machine-state] allowed as PROSE, not a path component: {p}"
+                     for p in prose)))
 
 
 def _write_doc(path: Path, doc: dict) -> Path:
@@ -2832,8 +2973,8 @@ def _write_doc(path: Path, doc: dict) -> Path:
     of one-character strings, and every one of them gets its own line either way. Same
     reviewability, a third less file."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    _refuse_machine_state(doc)
     text = json.dumps(doc, indent=1, ensure_ascii=False) + "\n"
-    _refuse_machine_state(text)
     path.write_text(text, encoding="utf-8", newline="\n")
     return path
 

@@ -27,7 +27,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -43,13 +43,23 @@ const SNAPSHOTS = path.join(ROOT, 'tests', '__snapshots__');
 // mechanisms in this suite declare a platform and they all spell it these two ways.
 const PLATFORM = process.platform === 'win32' ? 'win32' : 'posix';
 
-/** The machine literals, longest first — see the recorder's `_machine_prefixes`. */
+/**
+ * The machine literals, longest first — see the recorder's `_machine_prefixes`, which this
+ * mirrors spelling for spelling. `<TMP>` is here because a POSIX temp directory is NOT under
+ * `$HOME` (a Windows one is, which is why `<HOME>` covered it here by accident), and every
+ * literal is registered through `realpathSync` as well: macOS resolves `/tmp` to
+ * `/private/tmp`, Windows can hand back `%TEMP%` as an 8.3 short form, and `py_resolve`
+ * answers with the resolved path either way.
+ */
 function machinePrefixes() {
   const pairs = [];
   for (const [literal, token] of [[ROOT, '<CWD>'], [path.dirname(ROOT), '<CWD_PARENT>'],
-    [homedir(), '<HOME>']]) {
-    pairs.push([literal, token]);
-    if (literal.includes('\\')) pairs.push([literal.replaceAll('\\', '/'), token]);
+    [homedir(), '<HOME>'], [tmpdir(), '<TMP>']]) {
+    for (const spelling of [literal, realpathSync(literal)]) {
+      for (const s of [spelling, spelling.replaceAll('\\', '/')]) {
+        if (s && !pairs.some(([l, t]) => l === s && t === token)) pairs.push([s, token]);
+      }
+    }
   }
   return pairs.sort((a, b) => b[0].length - a[0].length);
 }

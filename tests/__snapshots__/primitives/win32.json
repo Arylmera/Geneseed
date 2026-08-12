@@ -9,7 +9,8 @@
  "normalised": {
   "<CWD>": "the probe's working directory, which is this checkout's root",
   "<CWD_PARENT>": "its parent, so WHERE the repo is cloned stops being a recorded input",
-  "<HOME>": "the user's home directory, as `Path('~').expanduser()` answers it"
+  "<HOME>": "the user's home directory, as `Path('~').expanduser()` answers it",
+  "<TMP>": "the system temp directory, as `tempfile.gettempdir()` answers it. On Windows it sits INSIDE the home directory, so `<HOME>` would have rewritten any answer bearing it without ever being told about a temp directory; on POSIX `/tmp` is not under `$HOME` and the first Linux recording was refused for naming it"
  },
  "cases": [
   {
