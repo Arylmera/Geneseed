@@ -10,7 +10,7 @@
     "<r2 headers>": "69c6ccbbf5524ab593950b5c9878915ef5eb95d8d1eb3622dd9285008b6d2480",
     "<r2 status>": "c7b003871d7d406397b2d163039a21643ddd9e0cfd2b0b89b7d9fe55eca57d01",
     "<r3 body>": "d11270432532898181895d0fa4ab347120ee20d1fb8f268830108fe9ab92a83e",
-    "<r3 headers>": "5bf56ac7af7c144935dd4a1ab24ee76b51e0d7967ed16bfdbb4ae883ec474a0b",
+    "<r3 headers>": "0f1ff215a59be75538c2ae1010509d56bfb59c69221b51be5b32e07f8f26487f",
     "<r3 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -56,7 +56,7 @@
     "<r2 headers>": "Content-Type: application/json\nContent-Length: 103",
     "<r2 status>": "409 Conflict",
     "<r3 body>": "{\"exists\": true, \"path\": \"<HOME>\\\\.config\\\\opencode\\\\PROFILE.md\", \"text\": \"# Me\\n\\nI write Rust.\\n\", \"fingerprint\": \"3557095f088da537\"}",
-    "<r3 headers>": "Content-Type: application/json\nContent-Length: 186",
+    "<r3 headers>": "Content-Type: application/json\nContent-Length: 135",
     "<r3 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

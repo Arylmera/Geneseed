@@ -103,7 +103,7 @@ One more honest edge, in the web console rather than the CLI: the **"browse…" 
 ### ✅ After installing
 
 - **Verify** — open your agent in any repo: the first reply starts with the readiness sigil and your project's docs are already in context. `geneseed doctor` should print `ok`.
-- **Run it from anywhere** — a global `npm install -g geneseed` already does this. From a checkout, `./geneseed link` symlinks into `~/.local/bin`; `.\geneseed.cmd link` writes a shim into `%LOCALAPPDATA%\Geneseed\bin` and adds it to your user PATH (open a new terminal).
+- **Run it from anywhere** — a global `npm install -g geneseed` already does this. From a checkout, `./geneseed link` writes a launcher shim into `~/.local/bin`; `.\geneseed.cmd link` writes a shim into `%LOCALAPPDATA%\Geneseed\bin` and adds it to your user PATH (open a new terminal).
 - **Everything else** — other tools (Claude Code, plain `AGENT.md`), per-repo installs, MCP servers, environment knobs, troubleshooting: **[SETUP.md](SETUP.md)**.
 
 ---

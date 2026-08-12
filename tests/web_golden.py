@@ -2111,10 +2111,15 @@ def _read_cells(cell) -> list[dict]:
                      '\\ud83e\\uddec Gene-seed implanted']),
         cell("themes/an-undeployed-host-still-reports-a-current-pair",
              [_req(path="/api/themes")], world={"repo/.keep": ""},
-             # Describing the reference, not adjudicating it: with nothing deployed the
-             # detected pair is whatever `_installed_defaults` finds, and the theme falls
-             # back to `neutral`. The cell below is what tells detection from fallback.
-             expect=['"current": {"theme": "neutral"']),
+             # BOTH HALVES OF THE PAIR ARE NAMED SINCE THE BUNDLE WALK WAS PINNED. It used
+             # to say only `"theme": "neutral"`, because `_installed_defaults` walked
+             # `ROOT / "Harness"` and the emit was whatever the operator's own checkout had
+             # built — `opencode` here, nothing on the runner, i.e. the one field of this
+             # cell that was not reproducible. With the walk cwd-relative the undeployed
+             # answer is `None`, and what the body carries is `_WebState`'s own
+             # `or "opencode-global"` fallback. The cell below is still what tells detection
+             # from fallback: it differs on the THEME, which no default supplies.
+             expect=['"current": {"theme": "neutral", "emit": "opencode-global"}']),
         cell("themes/the-detected-install-is-the-current-pair",
              [_req(path="/api/themes")], world=_installed(),
              expect=['"current": {"theme": "imperial", "emit": "opencode-global"}']),
@@ -2141,13 +2146,21 @@ def _read_cells(cell) -> list[dict]:
                      '"python": "<RUNTIME>"', 'Content-Length: <CLEN>']),
         cell("setup/an-undeployed-target-says-so",
              [_req(path="/api/setup")], world={"repo/.keep": ""},
-             # `installed_fp` is deliberately NOT named: with no host dir seeded, the
-             # candidate chain walks on to the checkout's own `Harness/` and finds a real
-             # fingerprint there. Both sides read the same one, so the byte comparison
-             # still gates it; naming it would tie this cell to the developer's tree.
+             # THE FOUR FIELDS THAT COULD NOT BE NAMED BEFORE THE BUNDLE WALK WAS PINNED.
+             # `_status_data`'s chain used to walk on to the checkout's own `Harness/` when
+             # no host dir was seeded, so `installed_fp`, `version_target`, `version_verdict`
+             # and `emit` reported the operator's real install — a fingerprint, an absolute
+             # path and a whole sentence that a fresh clone answers differently. The old
+             # comment here said naming them "would tie this cell to the developer's tree",
+             # which was true and is the reason the cell was recording something no other
+             # machine could reproduce. They are the sandbox's answers now, so they are
+             # named: this is the cell that says "nothing is deployed" in full.
              expect=['"deployed": false',
                      '"agent_md": null, "agent_md_present": false',
                      '"theme": "neutral", "accent": "cyan"',
+                     '"installed_fp": null, "version_target": null',
+                     '"version_verdict": "no Geneseed install detected to compare"',
+                     '"emit": "\\u2014"',
                      '"target": "<HOME>']),
 
         # ---- /api/installs -------------------------------------------------------------

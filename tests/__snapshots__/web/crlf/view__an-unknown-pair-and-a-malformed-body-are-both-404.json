@@ -10,7 +10,7 @@
     "<r2 headers>": "12596dc69b54db5fd0169b657e1a3b136cff64993919bc086fb89754092773cd",
     "<r2 status>": "7d04f7431bbfa41a04bcc7e6b98b9de0d919756c4c671c5785c99fff45f16402",
     "<r3 body>": "2445a002a1e9d33aa4471e40955cfeac0484c66d6abf9d2404101e53e3b0359f",
-    "<r3 headers>": "9226c69813de565c90cecba5b16d774bf59cfdc5f4546ac88d2f23b40cfc44e9",
+    "<r3 headers>": "f82ac0848adc720d24ba68e2d3ab3128c76a48be02976c86a1ad353bc6e4bc1c",
     "<r3 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -54,7 +54,7 @@
     "<r2 headers>": "Content-Type: application/json\nContent-Length: 52",
     "<r2 status>": "404 Not Found",
     "<r3 body>": "{\"theme\": \"imperial\", \"accent\": \"yellow\", \"emit\": \"opencode-global\", \"footprint\": \"full\", \"install\": {\"host\": \"opencode\", \"scope\": \"global\", \"path\": \"<HOME>\\\\.config\\\\opencode\", \"footprint\": \"full\"}, \"target\": \"<HOME>\\\\.config\\\\opencode\", \"deployed\": true, \"counts\": {\"agents\": 0, \"skills\": 0, \"laws\": 37, \"memory\": 0, \"notebook\": 0, \"wiki\": 0, \"config\": 0}, \"doctor\": {\"ok\": true, \"problems\": [], \"checked_at\": \"<WHEN>\"}, \"diff\": {\"edited\": 2, \"added\": 0, \"missing\": 116}, \"build_time\": \"<WHEN>\"}",
-    "<r3 headers>": "Content-Type: application/json\nContent-Length: 619",
+    "<r3 headers>": "Content-Type: application/json\nContent-Length: 497",
     "<r3 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

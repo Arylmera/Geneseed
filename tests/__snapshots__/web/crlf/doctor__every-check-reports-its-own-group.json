@@ -4,7 +4,7 @@
     "<dirs>": "6622b117a82211d456df9c16e06c36016234dc16ce469cd0828e956984d61e5b",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<r1 body>": "1eeac6a3e7b769388dc57fd6a99577e41048ea3af9639f8afb38ad21ed239cff",
-    "<r1 headers>": "30fa2f81e3a5d2b2c1b338faae7495fdf29e9d33efc85874dbd691f53386e4ca",
+    "<r1 headers>": "0a2608aec5657ab5e97e0c6c214cf4fb431b3c8581edc62aeeede01534a98053",
     "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -36,7 +36,7 @@
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
     "<exit>": "0",
     "<r1 body>": "{\"themes\": [\"imperial\"], \"ok\": true, \"problems\": [], \"groups\": [{\"check\": \"build\", \"label\": \"Build scan (imperial)\", \"problems\": []}, {\"check\": \"global\", \"label\": \"Global install (imperial)\", \"problems\": []}, {\"check\": \"claude_bob\", \"label\": \"Claude/Bob/Copilot per-repo emit (imperial)\", \"problems\": []}, {\"check\": \"parity\", \"label\": \"Theme parity\", \"problems\": []}, {\"check\": \"colors\", \"label\": \"Colour themes\", \"problems\": []}, {\"check\": \"authoring\", \"label\": \"Authoring gates\", \"problems\": []}, {\"check\": \"shim\", \"label\": \"Hook shim\", \"problems\": []}, {\"check\": \"cli\", \"label\": \"CLI reference\", \"problems\": []}, {\"check\": \"bundle\", \"label\": \"Committed bundle drift\", \"problems\": []}], \"checked_at\": \"<WHEN>\"}",
-    "<r1 headers>": "Content-Type: application/json\nContent-Length: 722",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 712",
     "<r1 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

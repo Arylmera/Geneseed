@@ -30,9 +30,16 @@ def cmd_version(args: argparse.Namespace) -> int:
     installed = build.read_version(target)
     if installed is None:   # fall back to the other hosts' config dirs, then bundles —
         # a claude/bob/copilot-only machine must not report "no install detected".
+        # BUNDLE CANDIDATES ARE CWD-RELATIVE ONLY. `ROOT / "Harness"` used to sit here, and
+        # it reported the CHECKOUT's own bundle no matter where the caller stood — the
+        # in-folder location `_update._migrate_stray_bundle` calls stray and deletes. Run
+        # from the checkout (the normal `./geneseed version`) `Path.cwd() / "Harness"` is
+        # the same directory, so only the run-from-elsewhere answer moved, and it moved to
+        # the honest one: a bundle that is neither the cwd nor a host config dir is not
+        # this directory's install.
         for base in (build._claude_config_dir(), build._bob_config_dir(),
                      build._copilot_config_dir(),
-                     ROOT / "Harness", Path.cwd() / "Harness", Path.cwd()):
+                     Path.cwd() / "Harness", Path.cwd()):
             v = build.read_version(base)
             if v:
                 installed, target = v, base
@@ -65,8 +72,9 @@ def _status_data() -> dict:
             othercfg.append(fn())
         except Exception:  # noqa: BLE001 — a missing host dir must not sink status
             pass
+    # Same walk as `cmd_version`'s fallback, and cwd-relative for the same reason.
     candidates = (([cfg] if cfg else []) + othercfg
-                  + [ROOT / "Harness", Path.cwd() / "Harness", Path.cwd()])
+                  + [Path.cwd() / "Harness", Path.cwd()])
     for base in candidates:
         v = build.read_version(base)
         if v:

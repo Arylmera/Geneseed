@@ -25,11 +25,17 @@
  * the redirected `$XDG_CONFIG_HOME` and is therefore fenceable too. So unlike `status`, none
  * of this module's inputs is the unfenceable `ROOT`; the `rebuild-all` cells seed real
  * installs and get real answers.
+ *
+ * That sentence was FALSE until wave 2 of the P0/P1 review: `installedDefaults` walked
+ * `ROOT / "Harness"` and `ROOT.parent / "Harness"`, so on a checkout carrying a built
+ * bundle every cell that seeded no emit marker read this developer's own install — four
+ * web cells recorded it. Both candidates are gone (the argument is in the Python), and the
+ * claim is now true rather than aspirational.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { CONFIG, THEMES, ROOT, discoverNames } from './checkout.mjs';
+import { CONFIG, THEMES, discoverNames } from './checkout.mjs';
 import { GLOBAL_MANIFEST, HOSTS, pyResolve } from './hosts.mjs';
 import { registryRoots } from './registry.mjs';
 import { pyPrintErr, pyRepr, readText } from './lib/pyfs.mjs';
@@ -330,10 +336,9 @@ export function installedDefaults() {
   for (const { host, configDir } of HOSTS) {
     try { candidates.push([configDir(), `${host}-global`]); } catch { /* as the Python */ }
   }
-  for (const p of [path.join(ROOT, 'Harness'), path.join(path.dirname(ROOT), 'Harness'),
-    path.join(process.cwd(), 'Harness')]) {
-    candidates.push([p, null]);
-  }
+  // One cwd-relative bundle candidate — `ROOT / "Harness"` and `ROOT.parent / "Harness"`
+  // left with the Python's, see `_harness_setup._installed_defaults` for the argument.
+  candidates.push([path.join(process.cwd(), 'Harness'), null]);
   for (const [base, knownEmit] of candidates) {
     if (found.emit === null) {
       const em = path.join(base, '.geneseed-emit');

@@ -31,10 +31,10 @@ makes the next unported thing visible instead of silently absent.
 | # | The gap | Where it is asserted |
 |---|---|---|
 | 1 | **The full-screen curses panel.** `_tui_loop`, the eighteen screens of `_harness_tui_views.py`, the `(stdscr, curses, pal)` helpers of `_harness_tui_draw.py`, `_winterm.py`'s `_Window`, `_harness_menu.py`'s menus, `cmd_setup`'s and `cmd_bootstrap`'s curses arms, `_doctor_collect(on_progress=)`. `js/tui.mjs` refuses and names `python rituals/harness.py tui`. | `tests/test_tui_boundary.py` from both directions: behavioural (the arm refuses and leaves no panel behind) and structural — `test_the_arm_is_unreachable_by_construction_and_not_by_luck` fails if `js/tui.mjs` grows any of `?1049h`, `?1049l`, `?25l`, `\x1b[`, `[`. Landing a real panel means deleting that test *first* and updating this row second. |
-| 2 | **`textwrap.wrap` / `_wrap_lines`.** A second `difflib`: a stdlib payload with no Node twin. Its only caller is `_tui_loop`, so it is callerless in the port. Port it *with* the panel or not at all. | Gated on the reference alone — `tests/test_tui_boundary.py:306`. There is nothing to compare against, and the row says so. |
+| 2 | **`_wrap_lines`** (`rituals/_harness_tui_draw.py`). Its only caller is `_tui_loop`, so it is callerless in the port and travels with row 1. **`textwrap.wrap` itself has CROSSED** — this row said "a stdlib payload with no Node twin … port it *with* the panel or not at all" until P1 made `--help` the caller that required it: `pyTextWrap` (`js/cli.mjs`) is a real port of it, driven by `formatHelp`. | `textwrap.wrap`: `tests/__snapshots__/textwrap.json` freezes the CPython answers (38 cases × widths 11..198, sha256 over the matrix) and `tests/pure_snapshot.test.mjs` replays them with no Python involved; while the reference lives, `tests/test_cli_reference.py::test_the_ports_line_breaker_is_textwrap_at_every_width` compares against the running interpreter. `_wrap_lines` itself is gated on the reference alone — there is nothing to compare against, and the row says so. |
 | 3 | **`/api/pick-folder`.** Declined, never ported: it opens an OS-native folder dialog on the daemon host. `js/web/server.mjs` carries it in `DECLINED_POST`, a set distinct from `NOT_PORTED_POST` because "will never cross" is a different claim from "not yet". | Probed live, not merely declared: `tests/test_web_server.py` drives the real dispatcher and requires POST → 501 and GET → *not* 501 (it must fall through to the SPA). The reference's own handler, `rituals/_web_server.py:179`, is what no test reaches. |
 | 4 | **`_win_user_path`'s registry-write success arm.** `link`/`unlink` edit the persistent user Path through PowerShell. No test in this repo may run that — the edit would outlive the suite. | The *failure* arm is reached honestly: `harness_golden`'s `unlink` cells hand the verb a PATH with no `powershell` on it, so both sides take the "said nothing about PATH" branch with the registry untouched. Everything that can be *wrong* lives in the pure `_win_user_path_script` / `winUserPathScript` half, and `tests/test_win_user_path.py` runs a corpus over both. That the spawn half carries no logic is **STATED**, in that file's docstring. |
-| 5 | ~~**`link`/`unlink`'s Unix arm.**~~ **CLOSED at P11.** It symlinks `ROOT/geneseed` into `~/.local/bin`, and it now has six cells of its own — including the `PATH` split (a substring test passes every other cell and fails `a-path-entry-that-merely-contains-the-dir`), the `is_symlink()` clause that leaves a foreign `geneseed` alone, and an explicit dir argument with a trailing slash. That last one found a live divergence: the reference builds a `Path` and the port kept the raw string, so `str(Path('/x/bin/'))` and `/x/bin/` disagreed in two messages and in the PATH comparison. Fixed in `js/link.mjs` with `pyPathStr`. | The group is now a UNION across the two platforms, declared in `harness_golden.PLATFORM_ONLY` and asserted from either host by `tests/test_hook_cli_parity.py::ThePlatformDeclaredCellsAreDeclared`: every id declared for this platform must be built, every id declared for the other must be absent, and neither half may be empty. `compare()` also PRINTS the half it is not running, so a run says what it skipped. |
+| 5 | ~~**`link`/`unlink`'s Unix arm.**~~ **CLOSED at P11.** It writes a `#!/bin/sh` shim into `~/.local/bin` — `_harness_lifecycle.py:406-421`, carrying a `# GENESEED_LINK_SHIM` marker and chmod 0755 — and it now has six cells of its own. (It *symlinked* `ROOT/geneseed` until P0/P1 Task 2b moved the reference onto the same written shim the port had; the `is_symlink()` branch survives at `:469-470` so `unlink` still removes a legacy symlink install, and no cell covers that branch.) The six include the `PATH` split (a substring test passes every other cell and fails `a-path-entry-that-merely-contains-the-dir`), the **marker check** that leaves a foreign `geneseed` alone — the decoy in `unlink-removes-a-shim-it-made-and-leaves-a-foreign-one-alone` is a regular file, not a symlink, so the marker is what has to reject it — and an explicit dir argument with a trailing slash. That last one found a live divergence: the reference builds a `Path` and the port kept the raw string, so `str(Path('/x/bin/'))` and `/x/bin/` disagreed in two messages and in the PATH comparison. Fixed in `js/link.mjs` with `pyPathStr`. | The group is now a UNION across the two platforms, declared in `harness_golden.PLATFORM_ONLY` and asserted from either host by `tests/test_hook_cli_parity.py::ThePlatformDeclaredCellsAreDeclared`: every id declared for this platform must be built, every id declared for the other must be absent, and neither half may be empty. `compare()` also PRINTS the half it is not running, so a run says what it skipped. |
 | 6 | **The boot animation's call site.** `theme_anim.play_line` itself crossed; what is declared is that `js/setup.mjs` and `js/update.mjs` reach no panel. | `tests/test_tui_boundary.py::test_neither_module_contains_anything_that_could_paint_a_screen` — escape sequences, not the word "curses". The first draft looked for the word and failed on a *docblock*: a structural gate that reads prose is a gate on the documentation. |
 
 ## Ungated, and honest about it
@@ -108,3 +108,33 @@ makes the next unported thing visible instead of silently absent.
   Python implementation deletes the thing the port is measured against. `package.json`
   ships both for independent reasons — see `tests/test_package_manifest.py`, where every
   shipped path carries its argument.
+
+## Handed to the next phase — three things P0/P1 froze that P2–P4 must decide
+
+Not gaps in what the port proves: gaps that OPEN when the reference goes, created by the
+recordings this branch took. They are here rather than in a phase note because the phase note
+is per-machine and the decision has a deadline — the window in which both implementations
+exist.
+
+1. **`cli.json` is now a frozen oracle as well as a runtime table, and P2 takes it back.**
+   `tests/cli_help.test.mjs` asserts `deepEqual` between `tests/__snapshots__/cli_reference.json`
+   and the live `cli.json` (minus `source_sha256`), and two further tests read the live file. So
+   the first byte P2 changes in it — a reshaped spec, a dropped field the JS table does not
+   need, a new flag — turns that test red, and the only regeneration path is
+   `tests/record_help.py`, which does `import harness` and calls `harness.build_argparser()`.
+   P2 has to decide up front which of the file's three roles (runtime arg table, `--help`
+   renderer input, frozen oracle) survives the takeover, and re-point the equality at the new
+   owner **while the reference still exists**.
+2. **After P4 the 26 help fixtures cannot be re-recorded.** Adding or rewording a single CLI
+   flag changes `formatHelp`'s output and reddens `tests/cli_help.test.mjs`, with no argparse
+   left to ask. Either the CLI's help text becomes effectively immutable, or the fixtures get
+   re-blessed from the port — which makes them a DETERMINISM check rather than a regression
+   gate, the same degradation already flagged for `--idempotent`/`--deletion`. Neither is
+   wrong; picking neither is.
+3. **`record-corpus` stops working entirely at P4.** It is the only way to produce the `lf`
+   halves, it is Linux-only and dispatch-only, and four of its steps run the reference (record
+   the emit/CLI/web matrices, record the primitive corpus, the two `record_help.py`
+   invocations). When `build.py` / `rituals/harness.py` go, so do the platform-independence
+   gate and the record-twice rot detector. Whatever replaces those steps must be written while
+   both implementations still exist — a port-recorded corpus proves nothing the port did not
+   already believe.

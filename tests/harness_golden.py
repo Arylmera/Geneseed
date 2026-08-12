@@ -988,9 +988,6 @@ def _exclude_cells() -> list[dict]:
 #   * `_status_data` -> `_tui_inventory(theme)` -> `build.render_all(theme)` renders the
 #     WHOLE of `<checkout>/src` to count agents, skills and laws, and
 #     `build.source_fingerprint()` hashes `src/ themes/ adapters/` for the version row.
-#   * `_installed_defaults()` and `cmd_version`'s fallback chain both walk
-#     `ROOT / "Harness"` and `ROOT.parent / "Harness"` — the checkout's own bundle
-#     locations, not the sandbox's.
 #
 # `golden.cell_env` redirects HOME/XDG/APPDATA and clears the relocation vars; none of that
 # reaches ROOT. It CANNOT: `_build_core.ROOT` is `Path(__file__).resolve().parent`, every
@@ -1001,6 +998,16 @@ def _exclude_cells() -> list[dict]:
 # fixture tree, and copying the checkout into the sandbox would buy nothing — its `src/`
 # content is the live one, so the counts and the fingerprint would not change.
 #
+# WHAT LEFT THIS LIST IN WAVE 2 OF THE P0/P1 REVIEW. `_installed_defaults()`, `_status_data`
+# and `cmd_version`'s fallback chain used to walk `ROOT / "Harness"` (and, in the first,
+# `ROOT.parent / "Harness"`) — the checkout's own bundle locations, not the sandbox's. That
+# was the one input here a fixture could not fence AND a cell could observe: on a checkout
+# carrying a built `Harness/`, four web cells recorded this developer's install instead of
+# the "nothing deployed" answer a fresh clone gives, on a half CI never replays. The three
+# walks are cwd-relative now, so the sandbox's own cwd is the only bundle candidate. What
+# remains unfenceable is the RENDER — `src/` counts and the source fingerprint — which is
+# the same on any checkout of the same commit and is gated by shape, below.
+#
 # Two consequences, both deliberate:
 #
 #   1. The counts and the fingerprint are gated by COMPARISON (both sides render the same
@@ -1008,16 +1015,16 @@ def _exclude_cells() -> list[dict]:
 #      and absolutely only by SHAPE, via `expect_re`. A cell naming `17 agents` rots the
 #      next time content lands; a cell naming a literal fingerprint rots every commit, and
 #      `test_no_cell_hardcodes_a_source_fingerprint` refuses one.
-#   2. Every cell seeds a marker in the FIRST candidate the walk visits, so the
-#      unfenceable ones are never reached for any value the panel prints. What that leaves
-#      out is recorded rather than hidden: `Harness/` is gitignored, so a "no install
-#      anywhere" cell would report this developer's real install here and "(none found)" on
-#      a fresh clone. `_manifest_is_claude` is worse — it is only reached for a candidate
-#      with no known host, and `ROOT / "Harness"` is ordered AHEAD of the sandbox's own
-#      `Harness/`, so it is unreachable from any cell on a checkout that has one.
-#      `_accent_for`'s cyan fallback and `_version_verdict`'s "up to date" are unreachable
-#      for their own reasons (an unknown theme is refused upstream; "up to date" needs a
-#      marker holding a fingerprint no cell can know). All four are gated as PURE
+#   2. Every cell seeds a marker in the FIRST candidate the walk visits, which is how these
+#      two verbs stayed reproducible while the walk still ended in the checkout. Since the
+#      pin that is belt AND braces: a cell that seeds NOTHING now reports "(none found)"
+#      here exactly as it does on a fresh clone, which is what the four web cells were
+#      recording wrong. `_manifest_is_claude` is reachable again for the same reason — it
+#      needs a candidate with no known host, and `cwd / "Harness"` is now the only one —
+#      though no cell seeds a manifest without an emit marker, so it is still gated only by
+#      the corpus. `_accent_for`'s cyan fallback and `_version_verdict`'s "up to date" stay
+#      unreachable for their own reasons (an unknown theme is refused upstream; "up to date"
+#      needs a marker holding a fingerprint no cell can know). All three are gated as PURE
 #      FUNCTIONS over a corpus instead — `tests/test_pure_function_parity.py`.
 #
 # Cost, measured rather than assumed: 0.14 s per invocation for either verb. `render_all`
@@ -3325,7 +3332,7 @@ def _link_cells_posix() -> list[dict]:
     was true of the machine and not of the code: a Windows host has no symlink privilege and
     no `~/.local/bin` worth writing to. Nothing about the arm was hard to reach — the sandbox
     already redirects HOME, which is the only input `Path.home() / '.local' / 'bin'` reads —
-    so on a Linux host these five cells are ordinary cells, and four of them exercise a
+    so on a Linux host these six cells are ordinary cells, and four of them exercise a
     divergence risk the Windows arm does not carry:
 
       * THE DIR ARGUMENT IS A `Path` ON ONE SIDE AND A STRING ON THE OTHER. The reference does
@@ -3335,9 +3342,13 @@ def _link_cells_posix() -> list[dict]:
       * THE PATH TEST IS A SPLIT, not a substring: `str(target_dir) in PATH.split(os.pathsep)`.
         The Windows arm's is `.lower() in .lower()`, so the two halves of `link` fail
         differently and only this one can catch a port that reached for `includes`.
-      * `unlink` WALKS PATH and follows `os.readlink` WITHOUT resolving it, so a symlink named
-        `geneseed` that points at something else must be left alone. That is the security-ish
-        clause of the verb and no Windows cell has an analogue for it.
+      * `unlink` WALKS PATH and must leave a foreign `geneseed` alone. Since Task 2b that is
+        a MARKER check, not `is_symlink()`: both implementations write a `#!/bin/sh` shim
+        carrying `# GENESEED_LINK_SHIM`, and the decoy in the cell below is a REGULAR FILE
+        (`#!/bin/sh\\nnot ours\\n`), so the marker is the only thing that can reject it. The
+        `is_symlink()` branch still exists for legacy symlink installs and no cell supplies a
+        symlink decoy — that half is stated, here, rather than gated. This is the
+        security-ish clause of the verb and no Windows cell has an analogue for it.
     """
     # `{home}/.local/bin` on PATH, which is the arm that prints "is on PATH". Spelled with
     # `{home}` rather than `~`: nothing expands a tilde inside PATH.

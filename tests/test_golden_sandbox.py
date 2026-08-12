@@ -18,6 +18,7 @@ Run from the Geneseed root:  python -m unittest discover -s tests
 """
 import contextlib
 import io
+import json
 import os
 import shutil
 import sys
@@ -501,6 +502,81 @@ class TheNarrowingReasonIsActuallyWired(unittest.TestCase):
         self.assertIsNone(self._narrowed(golden, ["--new", "node x"]),
                           "an unnarrowed run must NOT claim a narrowing reason, or the "
                           "orphan check skips itself on every CI replay")
+
+
+# The four web cells that recorded the RECORDER's own gitignored `Harness/` build, and the
+# property that says the escape is closed. `_status_data`'s and `_installed_defaults`'
+# candidate walks used to end at `ROOT / "Harness"` (and, in the second, `ROOT.parent /
+# "Harness"` as well), which no sandbox can fence off; a cell that seeded no host dir
+# therefore reported this developer's install. The two halves were recorded on different
+# machines, so they disagreed on an axis that has nothing to do with line endings:
+#
+#   setup__an-undeployed-target-says-so   emit / installed_fp / version_target /
+#                                         version_verdict — all four
+#   themes__* (three cells)               emit
+#
+# WHY THE HALVES ARE THE GATE. crlf is recorded here and lf on the ubuntu runner, and no CI
+# job replays crlf (ci.yml's `cells` is ubuntu-only). A committed half nothing executes is
+# exactly what this branch exists to prevent, and the only cheap detector for "this cell
+# recorded the recorder" is that the two machines agree. It runs on both platforms because
+# both halves are committed — it reads the corpus, it never records one.
+_ESCAPED_WEB_CELLS = (
+    "setup__an-undeployed-target-says-so",
+    "themes__a-json-body-over-the-threshold-is-gzipped",
+    "themes__an-undeployed-host-still-reports-a-current-pair",
+    "themes__every-theme-carries-its-accent-tagline-and-sigil",
+)
+
+
+class TheEscapedCellsAgreeAcrossTheHalves(unittest.TestCase):
+    WEB = ROOT / "tests" / "__snapshots__" / "web"
+
+    @staticmethod
+    def _sep_free(text: str) -> str:
+        """Modulo separators: a Windows path inside a recorded JSON body arrives as the
+        two-character escape `\\\\`, its POSIX twin as one `/`. Every other backslash in
+        these bodies is the head of a `\\uXXXX` escape, which this leaves alone (and which
+        would in any case be rewritten identically on both sides)."""
+        return text.replace("\\\\", "/").replace("\r\n", "\n")
+
+    def _body(self, half: str, cid: str) -> str:
+        path = self.WEB / half / f"{cid}.json"
+        self.assertTrue(path.is_file(), f"{path} is missing — the cell was renamed or the "
+                                        f"half was never recorded")
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        body = doc.get("verbatim", {}).get("<r1 body>")
+        self.assertTrue(body, f"{path} records no <r1 body>; this gate would pass vacuously")
+        return body
+
+    def test_the_bodies_agree_modulo_separators(self):
+        for cid in _ESCAPED_WEB_CELLS:
+            with self.subTest(cell=cid):
+                crlf, lf = self._body("crlf", cid), self._body("lf", cid)
+                self.assertEqual(self._sep_free(crlf), self._sep_free(lf),
+                                 f"{cid}: the two halves disagree on something that is not "
+                                 f"a path separator — a machine-state escape is back")
+
+    def test_each_half_says_absolutely_that_nothing_is_deployed(self):
+        """The absolute tier the comparison above owes: two halves recorded on two
+        checkouts that BOTH carried a `Harness/` would agree with each other."""
+        for half in ("crlf", "lf"):
+            with self.subTest(half=half):
+                setup = self._body(half, "setup__an-undeployed-target-says-so")
+                self.assertIn('"installed_fp": null, "version_target": null', setup)
+                self.assertIn('"version_verdict": "no Geneseed install detected to '
+                              'compare"', setup)
+                self.assertIn('"emit": "\\u2014"', setup)
+                for cid in _ESCAPED_WEB_CELLS[1:]:
+                    self.assertIn('"emit": "opencode-global"', self._body(half, cid))
+
+    def test_the_separator_normalisation_is_load_bearing(self):
+        """Vacuity guard. The three `themes` bodies carry no path and are byte-identical
+        across the halves, so if `setup`'s were too this gate would prove nothing about
+        separators and would silently stop covering the case it was written for."""
+        cid = "setup__an-undeployed-target-says-so"
+        self.assertNotEqual(self._body("crlf", cid), self._body("lf", cid),
+                            "the two halves are byte-identical, so this class is no longer "
+                            "comparing a Windows recording against a POSIX one")
 
 
 if __name__ == "__main__":

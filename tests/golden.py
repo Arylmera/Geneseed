@@ -761,23 +761,34 @@ CORPUS_STAMPS = (
     #    `timeout:` that follows it, leaves the line untagged and fails.
     (re.compile(rb"(\(git: )[^,\r\n]+(, timeout: )"), rb"\1<GIT>\2"),
     # 3. THE FINGERPRINT OF THE OPERATOR'S OWN BUILD. `_status_data`'s candidate walk
-    #    (`_harness_status.py:68-74`) ends at `ROOT / "Harness"` — the CHECKOUT's bundle, which
-    #    no sandbox can fence off (there is no env hook for `ROOT`). `setup/an-undeployed-
-    #    target-says-so` seeds no host dir on purpose, so the walk leaves the sandbox and
-    #    `installed_fp` records whatever this machine last built: `240280e0c4d9` here, `null`
-    #    on the runner, and a different twelve hex digits after the next `build.py`.
+    #    (`_harness_status.py`) used to end at `ROOT / "Harness"` — the CHECKOUT's bundle,
+    #    which no sandbox can fence off (there is no env hook for `ROOT`). `setup/an-
+    #    undeployed-target-says-so` seeds no host dir on purpose, so the walk left the sandbox
+    #    and `installed_fp` recorded whatever this machine last built: `240280e0c4d9` here,
+    #    `null` on the runner, and a different twelve hex digits after the next `build.py`.
     #
     #    EXACTLY TWELVE HEX, which is what keeps the seeded fixtures out of reach — the same
     #    discrimination the `source ` rule above relies on. `"installed_fp":
     #    "0000000000000000"` is sixteen and stays byte-compared, and `installed: deadbeef1234`
     #    is a different spelling this pattern cannot see.
     #
-    #    THE OTHER THREE FIELDS OF THAT CELL ARE NOT TAGGED, deliberately. `version_target`,
-    #    `version_verdict` and `emit` also answer about the checkout rather than the sandbox,
+    #    THE OTHER THREE FIELDS OF THAT CELL WERE NOT TAGGED, deliberately. `version_target`,
+    #    `version_verdict` and `emit` also answered about the checkout rather than the sandbox,
     #    but they move only if the operator's `Harness/` appears or disappears — not on every
     #    rebuild — and each is either a whole SENTENCE or a field ~50 other cells assert. A
     #    stamp wide enough to cover them would cost more comparison than the rot is worth; the
     #    fix for those is to pin the walk, not to blank its answer. See task-8c-report.md.
+    #
+    #    THE WALK IS PINNED SINCE WAVE 2 OF THE P0/P1 REVIEW — all three bundle candidates in
+    #    `_harness_status`/`_harness_setup` are cwd-relative, so that cell records `null` on
+    #    every machine and this stamp is no longer what keeps it stable;
+    #    `TheEscapedCellsAgreeAcrossTheHalves` (tests/test_golden_sandbox.py) is. It is kept
+    #    as a second line rather than removed, with the hazard stated rather than implied:
+    #    twelve hex was chosen to miss the seeded fixtures, but `harness_golden._STAMP`'s
+    #    `deadbeef1234` IS twelve hex, so a future cell that seeds it and reads it back as
+    #    `installed_fp` would have its answer blanked. No cell does today (the two that carry
+    #    the field use the sixteen-hex `web_golden._VERSION`), and the pattern must not be
+    #    widened while that is the only thing separating them.
     (re.compile(rb'("installed_fp": ")[0-9a-f]{12}(?=")'), rb"\1<FP>"),
 
     # ---- THE FIFTH CLASS: A LENGTH, NOT A VALUE --------------------------------------------

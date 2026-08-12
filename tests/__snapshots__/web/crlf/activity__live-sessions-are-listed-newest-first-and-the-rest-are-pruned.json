@@ -4,7 +4,7 @@
     "<dirs>": "0b8507bfbd2f9988105a5ca7298564ffce06316f55e1e7087c1b8e99d0415b6d",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<r1 body>": "42fd43290bcae61365dac2de6864a0e873a64ebe28d811167ff04192df409a30",
-    "<r1 headers>": "6f2f17c7feb0df435ef28d3a3a7c18fe4f9e8a5f4002bf38f116350e2fd5fe2c",
+    "<r1 headers>": "2f4fca4424e555f2cbdd412a83cf89ffb7fca701b8bc436ba8dc53326c68d4de",
     "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -52,7 +52,7 @@
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/activity\nrepo",
     "<exit>": "0",
     "<r1 body>": "{\"enabled\": true, \"activity\": [{\"session_id\": \"s-live\", \"agent\": \"wayfinder\", \"title\": \"hello\", \"cwd\": \"<SB>/repo\", \"status\": \"working\", \"updated_at\": <NOW>, \"model\": \"opus\", \"phase\": \"edit\", \"turn_started_at\": <NOW>, \"cost\": 1.0, \"tokens\": 1200, \"files\": [\"a.py\"], \"todos\": [{\"text\": \"one\", \"done\": false}], \"blocked_on\": null, \"error\": null}, {\"session_id\": \"s-min\", \"agent\": null, \"title\": null, \"cwd\": null, \"status\": \"idle\", \"updated_at\": <NOW>, \"model\": null, \"phase\": null, \"turn_started_at\": null, \"cost\": 0, \"tokens\": 0, \"files\": null, \"todos\": null, \"blocked_on\": null, \"error\": null}, {\"session_id\": \"s-strpid\", \"agent\": null, \"title\": null, \"cwd\": null, \"status\": \"idle\", \"updated_at\": <NOW>, \"model\": null, \"phase\": null, \"turn_started_at\": null, \"cost\": 0, \"tokens\": 0, \"files\": null, \"todos\": null, \"blocked_on\": null, \"error\": null}, {\"session_id\": \"s-tie\", \"agent\": null, \"title\": null, \"cwd\": null, \"status\": \"idle\", \"updated_at\": <NOW>, \"model\": null, \"phase\": null, \"turn_started_at\": null, \"cost\": 0, \"tokens\": 0, \"files\": null, \"todos\": null, \"blocked_on\": null, \"error\": null}, {\"session_id\": \"s-older\", \"agent\": null, \"title\": null, \"cwd\": null, \"status\": \"idle\", \"updated_at\": <OLDER>, \"model\": null, \"phase\": null, \"turn_started_at\": null, \"cost\": 0, \"tokens\": 0, \"files\": null, \"todos\": null, \"blocked_on\": null, \"error\": null}]}",
-    "<r1 headers>": "Content-Type: application/json\nContent-Length: 1425",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 1356",
     "<r1 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

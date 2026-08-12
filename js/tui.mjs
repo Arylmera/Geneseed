@@ -28,10 +28,16 @@
  * not that.
  *
  * WHAT IS DELIBERATELY NOT HERE: `_bx` (its non-ASCII arm returns `curses.ACS_*` chtype ints,
- * which belong with the window), `_wrap_lines` (`textwrap.wrap` is a second `difflib` — a
- * stdlib payload with no Node twin — and it has no consumer until the screens arrive, so
+ * which belong with the window), `_wrap_lines` (no consumer until the screens arrive, so
  * porting it now would be a reduced port with no caller to check it against), and every
- * `(stdscr, curses, pal)` drawing helper. `_parse_laws`, `load_registry`, `entity_status` and
+ * `(stdscr, curses, pal)` drawing helper.
+ *
+ * **DO NOT WRITE A SECOND LINE BREAKER.** This block used to argue that `textwrap.wrap` was
+ * "a second `difflib` — a stdlib payload with no Node twin". It has one since P1:
+ * `pyTextWrap` in `js/cli.mjs`, written because `--help` was the caller that finally
+ * required it, frozen at `tests/__snapshots__/textwrap.json` and swept against the running
+ * interpreter at every width from 11 to 198. When P7c brings `_wrap_lines` across it wraps
+ * THAT, and the only open question is the ASCII/glyph width the panel measures in. `_parse_laws`, `load_registry`, `entity_status` and
  * `_tui_inventory` crossed in P6c and live in `js/inventory.mjs`.
  */
 import path from 'node:path';

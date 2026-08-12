@@ -16,7 +16,7 @@
 #     ./geneseed upgrade [ref] [theme]    self-upgrade from the published source
 #     ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
 #     ./geneseed link [dir]               put `geneseed` on PATH (run it from anywhere)
-#     ./geneseed unlink                   remove the on-PATH launcher symlink
+#     ./geneseed unlink                   remove the on-PATH launcher shim
 #     ./geneseed help
 #
 # Bare `./geneseed` opens the local web console when the environment can show it
@@ -30,9 +30,11 @@
 # before sync-self rewrites it on disk.
 
 set -eo pipefail
-# Resolve through symlinks so the launcher works when invoked via a symlink on
-# PATH (see `geneseed link`): HERE must be the real repo dir, not the link's dir,
-# or rituals/harness.py and the sibling scripts would not be found.
+# Resolve through symlinks so the launcher works when invoked via a symlink: HERE
+# must be the real repo dir, not the link's dir, or rituals/harness.py and the
+# sibling scripts would not be found. `geneseed link` writes a shim naming this file
+# by absolute path rather than a symlink, so the loop is no longer what makes an
+# on-PATH launcher work — it still covers a hand-made symlink and an older install.
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do
   dir="$(cd -P "$(dirname "$SOURCE")" && pwd)"
@@ -121,7 +123,7 @@ geneseed — front door for the Geneseed harness
   ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
   ./geneseed link [dir]               put `geneseed` on PATH so it runs from any directory
                                       (default ~/.local/bin; pass a dir to override)
-  ./geneseed unlink                   remove the on-PATH launcher symlink
+  ./geneseed unlink                   remove the on-PATH launcher shim
 
 Once linked and on PATH, drop the leading `./` — just `geneseed`, `geneseed build`, etc.
 USAGE

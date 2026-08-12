@@ -11,7 +11,7 @@
     "<r2 sent>": "4442e8d4038354405707f1ad4f244401a513e9228a25e5a0222320d42f9798e8",
     "<r2 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<r3 body>": "6585e0f1a5b2dc143c3c26ebc96381d4af3228a92d6505a645c2e3936ff48ea6",
-    "<r3 headers>": "5ab3a72701f681fd311e74decbb810d3bc75a0b5b224395810749f3b4613a7c5",
+    "<r3 headers>": "c2d72e07706489857a8f7bc40506b3f35c86b505347c8b32f6be18b2ae4d8377",
     "<r3 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -59,7 +59,7 @@
     "<r2 sent>": "{\"op\": \"delete\", \"id\": 1, \"fingerprint\": \"bac5856ab4cdacac\"}",
     "<r2 status>": "200 OK",
     "<r3 body>": "{\"exists\": true, \"path\": \"<HOME>\\\\.config\\\\opencode\\\\user-rules.md\", \"rules\": [{\"id\": 2, \"title\": \"Renamed\", \"scope\": \"user\", \"source\": \"\", \"trial_until\": \"\", \"status\": \"active\", \"overdue\": false, \"body\": \"Replaced text.\"}, {\"id\": 3, \"title\": \"On probation\", \"scope\": \"project\", \"source\": \"\", \"trial_until\": \"<DATE>\", \"status\": \"trial\", \"overdue\": false, \"body\": \"Not overdue yet.\"}, {\"id\": 2, \"title\": \"a duplicate id\", \"scope\": \"project\", \"source\": \"\", \"trial_until\": \"\", \"status\": \"active\", \"overdue\": false, \"body\": \"No metadata line at all.\"}], \"warnings\": [\"duplicate rule id R2\"], \"fingerprint\": \"ad9f914a0ba233da\", \"stats\": {\"rules\": 3, \"lines\": 10, \"tokens\": 42, \"max_rules\": 15, \"max_tokens\": 1500}}",
-    "<r3 headers>": "Content-Type: application/json\nContent-Length: 764",
+    "<r3 headers>": "Content-Type: application/json\nContent-Length: 709",
     "<r3 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

@@ -4,7 +4,7 @@
     "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<r1 body>": "7c9c8ff035ba533b257d50119958e9d0c64ec9f37e51fa9511852ef3e0343eba",
-    "<r1 headers>": "fce3a61d54e585e4728a06a7634cb1070419f2185fb40399f98445f83c10239d",
+    "<r1 headers>": "baafd5223770c124e98288ebb53c747f0da431400e2988a462b518359f2c2548",
     "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -38,7 +38,7 @@
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
     "<exit>": "0",
     "<r1 body>": "{\"exists\": true, \"path\": \"<HOME>\\\\.config\\\\opencode\\\\user-rules.md\", \"rules\": [{\"id\": 1, \"title\": \"Always run the tests\", \"scope\": \"project\", \"source\": \"a session\", \"trial_until\": \"<DATE>\", \"status\": \"trial\", \"overdue\": true, \"body\": \"Run the suite before you claim it works.\"}, {\"id\": 2, \"title\": \"Prefer the stdlib\", \"scope\": \"user\", \"source\": \"\", \"trial_until\": \"\", \"status\": \"active\", \"overdue\": false, \"body\": \"Reach for a dependency last.\"}, {\"id\": 3, \"title\": \"On probation\", \"scope\": \"project\", \"source\": \"\", \"trial_until\": \"<DATE>\", \"status\": \"trial\", \"overdue\": false, \"body\": \"Not overdue yet.\"}, {\"id\": 2, \"title\": \"a duplicate id\", \"scope\": \"project\", \"source\": \"\", \"trial_until\": \"\", \"status\": \"active\", \"overdue\": false, \"body\": \"No metadata line at all.\"}], \"warnings\": [\"duplicate rule id R2\"], \"fingerprint\": \"a1927eeaa2b464c3\", \"stats\": {\"rules\": 4, \"lines\": 16, \"tokens\": 82, \"max_rules\": 15, \"max_tokens\": 1500}}",
-    "<r1 headers>": "Content-Type: application/json\nContent-Length: 992",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 933",
     "<r1 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

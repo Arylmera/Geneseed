@@ -4,7 +4,7 @@
     "<dirs>": "0b8507bfbd2f9988105a5ca7298564ffce06316f55e1e7087c1b8e99d0415b6d",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<r1 body>": "35ffe2ea5339f2e21a77baf373f3415347b5b9cfb8a0ca2e7c7910c79ccba29d",
-    "<r1 headers>": "a339863f1d6af6aaff89837c4ab21cd00d471f55989eb1591e64f210764d11fd",
+    "<r1 headers>": "21638783d11464cd96c94737af1719a12079583d95a5650def8eac6283883aca",
     "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
     "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
@@ -40,7 +40,7 @@
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/activity\nrepo",
     "<exit>": "0",
     "<r1 body>": "{\"enabled\": true, \"activity\": [{\"session_id\": \"s-one\", \"agent\": null, \"title\": null, \"cwd\": null, \"status\": \"idle\", \"updated_at\": <NOW>, \"model\": null, \"phase\": null, \"turn_started_at\": null, \"cost\": 0, \"tokens\": 0, \"files\": null, \"todos\": null, \"blocked_on\": null, \"error\": null}]}",
-    "<r1 headers>": "Content-Type: application/json\nContent-Length: 287",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 282",
     "<r1 status>": "200 OK",
     "<server stderr>": "",
     "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"

@@ -827,25 +827,27 @@ By default you invoke the launcher as `./geneseed` from inside the repo. To call
 like any other command — plain `geneseed` from any directory — put it on your `PATH`:
 
 ```
-./geneseed link                    # symlink into ~/.local/bin (no sudo); pass a dir to override
+./geneseed link                    # a launcher shim in ~/.local/bin (no sudo); pass a dir to override
 ./geneseed link /usr/local/bin     # e.g. a system-wide bin dir (may prompt for sudo)
 ```
 
 (Or, in the TUI: `./geneseed` → **Settings** → **Run from anywhere** / **Remove from PATH**.)
 
-`link` creates a symlink to the launcher and tells you whether the target dir is on
-your `PATH` (and, if not, the one line to add it). The launcher resolves symlinks, so
-it still finds `rituals/harness.py` and the sibling scripts no matter where the link
-lives. Once it's on `PATH`, drop the `./`:
+`link` writes a small `#!/bin/sh` shim that runs this checkout by absolute path, and
+tells you whether the target dir is on your `PATH` (and, if not, the one line to add
+it). The shim names `rituals/harness.py` outright, so it finds the harness and the
+sibling scripts no matter where it lives — the same shape the Windows arm has always
+used. Once it's on `PATH`, drop the `./`:
 
 ```
 geneseed            # the interactive main menu, from any directory
 geneseed build      # …and every subcommand
 ```
 
-Remove the symlink with `./geneseed unlink` (it clears `geneseed` links from `PATH`
-and the common bin dirs). Prefer a shell function over a symlink? Add one to your rc
-instead — it does the same job:
+Remove it with `./geneseed unlink` (it clears the `geneseed` shims it wrote — and any
+symlink an older version left — from `PATH` and the common bin dirs; a `geneseed` it
+did not write is left alone). Prefer a shell function? Add one to your rc instead —
+it does the same job:
 
 ```
 echo 'geneseed() { "'"$PWD"'/geneseed" "$@"; }' >> ~/.zshrc   # or ~/.bashrc
@@ -905,7 +907,7 @@ schtasks /Create /TN "Geneseed Web" /SC ONLOGON /TR "\"%LOCALAPPDATA%\Geneseed\b
 schtasks /Delete /TN "Geneseed Web" /F   # to remove
 ```
 
-**macOS** — the launcher is the `geneseed` symlink from `./geneseed link` (default
+**macOS** — the launcher is the `geneseed` shim that `./geneseed link` writes (default
 `~/.local/bin/geneseed`). Use a **LaunchAgent** with `RunAtLoad` — and **no**
 `KeepAlive`, because the launcher exits after spawning the detached daemon (the
 daemon runs in its own session and survives). Write
@@ -930,7 +932,7 @@ daemon runs in its own session and survives). Write
 </plist>
 ```
 
-Use the **absolute** path to your `geneseed` symlink (LaunchAgents don't see your
+Use the **absolute** path to your `geneseed` launcher (LaunchAgents don't see your
 shell `PATH`). Then load it — it also runs it once now:
 
 ```bash

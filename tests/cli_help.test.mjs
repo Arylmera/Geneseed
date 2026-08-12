@@ -188,10 +188,20 @@ test('both entry points actually print it', () => {
   }
 });
 
-test('a --help anywhere in the line wins, and exits 0', () => {
-  // argparse's rule, and the reason the check sits before `parse`: `-h` is held at the parser,
-  // never in the argument table `cli.json` walks, so `parse` calls it an unrecognized argument.
-  // Exit 0 is the half a stdout comparison cannot see — the port answered 2 for all 26.
+test('a --help anywhere in the line wins, and exits 0 — a DECLINED divergence', () => {
+  // WHY THE CHECK SITS BEFORE `parse`: `-h` is held at the parser, never in the argument table
+  // `cli.json` walks, so `parse` would call it an unrecognized argument. Exit 0 is the half a
+  // stdout comparison cannot see — the port answered 2 for all 26.
+  //
+  // WHAT THIS TEST PINS IS NOT ARGPARSE'S RULE, and it used to say it was. argparse consumes
+  // optionals LEFT TO RIGHT, so anything that fails before the `-h` token fires first: two of
+  // the four cases below are cases where the REFERENCE exits 2 instead of printing help —
+  // `web --port abc -h` is `invalid int value: 'abc'` and `theme --solid-only
+  // --transparent-only --help` is `not allowed with argument --solid-only`. The generalisation
+  // came from `diff --nope --help`, which prints help on both sides only because an UNKNOWN
+  // option is deferred to the end of `parse_known_args`. So these two rows are a divergence the
+  // port keeps on purpose — see `docs/declined.md`, "`--help` anywhere on the line wins" — and
+  // the other two are parity.
   for (const argv of [['status', '--help'], ['status', '-h'], ['web', '--port', 'abc', '-h'],
     ['theme', '--solid-only', '--transparent-only', '--help']]) {
     const out = execFileSync(process.execPath, [path.join(ROOT, 'bin/geneseed-cli.mjs'), ...argv],

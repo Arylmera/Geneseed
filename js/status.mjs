@@ -36,16 +36,22 @@
  *
  * WHAT NO CELL CAN REACH, and where it is gated instead. `tests/harness_golden.py`'s
  * status/version section carries the long form; the short form is that ROOT is not
- * redirectable across a process boundary, so four things here are unreachable from any cell
- * on a checkout that has its own `Harness/`: `versionVerdict`'s "up to date" (needs a marker
- * holding a fingerprint no cell can know), `manifestIsClaude` (only reached for a candidate
- * with no known host, and `ROOT/"Harness"` is ordered ahead of the sandbox's),
- * `accentFor`'s cyan fallback (an unknown theme is refused upstream by `effectiveTheme`),
- * and the whole ANSI half of `statusLines` (`_color_enabled` is `sys.stdout.isatty()`, and
- * every harness captures stdout through a pipe). All four are PURE FUNCTIONS of their
- * arguments, so all four are gated as a corpus in `tests/test_pure_function_parity.py`
- * instead — which is a third answer to the colour question the P5c handoff posed as a
- * choice between shipping it ungated and not shipping it.
+ * redirectable across a process boundary, so three things here are unreachable from any
+ * cell: `versionVerdict`'s "up to date" (needs a marker holding a fingerprint no cell can
+ * know), `accentFor`'s cyan fallback (an unknown theme is refused upstream by
+ * `effectiveTheme`), and the whole ANSI half of `statusLines` (`_color_enabled` is
+ * `sys.stdout.isatty()`, and every harness captures stdout through a pipe). All three are
+ * PURE FUNCTIONS of their arguments, so all three are gated as a corpus in
+ * `tests/test_pure_function_parity.py` instead — which is a third answer to the colour
+ * question the P5c handoff posed as a choice between shipping it ungated and not shipping
+ * it.
+ *
+ * `manifestIsClaude` was a FOURTH until wave 2 of the P0/P1 review: it is only reached for
+ * a candidate with no known host, and `ROOT/"Harness"` was ordered ahead of the sandbox's
+ * own. Both ROOT-relative bundle candidates are gone from this walk and from
+ * `installedDefaults`, so the only no-known-host candidate left is `cwd/"Harness"`, which
+ * is inside the sandbox. It is reachable now; no cell seeds a manifest without an emit
+ * marker, so it is still gated only by the corpus, and that is a gap rather than a wall.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -90,9 +96,10 @@ export function cmdVersion(args) {
   let target = args.target ? pyResolve(args.target) : opencodeConfigDir();
   let installed = readVersion(target);
   if (installed === null) {
-    // A claude/bob/copilot-only machine must not report "no install detected".
+    // A claude/bob/copilot-only machine must not report "no install detected". The bundle
+    // candidates are cwd-relative only — see the Python for why `ROOT / "Harness"` left.
     for (const base of [claudeConfigDir(), bobConfigDir(), copilotConfigDir(),
-      path.join(ROOT, 'Harness'), path.join(process.cwd(), 'Harness'), process.cwd()]) {
+      path.join(process.cwd(), 'Harness'), process.cwd()]) {
       const v = readVersion(base);
       if (v) { installed = v; target = base; break; }
     }
@@ -166,8 +173,9 @@ export function statusData() {
   for (const fn of [claudeConfigDir, bobConfigDir, copilotConfigDir]) {
     try { otherCfg.push(fn()); } catch { /* a missing host dir must not sink status */ }
   }
+  // Same walk as `cmdVersion`'s fallback, and cwd-relative for the same reason.
   const candidates = [...(cfgDir ? [cfgDir] : []), ...otherCfg,
-    path.join(ROOT, 'Harness'), path.join(process.cwd(), 'Harness'), process.cwd()];
+    path.join(process.cwd(), 'Harness'), process.cwd()];
   for (const base of candidates) {
     const v = readVersion(base);
     if (v) { installedFp = v; verTarget = base; break; }
