@@ -18,7 +18,7 @@
       {
         "matcher": "startup|clear",
         "hooks": [
-          { "type": "command", "command": "python -c \"import sys;sys.stdout.write(open('AGENT.md',encoding='utf-8').read())\"" },
+          { "type": "command", "command": "node -e \"process.stdout.write(require('fs').readFileSync('AGENT.md','utf8'))\"" },
           { "type": "command", "command": "python rituals/harness.py context" }
         ]
       },

@@ -17,7 +17,7 @@ script, then present its markdown output to the user.
 Run the script that sits next to this SKILL.md:
 
 ```bash
-python3 <this-skill-directory>/scripts/token_report.py
+node <this-skill-directory>/scripts/token_report.mjs
 ```
 
 It auto-detects the host you are running on by locating session data and
@@ -72,5 +72,5 @@ session. Do not invent exact numbers.
 ## Self-improvement
 
 If the script failed to find this host's session data, or a host changed its
-storage schema, note the observed layout and fix `scripts/token_report.py`
+storage schema, note the observed layout and fix `scripts/token_report.mjs`
 (or record the finding in memory for the next run) before closing out.

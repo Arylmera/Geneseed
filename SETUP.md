@@ -43,14 +43,14 @@ named here rather than found later:
   off a terminal, which is how scripts and CI run them, the two runtimes print the same
   bytes. `home` opens the web console from either. Every other command in this guide runs from either
   runtime.
-- **One Python script rides inside the harness you install — and two more skills shell
-  out to `python3` without shipping one.** The `token-report` skill is a script rather
-  than prose, so **every bundle carries** one interpreter-dependent file: `src/skills/token-report/scripts/token_report.py`.
-  It runs only when the agent invokes that skill. `daydream` also runs `python3 -c` for
-  weighted random sampling, and `herdr` runs `python3 -c` twice to pull a field out of
-  JSON — neither ships a Python file of its own, but both need `python3` on PATH the
-  moment they're used. No other file in a bundle is Python, and no other skill shells out to it — on any
-  host, any theme, either footprint — and a test freezes both.
+- **Nothing you install needs an interpreter.** The `token-report` skill is a script
+  rather than prose, and it ships as `scripts/token_report.mjs`, run with `node`;
+  `daydream` and `herdr`, which used to hand inline code to `python3` without shipping
+  a file of their own, call `node -e` instead.
+  So **every bundle carries** nothing that needs one: no Python file, and no skill that
+  shells out to an interpreter — on any host, any theme, either footprint. Three tests
+  freeze that, down to a byte-for-byte comparison of the ported script against the one
+  it replaced.
 - **The self-update commands are for a git checkout.** `upgrade`, `update`, `sync-self`
   and `bootstrap` `git pull` the install's own origin. From an npm install they stop
   before touching anything and name `npm install -g geneseed@latest` instead.

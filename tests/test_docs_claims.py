@@ -286,11 +286,20 @@ class TheDocsCountTheSubcommandsThatCrossed(unittest.TestCase):
 
 
 class TheDocsNameThePythonThatRidesInsideABundle(unittest.TestCase):
-    '''"No Python needed" is FALSE in exactly one place and the docs have to say so.
+    '''"No Python needed" is now TRUE, and the docs have to say THAT — provably.
 
-    Derived by globbing `src/` — the tree every bundle is rendered from — rather than
-    by trusting `test_package_manifest.PYTHON_IN_THE_PRODUCT`, so the two gates fail
-    independently. Today the answer is `token_report.py` and nothing else.
+    Derived by globbing `src/` — the tree every bundle is rendered from — rather than by
+    trusting `test_package_manifest.PYTHON_IN_THE_PRODUCT`, so the two gates fail
+    independently. Since P2 Task 3 the answer is: nothing.
+
+    THE OLD POSITIVE CONTROL DIED WITH ITS SUBJECT. It asserted `_scripts() ==
+    {"token_report.py"}`, which was what stopped the doc assertion below from passing
+    vacuously — a glob that finds nothing satisfies "every file found is named in the
+    docs" for free. The replacement cannot be another statement about `src/`, because
+    the true statement about `src/` is now emptiness. So the control moved to the
+    SENTENCE: the docs must still carry a marker, it must still be found by the same
+    regex, and it must now assert the empty claim in words. A doc that simply deleted
+    the paragraph fails.
     '''
 
     MARKER = re.compile(r"every bundle carries[^\n]*?:([^\n]*)")
@@ -298,12 +307,31 @@ class TheDocsNameThePythonThatRidesInsideABundle(unittest.TestCase):
     def _scripts(self) -> set[str]:
         return {p.name for p in (ROOT / "src").rglob("*.py")}
 
-    def test_the_glob_finds_the_one_script(self):
-        """Positive control: the assertion below is vacuous if `src/` has no Python."""
-        self.assertEqual(self._scripts(), {"token_report.py"},
-                         "the set of Python files inside the bundle source has changed — "
-                         "the docs claim and test_package_manifest's declaration both "
-                         "need the new row")
+    def test_the_bundle_source_carries_no_python_at_all(self):
+        self.assertEqual(self._scripts(), set(),
+                         "Python is back inside the bundle source — the docs claim and "
+                         "test_package_manifest's declaration both need the new row, and "
+                         "'no Python needed' is false again")
+
+    def test_each_doc_still_states_the_claim_rather_than_dropping_it(self):
+        """The control: emptiness must be ASSERTED, not achieved by deleting the words.
+
+        `test_each_doc_names_every_python_file_a_bundle_carries` below is satisfied by
+        any document that never mentions the subject. This one is not.
+        """
+        for path in (README, SETUP):
+            with self.subTest(doc=path.name):
+                text = _read(path)
+                m = self.MARKER.search(text)
+                self.assertIsNotNone(
+                    m, f"{path.name} no longer says what Python a bundle carries. The "
+                       "sentence is not obsolete now that the answer is 'none' — it is "
+                       "the only place the reader is told, and P10a measured the cost "
+                       "of leaving it unsaid")
+                self.assertRegex(
+                    m.group(1), r"\bnone\b|\bno\b|\bnothing\b",
+                    f"{path.name}'s 'every bundle carries' clause reads {m.group(1)!r}, "
+                    "which states neither a file nor the absence of one")
 
     def test_each_doc_names_every_python_file_a_bundle_carries(self):
         want = self._scripts()

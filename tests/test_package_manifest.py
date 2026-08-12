@@ -680,13 +680,6 @@ class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
         r"|\buv run\b")
 
     PYTHON_IN_THE_PRODUCT: dict[str, str] = {
-        "src/skills/token-report/scripts/token_report.py":
-            "THE one. 746 lines, rendered into <skills>/token-report/scripts/ of EVERY "
-            "bundle — the lean/full switch touches only laws/universal.md "
-            "(js/render.mjs:195), so no footprint leaves it out. A Node-emitted Claude or "
-            "Bob install still needs Python 3 on PATH for this skill and no other.",
-        "src/skills/token-report/SKILL.md":
-            "invokes the above: `python3 <this-skill-directory>/scripts/token_report.py`",
         "src/agents/_template.md": "authoring template; documents `python rituals/harness.py`",
         "src/skills/_template.md": "authoring template; documents `python rituals/harness.py`",
         "src/skills/opencode-theme.md": "documents `python rituals/harness.py`",
@@ -697,21 +690,19 @@ class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
             "(P5b), not at this string — test_hook_form.py gates the emitted shape.",
         "adapters/opencode/README.md": "adapter prose naming `python build.py`",
         "adapters/opencode/GLOBAL-HARNESS-SPEC.md": "adapter prose naming `python build.py`",
-        "src/skills/daydream/instructions.md": "`python3 -c` for weighted random sampling",
-        "src/skills/herdr.md":
-            "`| python3 -c 'import sys,json; ...'` to pull a field out of JSON, x2",
     }
 
-    # THE ACTUAL PYTHON SURFACE OF THE PRODUCT, as of P0. Three entries, not one — the
-    # widened INVOCATION regex above and the whole-tree scan below each found a path the
-    # old gates could not see. P2 empties this by porting all three; P4's
-    # no_python.test.mjs asserts it is empty. Until then README.md, SETUP.md and
-    # SHIPPED.md say three, because saying one was false.
-    PYTHON_IN_THE_PRODUCT_FILES = ["src/skills/token-report/scripts/token_report.py"]
-    PYTHON_IN_THE_PRODUCT_INVOCATIONS = [  # Unused until the phase that empties it (P4 and later).
-        "src/skills/daydream/instructions.md",   # `python3 -c` for random sampling
-        "src/skills/herdr.md",                   # `| python3 -c 'import sys,json; ...'` x2
-    ]
+    # THE ACTUAL PYTHON SURFACE OF THE PRODUCT. EMPTY, as of P2 Task 3 — `token_report.py`
+    # became `token_report.mjs`, and `daydream` and `herdr` call `node -e` where they
+    # called `python3 -c`. Nothing a bundle carries needs an interpreter that a Node
+    # install does not already have.
+    #
+    # BOTH lists stay here rather than being deleted with their contents: they are what
+    # the three tests below assert AGAINST, so emptying them is the claim, and a future
+    # row would have to be added deliberately. P4's no_python.test.mjs asserts the same
+    # emptiness from the Node side.
+    PYTHON_IN_THE_PRODUCT_FILES: list[str] = []
+    PYTHON_IN_THE_PRODUCT_INVOCATIONS: list[str] = []
 
     # Python that is tracked in this repository but never rides inside a rendered
     # bundle: the reference implementation this port is replacing (`rituals/`, the root
@@ -723,8 +714,26 @@ class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
     _NOT_THE_PRODUCT_FILES = frozenset({
         "build.py", "_install_registry.py", "_build_core.py", "_build_emit.py",
         "_build_global.py", "_build_render.py", "_build_settings.py",
-        ".claude/skills/token-report/scripts/token_report.py",
     })
+
+    # THE SHELL-OUT CLASS, scanned over the WHOLE tree rather than over `src` and
+    # `adapters`. This is the gate that did not exist when `src/skills/daydream` and
+    # `src/skills/herdr` started calling `python3 -c`: the file-level scan below only
+    # ever saw two directories, so a second copy of the same line living in
+    # `.claude/skills/herdr/SKILL.md` — this repository's OWN deployed harness — was
+    # invisible to every gate in the suite, and stayed invisible while three documents
+    # promised exactly one Python file.
+    #
+    # Deliberately NOT the full INVOCATION pattern. Widening THAT to the whole tree
+    # would demand a declaration row for every one of ~30 prose mentions of `python
+    # build.py` and `python rituals/harness.py` — the unsatisfiable grep the phase
+    # ledger already rejected. `-c` and `uv run` are the narrow, sharp property: code
+    # handed to an interpreter inline, which is the only form that can smuggle a new
+    # runtime dependency in without a `.py` file to notice.
+    SHELLS_OUT = re.compile(r"\bpython3?(?:\.exe)?\s+-c\b|\buv run\b")
+
+    # `tests/` legitimately spawns interpreters — it is the harness for both of them.
+    _SHELL_OUT_EXEMPT_PREFIXES = ("tests/",)
 
     def _found(self) -> set[str]:
         out = subprocess.run(
@@ -759,14 +768,49 @@ class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
             gone, [], f"declared Python dependencies that no longer exist — delete: {gone}",
         )
 
-    def test_the_only_python_file_in_the_product_is_the_token_report_script(self):
+    def test_nothing_anywhere_hands_inline_code_to_an_interpreter(self):
+        """Whole-tree, and the one gate that could have caught daydream and herdr.
+
+        `_found()` sees two directories; this sees every tracked file, so the SECOND
+        copy of herdr's one-liner in `.claude/` is in scope too. Empty is the claim.
+        """
+        hits = []
+        for rel in _tracked():
+            if rel.startswith(self._SHELL_OUT_EXEMPT_PREFIXES):
+                continue
+            try:
+                text = (ROOT / rel).read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            if self.SHELLS_OUT.search(text):
+                hits.append(rel)
+        self.assertEqual(
+            sorted(hits), [],
+            "a file hands inline code to an interpreter. Every one of these needs "
+            "`node -e` instead, or a declared reason to exist:\n  " + "\n  ".join(hits),
+        )
+
+    def test_the_shell_out_scan_can_actually_see_a_counterexample(self):
+        """Positive control: an empty result is only evidence if the scan has teeth."""
+        self.assertTrue(self.SHELLS_OUT.search("run `python3 -c 'import x'` first"))
+        self.assertTrue(self.SHELLS_OUT.search("python -c pass"))
+        self.assertTrue(self.SHELLS_OUT.search("$ uv run thing.py"))
+        self.assertFalse(self.SHELLS_OUT.search("node -e 'x'"))
+        # And the scan must really be reaching the whole tree, not an empty list.
+        self.assertGreater(len(_tracked()), 200, "the tracked-file scan found nothing")
+
+    def test_the_product_carries_no_python_file_at_all(self):
         """Absolute, beside the set comparison: the count is what the docs promise.
 
-        `self._found()` only ever scans `src` and `adapters`, so it cannot see
+        `self._found()` only ever scans `src` and `adapters`, so it could not see
         `.claude/skills/token-report/scripts/token_report.py` — THIS repository's own
-        deployed harness (WITHHELD above: "not the product"), which carries a second
-        tracked copy of the same script. Scan every tracked file instead, then subtract
-        what is never part of a rendered bundle (`_NOT_THE_PRODUCT_*` above).
+        deployed harness, which carried a second tracked copy of the same script until
+        P2 Task 3 replaced both with `.mjs`. Scan every tracked file instead, then
+        subtract what is never part of a rendered bundle (`_NOT_THE_PRODUCT_*` above).
+
+        `tests/fixtures/token_report_oracle.py` is the ported script's frozen Python
+        twin, kept as the oracle for `tests/test_token_report_parity.py`. It is covered
+        by the `tests/` prefix: it ships nowhere and runs only under that comparison.
         """
         found = sorted(
             p for p in _tracked() if p.endswith(".py")
