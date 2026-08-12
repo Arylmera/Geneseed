@@ -69,8 +69,12 @@ output, including a literal escape sequence, so a probe that answered `[]` fails
 """
 from __future__ import annotations
 
+import datetime
+import getpass
+import hashlib
 import json
 import os
+import platform
 import random
 import re
 import shutil
@@ -2664,5 +2668,304 @@ class TheTildeUserFormIsADeliberateDivergence(unittest.TestCase):
         self.assertIn("refusing", str(ctx.exception))
 
 
+# --------------------------------------------------------------------------------------
+# THE RECORDING — the answers whose ORACLE IS CPYTHON, written down while one still exists
+# --------------------------------------------------------------------------------------
+#
+# Every class above is a COMPARISON: it runs both implementations and requires them to agree.
+# That gate dies with `rituals/harness.py`. The three cell harnesses already answered this
+# for their matrices (`tests/__snapshots__/{emit,cli,web}`); what those matrices never
+# reached is exactly this file's subject, so it needs a recording of its own — and unlike a
+# cell corpus, some of these answers cannot be RECOMPUTED by anything after the deletion:
+#
+#   * `str(Path(x))` is `ntpath`/`posixpath`, not `path.win32`/`path.posix`;
+#   * `difflib`'s autojunk and its longest-block recursion have no Node twin at any rung;
+#   * `unicodedata.east_asian_width` and `unicodedata.combining` have NO JavaScript
+#     counterpart at all — the width sweep below is the only oracle `js/tui.mjs`'s tables
+#     have ever had, which is why `.github/workflows/ci.yml` pins the interpreter.
+#
+# WHAT A RECORDING MUST NOT KEEP. A live pair shares a machine, so neither side of a
+# comparison ever had to care that an answer embedded this laptop. A CORPUS does: Task 8
+# found six machine-state vectors in the cell matrices (build date, source fingerprint, git
+# fixture SHA, epoch seconds, the Node version banner, and `shutil.which('git')`'s path),
+# every one of them by MEASURING a recording rather than by reading code. This file's own
+# vectors are different and are handled two ways, because they divide cleanly:
+#
+#   * A machine path is a PREFIX and can be substituted — `<CWD>`, `<CWD_PARENT>`, `<HOME>`.
+#     The literals are never written down; each side of the replay computes its own, because
+#     the literals ARE the machine state.
+#   * A local-time render and a Windows drive anchor cannot be. There is no token to swap:
+#     the zone offset is baked into `minute_stamp`'s digits, and `C:\` also occurs as
+#     hand-written corpus CONTENT (`py_path_str('C:\\x\\bin\\')`), so a blanket rule would
+#     rewrite that too and then fail on any machine whose checkout is not on C:. Those cases
+#     carry a `guard` — facts the replay must share before the answer means anything — and a
+#     replay that skips one says so out loud, on the width sweep's rule that a skip is not a
+#     pass.
+#
+# The recording is refused outright if a residual scan still finds this machine in it.
+
+SNAPSHOT_DIR = ROOT / "tests" / "__snapshots__"
+
+#: What each token stands for, carried IN the document so the replay is not reading this
+#: file. The literals are absent on purpose — see above.
+NORMALISED = {
+    "<CWD>": "the probe's working directory, which is this checkout's root",
+    "<CWD_PARENT>": "its parent, so WHERE the repo is cloned stops being a recorded input",
+    "<HOME>": "the user's home directory, as `Path('~').expanduser()` answers it",
+}
+
+
+def _machine_prefixes() -> "list[tuple[str, str]]":
+    """LONGEST FIRST, and the ordering is load-bearing rather than tidy: a normal checkout
+    lives UNDER the user's home, so substituting `<HOME>` first would turn the working
+    directory into `<HOME>/Documents/git/Geneseed` and leave the clone location in the
+    corpus. Both spellings of the separator, because a path that came back through a
+    `.as_posix()` or a URL is the same machine state with different bytes."""
+    pairs = []
+    for literal, token in ((str(ROOT), "<CWD>"), (str(ROOT.parent), "<CWD_PARENT>"),
+                           (str(Path.home()), "<HOME>")):
+        pairs.append((literal, token))
+        if "\\" in literal:
+            pairs.append((literal.replace("\\", "/"), token))
+    return sorted(pairs, key=lambda p: -len(p[0]))
+
+
+def _normalise_answer(value, prefixes):
+    """Applied to ANSWERS only. An argument is hand-written corpus content and has to travel
+    verbatim — the replay feeds it back in — and `_refuse_machine_state` is what proves no
+    argument smuggled a machine path in behind that claim."""
+    if isinstance(value, str):
+        for literal, token in prefixes:
+            value = value.replace(literal, token)
+        return value
+    if isinstance(value, list):
+        return [_normalise_answer(v, prefixes) for v in value]
+    if isinstance(value, dict):
+        return {k: _normalise_answer(v, prefixes) for k, v in value.items()}
+    return value
+
+
+def _guard_for(fn: str, args: list, answer, anchor: str) -> "dict | None":
+    """The facts a replay must share with this recording before the answer means anything.
+
+    DERIVED, NEVER HAND-LISTED. The anchor guard is decided by looking at the normalised
+    ANSWER, so a new corpus entry that happens to resolve against the drive gets one without
+    anybody remembering to add it; a list of case indices rots the moment a case is inserted
+    above it. Two users today, and each is a value no substitution can take out:
+
+      * `minute_stamp` renders a UTC instant in LOCAL time. The offset is not a substring of
+        the answer, it is the answer's arithmetic, and it moves with DST — so the offset AT
+        THAT INSTANT is what the replay has to match, not the zone's name.
+      * `py_resolve('/tmp')` attaches the working directory's drive on Windows.
+    """
+    if fn == "minute_stamp":
+        at = datetime.datetime.fromtimestamp(args[0], datetime.timezone.utc).astimezone()
+        return {"utcoffset": int(at.utcoffset().total_seconds())}
+    # `len(anchor) > 1` is what keeps this Windows-only WITHOUT a platform test: POSIX's
+    # anchor is `/`, which every absolute answer starts with and which carries no machine
+    # state at all. A guard there would be noise that reddens nothing.
+    #
+    # AND THE SECOND CLAUSE IS NOT TIDINESS — the first recording is what found it. A
+    # derived rule of "the answer starts with the drive" also fires on
+    # `py_path_str('C:\\x\\bin\\')`, whose `C:` is HAND-WRITTEN CORPUS CONTENT: the drive in
+    # that answer came from the input, not from this machine, and guarding it would make a
+    # perfectly portable case SKIP itself on any checkout that is not on C:. Silently
+    # dropping a case is the vacuity this whole file exists to prevent. So the anchor is
+    # machine state only when the case's own arguments do not name it.
+    if (len(anchor) > 1 and isinstance(answer, str) and answer.startswith(anchor)
+            and anchor not in json.dumps(args)):
+        return {"anchor": anchor}
+    return None
+
+
+#: The one known reference bug this recording freezes as correct, and where the decision is
+#: written down. Matched on the SHAPE of the answer rather than on a case index, for
+#: `_guard_for`'s reason.
+_DETAIL_LINES_HEAD_NOTE = (
+    "REFERENCE BUG, deliberately not fixed — see `js/tui.mjs`'s `detailLines` docblock, "
+    "`docs/port-ledger.md` row 1, and the P7b handoff section 5.4. `_detail_lines` answers "
+    "None for a header row and for a row whose data is absent, and "
+    "`rituals/_harness_tui.py:614` hands that straight to `_wrap_lines`, which iterates it: "
+    "an inventory with no agents, no skills and no laws puts the selection on row 0 (always "
+    "the AGENTS header) and crashes the panel on its first frame with TypeError instead of "
+    "drawing an empty state. The None IS this primitive's contract and both implementations "
+    "agree on it; the defect is in the CALLER, `_tui_loop`, which `docs/port-ledger.md` "
+    "declares unported and this migration deletes. Recorded rather than fixed because there "
+    "is nothing in THIS function to fix."
+)
+
+
+def _note_for(fn: str, answer) -> "str | None":
+    if fn == "detail_lines" and answer is None:
+        return _DETAIL_LINES_HEAD_NOTE
+    return None
+
+
+def _refuse_machine_state(text: str) -> None:
+    """RECORD, THEN MEASURE — the detector that earned its place in Task 8.
+
+    Every machine-state vector this project has found in a corpus was found by measuring a
+    recording, not by reading the code that produced it. So the negative is asserted
+    directly: a substitution table that MISSED something is exactly as plausible as one that
+    covered everything, and only this can tell them apart."""
+    probes = [("the working directory", str(ROOT)),
+              ("its parent", str(ROOT.parent)),
+              ("the home directory", str(Path.home())),
+              ("the temp directory", tempfile.gettempdir()),
+              ("the login name", getpass.getuser()),
+              ("the host name", platform.node())]
+    probes += [(f"{n} (posix-spelled)", v.replace("\\", "/"))
+               for n, v in probes if "\\" in v]
+    leaks = [f"    {name}: {literal!r}" for name, literal in probes
+             if literal and len(literal) > 2 and literal in text]
+    if leaks:
+        raise SystemExit(
+            "REFUSING TO RECORD — this machine is still in the corpus:\n"
+            + "\n".join(leaks)
+            + "\nA recorded answer that names this laptop is a rot vector, not a gate: it "
+              "reddens on the next machine for a reason that is not a defect. Normalise it, "
+              "guard it, or take the case out and say why.")
+
+
+def _write_doc(path: Path, doc: dict) -> Path:
+    """`indent=1` rather than `snapshot_io`'s 2: the diff corpus alone is tens of thousands
+    of one-character strings, and every one of them gets its own line either way. Same
+    reviewability, a third less file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(doc, indent=1, ensure_ascii=False) + "\n"
+    _refuse_machine_state(text)
+    path.write_text(text, encoding="utf-8", newline="\n")
+    return path
+
+
+def record_primitives(dest_dir: Path) -> Path:
+    """`_cases()` + `_byte_bearing_cases()`, both glyph tiers, one file per PLATFORM.
+
+    WHY {win32,posix} AND NOT {crlf,lf}. The cell corpora split on `os.linesep` because that
+    is the only OS-shaped thing an emitted file carries. This corpus is mostly `ntpath` vs
+    `posixpath`: seven of twelve `py_path_str` answers differ (`PLATFORM_EXPECTED` is the
+    table), `normcase` folds case and `/`→`\\` on one side and is the identity on the other,
+    `compare_paths` inherits that, `py_is_absolute` disagrees about a rootless `/x`, and
+    `write_text_linesep` is ONE of the reasons rather than the reason. Naming these halves
+    `crlf`/`lf` would name the smallest of them. The keys are `harness_golden.this_platform()`'s
+    so the three platform-declared mechanisms in this suite (`PLATFORM_ONLY`,
+    `PLATFORM_EXPECTED`, this) cannot drift into spelling one host three ways.
+
+    THE ASCII AXIS IS A DELTA, not a second array. `result_ascii` appears only where the
+    tier changes the answer, which keeps the file one copy instead of two AND makes the
+    tier-sensitive functions greppable — a property a duplicated array hides.
+    """
+    cases = _cases() + _byte_bearing_cases()
+    plain = _run([sys.executable, str(PY_PROBE)], cases, ascii_mode=False)
+    tiered = _run([sys.executable, str(PY_PROBE)], cases, ascii_mode=True)
+    prefixes, anchor = _machine_prefixes(), Path(ROOT).anchor
+    rows = []
+    for case, a, b in zip(cases, plain, tiered):
+        answer = _normalise_answer(a, prefixes)
+        row = {"fn": case["fn"], "args": case["args"], "result": answer}
+        tier = _normalise_answer(b, prefixes)
+        if tier != answer:
+            row["result_ascii"] = tier
+        guard = _guard_for(case["fn"], case["args"], answer, anchor)
+        if guard:
+            row["guard"] = guard
+        note = _note_for(case["fn"], a)
+        if note:
+            row["note"] = note
+        rows.append(row)
+    doc = {
+        "corpus": "primitives",
+        "platform": harness_golden.this_platform(),
+        "recorded_with": {"python": platform.python_version(),
+                          "implementation": platform.python_implementation(),
+                          "os_linesep": os.linesep.encode("utf-8").hex()},
+        "normalised": NORMALISED,
+        "cases": rows,
+    }
+    return _write_doc(dest_dir / f"{harness_golden.this_platform()}.json", doc)
+
+
+#: The codepoints the sweep's `sample` names, and what each one is FOR. Derived from the
+#: recorded runs rather than from a second `unicodedata` call, so a sample that disagrees
+#: with the hash it illustrates is impossible.
+_DWIDTH_SAMPLE = {
+    0x0041: "LATIN CAPITAL LETTER A — the ordinary case",
+    0x0300: "COMBINING GRAVE ACCENT — width 0, the half `\\p{Mn}|\\p{Me}` gets wrong",
+    0x0897: "the 15.1.0/16.0.0 boundary: unassigned at 15.1.0, a combining mark at 16.0.0",
+    0x4E00: "CJK UNIFIED IDEOGRAPH-4E00 — East_Asian_Width W",
+    0xD800: "a LONE SURROGATE — not text, and what a corrupt file hands the panel",
+    0x1F600: "GRINNING FACE — the astral emoji rule above the BMP",
+    0x2FFFF: "the last codepoint in the swept range",
+}
+
+
+def _width_at(runs: list, cp: int) -> int:
+    """The RLE, read. A run `[start, w]` holds until the next run starts."""
+    width = runs[0][1]
+    for start, w in runs:
+        if start > cp:
+            break
+        width = w
+    return width
+
+
+def record_dwidth(dest: Path) -> Path:
+    """The 196 608-codepoint sweep, plus the Unicode version that makes it mean anything.
+
+    THIS IS WHAT REPLACES THE ci.yml PIN. Today the sweep runs live against `unicodedata`
+    and the pin is what stops a floating `python-version` from silently switching it off.
+    After the deletion there is no interpreter to pin: the tables in `js/tui.mjs` are
+    anchored by `sha256` over these runs and by the version DECLARED beside them, and a Node
+    replay can check both without a Python anywhere on the machine.
+    """
+    if unicodedata.unidata_version != _declared_dwidth_unidata():
+        raise SystemExit(
+            f"REFUSING TO RECORD — this interpreter carries unidata "
+            f"{unicodedata.unidata_version} and `js/tui.mjs` declares "
+            f"{_declared_dwidth_unidata()}. Recording now would freeze a divergence that is "
+            "neither implementation's as if it were the reference's answer. Run this on the "
+            "pinned interpreter (see .github/workflows/ci.yml), or regenerate the tables and "
+            "move DWIDTH_UNIDATA with them.")
+    runs = _run([sys.executable, str(PY_PROBE)],
+                [{"fn": "dwidth_rle", "args": list(_DWIDTH_SWEEP)}], ascii_mode=False)[0]
+    canonical = json.dumps(runs, separators=(",", ":"))
+    doc = {
+        "corpus": "dwidth",
+        # THE DECLARED INPUT. `unidata_version` is the reference's, read off the interpreter
+        # that produced these runs; `declared_by` is the port's own constant. They are equal
+        # by the refusal above, and both are written down because the replay has to check the
+        # port's constant against something that is not the port.
+        "unidata_version": unicodedata.unidata_version,
+        "declared_by": {"file": "js/tui.mjs", "const": "DWIDTH_UNIDATA",
+                        "value": _declared_dwidth_unidata()},
+        "recorded_with": {"python": platform.python_version(),
+                          "implementation": platform.python_implementation()},
+        # Platform-independent by construction: `unicodedata` is a compiled-in database and
+        # `_dwidth` reads nothing else. No {win32,posix} split, and the replay proves that
+        # claim by running this same file on both.
+        "range": list(_DWIDTH_SWEEP),
+        "codepoints": _DWIDTH_SWEEP[1] - _DWIDTH_SWEEP[0],
+        "runs": len(runs),
+        "sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        "sample": {f"U+{cp:04X}": {"width": _width_at(runs, cp), "why": why}
+                   for cp, why in sorted(_DWIDTH_SAMPLE.items())},
+        "rle": runs,
+    }
+    return _write_doc(dest, doc)
+
+
+def _record_main(argv: "list[str]") -> int:
+    args = dict(zip(argv[::2], argv[1::2]))
+    if "--record" in args:
+        print(f"recorded {record_primitives(Path(args['--record']))}")
+    if "--record-dwidth" in args:
+        print(f"recorded {record_dwidth(Path(args['--record-dwidth']))}")
+    return 0
+
+
 if __name__ == "__main__":
+    # `--record` writes; everything else is the suite. Two flags and no argparse — this is
+    # an entry point with one argument each, and `unittest.main()` owns the rest of argv.
+    if {"--record", "--record-dwidth"} & set(sys.argv):
+        raise SystemExit(_record_main(sys.argv[1:]))
     unittest.main()

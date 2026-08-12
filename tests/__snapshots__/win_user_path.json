@@ -1,0 +1,135 @@
+{
+ "corpus": "win_user_path",
+ "recorded_on": "win32",
+ "recorded_with": {
+  "python": "3.13.5",
+  "implementation": "CPython"
+ },
+ "platform_independent": true,
+ "actions": [
+  "add",
+  "remove"
+ ],
+ "cases": [
+  {
+   "action": "add",
+   "row": "plain",
+   "directory": "C:\\Users\\dev\\AppData\\Local\\Geneseed\\bin",
+   "script": "$d='C:\\Users\\dev\\AppData\\Local\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if (-not $p) {$p=''};$parts=$p.Split(';') | Where-Object {$_ -ne ''};if ($parts -notcontains $d) {  $np=(@($parts)+$d) -join ';';  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "add",
+   "row": "apostrophe",
+   "directory": "C:\\Users\\O'Brien\\AppData\\Local\\Geneseed\\bin",
+   "script": "$d='C:\\Users\\O''Brien\\AppData\\Local\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if (-not $p) {$p=''};$parts=$p.Split(';') | Where-Object {$_ -ne ''};if ($parts -notcontains $d) {  $np=(@($parts)+$d) -join ';';  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "add",
+   "row": "two_apostrophes",
+   "directory": "C:\\Users\\O'Br'ien\\Geneseed\\bin",
+   "script": "$d='C:\\Users\\O''Br''ien\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if (-not $p) {$p=''};$parts=$p.Split(';') | Where-Object {$_ -ne ''};if ($parts -notcontains $d) {  $np=(@($parts)+$d) -join ';';  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "add",
+   "row": "doubled_apostrophe",
+   "directory": "C:\\Users\\O''Brien\\Geneseed\\bin",
+   "script": "$d='C:\\Users\\O''''Brien\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if (-not $p) {$p=''};$parts=$p.Split(';') | Where-Object {$_ -ne ''};if ($parts -notcontains $d) {  $np=(@($parts)+$d) -join ';';  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "add",
+   "row": "unc",
+   "directory": "\\\\fileserver\\team$\\dev\\Geneseed\\bin",
+   "script": "$d='\\\\fileserver\\team$\\dev\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if (-not $p) {$p=''};$parts=$p.Split(';') | Where-Object {$_ -ne ''};if ($parts -notcontains $d) {  $np=(@($parts)+$d) -join ';';  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "add",
+   "row": "semicolon",
+   "directory": "C:\\Users\\dev\\we;ird\\Geneseed\\bin",
+   "script": "$d='C:\\Users\\dev\\we;ird\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if (-not $p) {$p=''};$parts=$p.Split(';') | Where-Object {$_ -ne ''};if ($parts -notcontains $d) {  $np=(@($parts)+$d) -join ';';  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "add",
+   "row": "trailing_backslash",
+   "directory": "C:\\Users\\dev\\Geneseed\\bin\\",
+   "script": "$d='C:\\Users\\dev\\Geneseed\\bin\\';$p=[Environment]::GetEnvironmentVariable('Path','User');if (-not $p) {$p=''};$parts=$p.Split(';') | Where-Object {$_ -ne ''};if ($parts -notcontains $d) {  $np=(@($parts)+$d) -join ';';  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "add",
+   "row": "spaces",
+   "directory": "C:\\Program Files\\Geneseed (x86)\\bin",
+   "script": "$d='C:\\Program Files\\Geneseed (x86)\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if (-not $p) {$p=''};$parts=$p.Split(';') | Where-Object {$_ -ne ''};if ($parts -notcontains $d) {  $np=(@($parts)+$d) -join ';';  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "add",
+   "row": "unicode",
+   "directory": "C:\\Users\\Guillaume Lemer\\Généseed\\bin",
+   "script": "$d='C:\\Users\\Guillaume Lemer\\Généseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if (-not $p) {$p=''};$parts=$p.Split(';') | Where-Object {$_ -ne ''};if ($parts -notcontains $d) {  $np=(@($parts)+$d) -join ';';  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "add",
+   "row": "empty",
+   "directory": "",
+   "script": "$d='';$p=[Environment]::GetEnvironmentVariable('Path','User');if (-not $p) {$p=''};$parts=$p.Split(';') | Where-Object {$_ -ne ''};if ($parts -notcontains $d) {  $np=(@($parts)+$d) -join ';';  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "remove",
+   "row": "plain",
+   "directory": "C:\\Users\\dev\\AppData\\Local\\Geneseed\\bin",
+   "script": "$d='C:\\Users\\dev\\AppData\\Local\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if ($p) {  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "remove",
+   "row": "apostrophe",
+   "directory": "C:\\Users\\O'Brien\\AppData\\Local\\Geneseed\\bin",
+   "script": "$d='C:\\Users\\O''Brien\\AppData\\Local\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if ($p) {  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "remove",
+   "row": "two_apostrophes",
+   "directory": "C:\\Users\\O'Br'ien\\Geneseed\\bin",
+   "script": "$d='C:\\Users\\O''Br''ien\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if ($p) {  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "remove",
+   "row": "doubled_apostrophe",
+   "directory": "C:\\Users\\O''Brien\\Geneseed\\bin",
+   "script": "$d='C:\\Users\\O''''Brien\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if ($p) {  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "remove",
+   "row": "unc",
+   "directory": "\\\\fileserver\\team$\\dev\\Geneseed\\bin",
+   "script": "$d='\\\\fileserver\\team$\\dev\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if ($p) {  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "remove",
+   "row": "semicolon",
+   "directory": "C:\\Users\\dev\\we;ird\\Geneseed\\bin",
+   "script": "$d='C:\\Users\\dev\\we;ird\\Geneseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if ($p) {  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "remove",
+   "row": "trailing_backslash",
+   "directory": "C:\\Users\\dev\\Geneseed\\bin\\",
+   "script": "$d='C:\\Users\\dev\\Geneseed\\bin\\';$p=[Environment]::GetEnvironmentVariable('Path','User');if ($p) {  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "remove",
+   "row": "spaces",
+   "directory": "C:\\Program Files\\Geneseed (x86)\\bin",
+   "script": "$d='C:\\Program Files\\Geneseed (x86)\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if ($p) {  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "remove",
+   "row": "unicode",
+   "directory": "C:\\Users\\Guillaume Lemer\\Généseed\\bin",
+   "script": "$d='C:\\Users\\Guillaume Lemer\\Généseed\\bin';$p=[Environment]::GetEnvironmentVariable('Path','User');if ($p) {  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  },
+  {
+   "action": "remove",
+   "row": "empty",
+   "directory": "",
+   "script": "$d='';$p=[Environment]::GetEnvironmentVariable('Path','User');if ($p) {  $np=(($p.Split(';') | Where-Object {$_ -ne '' -and $_ -ne $d}) -join ';');  [Environment]::SetEnvironmentVariable('Path',$np,'User')}"
+  }
+ ]
+}

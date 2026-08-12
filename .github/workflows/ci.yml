@@ -175,6 +175,36 @@ jobs:
         run: |
           python tests/web_golden.py --against tests/__snapshots__/web --new "node js/web/server.mjs"
           python tests/web_golden.py --against tests/__snapshots__/web --new "node bin/geneseed-cli.mjs web"
+      # The three corpora whose oracle is CPYTHON ITSELF, and which no cell reaches.
+      #
+      # `primitives/` is per-PLATFORM for a reason the cell corpora only half share: it is
+      # mostly `ntpath` vs `posixpath` (seven of twelve `py_path_str` answers, all of
+      # `normcase`/`compare_paths`, `py_is_absolute`), of which `os.linesep` is one instance
+      # among many — so the halves are keyed `win32`/`posix` like `PLATFORM_ONLY` rather than
+      # `crlf`/`lf`. The win32 half is recorded by hand on the developer's machine; this is
+      # the only place the posix half can come from.
+      - name: record the primitive corpus from the reference (the posix half)
+        run: >
+          python tests/test_pure_function_parity.py
+          --record tests/__snapshots__/primitives
+      # `dwidth.json` and `win_user_path.json` are DECLARED platform-independent —
+      # `unicodedata` is a compiled-in database, and `_win_user_path_script` is a
+      # `str.replace` and two f-strings. Recorded here into a scratch directory and DIFFED
+      # against the committed Windows recording, which turns both declarations into a
+      # measurement on the second operating system instead of a reading of the source. This
+      # is Task 8c's method — the residual diff between two machines IS the machine-state
+      # detector — aimed at a claim rather than at a corpus.
+      - name: the platform-independent corpora are platform-independent
+        run: |
+          mkdir -p /tmp/xplat
+          python tests/test_pure_function_parity.py --record-dwidth /tmp/xplat/dwidth.json
+          python tests/test_win_user_path.py --record /tmp/xplat/win_user_path.json
+          diff /tmp/xplat/dwidth.json tests/__snapshots__/dwidth.json
+          diff /tmp/xplat/win_user_path.json tests/__snapshots__/win_user_path.json
+      # Recorded and replayed in the same run, for the reason the emit corpus gives above: a
+      # corpus that was never replayed is committed, plausible and unusable.
+      - name: replay the three CPython-oracle corpora against the port
+        run: node --test tests/pure_snapshot.test.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: snapshots-lf
