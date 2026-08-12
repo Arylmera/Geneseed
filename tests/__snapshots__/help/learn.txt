@@ -1,0 +1,12 @@
+usage: harness learn [-h] [--memory MEMORY] [--consolidate] [file]
+
+positional arguments:
+  file             notes file, or a transcript (default: stdin — also accepts
+                   a lifecycle-hook JSON payload with a transcript_path)
+
+options:
+  -h, --help       show this help message and exit
+  --memory MEMORY  bundle memory dir to dedup against and index into (default:
+                   $GENESEED_MEMORY, else ./memory or ./Harness/memory)
+  --consolidate    rebuild MEMORY.md from the fact files on disk: re-index
+                   orphans, prune dead lines, report duplicate descriptions

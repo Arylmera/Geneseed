@@ -1,0 +1,42 @@
+{
+  "paths": {
+    "<dirs>": "b8f43d7193f051010726dcc3c8504f1c0990af42557a26a8eed44abf89e17e74",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "a299c66f1e5997c4d0c2839d780ce4316e1425bac8c5b0d396387ce8fc1f23a2",
+    "<stdout>": "1f97fed25e17141211cea9fa7b689a7ba5668019b42b09b58246ebec4ae46798",
+    "home/.bob/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.bob/excludes.json": "25a12d9a46fb0f91814b1800a364fa1418eae6bad1be5d603952aafa1576215f",
+    "home/.claude/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.claude/excludes.json": "fab26d0c3d1063f613acaefe959879f97617f976d881428bfd162590688ba792",
+    "home/.config/opencode/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.config/opencode/excludes.json": "fab26d0c3d1063f613acaefe959879f97617f976d881428bfd162590688ba792",
+    "home/.copilot/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.copilot/excludes.json": "fab26d0c3d1063f613acaefe959879f97617f976d881428bfd162590688ba792",
+    "repo/.bob/rules/geneseed.md": "d8f838182cbd8a2249b1b9f169575a4954d83e61e2422d9c560e4dd0cf6eccf4",
+    "repo/.claude/settings.local.json": "265714e1822d12bcd2a4d16010b7a8372ad31b3c95655f8449fa3af55042f6c6",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 124,
+    "<exit>": 1,
+    "<stderr>": 255,
+    "<stdout>": 31,
+    "home/.bob/.geneseed-manifest.json": 14,
+    "home/.bob/excludes.json": 318,
+    "home/.claude/.geneseed-manifest.json": 14,
+    "home/.claude/excludes.json": 279,
+    "home/.config/opencode/.geneseed-manifest.json": 14,
+    "home/.config/opencode/excludes.json": 279,
+    "home/.copilot/.geneseed-manifest.json": 14,
+    "home/.copilot/excludes.json": 279,
+    "repo/.bob/rules/geneseed.md": 15,
+    "repo/.claude/settings.local.json": 51,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.bob\nhome/.claude\nhome/.config\nhome/.config/opencode\nhome/.copilot\nrepo\nrepo/.bob\nrepo/.bob/rules\nrepo/.claude",
+    "<exit>": "0",
+    "<stderr>": "[geneseed] claude: claudeMdExcludes already present (kept)\n[geneseed] bob: rules/geneseed.md already exists (kept, not ours)\n[geneseed] copilot: no native suppression exists — the global copilot-instructions.md still loads there (documented limitation)\n",
+    "<stdout>": "[geneseed] <SB>/repo excluded.\n"
+  }
+}

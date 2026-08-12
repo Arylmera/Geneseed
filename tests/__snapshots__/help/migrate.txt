@@ -1,0 +1,5 @@
+usage: harness migrate [-h] [--dry-run]
+
+options:
+  -h, --help  show this help message and exit
+  --dry-run   survey and print the plan; write nothing

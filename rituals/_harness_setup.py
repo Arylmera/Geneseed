@@ -272,8 +272,15 @@ def _installed_defaults() -> dict:
             candidates.append((spec["config_dir"](), f"{host}-global"))
         except Exception:
             pass
-    candidates += [(p, None) for p in (ROOT / "Harness", ROOT.parent / "Harness",
-                                       Path.cwd() / "Harness")]
+    # BUNDLE CANDIDATES ARE CWD-RELATIVE ONLY. `ROOT / "Harness"` and `ROOT.parent /
+    # "Harness"` used to sit here: two guesses made relative to where the CODE lives, so
+    # the wizard pre-selected the theme, emit, posture, mode and footprint of the
+    # checkout's own bundle from inside any unrelated project. The first is the in-folder
+    # bundle `_update._migrate_stray_bundle` calls stray and deletes; the second is
+    # `update`'s default output dir, which `$GENESEED_OUT` and the persistent registry are
+    # the explicit ways to name. What the pickers pre-select now describes the directory
+    # the operator is actually standing in, or a host config dir they really installed to.
+    candidates += [(Path.cwd() / "Harness", None)]
     for base, known_emit in candidates:
         try:
             if found["emit"] is None:

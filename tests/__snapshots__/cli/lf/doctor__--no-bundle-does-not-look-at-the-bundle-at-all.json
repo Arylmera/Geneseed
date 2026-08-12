@@ -1,0 +1,30 @@
+{
+  "paths": {
+    "<dirs>": "6069bdc2f736d51b3ca6ad9ca6d5e319044c5124ee721ceafc6241b778993ab1",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "1c27998f60f56a7064a54416b4433c70e70c0a5f6521eb6a60202592b16458da",
+    "bundle/.geneseed-theme": "1a3376a1e42e75f0d137b6a8baa4b46fad019cb3d13a6dccdd4d944903bd0791",
+    "bundle/memory/.gitignore": "07863e2b76f9b651ebbacb54cbbfd6296cf87daa88b45830941a5d056473be84",
+    "bundle/memory/README.md": "aea613945570fe6f1521d675f0b959815684f835178cbbf493eef8edfd41da32",
+    "bundle/notebook/README.md": "5682c6c13c7a12c3be217aec1024d5da88fa89b3c467e8ee3349c12b9bf8d211",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 84,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 168,
+    "bundle/.geneseed-theme": 8,
+    "bundle/memory/.gitignore": 27,
+    "bundle/memory/README.md": 23,
+    "bundle/notebook/README.md": 43,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "bundle\nbundle/memory\nbundle/notebook\ncfg\nhome\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[doctor] ok — 1 theme(s) clean: no unresolved tokens, no dead links, nothing escapes the bundle; themes in parity; specs carry purpose lines; rendered bundle in sync\n"
+  }
+}

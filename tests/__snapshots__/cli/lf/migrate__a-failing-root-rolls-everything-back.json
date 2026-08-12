@@ -1,0 +1,30 @@
+{
+  "paths": {
+    "<dirs>": "82dffbedb47702091484111bb6e64df35a3c63cecb573fab2742407dbb186432",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "9c458d9c7d2c6cedfa8a0e468ddaebccff2463cf48a76eab9cd44254dc03927e",
+    "<stdout>": "ef34e8e0b7a34398f80ba2bab60ace909218ef3b1eb7c8f4c5e8703c7e78c0b6",
+    "home/.claude/.geneseed-emit": "9db22d9e7cbec2d92fa51ab57b633cf21a090af3d92c587dcb5ba37e69822989",
+    "home/.claude/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.claude/.geneseed-theme": "537a1083ddda359d81879cac2fb41f0f7032d60416b71598a467fc449a8358d3",
+    "home/.claude/settings.json": "11854879ed70dc0dd23acdb879af7cf188b5c473e4912ba4f0d7e0df624380ac",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 60,
+    "<exit>": 1,
+    "<stderr>": 308,
+    "<stdout>": 136,
+    "home/.claude/.geneseed-emit": 14,
+    "home/.claude/.geneseed-manifest.json": 14,
+    "home/.claude/.geneseed-theme": 12,
+    "home/.claude/settings.json": 715,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.claude\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
+    "<exit>": "1",
+    "<stderr>": "[geneseed] unknown theme 'nosuchtheme'. available: biker, commentator, cyberpunk, gamer, imperial, joker, marvin, mean, military, neutral, pirate, sports, verstappen, wizard\n[migrate] FAILED claude:global (<HOME>/.claude) (exit 1) — rolling back.\n[migrate] rolled back 2 file(s); the install is unchanged.\n",
+    "<stdout>": "[migrate] 1 install(s), wiring shape: legacy\n[migrate] re-emitting claude:global (<HOME>/.claude): theme=nosuchtheme emit=claude-global\n"
+  }
+}

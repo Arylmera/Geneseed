@@ -1,0 +1,30 @@
+{
+  "paths": {
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "c21d1afd65914ac3693c09befc134085dcf24e98a22a8945ec7f30e9d34c7983",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "home/.config/opencode/.geneseed-emit": "de98185a41c839961b783c5d0703a020e29ba9469a4a7112743c67f4eb9acd6b",
+    "home/.config/opencode/.geneseed-theme": "4d4ed5e8244067c533e9c7b585ed8e3dd435106cefaf995de3a3e5f456c84af5",
+    "home/.config/opencode/.geneseed-version": "8855cb90253b2e9f847cfe9a3d2d292f73104f7f53fc8fea24484d38abbc1af2",
+    "home/.config/opencode/AGENT.md": "ab98b6318d89f98bf031262130a671493d482b03509d6d3ace207a84ee4b46db",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<stderr>": 174,
+    "<stdout>": 0,
+    "home/.config/opencode/.geneseed-emit": 17,
+    "home/.config/opencode/.geneseed-theme": 13,
+    "home/.config/opencode/.geneseed-version": 37,
+    "home/.config/opencode/AGENT.md": 12,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "1",
+    "<stderr>": "[geneseed] unknown theme 'nosuchtheme'. available: biker, commentator, cyberpunk, gamer, imperial, joker, marvin, mean, military, neutral, pirate, sports, verstappen, wizard\n",
+    "<stdout>": ""
+  }
+}

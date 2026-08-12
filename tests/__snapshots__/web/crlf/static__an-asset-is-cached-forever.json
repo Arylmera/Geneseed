@@ -1,0 +1,32 @@
+{
+  "paths": {
+    "<daemon-record>": "380b7a62b3ee76b2c04092e2b9174c525c61d4b23153e032d8defe2188600377",
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<r1 body>": "1f5bd6e77f8f97bbd35aba4b9545bb2371cd97802db5b9e2fa14b2b2cc6f6c06",
+    "<r1 headers>": "a354ef577e3b3bc51203c34d08e60b06f963d5233437168dd230fed559e8e776",
+    "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<server stdout>": "1bc93415824d62fe66f8626932cc78809c451e1094b35c6a6ddbef3494fe0143"
+  },
+  "sizes": {
+    "<daemon-record>": 120,
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<r1 body>": 2385,
+    "<r1 headers>": 101,
+    "<r1 status>": 6,
+    "<server stderr>": 0,
+    "<server stdout>": 205
+  },
+  "verbatim": {
+    "<daemon-record>": "{\"pid\": <PID>, \"port\": <PORT>, \"started\": <T>, \"theme\": \"neutral\", \"token\": \"<TOKEN>\", \"url\": \"http://127.0.0.1:<PORT>\"}",
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "0",
+    "<r1 body>": "import{a as l,j as e,I as a}from\"./index-CS7zvdLk.js\";import{r as n}from\"./react-DOpiTn5v.js\";const c=\"https://github.com/Arylmera/Geneseed\",h=\"https://github.com/Arylmera\";function u(){const[r,i]=n.useState(c),[t,o]=n.useState(!0);return n.useEffect(()=>{l.docsPage(\"about\").then(s=>{s!=null&&s.repo&&(i(s.repo),o(!!s.repo_is_github))}).catch(()=>{})},[]),e.jsxs(\"div\",{className:\"narrow\",children:[e.jsx(\"div\",{className:\"head-row mb-18\",children:e.jsxs(\"div\",{children:[e.jsx(\"h1\",{className:\"h\",children:\"About\"}),e.jsx(\"p\",{className:\"sub\",children:\"The project, where the source lives, and a word from the person who grew it.\"})]})}),e.jsxs(\"div\",{className:\"card pad-lg mb-16\",children:[e.jsx(\"div\",{className:\"card-head\",children:e.jsx(\"h3\",{children:\"Project\"})}),e.jsx(\"p\",{className:\"sub mb-16\",children:\"Geneseed is a portable, theme-able harness you implant once and use everywhere to grow a disciplined AI coding agent. One canonical source, many voices, MIT-licensed.\"}),e.jsxs(\"div\",{className:\"row wrap gap-10\",children:[e.jsxs(\"a\",{className:\"btn ghost\",href:r,target:\"_blank\",rel:\"noreferrer\",children:[e.jsx(a,{name:\"github\"}),t?\"Source on GitHub\":\"Source repo\"]}),t&&e.jsxs(e.Fragment,{children:[e.jsxs(\"a\",{className:\"btn ghost\",href:r+\"/issues\",target:\"_blank\",rel:\"noreferrer\",children:[e.jsx(a,{name:\"external\"}),\"Issues\"]}),e.jsxs(\"a\",{className:\"btn ghost\",href:r+\"/blob/main/LICENSE\",target:\"_blank\",rel:\"noreferrer\",children:[e.jsx(a,{name:\"external\"}),\"MIT License\"]})]})]})]}),e.jsxs(\"div\",{className:\"card pad-lg\",children:[e.jsx(\"div\",{className:\"card-head\",children:e.jsx(\"h3\",{children:\"Creator\"})}),e.jsxs(\"p\",{className:\"sub mb-16\",children:[\"Geneseed is built by \",e.jsx(\"strong\",{children:\"Guillaume Lemer\"}),\". It started as a personal, Obsidian-vault-grown agent operating system and was distilled into the repo you are running. Implant it once, and a disciplined agent grows around the same inherited rules, skills, and memory in every repo it follows you into.\"]}),e.jsx(\"p\",{className:\"sub mb-16\",children:\"If you find this useful, a star on the repo or an issue with feedback is the best way to help shape what comes next.\"}),e.jsx(\"div\",{className:\"row wrap gap-10\",children:e.jsxs(\"a\",{className:\"btn ghost\",href:h,target:\"_blank\",rel:\"noreferrer\",children:[e.jsx(a,{name:\"github\"}),\"@Arylmera on GitHub\"]})})]})]})}export{u as default};\n",
+    "<r1 headers>": "Content-Type: text/javascript\nContent-Length: 2385\nCache-Control: public, max-age=31536000, immutable",
+    "<r1 status>": "200 OK",
+    "<server stderr>": "",
+    "<server stdout>": "[web] no deployed harness at <HOME>\\.config\\opencode.\n      Run `geneseed setup` first — serving anyway (read-only UI).\n[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: neutral)\n[web] daemon ready.\n"
+  }
+}

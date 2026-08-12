@@ -1,0 +1,22 @@
+{
+  "paths": {
+    "<dirs>": "6991901ebb4d90155b414709975b405b0ae9fa1aa5d80fecc11cdcad19bfa180",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "cb73cde18ac7e632dfc0f9f986d1db9317adeb27044f624cd0065494816eacc3",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 47,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 173,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
+    "<exit>": "1",
+    "<stderr>": "",
+    "<stdout>": "[doctor] 1 problem(s) across 1 theme(s):\n  - [authoring] LAW_META[1] class 'nosuchclass' is not a known class ['security', 'process', 'verify', 'craft', 'context', 'comms']\n"
+  }
+}

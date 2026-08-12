@@ -1,0 +1,22 @@
+{
+  "paths": {
+    "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "80eee96df4bc5acdb67e19302d0bd6c62d5dc1c73f8bb09fe81afb4c6ae4c032",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 13,
+    "<exit>": 1,
+    "<stderr>": 131,
+    "<stdout>": 0,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo",
+    "<exit>": "1",
+    "<stderr>": "[theme] no shipped theme 'nosuch'. available: catppuccin, dracula, everforest, gruvbox, kanagawa, neon, nord, rosepine, tokyonight\n",
+    "<stdout>": ""
+  }
+}

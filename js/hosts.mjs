@@ -16,7 +16,7 @@
 import { realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { pyPathStr } from './lib/pyfs.mjs';
+import { pyPathStr, pyPrintErr, withDiscardableStderr } from './lib/pyfs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 
@@ -34,12 +34,35 @@ export const VERSION_MARKER = '.geneseed-version';
 /**
  * `Path.expanduser()` — a LEADING `~` only, and `~` alone counts.
  *
- * Deliberately not a general tilde expansion: Python does not expand `~user` on Windows the
- * way a shell would, and every caller here feeds it a config-dir env var.
+ * The docblock here used to claim "Python does not expand `~user` on Windows the way a
+ * shell would". That claim was FALSE, and `921384f`'s widened probe corpus caught it:
+ * `ntpath.expanduser('~someuser/x')` swaps the last component of `%USERPROFILE%` and
+ * returns `C:\Users\someuser\x` — it happily expands a name that may not even be a real
+ * account. POSIX's `expanduser` does the analogous thing via the password database.
+ *
+ * This port deliberately does NEITHER. Reproducing `ntpath`'s swap faithfully needs its own
+ * corpus, and the Python reference is being deleted, so byte-parity on this one input stops
+ * mattering the moment it is. What matters instead is that a `~user` form never resolves
+ * SILENTLY to the wrong place: the old code below returned it untouched, so
+ * `--target ~someone/x` created a literal `~someone` directory in whatever cwd the user ran
+ * from. It now REFUSES the form outright. This is the single primitive every config-dir env
+ * var and every `--target`/`--dir`/`--bundle`/`--out` argument passes through on the way to
+ * becoming a filesystem path, so refusing here — rather than at each of those call sites —
+ * is one guard instead of several, and none of the paths that already exist there. `~` alone
+ * and `~/…`/`~\…` are unaffected; only a name after the tilde is rejected.
  */
 export function expanduser(p) {
   if (p === '~') return os.homedir();
   if (p.startsWith('~/') || p.startsWith('~\\')) return path.join(os.homedir(), p.slice(2));
+  if (p.startsWith('~')) {
+    const msg = `refusing '${p}': a '~user' path is not expanded by this port (Python's `
+      + "ntpath/posixpath would guess a home directory for 'user' — this port does not); "
+      + 'pass an absolute path, or "~" / "~/…" for your own home directory';
+    pyPrintErr(`${msg}\n`);
+    const e = new Error(msg);
+    e.exitCode = 1;
+    throw e;
+  }
   return p;
 }
 
@@ -198,7 +221,19 @@ export function resolveMemoryDir(explicit) {
   const cwd = process.cwd();
   const bases = [cwd, path.join(cwd, 'Harness')];
   const gh = process.env.GENESEED_HARNESS;
-  if (gh) bases.push(expanduser(gh));
+  if (gh) {
+    // PER BASE, and the walk continues. `$GENESEED_HARNESS` is the FOURTH user-controlled
+    // tilde input and the one the `~user` refusal was never swept onto: `expanduser` throws
+    // on `~someone/x`, and this resolver is reached by `geneseed status` (js/status.mjs's
+    // `resolveMemoryDir(null)`) and by the `learn` hook, whose entry point
+    // (`bin/geneseed-hook.mjs`) has NO top-level try — so an unguarded throw here is a stack
+    // trace on a hook path and a non-zero exit, the exact failure the other three guards
+    // exist to prevent. Skipping the base degrades to "no memory store from $GENESEED_HARNESS",
+    // which is what an unset variable already does. `withDiscardableStderr` because the
+    // refusal prints at the RAISE SITE and both callers byte-compare stderr; the reference
+    // (`rituals/_harness_learn.py`, same guard) prints nothing here.
+    try { bases.push(withDiscardableStderr(() => expanduser(gh))); } catch { /* skip it */ }
+  }
   try { bases.push(opencodeConfigDir()); } catch { /* best-effort, as the Python */ }
   for (const base of bases) {
     for (const name of MEMORY_DIR_NAMES) {

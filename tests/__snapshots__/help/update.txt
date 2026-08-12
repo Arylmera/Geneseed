@@ -1,0 +1,7 @@
+usage: harness upgrade [-h] [theme]
+
+positional arguments:
+  theme       optional: force a theme (neutral|imperial|…)
+
+options:
+  -h, --help  show this help message and exit

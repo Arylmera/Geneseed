@@ -75,7 +75,17 @@ def sovereign_bypass(root) -> bool:
         raw = (entry.get("path") if isinstance(entry, dict) else entry) or ""
         if not isinstance(raw, str) or not raw.strip():
             continue
-        base = os.path.normcase(str(Path(raw.strip()).expanduser())).rstrip("\\/")
+        try:
+            base = os.path.normcase(str(Path(raw.strip()).expanduser())).rstrip("\\/")
+        except Exception:
+            # PER ENTRY — one unusable line must not decide the whole function, and until
+            # this guard existed the docstring above was FALSE on POSIX: `Path.expanduser()`
+            # raises RuntimeError (not OSError) for a `~unknownuser` entry, which escaped
+            # both try blocks and crashed the hook on a file the user hand-edits. Broad on
+            # purpose: "every failure mode degrades to False" is the contract, and this gate
+            # exits 0 and signals on stdout, so a crash reads as a clean pass while gating
+            # nothing. Skipping errs toward the gate staying ACTIVE.
+            continue
         if cwd == base or cwd.startswith(base + os.sep):
             return True
     return False

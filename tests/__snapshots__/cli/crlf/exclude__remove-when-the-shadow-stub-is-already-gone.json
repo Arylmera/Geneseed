@@ -1,0 +1,26 @@
+{
+  "paths": {
+    "<dirs>": "2986a6ed8511960b0b8c9860df472d04ad2002d4efb08954bcb0c5926032dcd7",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "f56ece132c633e6a2489e298dce4c0ee3198274efea65d9c7b3ab9af1e498721",
+    "<stdout>": "09747a92091a89c60803be36e2b66b65035d652d1b61915ea52edab882958de0",
+    "home/.bob/.geneseed-manifest.json": "4d2855c2eef8884d8183701314da8789bdb132115edbf6adf3e5e641dc7b1de7",
+    "home/.bob/excludes.json": "a8ff3eeb7c5b91c2984cad61729d863bc8588f71fcd7b73e9c26f003cdb4b664",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 23,
+    "<exit>": 1,
+    "<stderr>": 41,
+    "<stdout>": 34,
+    "home/.bob/.geneseed-manifest.json": 15,
+    "home/.bob/excludes.json": 24,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.bob\nrepo",
+    "<exit>": "0",
+    "<stderr>": "[geneseed] bob: shadow stub already gone\n",
+    "<stdout>": "[geneseed] <SB>\\repo re-included.\n"
+  }
+}

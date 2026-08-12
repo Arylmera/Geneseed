@@ -1,0 +1,34 @@
+{
+  "paths": {
+    "<daemon-record>": "380b7a62b3ee76b2c04092e2b9174c525c61d4b23153e032d8defe2188600377",
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<r1 body>": "5ff15525af709c12f3bf3e04db8fabff1a69610f12932da21b958419021347f5",
+    "<r1 headers>": "85b537555449267ddac99712cde7d9d57d2247d0ba00b85240c54a51c39e23d9",
+    "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<server stdout>": "1bc93415824d62fe66f8626932cc78809c451e1094b35c6a6ddbef3494fe0143",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<daemon-record>": 120,
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<r1 body>": 3565,
+    "<r1 headers>": 51,
+    "<r1 status>": 6,
+    "<server stderr>": 0,
+    "<server stdout>": 205,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<daemon-record>": "{\"pid\": <PID>, \"port\": <PORT>, \"started\": <T>, \"theme\": \"neutral\", \"token\": \"<TOKEN>\", \"url\": \"http://127.0.0.1:<PORT>\"}",
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "0",
+    "<r1 body>": "{\"section\": \"agents\", \"items\": [{\"name\": \"advocate\", \"title\": \"advocate\", \"desc\": \"Argues the strongest case for the proposal \\u2014 the upside, the opportunity, the cost of not acting.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\advocate.md\", \"status\": \"approved\"}, {\"name\": \"architect\", \"title\": \"architect\", \"desc\": \"Produces a design or implementation plan before code is written.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\architect.md\", \"status\": \"approved\"}, {\"name\": \"developer\", \"title\": \"developer\", \"desc\": \"Implements the scoped change in an isolated worktree, self-checked and ready for the tester.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\developer.md\", \"status\": \"approved\"}, {\"name\": \"docs\", \"title\": \"docs\", \"desc\": \"Writes and updates user-facing documentation after code lands.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\docs.md\", \"status\": \"approved\"}, {\"name\": \"empiricist\", \"title\": \"empiricist\", \"desc\": \"Demands evidence \\u2014 holds every claim, for and against, to data, tests, or precedent.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\empiricist.md\", \"status\": \"approved\"}, {\"name\": \"explorer\", \"title\": \"explorer\", \"desc\": \"Reads and searches widely in a throwaway context, returns only distilled findings.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\explorer.md\", \"status\": \"approved\"}, {\"name\": \"framer\", \"title\": \"framer\", \"desc\": \"Questions the problem itself \\u2014 whether the motion solves the real need or just a symptom.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\framer.md\", \"status\": \"approved\"}, {\"name\": \"historian\", \"title\": \"historian\", \"desc\": \"Brings the precedent \\u2014 what was tried before, how it went, and the lesson for this decision.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\historian.md\", \"status\": \"approved\"}, {\"name\": \"operator\", \"title\": \"operator\", \"desc\": \"Speaks for running it in production \\u2014 reliability, observability, rollback, and the on-call burden.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\operator.md\", \"status\": \"approved\"}, {\"name\": \"pragmatist\", \"title\": \"pragmatist\", \"desc\": \"Weighs feasibility \\u2014 the cost, effort, and complexity against whether the payoff is worth it.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\pragmatist.md\", \"status\": \"approved\"}, {\"name\": \"reviewer\", \"title\": \"reviewer\", \"desc\": \"Reviews a change for correctness and quality before it merges.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\reviewer.md\", \"status\": \"approved\"}, {\"name\": \"security\", \"title\": \"security\", \"desc\": \"Audits changes that touch the security surface.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\security.md\", \"status\": \"approved\"}, {\"name\": \"skeptic\", \"title\": \"skeptic\", \"desc\": \"Plays devil's advocate \\u2014 attacks the proposal for failure modes, risks, and hidden assumptions.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\skeptic.md\", \"status\": \"approved\"}, {\"name\": \"steward\", \"title\": \"steward\", \"desc\": \"Defends the long term \\u2014 architecture, maintainability, debt, and fit with the system's direction.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\steward.md\", \"status\": \"approved\"}, {\"name\": \"tester\", \"title\": \"tester\", \"desc\": \"Writes, runs, and diagnoses tests.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\tester.md\", \"status\": \"approved\"}, {\"name\": \"user-advocate\", \"title\": \"user-advocate\", \"desc\": \"Speaks for whoever uses the outcome \\u2014 their experience, their friction, what they'd actually ask for.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\user-advocate.md\", \"status\": \"approved\"}, {\"name\": \"visionary\", \"title\": \"visionary\", \"desc\": \"Argues the bold, transformative version \\u2014 the 10x upside and what it would take to aim there.\", \"source\": \"<REPO>\\\\src\\\\agents\\\\visionary.md\", \"status\": \"approved\"}]}",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 3565",
+    "<r1 status>": "200 OK",
+    "<server stderr>": "",
+    "<server stdout>": "[web] no deployed harness at <HOME>\\.config\\opencode.\n      Run `geneseed setup` first — serving anyway (read-only UI).\n[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: neutral)\n[web] daemon ready.\n"
+  }
+}

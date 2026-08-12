@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "ee9b6af405b938642909f9b66282ae03de1c9522af9e74130c77941a2c78b2cf",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "e5e3f9e05d6b46db9afc879ca90348ce42c16e917025f710f88bd8d2523be8a5",
+    "cfg/memory/agents/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 42,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 251,
+    "cfg/memory/agents/.keep": 0,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\ncfg/memory\ncfg/memory/agents\nhome\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"ask\", \"permissionDecisionReason\": \"Geneseed Law VI \\u2014 writing to memory: a standing rule, or a fact to remember? That choice is the user's. Run the rule skill first.\"}}\n"
+  }
+}

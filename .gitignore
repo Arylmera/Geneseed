@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+.pytest_cache/
 .geneseed-mirror/
 # Project-scope runtime state the workflow plugin writes (.geneseed/workflow-runs/).
 # Distinct from the USER-scope ~/.geneseed/ that holds the hook shim — same name, two

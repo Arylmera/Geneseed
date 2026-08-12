@@ -1,0 +1,26 @@
+{
+  "paths": {
+    "<dirs>": "206617ac96b91fc95909c25c40f7616c7aafd92258ff18d2974f3ca9419418dd",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "48f1d6a4beb94f96add06ee6763a2f7f9a612595eaf210f22961b0ba9a7b1937",
+    "<stdout>": "1a234791a9989f1f030b78fad1edee4c2cfc4c6c969d6b1811654e3d614ac038",
+    "home/.claude/.geneseed-manifest.json": "4d2855c2eef8884d8183701314da8789bdb132115edbf6adf3e5e641dc7b1de7",
+    "home/.claude/excludes.json": "686a97685918d098ae3ab9b7670eddff298f782e470a13c33ded8d75b511530c",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 26,
+    "<exit>": 1,
+    "<stderr>": 38,
+    "<stdout>": 39,
+    "home/.claude/.geneseed-manifest.json": 15,
+    "home/.claude/excludes.json": 47,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.claude\nrepo",
+    "<exit>": "1",
+    "<stderr>": "[geneseed] <SB>\\repo was not excluded\n",
+    "<stdout>": "[geneseed] nothing done for <SB>\\repo.\n"
+  }
+}

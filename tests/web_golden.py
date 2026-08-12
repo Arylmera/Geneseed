@@ -96,6 +96,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import golden            # noqa: E402  (needs tests/ on the path first)
 import harness_golden    # noqa: E402
+import snapshot_io       # noqa: E402
 
 ROOT = golden.ROOT
 
@@ -1959,6 +1960,38 @@ def _catalog_cells(cell) -> list[dict]:
              # is what says the CONFIG item goes through the same loader.
              expect=['"name": "vault:notes/two.md"', '"desc": "just one"',
                      '"manifest": {"kind": "wiki", "wikis": [{"name": "vault"']),
+        cell("catalog/a-tilde-user-wiki-manifest-degrades-to-an-empty-section",
+             [_req(path="/api/catalog/wiki")], world=_full(),
+             env={"GENESEED_WIKI": "~nosuchuser/wiki.jsonc"},
+             # THE REFUSAL MUST NOT REACH THE REQUEST PATH. `expanduser` refuses a `~user`
+             # form by printing and throwing, and `do_GET`/`server.mjs` wrap the whole GET in
+             # a blanket catch -> a JSON 500, so an unguarded refusal turns one bad env var
+             # into a dead Knowledge section. Both sides answer the section's own degrade
+             # instead: the empty list. The reference gets there the other way — `ntpath`
+             # expands `~nosuchuser` to a path that does not exist and `is_file()` says no —
+             # which is why this is stated absolutely and not merely compared.
+             expect=['{"section": "wiki", "items": []}', "200 OK"],
+             # The name of an account nobody has must appear NOWHERE: not in a body, and not
+             # on the daemon's stderr, where `expanduser` writes at the RAISE SITE. Without
+             # `withDiscardableStderr` around the catch this is the assertion that fires.
+             expect_absent=["nosuchuser", "refusing"]),
+        cell("catalog/a-tilde-user-vault-skips-only-that-entry",
+             [_req(path="/api/catalog/wiki"),
+              _req(path="/api/item/wiki/ghost:notes%2Fone.md")],
+             world=_full(**{f"{_OC}/wiki.jsonc": json.dumps({"wikis": [
+                 {"name": "ghost", "path": "~nosuchuser/vault",
+                  "entries": [{"path": "notes"}]},
+                 {"name": "vault", "path": "{sb/}/vault",
+                  "entries": [{"path": "notes", "description": "my notes"}]}]})}),
+             # PER ENTRY, and the good vault SURVIVES — the positive control is the whole
+             # cell. A guard that bailed out of the loop instead of continuing would answer
+             # an empty section here and look identical to the cell above. `ghost` is FIRST
+             # so the skip has to happen before the entry that must still be listed.
+             expect=['"name": "vault:notes/one.md"', '"group": "vault"',
+                     # The reader's own degrade: it falls through to `NotFound`, which is
+                     # where the reference lands when the expanded root does not exist.
+                     '{"error": "not found: ghost:notes/one.md"}', "404 Not Found"],
+             expect_absent=["nosuchuser", "refusing", '"group": "ghost"']),
         cell("catalog/an-unknown-section-is-a-404",
              [_req(path="/api/catalog/nope")], world=_full(),
              # The `NotFound` → 404 convention, first exercised here. `SECTIONS` is a
@@ -2078,10 +2111,15 @@ def _read_cells(cell) -> list[dict]:
                      '\\ud83e\\uddec Gene-seed implanted']),
         cell("themes/an-undeployed-host-still-reports-a-current-pair",
              [_req(path="/api/themes")], world={"repo/.keep": ""},
-             # Describing the reference, not adjudicating it: with nothing deployed the
-             # detected pair is whatever `_installed_defaults` finds, and the theme falls
-             # back to `neutral`. The cell below is what tells detection from fallback.
-             expect=['"current": {"theme": "neutral"']),
+             # BOTH HALVES OF THE PAIR ARE NAMED SINCE THE BUNDLE WALK WAS PINNED. It used
+             # to say only `"theme": "neutral"`, because `_installed_defaults` walked
+             # `ROOT / "Harness"` and the emit was whatever the operator's own checkout had
+             # built — `opencode` here, nothing on the runner, i.e. the one field of this
+             # cell that was not reproducible. With the walk cwd-relative the undeployed
+             # answer is `None`, and what the body carries is `_WebState`'s own
+             # `or "opencode-global"` fallback. The cell below is still what tells detection
+             # from fallback: it differs on the THEME, which no default supplies.
+             expect=['"current": {"theme": "neutral", "emit": "opencode-global"}']),
         cell("themes/the-detected-install-is-the-current-pair",
              [_req(path="/api/themes")], world=_installed(),
              expect=['"current": {"theme": "imperial", "emit": "opencode-global"}']),
@@ -2108,13 +2146,21 @@ def _read_cells(cell) -> list[dict]:
                      '"python": "<RUNTIME>"', 'Content-Length: <CLEN>']),
         cell("setup/an-undeployed-target-says-so",
              [_req(path="/api/setup")], world={"repo/.keep": ""},
-             # `installed_fp` is deliberately NOT named: with no host dir seeded, the
-             # candidate chain walks on to the checkout's own `Harness/` and finds a real
-             # fingerprint there. Both sides read the same one, so the byte comparison
-             # still gates it; naming it would tie this cell to the developer's tree.
+             # THE FOUR FIELDS THAT COULD NOT BE NAMED BEFORE THE BUNDLE WALK WAS PINNED.
+             # `_status_data`'s chain used to walk on to the checkout's own `Harness/` when
+             # no host dir was seeded, so `installed_fp`, `version_target`, `version_verdict`
+             # and `emit` reported the operator's real install — a fingerprint, an absolute
+             # path and a whole sentence that a fresh clone answers differently. The old
+             # comment here said naming them "would tie this cell to the developer's tree",
+             # which was true and is the reason the cell was recording something no other
+             # machine could reproduce. They are the sandbox's answers now, so they are
+             # named: this is the cell that says "nothing is deployed" in full.
              expect=['"deployed": false',
                      '"agent_md": null, "agent_md_present": false',
                      '"theme": "neutral", "accent": "cyan"',
+                     '"installed_fp": null, "version_target": null',
+                     '"version_verdict": "no Geneseed install detected to compare"',
+                     '"emit": "\\u2014"',
                      '"target": "<HOME>']),
 
         # ---- /api/installs -------------------------------------------------------------
@@ -2658,6 +2704,65 @@ def _dyn_stamps(record: dict, port: int, pid: int) -> list[tuple[bytes, bytes]]:
     return out
 
 
+def _corpus_stamps(now: int) -> list[tuple[bytes, bytes]]:
+    """The per-run values a RECORDED corpus cannot keep, and that no static pattern in
+    `golden.CORPUS_STAMPS` can name because they are this run's own.
+
+    `_dyn_stamps` above covers the SERVER's port, pid, token and started-second, because the
+    two SIDES of a cell disagree about them. These four are the HARNESS's: the clock
+    `_clock_repl` seeds worlds from (`{now}`, `{older}`, `{stale}`) and `os.getpid()`, which
+    `_activity_world` seeds as the pid of a process that is definitely alive. Both sides of a
+    live cell share them, so the live gate compares them in full and needs nothing here — but
+    a corpus recorded on Tuesday is replayed by a different process on Thursday.
+
+    TARGETED, not global, for `_dyn_stamps`' reason one step further: `os.getpid()` is four
+    or five digits and a bare replacement would rewrite any byte count that happened to
+    contain them, so each value is replaced only where it is syntactically the field it
+    belongs to. That also keeps the DELIBERATE constants beside them — `"pid": 0`,
+    `"pid": "not-a-pid"`, `_DEAD_PID` — byte-compared, which is what the `_is_live` cells are
+    for: tagging those would make the live/dead partition unreadable in the corpus.
+    """
+    pid = os.getpid()
+    out = [(f'"{field}": {value}'.encode(), f'"{field}": <{tag}>'.encode())
+           for field in ("updated_at", "turn_started_at")
+           for value, tag in ((now, "NOW"), (now - 600, "OLDER"), (now - 3600, "STALE"))]
+    out.append((f'"pid": {pid}'.encode(), b'"pid": <HARNESS-PID>'))
+    out.append((f'"pid": "{pid}"'.encode(), b'"pid": "<HARNESS-PID>"'))
+    return out
+
+
+# THE HASH OF A VALUE THE OTHER TABLE JUST TAGGED, which is the one rot a normaliser cannot
+# reach by naming a field. `api_rules_*` answer with `"fingerprint"`, a hash of the WHOLE
+# `user-rules.md`, and `api_rules_promote` writes two dates into that file from the server's
+# own clock. `golden.CORPUS_STAMPS` tags the dates; a hash taken over them before they were
+# tagged cannot be, so a corpus recorded on one day and replayed on the next differs in one
+# 16-hex field and in nothing else. Found by a recording crossing a real midnight between the
+# `--record` run and the `--against` run, not by reading — the two `promote/*` cells were the
+# only two of 114 that moved.
+#
+# SCOPED TO THE CELLS THAT CAUSE IT rather than to the field, and the difference matters: 14
+# web cells carry a `"fingerprint"`, only the 2 that PROMOTE move, and one of the other twelve
+# is `rules/a-stale-fingerprint-is-409-and-never-clobbers`, where that value IS the subject of
+# the test. So the trigger is the evidence that this cell dated its own rules file — which
+# also means a promote cell written later is covered without anyone remembering to name it.
+_PROMOTED = re.compile(rb", promoted \d{4}-\d{2}-\d{2}")
+_RULES_FINGERPRINT = re.compile(rb'("fingerprint": ")[0-9a-f]{16}(?=")')
+
+
+def _corpus_normalise(snap, now: int):
+    """`golden.corpus_normalise`'s per-cell half — see `_corpus_stamps`. An error string
+    passes through so the callers' `isinstance` checks still see it."""
+    if isinstance(snap, str):
+        return snap
+    stamps = _corpus_stamps(now)
+    out = {k: _apply(v, stamps) for k, v in snap.items()}
+    # Runs BEFORE `golden.corpus_normalise` (which happens inside `_record_cell`), so the
+    # trigger is the raw provenance line rather than the `<DATE>` tag it becomes.
+    if any(_PROMOTED.search(v) for v in out.values()):
+        out = {k: _RULES_FINGERPRINT.sub(rb"\1<RULES-FP>", v) for k, v in out.items()}
+    return out
+
+
 def _decode_body(body: bytes, encoding: str) -> bytes:
     """A gzipped response, compared as the bytes a CLIENT ends up with.
 
@@ -2791,6 +2896,27 @@ def _drive(port: int, token: str, requests: list[dict]) -> dict:
             # `started` (seven decimals against three) and `duration` moved Content-Length by
             # one byte in the ref-vs-ref self-check before a line of the port existed.
             untagged = ('gzip' not in enc) and not _width_varies(body_out)
+            # WHY NO `declared == len(data)` CHECK SITS HERE, measured rather than assumed.
+            #
+            # `golden._recompute_declared_lengths` rewrites the recorded `Content-Length` to
+            # the normalised body's length, and the obvious objection is that a header derived
+            # from a value already byte-compared gates nothing — so this is where an absolute
+            # companion would go, against the raw wire bytes. It would be a TAUTOLOGY. HTTP/1.1
+            # FRAMES ON THAT HEADER: `resp.read()` reads exactly `Content-Length` bytes, so
+            # `len(data) == declared` on every response that returns at all, and the check
+            # could never fire.
+            #
+            # WHAT ACTUALLY GATES IT, proven by planting `String(body.length - 1)` in
+            # `js/web/server.mjs:307` and replaying `static/index-html-carries-the-injected-
+            # token`: the cell went red on `<r1 body>`, 1282 bytes against 1281 — a server that
+            # lies about its length gets its BODY truncated by the client, and the body is
+            # compared in full. The other direction (a length longer than the bytes sent)
+            # raises `IncompleteRead` before this line and lands in `<transport>`. And a
+            # response that stopped declaring a length at all loses the header LINE, which the
+            # recompute never writes back. All three are loud; the number itself is the only
+            # part the recompute touches, and it is the only part nothing else can check.
+            # `tests/test_golden_destamp.py`'s `TheRecomputedLengthIsStillGatedByTheTransport`
+            # holds the framing claim so this comment cannot rot into an excuse.
             obs[f"<r{i} status>"] = f"{resp.status} {resp.reason}".encode()
             obs[f"<r{i} headers>"] = "\n".join(
                 f"{k}: {v if (untagged or k.title() != 'Content-Length') else '<CLEN>'}"
@@ -2974,8 +3100,11 @@ def run_cell(cli: list[str], cell: dict, now: "int | None" = None) -> "dict[str,
 
 
 def check_expectations(cell: dict, snap: "dict[str, bytes]",
-                       now: "int | None" = None) -> list[str]:
-    """The absolute assertions, run against the REFERENCE side.
+                       now: "int | None" = None,
+                       side: str = "the reference") -> list[str]:
+    """The absolute assertions, run against whichever side the run has: the REFERENCE on the
+    live pair and under `--record`, the CANDIDATE under `--against`. `side` names which one —
+    see `harness_golden.check_expectations`.
 
     Same discipline as `harness_golden.check_expectations`, and needed for the same reason:
     a cross-implementation comparison is blind to a defect both sides share. It is sharper
@@ -3009,15 +3138,15 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
                             f"arm it was not written for")
     for want in cell.get("expect", ()):
         if want not in text:
-            problems.append(f"the reference no longer answers {want!r} — this cell has "
+            problems.append(f"{side} no longer answers {want!r} — this cell has "
                             f"stopped exercising what it names")
     for unwanted in cell.get("expect_absent", ()):
         if unwanted in text:
-            problems.append(f"the reference now answers {unwanted!r}, which this cell "
+            problems.append(f"{side} now answers {unwanted!r}, which this cell "
                             f"exists to prove it leaves out")
     for pat in cell.get("expect_re", ()):
         if not re.search(pat, text):
-            problems.append(f"the reference's answer no longer matches {pat!r}")
+            problems.append(f"{side}'s answer no longer matches {pat!r}")
     # P6e — the first endpoint that DELETES, so P5h's three gate directions arrive here:
     # what went, what survived, and (through the snapshot the two sides compare) the
     # directory listing. A cross-implementation compare cannot make either of the first two,
@@ -3027,7 +3156,7 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
     # effect no assertion names is a side effect that can be deleted.
     for rel in cell.get("expect_files", ()):
         if rel not in snap:
-            problems.append(f"the reference no longer leaves {rel!r} behind — this cell "
+            problems.append(f"{side} no longer leaves {rel!r} behind — this cell "
                             f"names it as a file the endpoint must NOT remove")
     # DIRECTORIES COUNT, since P6i. `expect_absent_files` used to read the file keys only,
     # which made every DIRECTORY named in it pass trivially — and the husk an
@@ -3045,10 +3174,10 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
     kept = set(snap["<dirs>"].decode("utf-8").split("\n")) if want_absent else set()
     for rel in want_absent:
         if rel in snap or rel in kept:
-            problems.append(f"the reference now leaves {rel!r} behind, which this cell "
+            problems.append(f"{side} now leaves {rel!r} behind, which this cell "
                             f"exists to prove it prunes")
     if "<transport>" in snap:
-        problems.append(f"the reference's connection failed: "
+        problems.append(f"{side}'s connection failed: "
                         f"{snap['<transport>'].decode('utf-8', 'replace')}")
     # The record is not optional. Every cell's server runs with `--daemon-internal`, so a
     # missing or empty record means the run was not observed at all — and four of this
@@ -3063,10 +3192,38 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
 
 
 def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int,
-            jobs: int = 1) -> int:
-    print(f"[web-golden] {len(matrix)} cells · ref={' '.join(ref)} · new={' '.join(new)}"
-          f" · jobs={jobs}")
+            jobs: int = 1, record: "str | None" = None,
+            against: "str | None" = None, narrowed: "str | None" = None) -> int:
+    """Plain / `record` / `against` — the same three modes as `golden.compare`, sharing one
+    runner and one corpus format.
+
+    WHAT A RECORDED WEB CELL HOLDS. Every response body in it is the DECODED body, because
+    that is what `run_cell` snapshots: `_drive` inflates through `_decode_body` before the
+    bytes ever reach the observation dict. The distinction is not cosmetic — P6a measured
+    two zlib builds emitting 753 and 751 bytes for the same 1.5 kB input, and no normaliser
+    can reach inside a compressed stream to destamp it. A corpus of wire bytes would be a
+    recording of this machine's zlib, replayable nowhere.
+    """
+    if record:
+        print(f"[web-golden] {len(matrix)} cells · recording ref={' '.join(ref)} -> "
+              f"{record} · jobs={jobs}")
+        # See `golden.compare`: one flat file per cell, asserted before the first write.
+        names = {snapshot_io._safe(c["id"]) for c in matrix}
+        assert len(names) == len(matrix), (
+            f"{len(matrix)} cells collapse onto {len(names)} corpus filenames — two distinct "
+            "cell ids map to one file, so the recorded corpus would be silently short")
+    elif against:
+        print(f"[web-golden] {len(matrix)} cells · new={' '.join(new)} · against corpus "
+              f"{against} · jobs={jobs}")
+    else:
+        print(f"[web-golden] {len(matrix)} cells · ref={' '.join(ref)} · new={' '.join(new)}"
+              f" · jobs={jobs}")
     failures: list[str] = []
+    if against:
+        # The other direction of `_against_cell`'s single failure — see `golden.orphan_check`.
+        orphans = golden.orphan_check(against, {c["id"] for c in matrix}, narrowed)
+        if orphans:
+            failures.append(orphans)
 
     def _pair(cell: dict) -> tuple:
         """Both sides of ONE cell, and the CLOCK stays inside it.
@@ -3079,15 +3236,40 @@ def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int,
 
         Every cell binds `--port 0`, so the OS hands each server its own free port and two
         cells running at once can no more collide than a cell and the developer's own
-        daemon could."""
+        daemon could.
+
+        Or just the ONE side `--record`/`--against` needs. `now` is still sampled here and
+        still returned, because it is what `check_expectations` reads."""
         now = int(time.time())
+        if record:
+            return run_cell(ref, cell, now), None, now
+        if against:
+            return None, run_cell(new, cell, now), now
         return run_cell(ref, cell, now), run_cell(new, cell, now), now
 
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
     with pool:
         for i, (cell, (a, b, now)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
             cid = cell["id"]
-            if isinstance(a, str) or isinstance(b, str):
+            if record or against:
+                # THE ABSOLUTE TIER, ON WHICHEVER SIDE THIS RUN HAS — see the twin comment in
+                # `harness_golden.compare`. Sharper here for the reason this file's own
+                # docstring gives: two servers that both stopped enforcing the CSRF token
+                # agree in every guard cell forever, and a corpus only answers that argument
+                # for as long as it is never re-recorded. On the RAW snapshot, before
+                # `_corpus_normalise`, because an expectation is written against what the
+                # server actually said and the normaliser blanks some of it.
+                snap, whose = (a, "the reference") if record else (b, "the candidate")
+                vacuous = ([] if isinstance(snap, str)
+                           else check_expectations(cell, snap, now, side=whose))
+                if vacuous:
+                    failures.append(f"  {cid}: VACUOUS\n"
+                                    + "\n".join(f"    {p}" for p in vacuous))
+                elif record:
+                    golden._record_cell(record, cid, _corpus_normalise(a, now), failures)
+                else:
+                    golden._against_cell(against, cid, _corpus_normalise(b, now), failures)
+            elif isinstance(a, str) or isinstance(b, str):
                 failures.append(f"  {cid}: server failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                                 f"\n    new: {b if isinstance(b, str) else 'ok'}")
             elif (vacuous := check_expectations(cell, a, now)):
@@ -3105,7 +3287,10 @@ def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int,
             if i % 5 == 0 or i == len(matrix):
                 print(f"[web-golden]   {i}/{len(matrix)} ({len(failures)} failing)")
     if not failures:
-        print(f"[web-golden] ok — {len(matrix)} cells identical")
+        if record:
+            print(f"[web-golden] recorded {len(matrix)} cells to {record}")
+        else:
+            print(f"[web-golden] ok — {len(matrix)} cells identical")
         return 0
     print(f"\n[web-golden] {len(failures)}/{len(matrix)} cells DIFFER:\n")
     for f in failures[:limit]:
@@ -3131,9 +3316,31 @@ def main(argv=None) -> int:
                          "machine). Each cell starts its own server on its own OS-chosen "
                          "port inside its own sandbox, so this changes only how long the "
                          "gate takes, never what it compares.")
+    ap.add_argument("--record", metavar="DIR", default=None,
+                    help="run ONLY the reference server and write each cell's snapshot to "
+                         "DIR/<crlf|lf>, instead of comparing. Response bodies are recorded "
+                         "DECODED — see `compare`.")
+    ap.add_argument("--against", metavar="DIR", default=None,
+                    help="compare the candidate's live output against a corpus recorded "
+                         "earlier with --record into DIR/<crlf|lf>, instead of a live "
+                         "--ref. A cell with no recorded snapshot is a FAILURE, not a skip.")
     args = ap.parse_args(argv)
     if args.jobs < 1:
         print(f"[web-golden] --jobs must be at least 1, got {args.jobs}")
+        return 2
+    if args.record and args.against:
+        print("[web-golden] --record and --against are mutually exclusive")
+        return 2
+    # The corpus root, plus the platform subdirectory `golden.PLATFORM_CORPUS` names — chosen
+    # here rather than by the caller, so a recording and a replay on the same machine cannot
+    # land in different places. See that constant for why the split is not a normalisation.
+    if args.record:
+        args.record = str(Path(args.record) / golden.PLATFORM_CORPUS)
+    if args.against:
+        args.against = str(Path(args.against) / golden.PLATFORM_CORPUS)
+    if args.against and not args.new:
+        print("[web-golden] --against needs --new: with no candidate server it would replay "
+              "the REFERENCE against the reference's own recording, which always passes.")
         return 2
 
     ref = harness_golden._resolve_cli(golden._split(args.ref)) if args.ref else [
@@ -3147,7 +3354,9 @@ def main(argv=None) -> int:
             print(f"[web-golden] --only {','.join(keep)} selected 0 cells — nothing would "
                   f"be compared, which is not a pass.")
             return 2
-    return compare(ref, new, matrix, args.limit, jobs=args.jobs)
+    return compare(ref, new, matrix, args.limit, jobs=args.jobs,
+                   record=args.record, against=args.against,
+                   narrowed=f"--only {args.only}" if args.only else None)
 
 
 if __name__ == "__main__":

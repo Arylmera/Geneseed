@@ -1,0 +1,32 @@
+{
+  "paths": {
+    "<dirs>": "db68c7f3657707dc4f4a0bcc6b77f19d5aa3834f94fc305bf1c8a6380f257a27",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "046ca05b8c65efc63486e900a3538fdbb4ce49a5f1c4aad4f3c409cd8cc4c385",
+    "home/.config/opencode/MY-OWN.md": "9642e822c80e9c3ad6ca843a1f65fe1d056ab9f8011e8c0ca7d861c638dff1b8",
+    "home/.config/opencode/memory/fact.md": "78d79a6cd3fa510f477ab66e6b26c544ba8815716116376e92c6df3decaaba11",
+    "home/.config/opencode/notebook/note.md": "a9bdf6fb81d407c595db2ed4dcc7e9880177f134bcead057b825dc506db343e7",
+    "home/.config/opencode/opencode.json": "c5bd36aaef3a92b5e6cb06a01d69e582e6cbaea4c5399479e5dd27ab3c1998be",
+    "home/.config/opencode/prompts/mine.md": "11f510571d186365000c627f970f89431a1cbfbe94339a3f3f4cdbf03142b1a6",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 138,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 420,
+    "home/.config/opencode/MY-OWN.md": 24,
+    "home/.config/opencode/memory/fact.md": 55,
+    "home/.config/opencode/notebook/note.md": 8,
+    "home/.config/opencode/opencode.json": 120,
+    "home/.config/opencode/prompts/mine.md": 26,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/memory\nhome/.config/opencode/notebook\nhome/.config/opencode/prompts\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[uninstall] target: <HOME>\\.config\\opencode (opencode:global)\n[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the opencode.json instructions entry.\n[uninstall] memory/ and notebook/ are kept in place (never deleted here) — --archive-memory sets both aside.\n[uninstall] done — removed 2 file(s); opencode.json updated where needed; memory/notebook kept in place. Start a new session to apply.\n"
+  }
+}

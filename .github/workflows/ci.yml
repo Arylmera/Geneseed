@@ -7,6 +7,8 @@ name: ci
 on:
   push:
   pull_request:
+  # For `record-corpus` below, which is guarded to this trigger and never runs on a push.
+  workflow_dispatch:
 
 # THE PYTHON IS PINNED, not floating. `3.x` resolves to whatever the runner ships newest,
 # and one gate in this suite is a comparison against a specific Unicode database:
@@ -77,6 +79,17 @@ jobs:
       # CLI's, and P4a's finding was that a second driver does not inherit the first's proof.
       - name: golden — the emit matrix (Node generator vs build.py)
         run: python tests/golden.py --new "node bin/geneseed.mjs"
+      # The RECORDED corpus, replayed against the port. The step above compares two live
+      # implementations and dies with the reference; this one compares the port against bytes
+      # the reference wrote down, and is what survives the deletion. Both run while both exist,
+      # because a corpus that is committed but never replayed is inert — it would first be
+      # exercised on the day the reference is gone and re-recording is impossible. `--against`
+      # picks `emit/lf` or `emit/crlf` from `os.linesep`; this runner is Linux, so it reads the
+      # LF half, recorded by the `record-corpus` job on this same image.
+      - name: golden — the recorded corpus, replayed
+        run: >
+          python tests/golden.py --against tests/__snapshots__/emit
+          --new "node bin/geneseed.mjs"
       - name: golden — the prune, from both drivers
         run: |
           python tests/golden.py --ref "node bin/geneseed.mjs" --deletion
@@ -87,13 +100,146 @@ jobs:
         run: >
           python tests/harness_golden.py --new "node bin/geneseed-hook.mjs"
           --new-cli "node bin/geneseed-cli.mjs"
+      # The CLI corpus, replayed — the same argument as the emit corpus two steps up, and the
+      # same pairing: the live comparison above dies with `rituals/harness.py`, this one is
+      # what survives it, and both run while both exist because a corpus nothing replays is
+      # inert. It reads `cli/lf`, recorded by `record-corpus` on this same image.
+      - name: harness_golden — the recorded corpus, replayed
+        run: >
+          python tests/harness_golden.py --against tests/__snapshots__/cli
+          --new "node bin/geneseed-hook.mjs" --new-cli "node bin/geneseed-cli.mjs"
       - name: web_golden — the console, from both entries
         run: |
           python tests/web_golden.py --new "node js/web/server.mjs"
           python tests/web_golden.py --new "node bin/geneseed-cli.mjs web"
+      # Both entries again, because P4a's finding was that a second driver does not inherit
+      # the first's proof — and a corpus replay is where that matters most, since it is the
+      # only one of the two that will still exist after the reference is deleted.
+      - name: web_golden — the recorded corpus, replayed from both entries
+        run: |
+          python tests/web_golden.py --against tests/__snapshots__/web --new "node js/web/server.mjs"
+          python tests/web_golden.py --against tests/__snapshots__/web --new "node bin/geneseed-cli.mjs web"
       # The Node CLI's own doctor, on the platform the reference's was just proved on.
       - name: doctor, from the port
         run: node bin/geneseed-cli.mjs doctor
+
+  # RECORD THE LINUX CORPUS — all three matrices. Manual dispatch only: `if:` keeps it off
+  # every push, because it gates nothing and re-runs 691 cells.
+  #
+  # `--record` writes the reference's answer down so the port keeps a regression gate after
+  # `build.py` and `rituals/harness.py` are deleted. Those corpora are PER-PLATFORM:
+  # `pyfs.writeText` emits `os.linesep`, so the cells committed under `*/crlf/` were recorded
+  # on Windows and every one of them fails when replayed on Linux. (`harness_golden` has a
+  # second reason — `PLATFORM_ONLY` gives Windows and POSIX different `link`/`unlink` cells,
+  # so the two corpora do not even hold the same cell IDS.) Only a Linux machine can record
+  # the `lf/` halves, and after the reference is gone there will not be another chance —
+  # hence a job rather than a note.
+  #
+  # TO USE: dispatch this workflow, download the `snapshots-lf` artifact, and commit its
+  # `emit/lf/`, `cli/lf/` and `web/lf/` directories. The `--idempotent` and `--deletion`
+  # matrices have no corpus and are separately scheduled.
+  #
+  # UNTIL `cli/lf/` AND `web/lf/` ARE COMMITTED the two new replay steps in `cells` above
+  # fail every cell with "NO RECORDED SNAPSHOT" — loudly, which is the intended failure mode
+  # for a corpus that is not there, and the reason this job's first dispatch is a prerequisite
+  # rather than a follow-up.
+  record-corpus:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: record the emit matrix from the reference
+        run: python tests/golden.py --record tests/__snapshots__/emit
+      # A corpus that was never replayed is the defect this job exists to fix, one step over:
+      # committed, plausible, and unusable. Recording and replaying in the same run is what
+      # makes a green dispatch mean the artifact is worth committing.
+      - name: replay the emit corpus against the port
+        run: >
+          python tests/golden.py --against tests/__snapshots__/emit
+          --new "node bin/geneseed.mjs"
+      - name: record the CLI matrix from the reference
+        run: python tests/harness_golden.py --record tests/__snapshots__/cli
+      - name: replay the CLI corpus against the port
+        run: >
+          python tests/harness_golden.py --against tests/__snapshots__/cli
+          --new "node bin/geneseed-hook.mjs" --new-cli "node bin/geneseed-cli.mjs"
+      - name: record the web matrix from the reference
+        run: python tests/web_golden.py --record tests/__snapshots__/web
+      - name: replay the web corpus against the port, from both entries
+        run: |
+          python tests/web_golden.py --against tests/__snapshots__/web --new "node js/web/server.mjs"
+          python tests/web_golden.py --against tests/__snapshots__/web --new "node bin/geneseed-cli.mjs web"
+      # The three corpora whose oracle is CPYTHON ITSELF, and which no cell reaches.
+      #
+      # `primitives/` is per-PLATFORM for a reason the cell corpora only half share: it is
+      # mostly `ntpath` vs `posixpath` (seven of twelve `py_path_str` answers, all of
+      # `normcase`/`compare_paths`, `py_is_absolute`), of which `os.linesep` is one instance
+      # among many — so the halves are keyed `win32`/`posix` like `PLATFORM_ONLY` rather than
+      # `crlf`/`lf`. The win32 half is recorded by hand on the developer's machine; this is
+      # the only place the posix half can come from.
+      - name: record the primitive corpus from the reference (the posix half)
+        run: >
+          python tests/test_pure_function_parity.py
+          --record tests/__snapshots__/primitives
+      # `dwidth.json` and `win_user_path.json` are DECLARED platform-independent —
+      # `unicodedata` is a compiled-in database, and `_win_user_path_script` is a
+      # `str.replace` and two f-strings. Recorded here into a scratch directory and DIFFED
+      # against the committed Windows recording, which turns both declarations into a
+      # measurement on the second operating system instead of a reading of the source. This
+      # is Task 8c's method — the residual diff between two machines IS the machine-state
+      # detector — aimed at a claim rather than at a corpus.
+      #
+      # BOTH DIFFS RUN, AND THAT IS NOT TIDINESS. The step is `bash -e`: run 31554447437
+      # aborted on the first `diff` (a `python: 3.13.5` against `3.13.15` that nothing reads)
+      # and never reached the second, where `win_user_path.json`'s `recorded_on: win32` was a
+      # leak of the same class waiting behind it. A gate that reports one finding per run
+      # takes one run per finding.
+      #
+      # THE HELP CORPUS IS THE THIRD SUCH CLAIM (Task 10). `tests/record_help.py` calls
+      # `parser.format_help()` in process rather than capturing 26 subprocesses, so no newline
+      # translation reaches it, and it pins `COLUMNS` so argparse's wrap column cannot come
+      # from the recorder's terminal. Both of those are DECLARATIONS until a second operating
+      # system records the same bytes, which is what the `diff -r` below makes them.
+      - name: the platform-independent corpora are platform-independent
+        run: |
+          mkdir -p /tmp/xplat
+          python tests/test_pure_function_parity.py --record-dwidth /tmp/xplat/dwidth.json
+          python tests/test_win_user_path.py --record /tmp/xplat/win_user_path.json
+          python tests/record_help.py /tmp/xplat/help
+          rc=0
+          diff /tmp/xplat/dwidth.json tests/__snapshots__/dwidth.json || rc=1
+          diff /tmp/xplat/win_user_path.json tests/__snapshots__/win_user_path.json || rc=1
+          diff /tmp/xplat/help/cli_reference.json tests/__snapshots__/cli_reference.json || rc=1
+          diff -r /tmp/xplat/help/help tests/__snapshots__/help || rc=1
+          # THE FOURTH CLAIM, and the sharpest one this file makes about an oracle. The
+          # committed `textwrap.json` was recorded on a PRE-gh-139065 interpreter with the
+          # upstream one-liner applied by `record_help.Gh139065`; this runner's `python-version:
+          # "3.13"` resolves post-fix and needs no correction. Byte-identical output is the
+          # measurement that the correction reproduces the fix rather than approximating it —
+          # the two machines are running genuinely different `textwrap` code.
+          diff /tmp/xplat/help/textwrap.json tests/__snapshots__/textwrap.json || rc=1
+          exit $rc
+      # RECORD TWICE, DIFF — the rot detector Task 8 added and 8c found the limit of. Two
+      # recordings minutes apart on one image agree unless the corpus embeds a clock or a
+      # per-run temp name; the step above is the one that catches a machine.
+      - name: recording the help corpus twice gives the same bytes
+        run: |
+          python tests/record_help.py /tmp/xplat/help2
+          diff -r /tmp/xplat/help2 /tmp/xplat/help
+      # Recorded and replayed in the same run, for the reason the emit corpus gives above: a
+      # corpus that was never replayed is committed, plausible and unusable.
+      - name: replay the four CPython-oracle corpora against the port
+        run: node --test tests/pure_snapshot.test.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-lf
+          path: tests/__snapshots__/
 
   # The web UI (web/) is a Vite/React app with its own toolchain, so it gets a
   # dedicated job: lint, format check, unit tests, and a production build. Linux
@@ -119,3 +265,27 @@ jobs:
         run: npm test
       - name: production build
         run: npm run build
+      - name: dist is fresh
+        # web/dist is TRACKED and hand-committed, and it is in package.json's files[]. A
+        # web/src change that was never rebuilt ships a console that does not match its
+        # source: the daemon serves stale code, then fails hard on MIME after the next
+        # rebuild. `npm run build` above is a compile check; this is the freshness check.
+        # Run from the repo root, because dist lives outside this job's working-directory.
+        #
+        # TWO COMMANDS, BECAUSE `git diff` CANNOT SEE AN UNTRACKED FILE. Vite names every
+        # chunk with a content hash, so a source change that adds or renames a lazy chunk
+        # writes a file git has never heard of — and `git diff` reports only tracked paths, so
+        # that build passed this gate. It was caught indirectly at best, via whichever tracked
+        # chunk happened to reference the new name. `git status --porcelain` lists untracked
+        # paths (`??`) as well as modified ones, so the second command is the assertion the
+        # comment above actually claims. Both run: `git diff` names WHAT changed in a
+        # reviewable form, the status check is what makes the gate complete.
+        working-directory: .
+        run: |
+          git diff --exit-code --stat -- web/dist
+          drift="$(git status --porcelain -- web/dist)"
+          if [ -n "$drift" ]; then
+            echo "web/dist is not what web/src builds to — rebuild and commit:"
+            echo "$drift"
+            exit 1
+          fi

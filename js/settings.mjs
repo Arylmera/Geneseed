@@ -39,7 +39,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {
   jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, pyEq, pyRepr, indexOfEq,
-  readText, writeText,
+  pyPrintErr, readText, writeText,
 } from './lib/pyfs.mjs';
 
 export const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
@@ -310,10 +310,25 @@ export function shimHome() {
   return env ? expanduser(env) : path.join(os.homedir(), '.geneseed');
 }
 
-/** `Path(x).expanduser()` — only the `~` and `~/…` forms Python expands with no username. */
+/**
+ * `Path(x).expanduser()` — private twin of `js/hosts.mjs`'s `expanduser`, same guard.
+ *
+ * `GENESEED_HOME` is user-set, same as any config-dir env var there, so a `~user` value here
+ * has the identical failure mode (a hook shim written under a literal `~user` directory) and
+ * gets the identical fix — refuse rather than pass through. See that file's docblock for why
+ * the refusal lives IN the primitive rather than at `shimHome`'s caller.
+ */
 function expanduser(p) {
   if (p === '~') return os.homedir();
   if (p.startsWith('~/') || p.startsWith('~\\')) return path.join(os.homedir(), p.slice(2));
+  if (p.startsWith('~')) {
+    const msg = `refusing '${p}': a '~user' path is not expanded by this port; pass an `
+      + 'absolute path, or "~" / "~/…" for your own home directory';
+    pyPrintErr(`${msg}\n`);
+    const e = new Error(msg);
+    e.exitCode = 1;
+    throw e;
+  }
   return p;
 }
 

@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "bf7dfd921a85a6085fa68749e33f23806c8271b3967d15052009d98c17022eda",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "60e170a18148d0454cbb629604cbd64d23e7ebc6ab31fd8ce0660c29e1c80f81",
+    "repo/.claude/settings.local.json": "cb8ecd9c30b2b61ff291f72001f7cdd138205b932f0eff2c7057123a6b553c19",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 26,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 411,
+    "repo/.claude/settings.local.json": 19,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo\nrepo/.claude",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[uninstall] target: <SB>\\repo (claude:project)\n[uninstall] removes: agents/, skills/, markers, the CLAUDE.md managed block, and Geneseed's settings.json hooks/excludes (your own keys/hooks are kept).\n[uninstall] memory/ and notebook/ are kept in place (never deleted here).\n[uninstall] done — removed 1 file(s); settings.json updated where needed; memory/notebook kept in place. Start a new session to apply.\n"
+  }
+}

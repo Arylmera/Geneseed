@@ -83,6 +83,7 @@ from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import golden  # noqa: E402  (needs tests/ on the path first)
+import snapshot_io  # noqa: E402
 
 ROOT = golden.ROOT
 FAKE_LLM = ROOT / "tests" / "fixtures" / "fake_llm.py"
@@ -200,7 +201,7 @@ def cells() -> list[dict]:
 # ONE GROUP IN THIS FILE DIFFERS BY HOST, and the declaration is here rather than inside it
 # so that "what this run did not cover" is a fact about the SUITE and not a comment in a
 # function nobody opens. `link` and `unlink` are two different programs on the two platforms
-# — a `.cmd` shim plus a registry Path edit on Windows, a symlink plus an `export PATH` hint
+# — a `.cmd` shim plus a registry Path edit on Windows, a `sh` shim plus an `export PATH` hint
 # on Unix — so no host can run both halves and the union is what the matrix claims.
 #
 # WHY IT IS A TABLE AND NOT A `sys.platform` CHECK LEFT WHERE IT WAS. `_link_cells` used to
@@ -225,11 +226,11 @@ PLATFORM_ONLY: "dict[str, str]" = {
     "link/reports-a-manual-step-when-the-dir-is-not-on-path": "win32",
     "unlink/unlink-removes-the-shim": "win32",
     "unlink/unlink-with-nothing-linked-says-so": "win32",
-    "link/symlinks-the-launcher-and-finds-the-dir-already-on-path": "posix",
+    "link/writes-the-launcher-shim-and-finds-the-dir-already-on-path": "posix",
     "link/reports-the-export-line-when-the-dir-is-not-on-path": "posix",
     "link/a-path-entry-that-merely-contains-the-dir-is-not-a-match": "posix",
     "link/an-explicit-dir-argument-is-used-instead-of-the-default": "posix",
-    "unlink/unlink-removes-a-symlink-it-made-and-leaves-a-foreign-one-alone": "posix",
+    "unlink/unlink-removes-a-shim-it-made-and-leaves-a-foreign-one-alone": "posix",
     # Distinct from the Windows one above on purpose: the two arms print different sentences
     # (`found.` vs `found on PATH`) and a shared id would make the union unrepresentable.
     "unlink/unlink-on-a-path-with-no-launcher-says-so": "posix",
@@ -445,6 +446,30 @@ def _context_cells() -> list[dict]:
             # pointed at `pyPathStr` and a different NAME is all it took to hide the twin.
             world=dict(_DOCS_WORLD, **{
                 "cfg/excludes.json": '{"excludes": [{"path": "{repo/}/../repo"}]}\n'}),
+            steps=[{"argv": ["context", "--root", "{cfg}"], "cwd": "repo"}],
+            expect=["PROJECT CONTEXT"]),
+        ctx(id="context/sovereign-bypass-does-not-match-a-tilde-user-entry",
+            # The direct sequel to the `..` cell above, and the same defect class: a
+            # `str(Path(entry).expanduser())` the two implementations did not share. The hook
+            # had a PRIVATE `expanduser` returning `~user` untouched while `js/hosts.mjs`'s
+            # single owner REFUSES the form — so the hook was quietly exempt from an
+            # adjudicated decision (`TheTildeUserFormIsADeliberateDivergence`) by owning a
+            # second copy. Importing the owner makes the refusal THROW, and the reference
+            # raises RuntimeError on the same input on POSIX, so both sides now guard the
+            # entry and skip it.
+            #
+            # WHAT THIS CELL SEES, PER HOST, and neither half is the whole gate:
+            #   * win32 — the reference never raises (`ntpath` guesses `C:\\Users\\nosuch`,
+            #     which is not the sandbox cwd, so: no bypass). The port would CRASH without
+            #     its guard, and a crashing hook exits non-zero with a stack trace where the
+            #     reference exits 0 with the context. That is what makes it discriminating
+            #     here.
+            #   * posix — the REFERENCE crashes without its guard. Unverified on this
+            #     machine; only a Linux run closes that half.
+            # Either way the asserted behaviour is one sentence: a `~user` entry grants no
+            # bypass, and the hook still injects.
+            world=dict(_DOCS_WORLD, **{
+                "cfg/excludes.json": '{"excludes": [{"path": "~nosuchuser/repo"}]}\n'}),
             steps=[{"argv": ["context", "--root", "{cfg}"], "cwd": "repo"}],
             expect=["PROJECT CONTEXT"]),
         ctx(id="context/sovereign-malformed-degrades-to-off",
@@ -963,9 +988,6 @@ def _exclude_cells() -> list[dict]:
 #   * `_status_data` -> `_tui_inventory(theme)` -> `build.render_all(theme)` renders the
 #     WHOLE of `<checkout>/src` to count agents, skills and laws, and
 #     `build.source_fingerprint()` hashes `src/ themes/ adapters/` for the version row.
-#   * `_installed_defaults()` and `cmd_version`'s fallback chain both walk
-#     `ROOT / "Harness"` and `ROOT.parent / "Harness"` — the checkout's own bundle
-#     locations, not the sandbox's.
 #
 # `golden.cell_env` redirects HOME/XDG/APPDATA and clears the relocation vars; none of that
 # reaches ROOT. It CANNOT: `_build_core.ROOT` is `Path(__file__).resolve().parent`, every
@@ -976,6 +998,16 @@ def _exclude_cells() -> list[dict]:
 # fixture tree, and copying the checkout into the sandbox would buy nothing — its `src/`
 # content is the live one, so the counts and the fingerprint would not change.
 #
+# WHAT LEFT THIS LIST IN WAVE 2 OF THE P0/P1 REVIEW. `_installed_defaults()`, `_status_data`
+# and `cmd_version`'s fallback chain used to walk `ROOT / "Harness"` (and, in the first,
+# `ROOT.parent / "Harness"`) — the checkout's own bundle locations, not the sandbox's. That
+# was the one input here a fixture could not fence AND a cell could observe: on a checkout
+# carrying a built `Harness/`, four web cells recorded this developer's install instead of
+# the "nothing deployed" answer a fresh clone gives, on a half CI never replays. The three
+# walks are cwd-relative now, so the sandbox's own cwd is the only bundle candidate. What
+# remains unfenceable is the RENDER — `src/` counts and the source fingerprint — which is
+# the same on any checkout of the same commit and is gated by shape, below.
+#
 # Two consequences, both deliberate:
 #
 #   1. The counts and the fingerprint are gated by COMPARISON (both sides render the same
@@ -983,16 +1015,16 @@ def _exclude_cells() -> list[dict]:
 #      and absolutely only by SHAPE, via `expect_re`. A cell naming `17 agents` rots the
 #      next time content lands; a cell naming a literal fingerprint rots every commit, and
 #      `test_no_cell_hardcodes_a_source_fingerprint` refuses one.
-#   2. Every cell seeds a marker in the FIRST candidate the walk visits, so the
-#      unfenceable ones are never reached for any value the panel prints. What that leaves
-#      out is recorded rather than hidden: `Harness/` is gitignored, so a "no install
-#      anywhere" cell would report this developer's real install here and "(none found)" on
-#      a fresh clone. `_manifest_is_claude` is worse — it is only reached for a candidate
-#      with no known host, and `ROOT / "Harness"` is ordered AHEAD of the sandbox's own
-#      `Harness/`, so it is unreachable from any cell on a checkout that has one.
-#      `_accent_for`'s cyan fallback and `_version_verdict`'s "up to date" are unreachable
-#      for their own reasons (an unknown theme is refused upstream; "up to date" needs a
-#      marker holding a fingerprint no cell can know). All four are gated as PURE
+#   2. Every cell seeds a marker in the FIRST candidate the walk visits, which is how these
+#      two verbs stayed reproducible while the walk still ended in the checkout. Since the
+#      pin that is belt AND braces: a cell that seeds NOTHING now reports "(none found)"
+#      here exactly as it does on a fresh clone, which is what the four web cells were
+#      recording wrong. `_manifest_is_claude` is reachable again for the same reason — it
+#      needs a candidate with no known host, and `cwd / "Harness"` is now the only one —
+#      though no cell seeds a manifest without an emit marker, so it is still gated only by
+#      the corpus. `_accent_for`'s cyan fallback and `_version_verdict`'s "up to date" stay
+#      unreachable for their own reasons (an unknown theme is refused upstream; "up to date"
+#      needs a marker holding a fingerprint no cell can know). All three are gated as PURE
 #      FUNCTIONS over a corpus instead — `tests/test_pure_function_parity.py`.
 #
 # Cost, measured rather than assumed: 0.14 s per invocation for either verb. `render_all`
@@ -3269,11 +3301,12 @@ def _link_cells() -> list[dict]:
     """`link` / `unlink` — P10b, and the ONE group in this file whose cells differ by host.
 
     The two arms are different programs. On Windows the verb writes a `.cmd` shim naming an
-    interpreter and edits the persistent user Path; on Unix it symlinks `ROOT/geneseed` into
-    a bin dir and prints an `export PATH=…` hint. Neither host can run the other's, so the
-    group is a UNION declared in `PLATFORM_ONLY` and the runner announces the half it is not
-    running. A group that quietly returned `[]` is what the Unix arm used to be — and it was
-    invisible from Windows, where it looked exactly like a group that had been written.
+    interpreter and edits the persistent user Path; on Unix it writes a small `sh` shim
+    naming its own interpreter into a bin dir and prints an `export PATH=…` hint. Neither
+    host can run the other's, so the group is a UNION declared in `PLATFORM_ONLY` and the
+    runner announces the half it is not running. A group that quietly returned `[]` is what
+    the Unix arm used to be — and it was invisible from Windows, where it looked exactly
+    like a group that had been written.
     """
     return _link_cells_win() if sys.platform == "win32" else _link_cells_posix()
 
@@ -3288,8 +3321,8 @@ def _lk(name, argv, **kw) -> dict:
     return dict(id=f"{argv[0]}/{name}", bin="cli", **kw)
 
 
-#: The Unix launcher `link` symlinks, relative to the sandbox's HOME — `~/.local/bin/geneseed`.
-_LINK_SYMLINK = "home/.local/bin/geneseed"
+#: The Unix launcher `link` shim, relative to the sandbox's HOME — `~/.local/bin/geneseed`.
+_LINK_SHIM_POSIX = "home/.local/bin/geneseed"
 
 
 def _link_cells_posix() -> list[dict]:
@@ -3299,7 +3332,7 @@ def _link_cells_posix() -> list[dict]:
     was true of the machine and not of the code: a Windows host has no symlink privilege and
     no `~/.local/bin` worth writing to. Nothing about the arm was hard to reach — the sandbox
     already redirects HOME, which is the only input `Path.home() / '.local' / 'bin'` reads —
-    so on a Linux host these five cells are ordinary cells, and four of them exercise a
+    so on a Linux host these six cells are ordinary cells, and four of them exercise a
     divergence risk the Windows arm does not carry:
 
       * THE DIR ARGUMENT IS A `Path` ON ONE SIDE AND A STRING ON THE OTHER. The reference does
@@ -3309,23 +3342,28 @@ def _link_cells_posix() -> list[dict]:
       * THE PATH TEST IS A SPLIT, not a substring: `str(target_dir) in PATH.split(os.pathsep)`.
         The Windows arm's is `.lower() in .lower()`, so the two halves of `link` fail
         differently and only this one can catch a port that reached for `includes`.
-      * `unlink` WALKS PATH and follows `os.readlink` WITHOUT resolving it, so a symlink named
-        `geneseed` that points at something else must be left alone. That is the security-ish
-        clause of the verb and no Windows cell has an analogue for it.
+      * `unlink` WALKS PATH and must leave a foreign `geneseed` alone. Since Task 2b that is
+        a MARKER check, not `is_symlink()`: both implementations write a `#!/bin/sh` shim
+        carrying `# GENESEED_LINK_SHIM`, and the decoy in the cell below is a REGULAR FILE
+        (`#!/bin/sh\\nnot ours\\n`), so the marker is the only thing that can reject it. The
+        `is_symlink()` branch still exists for legacy symlink installs and no cell supplies a
+        symlink decoy — that half is stated, here, rather than gated. This is the
+        security-ish clause of the verb and no Windows cell has an analogue for it.
     """
     # `{home}/.local/bin` on PATH, which is the arm that prints "is on PATH". Spelled with
     # `{home}` rather than `~`: nothing expands a tilde inside PATH.
     on_path = {"PATH": "{home}/.local/bin"}
     return [
-        _lk("symlinks-the-launcher-and-finds-the-dir-already-on-path", ("link",),
+        _lk("writes-the-launcher-shim-and-finds-the-dir-already-on-path", ("link",),
             env=dict(on_path),
-            # The arrow line names ROOT, which normalises to `<REPO>` on both sides, so the
-            # whole message is comparable — unlike the Windows shim, whose body bakes a
-            # runtime and has to be destamped.
+            # The arrow line names the entry point, which is the SAME runner/entry stamp
+            # as the Windows shim's body — the reference bakes `sys.executable` +
+            # `rituals/harness.py`, the port bakes `process.execPath` + `bin/geneseed-cli.mjs`,
+            # and `_STAMPS` normalises both the file and this line the same way.
             expect=["geneseed: linked ", " -> ", "is on PATH — run 'geneseed' from anywhere."],
             # The absolute half: the ELSE branch must not be what this cell is looking at.
             expect_absent=["is not on your PATH", "export PATH="],
-            expect_files=[_LINK_SYMLINK]),
+            expect_files=[_LINK_SHIM_POSIX]),
         _lk("reports-the-export-line-when-the-dir-is-not-on-path", ("link",),
             # A directory that EXISTS and holds nothing, so the split finds no match. The
             # reference compares `str(Path)` against the split parts, so a port using a
@@ -3336,7 +3374,7 @@ def _link_cells_posix() -> list[dict]:
             expect=["geneseed: linked ", "is not on your PATH. Add it, e.g.:",
                     "export PATH="],
             expect_absent=["is on PATH — run"],
-            expect_files=[_LINK_SYMLINK]),
+            expect_files=[_LINK_SHIM_POSIX]),
         _lk("a-path-entry-that-merely-contains-the-dir-is-not-a-match", ("link",),
             # THE SPLIT, isolated. `{home}/.local/binaries` CONTAINS `{home}/.local/bin` as a
             # substring and is not the same directory, so the reference prints the manual
@@ -3346,7 +3384,7 @@ def _link_cells_posix() -> list[dict]:
             env={"PATH": "{home}/.local/binaries"},
             expect=["is not on your PATH. Add it, e.g.:"],
             expect_absent=["is on PATH — run"],
-            expect_files=[_LINK_SYMLINK]),
+            expect_files=[_LINK_SHIM_POSIX]),
         _lk("an-explicit-dir-argument-is-used-instead-of-the-default",
             ("link", "{sb}/mybin/"),
             # THE TRAILING SLASH IS THE POINT. `Path("/x/mybin/")` renders as `/x/mybin`, and
@@ -3357,17 +3395,17 @@ def _link_cells_posix() -> list[dict]:
             world={"repo/.keep": "", "nowhere/.keep": ""},
             expect=["geneseed: linked ", "is not on your PATH"],
             expect_files=["mybin/geneseed"],
-            expect_absent_files=[_LINK_SYMLINK]),
-        _lk("unlink-removes-a-symlink-it-made-and-leaves-a-foreign-one-alone",
+            expect_absent_files=[_LINK_SHIM_POSIX]),
+        _lk("unlink-removes-a-shim-it-made-and-leaves-a-foreign-one-alone",
             ("unlink",),
             # BOTH directories are on PATH, so `unlink` really walks the decoy — a decoy the
             # verb never looks at proves nothing (P6c).
             env={"PATH": "{home}/.local/bin:{sb}/decoy"},
-            # TWO STEPS, because `world` seeds text files and this verb only removes SYMLINKS
-            # — a seeded regular file named `geneseed` is not what it is looking for. Step
-            # one makes the real link; only step two's streams are compared. The decoy is
-            # exactly that seeded regular file: same name, on PATH, and `is_symlink()` is
-            # what has to reject it.
+            # TWO STEPS, because `world` seeds a plain text file and this verb only removes
+            # its OWN two shapes — a seeded regular file with no `GENESEED_LINK_SHIM` marker
+            # is not what it is looking for. Step one makes the real link; only step two's
+            # streams are compared. The decoy is exactly that seeded regular file: same
+            # name, on PATH, unmarked — the marker check is what has to reject it.
             world={"repo/.keep": "", "decoy/geneseed": "#!/bin/sh\nnot ours\n"},
             steps=[{"argv": ["link"], "cwd": "repo"},
                    {"argv": ["unlink"], "cwd": "repo"}],
@@ -3375,14 +3413,14 @@ def _link_cells_posix() -> list[dict]:
             expect_absent=["no linked launcher found on PATH"],
             # The absolute half of a DELETION (P5h): without it two implementations that
             # both stopped unlinking compare equal.
-            expect_absent_files=[_LINK_SYMLINK],
+            expect_absent_files=[_LINK_SHIM_POSIX],
             expect_files=["decoy/geneseed"]),
         _lk("unlink-on-a-path-with-no-launcher-says-so", ("unlink",),
             env={"PATH": "{sb}/nowhere"},
             world={"repo/.keep": "", "nowhere/.keep": ""},
             expect=["geneseed: no linked launcher found on PATH"],
             expect_absent=["geneseed: removed "],
-            expect_absent_files=[_LINK_SYMLINK]),
+            expect_absent_files=[_LINK_SHIM_POSIX]),
     ]
 
 
@@ -4054,7 +4092,26 @@ _STAMPS = (
     # `test_the_link_shim_names_each_runtimes_own_entry_point` in tests/test_hook_cli_parity.py,
     # which runs both binaries into a sandboxed HOME and asserts each shim absolutely.
     (re.compile(r'^"[^"\r\n]+" "[^"\r\n]+" %\*', re.M), '"<RUNNER>" "<ENTRY>" %*'),
+    # ---- the SAME rule again, for the Unix shim -------------------------------------------
+    #
+    # `link` on Unix writes `~/.local/bin/geneseed`, a `sh` script whose one real line is
+    # `exec "<runner>" "<entry>" "$@"` — the same runner/entry split as the Windows shim
+    # above, just POSIX syntax. Anchored at line start with two non-empty quoted values,
+    # `"$@"` itself left OUTSIDE the match so a side that stopped quoting it still shows up
+    # as a real difference rather than comparing equal through the stamp.
+    (re.compile(r'^exec "[^"\r\n]+" "[^"\r\n]+" "\$@"', re.M), 'exec "<RUNNER>" "<ENTRY>" "$@"'),
+    # `cmd_link`'s "linked <dest> -> <entry>" line names the same entry point a second time,
+    # in stdout rather than a file — `dest` is inside HOME and already comparable once
+    # normalised, only the `-> <entry>` tail needs the stamp. Anchored to the one message
+    # this verb prints, so it cannot reach any other `->` in the corpus.
+    (re.compile(r'^(geneseed: linked .+) -> .+$', re.M), r'\1 -> <ENTRY>'),
 )
+# The build date and the live source fingerprint are NOT destamped here, and that is
+# deliberate. They are identical on both sides of a live cell — one clock, one checkout —
+# so this gate compares them in full, including the cross-implementation claim that
+# `sourceFingerprint()` answers what `source_fingerprint()` does. They move only between
+# two RUNS, which is a threat to a recorded corpus and to nothing else, so they are
+# normalised there and only there: see `golden.CORPUS_STAMPS`.
 
 
 def _destamp(data: bytes) -> bytes:
@@ -4553,8 +4610,18 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
         return snap
 
 
-def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
-    """The absolute assertions, run against the REFERENCE side.
+def check_expectations(cell: dict, snap: "dict[str, bytes]",
+                       side: str = "the reference") -> list[str]:
+    """The absolute assertions, run against whichever side the run has: the REFERENCE on the
+    live pair and under `--record`, the CANDIDATE under `--against`.
+
+    `side` NAMES WHICH ONE IT READ, and it is a parameter rather than a fixed word because a
+    gate that misreports its own subject is the believed-oracle failure in miniature — every
+    message below would otherwise blame `rituals/harness.py` for a sentence the port did not
+    print.
+
+    They are ABSOLUTE — each states what an implementation must actually print — so they hold
+    on either side, which is what lets them survive the reference's deletion.
 
     This is the half a comparison cannot do. The four hook verbs are silent on almost every
     path by design, so two implementations that both stopped working would agree in every
@@ -4571,22 +4638,22 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     text = (snap["<stdout>"] + b"\n" + snap["<stderr>"]).decode("utf-8", "replace")
     for want in cell.get("expect", ()):
         if want not in text:
-            problems.append(f"the reference no longer prints {want!r} — this cell has "
+            problems.append(f"{side} no longer prints {want!r} — this cell has "
                             f"stopped exercising what it names")
     for unwanted in cell.get("expect_absent", ()):
         if unwanted in text:
-            problems.append(f"the reference now prints {unwanted!r}, which this cell "
+            problems.append(f"{side} now prints {unwanted!r}, which this cell "
                             f"exists to prove it leaves out")
     for pat in cell.get("expect_re", ()):
         if not re.search(pat, text):
-            problems.append(f"the reference's output no longer matches {pat!r} — this "
+            problems.append(f"{side}'s output no longer matches {pat!r} — this "
                             f"cell has stopped exercising what it names")
     if cell.get("expect_silent") and snap["<stdout>"].strip():
-        problems.append("the reference printed on stdout, but this cell exists to prove "
+        problems.append(f"{side} printed on stdout, but this cell exists to prove "
                         f"it stays silent: {snap['<stdout>'][:160]!r}")
     for want in cell.get("expect_files", ()):
         if want not in snap:
-            problems.append(f"the reference did not write {want} — this cell cannot tell "
+            problems.append(f"{side} did not write {want} — this cell cannot tell "
                             f"whether the candidate does")
     # The absolute half of a DELETION, and the sixth kind. `expect_files` says the
     # reference wrote something; nothing said the reference REMOVED something, and for
@@ -4619,16 +4686,44 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     kept = set(snap["<dirs>"].decode("utf-8").split("\n")) if want_absent else set()
     for unwanted in want_absent:
         if unwanted in snap or unwanted in kept:
-            problems.append(f"the reference left {unwanted} behind, and this cell exists "
+            problems.append(f"{side} left {unwanted} behind, and this cell exists "
                             f"to prove it removes it")
     return problems
 
 
-def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1) -> int:
-    """`ref` and `new` map a cell's `bin` ("hook"/"cli") to the command that answers it."""
+def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1,
+            record: "str | None" = None, against: "str | None" = None,
+            narrowed: "str | None" = None) -> int:
+    """`ref` and `new` map a cell's `bin` ("hook"/"cli") to the command that answers it.
+
+    Three things this can do to the matrix, sharing one runner — the same three
+    `golden.compare` does, wired the same way and writing the same corpus format.
+
+    Plain (record and against both None): run BOTH sides of every cell and compare every
+    byte either one wrote. The original gate, and it dies with the reference.
+    `record`: run ONLY `ref` and write each cell's snapshot to `record`. This is how the
+    reference's answer to 318 CLI cells outlives `rituals/harness.py`.
+    `against`: run ONLY `new` and compare it to a corpus recorded earlier. A cell the
+    corpus has no entry for is a FAILURE, not a skip — see `golden._against_cell`.
+    """
     shown = " · ".join(f"new[{k}]={' '.join(v)}" for k, v in sorted(new.items()))
-    print(f"[harness-golden] {len(matrix)} cells · ref={' '.join(ref['hook'])} · {shown}"
-          f" · jobs={jobs}")
+    if record:
+        print(f"[harness-golden] {len(matrix)} cells · recording "
+              f"ref={' '.join(ref['hook'])} -> {record} · jobs={jobs}")
+        # See `golden.compare`: one flat file per cell, so two cell ids that collapse onto
+        # one corpus FILENAME would record 317 answers for 318 cells and `--against` would
+        # then pass over a corpus quietly missing one. Asserted before the first write, so a
+        # collision costs no run and leaves no half-written corpus on disk.
+        names = {snapshot_io._safe(c["id"]) for c in matrix}
+        assert len(names) == len(matrix), (
+            f"{len(matrix)} cells collapse onto {len(names)} corpus filenames — two distinct "
+            "cell ids map to one file, so the recorded corpus would be silently short")
+    elif against:
+        print(f"[harness-golden] {len(matrix)} cells · {shown} · against corpus {against}"
+              f" · jobs={jobs}")
+    else:
+        print(f"[harness-golden] {len(matrix)} cells · ref={' '.join(ref['hook'])} · {shown}"
+              f" · jobs={jobs}")
     # WHAT THIS RUN CANNOT COVER, said by the run itself. A suite that silently drops a
     # group on one operating system reads exactly like a suite that never had it — which is
     # what `link`/`unlink`'s Unix arm was for ten phases. See `PLATFORM_ONLY`.
@@ -4637,6 +4732,11 @@ def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1)
         print(f"[harness-golden] {len(skipped)} cell(s) declared for the other platform and "
               f"NOT run here ({this_platform()}): {', '.join(skipped)}")
     failures: list[str] = []
+    if against:
+        # The other direction of `_against_cell`'s single failure — see `golden.orphan_check`.
+        orphans = golden.orphan_check(against, {c["id"] for c in matrix}, narrowed)
+        if orphans:
+            failures.append(orphans)
 
     def _pair(cell: dict) -> tuple:
         """Both sides of ONE cell. `run_cell` builds two throwaway temp dirs, seeds its own
@@ -4644,8 +4744,15 @@ def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1)
         that sandbox — it shares nothing with another cell and depends on no ordering, which
         is what makes running them at once a change to the clock and not to the gate. The
         `doctor` cells are why it is worth doing: each one copies 511 tracked files TWICE
-        (see `_copy_checkout`) on top of two ~2 s runs of the verb."""
+        (see `_copy_checkout`) on top of two ~2 s runs of the verb.
+
+        Or just the ONE side `--record`/`--against` needs, which is also why each of those
+        two runs in roughly half the wall clock of the plain gate."""
         which = cell.get("bin", "hook")
+        if record:
+            return run_cell(ref[which], cell), None
+        if against:
+            return None, run_cell(new[which], cell)
         return run_cell(ref[which], cell), run_cell(new[which], cell)
 
     # `pool.map` yields in submission order, so the failure list and the `--limit` cut read
@@ -4655,7 +4762,28 @@ def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1)
     with pool:
         for i, (cell, (a, b)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
             cid = cell["id"]
-            if isinstance(a, str) or isinstance(b, str):
+            if record or against:
+                # THE ABSOLUTE TIER, ON WHICHEVER SIDE THIS RUN HAS — and it belongs on both.
+                # These 244 `expect_*` declarations used to run ONLY on the live pair, i.e.
+                # only while `rituals/harness.py` still exists. That left the two surviving
+                # modes as pure hash work: `--against` a bare byte compare, and `--record` a
+                # BLIND BLESSING of whatever the cells happen to produce — which is exactly
+                # how Task 7 banked six anchor cells with empty verbatim text. The
+                # expectations are ABSOLUTE (they state what the implementation must say, not
+                # that two agree), so they hold against the candidate as readily as the
+                # reference. Checked BEFORE the write/compare, so a cell that has stopped
+                # exercising what it names is never recorded and never blessed.
+                snap, whose = (a, "the reference") if record else (b, "the candidate")
+                vacuous = ([] if isinstance(snap, str)
+                           else check_expectations(cell, snap, side=whose))
+                if vacuous:
+                    failures.append(f"  {cid}: VACUOUS\n"
+                                    + "\n".join(f"    {p}" for p in vacuous))
+                elif record:
+                    golden._record_cell(record, cid, a, failures)
+                else:
+                    golden._against_cell(against, cid, b, failures)
+            elif isinstance(a, str) or isinstance(b, str):
                 failures.append(f"  {cid}: CLI failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                                 f"\n    new: {b if isinstance(b, str) else 'ok'}")
             elif (vacuous := check_expectations(cell, a)):
@@ -4673,7 +4801,10 @@ def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1)
             if i % 20 == 0 or i == len(matrix):
                 print(f"[harness-golden]   {i}/{len(matrix)} ({len(failures)} failing)")
     if not failures:
-        print(f"[harness-golden] ok — {len(matrix)} cells identical")
+        if record:
+            print(f"[harness-golden] recorded {len(matrix)} cells to {record}")
+        else:
+            print(f"[harness-golden] ok — {len(matrix)} cells identical")
         return 0
     print(f"\n[harness-golden] {len(failures)}/{len(matrix)} cells DIFFER:\n")
     for f in failures[:limit]:
@@ -4731,10 +4862,32 @@ def main(argv=None) -> int:
                     help="cells to run CONCURRENTLY (default: %(default)s on this "
                          "machine). A cell is a self-contained sandbox, so this changes "
                          "only how long the gate takes, never what it compares.")
+    ap.add_argument("--record", metavar="DIR", default=None,
+                    help="run ONLY the reference and write each cell's snapshot to "
+                         "DIR/<crlf|lf>, instead of comparing. This is how the "
+                         "reference's answer outlives rituals/harness.py.")
+    ap.add_argument("--against", metavar="DIR", default=None,
+                    help="compare the candidate's live output against a corpus recorded "
+                         "earlier with --record into DIR/<crlf|lf>, instead of a live "
+                         "--ref. A cell with no recorded snapshot is a FAILURE, not a skip.")
     args = ap.parse_args(argv)
     if args.jobs < 1:
         print(f"[harness-golden] --jobs must be at least 1, got {args.jobs}")
         return 2
+    if args.record and args.against:
+        print("[harness-golden] --record and --against are mutually exclusive")
+        return 2
+    # Both flags name the corpus ROOT; `golden.PLATFORM_CORPUS` picks the subdirectory here
+    # rather than leaving it to the caller, so a recording and a replay on the same machine
+    # can never land in different places. The split is not a normalisation — see that
+    # constant. It bites harder here than on the emit matrix: this harness's cells write
+    # shims, install logs and memory stores through the same `os.linesep` text path, AND
+    # `PLATFORM_ONLY` already gives Windows and POSIX different `link`/`unlink` cells, so
+    # the two corpora do not even hold the same cell IDS.
+    if args.record:
+        args.record = str(Path(args.record) / golden.PLATFORM_CORPUS)
+    if args.against:
+        args.against = str(Path(args.against) / golden.PLATFORM_CORPUS)
 
     ref = _resolve_cli(golden._split(args.ref)) if args.ref else [
         sys.executable, str(ROOT / "rituals" / "harness.py")]
@@ -4751,6 +4904,16 @@ def main(argv=None) -> int:
     # binary was not supplied would silently compare the reference against ITSELF and pass,
     # which reads exactly like a ported verb — the same failure mode as `--only` matching
     # nothing, and refused the same way.
+    # `--against` REPLAYS THE CANDIDATE, so a missing candidate is not a default here. With
+    # neither binary supplied both keys below fall back to `ref`, and the run would compare
+    # the reference against its own recording — a determinism self-check wearing the
+    # regression gate's name, green by construction. Same refusal, and the same reason, as
+    # the `--new`-without-`--new-cli` check below and as `--only` matching nothing.
+    if args.against and not args.new:
+        print("[harness-golden] --against needs --new (and --new-cli): with no candidate "
+              "binary it would replay the REFERENCE against the reference's own recording, "
+              "which always passes.")
+        return 2
     new = {"hook": _resolve_cli(golden._split(args.new)) if args.new else ref,
            "cli": _resolve_cli(golden._split(args.new_cli)) if args.new_cli else ref}
     if args.new and not args.new_cli:
@@ -4761,7 +4924,9 @@ def main(argv=None) -> int:
                   f"({needs[0]}, ...). They would have been compared against the reference "
                   f"itself, which always passes. Pass --new-cli, or --only the hook verbs.")
             return 2
-    return compare({"hook": ref, "cli": ref}, new, matrix, args.limit, jobs=args.jobs)
+    return compare({"hook": ref, "cli": ref}, new, matrix, args.limit, jobs=args.jobs,
+                   record=args.record, against=args.against,
+                   narrowed=f"--only {args.only}" if args.only else None)
 
 
 if __name__ == "__main__":

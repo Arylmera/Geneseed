@@ -1,0 +1,32 @@
+{
+  "paths": {
+    "<daemon-record>": "380b7a62b3ee76b2c04092e2b9174c525c61d4b23153e032d8defe2188600377",
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<r1 body>": "ca2d4be9db2c9a6ccd7118e56153628a84d890b5ed647b9d4153ccfa9393abd1",
+    "<r1 headers>": "4b81455b3ae65cf5e63b178f201fad007bc798202c717729638fea7e3e53d9a6",
+    "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<server stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<server stdout>": "a2220f17b666a38e07f807abe1b4f584b70e0176ecd80a8f7a43d34a7fa9a06c"
+  },
+  "sizes": {
+    "<daemon-record>": 120,
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<r1 body>": 1282,
+    "<r1 headers>": 68,
+    "<r1 status>": 6,
+    "<server stderr>": 0,
+    "<server stdout>": 205
+  },
+  "verbatim": {
+    "<daemon-record>": "{\"pid\": <PID>, \"port\": <PORT>, \"started\": <T>, \"theme\": \"neutral\", \"token\": \"<TOKEN>\", \"url\": \"http://127.0.0.1:<PORT>\"}",
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "0",
+    "<r1 body>": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Geneseed — Harness Console</title>\n    <!-- PWA: installable as a standalone app with a dock/taskbar icon. -->\n    <meta name=\"theme-color\" content=\"#08090B\" />\n    <link rel=\"manifest\" href=\"/manifest.webmanifest\" />\n    <link rel=\"apple-touch-icon\" href=\"/icon.svg\" />\n    <!-- The brand sprout as an inline SVG favicon (no extra asset to serve). -->\n    <link rel=\"icon\" type=\"image/svg+xml\"\n      href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.5v-9' stroke='%233AD4C4' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3Cpath d='M12 13c0-4.5 3.2-7.5 7.5-7.5 0 4.5-3.2 7.5-7.5 7.5z' fill='%233AD4C4'/%3E%3Cpath d='M12 14.5c0-3.6-2.6-6-6-6 0 3.6 2.6 6 6 6z' fill='%233AD4C4' opacity='.42'/%3E%3C/svg%3E\" />\n    <script type=\"module\" crossorigin src=\"/assets/index-CS7zvdLk.js\"></script>\n    <link rel=\"modulepreload\" crossorigin href=\"/assets/react-DOpiTn5v.js\">\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-DUCsDv7z.css\">\n  <script>window.__GENESEED_TOKEN__=\"<TOKEN>\";</script></head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n",
+    "<r1 headers>": "Content-Type: text/html\nContent-Length: 1282\nCache-Control: no-store",
+    "<r1 status>": "200 OK",
+    "<server stderr>": "",
+    "<server stdout>": "[web] no deployed harness at <HOME>/.config/opencode.\n      Run `geneseed setup` first — serving anyway (read-only UI).\n[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: neutral)\n[web] daemon ready.\n"
+  }
+}

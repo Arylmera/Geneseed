@@ -1,0 +1,12 @@
+usage: harness doctor [-h] [--theme THEME] [--all] [--bundle BUNDLE]
+                      [--no-bundle]
+
+options:
+  -h, --help       show this help message and exit
+  --theme THEME
+  --all            sweep EVERY theme (maintainer full check / CI), not just
+                   the installed one — the default scopes to the installed
+                   theme
+  --bundle BUNDLE  committed bundle to check for drift vs a fresh render
+                   (default: ./Harness)
+  --no-bundle      skip the committed-bundle drift check

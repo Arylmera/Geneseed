@@ -6,7 +6,9 @@
  * exported functions and does nothing else — every branch it reaches is the port's own,
  * which is the only reason a probe is allowed to exist beside a byte matrix.
  */
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import {
   accentFor, defaultTheme, manifestIsClaude, statusLines, versionVerdict,
@@ -17,8 +19,13 @@ import { descBlockProblem, isVendoredPath, validateIsVendored } from '../../js/n
 import { proseMirrorProblems, romanToInt, themesToCheck } from '../../js/doctor.mjs';
 import { pyCapitalize } from '../../js/installs.mjs';
 import {
-  pyInt, pyIsAbsolute, pyLen, pyLjust, pyUnquote, pyWhich,
+  comparePaths, jsonDumpsCompact, normcase, parseJson, pyInt, pyIsAbsolute, pyLen, pyLjust,
+  pyPathStr, pyStripSpace, pyUnquote, pyWhich, writeText,
 } from '../../js/lib/pyfs.mjs';
+// `expanduser` and `pyResolve` are NOT in `pyfs.mjs` — they are host-config resolvers and
+// live beside the config-dir lookups that need them. Verified rather than assumed; the
+// private copies in `js/hooks.mjs` are a second pair and not these.
+import { expanduser, pyResolve } from '../../js/hosts.mjs';
 import { installedDefaults } from '../../js/installs.mjs';
 import { installAgentEntryOf } from '../../js/uninstall.mjs';
 import {
@@ -74,6 +81,13 @@ function withEnvAndStdout(env, tty, fn) {
   }
 }
 
+/** One scratch dir per process for `write_text_linesep`, made on first use. */
+let SCRATCH = null;
+const scratchFile = () => {
+  if (SCRATCH === null) SCRATCH = mkdtempSync(path.join(tmpdir(), 'pure-probe-'));
+  return path.join(SCRATCH, 't.txt');
+};
+
 const FNS = {
   version_verdict: (a) => versionVerdict(a[0], a[1]),
   status_lines: (a) => statusLines(a[0], a[1]),
@@ -99,6 +113,28 @@ const FNS = {
   validate_is_vendored: (a) => validateIsVendored(a[0]),
   py_which: (a) => pyWhich(a[0], a[1]),
   py_is_absolute: (a) => pyIsAbsolute(a[0]),
+
+  // ---- the primitives whose answers ARE the bytes on a user's disk --------------------
+  py_path_str: (a) => pyPathStr(a[0]),
+  py_resolve: (a) => pyResolve(a[0]),
+  // `pyPathStr` AFTER IT, because the reference's `expanduser` is a Path METHOD and this
+  // one is a string function: `Path("")` is `.` before `expanduser` is even consulted, so a
+  // raw comparison would score `py_path_str`'s job as an `expanduser` divergence. The
+  // composite is what `js/hooks.mjs` actually writes, and `py_path_str` gates its own half
+  // over its own corpus — so a real tilde divergence still shows through, and does.
+  expanduser: (a) => pyPathStr(expanduser(a[0])),
+  normcase: (a) => normcase(a[0]),
+  compare_paths: (a) => comparePaths(a[0], a[1]),
+  json_dumps: (a) => jsonDumpsCompact(a[0]),
+  parse_json_roundtrip: (a) => jsonDumpsCompact(parseJson(a[0])),
+  py_strip_space: (a) => pyStripSpace(a[0]),
+  // HEX, NOT TEXT — see the reference probe's comment. `readFileSync` with no encoding is
+  // the raw buffer, which is the only reading that can see `writeText`'s translation.
+  write_text_linesep: (a) => {
+    const p = scratchFile();
+    writeText(p, a[0]);
+    return readFileSync(p).toString('hex');
+  },
   install_agent_entry_of: (a) => installAgentEntryOf(a[0]),
   py_int: (a) => pyInt(a[0]),
   java_major_ok: (a) => javaMajorOk(...a),

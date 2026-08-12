@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -199,5 +200,102 @@ class TheScriptSaysWhatItIsSupposedToSay(unittest.TestCase):
                     self.assertNotIn("'Machine'", self.build(action, directory))
 
 
+SNAPSHOT = ROOT / "tests" / "__snapshots__" / "win_user_path.json"
+
+
+def record(dest: Path) -> Path:
+    """A SEPARATE CORPUS, and that is the whole reason this entry point exists.
+
+    Every migration plan for this branch assumed `win_user_path` rode along with the pure
+    probe. It does not: `win_user_path_script` appears ZERO times in
+    `tests/fixtures/pure_probe.py`, so nothing in `tests/__snapshots__/primitives/` would
+    have covered one line of it and the omission would have surfaced on the day the
+    reference was gone.
+
+    ONE FILE, NO PLATFORM SPLIT, and the claim is checkable rather than asserted.
+    `_win_user_path_script` is a `str.replace` and two f-strings — no `os.sep`, no
+    `os.linesep`, no `Path`, nothing that reads the host — so a Windows recording has to
+    replay on Linux. `TheRecordedCorpusStillMatchesTheReference` below is what makes that a
+    measurement: it runs on every host, and CI runs `validate` on ubuntu AND windows, so the
+    first Linux run either confirms the claim or names the row that breaks it. (The verb
+    itself is Windows-only; the string BUILDER is not, and only the builder is here.)
+
+    The DIRECTORY travels beside the script, so the replay drives `winUserPathScript` from
+    the corpus rather than from a hand-copied `CORPUS` — Task 8's rule that no cell id is
+    hand-written, one layer down.
+    """
+    import _harness_lifecycle
+    build = _harness_lifecycle._win_user_path_script
+    # EVERY FIELD HERE IS RE-RECORDED ON LINUX AND `diff`ED AGAINST THIS FILE — that is
+    # `record-corpus`'s "the platform-independent corpora are platform-independent" step, and
+    # it is the whole gate behind `platform_independent` below. So a field whose CORRECT value
+    # differs per recorder cannot live in this document: you may keep the value or the claim,
+    # not both.
+    #
+    # Two of them did. `"recorded_on": sys.platform` said `win32` here and `linux` there, and
+    # `platform.python_version()` said `3.13.5` here and `3.13.15` there. Only the second was
+    # ever reported, because the step runs under `bash -e` and aborted on the FIRST diff — the
+    # `dwidth.json` one — so `recorded_on` was a leak of the same class hiding behind a leak.
+    # `recorded_on` is gone (it was read by two failure messages and no gate; the corpus is
+    # PowerShell for the Windows PATH verb whoever types it) and `python` is major.minor: see
+    # `_recorded_with` in tests/test_pure_function_parity.py for the full argument.
+    doc = {
+        "corpus": "win_user_path",
+        "recorded_with": {"python": ".".join(platform.python_version_tuple()[:2]),
+                          "implementation": platform.python_implementation()},
+        "platform_independent": True,
+        "actions": list(ACTIONS),
+        "cases": [{"action": action, "row": name, "directory": directory,
+                   "script": build(action, directory)}
+                  for action in ACTIONS for name, directory in CORPUS.items()],
+    }
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n",
+                    encoding="utf-8", newline="\n")
+    return dest
+
+
+class TheRecordedCorpusStillMatchesTheReference(unittest.TestCase):
+    """The corpus, replayed against the implementation that produced it.
+
+    Two jobs, and the second is the one worth having. The first is the ordinary staleness
+    check — edit the builder, forget to re-record, this names the row. The second is the
+    PLATFORM ARGUMENT: this file is recorded on Windows and committed once, and `validate`
+    runs the unit suite on ubuntu-latest as well, so a POSIX run of this test is what turns
+    "the builder reads nothing host-shaped" from a reading of the source into a measurement.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        if not SNAPSHOT.exists():
+            raise unittest.SkipTest(
+                f"{SNAPSHOT} has not been recorded — run `python "
+                "tests/test_win_user_path.py --record tests/__snapshots__/win_user_path.json`")
+        cls.doc = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+
+    def test_every_recorded_case_still_builds_its_recorded_script(self):
+        import _harness_lifecycle
+        self.assertTrue(self.doc["cases"], "the recorded corpus is empty")
+        for case in self.doc["cases"]:
+            with self.subTest(action=case["action"], row=case["row"]):
+                self.assertEqual(
+                    _harness_lifecycle._win_user_path_script(case["action"],
+                                                             case["directory"]),
+                    case["script"],
+                    f"{case['action']}/{case['row']} no longer builds what the reference "
+                    "recorded")
+
+    def test_the_recording_covers_every_row_of_the_live_corpus(self):
+        """A recording is only a gate over what it recorded. Without this, deleting a row
+        from `CORPUS` and never re-recording leaves a green suite over a smaller corpus —
+        and adding one leaves it ungated by the file that outlives the reference."""
+        self.assertEqual({(c["action"], c["row"]) for c in self.doc["cases"]},
+                         {(a, n) for a in ACTIONS for n in CORPUS},
+                         "the recorded corpus and the live one are no longer the same set")
+
+
 if __name__ == "__main__":
+    if "--record" in sys.argv:
+        raise SystemExit(print(f"recorded "
+                               f"{record(Path(sys.argv[sys.argv.index('--record') + 1]))}"))
     unittest.main()

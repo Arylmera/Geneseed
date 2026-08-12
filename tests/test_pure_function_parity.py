@@ -69,8 +69,12 @@ output, including a literal escape sequence, so a probe that answered `[]` fails
 """
 from __future__ import annotations
 
+import datetime
+import getpass
+import hashlib
 import json
 import os
+import platform
 import random
 import re
 import shutil
@@ -79,10 +83,14 @@ import sys
 import tempfile
 import unicodedata
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import golden  # noqa: E402
+# For `this_platform()` only — the platform KEY is shared with `harness_golden.PLATFORM_ONLY`
+# on purpose, so the two platform-declared mechanisms in this suite cannot drift into
+# spelling the same host two different ways.
+import harness_golden  # noqa: E402
 
 ROOT = golden.ROOT
 PY_PROBE = ROOT / "tests" / "fixtures" / "pure_probe.py"
@@ -2374,5 +2382,758 @@ class TheDisplayTiersAreThreeAndTheCorpusReachesTwo(unittest.TestCase):
         self.assertNotIn("█", self.ascii_[3][0])
 
 
+#: The `str(Path(x))` corpus, NAMED because `PLATFORM_EXPECTED` below is a claim about it
+#: and a second copy of the list would let the two drift apart silently.
+#:
+#: A trailing slash is the cheapest divergence and the one `harness_golden`'s explicit-dir
+#: `link` cell found. Every entry runs on BOTH platforms; the answers differ on seven of
+#: them, which is what the table declares.
+#:
+#: `C:\x\bin\` and `//server/share/` are here because a drive path and a UNC root are what
+#: the reference parses on Windows — and because the SAME two strings are a one-component
+#: filename and a POSIX double-slash root on Linux. That pair is what found the
+#: platform-shaped bug in `pyPathStr`, which reproduced `ntpath` on both platforms.
+#: `a\b` and `\\srv\share\` are their POSIX twins, added with the fix: a backslash is an
+#: ordinary character there, so the reference returns both verbatim and the port now does
+#: too. Nothing was moved to one platform — all eleven are compared on both.
+#:
+#: `//` and `///x` are deliberately ABSENT. `PureWindowsPath` answers `\\` and `\\\x` and
+#: the port answers `\` and `\x`: a real WINDOWS divergence, an incomplete UNC prefix that
+#: needs ntpath's share-name parsing, and out of scope for the platform fix. It is written
+#: down here and in `pyPathStr`'s docblock rather than left as a silent gap.
+_PY_PATH_STR_CORPUS = ("/x/bin/", "/x/bin", "C:\\x\\bin\\", "~/bin", "", ".", "..",
+                       "//server/share/", "a//b", "a/./b", "a\\b", "\\\\srv\\share\\")
+
+#: What `str(Path(x))` ANSWERS, per operating system, for every input above whose answer
+#: depends on which one you are running. Mirrors `harness_golden.PLATFORM_ONLY` — the
+#: declaration lives beside the corpus so that "what this run did not cover" is a fact about
+#: the suite rather than a comment in a function nobody opens — with one difference forced by
+#: the subject: `PLATFORM_ONLY` names CELLS a host cannot run at all, and these inputs all
+#: run everywhere. What is platform-specific is the ANSWER, so the table carries both.
+#:
+#: WHY AN ABSOLUTE TABLE AT ALL, next to a comparison that already passes. A
+#: cross-implementation equality is blind to a fault BOTH sides share — this file has found
+#: that five times — and `TheByteBearingPrimitivesAgree` had exactly one absolute assertion
+#: in it (`os.linesep`). Two implementations that both answered `''` for every path would
+#: agree on all eleven rows. The table says what they must agree ON, and the port inherits
+#: it through the equality rather than through a second probe process.
+PLATFORM_EXPECTED: "dict[str, dict[str, str]]" = {
+    "/x/bin/":         {"win32": "\\x\\bin",             "posix": "/x/bin"},
+    "/x/bin":          {"win32": "\\x\\bin",             "posix": "/x/bin"},
+    "C:\\x\\bin\\":    {"win32": "C:\\x\\bin",           "posix": "C:\\x\\bin\\"},
+    "~/bin":           {"win32": "~\\bin",               "posix": "~/bin"},
+    "//server/share/": {"win32": "\\\\server\\share\\",  "posix": "//server/share"},
+    "a//b":            {"win32": "a\\b",                 "posix": "a/b"},
+    "a/./b":           {"win32": "a\\b",                 "posix": "a/b"},
+}
+
+
+def _byte_bearing_cases() -> list[dict]:
+    """The primitives whose answers ARE the bytes on a user's disk. Each entry below has a
+    reason: an entry that does not contain the character it is named for is a comment, not
+    a test (P6d found exactly that)."""
+    cases = []
+    for p in _PY_PATH_STR_CORPUS:
+        cases.append({"fn": "py_path_str", "args": [p]})
+    # ensure_ascii: json.dumps escapes non-ASCII, JSON.stringify does not.
+    for o in ({"k": "é"}, {"k": "\u001c"}, {"k": "\ufeff"}, {"k": "😀"}, {"k": "a\\b"}):
+        cases.append({"fn": "json_dumps", "args": [o]})
+    # int vs float identity: JSON.parse collapses 1.0 to 1, python does not.
+    for s in ('{"a": 1.0}', '{"a": 1}', '{"a": 1e3}', '{"a": -0.0}'):
+        cases.append({"fn": "parse_json_roundtrip", "args": [s]})
+    # PY_SPACE: python \s minus U+FEFF plus U+001C..U+001F and U+0085.
+    for s in ("a\u001cb", "a\u0085b", "a\ufeffb", "a\u00a0b", " a\t\n\v\f\r b "):
+        cases.append({"fn": "py_strip_space", "args": [s]})
+    # os.linesep translation — the CRLF/LF split no cell saw until P5b.
+    for s in ("a\nb", "a\r\nb", "a\rb", "a\n", "", "a\n\n"):
+        cases.append({"fn": "write_text_linesep", "args": [s]})
+    for p in ("A/B", "a/b", "A\\B", "ä/b", "z/a", "a/z"):
+        cases.append({"fn": "normcase", "args": [p]})
+        cases.append({"fn": "compare_paths", "args": [p, "a/b"]})
+    # `~unknownuser/x` is NOT here. It was, until `921384f`'s widened corpus caught a false
+    # docblock claim ("Python does not expand `~user` on Windows") and the project decided
+    # the port should REFUSE the form rather than reproduce `ntpath`'s guess-a-home-dir rule.
+    # A comparison is the wrong gate for a divergence that is now deliberate — see
+    # `TheTildeUserFormIsADeliberateDivergence` below, which asserts each side absolutely
+    # instead of comparing them.
+    for p in ("~", "~/x", "x", ""):
+        cases.append({"fn": "expanduser", "args": [p]})
+    for p in (".", "..", "a/../b", "/tmp"):
+        cases.append({"fn": "py_resolve", "args": [p]})
+    return cases
+
+
+class TheByteBearingPrimitivesAgree(unittest.TestCase):
+    """The nine primitives that decide the bytes written into a user's harness bundle.
+
+    THE ONLY ORACLE THAT SURVIVES. Every one of these is exercised by the 259-cell emit
+    matrix today, and the migration deletes it — after which nothing on this machine can
+    answer "what does CPython do here" ever again. So they are recorded as a corpus while a
+    CPython is still present to ask.
+
+    `write_text_linesep` returns HEX and not text, and that is the load-bearing choice: a
+    text transport applies newline translation on the way back and normalises away the exact
+    property under test. That is how a real CRLF/LF split hid from 103 cells in P5b.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.cases = _byte_bearing_cases()
+        cls.py = _run([sys.executable, str(PY_PROBE)], cls.cases, ascii_mode=False)
+        cls.js = _run(["node", str(JS_PROBE)], cls.cases, ascii_mode=False)
+
+    def test_both_probes_answer_identically(self):
+        for c, a, b in zip(self.cases, self.py, self.js):
+            with self.subTest(fn=c["fn"], args=c["args"]):
+                self.assertEqual(a, b, f"{c['fn']}{c['args']!r}")
+
+    def test_the_linesep_corpus_records_this_platforms_translation(self):
+        """The positive control, and it is not decoration.
+
+        A comparison alone passes on two implementations that both write LF — which is the
+        RIGHT answer on POSIX and the wrong one on Windows, and the corpus cannot tell those
+        apart by comparing. So the reference's own answer for `"a\\nb"` is asserted against
+        `os.linesep` absolutely: the day either side stops translating, this names it."""
+        i = [c["fn"] for c in self.cases].index("write_text_linesep")
+        want = ("a" + os.linesep + "b").encode("utf-8").hex()
+        self.assertEqual(self.py[i], want)
+
+
+class ThePlatformSensitiveAnswersAreDeclared(unittest.TestCase):
+    """`PLATFORM_EXPECTED` against what `str(Path(x))` actually answers.
+
+    THE HOLE THIS CLOSES. `_PY_PATH_STR_CORPUS` is compared between two implementations, and
+    a comparison cannot say what the right answer IS — only that both sides give the same
+    one. Every absolute statement about these paths lived in a comment. So the answers are a
+    table, and this checks it FROM EITHER SIDE, the same five directions
+    `tests/test_hook_cli_parity.py::ThePlatformDeclaredCellsAreDeclared` checks
+    `harness_golden.PLATFORM_ONLY` in:
+
+      * the live reference on THIS host must answer this platform's declared string;
+      * the other platform's half is PRINTED, so a green run says what it did not assert;
+      * the table must be EXACTLY the inputs whose answer is platform-sensitive — checkable
+        from one host because `PureWindowsPath` and `PurePosixPath` both import anywhere,
+        which is this file's analogue of calling both `_link_cells_*` arms directly;
+      * every declared input must still be IN the corpus, so a row cannot rot after an edit;
+      * neither half may be empty, which is the state the mechanism exists to prevent.
+
+    The PORT is not run here. `TheByteBearingPrimitivesAgree` already asserts py == js for
+    every one of these inputs and this asserts py == declared, so js == declared follows —
+    a second probe process would buy nothing.
+    """
+
+    def setUp(self):
+        self.here = harness_golden.this_platform()
+        self.other = "posix" if self.here == "win32" else "win32"
+
+    def test_the_reference_answers_what_this_platform_declares(self):
+        for src, want in sorted(PLATFORM_EXPECTED.items()):
+            with self.subTest(input=src):
+                self.assertEqual(str(Path(src)), want[self.here])
+
+    def test_the_other_platforms_answers_are_declared_and_not_asserted(self):
+        """Skipped, never dropped — and said out loud. A half that is silently not run is
+        indistinguishable from a half that does not exist, which is the ten-phase history
+        behind `PLATFORM_ONLY`."""
+        rows = [f"{src!r} -> {want[self.other]!r}"
+                for src, want in sorted(PLATFORM_EXPECTED.items())]
+        print(f"\n[pure-parity] {len(rows)} `str(Path(x))` answers belong to {self.other} "
+              f"and were NOT asserted on this {self.here} run:")
+        for row in rows:
+            print(f"    {row}")
+        self.assertTrue(rows, "the other platform's half is empty")
+
+    def test_the_table_is_exactly_the_inputs_whose_answer_differs_by_platform(self):
+        """THE DIRECTION THAT STOPS DRIFT, and the only one checkable from a single host.
+
+        Both parsers are ordinary classes, so a test can call BOTH. Without this, adding a
+        corpus entry that happens to be platform-sensitive and forgetting the table is
+        invisible from either machine — the row above only checks the half this host runs.
+        """
+        differ = {p for p in _PY_PATH_STR_CORPUS
+                  if str(PureWindowsPath(p)) != str(PurePosixPath(p))}
+        self.assertEqual(set(PLATFORM_EXPECTED), differ,
+                         "PLATFORM_EXPECTED and the corpus disagree — every input whose "
+                         "`str(Path(x))` depends on the operating system has to be in the "
+                         "table, and every input in the table has to be one of them")
+        for src, want in sorted(PLATFORM_EXPECTED.items()):
+            with self.subTest(input=src):
+                self.assertEqual({"win32": str(PureWindowsPath(src)),
+                                  "posix": str(PurePosixPath(src))}, want,
+                                 "a hand-written expectation the parsers disown")
+
+    def test_every_declared_input_is_still_in_the_corpus(self):
+        orphans = sorted(set(PLATFORM_EXPECTED) - set(_PY_PATH_STR_CORPUS))
+        self.assertFalse(orphans, f"{orphans} are declared but no longer probed")
+
+    def test_the_declaration_is_not_empty_in_either_direction(self):
+        """The positive control. An empty table satisfies every test above, and an empty
+        table is exactly what this mechanism exists to make impossible."""
+        self.assertTrue(PLATFORM_EXPECTED, "the table is empty")
+        for src, want in sorted(PLATFORM_EXPECTED.items()):
+            with self.subTest(input=src):
+                self.assertEqual(sorted(want), ["posix", "win32"],
+                                 "a row naming one platform is a declaration that the "
+                                 "other has no answer for this input")
+
+
+class TheTildeUserFormIsADeliberateDivergence(unittest.TestCase):
+    """`~unknownuser/x` — a byte-bearing case UNTIL the project decided the port should not
+    reproduce `ntpath`'s rule for it (see `js/hosts.mjs`'s `expanduser` docblock). Pulled out
+    of `_byte_bearing_cases()` above because `TheByteBearingPrimitivesAgree` is a COMPARISON,
+    and comparing two implementations that are now deliberately different would either fail
+    forever (right answer, wrong gate) or need to be silenced (which is how the false "Python
+    does not expand ~user" claim survived undetected in the first place). Each side gets its
+    own ABSOLUTE assertion instead, so the divergence stays a stated fact instead of becoming
+    an unstated one again.
+
+    AND THE SECOND ARM WAS WRONG IN ITS TURN, which is why the reference's answer is now
+    declared per platform instead of guessed inline. This class asserted that POSIX "returns
+    the path UNCHANGED". `posixpath.expanduser` does exactly that — but the reference does
+    not call `posixpath.expanduser`, it calls `Path.expanduser`, which refuses a home
+    directory it could not determine:
+
+        homedir = os.path.expanduser(self._tail[0])
+        if homedir[:1] == "~":
+            raise RuntimeError("Could not determine home directory.")
+
+    So on POSIX the reference RAISES for an unknown account, and the first Linux run reported
+    this test as an ERROR rather than a failure — that RuntimeError escaping, not a
+    comparison going red. Which moves the divergence this class is named for: it is
+    WINDOWS-ONLY. There `ntpath` guesses `C:\\Users\\unknownuser` and pathlib hands it back
+    happily. On POSIX the reference and the port already agree in KIND — both refuse — and
+    differ only in which exception says so.
+    """
+
+    #: The input, and what the REFERENCE does with it on each platform. Both halves are
+    #: written down for `PLATFORM_ONLY`'s reason: the arm that cannot run here is precisely
+    #: the arm that was wrong, and an undeclared arm is one nobody re-reads.
+    INPUT = "~unknownuser/x"
+    REFERENCE = {
+        "win32": "expands — ntpath swaps the last component of %USERPROFILE%",
+        "posix": "raises RuntimeError — pathlib refuses a home it cannot determine",
+    }
+
+    def test_the_reference_follows_this_platforms_rule(self):
+        """Names the shape rather than comparing `expanduser` to itself on this input.
+
+        `home.parent / "unknownuser" / "x"` is independently derived from the well-tested
+        bare-`~` case above (`home = Path("~").expanduser()`), not from calling `expanduser`
+        on the divergent input a second time — so the Windows arm is a real assertion about
+        ntpath's swap-the-last-component rule, not a tautology.
+        """
+        if harness_golden.this_platform() != "win32":
+            with self.assertRaises(RuntimeError):
+                Path(self.INPUT).expanduser()
+            return
+        home = Path(os.path.expanduser("~"))
+        # ntpath guesses ONLY when the current account is the last component of
+        # %USERPROFILE%; on a renamed profile it returns the path untouched and pathlib then
+        # raises — the POSIX outcome, on a Windows host. Stating the precondition is what
+        # keeps the arm an assertion about the rule rather than about this machine.
+        if os.environ.get("USERNAME") == home.name:
+            self.assertEqual(str(Path(self.INPUT).expanduser()),
+                             str(home.parent / "unknownuser" / "x"))
+        else:
+            with self.assertRaises(RuntimeError):
+                Path(self.INPUT).expanduser()
+
+    def test_the_other_platforms_rule_is_declared_and_not_run(self):
+        here = harness_golden.this_platform()
+        other = "posix" if here == "win32" else "win32"
+        print(f"\n[pure-parity] `{self.INPUT}` on {other} — declared, not run on this "
+              f"{here} host: {self.REFERENCE[other]}")
+        self.assertEqual(sorted(self.REFERENCE), ["posix", "win32"],
+                         "both operating systems' rules have to be written down — a table "
+                         "with one side is how the POSIX arm stayed wrong")
+        for platform, rule in sorted(self.REFERENCE.items()):
+            with self.subTest(platform=platform):
+                self.assertTrue(rule.strip())
+
+    def test_the_port_refuses_rather_than_guess_a_home_directory(self):
+        """ABSOLUTE, AND ON EVERY PLATFORM — `js/hosts.mjs`'s refusal has no `os` branch in
+        it, so unlike the reference above this arm needs no table.
+
+        The Node probe's `expanduser` case throws for this input, and nothing in
+        `pure_probe.mjs`'s dispatch loop catches it — an uncaught exception exits the process
+        non-zero, which `_run` turns into this `AssertionError`. That crash IS the refusal:
+        unlike the old behaviour (silently returning `~unknownuser/x`, which `--target` would
+        then use to create a literal `~unknownuser` directory in cwd), a non-zero exit with a
+        message is a normal, catchable CLI error.
+        """
+        with self.assertRaises(AssertionError) as ctx:
+            _run(["node", str(JS_PROBE)], [{"fn": "expanduser", "args": ["~unknownuser/x"]}],
+                 ascii_mode=False)
+        self.assertIn("~unknownuser/x", str(ctx.exception))
+        self.assertIn("refusing", str(ctx.exception))
+
+
+# --------------------------------------------------------------------------------------
+# THE RECORDING — the answers whose ORACLE IS CPYTHON, written down while one still exists
+# --------------------------------------------------------------------------------------
+#
+# Every class above is a COMPARISON: it runs both implementations and requires them to agree.
+# That gate dies with `rituals/harness.py`. The three cell harnesses already answered this
+# for their matrices (`tests/__snapshots__/{emit,cli,web}`); what those matrices never
+# reached is exactly this file's subject, so it needs a recording of its own — and unlike a
+# cell corpus, some of these answers cannot be RECOMPUTED by anything after the deletion:
+#
+#   * `str(Path(x))` is `ntpath`/`posixpath`, not `path.win32`/`path.posix`;
+#   * `difflib`'s autojunk and its longest-block recursion have no Node twin at any rung;
+#   * `unicodedata.east_asian_width` and `unicodedata.combining` have NO JavaScript
+#     counterpart at all — the width sweep below is the only oracle `js/tui.mjs`'s tables
+#     have ever had, which is why `.github/workflows/ci.yml` pins the interpreter.
+#
+# WHAT A RECORDING MUST NOT KEEP. A live pair shares a machine, so neither side of a
+# comparison ever had to care that an answer embedded this laptop. A CORPUS does: Task 8
+# found six machine-state vectors in the cell matrices (build date, source fingerprint, git
+# fixture SHA, epoch seconds, the Node version banner, and `shutil.which('git')`'s path),
+# every one of them by MEASURING a recording rather than by reading code. This file's own
+# vectors are different and are handled two ways, because they divide cleanly:
+#
+#   * A machine path is a PREFIX and can be substituted — `<CWD>`, `<CWD_PARENT>`, `<HOME>`.
+#     The literals are never written down; each side of the replay computes its own, because
+#     the literals ARE the machine state.
+#   * A local-time render and a Windows drive anchor cannot be. There is no token to swap:
+#     the zone offset is baked into `minute_stamp`'s digits, and `C:\` also occurs as
+#     hand-written corpus CONTENT (`py_path_str('C:\\x\\bin\\')`), so a blanket rule would
+#     rewrite that too and then fail on any machine whose checkout is not on C:. Those cases
+#     carry a `guard` — facts the replay must share before the answer means anything — and a
+#     replay that skips one says so out loud, on the width sweep's rule that a skip is not a
+#     pass.
+#
+# The recording is refused outright if a residual scan still finds this machine in it.
+
+SNAPSHOT_DIR = ROOT / "tests" / "__snapshots__"
+
+#: What each token stands for, carried IN the document so the replay is not reading this
+#: file. The literals are absent on purpose — see above.
+NORMALISED = {
+    "<CWD>": "the probe's working directory, which is this checkout's root",
+    "<CWD_PARENT>": "its parent, so WHERE the repo is cloned stops being a recorded input",
+    "<HOME>": "the user's home directory, as `Path('~').expanduser()` answers it",
+    "<TMP>": "the system temp directory, as `tempfile.gettempdir()` answers it. On Windows "
+             "it sits INSIDE the home directory, so `<HOME>` would have rewritten any answer "
+             "bearing it without ever being told about a temp directory; on POSIX `/tmp` is "
+             "not under `$HOME` and the first Linux recording was refused for naming it",
+}
+
+
+def _machine_prefixes() -> "list[tuple[str, str]]":
+    """LONGEST FIRST, and the ordering is load-bearing rather than tidy: a normal checkout
+    lives UNDER the user's home, so substituting `<HOME>` first would turn the working
+    directory into `<HOME>/Documents/git/Geneseed` and leave the clone location in the
+    corpus. The same ordering is what makes `<TMP>` safe to add on Windows, where the temp
+    directory is a LONGER path under the home directory and would otherwise come back as
+    `<HOME>/AppData/Local/Temp`.
+
+    THREE SPELLINGS OF EVERY ONE, because one directory can be named three ways and a table
+    that knows one of them misses the leak entirely:
+
+      * separators — a path that came back through an `.as_posix()` or a URL is the same
+        machine state in different bytes;
+      * `realpath` — POSIX `/tmp` is a symlink on macOS (`/private/tmp`), a home directory
+        can live under one (`/home` → an automount), and Windows can hand back `%TEMP%` as
+        an 8.3 short form. `py_resolve` answers with the RESOLVED path, so the unresolved
+        spelling alone would not match what the recording actually contains.
+
+    `<TMP>` IS WHY THIS FILE'S FIRST POSIX RECORDING WAS REFUSED. Windows was clean by
+    accident, not by design — see `_refuse_machine_state`."""
+    pairs: "list[tuple[str, str]]" = []
+    for literal, token in ((str(ROOT), "<CWD>"), (str(ROOT.parent), "<CWD_PARENT>"),
+                           (str(Path.home()), "<HOME>"), (tempfile.gettempdir(), "<TMP>")):
+        for spelling in (literal, os.path.realpath(literal)):
+            for sep_spelling in (spelling, spelling.replace("\\", "/")):
+                if sep_spelling and (sep_spelling, token) not in pairs:
+                    pairs.append((sep_spelling, token))
+    return sorted(pairs, key=lambda p: -len(p[0]))
+
+
+def _normalise_answer(value, prefixes):
+    """Applied to ANSWERS only. An argument is hand-written corpus content and has to travel
+    verbatim — the replay feeds it back in — and `_refuse_machine_state` is what proves no
+    argument smuggled a machine path in behind that claim."""
+    if isinstance(value, str):
+        for literal, token in prefixes:
+            value = value.replace(literal, token)
+        return value
+    if isinstance(value, list):
+        return [_normalise_answer(v, prefixes) for v in value]
+    if isinstance(value, dict):
+        return {k: _normalise_answer(v, prefixes) for k, v in value.items()}
+    return value
+
+
+def _guard_for(fn: str, args: list, answer, anchor: str) -> "dict | None":
+    """The facts a replay must share with this recording before the answer means anything.
+
+    DERIVED, NEVER HAND-LISTED. The anchor guard is decided by looking at the normalised
+    ANSWER, so a new corpus entry that happens to resolve against the drive gets one without
+    anybody remembering to add it; a list of case indices rots the moment a case is inserted
+    above it. Two users today, and each is a value no substitution can take out:
+
+      * `minute_stamp` renders a UTC instant in LOCAL time. The offset is not a substring of
+        the answer, it is the answer's arithmetic, and it moves with DST — so the offset AT
+        THAT INSTANT is what the replay has to match, not the zone's name.
+      * `py_resolve('/tmp')` attaches the working directory's drive on Windows.
+    """
+    if fn == "minute_stamp":
+        at = datetime.datetime.fromtimestamp(args[0], datetime.timezone.utc).astimezone()
+        return {"utcoffset": int(at.utcoffset().total_seconds())}
+    # `len(anchor) > 1` is what keeps this Windows-only WITHOUT a platform test: POSIX's
+    # anchor is `/`, which every absolute answer starts with and which carries no machine
+    # state at all. A guard there would be noise that reddens nothing.
+    #
+    # AND THE SECOND CLAUSE IS NOT TIDINESS — the first recording is what found it. A
+    # derived rule of "the answer starts with the drive" also fires on
+    # `py_path_str('C:\\x\\bin\\')`, whose `C:` is HAND-WRITTEN CORPUS CONTENT: the drive in
+    # that answer came from the input, not from this machine, and guarding it would make a
+    # perfectly portable case SKIP itself on any checkout that is not on C:. Silently
+    # dropping a case is the vacuity this whole file exists to prevent. So the anchor is
+    # machine state only when the case's own arguments do not name it.
+    if (len(anchor) > 1 and isinstance(answer, str) and answer.startswith(anchor)
+            and anchor not in json.dumps(args)):
+        return {"anchor": anchor}
+    return None
+
+
+#: The one known reference bug this recording freezes as correct, and where the decision is
+#: written down. Matched on the SHAPE of the answer rather than on a case index, for
+#: `_guard_for`'s reason.
+_DETAIL_LINES_HEAD_NOTE = (
+    "REFERENCE BUG, deliberately not fixed — see `js/tui.mjs`'s `detailLines` docblock, "
+    "`docs/port-ledger.md` row 1, and the P7b handoff section 5.4. `_detail_lines` answers "
+    "None for a header row and for a row whose data is absent, and "
+    "`rituals/_harness_tui.py:614` hands that straight to `_wrap_lines`, which iterates it: "
+    "an inventory with no agents, no skills and no laws puts the selection on row 0 (always "
+    "the AGENTS header) and crashes the panel on its first frame with TypeError instead of "
+    "drawing an empty state. The None IS this primitive's contract and both implementations "
+    "agree on it; the defect is in the CALLER, `_tui_loop`, which `docs/port-ledger.md` "
+    "declares unported and this migration deletes. Recorded rather than fixed because there "
+    "is nothing in THIS function to fix."
+)
+
+
+def _note_for(fn: str, answer) -> "str | None":
+    if fn == "detail_lines" and answer is None:
+        return _DETAIL_LINES_HEAD_NOTE
+    return None
+
+
+#: The keys whose values are text THIS FILE wrote rather than answers the machine gave: the
+#: token dictionary, a frozen bug's note, a swept codepoint's reason. They are corpus content
+#: exactly as an argument is, and they get the argument's test — measured, and not guessed:
+#: `<TMP>`'s own description has to be allowed to say `/tmp`, and on a POSIX recording that
+#: is a verbatim hit on `tempfile.gettempdir()`.
+_AUTHORED_KEYS = ("args", "normalised", "note", "why")
+
+
+def _split_by_provenance(doc: dict) -> "tuple[list[str], list[str]]":
+    """The document cut where PROVENANCE cuts it: what this machine ANSWERED, and what the
+    corpus WROTE DOWN. The two need different tests and one test for both is unsound in one
+    direction or the other.
+
+      * An answer is produced here. A machine path in one is a leak the substitution table
+        missed, full stop — no exemption, no argument.
+      * An argument (and the authored text beside it) is source in this very file, and it
+        travels verbatim because the replay feeds it back in. `py_resolve('/tmp')` puts the
+        POSIX temp directory in the corpus BY NAME, on purpose, and a scan that cannot tell
+        that from a leak refuses a recording that is correct. That is `_guard_for`'s clause
+        one level up: the literal came from the corpus, not from this machine — and it stays
+        CHECKED rather than assumed, because the exemption demands this file's source say so.
+
+    THE VALUES, DECODED — never the serialised text, and that is the second half of why
+    Windows looked clean. `json.dumps` writes a Windows path as `"C:\\\\Users\\\\me"`, two
+    backslash characters where the literal has one, so the old scan's raw `C:\\Users\\me`
+    could not match it and every un-normalised Windows path in a recording was INVISIBLE to
+    the detector. Its separator hid inside JSON's escape exactly as its temp directory hid
+    under its home. Keys are collected too: a key is a recorded value (`dwidth`'s `sample` is
+    keyed by codepoint)."""
+    answers: "list[str]" = []
+    authored: "list[str]" = []
+
+    def walk(value, into: "list[str]") -> None:
+        if isinstance(value, str):
+            into.append(value)
+        elif isinstance(value, list):
+            for v in value:
+                walk(v, into)
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                into.append(k)
+                walk(v, authored if k in _AUTHORED_KEYS else into)
+
+    walk(doc, answers)
+    return answers, authored
+
+
+def _machine_probes() -> "list[tuple[str, str]]":
+    """The paths the residual scan looks for — WRITTEN OUT AGAIN rather than read off
+    `_machine_prefixes()`, and the duplication is the whole point.
+
+    A control that shares its list with the thing it controls cannot fail independently of
+    it: measured, on the mutation that removed `<HOME>` from the substitution table, a scan
+    reusing that table stopped looking for the home directory in the same edit that stopped
+    substituting it, and the leak was only caught because this machine's login name happens
+    to be a component of its home path. On a build agent whose checkout is not under `$HOME`
+    the same mutation would have recorded silently. So this list is spelled out separately —
+    "a mutation control must share nothing with what is mutated" — and every source is
+    registered in all four of its spellings for `_machine_prefixes`'s reasons."""
+    out: "list[tuple[str, str]]" = []
+    for name, literal in (("the working directory", str(ROOT)),
+                          ("its parent", str(ROOT.parent)),
+                          ("the home directory", str(Path.home())),
+                          ("the temp directory", tempfile.gettempdir())):
+        for spelling in (literal, os.path.realpath(literal)):
+            for sep_spelling in (spelling, spelling.replace("\\", "/")):
+                if len(sep_spelling) > 2 and (name, sep_spelling) not in out:
+                    out.append((name, sep_spelling))
+    return out
+
+
+def _login_names() -> "list[str]":
+    """Every spelling of WHO and WHERE, because one call answers one of them.
+
+    `getpass.getuser()` returns the first of LOGNAME/USER/LNAME/USERNAME that is set and only
+    then consults the password database, so a machine where those disagree has a name the
+    single call cannot see. `Path.home().name` is a fifth spelling and it is the one that
+    actually reaches an answer, through `~`. The host name is included in both its full and
+    its short form: a POSIX `platform.node()` can be an FQDN whose first label is what a path
+    or a UNC share would carry."""
+    node = platform.node()
+    names = [getpass.getuser(), Path.home().name, node, node.split(".")[0]]
+    names += [os.environ.get(k) for k in ("USER", "LOGNAME", "LNAME", "USERNAME", "HOSTNAME")]
+    return sorted({n for n in names if n and len(n) > 2})
+
+
+def _refuse_machine_state(doc: dict) -> None:
+    """RECORD, THEN MEASURE — the detector that earned its place in Task 8.
+
+    Every machine-state vector this project has found in a corpus was found by measuring a
+    recording, not by reading the code that produced it. So the negative is asserted
+    directly: a substitution table that MISSED something is exactly as plausible as one that
+    covered everything, and only this can tell them apart.
+
+    A NAME IS NOT A PATH, and the first POSIX recording is what taught this file the
+    difference. Dispatched on ubuntu, a plain substring test for the login name `runner`
+    fired on `netrunner` and `speedrunner` — words in `themes/cyberpunk.json` and
+    `themes/gamer.json` that `theme_options` and `theme_preview` read out of the COMMITTED
+    TREE. Substituting a token there would have been the rot vector: `net<USER>` recorded on
+    a machine called `runner` and `netrunner` everywhere else is a corpus whose bytes depend
+    on who typed `python`. So a bare name is machine state only where it stands as a path
+    COMPONENT — which is the only route it has into an answer, since no recorded primitive
+    calls `getuser`, `getlogin` or `os.uname`: it arrives through `$HOME`, `%USERPROFILE%`, a
+    temp path or `~user`, and every one of those puts a separator immediately before it. A
+    prose collision is REPORTED instead, because a detector that says nothing on a hit it
+    decided to allow is indistinguishable from one that never looked."""
+    answers, authored = _split_by_provenance(doc)
+    source = Path(__file__).read_text(encoding="utf-8")
+    leaks, exempt, prose = [], [], []
+    paths = _machine_probes()
+    for name, literal in paths:
+        if any(literal in s for s in answers):
+            leaks.append(f"    a recorded ANSWER still names {name}: {literal!r}"
+                         "\n        the substitution table missed it — a spelling it does "
+                         "not know, or an answer it never reached")
+        if any(literal in s for s in authored):
+            if literal in source:
+                exempt.append(f"{literal!r} ({name}) — {Path(__file__).name} writes it down, "
+                              "so it is corpus text and not this machine")
+            else:
+                leaks.append(f"    corpus text names {name}: {literal!r}"
+                             "\n        and this file's source does not write it down, so "
+                             "it did not come from the corpus")
+    every = answers + authored
+    for name in _login_names():
+        bounded = re.compile(r"[/\\~]" + re.escape(name) + r"(?![0-9A-Za-z_-])")
+        where = [s for s in every if bounded.search(s)]
+        if where:
+            leaks.append(f"    a path component is this machine's name: {name!r}"
+                         f"\n        in {where[0][:120]!r}")
+        elif any(name in s for s in every):
+            prose.append(f"{name!r} × {sum(s.count(name) for s in every)}")
+    if leaks:
+        raise SystemExit(
+            "REFUSING TO RECORD — this machine is still in the corpus:\n"
+            + "\n".join(leaks)
+            + "\nA recorded answer that names this laptop is a rot vector, not a gate: it "
+              "reddens on the next machine for a reason that is not a defect. Normalise it, "
+              "guard it, or take the case out and say why.")
+    # SILENT ON SUCCESS IS THE SAME SHAPE AS BROKEN. What was probed, and every hit that was
+    # deliberately not refused, is stated out loud on every recording.
+    print(f"[machine-state] {len(paths)} path spellings and {len(_login_names())} names "
+          f"probed over {len(answers)} answer strings and {len(authored)} corpus-text strings"
+          + ("".join(f"\n[machine-state] allowed in CORPUS TEXT: {e}" for e in exempt))
+          + ("".join(f"\n[machine-state] allowed as PROSE, not a path component: {p}"
+                     for p in prose)))
+
+
+def _recorded_with(**extra) -> dict:
+    """WHAT PRODUCED THESE ANSWERS, at the granularity that is a property OF THEM.
+
+    MAJOR.MINOR, AND THE PATCH DIGIT IS THE BUG. `platform.python_version()` answers `3.13.5`
+    on this laptop and `3.13.15` on the ubuntu runner, and `record-corpus` re-records
+    `dwidth.json` and `win_user_path.json` there and `diff`s them against the committed
+    copies. Run 31554447437 failed on that one line — a 196 608-codepoint sweep that hashed
+    identically either side, refused for the security release the recorder happened to be on.
+    That is provenance that had wandered into an equality check, the same class as the
+    `Node.js v<NODE>` banner `tests/golden.py` stamps out of the CLI cells.
+
+    `3.13` IS NOT A TRUNCATION FOR TIDINESS. It is what `.github/workflows/ci.yml` pins, what
+    `_PYTHON_UNIDATA` above is keyed by, and the granularity at which the one toolchain input
+    that actually gates these corpora — `unicodedata.unidata_version` — is decided. CPython
+    does not ship a new Unicode database in a bugfix release; if it ever did, the RUNS would
+    differ and the diff would say so, which is the check that was doing the work all along.
+
+    IT STAYS COMPARED, and that is the argument against the other shape. A provenance block
+    excluded from the comparison keeps the digit at the cost of a value nothing checks — and
+    a recorded value nothing checks is a claim nothing keeps true, which is how `recorded_on`
+    (`tests/test_win_user_path.py`) sat in a cross-diffed file declaring itself
+    platform-independent. Every field these documents carry is either compared or absent.
+    """
+    return {"python": ".".join(platform.python_version_tuple()[:2]),
+            # KEPT, AND KEPT COMPARED. `difflib`'s autojunk, `ntpath`'s answers and
+            # `unicodedata`'s tables are THIS implementation's; a PyPy recording is a
+            # different oracle wearing the same filename and should redden.
+            "implementation": platform.python_implementation(), **extra}
+
+
+def _write_doc(path: Path, doc: dict) -> Path:
+    """`indent=1` rather than `snapshot_io`'s 2: the diff corpus alone is tens of thousands
+    of one-character strings, and every one of them gets its own line either way. Same
+    reviewability, a third less file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _refuse_machine_state(doc)
+    text = json.dumps(doc, indent=1, ensure_ascii=False) + "\n"
+    path.write_text(text, encoding="utf-8", newline="\n")
+    return path
+
+
+def record_primitives(dest_dir: Path) -> Path:
+    """`_cases()` + `_byte_bearing_cases()`, both glyph tiers, one file per PLATFORM.
+
+    WHY {win32,posix} AND NOT {crlf,lf}. The cell corpora split on `os.linesep` because that
+    is the only OS-shaped thing an emitted file carries. This corpus is mostly `ntpath` vs
+    `posixpath`: seven of twelve `py_path_str` answers differ (`PLATFORM_EXPECTED` is the
+    table), `normcase` folds case and `/`→`\\` on one side and is the identity on the other,
+    `compare_paths` inherits that, `py_is_absolute` disagrees about a rootless `/x`, and
+    `write_text_linesep` is ONE of the reasons rather than the reason. Naming these halves
+    `crlf`/`lf` would name the smallest of them. The keys are `harness_golden.this_platform()`'s
+    so the three platform-declared mechanisms in this suite (`PLATFORM_ONLY`,
+    `PLATFORM_EXPECTED`, this) cannot drift into spelling one host three ways.
+
+    THE ASCII AXIS IS A DELTA, not a second array. `result_ascii` appears only where the
+    tier changes the answer, which keeps the file one copy instead of two AND makes the
+    tier-sensitive functions greppable — a property a duplicated array hides.
+    """
+    cases = _cases() + _byte_bearing_cases()
+    plain = _run([sys.executable, str(PY_PROBE)], cases, ascii_mode=False)
+    tiered = _run([sys.executable, str(PY_PROBE)], cases, ascii_mode=True)
+    prefixes, anchor = _machine_prefixes(), Path(ROOT).anchor
+    rows = []
+    for case, a, b in zip(cases, plain, tiered):
+        answer = _normalise_answer(a, prefixes)
+        row = {"fn": case["fn"], "args": case["args"], "result": answer}
+        tier = _normalise_answer(b, prefixes)
+        if tier != answer:
+            row["result_ascii"] = tier
+        guard = _guard_for(case["fn"], case["args"], answer, anchor)
+        if guard:
+            row["guard"] = guard
+        note = _note_for(case["fn"], a)
+        if note:
+            row["note"] = note
+        rows.append(row)
+    doc = {
+        "corpus": "primitives",
+        "platform": harness_golden.this_platform(),
+        "recorded_with": _recorded_with(os_linesep=os.linesep.encode("utf-8").hex()),
+        "normalised": NORMALISED,
+        "cases": rows,
+    }
+    return _write_doc(dest_dir / f"{harness_golden.this_platform()}.json", doc)
+
+
+#: The codepoints the sweep's `sample` names, and what each one is FOR. Derived from the
+#: recorded runs rather than from a second `unicodedata` call, so a sample that disagrees
+#: with the hash it illustrates is impossible.
+_DWIDTH_SAMPLE = {
+    0x0041: "LATIN CAPITAL LETTER A — the ordinary case",
+    0x0300: "COMBINING GRAVE ACCENT — width 0, the half `\\p{Mn}|\\p{Me}` gets wrong",
+    0x0897: "the 15.1.0/16.0.0 boundary: unassigned at 15.1.0, a combining mark at 16.0.0",
+    0x4E00: "CJK UNIFIED IDEOGRAPH-4E00 — East_Asian_Width W",
+    0xD800: "a LONE SURROGATE — not text, and what a corrupt file hands the panel",
+    0x1F600: "GRINNING FACE — the astral emoji rule above the BMP",
+    0x2FFFF: "the last codepoint in the swept range",
+}
+
+
+def _width_at(runs: list, cp: int) -> int:
+    """The RLE, read. A run `[start, w]` holds until the next run starts."""
+    width = runs[0][1]
+    for start, w in runs:
+        if start > cp:
+            break
+        width = w
+    return width
+
+
+def record_dwidth(dest: Path) -> Path:
+    """The 196 608-codepoint sweep, plus the Unicode version that makes it mean anything.
+
+    THIS IS WHAT REPLACES THE ci.yml PIN. Today the sweep runs live against `unicodedata`
+    and the pin is what stops a floating `python-version` from silently switching it off.
+    After the deletion there is no interpreter to pin: the tables in `js/tui.mjs` are
+    anchored by `sha256` over these runs and by the version DECLARED beside them, and a Node
+    replay can check both without a Python anywhere on the machine.
+    """
+    if unicodedata.unidata_version != _declared_dwidth_unidata():
+        raise SystemExit(
+            f"REFUSING TO RECORD — this interpreter carries unidata "
+            f"{unicodedata.unidata_version} and `js/tui.mjs` declares "
+            f"{_declared_dwidth_unidata()}. Recording now would freeze a divergence that is "
+            "neither implementation's as if it were the reference's answer. Run this on the "
+            "pinned interpreter (see .github/workflows/ci.yml), or regenerate the tables and "
+            "move DWIDTH_UNIDATA with them.")
+    runs = _run([sys.executable, str(PY_PROBE)],
+                [{"fn": "dwidth_rle", "args": list(_DWIDTH_SWEEP)}], ascii_mode=False)[0]
+    canonical = json.dumps(runs, separators=(",", ":"))
+    doc = {
+        "corpus": "dwidth",
+        # THE DECLARED INPUT. `unidata_version` is the reference's, read off the interpreter
+        # that produced these runs; `declared_by` is the port's own constant. They are equal
+        # by the refusal above, and both are written down because the replay has to check the
+        # port's constant against something that is not the port.
+        "unidata_version": unicodedata.unidata_version,
+        "declared_by": {"file": "js/tui.mjs", "const": "DWIDTH_UNIDATA",
+                        "value": _declared_dwidth_unidata()},
+        "recorded_with": _recorded_with(),
+        # Platform-independent by construction: `unicodedata` is a compiled-in database and
+        # `_dwidth` reads nothing else. No {win32,posix} split, and the replay proves that
+        # claim by running this same file on both.
+        "range": list(_DWIDTH_SWEEP),
+        "codepoints": _DWIDTH_SWEEP[1] - _DWIDTH_SWEEP[0],
+        "runs": len(runs),
+        "sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        "sample": {f"U+{cp:04X}": {"width": _width_at(runs, cp), "why": why}
+                   for cp, why in sorted(_DWIDTH_SAMPLE.items())},
+        "rle": runs,
+    }
+    return _write_doc(dest, doc)
+
+
+def _record_main(argv: "list[str]") -> int:
+    args = dict(zip(argv[::2], argv[1::2]))
+    if "--record" in args:
+        print(f"recorded {record_primitives(Path(args['--record']))}")
+    if "--record-dwidth" in args:
+        print(f"recorded {record_dwidth(Path(args['--record-dwidth']))}")
+    return 0
+
+
 if __name__ == "__main__":
+    # `--record` writes; everything else is the suite. Two flags and no argparse — this is
+    # an entry point with one argument each, and `unittest.main()` owns the rest of argv.
+    if {"--record", "--record-dwidth"} & set(sys.argv):
+        raise SystemExit(_record_main(sys.argv[1:]))
     unittest.main()

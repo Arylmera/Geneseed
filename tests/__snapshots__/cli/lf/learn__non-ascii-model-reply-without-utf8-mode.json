@@ -1,0 +1,30 @@
+{
+  "paths": {
+    "<dirs>": "5985f7526bdd61f2f0a7148d765e70858686d5948a64e865469b1cb3ca38db0b",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e1c5cec99b3658792bf5e61fc51558e3e296be4cf57917098793fef9564c90a3",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "echo/prompt.txt": "dace39ce2b1537113f215e868015731e502b103e216f049a1b74ed0ee4320296",
+    "reply/out.md": "1cba61de2607370ec644772910648686304be8fc08e1d34f7d6846593e473819",
+    "repo/memory/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/memory/MEMORY.md": "91123e2cd7d9f0326899c34d6ef6d3a04f6e52b787a5588b2bc24c3021da0f66",
+    "repo/memory/alpha-fact.md": "1cba61de2607370ec644772910648686304be8fc08e1d34f7d6846593e473819"
+  },
+  "sizes": {
+    "<dirs>": 36,
+    "<exit>": 1,
+    "<stderr>": 63,
+    "<stdout>": 0,
+    "echo/prompt.txt": 1646,
+    "reply/out.md": 146,
+    "repo/memory/.keep": 0,
+    "repo/memory/MEMORY.md": 71,
+    "repo/memory/alpha-fact.md": 146
+  },
+  "verbatim": {
+    "<dirs>": "cfg\necho\nhome\nreply\nrepo\nrepo/memory",
+    "<exit>": "0",
+    "<stderr>": "[learn] wrote 1 memory file(s) to <SB>/repo/memory: alpha-fact\n",
+    "<stdout>": ""
+  }
+}

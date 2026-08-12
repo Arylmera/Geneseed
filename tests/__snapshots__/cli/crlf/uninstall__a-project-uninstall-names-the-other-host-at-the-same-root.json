@@ -1,0 +1,38 @@
+{
+  "paths": {
+    "<dirs>": "0f6cfcfceab788960b3eb2d9140f80b044587ed64cb1f84833ee527a9df1967b",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "9ae3fc77ef61d260a6a5f45a6dc70cabb0f1ed38d6d1c380f1a2316aa9187513",
+    "<stdout>": "60c6943abc301982be758f2c3067611eecee2c4593a81e89a8486c5d77278138",
+    "repo/.claude/.geneseed-manifest.json": "6d368be79324c4a531b3109cf04ca8810544e28e9e1585c7c659b24b012341f0",
+    "repo/.claude/CLAUDE.md": "d8472a3ea7f4e2bbcf9fff40b16e00a465d11a454508ecadbb6c9c3996b3cc14",
+    "repo/.geneseed-emit": "05deea0326f464d3a422110aa658f5ff58094053955def0ff74dcd0a45816329",
+    "repo/.geneseed-theme": "07c21153b0d65281df8d296392a5eb9ce3f39a35d9c7f43e84c998989f15cc2a",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/.opencode/agents/mine.md": "7022b913fe7da764d332d6a15c3893872ace7000e915a84a5f25f5cdae250e89",
+    "repo/.opencode/context.json": "65312c4d03ce5c6cbf3281af1c81537c6cbe6712f7a4624e8f66dd5f33acdccc",
+    "repo/README.md": "a07f1e07cd8a08469cdb8b05a4e60db6c499ee09ab5e7d6d13b62ed02ef2e8cd",
+    "repo/opencode.json": "f42728bcf3286fee57bd1d8c506689b321331776c5bff20fd72ed8d0b1bb7b01"
+  },
+  "sizes": {
+    "<dirs>": 63,
+    "<exit>": 1,
+    "<stderr>": 199,
+    "<stdout>": 564,
+    "repo/.claude/.geneseed-manifest.json": 529,
+    "repo/.claude/CLAUDE.md": 136,
+    "repo/.geneseed-emit": 10,
+    "repo/.geneseed-theme": 9,
+    "repo/.keep": 0,
+    "repo/.opencode/agents/mine.md": 25,
+    "repo/.opencode/context.json": 15,
+    "repo/README.md": 22,
+    "repo/opencode.json": 51
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo\nrepo/.claude\nrepo/.opencode\nrepo/.opencode/agents",
+    "<exit>": "0",
+    "<stderr>": "[uninstall] WARN: could not fully remove the install — still present: <SB>\\repo\\.opencode. The install marker was KEPT so you can retry `harness uninstall` once the file(s) are unlocked/removable.\n",
+    "<stdout>": "[uninstall] target: <SB>\\repo (opencode:project)\n[uninstall] removes: AGENT.md, .opencode/, laws/, agents/, skills/, and the opencode.json instructions entry.\n[uninstall] memory/ and notebook/ are kept in place (never deleted here).\n[uninstall] INCOMPLETE — removed 5 file(s), but 1 item(s) survived (see the WARN above); the install marker was kept — retry `harness uninstall` once they're removable. opencode.json updated where needed; memory/notebook kept in place.\n[uninstall] also found claude:project here — run `harness uninstall` again to remove it.\n"
+  }
+}

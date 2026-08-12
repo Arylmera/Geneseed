@@ -45,7 +45,7 @@
  * for the file as a whole is that its transitive imports now reach two modules that spawn,
  * which `_ALLOWED_SPAWNS` in `tests/test_hook_cli_parity.py` declares argv by argv.
  */
-import { cliSpec } from '../js/cli.mjs';
+import { cliSpec, printHelp } from '../js/cli.mjs';
 import { cmdDiff } from '../js/diff.mjs';
 import { cmdDoctor } from '../js/doctor.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
@@ -325,6 +325,14 @@ async function main(argv) {
       + 'metadata is missing or stale. Run `geneseed doctor`, and regenerate it from a '
       + 'checkout with `python tests/gen_cli_reference.py`.');
   }
+  // BEFORE `parse`, because `-h`/`--help` is not in any subcommand's spec and never can be:
+  // argparse owns it at the parser, not in the argument table `cli.json` walks — so `parse`
+  // answers `unrecognized arguments: --help`, which is what this entry did on all 26 verbs
+  // until Task 10 compared the two implementations' help for the first time. AFTER the spec
+  // lookup, so a stale `cli.json` still refuses with the sentence that names the fix rather
+  // than printing half a help text. Anything else on the line is ignored, which is argparse's
+  // own rule: `harness diff --nope --help` prints the help.
+  if (argv.slice(1).some((t) => t === '-h' || t === '--help')) return printHelp('geneseed', verb);
   const parsed = parse(argSpec, argv.slice(1));
   if (parsed.error) return die(2, parsed.error);
   try {

@@ -1,0 +1,22 @@
+{
+  "paths": {
+    "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "7744988a6f95c2aa3ef40820c7c50e8dcc3694021776527757b6beb0a1c12862",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 13,
+    "<exit>": 1,
+    "<stderr>": 145,
+    "<stdout>": 0,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo",
+    "<exit>": "1",
+    "<stderr>": "[diff] no global Geneseed install at <HOME>/.config/opencode (no .geneseed-manifest.json). Pass --target, or run `--emit opencode-global` first.\n",
+    "<stdout>": ""
+  }
+}

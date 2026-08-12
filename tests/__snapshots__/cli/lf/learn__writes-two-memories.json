@@ -1,0 +1,32 @@
+{
+  "paths": {
+    "<dirs>": "5985f7526bdd61f2f0a7148d765e70858686d5948a64e865469b1cb3ca38db0b",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "2c1e4014d551532ce35c02cc4017eeb0342b239a234fa020604bed5ea10dd0e3",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "echo/prompt.txt": "dace39ce2b1537113f215e868015731e502b103e216f049a1b74ed0ee4320296",
+    "reply/out.md": "8392e259595ec2e0baef52a07fc80dd0c336c8773874c685e79a46ff4a31eb60",
+    "repo/memory/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/memory/MEMORY.md": "15aabb762c4d961e58d4452c43425479c29da4c75e8628918d41e2a5be5377c3",
+    "repo/memory/alpha-fact.md": "9bbdcb3370bfb12b4a542cd4f2f8e7bb7c8734de86344c2e61854f54500f6ea3",
+    "repo/memory/beta-fact.md": "bc74cc13324c8f84500b65c8469b8257f7aa7fab2d761fe9607cb2935268a91e"
+  },
+  "sizes": {
+    "<dirs>": 36,
+    "<exit>": 1,
+    "<stderr>": 74,
+    "<stdout>": 0,
+    "echo/prompt.txt": 1646,
+    "reply/out.md": 260,
+    "repo/memory/.keep": 0,
+    "repo/memory/MEMORY.md": 126,
+    "repo/memory/alpha-fact.md": 135,
+    "repo/memory/beta-fact.md": 114
+  },
+  "verbatim": {
+    "<dirs>": "cfg\necho\nhome\nreply\nrepo\nrepo/memory",
+    "<exit>": "0",
+    "<stderr>": "[learn] wrote 2 memory file(s) to <SB>/repo/memory: alpha-fact, beta-fact\n",
+    "<stdout>": ""
+  }
+}

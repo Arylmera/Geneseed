@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "7428b0844d9d0574d40b7e7101d842d3a2631c526779df507427cdcd886d4946",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "p.json": "0d119f239aa6da4e31a62987324cc7bb9dea568717aab2382ebad436628c41a4",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 13,
+    "<exit>": 1,
+    "<stderr>": 205,
+    "<stdout>": 0,
+    "p.json": 34,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo",
+    "<exit>": "1",
+    "<stderr>": "[theme] palette missing role(s): addBg, bg, bgElement, bgPanel, border, comment, delBg, err, fg, fgMuted, fn, kw, num, ok, secondary, str, type, warn (see themes/opencode/README.md; --from seeds them all)\n",
+    "<stdout>": ""
+  }
+}

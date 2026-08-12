@@ -71,12 +71,15 @@
  * IMPLEMENTATIONS — declared here rather than faked, because the only way to gate it is to
  * edit the machine running the gate.
  */
-import { existsSync, lstatSync, mkdirSync, readlinkSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  chmodSync, existsSync, lstatSync, mkdirSync, readlinkSync, rmSync,
+} from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 
 import { ROOT } from './checkout.mjs';
+import { readMaybe } from './installs.mjs';
 import { pyPathStr, pyPrint, pyPrintErr, writeText } from './lib/pyfs.mjs';
 
 const IS_WIN = process.platform === 'win32';
@@ -163,9 +166,8 @@ export function cmdLink(args) {
     }
     return 0;
   }
-  // Unix: symlink the launcher into a bin dir (default ~/.local/bin, no sudo). NO
-  // DIVERGENCE HERE — the reference symlinks `ROOT/geneseed`, the shell launcher, and so
-  // does this: the target is a file, not an interpreter, so both implementations name it.
+  // Unix: write a shim into a bin dir (default ~/.local/bin, no sudo). See the shim
+  // comment below for why this is no longer a symlink to `ROOT/geneseed`.
   // `Path(args.dir)` — and `pyPathStr` is that conversion, not decoration. The reference
   // builds a `Path` here and prints `str(target_dir)` twice (the PATH notice and the `export
   // PATH=` line) as well as comparing it against `PATH.split(os.pathsep)`, so an argument
@@ -184,18 +186,27 @@ export function cmdLink(args) {
     }
   }
   const dest = path.join(targetDir, 'geneseed');
+  const entry = path.join(here, 'bin', 'geneseed-cli.mjs');
   try {
     mkdirSync(targetDir, { recursive: true });
     // `dest.is_symlink() or dest.exists()` — the first half is what catches a BROKEN
     // symlink, which `existsSync` follows and reports absent.
     if (isSymlink(dest) || existsSync(dest)) rmSync(dest, { force: true });
-    symlinkSync(path.join(here, 'geneseed'), dest);
+    // A WRITTEN SHIM, not a symlink to `ROOT/geneseed`. The bash launcher execs a Python
+    // interpreter, so symlinking it puts Python on PATH from the Node verb. The Windows
+    // arm above has always written a shim; this is the same shape. `GENESEED_LINK_SHIM`
+    // is the marker `cmdUnlink` recognises — without it, unlink cannot tell our file from
+    // a stranger's and would have to refuse every regular file, which is a no-op.
+    writeText(dest, '#!/bin/sh\n'
+      + '# GENESEED_LINK_SHIM\n'
+      + `exec "${process.execPath}" "${entry}" "$@"\n`);
+    chmodSync(dest, 0o755);
   } catch (e) {
     pyPrintErr(`geneseed: could not write ${dest} (${pyOsError(e)}) — pick a writable dir: `
       + 'geneseed link <dir>\n');
     return 1;
   }
-  pyPrint(`geneseed: linked ${dest} -> ${path.join(here, 'geneseed')}\n`);
+  pyPrint(`geneseed: linked ${dest} -> ${entry}\n`);
   if ((process.env.PATH || '').split(path.delimiter).includes(targetDir)) {
     pyPrint(`geneseed: '${targetDir}' is on PATH — run 'geneseed' from anywhere.\n`);
   } else {
@@ -234,10 +245,15 @@ export function cmdUnlink() {
     if (seen.has(d)) continue;
     seen.add(d);
     const f = path.join(d, 'geneseed');
-    // `os.readlink(f)` raw, then `.name` — NOT a resolved path: the reference asks whether
-    // the link's own target BASENAME is `geneseed`, so a symlink pointing at some other
-    // program that happens to sit in a `geneseed` directory is left alone.
-    if (isSymlink(f) && path.basename(readlinkSync(f)) === 'geneseed') {
+    // TWO shapes, because two shapes exist on disk. (a) `os.readlink(f)` raw, then `.name`
+    // — NOT a resolved path: the reference asks whether the link's own target BASENAME is
+    // `geneseed`, so a symlink pointing at some other program that happens to sit in a
+    // `geneseed` directory is left alone. That is every install made before the shim.
+    // (b) a regular file we wrote, identified by its marker — never "any regular file
+    // called geneseed", which would delete a stranger's program.
+    const ours = (isSymlink(f) && path.basename(readlinkSync(f)) === 'geneseed')
+      || (!isSymlink(f) && existsSync(f) && (readMaybe(f) ?? '').includes('GENESEED_LINK_SHIM'));
+    if (ours) {
       try {
         rmSync(f);
         pyPrint(`geneseed: removed ${f}\n`);

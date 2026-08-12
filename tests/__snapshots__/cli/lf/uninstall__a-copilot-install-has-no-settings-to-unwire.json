@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "b1a3f728b65bb24e6fc8ceb180d7dd0a6b779b1789a2a1244d82ca5945c5fe76",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "1e03b7f432ffa1a5b0391f132931d0c6c2ddff7ccf551f7200fcb721b5ecf05c",
+    "repo/.github/workflows/ci.yml": "e80c48c07c83c46fa16fab702aad9bfdf3b4e838aaeee7b8de51551fd335b30e",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 49,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 420,
+    "repo/.github/workflows/ci.yml": 18,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo\nrepo/.github\nrepo/.github/workflows",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[uninstall] target: <SB>/repo (copilot:project)\n[uninstall] removes: agents/, skills/, markers, and the AGENTS.md managed block (Copilot has no settings.json/hooks to unwire; your own .github files are kept).\n[uninstall] memory/ and notebook/ are kept in place (never deleted here).\n[uninstall] done — removed 1 file(s); settings.json updated where needed; memory/notebook kept in place. Start a new session to apply.\n"
+  }
+}

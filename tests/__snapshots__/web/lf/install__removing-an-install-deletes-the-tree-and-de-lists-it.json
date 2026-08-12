@@ -1,0 +1,47 @@
+{
+  "paths": {
+    "<daemon-record>": "001626a30ef917ebc601ee099fe891e89bb3ffb8e6481b562b263a0b4d50ce84",
+    "<dirs>": "e8afcf2e35b2b607177b3e5317f96fa8907e6a837988c149a3f4edc9cca1a4b0",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<r1 body>": "3a4326a0fa3f3f6c31da09513216262f862da312af194bbd260ff91a4d4cfebf",
+    "<r1 headers>": "4f53fc01d2e4be5a7f6292873a10d692982ab80d2af4c8d97b51623fa72b1712",
+    "<r1 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<r2 body>": "cdeeca983ca0c899b4c11fa604f7a71101b75691f724bb8e12eb581a543b5ba7",
+    "<r2 headers>": "0e5e14fb1b92d942832d0fe94c6a14a7a65dfa8503bb283fb1ff93b0b8c00f89",
+    "<r2 status>": "f9bafc82ba5f8fb02b25020d66f396860604f496ca919480147fa525cb505d88",
+    "<server stderr>": "bf2c191b3b1b8565a91cb34f7270876576beb26ae0adec9ed58c0f8cd814b34d",
+    "<server stdout>": "c096a2f39dbf64e34099777d2577d7e916870b8ea0288dfc2aaa475ff15c2ded",
+    "home/.config/opencode/opencode.json": "0f4d673ffb91cae66fd236e4eb964d0b49771fd0cee47994652ffa2d6c6d3bd2",
+    "home/.config/opencode/skills/mine.md": "92c003665cdd7dca89425878a28450b78a806bab5a1676c2001ad440ef01c3ee",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<daemon-record>": 121,
+    "<dirs>": 77,
+    "<exit>": 1,
+    "<r1 body>": 94,
+    "<r1 headers>": 49,
+    "<r1 status>": 6,
+    "<r2 body>": 890,
+    "<r2 headers>": 50,
+    "<r2 status>": 6,
+    "<server stderr>": 210,
+    "<server stdout>": 84,
+    "home/.config/opencode/opencode.json": 73,
+    "home/.config/opencode/skills/mine.md": 23,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<daemon-record>": "{\"pid\": <PID>, \"port\": <PORT>, \"started\": <T>, \"theme\": \"imperial\", \"token\": \"<TOKEN>\", \"url\": \"http://127.0.0.1:<PORT>\"}",
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/skills\nrepo",
+    "<exit>": "0",
+    "<r1 body>": "{\"ok\": true, \"removed\": 2, \"memory\": \"keep\", \"incomplete\": [\"<HOME>/.config/opencode/skills\"]}",
+    "<r1 headers>": "Content-Type: application/json\nContent-Length: 94",
+    "<r1 status>": "200 OK",
+    "<r2 body>": "{\"installs\": [{\"id\": \"opencode:global\", \"host\": \"opencode\", \"scope\": \"global\", \"path\": \"<HOME>/.config/opencode\", \"state\": \"absent\", \"theme\": null, \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": true}, {\"id\": \"claude:global\", \"host\": \"claude\", \"scope\": \"global\", \"path\": \"<HOME>/.claude\", \"state\": \"absent\", \"theme\": null, \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": false}, {\"id\": \"bob:global\", \"host\": \"bob\", \"scope\": \"global\", \"path\": \"<HOME>/.bob\", \"state\": \"absent\", \"theme\": null, \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": false}, {\"id\": \"copilot:global\", \"host\": \"copilot\", \"scope\": \"global\", \"path\": \"<HOME>/.copilot\", \"state\": \"absent\", \"theme\": null, \"footprint\": \"full\", \"posture\": null, \"mode\": null, \"selected\": false}], \"postures\": [\"peer\", \"artisan\", \"assistant\", \"expert\", \"mentor\"], \"modes\": [\"direct\", \"foreman\"]}",
+    "<r2 headers>": "Content-Type: application/json\nContent-Length: 890",
+    "<r2 status>": "200 OK",
+    "<server stderr>": "[uninstall] WARN: could not fully remove the install — still present: <HOME>/.config/opencode/skills. The install marker was KEPT so you can retry `harness uninstall` once the file(s) are unlocked/removable.\n",
+    "<server stdout>": "[web] Geneseed UI on http://127.0.0.1:<PORT>  (theme: imperial)\n[web] daemon ready.\n"
+  }
+}

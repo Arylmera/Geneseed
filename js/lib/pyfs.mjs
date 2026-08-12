@@ -244,8 +244,19 @@ export function indexOfEq(arr, value) {
  * Two residual differences, both unreachable with this repo's ASCII filenames: Python
  * compares by code point where JS compares by UTF-16 code unit (differs only above the
  * BMP), and `str.lower()` is not `toLowerCase()` for a handful of characters.
+ *
+ * THE SEPARATOR CONVERSION IS NOT OPTIONAL, and it was missing until the byte-bearing
+ * corpus in `tests/test_pure_function_parity.py` asked. `ntpath.normcase` is
+ * `s.replace('/', '\\').lower()`, and `PurePath._str_normcase` gets the same conversion for
+ * free because `Path` has already done it — so BOTH readings of the reference fold slashes
+ * and this did not. Every sort call site feeds it `path.join` output or a bare `readdir`
+ * name, which is why no emitted byte ever moved; `fnTranslate(normcase(pattern))` in
+ * `js/hooks.mjs` is where it was reachable, because an exclude pattern is USER-WRITTEN and
+ * `memory/*` never matched a native `memory\x` the way `fnmatch` does.
  */
-export const normcase = process.platform === 'win32' ? (s) => s.toLowerCase() : (s) => s;
+export const normcase = process.platform === 'win32'
+  ? (s) => s.replaceAll('/', '\\').toLowerCase()
+  : (s) => s;
 
 /** `sorted()` over paths \u2014 one owner, so two call sites cannot drift apart. */
 export function comparePaths(a, b) {
@@ -466,6 +477,39 @@ export function pyAscii(v) {
 const xlate = (s) => (EOL === '\n' ? s : s.replaceAll('\n', EOL));
 export const pyPrint = (s) => process.stdout.write(xlate(s));
 export const pyPrintErr = (s) => process.stderr.write(xlate(s));
+
+/**
+ * Hold `fn`'s stderr, and emit it only if `fn` RETURNS.
+ *
+ * The reproduction of `except SystemExit` for a port that writes its refusal at the raise
+ * site (`js/generate.mjs`'s `sysExit` docblock states the convention). `sys.exit(msg)`
+ * attaches the message to the EXCEPTION and the interpreter prints it on the way out, so a
+ * Python caller that catches sees no output at all — which makes write-at-the-raise-site
+ * identical for every caller that lets the throw propagate, and wrong for every caller that
+ * catches.
+ *
+ * MOVED HERE beside `pyPrintErr`, whose writes it intercepts, when the hook became the
+ * second and third such caller: `js/hosts.mjs`'s `expanduser` refuses a `~user` path by
+ * printing and throwing, and `js/hooks.mjs` catches it twice — once per `excludes.json`
+ * entry and once around `$GENESEED_ROOT`/`--root`. Its old docblock in `js/doctor.mjs`
+ * warned that a general helper "would invite a second caller that wanted silence the
+ * noise". That warning stands and is the contract: this is for a message that belonged to
+ * an exception NOBODY LET ESCAPE, never for quieting output a call legitimately makes —
+ * which is why the held chunks are replayed in full on the success path.
+ */
+export function withDiscardableStderr(fn) {
+  const real = process.stderr.write.bind(process.stderr);
+  const held = [];
+  process.stderr.write = (chunk) => { held.push(chunk); return true; };
+  try {
+    const value = fn();
+    process.stderr.write = real;
+    for (const chunk of held) real(chunk);
+    return value;
+  } finally {
+    process.stderr.write = real;
+  }
+}
 
 /**
  * The same rule applied to a whole CALL rather than to one string — `bin/geneseed.mjs`'s
@@ -702,13 +746,40 @@ export function pyInt(s) {
   return Number(sign === -1 ? -value : value);
 }
 
+/**
+ * `str(Path(x))` — and it is PLATFORM-SHAPED, because `Path` is.
+ *
+ * `Path` is `WindowsPath` on Windows and `PosixPath` everywhere else, and the two parsers
+ * disagree about the two things below. A body that is right on one host is therefore wrong
+ * on the other, which is exactly how this one passed a whole Windows suite and failed two
+ * cases on the first Linux run of `tests/test_pure_function_parity.py`:
+ *
+ *   * SEPARATORS. `ntpath` treats `\` and `/` alike; `posixpath` treats `\` as an ordinary
+ *     filename character. `str(PurePosixPath('C:\\x\\bin\\'))` is that string VERBATIM —
+ *     one component, trailing backslash and all — where splitting on both answered
+ *     `C:/x/bin`. A backslash is legal in a Linux filename, so this is not academic.
+ *   * THE DOUBLE-SLASH ROOT. POSIX gives EXACTLY two leading slashes an
+ *     implementation-defined meaning and `PurePosixPath` preserves them; three or more
+ *     collapse to one. `path.posix.parse` reports a one-character root for every case, so
+ *     `//server/share` came back as `/server/share`.
+ *
+ * NOT reproduced, and named here rather than left as a gap nobody wrote down: `//` and
+ * `///x` on WINDOWS, where `PureWindowsPath` answers `\\` and `\\\x` and this answers `\`
+ * and `\x`. Those are incomplete UNC prefixes and matching them needs ntpath's share-name
+ * parsing; both inputs are kept OUT of the corpus in `tests/test_pure_function_parity.py`
+ * instead of sitting in it wrong.
+ *
+ * The root's separators are still rewritten ONE AT A TIME, never `replace(/[\\/]+/g, sep)`:
+ * a UNC root's leading pair is part of it, so collapsing runs turns `//server/share/x` into
+ * `\server\share\x`.
+ */
 export function pyPathStr(s) {
-  const raw = path.parse(s).root;
-  // Each separator individually, never `replace(/[\\/]+/g, sep)`: a UNC root's LEADING pair
-  // is part of it, so collapsing runs turns `//server/share/x` into `\server\share\x`.
-  // Measured against `str(Path(...))` over a 25-path corpus; that was the one that differed.
+  const win = path.sep === '\\';
+  let raw = path.parse(s).root;
+  if (!win && raw && /^\/\/(?!\/)/.test(s)) raw = '//';
   const root = raw.replace(/[\\/]/g, path.sep);
-  const parts = s.slice(raw.length).split(/[\\/]+/).filter((p) => p !== '' && p !== '.');
+  const seps = win ? /[\\/]+/ : /\/+/;
+  const parts = s.slice(raw.length).split(seps).filter((p) => p !== '' && p !== '.');
   const tail = parts.join(path.sep);
   if (!root) return tail || '.';
   return root + tail;

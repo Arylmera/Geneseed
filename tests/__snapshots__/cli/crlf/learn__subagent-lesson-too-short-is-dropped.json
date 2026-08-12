@@ -1,0 +1,26 @@
+{
+  "paths": {
+    "<dirs>": "5985f7526bdd61f2f0a7148d765e70858686d5948a64e865469b1cb3ca38db0b",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "echo/prompt.txt": "435424b52fb8f4ae1d8cb605e309d164ded0a55d2191933032e607b87669b76c",
+    "reply/out.md": "9f2a59a60e65fbcd5a3e1b7248adf92890ce3a32b19e43fb4751c2657196de13",
+    "repo/memory/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 36,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 0,
+    "echo/prompt.txt": 472,
+    "reply/out.md": 4,
+    "repo/memory/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\necho\nhome\nreply\nrepo\nrepo/memory",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": ""
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "paths": {
+    "<dirs>": "352e84a1c1bbbdb4a0f24eb326ccf860b11ff9c988bec012aa1cc61bf4931f28",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "5876618c43cc846673a2f3bdb38a90e029f2742311a275dc4d877b6122123196",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "echo/prompt.txt": "9f890f518cb244e131d0551b563353d2d423fc51f3c7c5b90d6637ece370c255",
+    "reply/out.md": "92785c71791538a9aa2f37aedf2defab2428b36264df2a4fe19ad62fd180cba8",
+    "repo/memory/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/memory/agents/explore.md": "e4c7d1724639fbe9313e6db5294679a21dc2bfec84f939d8296df5cf8769c0c2"
+  },
+  "sizes": {
+    "<dirs>": 55,
+    "<exit>": 1,
+    "<stderr>": 59,
+    "<stdout>": 0,
+    "echo/prompt.txt": 465,
+    "reply/out.md": 43,
+    "repo/memory/.keep": 0,
+    "repo/memory/agents/explore.md": 3540
+  },
+  "verbatim": {
+    "<dirs>": "cfg\necho\nhome\nreply\nrepo\nrepo/memory\nrepo/memory/agents",
+    "<exit>": "0",
+    "<stderr>": "[learn] agent lesson -> <SB>/repo/memory/agents/explore.md\n",
+    "<stdout>": ""
+  }
+}

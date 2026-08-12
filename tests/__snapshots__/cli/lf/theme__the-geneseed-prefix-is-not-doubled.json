@@ -1,0 +1,26 @@
+{
+  "paths": {
+    "<dirs>": "497dce405dc10ff4e98aeb9f0c5861c43f5cc3bdcf25710e4838c9a28ef50301",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "6ff0951b855aa94b43f1a149c4f2beb234447b73a0f1395128737df98a85a85c",
+    "home/.config/opencode/themes/geneseed-mine-transparent.json": "5bcb1fe027a07a2bb306231bc5f704245e965af3828f56d34ec3bac0a0e8e542",
+    "home/.config/opencode/themes/geneseed-mine.json": "d4e8b0f56b352a4c58d0811af7550ad4746d3bc0179c051b131d096ba8df577c",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 77,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 192,
+    "home/.config/opencode/themes/geneseed-mine-transparent.json": 1648,
+    "home/.config/opencode/themes/geneseed-mine.json": 1663,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/themes\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[theme] wrote geneseed-mine.json, geneseed-mine-transparent.json to <HOME>/.config/opencode/themes\n[theme] select in OpenCode with: /theme geneseed-mine  (or /theme geneseed-mine-transparent)\n"
+  }
+}

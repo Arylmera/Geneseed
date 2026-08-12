@@ -1,0 +1,24 @@
+{
+  "paths": {
+    "<dirs>": "13bae1d455ca2a52a030ac3cbb456b9aba0e371b18bfeba8b6b4c36d85e18181",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "d99dbae2351a2b18a1b350e412969c11e1d95e8527da6ce70370750a49ff514c",
+    "home/.local/bin/geneseed": "07236f375a7f2844450a24d55fbe7e2f7d65a3297896a5c9c0996314d778cb31",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 41,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 130,
+    "home/.local/bin/geneseed": 62,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.local\nhome/.local/bin\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "geneseed: linked <HOME>/.local/bin/geneseed -> <ENTRY>\ngeneseed: '<HOME>/.local/bin' is on PATH — run 'geneseed' from anywhere.\n"
+  }
+}

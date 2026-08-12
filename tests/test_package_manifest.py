@@ -212,6 +212,11 @@ SHIPS: tuple[tuple[str, str], ...] = (
     # that list. `docs/specs/` is gitignored, so a ledger kept only in a phase note is a
     # per-machine file — this is the tracked home for it.
     ("docs/port-ledger.md", "docs/*.md — what the Node port does not prove"),
+    # P10 (Task 10), and its neighbour above says why it belongs in the package rather than in
+    # a phase note: `docs/port-ledger.md` lists what the port does not PROVE, and this lists
+    # where the port deliberately does not AGREE. Both are statements a reader holding two
+    # implementations is owed, and both would otherwise live in gitignored `docs/specs/`.
+    ("docs/declined.md", "docs/*.md — where the port deliberately diverges, and why"),
     ("web/dist/", "TRACKED and load-bearing: js/web/server.mjs serves it, and _npm_build is a "
                   "first-run-from-a-partial-checkout path no cell reaches"),
     ("web/src/pages/Laws.jsx", "doctor's lawMetaProblems reads this ONE file out of web/src; "
@@ -664,7 +669,16 @@ class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
     the answer covers every theme, host and footprint without emitting anything.
     """
 
-    INVOCATION = re.compile(r"python3?(?:\.exe)?\s+[^\s`\"']*\.py\b|#!.*python|\buv run\b")
+    # `python3 -c '...'` is an invocation too, and the first draft of this pattern could
+    # not see it — which is how src/skills/daydream and src/skills/herdr came to call
+    # python while README.md, SETUP.md and SHIPPED.md promised that exactly one file did.
+    # A gate that cannot see the counterexample is not a gate; it is a sentence about the
+    # examples someone thought of.
+    INVOCATION = re.compile(
+        r"python3?(?:\.exe)?\s+-c\b"
+        r"|python3?(?:\.exe)?\s+[^\s`\"']*\.py\b"
+        r"|#!.*python"
+        r"|\buv run\b")
 
     PYTHON_IN_THE_PRODUCT: dict[str, str] = {
         "src/skills/token-report/scripts/token_report.py":
@@ -684,7 +698,34 @@ class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
             "(P5b), not at this string — test_hook_form.py gates the emitted shape.",
         "adapters/opencode/README.md": "adapter prose naming `python build.py`",
         "adapters/opencode/GLOBAL-HARNESS-SPEC.md": "adapter prose naming `python build.py`",
+        "src/skills/daydream/instructions.md": "`python3 -c` for weighted random sampling",
+        "src/skills/herdr.md":
+            "`| python3 -c 'import sys,json; ...'` to pull a field out of JSON, x2",
     }
+
+    # THE ACTUAL PYTHON SURFACE OF THE PRODUCT, as of P0. Three entries, not one — the
+    # widened INVOCATION regex above and the whole-tree scan below each found a path the
+    # old gates could not see. P2 empties this by porting all three; P4's
+    # no_python.test.mjs asserts it is empty. Until then README.md, SETUP.md and
+    # SHIPPED.md say three, because saying one was false.
+    PYTHON_IN_THE_PRODUCT_FILES = ["src/skills/token-report/scripts/token_report.py"]
+    PYTHON_IN_THE_PRODUCT_INVOCATIONS = [  # Unused until the phase that empties it (P4 and later).
+        "src/skills/daydream/instructions.md",   # `python3 -c` for random sampling
+        "src/skills/herdr.md",                   # `| python3 -c 'import sys,json; ...'` x2
+    ]
+
+    # Python that is tracked in this repository but never rides inside a rendered
+    # bundle: the reference implementation this port is replacing (`rituals/`, the root
+    # `_build_*.py` facade, `build.py`, `_install_registry.py`), and `.claude/` — this
+    # repository's OWN deployed harness (WITHHELD above: "not the product"). The `.claude/`
+    # directory is watched file-by-file rather than excluded by prefix, so a NEW Python file
+    # appearing there is caught rather than silently permitted.
+    _NOT_THE_PRODUCT_PREFIXES = ("tests/", "rituals/")
+    _NOT_THE_PRODUCT_FILES = frozenset({
+        "build.py", "_install_registry.py", "_build_core.py", "_build_emit.py",
+        "_build_global.py", "_build_render.py", "_build_settings.py",
+        ".claude/skills/token-report/scripts/token_report.py",
+    })
 
     def _found(self) -> set[str]:
         out = subprocess.run(
@@ -720,9 +761,23 @@ class TheBundlesOnlyPythonIsDeclared(unittest.TestCase):
         )
 
     def test_the_only_python_file_in_the_product_is_the_token_report_script(self):
-        """Absolute, beside the set comparison: the count is what the docs promise."""
-        py = sorted(p for p in self._found() if p.endswith(".py"))
-        self.assertEqual(py, ["src/skills/token-report/scripts/token_report.py"])
+        """Absolute, beside the set comparison: the count is what the docs promise.
+
+        `self._found()` only ever scans `src` and `adapters`, so it cannot see
+        `.claude/skills/token-report/scripts/token_report.py` — THIS repository's own
+        deployed harness (WITHHELD above: "not the product"), which carries a second
+        tracked copy of the same script. Scan every tracked file instead, then subtract
+        what is never part of a rendered bundle (`_NOT_THE_PRODUCT_*` above).
+        """
+        found = sorted(
+            p for p in _tracked() if p.endswith(".py")
+            and not p.startswith(self._NOT_THE_PRODUCT_PREFIXES)
+            and p not in self._NOT_THE_PRODUCT_FILES
+        )
+        self.assertEqual(
+            found, sorted(self.PYTHON_IN_THE_PRODUCT_FILES),
+            f"tracked .py files outside the reference implementation and .claude/: {found}",
+        )
 
 
 if __name__ == "__main__":

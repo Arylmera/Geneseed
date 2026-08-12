@@ -1,0 +1,28 @@
+{
+  "paths": {
+    "<dirs>": "206617ac96b91fc95909c25c40f7616c7aafd92258ff18d2974f3ca9419418dd",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "74e7fc871bb2cf9a458f200f197153b7ea17c8c27dead612e642d780902fdd29",
+    "home/.claude/.geneseed-emit": "d5a4d4bd01e992aeea97c9287481d9bde746edc2fd2d49c0366d8a5351902721",
+    "home/.claude/.geneseed-theme": "07c21153b0d65281df8d296392a5eb9ce3f39a35d9c7f43e84c998989f15cc2a",
+    "home/.claude/.geneseed-version": "8855cb90253b2e9f847cfe9a3d2d292f73104f7f53fc8fea24484d38abbc1af2",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 26,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 1552,
+    "home/.claude/.geneseed-emit": 15,
+    "home/.claude/.geneseed-theme": 9,
+    "home/.claude/.geneseed-version": 37,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.claude\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "┌─ ◆ Geneseed — status ────────────────────────────────────────────────────────────────────────────────┐\n│  theme        neutral  (accent: cyan)                                                                │\n│  install      claude-global                                                                          │\n│  components   17 agents · 47 skills · 37 laws                                                        │\n│  memory       (not found)  (0 facts)                                                                 │\n│  version      deadbeef1234  ·  source <FP>                                                   │\n├──────────────────────────────────────────────────────────────────────────────────────────────────────┤\n│  ! installed build differs from the current source — run `./geneseed update` (or rebuild) to apply it│\n└──────────────────────────────────────────────────────────────────────────────────────────────────────┘\n"
+  }
+}

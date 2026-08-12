@@ -1,0 +1,26 @@
+{
+  "paths": {
+    "<dirs>": "bf7dfd921a85a6085fa68749e33f23806c8271b3967d15052009d98c17022eda",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "35934299e6ae415917e4635519fc993ba3b2e81d5d0d9164434945933b38a76c",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/.claude/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/.geneseed-emit": "459665e626489c7088b8614d7a1696b9cf04a3ecb4c7288962b295662b8ae07a",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 26,
+    "<exit>": 1,
+    "<stderr>": 105,
+    "<stdout>": 0,
+    "repo/.claude/.keep": 0,
+    "repo/.geneseed-emit": 8,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nrepo\nrepo/.claude",
+    "<exit>": "1",
+    "<stderr>": "[uninstall] no claude:project Geneseed install at <SB>\\repo (no .geneseed-manifest.json under .claude/).\n",
+    "<stdout>": ""
+  }
+}

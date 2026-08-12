@@ -1,0 +1,28 @@
+{
+  "paths": {
+    "<dirs>": "352e84a1c1bbbdb4a0f24eb326ccf860b11ff9c988bec012aa1cc61bf4931f28",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "7213f7e47847bdb9e39aad993f68f73298991d81e1fa71226560c20c315ce104",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "echo/prompt.txt": "1347a34fa4c403ba3ba5a7ef422197d9f9a49df96e70db300f7f0822b2d88809",
+    "reply/out.md": "fdb0af5c58f17e5eb46c6c5611cae8973eefc797dab43781e17aaf3dbf3306de",
+    "repo/memory/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/memory/agents/code-reviewer.md": "9699e1bbec9f4197376e90d5753758dddee7d0d836721768a92a6929e1b400a8"
+  },
+  "sizes": {
+    "<dirs>": 55,
+    "<exit>": 1,
+    "<stderr>": 65,
+    "<stdout>": 0,
+    "echo/prompt.txt": 481,
+    "reply/out.md": 40,
+    "repo/memory/.keep": 0,
+    "repo/memory/agents/code-reviewer.md": 79
+  },
+  "verbatim": {
+    "<dirs>": "cfg\necho\nhome\nreply\nrepo\nrepo/memory\nrepo/memory/agents",
+    "<exit>": "0",
+    "<stderr>": "[learn] agent lesson -> <SB>\\repo\\memory\\agents\\code-reviewer.md\n",
+    "<stdout>": ""
+  }
+}

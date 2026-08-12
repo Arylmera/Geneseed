@@ -1,0 +1,14 @@
+usage: harness web [-h] [--theme THEME] [--port PORT] [--no-browser]
+                   [{start,stop,restart,status}]
+
+positional arguments:
+  {start,stop,restart,status}
+                        start|stop|restart|status — run the UI as a background
+                        daemon so it doesn't block the terminal (omit to run
+                        in the foreground)
+
+options:
+  -h, --help            show this help message and exit
+  --theme THEME         force a theme (default: detected)
+  --port PORT           port (default: 4747)
+  --no-browser          don't auto-open the browser

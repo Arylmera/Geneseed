@@ -1,0 +1,52 @@
+{
+  "paths": {
+    "<dirs>": "d4cbc65fb6f3ffb03fc50f4874fe5b91ed93a7e2aa5cc9d4b30eb1953646ec92",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "9ae3fc77ef61d260a6a5f45a6dc70cabb0f1ed38d6d1c380f1a2316aa9187513",
+    "<stdout>": "2d13b6020336e93a05e369cce27cb9ca8fa6e8156507db493c099f926b6e9d09",
+    "home/.config/opencode/.geneseed-emit": "de98185a41c839961b783c5d0703a020e29ba9469a4a7112743c67f4eb9acd6b",
+    "home/.config/opencode/.geneseed-manifest.json": "f4eed83f51cc6bdc830e0819b7700bfc62d0da9edf14277d8b43cc72990c5100",
+    "home/.config/opencode/.geneseed-theme": "07c21153b0d65281df8d296392a5eb9ce3f39a35d9c7f43e84c998989f15cc2a",
+    "home/.config/opencode/.geneseed-version": "8855cb90253b2e9f847cfe9a3d2d292f73104f7f53fc8fea24484d38abbc1af2",
+    "home/.config/opencode/AGENT.md": "ab98b6318d89f98bf031262130a671493d482b03509d6d3ace207a84ee4b46db",
+    "home/.config/opencode/MY-OWN.md": "9642e822c80e9c3ad6ca843a1f65fe1d056ab9f8011e8c0ca7d861c638dff1b8",
+    "home/.config/opencode/opencode.json": "413a62a84514477e9623c9e161231e3bdef4873b5728d789894efdfd7e3279d6",
+    "home/.config/opencode/prompts/mine.md": "11f510571d186365000c627f970f89431a1cbfbe94339a3f3f4cdbf03142b1a6",
+    "home/.config/opencode/skills/vend/references/deep.md": "3f25244577c5a8e14780fe01309dab3e6c9190f5429d4d1139779102ad994d66",
+    "repo/.geneseed-emit": "05deea0326f464d3a422110aa658f5ff58094053955def0ff74dcd0a45816329",
+    "repo/.geneseed-theme": "07c21153b0d65281df8d296392a5eb9ce3f39a35d9c7f43e84c998989f15cc2a",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repo/.opencode/agents/mine.md": "7022b913fe7da764d332d6a15c3893872ace7000e915a84a5f25f5cdae250e89",
+    "repo/.opencode/context.json": "65312c4d03ce5c6cbf3281af1c81537c6cbe6712f7a4624e8f66dd5f33acdccc",
+    "repo/README.md": "a07f1e07cd8a08469cdb8b05a4e60db6c499ee09ab5e7d6d13b62ed02ef2e8cd",
+    "repo/opencode.json": "f42728bcf3286fee57bd1d8c506689b321331776c5bff20fd72ed8d0b1bb7b01"
+  },
+  "sizes": {
+    "<dirs>": 223,
+    "<exit>": 1,
+    "<stderr>": 199,
+    "<stdout>": 473,
+    "home/.config/opencode/.geneseed-emit": 17,
+    "home/.config/opencode/.geneseed-manifest.json": 103,
+    "home/.config/opencode/.geneseed-theme": 9,
+    "home/.config/opencode/.geneseed-version": 37,
+    "home/.config/opencode/AGENT.md": 12,
+    "home/.config/opencode/MY-OWN.md": 24,
+    "home/.config/opencode/opencode.json": 161,
+    "home/.config/opencode/prompts/mine.md": 26,
+    "home/.config/opencode/skills/vend/references/deep.md": 16,
+    "repo/.geneseed-emit": 10,
+    "repo/.geneseed-theme": 9,
+    "repo/.keep": 0,
+    "repo/.opencode/agents/mine.md": 25,
+    "repo/.opencode/context.json": 15,
+    "repo/README.md": 22,
+    "repo/opencode.json": 51
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/prompts\nhome/.config/opencode/skills\nhome/.config/opencode/skills/vend\nhome/.config/opencode/skills/vend/references\nrepo\nrepo/.opencode\nrepo/.opencode/agents",
+    "<exit>": "0",
+    "<stderr>": "[uninstall] WARN: could not fully remove the install — still present: <SB>\\repo\\.opencode. The install marker was KEPT so you can retry `harness uninstall` once the file(s) are unlocked/removable.\n",
+    "<stdout>": "[uninstall] target: <SB>\\repo (opencode:project)\n[uninstall] removes: AGENT.md, .opencode/, laws/, agents/, skills/, and the opencode.json instructions entry.\n[uninstall] memory/ and notebook/ are kept in place (never deleted here).\n[uninstall] INCOMPLETE — removed 5 file(s), but 1 item(s) survived (see the WARN above); the install marker was kept — retry `harness uninstall` once they're removable. opencode.json updated where needed; memory/notebook kept in place.\n"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "paths": {
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "4fda9594ca4a7ac23f2cc3e5f75aac1a757a89d0337acb6fa2f4548a56e2e225",
+    "<stdout>": "807a342923fbfdc3db05e7192722f029733e3501a9f76453aa159862c2139388",
+    "home/.config/opencode/.geneseed-emit": "de98185a41c839961b783c5d0703a020e29ba9469a4a7112743c67f4eb9acd6b",
+    "home/.config/opencode/.geneseed-footprint": "67d30cae2dd1cb7c40630f1070836eefbd5e61e47f02fb3ff5dcddd550f6015a",
+    "home/.config/opencode/.geneseed-theme": "d9250b2ff7e162caad9a743dba65df7842248948701948891c6476d988831a00",
+    "home/.config/opencode/.geneseed-version": "8855cb90253b2e9f847cfe9a3d2d292f73104f7f53fc8fea24484d38abbc1af2",
+    "home/.config/opencode/AGENT.md": "ab98b6318d89f98bf031262130a671493d482b03509d6d3ace207a84ee4b46db",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<stderr>": 141,
+    "<stdout>": 1617,
+    "home/.config/opencode/.geneseed-emit": 17,
+    "home/.config/opencode/.geneseed-footprint": 10,
+    "home/.config/opencode/.geneseed-theme": 10,
+    "home/.config/opencode/.geneseed-version": 37,
+    "home/.config/opencode/AGENT.md": 12,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "0",
+    "<stderr>": "[geneseed] WARN: <HOME>\\.config\\opencode\\.geneseed-footprint holds unknown footprint 'enormous' — reading it as 'full'. Known: lean, full.\n",
+    "<stdout>": "┌─ ◆ Geneseed — status ────────────────────────────────────────────────────────────────────────────────┐\n│  theme        imperial  (accent: yellow)                                                             │\n│  install      opencode-global                                                                        │\n│  components   17 agents · 47 skills · 37 laws                                                        │\n│  memory       (not found)  (0 facts)                                                                 │\n│  version      deadbeef1234  ·  source <FP>                                                   │\n│  AGENT.md     <HOME>\\.config\\opencode\\AGENT.md  (present)│\n├──────────────────────────────────────────────────────────────────────────────────────────────────────┤\n│  ! installed build differs from the current source — run `./geneseed update` (or rebuild) to apply it│\n└──────────────────────────────────────────────────────────────────────────────────────────────────────┘\n"
+  }
+}

@@ -1,0 +1,6 @@
+usage: harness prompt [-h] [--theme THEME] [--out OUT]
+
+options:
+  -h, --help     show this help message and exit
+  --theme THEME
+  --out OUT      write to FILE (default: stdout)

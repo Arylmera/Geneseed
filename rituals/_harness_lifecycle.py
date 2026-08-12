@@ -321,7 +321,7 @@ def cmd_sync_self(args: argparse.Namespace) -> int:
 
 
 # --- run-from-anywhere (link/unlink): cross-platform PATH install ------------------
-# Unix symlinks the launcher into a bin dir; Windows writes a small `geneseed.cmd` shim
+# Unix writes a small shim into a bin dir; Windows writes a small `geneseed.cmd` shim
 # into a dedicated dir and puts THAT on the user PATH (no admin/Dev-Mode symlink needed).
 
 def _win_bin_dir() -> Path:
@@ -390,7 +390,7 @@ def cmd_link(args: argparse.Namespace) -> int:
         else:
             print(f"geneseed: add '{bindir}' to your PATH manually, then run `geneseed` from anywhere.")
         return 0
-    # Unix: symlink the launcher into a bin dir (default ~/.local/bin, no sudo).
+    # Unix: write a shim into a bin dir (default ~/.local/bin, no sudo).
     target_dir = Path(args.dir) if getattr(args, "dir", None) else None
     if target_dir is None:
         local = Path.home() / ".local" / "bin"
@@ -400,16 +400,30 @@ def cmd_link(args: argparse.Namespace) -> int:
         except OSError:
             target_dir = Path("/usr/local/bin")
     dest = target_dir / "geneseed"
+    entry = here / "rituals" / "harness.py"
     try:
         target_dir.mkdir(parents=True, exist_ok=True)
         if dest.is_symlink() or dest.exists():
             dest.unlink()
-        dest.symlink_to(here / "geneseed")
+        # A WRITTEN SHIM, not a symlink to `ROOT/geneseed`. The bash launcher that used to
+        # be symlinked execs a Python interpreter, so symlinking it puts Python on PATH
+        # from the Node port's `link` too — which is the bug this shape closes; the Node
+        # side writes its own shim now (naming `process.execPath` + `bin/geneseed-cli.mjs`)
+        # and this side keeps parity by doing the same for its own runtime.
+        # `GENESEED_LINK_SHIM` is the marker `cmd_unlink` recognises — without it, unlink
+        # cannot tell our file from a stranger's and would have to refuse every regular
+        # file, which is a no-op.
+        dest.write_text(
+            "#!/bin/sh\n"
+            "# GENESEED_LINK_SHIM\n"
+            f'exec "{sys.executable}" "{entry}" "$@"\n',
+            encoding="utf-8")
+        dest.chmod(0o755)
     except OSError as e:
         print(f"geneseed: could not write {dest} ({e}) — pick a writable dir: "
               f"geneseed link <dir>", file=sys.stderr)
         return 1
-    print(f"geneseed: linked {dest} -> {here / 'geneseed'}")
+    print(f"geneseed: linked {dest} -> {entry}")
     if str(target_dir) in (os.environ.get("PATH") or "").split(os.pathsep):
         print(f"geneseed: '{target_dir}' is on PATH — run 'geneseed' from anywhere.")
     else:
@@ -419,7 +433,7 @@ def cmd_link(args: argparse.Namespace) -> int:
 
 
 def cmd_unlink(args: argparse.Namespace) -> int:
-    """Remove the `geneseed` launcher from PATH (the symlink on Unix / shim + PATH entry
+    """Remove the `geneseed` launcher from PATH (the shim on Unix / shim + PATH entry
     on Windows)."""
     if sys.platform.startswith("win"):
         bindir = _win_bin_dir()
@@ -446,7 +460,23 @@ def cmd_unlink(args: argparse.Namespace) -> int:
             continue
         seen.add(d)
         f = d / "geneseed"
-        if f.is_symlink() and Path(os.readlink(f)).name == "geneseed":
+        # TWO shapes, because two shapes exist on disk. (a) `os.readlink(f)` raw, then
+        # `.name` — NOT a resolved path: the reference asks whether the link's own target
+        # BASENAME is `geneseed`, so a symlink pointing at some other program that happens
+        # to sit in a `geneseed` directory is left alone. That is every install made before
+        # the shim. (b) a regular file we wrote, identified by its marker — never "any
+        # regular file called geneseed", which would delete a stranger's program.
+        if f.is_symlink():
+            ours = Path(os.readlink(f)).name == "geneseed"
+        elif f.exists():
+            try:
+                body = f.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                body = ""
+            ours = "GENESEED_LINK_SHIM" in body
+        else:
+            ours = False
+        if ours:
             try:
                 f.unlink()
                 print(f"geneseed: removed {f}")

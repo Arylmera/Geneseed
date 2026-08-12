@@ -1,0 +1,28 @@
+{
+  "paths": {
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "38debecd41fedc88214d312672940702bd671d95cae2f5d26270a7cfde05ff68",
+    "home/.config/opencode/.geneseed-manifest.json": "4e77fd14a9065649511a7cf3b708fcbb2ba9a003967d400960415347bee3006a",
+    "home/.config/opencode/.geneseed-version": "4e031a892de0fa3e01e608646128b90468f57ef915d586bb2b5d6c1b1876f1b4",
+    "home/.config/opencode/AGENT.md": "21e05415e8266e7cf1f67b862af997d7ff6ae0fa299ab06c8b2443bcfa38fb42",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 1617,
+    "home/.config/opencode/.geneseed-manifest.json": 14,
+    "home/.config/opencode/.geneseed-version": 36,
+    "home/.config/opencode/AGENT.md": 67,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "┌─ ◆ Geneseed — status ────────────────────────────────────────────────────────────────────────────────┐\n│  theme        cyberpunk  (accent: magenta)                                                           │\n│  install      opencode-global                                                                        │\n│  components   17 agents · 47 skills · 37 laws                                                        │\n│  memory       (not found)  (0 facts)                                                                 │\n│  version      deadbeef1234  ·  source <FP>                                                   │\n│  AGENT.md     <HOME>/.config/opencode/AGENT.md  (present)│\n├──────────────────────────────────────────────────────────────────────────────────────────────────────┤\n│  ! installed build differs from the current source — run `./geneseed update` (or rebuild) to apply it│\n└──────────────────────────────────────────────────────────────────────────────────────────────────────┘\n"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "paths": {
+    "<dirs>": "7a46087651f2de69e36e0dec75aa0ae45daec04faae928d9148eeb5240f7abb4",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e27b8d681c9da4dd0de9f9108deba9d98a0638aa671dcc38f2dde1cd12615920",
+    "<stdout>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "echo/prompt.txt": "bbddaeb88d449193813bdec6f1c655f13d1637d32ef485ab4af399050ea054cb",
+    "home/.config/opencode/memory/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "home/.config/opencode/memory/MEMORY.md": "a6e773bd539ef1196c0cc3a5ee6f8b11602bd6b0aa0e89ebef7cc1b3df482f77",
+    "home/.config/opencode/memory/alpha-fact.md": "14049d04a19d6b19138621b19f3399f1a3265376d8bb9798a50fec33e0cab138",
+    "reply/out.md": "14049d04a19d6b19138621b19f3399f1a3265376d8bb9798a50fec33e0cab138",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 88,
+    "<exit>": 1,
+    "<stderr>": 77,
+    "<stdout>": 0,
+    "echo/prompt.txt": 1683,
+    "home/.config/opencode/memory/.keep": 0,
+    "home/.config/opencode/memory/MEMORY.md": 73,
+    "home/.config/opencode/memory/alpha-fact.md": 143,
+    "reply/out.md": 143,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\necho\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/memory\nreply\nrepo",
+    "<exit>": "0",
+    "<stderr>": "[learn] wrote 1 memory file(s) to <HOME>\\.config\\opencode\\memory: alpha-fact\n",
+    "<stdout>": ""
+  }
+}

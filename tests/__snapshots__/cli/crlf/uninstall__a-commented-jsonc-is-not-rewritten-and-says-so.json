@@ -1,0 +1,30 @@
+{
+  "paths": {
+    "<dirs>": "c6e3cbb5ccd6821a249564e89eb30058fc2d6942ef3534ca31ac004d1785449d",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "c05bf16bacba2d9ec26d9be91e0a1f3644c4290576547a60e945d06fa77a37d9",
+    "home/.config/opencode/MY-OWN.md": "9642e822c80e9c3ad6ca843a1f65fe1d056ab9f8011e8c0ca7d861c638dff1b8",
+    "home/.config/opencode/opencode.json": "413a62a84514477e9623c9e161231e3bdef4873b5728d789894efdfd7e3279d6",
+    "home/.config/opencode/opencode.jsonc": "1c57b09f61a1dd2e483a887750bce134bb9008c12e0d82139bd5ccd02bf1d039",
+    "home/.config/opencode/prompts/mine.md": "11f510571d186365000c627f970f89431a1cbfbe94339a3f3f4cdbf03142b1a6",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 78,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 525,
+    "home/.config/opencode/MY-OWN.md": 24,
+    "home/.config/opencode/opencode.json": 161,
+    "home/.config/opencode/opencode.jsonc": 83,
+    "home/.config/opencode/prompts/mine.md": 26,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nhome/.config/opencode/prompts\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[uninstall] target: <HOME>\\.config\\opencode (opencode:global)\n[uninstall] removes: AGENT.md, agents/, skills/, plugins/, markers, and the opencode.json instructions entry.\n[uninstall] memory/ and notebook/ are kept in place (never deleted here).\n[uninstall] opencode.jsonc has comments — not rewriting it. Remove this from its \"instructions\" by hand: \"<HOME>/.config/opencode/AGENT.md\"\n[uninstall] done — removed 2 file(s); opencode.json updated where needed; memory/notebook kept in place. Start a new session to apply.\n"
+  }
+}

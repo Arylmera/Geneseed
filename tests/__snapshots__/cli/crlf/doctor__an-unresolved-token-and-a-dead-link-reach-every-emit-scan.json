@@ -1,0 +1,22 @@
+{
+  "paths": {
+    "<dirs>": "6991901ebb4d90155b414709975b405b0ae9fa1aa5d80fecc11cdcad19bfa180",
+    "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "0cbf7d5f66e6e99bc11f343d8461523546f0595fa60cb7d622088c52b34d7914",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 47,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 1005,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
+    "<exit>": "1",
+    "<stderr>": "",
+    "<stdout>": "[doctor] 12 problem(s) across 1 theme(s):\n  - [neutral bob] dead link './nowhere.md' in .bob\\memory\\README.md\n  - [neutral bob] unresolved token {{NOPE}} in .bob\\memory\\README.md\n  - [neutral claude] dead link './nowhere.md' in .claude\\memory\\README.md\n  - [neutral claude] unresolved token {{NOPE}} in .claude\\memory\\README.md\n  - [neutral copilot] dead link './nowhere.md' in .github\\memory\\README.md\n  - [neutral copilot] unresolved token {{NOPE}} in .github\\memory\\README.md\n  - [neutral global/full] dead link './nowhere.md' in memory\\README.md\n  - [neutral global/full] unresolved token {{NOPE}} in memory\\README.md\n  - [neutral global/lean] dead link './nowhere.md' in memory\\README.md\n  - [neutral global/lean] unresolved token {{NOPE}} in memory\\README.md\n  - [neutral] dead link './nowhere.md' in memory\\README.md\n  - [neutral] unresolved token {{NOPE}} in memory\\README.md\n  tip: dead links to skills mean your source is incomplete — run `./geneseed update` (or re-sync src/), then re-check.\n"
+  }
+}

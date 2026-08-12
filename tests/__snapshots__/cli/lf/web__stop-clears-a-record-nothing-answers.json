@@ -1,0 +1,22 @@
+{
+  "paths": {
+    "<dirs>": "7fe9a9b0931d830416112cd909fea62ef9578861cb628d66b3f73b69770234f1",
+    "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "<stdout>": "ad7ea60e221bbeb4187cb8bef41dea740e98c6c64517c2a0a87221286af23984",
+    "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sizes": {
+    "<dirs>": 48,
+    "<exit>": 1,
+    "<stderr>": 0,
+    "<stdout>": 47,
+    "repo/.keep": 0
+  },
+  "verbatim": {
+    "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",
+    "<exit>": "0",
+    "<stderr>": "",
+    "<stdout>": "[web] no live server (cleared a stale record).\n"
+  }
+}
