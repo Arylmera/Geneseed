@@ -25,10 +25,12 @@ for a different reason and needs a different gate:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -60,6 +62,30 @@ def setUpModule() -> None:
 
 def tearDownModule() -> None:
     golden.restore_process_home()
+
+
+class _Gh139065(textwrap.TextWrapper):
+    """`if self.break_long_words and space_left > 0:` — the whole of the upstream fix.
+
+    Returning early is exactly equivalent to failing that condition: the `elif not cur_line`
+    arm below it is unreachable when `space_left <= 0`, because an empty `cur_line` has
+    `cur_len == 0` and so `space_left == width` (or 1 when width < 1).
+
+    AT MODULE SCOPE because there are now TWO sweeps that need the oracle normalised — the line
+    breaker itself and the whole formatter that calls it — and an oracle correction defined
+    inside one of them is an oracle correction the other silently does without.
+    """
+
+    def _handle_long_word(self, reversed_chunks, cur_line, cur_len, width):
+        if (1 if width < 1 else width - cur_len) <= 0:
+            return
+        super()._handle_long_word(reversed_chunks, cur_line, cur_len, width)
+
+
+#: True on an interpreter older than the gh-139065 backport (3.13.14). Detected BY BEHAVIOUR —
+#: a line of exactly `width` followed by a word too long for any line yields 'ab ' pre-fix — so
+#: a distro backport is read correctly and `sys.version_info` is never consulted.
+_PRE_GH139065 = textwrap.wrap("ab cdefgh", 3)[0] == "ab "
 
 
 def _node_json(src: str, cwd: Path = ROOT) -> object:
@@ -253,23 +279,8 @@ class TheRecordingIsWhatTheParserAnswers(unittest.TestCase):
         interpreter older than the fix the upstream one-liner is applied here. Detected by
         BEHAVIOUR rather than by `sys.version_info`, so a distro backport is read correctly."""
         import re
-        import textwrap
 
-        class _Gh139065(textwrap.TextWrapper):
-            """`if self.break_long_words and space_left > 0:` — the whole of the upstream fix.
-
-            Returning early is exactly equivalent to failing that condition: the `elif not
-            cur_line` arm below it is unreachable when `space_left <= 0`, because an empty
-            `cur_line` has `cur_len == 0` and so `space_left == width` (or 1 when width < 1)."""
-
-            def _handle_long_word(self, reversed_chunks, cur_line, cur_len, width):
-                if (1 if width < 1 else width - cur_len) <= 0:
-                    return
-                super()._handle_long_word(reversed_chunks, cur_line, cur_len, width)
-
-        # A line of exactly `width` followed by a word too long for any line: 'ab ' pre-fix.
-        pre_fix = textwrap.wrap("ab cdefgh", 3)[0] == "ab "
-        wrapper = _Gh139065 if pre_fix else textwrap.TextWrapper
+        wrapper = _Gh139065 if _PRE_GH139065 else textwrap.TextWrapper
         self.assertEqual(wrapper(width=3).wrap("ab cdefgh"), ["ab", "cde", "fgh"],
                          "the oracle is not post-gh-139065, so this sweep measures the "
                          "interpreter's patch digit rather than the port")
@@ -295,6 +306,136 @@ class TheRecordingIsWhatTheParserAnswers(unittest.TestCase):
                                  f"width {w}: the port's line breaker disagrees with "
                                  f"textwrap.wrap on {t!r}")
         self.assertGreater(len(cases) * len(widths), 1000)
+
+    @unittest.skipIf(NODE is None, "node is not on PATH")
+    def test_the_whole_formatter_agrees_at_every_width(self):
+        """THE SAME RULE, APPLIED ONE LEVEL UP — and it found a real divergence the moment it
+        was written.
+
+        The sweep above was built for `pyTextWrap` and scoped by its author to "a language
+        primitive". The formatter that CALLS it was gated at exactly one width: all 26 fixtures
+        are recorded at `COLUMNS=80`, so `tests/cli_help.test.mjs` replays 26 texts at one wrap
+        column and `docs/declined.md`'s claim that "argparse's entire layout — usage assembly,
+        the wrapped continuation indent, the two-column help position, the wrap column — is
+        gated against the reference" was true of one number.
+
+        WHAT IT CAUGHT. `formatHelp` emitted a mutually exclusive group as ONE atomic usage
+        part; `_get_actions_usage_parts` decorates the members in place and returns TWO
+        (`['[--solid-only |', '--transparent-only]']`), so argparse can break a line INSIDE the
+        group and the port could not. `theme` diverged at 73 of these 181 widths — 64 of them in
+        the `if` arm `_format_usage` takes for a short prog, i.e. the arm the corpus does
+        exercise, just never at a width where the group straddles the wrap column.
+
+        WIDTH IS THE AXIS, so the band is `COLUMNS` rather than the derived wrap column:
+        `helpWidth()`/`get_terminal_size().columns - 2` is the conversion, and passing the
+        terminal value in is what makes the two sides answer the same question. 20 is below
+        every prog this parser ships (`_format_usage`'s narrow arm) and 200 is a wide terminal.
+
+        The oracle is normalised the same way the line-breaker sweep normalises it — a pre-
+        gh-139065 `textwrap` would otherwise make this measure the interpreter's patch digit,
+        and `format_help` reaches `textwrap.wrap` through a fresh module lookup, so patching the
+        module attribute is enough."""
+        import record_help  # noqa: PLC0415 — the owner of the COLUMNS fence
+
+        real_wrap = textwrap.wrap
+
+        def _fixed_wrap(text, width=70, **kw):
+            return _Gh139065(width=width, **kw).wrap(text)
+
+        subs = record_help._subparsers(harness.build_argparser())
+        names = sorted(subs)
+        self.assertEqual(len(names), 26, "the verb set collapsed, so this measured nothing")
+        widths = list(range(20, 201))
+        was = os.environ.get("COLUMNS")
+        want: "dict[str, list[str]]" = {}
+        try:
+            if _PRE_GH139065:
+                textwrap.wrap = _fixed_wrap
+            for name in names:
+                rows = []
+                for w in widths:
+                    os.environ["COLUMNS"] = str(w)
+                    rows.append(subs[name].format_help())
+                want[name] = rows
+        finally:
+            textwrap.wrap = real_wrap
+            if was is None:
+                os.environ.pop("COLUMNS", None)
+            else:
+                os.environ["COLUMNS"] = was
+
+        progs = {name: subs[name].prog for name in names}
+        got = _node_json(
+            "import {cliCommand, formatHelp} from './js/cli.mjs';"
+            f"const names = {json.dumps(names)}, widths = {json.dumps(widths)},"
+            f"  progs = {json.dumps(progs)};"
+            "process.stdout.write(JSON.stringify(Object.fromEntries(names.map((n) =>"
+            "  [n, widths.map((w) => formatHelp(cliCommand(n), progs[n], w - 2))]))));")
+        for name in names:
+            for j, w in enumerate(widths):
+                self.assertEqual(
+                    got[name][j], want[name][j],
+                    f"`{name} --help` at COLUMNS={w}: the port's formatter disagrees with "
+                    f"argparse\n--- argparse ---\n{want[name][j]}\n--- port ---\n{got[name][j]}")
+        self.assertGreater(len(names) * len(widths), 4000)
+
+    #: `$COLUMNS` values that separate `int()` from `Number.parseInt`, plus the ones that
+    #: separate the ENV branch from the terminal fallback. Every row here is a value a shell
+    #: can really export, and each one used to take a different path in the two
+    #: implementations — `parseInt('80abc')` is 80 where `int` raises and Python falls through
+    #: to the terminal, then to 80, at a DIFFERENT width. `''` and the unset case are the
+    #: fallback itself; both sides see a pipe, so both answer 80 - 2.
+    COLUMNS_CORPUS = ("80", " 80 ", "80abc", "0x50", "1_0", "٣", "0", "-5", "+90", "",
+                      "  ", "9999", "1.5", "abc")
+
+    @unittest.skipIf(NODE is None, "node is not on PATH")
+    def test_the_ports_help_width_is_shutil_get_terminal_size(self):
+        """`helpWidth()` against `shutil.get_terminal_size().columns - 2`, over the values that
+        tell `int()` from `Number.parseInt`.
+
+        THE THIRD CALLER `pyInt`'s DOCBLOCK DID NOT HAVE. It says "surrounding whitespace is
+        Python's to strip and both callers have already done it" — `$COLUMNS` arrives however
+        the shell set it, so this one strips first. And the port reached for `parseInt` in a
+        tree that already owned `pyInt` for exactly this, which is the whole finding: every
+        help assertion in `tests/cli_help.test.mjs` runs at `COLUMNS=80`, so both the env-parse
+        branch and the fallback were exercised at one value each.
+
+        BOTH SIDES ARE SPAWNED WITH A PIPE, which pins the fallback: `os.get_terminal_size` on
+        a pipe raises OSError and `shutil` answers 80, and `process.stdout.columns` is
+        undefined and this port answers 80. That is the same 80 for the same reason, not a
+        coincidence to be tolerated."""
+        env_base = {k: v for k, v in os.environ.items() if k != "COLUMNS"}
+        for raw in self.COLUMNS_CORPUS:
+            env = dict(env_base)
+            if raw:
+                env["COLUMNS"] = raw
+            with self.subTest(columns=raw):
+                py = subprocess.run(
+                    [sys.executable, "-c",
+                     "import shutil,sys; "
+                     "sys.stdout.write(str(shutil.get_terminal_size().columns - 2))"],
+                    cwd=str(ROOT), env=env, capture_output=True, text=True, encoding="utf-8")
+                node = subprocess.run(
+                    [NODE, "--input-type=module", "-e",
+                     "import {helpWidth} from './js/cli.mjs';"
+                     "process.stdout.write(String(helpWidth()));"],
+                    cwd=str(ROOT), env=env, capture_output=True, text=True, encoding="utf-8")
+                self.assertEqual((py.returncode, node.returncode), (0, 0),
+                                 f"a probe failed:\n{py.stderr}\n{node.stderr}")
+                self.assertEqual(node.stdout, py.stdout,
+                                 f"COLUMNS={raw!r}: the port renders help at width "
+                                 f"{node.stdout} where argparse would use {py.stdout}")
+        # The vacuity guard: a corpus every row of which answered 78 would prove nothing about
+        # the parse at all.
+        self.assertGreater(len({
+            subprocess.run([sys.executable, "-c",
+                            "import shutil,sys; "
+                            "sys.stdout.write(str(shutil.get_terminal_size().columns - 2))"],
+                           cwd=str(ROOT),
+                           env={**env_base, **({"COLUMNS": r} if r else {})},
+                           capture_output=True, text=True, encoding="utf-8").stdout
+            for r in self.COLUMNS_CORPUS}), 2,
+            "every corpus row produced the same width — the parse branch is untested")
 
 
 @unittest.skipIf(NODE is None, "node is not on PATH")

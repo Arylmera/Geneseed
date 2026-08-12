@@ -424,6 +424,67 @@ class ResolveMemoryDirTests(unittest.TestCase):
             shutil.rmtree(store, ignore_errors=True)
             shutil.rmtree(work, ignore_errors=True)
 
+    def _both_resolvers(self, gh: str) -> "tuple[str, str]":
+        """Drive both implementations of `_resolve_memory_dir(None)` / `resolveMemoryDir(null)`
+        from a cwd with no memory store, with `$GENESEED_HARNESS` set to `gh`.
+
+        Returns each side's (returncode, stdout) rendered as one string. Subprocesses on BOTH
+        sides deliberately: the defect is a THROW that escapes the function, and an in-process
+        call cannot distinguish "returned None" from "took the process down" the way an exit
+        code can."""
+        import subprocess
+        work = Path(tempfile.mkdtemp())
+        env = dict(os.environ, GENESEED_HARNESS=gh, PYTHONUTF8="1")
+        env.pop("GENESEED_MEMORY", None)
+        try:
+            py = subprocess.run(
+                [sys.executable, "-c",
+                 "import sys; sys.path.insert(0, %r); import harness; "
+                 "sys.stdout.write(repr(harness._resolve_memory_dir(None)))"
+                 % str(ROOT / "rituals")],
+                cwd=str(work), env=env, capture_output=True, encoding="utf-8",
+                errors="replace")
+            node = subprocess.run(
+                [shutil.which("node"), "--input-type=module", "-e",
+                 "import {resolveMemoryDir} from %r;"
+                 "process.stdout.write(String(resolveMemoryDir(null)));"
+                 % (ROOT / "js" / "hosts.mjs").as_uri()],
+                cwd=str(work), env=env, capture_output=True, encoding="utf-8",
+                errors="replace")
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+        return (f"{py.returncode} {py.stdout}", f"{node.returncode} {node.stdout}")
+
+    @unittest.skipUnless(shutil.which("node"), "node is not on PATH")
+    def test_a_tilde_user_harness_var_is_skipped_by_both_not_raised(self):
+        """THE FOURTH USER-CONTROLLED TILDE INPUT, and the one the `~user` refusal missed.
+
+        Task 5 made `expanduser` THROW on `~user`; the follow-up guarded excludes.json,
+        `$GENESEED_ROOT` and `--root`, and left `$GENESEED_HARNESS` bare — one line above the
+        reference's own `except Exception: pass`. Unguarded it reaches `geneseed status` and
+        the `learn` hook, whose entry point has no top-level try, so it is a stack trace on a
+        hook path.
+
+        ABSOLUTE ON BOTH SIDES rather than a mere cross-comparison: two implementations that
+        both crashed would agree. Each side must exit 0 and answer 'no store'."""
+        py, node = self._both_resolvers("~nosuchuser-geneseed/store")
+        self.assertEqual(py, "0 None", "the reference raised on $GENESEED_HARNESS='~user'")
+        self.assertEqual(node, "0 null", "the port raised on $GENESEED_HARNESS='~user'")
+
+    @unittest.skipUnless(shutil.which("node"), "node is not on PATH")
+    def test_the_guard_did_not_swallow_a_usable_store(self):
+        """The vacuity guard beside it: a guard that skipped the base UNCONDITIONALLY would
+        pass the test above, so prove the same call still FINDS a real store."""
+        store = Path(tempfile.mkdtemp())
+        (store / "memory").mkdir()
+        try:
+            py, node = self._both_resolvers(str(store))
+            self.assertIn("memory", py)
+            self.assertIn("memory", node)
+            self.assertTrue(py.startswith("0 ") and node.startswith("0 "))
+        finally:
+            shutil.rmtree(store, ignore_errors=True)
+
 
 class GlobalEmitDoctorTests(unittest.TestCase):
     def test_global_emit_is_link_clean(self):

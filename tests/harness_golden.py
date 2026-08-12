@@ -4599,8 +4599,18 @@ def run_cell(cli: list[str], cell: dict) -> "dict[str, bytes] | str":
         return snap
 
 
-def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
-    """The absolute assertions, run against the REFERENCE side.
+def check_expectations(cell: dict, snap: "dict[str, bytes]",
+                       side: str = "the reference") -> list[str]:
+    """The absolute assertions, run against whichever side the run has: the REFERENCE on the
+    live pair and under `--record`, the CANDIDATE under `--against`.
+
+    `side` NAMES WHICH ONE IT READ, and it is a parameter rather than a fixed word because a
+    gate that misreports its own subject is the believed-oracle failure in miniature — every
+    message below would otherwise blame `rituals/harness.py` for a sentence the port did not
+    print.
+
+    They are ABSOLUTE — each states what an implementation must actually print — so they hold
+    on either side, which is what lets them survive the reference's deletion.
 
     This is the half a comparison cannot do. The four hook verbs are silent on almost every
     path by design, so two implementations that both stopped working would agree in every
@@ -4617,22 +4627,22 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     text = (snap["<stdout>"] + b"\n" + snap["<stderr>"]).decode("utf-8", "replace")
     for want in cell.get("expect", ()):
         if want not in text:
-            problems.append(f"the reference no longer prints {want!r} — this cell has "
+            problems.append(f"{side} no longer prints {want!r} — this cell has "
                             f"stopped exercising what it names")
     for unwanted in cell.get("expect_absent", ()):
         if unwanted in text:
-            problems.append(f"the reference now prints {unwanted!r}, which this cell "
+            problems.append(f"{side} now prints {unwanted!r}, which this cell "
                             f"exists to prove it leaves out")
     for pat in cell.get("expect_re", ()):
         if not re.search(pat, text):
-            problems.append(f"the reference's output no longer matches {pat!r} — this "
+            problems.append(f"{side}'s output no longer matches {pat!r} — this "
                             f"cell has stopped exercising what it names")
     if cell.get("expect_silent") and snap["<stdout>"].strip():
-        problems.append("the reference printed on stdout, but this cell exists to prove "
+        problems.append(f"{side} printed on stdout, but this cell exists to prove "
                         f"it stays silent: {snap['<stdout>'][:160]!r}")
     for want in cell.get("expect_files", ()):
         if want not in snap:
-            problems.append(f"the reference did not write {want} — this cell cannot tell "
+            problems.append(f"{side} did not write {want} — this cell cannot tell "
                             f"whether the candidate does")
     # The absolute half of a DELETION, and the sixth kind. `expect_files` says the
     # reference wrote something; nothing said the reference REMOVED something, and for
@@ -4665,13 +4675,14 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]") -> list[str]:
     kept = set(snap["<dirs>"].decode("utf-8").split("\n")) if want_absent else set()
     for unwanted in want_absent:
         if unwanted in snap or unwanted in kept:
-            problems.append(f"the reference left {unwanted} behind, and this cell exists "
+            problems.append(f"{side} left {unwanted} behind, and this cell exists "
                             f"to prove it removes it")
     return problems
 
 
 def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1,
-            record: "str | None" = None, against: "str | None" = None) -> int:
+            record: "str | None" = None, against: "str | None" = None,
+            narrowed: "str | None" = None) -> int:
     """`ref` and `new` map a cell's `bin` ("hook"/"cli") to the command that answers it.
 
     Three things this can do to the matrix, sharing one runner — the same three
@@ -4710,6 +4721,11 @@ def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1,
         print(f"[harness-golden] {len(skipped)} cell(s) declared for the other platform and "
               f"NOT run here ({this_platform()}): {', '.join(skipped)}")
     failures: list[str] = []
+    if against:
+        # The other direction of `_against_cell`'s single failure — see `golden.orphan_check`.
+        orphans = golden.orphan_check(against, {c["id"] for c in matrix}, narrowed)
+        if orphans:
+            failures.append(orphans)
 
     def _pair(cell: dict) -> tuple:
         """Both sides of ONE cell. `run_cell` builds two throwaway temp dirs, seeds its own
@@ -4735,10 +4751,27 @@ def compare(ref: dict, new: dict, matrix: list[dict], limit: int, jobs: int = 1,
     with pool:
         for i, (cell, (a, b)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
             cid = cell["id"]
-            if record:
-                golden._record_cell(record, cid, a, failures)
-            elif against:
-                golden._against_cell(against, cid, b, failures)
+            if record or against:
+                # THE ABSOLUTE TIER, ON WHICHEVER SIDE THIS RUN HAS — and it belongs on both.
+                # These 244 `expect_*` declarations used to run ONLY on the live pair, i.e.
+                # only while `rituals/harness.py` still exists. That left the two surviving
+                # modes as pure hash work: `--against` a bare byte compare, and `--record` a
+                # BLIND BLESSING of whatever the cells happen to produce — which is exactly
+                # how Task 7 banked six anchor cells with empty verbatim text. The
+                # expectations are ABSOLUTE (they state what the implementation must say, not
+                # that two agree), so they hold against the candidate as readily as the
+                # reference. Checked BEFORE the write/compare, so a cell that has stopped
+                # exercising what it names is never recorded and never blessed.
+                snap, whose = (a, "the reference") if record else (b, "the candidate")
+                vacuous = ([] if isinstance(snap, str)
+                           else check_expectations(cell, snap, side=whose))
+                if vacuous:
+                    failures.append(f"  {cid}: VACUOUS\n"
+                                    + "\n".join(f"    {p}" for p in vacuous))
+                elif record:
+                    golden._record_cell(record, cid, a, failures)
+                else:
+                    golden._against_cell(against, cid, b, failures)
             elif isinstance(a, str) or isinstance(b, str):
                 failures.append(f"  {cid}: CLI failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                                 f"\n    new: {b if isinstance(b, str) else 'ok'}")
@@ -4881,7 +4914,8 @@ def main(argv=None) -> int:
                   f"itself, which always passes. Pass --new-cli, or --only the hook verbs.")
             return 2
     return compare({"hook": ref, "cli": ref}, new, matrix, args.limit, jobs=args.jobs,
-                   record=args.record, against=args.against)
+                   record=args.record, against=args.against,
+                   narrowed=f"--only {args.only}" if args.only else None)
 
 
 if __name__ == "__main__":

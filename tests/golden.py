@@ -357,7 +357,7 @@ def _snapshot(sandbox: Path, roots: list[tuple[str, Path]]) -> dict[str, bytes]:
     snap: dict[str, bytes] = {}
     for rel in sorted(_files(sandbox)):
         try:
-            snap[rel] = _destamp(rel, _normalise((sandbox / rel).read_bytes(), roots))
+            snap[rel] = _normalise((sandbox / rel).read_bytes(), roots)
         except OSError:
             continue
     return snap
@@ -588,8 +588,8 @@ def run_cell(gen: list[str], cell: dict, repeat: int = 1) -> "dict[str, bytes] |
         # and the emitted git-gate and rule-gate hooks signal their verdict on. Only the
         # LAST run's streams are kept, matching the snapshot, which is why they are
         # compared only when both sides ran the same number of times (see `compare`).
-        snap["<stdout>"] = _destamp("<stdout>", _normalise(proc.stdout.encode("utf-8", "replace"), roots))
-        snap["<stderr>"] = _destamp("<stderr>", _normalise(proc.stderr.encode("utf-8", "replace"), roots))
+        snap["<stdout>"] = _normalise(proc.stdout.encode("utf-8", "replace"), roots)
+        snap["<stderr>"] = _normalise(proc.stderr.encode("utf-8", "replace"), roots)
         return snap
 
 
@@ -636,7 +636,12 @@ VERBATIM_CELLS = {
 PLATFORM_CORPUS = "crlf" if os.linesep == "\r\n" else "lf"
 
 
-# WHAT A RECORDED CORPUS CANNOT KEEP — and the reason this is not `_destamp`.
+# WHAT A RECORDED CORPUS CANNOT KEEP — the table `_destamp` sits beside.
+#
+# `_destamp` used to be the exception to everything below: it was wired into `_snapshot`, so it
+# ran on the LIVE path too and this preamble's closing claim was false for `.geneseed-version`.
+# It now runs inside `corpus_normalise` with these, on the record/replay path only. See that
+# function's docstring for the argument.
 #
 # Every stamp in the three harnesses so far exists because the two SIDES of a cell disagree.
 # These exist because two RUNS do, which is a threat that did not exist until `--record` did.
@@ -666,10 +671,16 @@ PLATFORM_CORPUS = "crlf" if os.linesep == "\r\n" else "lf"
 # check it.
 CORPUS_STAMPS = (
     # `_build_render.write_version`: `<fp> (built <date>) [release <rel>]`. The release LABEL
-    # is left verbatim — it moves only when a human bumps it, which is a real output change a
-    # corpus SHOULD redden on. Un-anchored, because this line is also quoted inside a `diff`
-    # response body (`"-c81317fdc842 (built 2026-08-11) [release 1.0.0]"`), where it is not at
-    # the start of a line at all.
+    # is left verbatim HERE — it moves only when a human bumps it, which is a real output
+    # change a corpus SHOULD redden on. Un-anchored, because this line is also quoted inside a
+    # `diff` response body (`"-c81317fdc842 (built 2026-08-11) [release 1.0.0]"`), where it is
+    # not at the start of a line at all.
+    #
+    # SCOPE, because these two overlap and the earlier prose glossed it: inside the FILE
+    # `.geneseed-version`, `_destamp` has already run and tagged the label `<REL>` — it owns
+    # that file whole, so a release bump does not redden 259 emit cells for a value the live
+    # gate compares in full. The sentence above is about every OTHER carrier of the same line,
+    # where the label is unblanked and compared.
     (re.compile(rb"[0-9a-f]{6,64} \(built \d{4}-\d{2}-\d{2}\)"), b"<FP> (built <DATE>)"),
     # `cmd_version`'s first line — `_harness_status.py:40`, `js/status.mjs:100`.
     (re.compile(rb"(\[version\] source: +)[0-9a-f]{6,64}"), rb"\1<FP>"),
@@ -768,6 +779,39 @@ CORPUS_STAMPS = (
     #    stamp wide enough to cover them would cost more comparison than the rot is worth; the
     #    fix for those is to pin the walk, not to blank its answer. See task-8c-report.md.
     (re.compile(rb'("installed_fp": ")[0-9a-f]{12}(?=")'), rb"\1<FP>"),
+
+    # ---- THE FIFTH CLASS: A LENGTH, NOT A VALUE --------------------------------------------
+    #
+    # Every entry above blanks a moving VALUE, and every one of them was findable by diffing
+    # two recordings as text. This one is invisible to that method, which is why the crlf/lf
+    # sweep in Task 8c walked past it: what leaks is not the machine's path but its LENGTH.
+    #
+    # The `status` panel pads each row out to the box. `_normalise` shrinks the row's path to
+    # `<HOME>`/`<SB>` AFTERWARDS, so the surviving padding run is a direct readout of the
+    # recorder's home directory length. Measured on the committed corpus: the AGENT.md row of
+    # `status/a-bogus-footprint-marker-warns-on-stderr` is 60 columns in the crlf half and 89
+    # in the lf half, against a neighbouring `components` row that is 104 in both — 104-60=44
+    # and 104-89=15 being exactly len(sandbox home) - len("<HOME>") on each machine. Eight
+    # `status/*` cells per half carry it, and on Windows the run is fully CONSUMED, so that row
+    # cannot even be re-padded: it is the length itself, frozen. A different Windows username
+    # reddens it, and after the reference is deleted a red padding run is unanswerable.
+    #
+    # NARROW, AND THE NARROWNESS IS THE POINT. `golden.py`'s own note beside the `source <FP>`
+    # rule is right that pre-normalisation padding is a FEATURE — a port that padded the panel
+    # differently must still be caught. So this fires only on a row that (a) is a box row, (b)
+    # carries one of the four PATH tags `_normalise` writes, and (c) ends in a parenthetical
+    # before the padding. The row's whole CONTENT and its `│` terminator stay byte-compared;
+    # only the run between them goes. Every row without a normalised path — `components`,
+    # `theme`, `posture` — keeps its padding under the comparison in full.
+    #
+    # THE WINDOWS ROW NEEDS NO MATCH, and that is the shape of the leak rather than a gap in
+    # the pattern: its padding run is already fully CONSUMED (`(present)│`, zero spaces), so
+    # deleting the run on the lf side is what makes the two halves land on the same bytes.
+    # `<HOME>` was measured to be the same character count in both spellings, which is why
+    # this converges rather than merely shrinking. (` +` and ` *` are equivalent here — a
+    # zero-width match substitutes the group back unchanged — so this takes the narrower one.)
+    (re.compile("(?m)^(│ [^\n]*?<(?:HOME|SB|REPO|OUT)>[^\n]*?\\)) +(?=│)".encode("utf-8")),
+     rb"\1"),
 )
 
 # `learn`'s bullet, `- <today>: <lesson>` (`_harness_learn.py:44`) — the one stamp that needs
@@ -794,17 +838,115 @@ def corpus_normalise(snap):
     `archived-memory/<STAMP>`) because the live comparison needed it first. Re-checked by
     scanning a full recording of both matrices, keys included: nothing else moves.
 
+    `_destamp` RUNS HERE, and it was on the live path until this wave. It was wired into
+    `_snapshot` (which all three harnesses share), so the emit matrix's 259 cells compared
+    `.geneseed-version` as `<FP> (built <DATE>) [release <REL>]` on BOTH sides — i.e. did not
+    compare its contents at all, while `CORPUS_STAMPS`' own preamble said the live gate keeps
+    every one of these fields. The threat it answers ("the build date moves at midnight, the
+    fingerprint moves on any src/ edit") is a threat between two RUNS, which is this
+    function's subject; a live pair shares one clock and one checkout. It runs BEFORE the
+    `CORPUS_STAMPS` loop so this file keeps ONE owner and the recorded bytes are unchanged by
+    the move — `<FP>` is not hex, so no stamp below can match what it wrote.
+
+    RESIDUAL, STATED RATHER THAN ASSUMED: a live run that crosses midnight between its two
+    sides now reddens the version marker. That exposure is not new and is not special to this
+    file — every date-carrying output in `CORPUS_STAMPS` (the `promote` dates, the lesson
+    bullets) has always had it on the live path, because tolerating a mid-run midnight is not
+    something a cross-implementation gate can do without going blind to the field.
+
     An error string passes through, so the callers' `isinstance` checks still see it."""
     if isinstance(snap, str):
         return snap
     out = {}
     for k, v in snap.items():
+        v = _destamp(k, v)
         for pat, repl in CORPUS_STAMPS:
             v = pat.sub(repl, v)
         if _LESSONS_FILE.match(v):
             v = _LESSON_BULLET.sub(b"- <DATE>: ", v)
         out[k] = v
+    _recompute_declared_lengths(out)
     return out
+
+
+_CLEN_HEADER = re.compile(rb"(?m)^Content-Length: (\d+)$")
+
+
+def _recompute_declared_lengths(out: "dict[str, bytes]") -> None:
+    """THE SIXTH CLASS, and the one no text diff could see: a recorded LENGTH.
+
+    `web_golden._drive` records `resp.getheaders()` verbatim and the body is normalised
+    afterwards, so a `Content-Length` in the corpus counts the RECORDER'S path lengths.
+    Measured on the committed corpus: 202 of 446 recorded responses declare a length their
+    own recorded body does not have, and every delta is exactly the normaliser's shrinkage —
+    `catalog/an-undeployed-target-lists-the-source-render` declares 4177 against a 3565-byte
+    body, which is 17 `"source"` entries times (len(checkout) - len("<REPO>")). It is a false
+    RED, on any machine whose checkout path is a different length from the recorder's, and
+    after the reference is deleted a red Content-Length cannot be told from a port that
+    miscounts its own body.
+
+    SO THE HEADER IS MADE A FUNCTION OF THE RECORDED BODY, and the obvious objection — that
+    this makes it vacuous — was CHECKED RATHER THAN ANSWERED WITH A SECOND GATE. The obvious
+    companion (assert in `_drive` that the declared length equals the raw body length) is a
+    tautology: HTTP/1.1 frames on that header, so `resp.read()` returns exactly
+    `Content-Length` bytes and the two can never disagree. Measured instead, by planting
+    `String(body.length - 1)` in `js/web/server.mjs`: the cell reddens on `<rN body>` (1282
+    against 1281), because a server that lies gets its BODY truncated by the client. The
+    reverse direction raises `IncompleteRead` into `<transport>`, and a response that stops
+    declaring a length loses the header LINE, which this never writes back. The number is the
+    only thing here nothing else can check, and it is the only thing this touches. See
+    `web_golden._drive` and `test_golden_destamp.TheRecomputedLengthIsStillGatedByTheTransport`.
+
+    LAST, after every stamp above, because a stamp that shrinks a body must be counted too.
+    `<CLEN>`-tagged headers (gzip, and width-varying bodies) carry no digits and are skipped
+    by the pattern rather than by a special case."""
+    for k in list(out):
+        if not (k.startswith("<r") and k.endswith(" headers>")):
+            continue
+        body = out.get(k[:-len(" headers>")] + " body>")
+        if body is None:
+            continue
+        out[k] = _CLEN_HEADER.sub(b"Content-Length: %d" % len(body), out[k])
+
+
+def orphan_check(against: str, ids: "set[str]", narrowed: "str | None") -> "str | None":
+    """THE INVERSE OF `_against_cell`'s ONE FAILURE DIRECTION, and the whole of it.
+
+    `_against_cell` fails a cell that ran but has no recorded snapshot. Nothing enumerated
+    the corpus, so the other direction — the corpus holds entries this run never consumed —
+    exited 0 in all three harnesses. A narrowed matrix therefore replays green over fewer
+    cells (`[golden] 12 cells … ok` reads exactly like `[golden] 259 cells … ok` in a CI log)
+    while the files it skipped sit in git looking like regression proof. After the reference
+    is deleted these corpora are the only gate left, and its two failure modes are "a cell was
+    lost from the matrix" and "the corpus is stale relative to the matrix".
+
+    THE PATTERN IS ALREADY THE PROJECT'S, on its two smaller corpora and nowhere else:
+    `tests/test_win_user_path.py`'s `test_the_recording_covers_every_row_of_the_live_corpus`
+    ("a recording is only a gate over what it recorded") and
+    `tests/test_pure_function_parity.py`'s `declared but no longer probed`. The 1389 cell
+    files were the outlier.
+
+    ONE OWNER, three callers: `harness_golden` and `web_golden` define their own `compare()`
+    and spell a cell id differently (`c["id"]` against `_cell_id(c)`), so what is shared is
+    this function and its callers hand it a set of ids rather than a matrix.
+
+    DELIBERATE NARROWING IS NOT A DEFECT, so `--only`/`--emits`/`--quick` pass a reason and
+    the check is SKIPPED — announced, never silent, because a skipped gate nobody was told
+    about is the failure this whole file argues against."""
+    if narrowed:
+        print(f"[corpus] orphan check SKIPPED — the matrix was narrowed by {narrowed}, so a "
+              f"corpus entry this run did not consume proves nothing")
+        return None
+    have = {p.stem for p in Path(against).glob("*.json")}
+    want = {snapshot_io._safe(cid) for cid in ids}
+    orphans = sorted(have - want)
+    if not orphans:
+        return None
+    return (f"  CORPUS ORPHANS: {len(orphans)} recorded snapshot(s) in {against} were not "
+            f"consumed by this run — the matrix has shrunk away from its own corpus, and the "
+            f"replay would otherwise pass over the gap:\n"
+            + "\n".join(f"    {n}" for n in orphans[:10])
+            + (f"\n    ... and {len(orphans) - 10} more" if len(orphans) > 10 else ""))
 
 
 def _cell_id(cell: dict) -> str:
@@ -829,7 +971,8 @@ def _diff(name: str, a: bytes, b: bytes) -> str:
 def compare(ref: list[str], new: list[str], quick: bool, limit: int,
             ref_repeat: int = 1, new_repeat: int = 1,
             matrix: "list[dict] | None" = None, jobs: int = 1,
-            record: "str | None" = None, against: "str | None" = None) -> int:
+            record: "str | None" = None, against: "str | None" = None,
+            narrowed: "str | None" = None) -> int:
     """The three things this file can do to a matrix, sharing one runner.
 
     Plain (record and against both None): run BOTH generators, byte-compare — the
@@ -859,6 +1002,10 @@ def compare(ref: list[str], new: list[str], quick: bool, limit: int,
         print(f"[golden] {len(matrix)} cells · ref={' '.join(ref)}{times.get(ref_repeat, '')}"
               f" · new={' '.join(new)}{times.get(new_repeat, '')} · jobs={jobs}")
     failures: list[str] = []
+    if against:
+        orphans = orphan_check(against, {_cell_id(c) for c in matrix}, narrowed)
+        if orphans:
+            failures.append(orphans)
 
     def _pair(cell: dict) -> tuple:
         """Both sides of ONE cell — or just the one side `record`/`against` needs. The
@@ -1072,6 +1219,21 @@ def main(argv=None) -> int:
     if args.jobs < 1:
         print(f"[golden] --jobs must be at least 1, got {args.jobs}")
         return 2
+    # BACK-PORTED from `harness_golden.main` and `web_golden.main`, which have refused this
+    # since they grew the flags. With no candidate at all, `new` falls back to `ref`, which
+    # falls back to `build.py` — the run then replays the REFERENCE against the reference's
+    # own recording, on the largest corpus on the branch. ci.yml:75-79 names that hazard as
+    # the reason `--new` is passed at all.
+    #
+    # `not (args.new or args.ref)` AND NOT `not args.new`: unlike its two siblings, this
+    # harness makes `--ref` a first-class candidate slot and CI already uses it
+    # (`--ref "node bin/geneseed.mjs" --deletion`). Refusing on `--new` alone would reject a
+    # perfectly good replay of the PORT.
+    if args.against and not (args.new or args.ref):
+        print("[golden] --against needs --new (or --ref): with no candidate generator it "
+              "would replay the REFERENCE against the reference's own recording, which "
+              "always passes.")
+        return 2
     ref = _split(args.ref) if args.ref else [sys.executable, "build.py"]
     new = _split(args.new) if args.new else ref
     keep = None
@@ -1112,10 +1274,15 @@ def main(argv=None) -> int:
         print(f"[golden] --repeat must be at least 1, got {args.repeat}")
         return 2
     m = _keep(cells(args.quick))
+    # The two flags that make this run a SUBSET of the matrix the corpus was recorded from.
+    # Named here, where they are parsed, rather than re-derived inside `compare`.
+    narrowed = ", ".join(
+        f for f in ("--quick" if args.quick else "",
+                    f"--emits {args.emits}" if args.emits else "") if f) or None
     return 2 if m is None else compare(ref, new, args.quick, args.limit, matrix=m,
                                        ref_repeat=args.repeat, new_repeat=args.repeat,
                                        jobs=args.jobs, record=args.record,
-                                       against=args.against)
+                                       against=args.against, narrowed=narrowed)
 
 
 if __name__ == "__main__":

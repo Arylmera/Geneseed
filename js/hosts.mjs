@@ -16,7 +16,7 @@
 import { realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { pyPathStr, pyPrintErr } from './lib/pyfs.mjs';
+import { pyPathStr, pyPrintErr, withDiscardableStderr } from './lib/pyfs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 
@@ -221,7 +221,19 @@ export function resolveMemoryDir(explicit) {
   const cwd = process.cwd();
   const bases = [cwd, path.join(cwd, 'Harness')];
   const gh = process.env.GENESEED_HARNESS;
-  if (gh) bases.push(expanduser(gh));
+  if (gh) {
+    // PER BASE, and the walk continues. `$GENESEED_HARNESS` is the FOURTH user-controlled
+    // tilde input and the one the `~user` refusal was never swept onto: `expanduser` throws
+    // on `~someone/x`, and this resolver is reached by `geneseed status` (js/status.mjs's
+    // `resolveMemoryDir(null)`) and by the `learn` hook, whose entry point
+    // (`bin/geneseed-hook.mjs`) has NO top-level try — so an unguarded throw here is a stack
+    // trace on a hook path and a non-zero exit, the exact failure the other three guards
+    // exist to prevent. Skipping the base degrades to "no memory store from $GENESEED_HARNESS",
+    // which is what an unset variable already does. `withDiscardableStderr` because the
+    // refusal prints at the RAISE SITE and both callers byte-compare stderr; the reference
+    // (`rituals/_harness_learn.py`, same guard) prints nothing here.
+    try { bases.push(withDiscardableStderr(() => expanduser(gh))); } catch { /* skip it */ }
+  }
   try { bases.push(opencodeConfigDir()); } catch { /* best-effort, as the Python */ }
   for (const base of bases) {
     for (const name of MEMORY_DIR_NAMES) {

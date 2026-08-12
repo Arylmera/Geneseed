@@ -16,7 +16,10 @@ leak.
 
 Run from the Geneseed root:  python -m unittest discover -s tests
 """
+import contextlib
+import io
 import os
+import shutil
 import sys
 import unittest
 from pathlib import Path
@@ -131,9 +134,13 @@ class FlagWiringTests(unittest.TestCase):
         seen = {}
 
         def fake_compare(ref, new, quick, limit, ref_repeat=1, new_repeat=1, matrix=None,
-                         jobs=1, record=None, against=None):
+                         jobs=1, record=None, against=None, **kw):
+            # `**kw` because a mock that mirrors a signature EXACTLY turns every new keyword
+            # into a TypeError in seven unrelated tests — which is how this file greeted
+            # `--record`/`--against` in Task 7 and `narrowed` here. The wiring assertions
+            # below name the keys they care about; the rest are captured, not enumerated.
             seen.update(ref=ref, new=new, ref_repeat=ref_repeat, new_repeat=new_repeat,
-                        matrix=matrix, jobs=jobs, record=record, against=against)
+                        matrix=matrix, jobs=jobs, record=record, against=against, **kw)
             return 0
 
         real, golden.compare = golden.compare, fake_compare
@@ -250,10 +257,14 @@ class CorpusFlagWiringTests(unittest.TestCase):
         self.assertIn(expected, ("crlf", "lf"))
         # The candidate binaries every harness demands before it will replay anything. They
         # are never spawned here — `compare` is intercepted — but `main` refuses without them.
+        # `golden` was ABSENT from this set until the refusal was back-ported into it, and the
+        # sentence above was false while it was: the harness carrying the largest corpus was
+        # the one with no such demand.
         candidate = {harness_golden: ["--new", "node bin/geneseed-hook.mjs",
                                       "--new-cli", "node bin/geneseed-cli.mjs"],
-                     web_golden: ["--new", "node js/web/server.mjs"]}
-        for mod in (harness_golden, web_golden):
+                     web_golden: ["--new", "node js/web/server.mjs"],
+                     golden: ["--new", "node bin/geneseed.mjs"]}
+        for mod in (harness_golden, web_golden, golden):
             for flag in ("--record", "--against"):
                 with self.subTest(harness=mod.__name__, flag=flag):
                     _, seen = self._capture(mod, [flag, "corpus-root", *candidate[mod]])
@@ -267,22 +278,35 @@ class CorpusFlagWiringTests(unittest.TestCase):
                                       f"{mod.__name__}: {flag} also set --{other}")
 
     def test_the_two_flags_are_mutually_exclusive(self):
-        for mod in (harness_golden, web_golden):
+        for mod in (harness_golden, web_golden, golden):
             with self.subTest(harness=mod.__name__):
                 rc, _ = self._capture(mod, ["--record", "a", "--against", "b"])
                 self.assertEqual(rc, 2, f"{mod.__name__}: recording and replaying in one run "
                                         "has no meaning and must be refused")
 
     def test_against_without_a_candidate_is_refused(self):
-        """With no candidate binary both harnesses fall back to the reference, and the run
+        """With no candidate binary every harness falls back to the reference, and the run
         replays the REFERENCE against the reference's own recording — a determinism
         self-check wearing the regression gate's name, green by construction. `ci.yml` warns
         about the same shape for the live gate; this is the corpus half of it."""
-        for mod in (harness_golden, web_golden):
+        for mod in (harness_golden, web_golden, golden):
             with self.subTest(harness=mod.__name__):
                 rc, _ = self._capture(mod, ["--against", "corpus-root"])
                 self.assertEqual(rc, 2, f"{mod.__name__}: --against with no --new compares "
                                         "the reference against itself and always passes")
+
+    def test_goldens_ref_is_a_candidate_slot_and_still_replays(self):
+        """THE CORRECTION THE SIBLINGS DO NOT NEED. `tests/golden.py` differs from the other
+        two: `new` falls back to `ref`, and `--ref` is a first-class flag CI already uses
+        (`--ref "node bin/geneseed.mjs" --deletion`). A refusal spelt `not args.new` would
+        reject a perfectly good replay of the PORT, so the guard is `not (new or ref)` — and
+        this is the arm that proves the escape hatch is really open."""
+        rc, seen = self._capture(golden, ["--against", "corpus-root",
+                                          "--ref", "node bin/geneseed.mjs"])
+        self.assertEqual(rc, 0, "--against --ref <candidate> is a valid replay of the port "
+                                "and must not be refused")
+        self.assertEqual(seen["against"],
+                         str(Path("corpus-root") / golden.PLATFORM_CORPUS))
 
 
 class ACellMissingFromTheCorpusIsAFailure(unittest.TestCase):
@@ -322,6 +346,161 @@ class ACellMissingFromTheCorpusIsAFailure(unittest.TestCase):
             self.assertEqual(sorted(snapshot_io.read(Path(td), "verb/a-cell")["verbatim"]),
                              ["<stdout>"], "a real file must stay hashed, a pseudo-file must "
                                            "be recorded verbatim")
+
+
+class ACorpusEntryNOBODYCONSUMEDIsAlsoAFailure(unittest.TestCase):
+    """THE INVERSE, which no harness checked. `_against_cell` fails a cell with no snapshot;
+    nothing failed a snapshot with no cell, so a matrix narrowed by an edit — or by
+    `--only`/`--emits`/`--quick` on a command line — replayed green over fewer cells while the
+    files it skipped stayed in git looking like proof.
+
+    All three directions, because a check with only its positive arm tested is how a gate
+    starts refusing legitimate runs and gets deleted."""
+
+    def _corpus(self, *cell_ids):
+        import tempfile
+        td = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, td, ignore_errors=True)
+        for cid in cell_ids:
+            golden._record_cell(td, cid, {"<stdout>": b"x"}, [])
+        return td
+
+    def test_a_full_run_is_clean(self):
+        td = self._corpus("verb/one", "verb/two")
+        self.assertIsNone(golden.orphan_check(td, {"verb/one", "verb/two"}, None))
+
+    def test_a_narrowed_run_leaves_the_corpus_orphaned_and_says_so(self):
+        td = self._corpus("verb/one", "verb/two")
+        problem = golden.orphan_check(td, {"verb/one"}, None)
+        self.assertIsNotNone(problem, "a replay that consumed 1 of 2 recorded cells reported "
+                                      "nothing — the corpus can shrink away silently")
+        self.assertIn("CORPUS ORPHANS", problem)
+        self.assertIn(snapshot_io._safe("verb/two"), problem)
+        self.assertNotIn(snapshot_io._safe("verb/one"), problem)
+
+    def test_a_DELIBERATE_narrowing_skips_the_check_out_loud(self):
+        """`--only`/`--emits`/`--quick` narrow on purpose, so the check would be a false red.
+        Skipped, and ANNOUNCED — a gate that quietly stops running is the failure this whole
+        file argues against."""
+        td = self._corpus("verb/one", "verb/two")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertIsNone(golden.orphan_check(td, {"verb/one"}, "--only verb/one"))
+        self.assertIn("orphan check SKIPPED", out.getvalue())
+        self.assertIn("--only verb/one", out.getvalue())
+
+
+class TheAbsoluteTierRunsInEveryMODE(unittest.TestCase):
+    """`check_expectations` ran ONLY on the live pair — the one path that dies with
+    `rituals/harness.py`.
+
+    Two consequences, and the second is the worse one. `--against` degraded to a pure hash
+    compare, so `web_golden`'s own named blind spot ("two servers that both stopped enforcing
+    the CSRF token would agree in every guard cell") was answered only for as long as nobody
+    re-recorded. And `--record` HAD the reference snapshot in hand and still did not check it,
+    so every future regeneration — which after the reference is deleted must be made FROM THE
+    PORT — was a blind blessing of whatever the cells happened to produce. Task 7 shipped
+    exactly that once, banking six anchor cells with empty verbatim text.
+
+    `run_cell` is stubbed rather than spawned: the claim is about the ADJUDICATION, and a real
+    subprocess would make the same assertion cost a second and depend on a verb."""
+
+    SNAP = {"<stdout>": b"hello world\n", "<stderr>": b"", "<exit>": b"0"}
+
+    def _record(self, mod, cell, td, **kw):
+        real, mod.run_cell = mod.run_cell, lambda *a, **k: dict(self.SNAP)
+        try:
+            return mod.compare(record=td, matrix=[cell], limit=5, **kw)
+        finally:
+            mod.run_cell = real
+
+    def test_a_vacuous_cell_is_refused_by_record_and_nothing_is_written(self):
+        import tempfile
+        td = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, td, ignore_errors=True)
+        cell = {"id": "probe/a-cell-that-stopped-exercising-what-it-names",
+                "bin": "cli", "expect": ["a sentence the reference never prints"]}
+        rc = self._record(harness_golden, cell, td,
+                          ref={"hook": ["x"], "cli": ["x"]}, new={"hook": ["y"], "cli": ["y"]})
+        self.assertEqual(rc, 1, "--record banked a cell whose own `expect` no longer holds")
+        self.assertEqual(list(Path(td).glob("*.json")), [],
+                         "the corpus gained an entry for a cell that gates nothing")
+
+    def test_a_sound_cell_still_records(self):
+        """The vacuity guard: "refuses everything" and "refuses the right thing" are the same
+        red until something is banked."""
+        import tempfile
+        td = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, td, ignore_errors=True)
+        cell = {"id": "probe/a-cell-that-still-says-what-it-names",
+                "bin": "cli", "expect": ["hello world"]}
+        rc = self._record(harness_golden, cell, td,
+                          ref={"hook": ["x"], "cli": ["x"]}, new={"hook": ["y"], "cli": ["y"]})
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(list(Path(td).glob("*.json"))), 1)
+
+    def test_against_checks_the_CANDIDATE_side(self):
+        """The expectations are ABSOLUTE — they say what an implementation must print, not that
+        two agree — so they hold against the candidate as readily as the reference. That is
+        what makes them the tier that survives the deletion."""
+        import tempfile
+        td = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, td, ignore_errors=True)
+        good = {"id": "probe/a-cell", "bin": "cli", "expect": ["hello world"]}
+        self.assertEqual(self._record(harness_golden, good, td,
+                                      ref={"hook": ["x"], "cli": ["x"]},
+                                      new={"hook": ["y"], "cli": ["y"]}), 0)
+        # Same recorded bytes, same candidate output — but the cell now declares something the
+        # candidate does not say. A pure hash compare cannot see this; that is the whole point.
+        bad = {**good, "expect": ["a sentence neither side prints"]}
+        real, harness_golden.run_cell = harness_golden.run_cell, \
+            lambda *a, **k: dict(self.SNAP)
+        try:
+            rc = harness_golden.compare(ref={"hook": ["x"], "cli": ["x"]},
+                                        new={"hook": ["y"], "cli": ["y"]},
+                                        matrix=[bad], limit=5, against=td)
+        finally:
+            harness_golden.run_cell = real
+        self.assertEqual(rc, 1, "--against replayed byte-identical bytes and never asked "
+                                "whether the cell still exercises what it names")
+
+
+class TheNarrowingReasonIsActuallyWired(unittest.TestCase):
+    """The lesson a previous phase paid for: a narrowing flag needs a WIRING test. The check
+    above is correct and was, in its first draft, simply not connected — `orphan_check` cannot
+    skip for a reason `main` never sends it, and an unsent reason turns every deliberate
+    `--only` run into a false red."""
+
+    def _narrowed(self, mod, argv):
+        seen = {}
+
+        def fake_compare(*a, **kw):
+            seen.update(kw)
+            return 0
+
+        real, mod.compare = mod.compare, fake_compare
+        try:
+            mod.main(argv)
+        finally:
+            mod.compare = real
+        return seen.get("narrowed")
+
+    def test_only_reaches_the_two_cell_harnesses(self):
+        self.assertEqual(
+            self._narrowed(harness_golden, ["--only", "version", "--new", "node x",
+                                            "--new-cli", "node y"]),
+            "--only version")
+        self.assertEqual(
+            self._narrowed(web_golden, ["--only", "docs", "--new", "node z"]),
+            "--only docs")
+
+    def test_quick_and_emits_reach_golden_and_a_full_run_sends_none(self):
+        self.assertEqual(
+            self._narrowed(golden, ["--quick", "--emits", "files", "--new", "node x"]),
+            "--quick, --emits files")
+        self.assertIsNone(self._narrowed(golden, ["--new", "node x"]),
+                          "an unnarrowed run must NOT claim a narrowing reason, or the "
+                          "orphan check skips itself on every CI replay")
 
 
 if __name__ == "__main__":

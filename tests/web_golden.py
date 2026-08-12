@@ -2883,6 +2883,27 @@ def _drive(port: int, token: str, requests: list[dict]) -> dict:
             # `started` (seven decimals against three) and `duration` moved Content-Length by
             # one byte in the ref-vs-ref self-check before a line of the port existed.
             untagged = ('gzip' not in enc) and not _width_varies(body_out)
+            # WHY NO `declared == len(data)` CHECK SITS HERE, measured rather than assumed.
+            #
+            # `golden._recompute_declared_lengths` rewrites the recorded `Content-Length` to
+            # the normalised body's length, and the obvious objection is that a header derived
+            # from a value already byte-compared gates nothing — so this is where an absolute
+            # companion would go, against the raw wire bytes. It would be a TAUTOLOGY. HTTP/1.1
+            # FRAMES ON THAT HEADER: `resp.read()` reads exactly `Content-Length` bytes, so
+            # `len(data) == declared` on every response that returns at all, and the check
+            # could never fire.
+            #
+            # WHAT ACTUALLY GATES IT, proven by planting `String(body.length - 1)` in
+            # `js/web/server.mjs:307` and replaying `static/index-html-carries-the-injected-
+            # token`: the cell went red on `<r1 body>`, 1282 bytes against 1281 — a server that
+            # lies about its length gets its BODY truncated by the client, and the body is
+            # compared in full. The other direction (a length longer than the bytes sent)
+            # raises `IncompleteRead` before this line and lands in `<transport>`. And a
+            # response that stopped declaring a length at all loses the header LINE, which the
+            # recompute never writes back. All three are loud; the number itself is the only
+            # part the recompute touches, and it is the only part nothing else can check.
+            # `tests/test_golden_destamp.py`'s `TheRecomputedLengthIsStillGatedByTheTransport`
+            # holds the framing claim so this comment cannot rot into an excuse.
             obs[f"<r{i} status>"] = f"{resp.status} {resp.reason}".encode()
             obs[f"<r{i} headers>"] = "\n".join(
                 f"{k}: {v if (untagged or k.title() != 'Content-Length') else '<CLEN>'}"
@@ -3066,8 +3087,11 @@ def run_cell(cli: list[str], cell: dict, now: "int | None" = None) -> "dict[str,
 
 
 def check_expectations(cell: dict, snap: "dict[str, bytes]",
-                       now: "int | None" = None) -> list[str]:
-    """The absolute assertions, run against the REFERENCE side.
+                       now: "int | None" = None,
+                       side: str = "the reference") -> list[str]:
+    """The absolute assertions, run against whichever side the run has: the REFERENCE on the
+    live pair and under `--record`, the CANDIDATE under `--against`. `side` names which one —
+    see `harness_golden.check_expectations`.
 
     Same discipline as `harness_golden.check_expectations`, and needed for the same reason:
     a cross-implementation comparison is blind to a defect both sides share. It is sharper
@@ -3101,15 +3125,15 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
                             f"arm it was not written for")
     for want in cell.get("expect", ()):
         if want not in text:
-            problems.append(f"the reference no longer answers {want!r} — this cell has "
+            problems.append(f"{side} no longer answers {want!r} — this cell has "
                             f"stopped exercising what it names")
     for unwanted in cell.get("expect_absent", ()):
         if unwanted in text:
-            problems.append(f"the reference now answers {unwanted!r}, which this cell "
+            problems.append(f"{side} now answers {unwanted!r}, which this cell "
                             f"exists to prove it leaves out")
     for pat in cell.get("expect_re", ()):
         if not re.search(pat, text):
-            problems.append(f"the reference's answer no longer matches {pat!r}")
+            problems.append(f"{side}'s answer no longer matches {pat!r}")
     # P6e — the first endpoint that DELETES, so P5h's three gate directions arrive here:
     # what went, what survived, and (through the snapshot the two sides compare) the
     # directory listing. A cross-implementation compare cannot make either of the first two,
@@ -3119,7 +3143,7 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
     # effect no assertion names is a side effect that can be deleted.
     for rel in cell.get("expect_files", ()):
         if rel not in snap:
-            problems.append(f"the reference no longer leaves {rel!r} behind — this cell "
+            problems.append(f"{side} no longer leaves {rel!r} behind — this cell "
                             f"names it as a file the endpoint must NOT remove")
     # DIRECTORIES COUNT, since P6i. `expect_absent_files` used to read the file keys only,
     # which made every DIRECTORY named in it pass trivially — and the husk an
@@ -3137,10 +3161,10 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
     kept = set(snap["<dirs>"].decode("utf-8").split("\n")) if want_absent else set()
     for rel in want_absent:
         if rel in snap or rel in kept:
-            problems.append(f"the reference now leaves {rel!r} behind, which this cell "
+            problems.append(f"{side} now leaves {rel!r} behind, which this cell "
                             f"exists to prove it prunes")
     if "<transport>" in snap:
-        problems.append(f"the reference's connection failed: "
+        problems.append(f"{side}'s connection failed: "
                         f"{snap['<transport>'].decode('utf-8', 'replace')}")
     # The record is not optional. Every cell's server runs with `--daemon-internal`, so a
     # missing or empty record means the run was not observed at all — and four of this
@@ -3156,7 +3180,7 @@ def check_expectations(cell: dict, snap: "dict[str, bytes]",
 
 def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int,
             jobs: int = 1, record: "str | None" = None,
-            against: "str | None" = None) -> int:
+            against: "str | None" = None, narrowed: "str | None" = None) -> int:
     """Plain / `record` / `against` — the same three modes as `golden.compare`, sharing one
     runner and one corpus format.
 
@@ -3182,6 +3206,11 @@ def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int,
         print(f"[web-golden] {len(matrix)} cells · ref={' '.join(ref)} · new={' '.join(new)}"
               f" · jobs={jobs}")
     failures: list[str] = []
+    if against:
+        # The other direction of `_against_cell`'s single failure — see `golden.orphan_check`.
+        orphans = golden.orphan_check(against, {c["id"] for c in matrix}, narrowed)
+        if orphans:
+            failures.append(orphans)
 
     def _pair(cell: dict) -> tuple:
         """Both sides of ONE cell, and the CLOCK stays inside it.
@@ -3209,10 +3238,24 @@ def compare(ref: list[str], new: list[str], matrix: list[dict], limit: int,
     with pool:
         for i, (cell, (a, b, now)) in enumerate(zip(matrix, pool.map(_pair, matrix)), 1):
             cid = cell["id"]
-            if record:
-                golden._record_cell(record, cid, _corpus_normalise(a, now), failures)
-            elif against:
-                golden._against_cell(against, cid, _corpus_normalise(b, now), failures)
+            if record or against:
+                # THE ABSOLUTE TIER, ON WHICHEVER SIDE THIS RUN HAS — see the twin comment in
+                # `harness_golden.compare`. Sharper here for the reason this file's own
+                # docstring gives: two servers that both stopped enforcing the CSRF token
+                # agree in every guard cell forever, and a corpus only answers that argument
+                # for as long as it is never re-recorded. On the RAW snapshot, before
+                # `_corpus_normalise`, because an expectation is written against what the
+                # server actually said and the normaliser blanks some of it.
+                snap, whose = (a, "the reference") if record else (b, "the candidate")
+                vacuous = ([] if isinstance(snap, str)
+                           else check_expectations(cell, snap, now, side=whose))
+                if vacuous:
+                    failures.append(f"  {cid}: VACUOUS\n"
+                                    + "\n".join(f"    {p}" for p in vacuous))
+                elif record:
+                    golden._record_cell(record, cid, _corpus_normalise(a, now), failures)
+                else:
+                    golden._against_cell(against, cid, _corpus_normalise(b, now), failures)
             elif isinstance(a, str) or isinstance(b, str):
                 failures.append(f"  {cid}: server failed\n    ref: {a if isinstance(a, str) else 'ok'}"
                                 f"\n    new: {b if isinstance(b, str) else 'ok'}")
@@ -3299,7 +3342,8 @@ def main(argv=None) -> int:
                   f"be compared, which is not a pass.")
             return 2
     return compare(ref, new, matrix, args.limit, jobs=args.jobs,
-                   record=args.record, against=args.against)
+                   record=args.record, against=args.against,
+                   narrowed=f"--only {args.only}" if args.only else None)
 
 
 if __name__ == "__main__":

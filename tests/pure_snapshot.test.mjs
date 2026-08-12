@@ -35,6 +35,7 @@ import { fileURLToPath } from 'node:url';
 
 import { DWIDTH_UNIDATA } from '../js/tui.mjs';
 import { winUserPathScript } from '../js/link.mjs';
+import { pyTextWrap } from '../js/cli.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PROBE = path.join(ROOT, 'tests', 'fixtures', 'pure_probe.mjs');
@@ -121,6 +122,7 @@ function guardHolds(row) {
 const primitives = load(path.join('primitives', `${PLATFORM}.json`));
 const dwidth = load('dwidth.json');
 const winUserPath = load('win_user_path.json');
+const textwrapCorpus = load('textwrap.json');
 
 test('the primitive corpus replays against the port', { skip: primitives ? false
   : `tests/__snapshots__/primitives/${PLATFORM}.json has not been recorded — the ${PLATFORM} `
@@ -258,6 +260,55 @@ test('the width sweep still produces the recorded runs', { skip: dwidth ? false
     const cp = parseInt(name.slice(2), 16);
     assert.equal(dwidth.rle.filter(([start]) => start <= cp).at(-1)[1], entry.width,
       `${name}'s sample width disagrees with the runs it is drawn from`);
+  }
+});
+
+test('pyTextWrap still answers every recorded wrap', { skip: textwrapCorpus ? false
+  : 'tests/__snapshots__/textwrap.json has not been recorded' }, () => {
+  // THE ONE CPYTHON ORACLE P1 LEFT AS A LIVE COMPARISON. `tests/test_cli_reference.py`'s
+  // sweep computes its expectation from the RUNNING interpreter's `textwrap`, so it dies with
+  // `rituals/harness.py` — and what would survive is 26 help fixtures at ONE wrap column,
+  // which that sweep's own docstring records as having proved nothing: a greedy space-only
+  // wrap passed all 26. `pyTextWrap` is ~40 lines including a hand-transcribed `WORDSEP`, and
+  // Task 10b showed its payload is one term subtle. This is the frozen half.
+  assert.equal(textwrapCorpus.corpus, 'textwrap');
+  assert.equal(textwrapCorpus.oracle, 'textwrap.wrap, post-gh-139065',
+    'the recording does not declare which side of gh-139065 it is on, so it cannot be told '
+    + 'apart from a corpus frozen against the behaviour CPython already fixed');
+
+  // The document self-checks before it is used as an oracle — a hand-edited matrix that no
+  // longer hashes to its own sha256 is not the reference's answer any more. The canonical
+  // form is `json.dumps(separators=(',', ':'), ensure_ascii=False)`, which is byte for byte
+  // what `JSON.stringify` produces.
+  assert.equal(createHash('sha256').update(JSON.stringify(textwrapCorpus.matrix), 'utf8')
+    .digest('hex'), textwrapCorpus.sha256,
+  'textwrap.json\'s matrix does not hash to its own sha256 — the file was edited by hand');
+
+  // The positive controls. Every assertion below is vacuous over an empty or one-width corpus,
+  // and "the widths collapsed" and "the port agrees everywhere" are the same green.
+  const [lo, hi] = textwrapCorpus.widths;
+  const widths = Array.from({ length: hi - lo }, (_, i) => lo + i);
+  assert.ok(textwrapCorpus.cases.length > 30, 'the case list collapsed');
+  assert.ok(widths.length > 100, 'the width band collapsed to a corpus at one width, which is '
+    + 'not evidence about an algorithm');
+  assert.equal(textwrapCorpus.rows, textwrapCorpus.cases.length * widths.length);
+  assert.ok(textwrapCorpus.matrix.some((rows) => rows.some((lines) => lines.length > 1)),
+    'not one recorded case wraps at all — the corpus cannot tell a line breaker from `[t]`');
+
+  for (const [i, t] of textwrapCorpus.cases.entries()) {
+    for (const [j, w] of widths.entries()) {
+      assert.deepStrictEqual(pyTextWrap(t, w), textwrapCorpus.matrix[i][j],
+        `case ${i} at width ${w}: the port's line breaker disagrees with the textwrap.wrap `
+        + `the reference recorded, on ${JSON.stringify(t)}`);
+    }
+  }
+
+  // The sample is the readable window into the hash, and it is checked against the matrix it
+  // is drawn from so it cannot rot into decoration.
+  for (const [key, lines] of Object.entries(textwrapCorpus.sample)) {
+    const [i, w] = key.split('@').map(Number);
+    assert.deepStrictEqual(textwrapCorpus.matrix[i][widths.indexOf(w)], lines,
+      `sample ${key} disagrees with the matrix row it names`);
   }
 });
 

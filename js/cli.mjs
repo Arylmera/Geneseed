@@ -42,6 +42,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { ROOT } from './checkout.mjs';
+import { pyInt, pyStripSpace } from './lib/pyfs.mjs';
 
 const CLI_JSON = path.join(ROOT, 'cli.json');
 const HARNESS_PY = path.join(ROOT, 'rituals', 'harness.py');
@@ -387,11 +388,24 @@ export function formatHelp(cmd, prog, width) {
     }
     // `add_mutually_exclusive_group()` — never required in this parser, so `[a | b]`, and the
     // members lose their own brackets to it. Emitted once, at the first member's position.
+    //
+    // ONE PART PER MEMBER, NOT ONE PER GROUP, and that distinction is the whole of a real
+    // divergence this port shipped. `_get_actions_usage_parts` decorates the members IN PLACE:
+    // the first gets the opening bracket, every part but the last gains a trailing ` |`, the
+    // last gains the closing bracket — and it returns them as SEPARATE parts. `_format_usage`
+    // then wraps on the part boundaries, so argparse can break the line INSIDE the group and
+    // end a line with `[--solid-only |`. A single atomic `[a | b]` part cannot be broken at
+    // all, so the two layouts diverge at every width where the group straddles the wrap
+    // column: measured on `theme`, 73 of the 181 widths in COLUMNS 20..200, and 64 of those in
+    // the arm the fixtures exercise. COLUMNS=80 — the one width the 26 recorded fixtures are
+    // rendered at — is not one of them, which is why nothing saw it.
     if (done.has(group)) continue;
     done.add(group);
-    optParts.push(`[${group
-      .map((f) => usagePart(options.find((o) => o.names.includes(f)), false))
-      .join(' | ')}]`);
+    const members = group.map((f) => usagePart(options.find((o) => o.names.includes(f)), false));
+    members[0] = `[${members[0]}`;
+    members[members.length - 1] += ']';
+    for (let i = 0; i < members.length - 1; i += 1) members[i] += ' |';
+    optParts.push(...members);
   }
   const posParts = positionals.map((a) => usagePart(a, true));
 
@@ -401,7 +415,15 @@ export function formatHelp(cmd, prog, width) {
   // and not by `--daemon-internal`.
   const invocations = [...positionals.map((a) => actionInvocation(a, true)),
     ...options.map((a) => actionInvocation(a, false))];
-  const helpPosition = Math.min(Math.max(...invocations.map((s) => s.length)) + 2 + 2, 24);
+  // `_max_help_position` IS ITSELF A FUNCTION OF THE WIDTH, which the port had baked as the
+  // constant 24: `HelpFormatter.__init__` is
+  // `min(max_help_position, max(width - 20, indent_increment * 2))`, so the two-column layout
+  // collapses to a 4-column indent on a narrow terminal and every action's help moves to its
+  // own line. Equal to 24 for every width from 44 up, which is why the fixtures at width 78
+  // could not see it and why only a width SWEEP could.
+  const maxHelpPosition = Math.min(24, Math.max(width - 20, 2 * 2));
+  const helpPosition = Math.min(Math.max(...invocations.map((s) => s.length)) + 2 + 2,
+    maxHelpPosition);
 
   const blocks = [`${formatUsage(prog, optParts, posParts, width)}\n`];
   if (positionals.length) {
@@ -420,10 +442,23 @@ export function formatHelp(cmd, prog, width) {
  * 80 — minus the two columns `HelpFormatter.__init__` subtracts. (`shutil.get_terminal_size`
  * reads `COLUMNS` before it asks the tty, and falls back to 80 when neither answers, which is
  * every pipe both implementations write help into.)
+ *
+ * `pyInt`, NOT `Number.parseInt`, and the tree already owned it. `get_terminal_size` spells
+ * this `int(os.environ['COLUMNS'])` inside `except (KeyError, ValueError)`, and `int` is not
+ * `parseInt`. Measured against the reference over a corpus of `$COLUMNS` values
+ * (`test_the_ports_help_width_is_shutil_get_terminal_size`): `COLUMNS=1_0` is 10 to Python and
+ * 1 to `parseInt`, `COLUMNS=٣` is 3 and NaN, `COLUMNS=' 80 '` is 80 and NaN. `COLUMNS=80abc`
+ * is a ValueError to Python and 80 to `parseInt` — the same answer down a PIPE, where the
+ * fallback is 80 either way, and a different one on any terminal that is not 80 wide, which is
+ * why the corpus is the gate rather than a cell. A non-positive value falls through on both
+ * sides, which is Python's `if columns <= 0` and was already right here.
+ *
+ * `pyStripSpace` because THIS is the caller `pyInt`'s docblock did not have: its other two
+ * strip before calling, and `$COLUMNS` arrives however the shell set it — `int(' 80 ')` is 80.
  */
-function helpWidth() {
-  const env = Number.parseInt(process.env.COLUMNS ?? '', 10);
-  if (Number.isInteger(env) && env > 0) return env - 2;
+export function helpWidth() {
+  const env = pyInt(pyStripSpace(process.env.COLUMNS ?? ''));
+  if (env !== null && env > 0) return env - 2;
   return (process.stdout.columns > 0 ? process.stdout.columns : 80) - 2;
 }
 

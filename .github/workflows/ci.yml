@@ -217,6 +217,13 @@ jobs:
           diff /tmp/xplat/win_user_path.json tests/__snapshots__/win_user_path.json || rc=1
           diff /tmp/xplat/help/cli_reference.json tests/__snapshots__/cli_reference.json || rc=1
           diff -r /tmp/xplat/help/help tests/__snapshots__/help || rc=1
+          # THE FOURTH CLAIM, and the sharpest one this file makes about an oracle. The
+          # committed `textwrap.json` was recorded on a PRE-gh-139065 interpreter with the
+          # upstream one-liner applied by `record_help.Gh139065`; this runner's `python-version:
+          # "3.13"` resolves post-fix and needs no correction. Byte-identical output is the
+          # measurement that the correction reproduces the fix rather than approximating it —
+          # the two machines are running genuinely different `textwrap` code.
+          diff /tmp/xplat/help/textwrap.json tests/__snapshots__/textwrap.json || rc=1
           exit $rc
       # RECORD TWICE, DIFF — the rot detector Task 8 added and 8c found the limit of. Two
       # recordings minutes apart on one image agree unless the corpus embeds a clock or a
@@ -227,7 +234,7 @@ jobs:
           diff -r /tmp/xplat/help2 /tmp/xplat/help
       # Recorded and replayed in the same run, for the reason the emit corpus gives above: a
       # corpus that was never replayed is committed, plausible and unusable.
-      - name: replay the three CPython-oracle corpora against the port
+      - name: replay the four CPython-oracle corpora against the port
         run: node --test tests/pure_snapshot.test.mjs
       - uses: actions/upload-artifact@v4
         with:
@@ -264,5 +271,21 @@ jobs:
         # source: the daemon serves stale code, then fails hard on MIME after the next
         # rebuild. `npm run build` above is a compile check; this is the freshness check.
         # Run from the repo root, because dist lives outside this job's working-directory.
+        #
+        # TWO COMMANDS, BECAUSE `git diff` CANNOT SEE AN UNTRACKED FILE. Vite names every
+        # chunk with a content hash, so a source change that adds or renames a lazy chunk
+        # writes a file git has never heard of — and `git diff` reports only tracked paths, so
+        # that build passed this gate. It was caught indirectly at best, via whichever tracked
+        # chunk happened to reference the new name. `git status --porcelain` lists untracked
+        # paths (`??`) as well as modified ones, so the second command is the assertion the
+        # comment above actually claims. Both run: `git diff` names WHAT changed in a
+        # reviewable form, the status check is what makes the gate complete.
         working-directory: .
-        run: git diff --exit-code --stat -- web/dist
+        run: |
+          git diff --exit-code --stat -- web/dist
+          drift="$(git status --porcelain -- web/dist)"
+          if [ -n "$drift" ]; then
+            echo "web/dist is not what web/src builds to — rebuild and commit:"
+            echo "$drift"
+            exit 1
+          fi

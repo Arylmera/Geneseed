@@ -172,7 +172,15 @@ def _resolve_memory_dir(explicit: str | None) -> Path | None:
     bases = [cwd, cwd / "Harness"]
     gh = os.environ.get("GENESEED_HARNESS")
     if gh:
-        bases.append(Path(gh).expanduser())
+        try:
+            bases.append(Path(gh).expanduser())
+        except Exception:
+            # PER BASE — `Path.expanduser()` raises RuntimeError (not OSError) on POSIX for a
+            # `~unknownuser` value, and this line sat OUTSIDE the `except Exception: pass`
+            # below it, so a bad `$GENESEED_HARNESS` crashed `status` and the `learn` hook
+            # instead of degrading. Same shape and same reasoning as the guard in
+            # `_harness_context.sovereign_bypass`; the port carries the twin in js/hosts.mjs.
+            pass
     try:
         bases.append(build._opencode_config_dir())  # the global install's store
     except Exception:
