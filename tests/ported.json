@@ -378,11 +378,11 @@
       "python": "tests/test_spawn_hygiene.py",
       "kind": "parity",
       "py_tests": 4,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/unit/spawn_hygiene.test.mjs"
       ],
-      "why": "Every capturing spawn suppresses the Windows console window. The 'on BOTH sides' half dies; the Node half is the one that ships, and it is the gate that a human — not a byte comparison — found was needed, because a console window is not a byte."
+      "why": "Every capturing spawn suppresses the Windows console window. The 'on BOTH sides' half dies with the reference; the Node half is the one that ships, and it is the gate a HUMAN — not a byte comparison — found was needed, because a console window is not a byte and all 691 cells were byte-identical through the defect. Three structural scans (brace-matched call bodies, capturing only, one owner for the flag) PLUS a behavioural one, and the fourth is the interesting one: mutate.mjs's M9 survived all three scans when the shared NO_WINDOW was emptied to {}, because every call site still SPELLS the name and the name still has one owner. A gate on a REFERENCE is not a gate on the VALUE. The inverse assertion is deliberately absent and says so at the site: three real call sites inherit their streams AND hide, all correct, because Node's windowsHide is a different mechanism from Python's CREATE_NO_WINDOW creation flag."
     },
     {
       "python": "tests/test_token_report_parity.py",

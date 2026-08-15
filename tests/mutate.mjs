@@ -162,13 +162,19 @@ export const MUTATIONS = [
     id: 'M9',
     name: 'drop windowsHide from a capturing spawn',
     file: 'js/lib/pyproc.mjs',
-    find: 'windowsHide: true',
-    replace: 'windowsHide: false',
-    gate: null,
+    // THE SHARED OWNER, and the anchor took two tries: the flag is not spelled
+    // `windowsHide: true` anywhere, it is `process.platform === 'win32'` in ONE place, which is
+    // the whole point of the module. A mutation whose anchor is absent is reported as
+    // unapplicable rather than silently passing — that report is what corrected this row.
+    find: "export const NO_WINDOW = { windowsHide: process.platform === 'win32' };",
+    replace: 'export const NO_WINDOW = {};',
+    gate: UNIT,
     why: 'A console window flashing on every hook invocation is not a byte, so no corpus can '
-      + 'see it — a human using the product found the original. The gate has to be a SOURCE '
-      + 'scan, which is what `tests/test_spawn_hygiene.py` does and what its Node successor '
-      + 'must do. Declared, ungated until that row of ported.json lands.',
+      + 'see it — every one of 691 cells was byte-identical through the defect and a HUMAN '
+      + 'using the product found it. The gate has to read the SOURCE, which is what '
+      + 'tests/unit/spawn_hygiene.test.mjs does: brace-matched call bodies, capturing spawns '
+      + 'only, with a floor under the scan so a pattern that stops matching reports zero rather '
+      + 'than passing vacuously.',
   },
   {
     id: 'M10',
