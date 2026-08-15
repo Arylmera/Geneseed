@@ -16,7 +16,12 @@ import {
   substitute, effectiveTheme, themedRel, destRel, renderAll, renderFile, STRUCTURE,
 } from '../../js/render.mjs';
 import { build } from '../../js/emit.mjs';
-import { isVendoredPath, loadAgentOverrides, writeNativeLayer } from '../../js/native.mjs';
+import {
+  isVendoredPath, loadAgentOverrides, writeNativeLayer, descBlockProblem,
+} from '../../js/native.mjs';
+import { syncThemes } from '../../js/themes.mjs';
+import { writeText } from '../../js/lib/pyfs.mjs';
+import { copyCheckout } from '../helpers/cli_golden.mjs';
 import {
   writePrimaryAgent, writeCommandLayer, ensureAgentOverridesStub, sourceReleaseVersion,
 } from '../../js/opencode.mjs';
@@ -378,6 +383,198 @@ test('the notebook charter is agent-owned after seeding', () => {
     buildInto(out);
     assert.equal(fs.readFileSync(charter, 'utf8'), '# My rules\nmine now\n');
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The theme-parity maintainer assist — `SyncThemesTests`.
+//
+// `syncThemes` fills a theme's missing keys from `_TEMPLATE.json`. The reference redirects
+// `_build_core.THEMES`; the port takes the directory as its first parameter, so every test here
+// but the CLI one drives a temp directory directly.
+//
+// `writeText` translates to `os.linesep`, so a fixture written through it really is CRLF on
+// Windows — gated as M1 — while Python's `read_text` collapses it back before the reference ever
+// compares. Both halves have to be reproduced or the two byte-identity tests below fail on the
+// separator and invite exactly the wrong fix: weakening the assertion that IS the claim.
+const readTextPy = (p) => fs.readFileSync(p, 'utf8').split('\r\n').join('\n');
+
+function withTempThemes(files, fn) {
+  return withDir((d) => {
+    for (const [name, text] of Object.entries(files)) writeText(path.join(d, name), text);
+    const [changed, report] = captured(() => syncThemes(d));
+    return fn({ changed, report, dir: d, read: (n) => readTextPy(path.join(d, n)) });
+  });
+}
+
+const afterJson = (r, n = 'mytheme.json') => JSON.parse(r.read(n));
+
+test('a missing key is filled from the template, in template order', () => {
+  withTempThemes({
+    '_TEMPLATE.json': JSON.stringify({ A: '<a>', B: '<b>', C: '<c>' }),
+    'mytheme.json': JSON.stringify({ A: 'hello', C: 'world' }),          // missing B
+  }, (r) => {
+    assert.equal(r.changed, 1);
+    assert.deepEqual(afterJson(r), { A: 'hello', B: '<b>', C: 'world' });
+    assert.deepEqual(Object.keys(afterJson(r)), ['A', 'B', 'C'], 'template order was lost');
+    assert.ok(r.report.includes('mytheme.json'));
+    assert.ok(r.report.includes('added 1 key'));
+    assert.ok(r.report.includes('B'));
+    // The filled value is the template's PLACEHOLDER, not this theme's voice — so the report
+    // has to say so, or a maintainer ships `<b>` to users believing the sync finished the job.
+    assert.ok(r.report.includes('RESTYLE'));
+  });
+});
+
+test('an extra key is reported and never removed', () => {
+  const theme = { A: 'hello', ZZZ: 'keep-me' };
+  withTempThemes({
+    '_TEMPLATE.json': JSON.stringify({ A: '<a>' }),
+    'mytheme.json': JSON.stringify(theme),
+  }, (r) => {
+    assert.equal(r.changed, 0, 'nothing was missing, so nothing should have been written');
+    assert.deepEqual(afterJson(r), theme);
+    assert.ok(r.report.includes('ZZZ'));
+    assert.ok(r.report.includes('not removed'));
+  });
+});
+
+test('an extra key survives a sync that fills a missing one', () => {
+  // The two branches are separate code paths in the port — `missing.length` decides which
+  // report fires — so "kept when nothing else changed" says nothing about "kept when the file
+  // IS rewritten", which is the case where a key would actually be lost.
+  withTempThemes({
+    '_TEMPLATE.json': JSON.stringify({ A: '<a>', B: '<b>' }),
+    'mytheme.json': JSON.stringify({ A: 'hello', ZZZ: 'keep-me' }),
+  }, (r) => {
+    assert.equal(r.changed, 1);
+    assert.equal(afterJson(r).B, '<b>');
+    assert.equal(afterJson(r).ZZZ, 'keep-me', 'a rewrite dropped a key the template lacks');
+    assert.ok(r.report.includes('not removed'));
+    assert.ok(r.report.includes('ZZZ'));
+  });
+});
+
+test('a theme already in sync reports that nothing changed', () => {
+  withTempThemes({
+    '_TEMPLATE.json': JSON.stringify({ A: '<a>' }),
+    'mytheme.json': JSON.stringify({ A: 'hello' }),
+  }, (r) => {
+    assert.equal(r.changed, 0);
+    assert.ok(r.report.includes('already carry every template key'));
+  });
+});
+
+test('a one-key sync is a minimal TEXTUAL diff, not a re-dump', () => {
+  // THE CHURN GUARANTEE. Re-dumping rewrote ~170 lines per theme for a single added key, and a
+  // diff that size is one nobody reads. The fixture makes a re-dump impossible to hide: a raw
+  // em dash AND a legacy é escape cannot both survive a JSON round trip, so byte-identity
+  // on the untouched lines proves the insertion was textual.
+  withTempThemes({
+    '_TEMPLATE.json': '{\n  "A": "<a>",\n  "B": "<b>",\n  "C": "<c>"\n}\n',
+    'mytheme.json': '{\n  "A": "hello — caf\\u00e9",\n  "C": "world"\n}\n',
+  }, (r) => {
+    assert.equal(r.changed, 1);
+    assert.equal(r.read('mytheme.json'),
+      '{\n  "A": "hello — caf\\u00e9",\n  "B": "<b>",\n  "C": "world"\n}\n');
+  });
+});
+
+test('a no-op leaves the file bytes untouched', () => {
+  // Not merely "the values are unchanged": an in-sync theme must not be REWRITTEN, even where
+  // the formatting could not survive a dumps round trip. Same fixture, opposite direction.
+  const before = '{\n  "A": "caf\\u00e9 — raw"\n}\n';
+  withTempThemes({
+    '_TEMPLATE.json': '{\n  "A": "<a>"\n}\n',
+    'mytheme.json': before,
+  }, (r) => {
+    assert.equal(r.changed, 0);
+    assert.equal(r.read('mytheme.json'), before);
+  });
+});
+
+test('syncing a broken theme makes it parity-clean against the real template', () => {
+  // The integration check: a theme with a genuinely missing key, once synced, stops tripping
+  // the parity gate. Driven off the SHIPPED template and a shipped theme rather than a toy
+  // pair, so it fails if the real template grows a key the sync cannot fill.
+  const themesDir = path.join(ROOT, 'themes');
+  const good = JSON.parse(readTextPy(path.join(themesDir, 'neutral.json')));
+  assert.ok('VOICE' in good, 'neutral.json no longer has a VOICE key — this fixture is stale');
+  const broken = { ...good };
+  delete broken.VOICE;
+  withTempThemes({
+    '_TEMPLATE.json': readTextPy(path.join(themesDir, '_TEMPLATE.json')),
+    'neutral.json': JSON.stringify(good),
+    'broken.json': JSON.stringify(broken),
+  }, (r) => {
+    assert.ok('VOICE' in afterJson(r, 'broken.json'));
+  });
+});
+
+test('--sync-themes maps the changed count to the exit code', (t) => {
+  // CI uses the exit code as a drift check: 1 when files were filled, 0 on a no-op. The
+  // reference patches sys.argv and catches SystemExit, but `main` reaches `syncThemes()` with
+  // no argument, so the themes dir it reads is derived from the driver's OWN location and no
+  // in-process fixture can move it. §3.1's copyCheckout is the injection point: plant the
+  // broken theme in a COPY and run the real CLI out of it in a child, whose ROOT resolves
+  // there. That also makes this the only test in the class gating the flag-to-exit-code
+  // mapping rather than the function behind it.
+  withDir((d) => {
+    const co = path.join(d, 'checkout');
+    const themesDir = path.join(ROOT, 'themes');
+    const broken = { ...JSON.parse(readTextPy(path.join(themesDir, 'neutral.json'))) };
+    delete broken.VOICE;
+    copyCheckout(co, { 'themes/broken.json': `${JSON.stringify(broken, null, 2)}\n` });
+    const run = () => spawnSync(process.execPath,
+      [path.join(co, 'bin', 'geneseed.mjs'), '--sync-themes'],
+      { cwd: co, encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true });
+
+    const first = run();
+    if (first.status === 2) { t.skip(`the copied checkout has no template: ${first.stdout}`); return; }
+    assert.equal(first.status, 1, `filling a key must be red; stdout: ${first.stdout}`);
+    assert.equal(run().status, 0, 'a second run found drift where the first had just fixed it');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The description-block shape check — `DescBlockTests`.
+//
+// `descOf` / `firstBlockquote` scan for the first `>` line. `descBlockProblem` is what stops
+// that naive scan from silently picking up the WRONG one: a spec whose first block is prose
+// still has a `>` somewhere later, so without this check a stray quotation becomes the
+// description shown in every catalog, and nothing anywhere reports a problem.
+
+for (const [name, text, expect] of [
+  ['a clean shape', '# {{SKILL}}: foo\n\n> One-line purpose.\n\n## Procedure\n1. Step.\n', ''],
+  ['an HTML comment before the title', '<!--\n  authoring notes\n-->\n# {{SKILL}}: foo\n\n> Purpose.\n', ''],
+  ['prose before the blockquote',
+    '# {{SKILL}}: foo\n\nSome introductory prose that is NOT the description.\n\n> {{DESC_FOO}}\n',
+    "not a '>' blockquote"],
+  ['no title at all', '> Purpose without a title above it.\n', 'not a title'],
+  ['a title with nothing after it', '# {{SKILL}}: foo\n', 'no purpose blockquote'],
+  ['an empty blockquote', '# {{SKILL}}: foo\n\n>\n', 'empty'],
+  ['an empty file', '', 'empty'],
+]) {
+  test(`the desc-block check on ${name}`, () => {
+    const problem = descBlockProblem(text);
+    if (expect === '') assert.equal(problem, '', `a valid shape was flagged: ${problem}`);
+    else {
+      assert.notEqual(problem, '', 'a broken shape was accepted');
+      assert.ok(problem.includes(expect), `wrong diagnosis: ${problem}`);
+    }
+  });
+}
+
+test('every shipped agent and skill spec passes the check', () => {
+  let seen = 0;
+  for (const folder of ['agents', 'skills']) {
+    const d = path.join(cfg().src, folder);
+    for (const name of fs.readdirSync(d).filter((n) => n.endsWith('.md') && !n.startsWith('_'))) {
+      seen += 1;
+      assert.equal(descBlockProblem(readTextPy(path.join(d, name))), '', `${folder}/${name}`);
+    }
+  }
+  // A glob that matched nothing agrees with every check ever written.
+  assert.ok(seen > 20, `only ${seen} specs were scanned — this sweep proves little`);
 });
 
 // ---------------------------------------------------------------------------------------------
