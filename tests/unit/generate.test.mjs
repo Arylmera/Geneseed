@@ -13,9 +13,11 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { substitute, effectiveTheme, themedRel, destRel, renderAll } from '../../js/render.mjs';
+import { build } from '../../js/emit.mjs';
 import { isVendoredPath } from '../../js/native.mjs';
 import { themeFiles } from '../../js/installs.mjs';
-import { ROOT, makeCfg } from '../../js/checkout.mjs';
+import { ROOT, makeCfg, discoverNames } from '../../js/checkout.mjs';
+import { parseDriverArgs } from '../../bin/geneseed.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';
@@ -31,6 +33,57 @@ const themeNames = () => themeFiles().map((p) => path.basename(p, '.json'));
 function withDir(fn) {
   const sb = makeSandbox('gs-gen-');
   try { return fn(sb.path); } finally { sb.cleanup(); }
+}
+
+/**
+ * `contextlib.redirect_stdout` / `redirect_stderr` — `build` narrates every run on stdout
+ * and warns on both streams, and "which stream said it" is part of several claims below.
+ */
+function captured(fn) {
+  const outw = process.stdout.write.bind(process.stdout);
+  const errw = process.stderr.write.bind(process.stderr);
+  let out = '';
+  let err = '';
+  process.stdout.write = (chunk) => { out += chunk; return true; };
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  try {
+    return [fn(), out, err];
+  } finally {
+    process.stdout.write = outw;
+    process.stderr.write = errw;
+  }
+}
+
+/** `build.build(theme, out, footprint)` — in process, narration swallowed. */
+function buildInto(out, cfgOpts = {}, buildOpts = {}) {
+  const [, , err] = captured(() => build(makeCfg(cfgOpts), 'neutral', out, buildOpts));
+  return err;
+}
+
+const read = (...p) => fs.readFileSync(path.join(...p), 'utf8');
+const isFile = (...p) => fs.existsSync(path.join(...p)) && fs.statSync(path.join(...p)).isFile();
+
+/**
+ * The bundle emit through its PUBLIC entry, in a child so the driver's own `ROOT` and
+ * `process.exit` semantics are the real ones.
+ *
+ * Stronger than the reference's fixture for the posture/mode axis: `_build_core.POSTURE` is
+ * a module global the Python rebinds directly, so nothing on that side ever gated the
+ * `--posture` flag reaching the renderer. Here the flag IS the input.
+ */
+function emitFiles(dir, out, extra = []) {
+  const r = spawnSync(process.execPath,
+    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', 'files', '--theme', 'neutral',
+      '--out', out, ...extra],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: { ...process.env, ...homeOverrides(path.join(dir, 'home')) },
+      maxBuffer: 1 << 26,
+      windowsHide: true,
+    });
+  assert.equal(r.status, 0, (r.stderr || '').slice(-1200));
+  return r;
 }
 
 /**
@@ -147,19 +200,188 @@ test('a lean build still ships the complete law file', () => {
   // build that shipped a condensed universal.md would silently narrow the agent's law.
   withDir((d) => {
     const out = path.join(d, 'bundle');
-    const r = spawnSync(process.execPath,
-      [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', 'files', '--theme', 'neutral',
-        '--out', out, '--footprint', 'lean'],
-      {
-        cwd: ROOT,
-        encoding: 'utf8',
-        env: { ...process.env, ...homeOverrides(path.join(d, 'home')) },
-        maxBuffer: 1 << 26,
-        windowsHide: true,
-      });
-    assert.equal(r.status, 0, (r.stderr || '').slice(-1200));
-    assert.ok(fs.readFileSync(path.join(out, 'AGENT.md'), 'utf8').includes(ESSENCE));
-    assert.ok(fs.readFileSync(path.join(out, 'laws', 'universal.md'), 'utf8').includes(FULL_ONLY),
+    emitFiles(d, out, ['--footprint', 'lean']);
+    assert.ok(read(out, 'AGENT.md').includes(ESSENCE));
+    assert.ok(read(out, 'laws', 'universal.md').includes(FULL_ONLY),
       'a lean build shipped a condensed universal.md — the laws themselves were narrowed');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The build round trip — `BuildRoundTripTests`.
+//
+// Not "does the bundle come out right" (259 recorded cells settle that byte for byte) but the
+// OWNERSHIP decisions a rebuild makes: which files the build re-asserts, which it seeds once and
+// must never touch again, and which of the agent's own writing it is forbidden to destroy. A
+// corpus records one emit; every claim below needs a SECOND one over the same directory.
+
+test('a build writes the expected tree', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    for (const rel of ['AGENT.md', 'laws/universal.md', 'memory/MEMORY.md',
+      // The agent's own freeform space ships its convention plus a seeded index.
+      'notebook/README.md', 'notebook/.gitignore', 'notebook/NOTEBOOK.md',
+      // The two stubs created once.
+      'context.json', 'wiki.jsonc']) {
+      assert.ok(isFile(out, ...rel.split('/')), `${rel} is missing from a fresh build`);
+    }
+  });
+});
+
+test('wiki.jsonc is seeded as commented JSONC and never overwritten', () => {
+  // wiki.jsonc holds the user's own knowledge-base declarations: seeded once as a commented
+  // copy-and-edit example over an empty list, and never rewritten (spec 2026-06-11).
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    const wiki = path.join(out, 'wiki.jsonc');
+    const text = fs.readFileSync(wiki, 'utf8');
+    assert.ok(text.includes('// Example'), 'the stub shipped without its inline example');
+    // Stripped by hand rather than through the product's own `readJsonc`, which is under test
+    // in its own block below: a stub parsed only by the reader it ships for proves the pair
+    // agree, not that the stub is JSONC.
+    const bare = text.split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
+    assert.deepEqual(JSON.parse(bare).wikis, []);
+
+    const mine = '{"wikis": [{"name": "Brain", "path": "/kb"}]}\n';
+    fs.writeFileSync(wiki, mine);
+    buildInto(out);
+    assert.equal(fs.readFileSync(wiki, 'utf8'), mine);
+  });
+});
+
+test('a legacy wiki.json suppresses the .jsonc stub', () => {
+  // A `wiki.json` seeded by an earlier build still counts as the manifest. Dropping a second
+  // `wiki.jsonc` beside it would fork the user's declarations across two files, and the build
+  // reads only one of them.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    fs.mkdirSync(out, { recursive: true });
+    const legacy = '{"wikis": [{"name": "Old", "path": "/kb"}]}\n';
+    fs.writeFileSync(path.join(out, 'wiki.json'), legacy);
+    buildInto(out);
+    assert.ok(!fs.existsSync(path.join(out, 'wiki.jsonc')), 'the build forked the manifest');
+    assert.equal(read(out, 'wiki.json'), legacy);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Posture and mode.
+//
+// Two axes with the same shape: a catalogue of bodies on disk, one of which AGENT.md inlines.
+// The whole catalogue ships either way — selecting a posture changes what the agent is TOLD to
+// be, never what it can be pointed at later.
+
+for (const [axis, dir, dflt, other, dfltMark, otherMark] of [
+  ['posture', 'postures', 'peer', 'expert', '**Peer**', '**Expert**'],
+  ['mode', 'modes', 'direct', 'foreman', '**Direct**', '**Foreman**'],
+]) {
+  const heading = `## ${axis[0].toUpperCase()}${axis.slice(1)}`;
+
+  test(`the default ${axis} is the one inlined`, () => {
+    withDir((d) => {
+      const out = path.join(d, 'bundle');
+      buildInto(out);
+      const agent = read(out, 'AGENT.md');
+      assert.ok(agent.includes(heading), `AGENT.md has no ${heading} section at all`);
+      assert.ok(agent.includes(dfltMark));
+      assert.ok(!agent.includes(otherMark));
+    });
+  });
+
+  test(`--${axis} switches the inlined body`, () => {
+    withDir((d) => {
+      const out = path.join(d, 'bundle');
+      emitFiles(d, out, [`--${axis}`, other]);
+      const agent = read(out, 'AGENT.md');
+      assert.ok(agent.includes(otherMark), `--${axis} ${other} did not reach the render`);
+      assert.ok(!agent.includes(dfltMark));
+      // The full catalogue ships regardless of which one is active.
+      assert.ok(isFile(out, dir, `${dflt}.md`),
+        `selecting ${other} dropped ${dflt}.md from the bundle`);
+    });
+  });
+
+  test(`${axis} names are discovered from disk, ${dflt} first`, () => {
+    const names = discoverNames(dir, dflt);
+    assert.equal(names[0], dflt, 'the default no longer sorts first');
+    assert.ok(names.includes(other));
+    assert.ok(!names.includes('README'), 'README is not a ' + axis);
+    // What the reference could not reach: the same discovery is what the CLI validates
+    // against, so a name on disk is a name the flag accepts and nothing else is.
+    assert.doesNotThrow(() => parseDriverArgs(['--emit', 'files', `--${axis}`, other]));
+    const bad = captured(() => assert.throws(
+      () => parseDriverArgs(['--emit', 'files', `--${axis}`, 'README']),
+      (e) => e.exitCode === 2));
+    assert.match(bad[2], /invalid choice: 'README'/);
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// The seed-once files.
+
+test('PROFILE.md is seeded once and preserved', () => {
+  // PROFILE.md holds the user's own identity: seeded beside AGENT.md, never overwritten (the
+  // same contract as wiki.jsonc and user-rules.md). It is identity, not rules — so the stub
+  // has to point rules somewhere else or the two files compete.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    const prof = path.join(out, 'PROFILE.md');
+    assert.ok(isFile(prof), 'PROFILE.md was never seeded');
+    assert.ok(fs.readFileSync(prof, 'utf8').includes('user-rules.md'));
+
+    const mine = '# Your profile\n\nI am the test user.\n';
+    fs.writeFileSync(prof, mine);
+    buildInto(out);
+    assert.equal(fs.readFileSync(prof, 'utf8'), mine);
+  });
+});
+
+test('the notebook survives a rebuild', () => {
+  // The notebook is the agent's own store: NOT an owned dir, seeded once. A rebuild must
+  // never wipe the index or any file the agent kept there.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    const index = '# Notebook Index\n- kept\n';
+    fs.writeFileSync(path.join(out, 'notebook', 'NOTEBOOK.md'), index);
+    fs.writeFileSync(path.join(out, 'notebook', 'scratch.md'), 'my own work');
+    buildInto(out);
+    assert.equal(read(out, 'notebook', 'NOTEBOOK.md'), index);
+    assert.ok(isFile(out, 'notebook', 'scratch.md'), 'a rebuild deleted the agent\'s own file');
+  });
+});
+
+test('the notebook charter is agent-owned after seeding', () => {
+  // README.md is seeded on the first build and never re-emitted: an agent rewrite survives a
+  // rebuild byte for byte (sovereign space, spec 2026-06-11).
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    const charter = path.join(out, 'notebook', 'README.md');
+    assert.ok(isFile(charter), 'the charter was never seeded');
+    fs.writeFileSync(charter, '# My rules\nmine now\n');
+    buildInto(out);
+    assert.equal(fs.readFileSync(charter, 'utf8'), '# My rules\nmine now\n');
+  });
+});
+
+test('the notebook .gitignore is re-asserted', () => {
+  // The one fixed law of that space, and the exception that makes the sovereignty above
+  // safe: modified OR deleted, the next rebuild puts the build's version back.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    const gi = path.join(out, 'notebook', '.gitignore');
+    const original = fs.readFileSync(gi, 'utf8');
+    fs.writeFileSync(gi, '# lifted\n');
+    buildInto(out);
+    assert.equal(fs.readFileSync(gi, 'utf8'), original, 'a lifted .gitignore stayed lifted');
+    fs.unlinkSync(gi);
+    buildInto(out);
+    assert.ok(isFile(gi), 'a deleted .gitignore was not restored');
+    assert.equal(fs.readFileSync(gi, 'utf8'), original);
   });
 });
