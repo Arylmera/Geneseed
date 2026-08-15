@@ -111,13 +111,15 @@ export const MUTATIONS = [
     file: 'js/native.mjs',
     find: '    if (oldSet.has(rel)) return true;',
     replace: '    if (rel || true) return true;',
-    gate: null,
-    why: "The class of bug that destroys a user's own file. UNGATED, AND THE REASON IS THE "
-      + "design doc's own: the claim guard only fires when a file EXISTS and was never owned, "
-      + 'and a fresh-sandbox emit never reaches that state by construction. It survived a '
-      + 'context-cell gate for exactly that reason. Its home is the unit tier - a pre-existing '
-      + "settings.json carrying the user's own hooks - which is ported.json's row for "
-      + 'tests/test_claude.py. Declared here so the hole is countable rather than implied.',
+    gate: UNIT,
+    why: "The class of bug that destroys a user's own file. IT SURVIVED A CELL GATE AND WAS "
+      + "CARRIED AS UNGATED FOR A WHILE, and the reason is the design doc's own: the claim "
+      + 'guard only fires when a file EXISTS at the destination and was never owned, and a '
+      + 'fresh-sandbox emit never reaches that state by construction. All 691 recorded cells '
+      + 'are blind to it. tests/unit/user_files.test.mjs is what closes it, by driving '
+      + 'writeNativeLayer in process over a seeded pre-existing file - which is the whole '
+      + 'argument for a unit tier: a corpus can only record states a cell can reach, and the '
+      + 'states worth fearing most are the ones a clean fixture cannot produce.',
   },
   {
     id: 'M6',
