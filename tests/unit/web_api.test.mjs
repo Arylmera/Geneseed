@@ -12,6 +12,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { spawnSync } from 'node:child_process';
@@ -19,11 +20,15 @@ import { spawnSync } from 'node:child_process';
 import { localHost } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
+  apiThemes, apiDoctor,
 } from '../../js/web/api.mjs';
-import { apiRestore } from '../../js/web/actions.mjs';
+import {
+  apiRestore, apiMcp, apiMcpToggle, buildOverride,
+} from '../../js/web/actions.mjs';
+import { MCP_PRESETS } from '../../js/mcp.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/diff.mjs';
-import { makeSandbox } from '../helpers/sandbox.mjs';
+import { makeSandbox, TMP_ROOT } from '../helpers/sandbox.mjs';
 import { webFixture, webFixtureTeardown, ROOT } from '../helpers/web_fixture.mjs';
 
 const FIXTURE = webFixture();
@@ -428,4 +433,359 @@ test('the update action runs a single upgrade', () => {
 
 test('an unknown action is null', () => {
   assert.equal(actionCommands('bogus'), null);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The theme picker.
+
+test('the theme list carries themes, emits and the current pair', () => {
+  const t = apiThemes(neutral());
+  const names = t.themes.map((x) => x.name);
+  assert.ok(names.includes('neutral'));
+  assert.ok(names.includes('imperial'));
+  assert.ok(t.emits.map((x) => x.name).includes('opencode-global'));
+  assert.equal(t.current.theme, 'neutral');
+});
+
+test('a valid build override wins over the state', () => {
+  const [theme, emit] = buildOverride(neutral(), { theme: 'imperial', emit: 'files' });
+  assert.equal(theme, 'imperial');
+  assert.equal(emit, 'files');
+});
+
+test('an invalid build override falls back to the state', () => {
+  const st = neutral();
+  st.emit = 'opencode-global';
+  const [theme, emit] = buildOverride(st, { theme: 'bogus', emit: 'nope' });
+  assert.equal(theme, 'neutral');
+  assert.equal(emit, 'opencode-global');
+});
+
+test('an empty build override body uses the state', () => {
+  const st = neutral();
+  const [theme, emit] = buildOverride(st, {});
+  assert.equal(theme, st.theme);
+  assert.equal(emit, st.emit);
+});
+
+test('every theme choice carries its gallery fields and a known accent', () => {
+  const t = apiThemes(neutral());
+  const n = t.themes.find((x) => x.name === 'neutral');
+  for (const key of ['blurb', 'accent', 'tagline', 'sigil']) assert.ok(key in n, `no ${key}`);
+  assert.equal(n.accent, 'cyan');
+  // Every theme declares an accent the swatch palette knows — a theme with an unknown accent
+  // renders untinted, which looks like a CSS bug rather than a data one.
+  for (const x of t.themes) {
+    assert.ok(['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'].includes(x.accent),
+      `theme ${x.name} declares accent ${JSON.stringify(x.accent)}`);
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Doctor: the grouped view and the flat list are the same set.
+
+test('the doctor groups are exactly the flat problem list', () => {
+  const d = apiDoctor(neutral());
+  assert.ok('groups' in d);
+  assert.ok(d.groups.length > 0);
+  for (const g of d.groups) {
+    assert.ok('check' in g);
+    assert.ok('label' in g);
+    assert.ok(Array.isArray(g.problems));
+  }
+  const checks = new Set(d.groups.map((g) => g.check));
+  for (const need of ['build', 'global', 'parity', 'authoring']) {
+    assert.ok(checks.has(need), `no ${need} group`);
+  }
+  // The flat list is exactly the union of the groups, deduped and sorted. Two renderings of
+  // one verdict that can disagree is a console that reports a different number of problems
+  // depending on which panel you look at.
+  const union = [...new Set(d.groups.flatMap((g) => g.problems))].sort();
+  assert.deepEqual(d.problems, union);
+  assert.equal(d.ok, d.problems.length === 0);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Restore.
+
+test('restore rewrites an edit, deletes an addition and rejects bad paths', () => {
+  const sb = makeSandbox();
+  try {
+    const cfg = emitInto(path.join(sb.path, 'cfg'));
+    const st = webState('neutral', cfg);
+    const agent = path.join(cfg, 'AGENT.md');
+    const original = fs.readFileSync(agent, 'utf8');
+    fs.writeFileSync(agent, `${original}\nLOCAL EDIT\n`);
+    const extra = path.join(cfg, 'zz-extra.md');
+    fs.writeFileSync(extra, 'local only\n');
+
+    const res = apiRestore(st, ['AGENT.md', 'zz-extra.md', 'bogus.md', '../escape.md']);
+
+    assert.ok(res.restored.includes('AGENT.md'), 'the edited file was not restored');
+    assert.equal(fs.readFileSync(agent, 'utf8'), original);
+    assert.ok(res.deleted.includes('zz-extra.md'), 'the added file was not deleted');
+    assert.ok(!fs.existsSync(extra));
+    assert.equal(res.errors.length, 2, 'the unknown name and the traversal must both error');
+  } finally { sb.cleanup(); }
+});
+
+test('restore without a deployed install is an error', () => {
+  const sb = makeSandbox();
+  try {
+    const res = apiRestore(webState('neutral', sb.path), ['AGENT.md']);
+    assert.deepEqual(res.restored, []);
+    assert.deepEqual(res.errors, ['no deployed harness']);
+  } finally { sb.cleanup(); }
+});
+
+// ---------------------------------------------------------------------------------------------
+// The wiki.
+
+function wikiFixture() {
+  const sb = makeSandbox();
+  const vault = path.join(sb.path, 'vault');
+  fs.mkdirSync(path.join(vault, 'sub'), { recursive: true });
+  fs.mkdirSync(path.join(vault, 'Hidden'));
+  fs.writeFileSync(path.join(vault, 'Note.md'), '# Note\nSee [[learn]].');
+  fs.writeFileSync(path.join(vault, 'sub', 'Page.md'), '# Page');
+  fs.writeFileSync(path.join(vault, 'Hidden', 'Secret.md'), '# Secret');
+  const manifest = path.join(sb.path, 'wiki.jsonc');
+  fs.writeFileSync(manifest, JSON.stringify({
+    wikis: [{
+      name: 'test',
+      path: vault,
+      entries: [
+        { path: 'Note.md', load: 'eager', description: 'the note' },
+        { path: 'sub/', load: 'lazy' },
+        { path: 'Hidden/', load: 'exclude' },
+      ],
+    }],
+  }));
+  const saved = process.env.GENESEED_WIKI;
+  process.env.GENESEED_WIKI = manifest;
+  return {
+    sb,
+    root: sb.path,
+    done() {
+      if (saved === undefined) delete process.env.GENESEED_WIKI;
+      else process.env.GENESEED_WIKI = saved;
+      sb.cleanup();
+    },
+  };
+}
+
+test('the wiki catalog lists pages minus the excluded folder', () => {
+  const w = wikiFixture();
+  try {
+    const names = apiCatalog(webState('neutral'), 'wiki').items.map((i) => i.name);
+    assert.ok(names.includes('test:Note.md'));
+    assert.ok(names.includes('test:sub/Page.md'));
+    assert.ok(!names.includes('test:Hidden/Secret.md'),
+      'an `exclude` entry was listed — the manifest is advisory rather than enforced');
+  } finally { w.done(); }
+});
+
+test('a wiki item reads its page and blocks traversal and unknown vaults', () => {
+  const w = wikiFixture();
+  try {
+    const st = webState('neutral');
+    const item = apiItem(st, 'wiki', 'test:Note.md');
+    assert.match(item.body, /# Note/);
+    assert.equal(item.title, 'Note');
+    assert.throws(() => apiItem(st, 'wiki', 'test:../wiki.jsonc'), NotFound);
+    assert.throws(() => apiItem(st, 'wiki', 'nope:Note.md'), NotFound);
+  } finally { w.done(); }
+});
+
+// The console groups the Knowledge list by vault and routes each row by its own type, so pages
+// must be tagged with both.
+test('wiki pages carry their group and their type', () => {
+  const w = wikiFixture();
+  try {
+    const rows = apiCatalog(webState('neutral'), 'wiki').items;
+    const row = rows.find((i) => i.name === 'test:Note.md');
+    assert.equal(row.type, 'wiki');
+    assert.equal(row.kind, 'page');
+    assert.equal(row.group, 'test');
+  } finally { w.done(); }
+});
+
+// The setup files render as parsed manifests — cards plus an entries table — not a raw JSON
+// dump, so `apiItem` must hand back a structured `manifest`.
+test('a config item returns the parsed manifest', () => {
+  const w = wikiFixture();
+  try {
+    fs.writeFileSync(path.join(w.root, 'context.json'), JSON.stringify({
+      context: [{ path: 'README.md', load: 'eager', description: 'x' }],
+    }));
+    const st = webState(null, w.root);
+
+    const ctx = apiItem(st, 'config', 'context.json');
+    assert.equal(ctx.title, 'Project context');
+    assert.equal(ctx.manifest.kind, 'context');
+    assert.equal(ctx.manifest.context[0].load, 'eager');
+
+    const wk = apiItem(st, 'config', 'wiki.jsonc');
+    assert.equal(wk.manifest.kind, 'wiki');
+    assert.equal(wk.manifest.wikis[0].name, 'test');
+
+    // Both surface as Setup manifests in the catalog.
+    const rows = Object.fromEntries(apiCatalog(st, 'config').items.map((i) => [i.name, i]));
+    assert.equal(rows['context.json'].kind, 'manifest');
+    assert.equal(rows['wiki.jsonc'].title, 'Wiki manifest');
+  } finally { w.done(); }
+});
+
+// ---------------------------------------------------------------------------------------------
+// MCP.
+//
+// THE TARGETS ARE REAL, NOT FAKED, and this is the one place the port is stronger than the
+// reference by necessity. `tests/test_web.py` replaced `_mcp_install_targets` with a lambda —
+// a module-level rebind ESM does not allow, since `apiMcpToggle` closes over the imported
+// binding. The alternative is not a weaker test: `installTargets()` scans `process.cwd()` for
+// each host's project marker, so creating `.opencode/` or `.claude/` in a sandbox and chdiring
+// into it produces a target the product DISCOVERS. The allowlist is then exercised as shipped
+// rather than as substituted — and the Python's fake could not have caught a discovery bug at
+// all, because it replaced discovery.
+//
+// CHDIR IS PROCESS-WIDE, so every one of these restores it in a `finally`. Note what that
+// protects against: this repository's own root carries a `.claude/` directory, so a toggle test
+// that ran from there would have `<repo>/.mcp.json` in its allowlist and could write into the
+// working tree.
+function inProjectDir(marker, fn) {
+  const sb = makeSandbox();
+  const cwd = process.cwd();
+  try {
+    fs.mkdirSync(path.join(sb.path, marker), { recursive: true });
+    process.chdir(sb.path);
+    // The sandbox root is canonical, but `process.cwd()` is what `installTargets` reads and it
+    // must agree with the path this test hands the allowlist.
+    return fn(process.cwd());
+  } finally {
+    process.chdir(cwd);
+    sb.cleanup();
+  }
+}
+
+test('the MCP listing carries every active install with its servers', () => {
+  // The shared fixture IS an active opencode-global install, which is what makes this
+  // structural check hold on any machine: the reference had to fake one for the same reason
+  // and got a weaker assertion for it.
+  const m = apiMcp();
+  assert.ok(m.targets.length > 0, 'no active install was listed — the fixture is not active');
+  for (const t of m.targets) {
+    assert.ok('path' in t);
+    assert.ok('commented' in t);
+    assert.ok(['opencode', 'claude', 'bob', 'copilot'].includes(t.host));
+    assert.ok('root' in t);
+    for (const s of t.servers) {
+      assert.ok(['enabled', 'disabled', 'absent'].includes(s.state));
+      assert.ok('label' in s);
+    }
+  }
+  assert.equal(typeof m.default, 'number');
+});
+
+test('an OpenCode target adds a preset and then disables it in place', () => {
+  inProjectDir('.opencode', (root) => {
+    const cfgPath = path.join(root, 'opencode.json');
+    const st = neutral();
+    const preset = Object.keys(MCP_PRESETS)[0];
+
+    let res = apiMcpToggle(st, { path: cfgPath, name: preset, enabled: true });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.equal(res.state, 'enabled');
+
+    // OpenCode KEEPS the entry and flips its enabled flag, so the state becomes `disabled`.
+    res = apiMcpToggle(st, { path: cfgPath, name: preset, enabled: false });
+    assert.equal(res.ok, true);
+    assert.equal(res.state, 'disabled');
+
+    assert.throws(() => apiMcpToggle(st, { path: 'bogus', name: preset, enabled: true }),
+      NotFound, 'an unlisted path was accepted — the allowlist is the whole security here');
+  });
+});
+
+test('a Claude target adds under mcpServers and REMOVES on toggle off', () => {
+  inProjectDir('.claude', (root) => {
+    const cfgPath = path.join(root, '.mcp.json');
+    const st = neutral();
+
+    let res = apiMcpToggle(st, { path: cfgPath, name: 'markitdown', enabled: true });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.equal(res.state, 'enabled');
+    let cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.deepEqual(cfg.mcpServers.markitdown, { command: 'uvx', args: ['markitdown-mcp'] });
+    assert.ok(!('mcp' in cfg), "OpenCode's key was written into a Claude config");
+
+    // Claude has no enabled flag, so toggling off REMOVES the entry.
+    res = apiMcpToggle(st, { path: cfgPath, name: 'markitdown', enabled: false });
+    assert.equal(res.ok, true);
+    assert.equal(res.state, 'absent');
+    cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.ok(!Object.hasOwn(cfg.mcpServers || {}, 'markitdown'));
+  });
+});
+
+// `~/.claude.json` is the USER-scope config and it holds far more than MCP wiring — projects,
+// history, startup counts. It is always a discovered target, so no marker directory is needed.
+//
+// THE GUARD BELOW IS NOT DECORATION. These two tests WRITE and then DELETE `~/.claude.json`,
+// and the only thing standing between that and the developer's real 160 kB Claude config is
+// `os.homedir()` reading the sandbox's `USERPROFILE`/`HOME`. It does — but "it does" is an
+// observation about today's Node, and the failure mode is silent destruction of a file this
+// suite does not own. `tests/unit/sandbox.test.mjs` already carries the rule this follows:
+// assert on the ENVIRONMENT, never by observing the leak.
+function sandboxHomeFile(name) {
+  const home = os.homedir();
+  assert.ok(home.startsWith(TMP_ROOT),
+    `os.homedir() is ${home}, which is not under the test temp root — refusing to write and `
+    + `delete ${name} in the developer's real home`);
+  return path.join(home, name);
+}
+
+test('a Claude config keeps its unrelated keys and refuses to be clobbered', () => {
+  const cfgPath = sandboxHomeFile('.claude.json');
+  const st = neutral();
+  try {
+    fs.writeFileSync(cfgPath, JSON.stringify({ numStartups: 7, projects: { '/x': {} } }));
+    const res = apiMcpToggle(st, { path: cfgPath, name: 'gitlab', enabled: true });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    const after = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.equal(after.numStartups, 7, 'an unrelated key was dropped');
+    assert.ok('gitlab' in after.mcpServers);
+
+    // A config that will not parse is REFUSED, never clobbered.
+    fs.writeFileSync(cfgPath, '{ not json');
+    const bad = apiMcpToggle(st, { path: cfgPath, name: 'markitdown', enabled: true });
+    assert.equal(bad.ok, false);
+    assert.equal(fs.readFileSync(cfgPath, 'utf8'), '{ not json',
+      'an unparseable config was overwritten — this file holds the user\'s whole Claude state');
+  } finally {
+    fs.rmSync(cfgPath, { force: true });
+  }
+});
+
+// A Claude config is STRICT JSON and must round-trip byte-faithfully. A string value holding
+// `,]` or `, }` — realistic in `~/.claude.json`'s history and prompts — must NOT have its comma
+// silently dropped by the OpenCode comment-stripper's trailing-comma pass. This is the
+// regression guard for a parser-mismatch DATA-LOSS bug.
+test('a Claude config does not have its string values mangled', () => {
+  const cfgPath = sandboxHomeFile('.claude.json');
+  const st = neutral();
+  const booby = {
+    history: [{ display: 'jq .a[] | select(.x,]' }, { display: 'rewrite {a, } please' }],
+    note: 'fix [1,2,] and {b, }',
+  };
+  try {
+    fs.writeFileSync(cfgPath, JSON.stringify(booby));
+    const res = apiMcpToggle(st, { path: cfgPath, name: 'markitdown', enabled: true });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    const after = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.deepEqual(after.history, booby.history, 'a comma was dropped from a string value');
+    assert.equal(after.note, booby.note);
+    assert.ok('markitdown' in after.mcpServers);
+  } finally {
+    fs.rmSync(cfgPath, { force: true });
+  }
 });

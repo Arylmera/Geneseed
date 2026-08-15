@@ -66,7 +66,7 @@ export function homeOverrides(home) {
 // because the root handed out was short and the child's own resolve expanded it, so the tag
 // matched nothing. The developer's machine cannot produce a short `TEMP`; GitHub's runner
 // spells it `C:\Users\RUNNER~1\…`.
-const TMP_ROOT = fs.realpathSync.native(os.tmpdir());
+export const TMP_ROOT = fs.realpathSync.native(os.tmpdir());
 
 /**
  * One cell's temp dir: canonical, and with a teardown that cannot raise.
