@@ -425,8 +425,21 @@ function parseVersionTuple(v) {
   return out;
 }
 
-/** `_build_core.version_is_newer` — null when either side fails to parse. */
-function versionIsNewer(a, b) {
+/**
+ * `_build_core.version_is_newer` — null when either side fails to parse.
+ *
+ * EXPORTED FOR ITS GATE, and the argument belongs here rather than in the test. Its only
+ * caller is `warnIfDowngrade`, one line down, whose whole observable behaviour is "print a
+ * warning or say nothing" — so through the emit face `false` and `null` are the SAME
+ * observation, and six of the nine claims this function makes are invisible. That numeric
+ * comparison beats lexical (`1.10.0` > `1.9.0`), that a short tuple is zero-padded on the
+ * right (`1.2` == `1.2.0`), and that an unparseable side answers `null` rather than `false`
+ * are each a decision with a wrong answer that no cell and no emit can distinguish.
+ *
+ * Nothing else changes: it is the same function, called the same way, from the same one
+ * place. See `tests/unit/lifecycle.test.mjs`.
+ */
+export function versionIsNewer(a, b) {
   const ta = parseVersionTuple(a);
   const tb = parseVersionTuple(b);
   if (ta === null || tb === null) return null;

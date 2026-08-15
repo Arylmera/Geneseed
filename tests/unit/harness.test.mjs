@@ -23,8 +23,13 @@ import {
 } from '../../js/hooks.mjs';
 import {
   themeParityProblems, countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt,
-  themesToCheck, globalEmitProblems,
+  themesToCheck, globalEmitProblems, renderedProblems, authoringProblems, claudeBobEmitProblems,
 } from '../../js/doctor.mjs';
+import {
+  memoryDropIndex, discoverContext, resolveContextSets, resolveAgentName, appendAgentLesson,
+  consolidateMemory,
+} from '../../js/hooks.mjs';
+import { memoryFactCount } from '../../js/status.mjs';
 import { stripSkillBodyLinks } from '../../js/native.mjs';
 import { stripCapabilityLinks } from '../../js/emit.mjs';
 import { themeOfDir } from '../../js/installs.mjs';
@@ -407,6 +412,235 @@ test('roman numerals bridge to LAW_META\'s arabic keys', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+// The authoring gate on the specs themselves.
+
+test('the shipped specs and plugins pass the authoring gate', () => {
+  assert.deepEqual(authoringProblems(), []);
+});
+
+test('a spec whose first block is prose rather than a blockquote is flagged', () => {
+  // WHY THE FIRST BLOCK AND NOT ANY BLOCK. A later `>` line would let a naive check pass,
+  // and that drift is exactly what let `descOf()` silently extract the wrong description —
+  // the spec read fine to a human and shipped the wrong one-liner into every bundle.
+  const problems = withFault({
+    'src/skills/zzz-fixture-probe.md':
+      '# {{SKILL}}: zzz-fixture-probe\n\nSome prose that is NOT the description.\n\n'
+      + '> {{DESC_COMMIT}}\n',
+  }, (root) => gate(root, 'm.authoringProblems()'));
+  assert.ok(
+    problems.some((p) => p.includes('skills/zzz-fixture-probe.md')
+      && p.includes("not a '>' blockquote")),
+    JSON.stringify(problems));
+});
+
+// ---------------------------------------------------------------------------------------------
+// The memory store's index.
+//
+// `_memory_facts` HAS NO SINGLE SUCCESSOR, and that is a split rather than a loss. It built one
+// record per fact — name, description, body — for the TUI's memory screen, and the port kept the
+// half each surviving caller needs: `memoryFactCount` (status, the number) and
+// `js/web/api.mjs`'s `memoryItems` (the console's list, gated by the 114 web cells). What is
+// asserted here is the part with no other owner: that the index really tracks the store.
+
+test('the fact count sees the facts and skips the index and the readme', () => {
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'MEMORY.md'),
+      '# Memory Index\n- [a](a.md)\n- [b](b.md)\n', 'utf8');
+    fs.writeFileSync(path.join(d, 'README.md'), 'conv', 'utf8');
+    fs.writeFileSync(path.join(d, 'a.md'),
+      '---\nname: a\ndescription: alpha\n---\nbody A', 'utf8');
+    fs.writeFileSync(path.join(d, 'b.md'),
+      '---\nname: b\ndescription: beta\n---\nbody B', 'utf8');
+    // Two facts — MEMORY.md and README.md are the store's furniture, not entries in it.
+    assert.equal(memoryFactCount(d), 2);
+
+    memoryDropIndex(d, 'b');
+    const index = fs.readFileSync(path.join(d, 'MEMORY.md'), 'utf8');
+    assert.ok(!index.includes('(b.md)'), index);
+    assert.ok(index.includes('(a.md)'), 'dropping one pointer removed the other too');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Context discovery — what the agent is handed when a repo has no manifest.
+
+function contextFixture(d) {
+  fs.writeFileSync(path.join(d, 'README.md'), '# r', 'utf8');
+  fs.writeFileSync(path.join(d, 'CONTRIBUTING.md'), '# c', 'utf8');
+  fs.writeFileSync(path.join(d, 'notes.md'), '# n', 'utf8');
+  fs.mkdirSync(path.join(d, 'docs'));
+  fs.writeFileSync(path.join(d, 'docs', 'guide.md'), '# g', 'utf8');
+  fs.mkdirSync(path.join(d, 'node_modules'));
+  fs.writeFileSync(path.join(d, 'node_modules', 'junk.md'), 'x', 'utf8');
+  fs.mkdirSync(path.join(d, 'packages', 'foo'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'packages', 'foo', 'README.md'), '# foo', 'utf8');
+}
+
+const baseNames = (rows) => new Set(rows.map((r) => path.basename(r.path)));
+
+test('discovery sorts convention files eager and the rest lazy', () => {
+  withDir((d) => {
+    contextFixture(d);
+    const [eager, lazy] = discoverContext(d);
+    const en = baseNames(eager);
+    const ln = baseNames(lazy);
+    assert.ok(en.has('README.md'), [...en].join(','));
+    assert.ok(en.has('CONTRIBUTING.md'), [...en].join(','));
+    assert.ok(ln.has('notes.md'), 'a misc root .md should be lazy');
+    assert.ok(ln.has('guide.md'), 'the docs/ tree should be lazy');
+    assert.ok(!ln.has('junk.md'), 'node_modules was scanned');
+    assert.ok(lazy.some((l) => path.basename(path.dirname(l.path)) === 'foo'),
+      'a nested package README was not found');
+  });
+});
+
+test('an empty manifest falls back to discovery', () => {
+  withDir((d) => {
+    contextFixture(d);
+    fs.writeFileSync(path.join(d, 'context.json'), '{"context": []}', 'utf8');
+    const [eager, , source] = resolveContextSets(d);
+    assert.ok(eager.some((e) => path.basename(e.path) === 'README.md'),
+      'an empty manifest silenced discovery instead of falling back to it');
+    assert.ok(source.includes('auto-discovery'), source);
+  });
+});
+
+test('a manifest with extend layers on top of discovery', () => {
+  withDir((d) => {
+    contextFixture(d);
+    fs.writeFileSync(path.join(d, 'house.md'), '# house rules', 'utf8');
+    fs.writeFileSync(path.join(d, 'context.json'),
+      '{"extend": true, "context": [{"path": "house.md", "load": "eager", '
+      + '"description": "house rules"}]}', 'utf8');
+    const [eager, , source] = resolveContextSets(d);
+    const en = baseNames(eager);
+    assert.ok(en.has('README.md'), 'extend dropped the discovered set');
+    assert.ok(en.has('house.md'), 'extend dropped the manifest set');
+    // Not "auto-discovery": the source names a manifest, because one was honoured.
+    assert.ok(!source.includes('auto-discovery'), source);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// doctor's claude/bob per-repo check — the blind spot that let dead links ship.
+//
+// `doctorCollect` used to validate only the `files` build and opencode-global; the claude/bob
+// PER-REPO emit was never checked, which is exactly why the CLAUDE.md / AGENTS.md dead
+// skill-table links shipped unnoticed.
+
+test('the claude/bob per-repo emit is clean on the shipped tree', () => {
+  assert.deepEqual(claudeBobEmitProblems('neutral'), []);
+});
+
+test('the claude/bob check catches the dead link it was written for', () => {
+  // REINTRODUCE THE EXACT REGRESSION. The dead link is a property of the RENDER, not of a file
+  // on disk: `CAPABILITY_LINK_RE` lost its optional path-prefix group, so `.claude/skills/x.md`
+  // style links stopped being stripped and pointed at nothing in the emitted bundle.
+  //
+  // The reference monkeypatches `_build_core.CAPABILITY_LINK_RE`. Here it is a module const in
+  // `js/emit.mjs` with no injection point left (`cfg.capabilityLinkRe` was the Python driver's
+  // seam and the Node path supplies none), so the narrowed pattern is PLANTED IN THE COPY and
+  // the check is run out of it — the same discovery route the theme and count gates use.
+  const real = fs.readFileSync(path.join(ROOT, 'js', 'emit.mjs'), 'utf8');
+  const wide = '/\\[([^\\]]+)\\]\\((?:(?!https?:\\/\\/|\\/)[A-Za-z0-9_.-]+\\/)*'
+    + '(?:agents|skills)\\/[A-Za-z0-9_-]+\\.md\\)/g';
+  const narrow = '/\\[([^\\]]+)\\]\\((?:agents|skills)\\/[A-Za-z0-9_-]+\\.md\\)/g';
+  assert.ok(real.includes(wide),
+    'the CAPABILITY_LINK_RE literal has been reworded — this fault no longer plants anything');
+  const problems = withFault({ 'js/emit.mjs': real.replace(wide, narrow) },
+    (root) => gate(root, "m.claudeBobEmitProblems('neutral')"));
+  assert.ok(problems.some((p) => p.includes('dead link') && p.includes('skills/')),
+    `expected a seeded dead skill link, got: ${JSON.stringify(problems.slice(0, 5))}`);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Per-agent lessons — the Python twin of the OpenCode learn plugin's child-session branch.
+
+test('an agent name is normalised or refused, never interpolated blind', () => {
+  // THE REFUSALS ARE A PATH-TRAVERSAL GUARD, not tidiness: the name becomes a FILENAME under
+  // `memory/agents/`, so `../evil` reaching the join is a write outside the store.
+  assert.equal(resolveAgentName('Reviewer'), 'reviewer');
+  assert.equal(resolveAgentName('user-advocate'), 'user-advocate');
+  assert.equal(resolveAgentName('../evil'), null);
+  assert.equal(resolveAgentName('has space'), null);
+  assert.equal(resolveAgentName(''), null);
+  assert.equal(resolveAgentName(null), null);
+});
+
+/**
+ * `Path.read_text()` — INCLUDING its universal-newline decode, which is the part that matters.
+ *
+ * `writeText` translates `\n` to `os.linesep`, so on Windows a lesson file really is CRLF on
+ * disk (M1 in the mutation matrix is exactly that translation, so the bytes are already gated).
+ * The reference asserts `text.startswith("# reviewer — lessons\n")` and passes anyway, because
+ * Python's text-mode read collapses `\r\n` back to `\n` before it ever sees the string — a
+ * dependency its assertion never states. A raw `readFileSync(..., 'utf8')` does not, so the
+ * first port of these two tests failed on the separator rather than on anything they are about.
+ */
+const readTextPy = (p) => fs.readFileSync(p, 'utf8').split('\r\n').join('\n');
+
+test('a lesson file is created, appended, and capped at a hundred', () => {
+  withDir((mem) => {
+    const f = appendAgentLesson(mem, 'reviewer', 'cite tests in findings');
+    const text = readTextPy(f);
+    assert.ok(text.startsWith('# reviewer — lessons\n'), JSON.stringify(text.slice(0, 40)));
+    assert.match(text, /- \d{4}-\d{2}-\d{2}: cite tests in findings\n$/);
+    for (let i = 0; i < 120; i += 1) appendAgentLesson(mem, 'reviewer', `lesson ${i}`);
+    const bullets = readTextPy(f).split('\n').filter((l) => l.startsWith('- '));
+    // THE CAP DROPS FROM THE FRONT. A cap that kept the FIRST hundred would freeze the file
+    // after a week and quietly stop recording anything the agent learned since.
+    assert.equal(bullets.length, 100);
+    assert.ok(bullets.at(-1).includes('lesson 119'), bullets.at(-1));
+  });
+});
+
+test('a lesson collapses its whitespace onto one bullet', () => {
+  // A lesson arrives from a model and can carry newlines and tabs. One bullet per lesson is
+  // what makes the cap above countable at all.
+  withDir((mem) => {
+    const f = appendAgentLesson(mem, 'tester', 'a  lesson\nwith\tbreaks');
+    assert.match(readTextPy(f), /- \d{4}-\d{2}-\d{2}: a lesson with breaks\n$/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `learn --consolidate` — rebuild MEMORY.md from the fact files that are really on disk.
+
+test('consolidate re-indexes an orphan and prunes a dead line', () => {
+  withDir((mem) => {
+    fs.writeFileSync(path.join(mem, 'new-fact.md'),
+      '---\nname: new-fact\ndescription: a new fact\ntype: project\n---\nbody\n', 'utf8');
+    fs.writeFileSync(path.join(mem, 'MEMORY.md'),
+      '# Memory Index\n- [gone](gone.md) — stale\n', 'utf8');
+    const report = consolidateMemory(mem);
+    const index = fs.readFileSync(path.join(mem, 'MEMORY.md'), 'utf8');
+    assert.ok(index.includes('new-fact.md'), index);
+    assert.ok(!index.includes('gone.md'), index);
+    // The DESCRIPTION is carried across, not just the link — an index of bare filenames is
+    // not something the agent can choose from.
+    assert.ok(index.includes('a new fact'), index);
+    assert.deepEqual(report.added, ['new-fact']);
+    assert.deepEqual(report.pruned, ['gone']);
+  });
+});
+
+test('consolidate skips the index and the readme, and reports duplicates', () => {
+  withDir((mem) => {
+    for (const slug of ['a', 'b']) {
+      fs.writeFileSync(path.join(mem, `${slug}.md`),
+        `---\nname: ${slug}\ndescription: same desc\n---\nx\n`, 'utf8');
+    }
+    fs.writeFileSync(path.join(mem, 'README.md'), 'not a fact\n', 'utf8');
+    const report = consolidateMemory(mem);
+    const index = fs.readFileSync(path.join(mem, 'MEMORY.md'), 'utf8');
+    assert.ok(!index.includes('README.md'), index);
+    // REPORTED, NOT MERGED. Two facts with the same description are a judgement call for the
+    // user; consolidating them automatically would delete one of their memories.
+    assert.deepEqual(report.duplicates, [['a', 'b']]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
 // Theme detection — what `doctor` decides it is looking at.
 
 const AVAIL = ['cyberpunk', 'gamer', 'imperial', 'military', 'neutral', 'pirate', 'sports',
@@ -682,6 +916,89 @@ test('the capability stripper drops per-row spec links and keeps folder pointers
   assert.ok(out.includes('](agents/)'), out);
   assert.ok(out.includes('](skills/)'), out);
   assert.ok(out.includes('](memory/)'), out);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The committed-bundle drift check — and the dialect blindness that hid inside it.
+//
+// The first two tests build the PORTABLE bundle, which is the only dialect a plain `build`
+// fixture can produce. For as long as they were the WHOLE coverage, a bundle emitted for a host
+// that catalogues natively was unreachable, and the check's dialect-blindness could not be seen:
+// it reported a freshly emitted OpenCode bundle as stale on every run, with no rebuild able to
+// clear it. That is the shape to look for — not a missing assertion, a missing INPUT.
+
+/** A real OpenCode project bundle, with the markers a DEPLOYED one carries. */
+function opencodeBundle(d, footprint = 'lean') {
+  const out = path.join(d, 'bundle');
+  generate(['--emit', 'opencode', '--theme', 'neutral', '--out', out, '--root', out,
+    '--footprint', footprint], path.join(d, 'home'));
+  // `.geneseed-emit` is written by the driver's `main()`, not by the emit function, so a
+  // fixture that reaches the emitter directly has to write it exactly as an install does.
+  fs.writeFileSync(path.join(out, '.geneseed-theme'), 'neutral\n', 'utf8');
+  fs.writeFileSync(path.join(out, '.geneseed-footprint'), `${footprint}\n`, 'utf8');
+  fs.writeFileSync(path.join(out, '.geneseed-emit'), 'opencode\n', 'utf8');
+  return out;
+}
+
+test('a fresh portable bundle is clean, and a tampered one is stale', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    generate(['--emit', 'files', '--theme', 'neutral', '--out', out], path.join(d, 'home'));
+    assert.deepEqual(renderedProblems(out), []);
+    fs.writeFileSync(path.join(out, 'AGENT.md'), 'tampered', 'utf8');
+    const probs = renderedProblems(out);
+    assert.ok(probs.some((p) => p.includes('AGENT.md') && p.includes('stale')),
+      JSON.stringify(probs));
+  });
+});
+
+test('a file missing from the bundle is reported', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    generate(['--emit', 'files', '--theme', 'neutral', '--out', out], path.join(d, 'home'));
+    fs.rmSync(path.join(out, 'laws', 'universal.md'));
+    const probs = renderedProblems(out);
+    assert.ok(probs.some((p) => p.includes('universal.md') && p.includes('missing')),
+      JSON.stringify(probs));
+  });
+});
+
+test('an absent bundle is a no-op, not a failure', () => {
+  assert.deepEqual(renderedProblems(path.join(ROOT, 'does-not-exist')), []);
+});
+
+test('an OpenCode bundle straight out of the emitter is not drift', () => {
+  // Its AGENT.md differs from a portable render BY CONSTRUCTION — the catalogue tables are
+  // collapsed to a pointer and the per-row spec links are stripped — so a check that renders
+  // the portable shape flags it forever and no rebuild can clear it.
+  withDir((d) => {
+    assert.deepEqual(renderedProblems(opencodeBundle(d)), []);
+  });
+});
+
+test('an OpenCode bundle still detects real drift', () => {
+  // The dialect awareness must not have bought that by switching the check off. This is the
+  // control on the test above, and without it "not drift" is satisfied by "never reports".
+  withDir((d) => {
+    const out = opencodeBundle(d);
+    const agentMd = path.join(out, 'AGENT.md');
+    fs.writeFileSync(agentMd, `${fs.readFileSync(agentMd, 'utf8')}\ntampered\n`, 'utf8');
+    const probs = renderedProblems(out);
+    assert.ok(probs.some((p) => p.includes('AGENT.md') && p.includes('stale')),
+      `real drift in an OpenCode bundle went unreported: ${JSON.stringify(probs)}`);
+  });
+});
+
+test('the de-linking carve-out does not cover a spec file', () => {
+  // The carve-out is scoped to AGENT.md ALONE. A tampered agent spec — a file it must not
+  // cover — is still drift, and this is what stops the carve-out widening silently.
+  withDir((d) => {
+    const out = opencodeBundle(d);
+    fs.writeFileSync(path.join(out, 'agents', 'reviewer.md'), 'tampered', 'utf8');
+    const probs = renderedProblems(out);
+    assert.ok(probs.some((p) => p.includes('reviewer.md') && p.includes('stale')),
+      `drift in a non-AGENT.md file went unreported: ${JSON.stringify(probs)}`);
+  });
 });
 
 test('a portable bundle keeps its links and a native global strips them', () => {
