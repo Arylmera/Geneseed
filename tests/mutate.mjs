@@ -122,6 +122,27 @@ export const MUTATIONS = [
       + 'states worth fearing most are the ones a clean fixture cannot produce.',
   },
   {
+    // THE FALSIFIER'S ROW. Not invented and not planted: this is a real historical defect,
+    // documented in bin/geneseed.mjs's own docblock, found by GitHub's Windows runner, and
+    // REVERTED AS AN EXPERIMENT during P3 - at which point the entire Node suite stayed green
+    // (68 unit tests, 12 emit cells). That is what the design doc calls a hole named by name,
+    // and tests/unit/resolve_out.test.mjs is the gate written to close it.
+    id: 'M12',
+    name: 'let resolveOut normalise instead of canonicalise (a REAL historical defect)',
+    file: 'bin/geneseed.mjs',
+    find: '  return pyResolve(path.resolve(process.cwd(), raw));',
+    replace: '  return path.resolve(process.cwd(), raw);',
+    gate: UNIT,
+    why: 'The reference ends in Path.resolve(), which CANONICALISES - 8.3 short names expanded, '
+      + 'symlinks followed, the filesystem own casing - where path.resolve only normalises . '
+      + 'and .. . Nine pyResolve call sites had the rule and this one did not, so the two entry '
+      + 'points printed the same directory under two different names, a 70-byte difference in a '
+      + 'line compared byte for byte. Invisible on a machine whose paths are already canonical, '
+      + 'which is every machine this ran on until a runner handed it C:/Users/RUNNER~1/... The '
+      + 'fixture that could have caught it already existed and was locked inside a test about a '
+      + 'different function; it lives in tests/helpers/alias.mjs now.',
+  },
+  {
     id: 'M6',
     name: 'make parseJson collapse an integral float',
     file: 'js/lib/pyfs.mjs',

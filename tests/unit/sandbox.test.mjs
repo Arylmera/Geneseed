@@ -16,88 +16,22 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import {
   HOME_VARS, RELOCATION_VARS, cellEnv, homeOverrides, makeSandbox, restoreProcessHome,
   sandboxProcessHome,
 } from '../helpers/sandbox.mjs';
+import { ALIAS_SKIP, aliasedTemp } from '../helpers/alias.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-// A SECOND spelling of `real` naming the same directory, or null if this platform cannot make
-// one.
-//
-// TWO MECHANISMS ON WINDOWS, AND THE ORDER IS THE LESSON OF THIS FILE. An earlier draft used a
-// directory junction ALONE, because it needs no elevation and no subprocess — and a junction is
-// a fine fixture for the wrong bug. `fs.realpathSync` resolves junctions, so the gate was green
-// while `makeSandbox` handed out unexpanded 8.3 short names, and all 259 emit cells then failed
-// on `windows-latest` with the raw sandbox root leaking into every stream. The mechanism that
-// was dropped for convenience was the one carrying the defect.
-//
-// So the 8.3 short name is tried FIRST — it is what GitHub's runner actually holds — and the
-// junction is the fallback for a volume where `fsutil 8dot3name` has switched short names off.
-// Both are second spellings; only one of them separates `realpathSync` from
-// `realpathSync.native`.
-function aliasOf(real) {
-  if (process.platform === 'win32') {
-    const short = shortName(real);
-    if (short && short !== real) return { path: short, kind: '8.3', remove: () => {} };
-  }
-  const link = `${real}-alias`;
-  try {
-    fs.symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
-    return { path: link, kind: 'link', remove: () => { try { fs.unlinkSync(link); } catch { /* gone */ } } };
-  } catch { return null; }
-}
-
-// Through the Scripting.FileSystemObject rather than a `cmd.exe` `for /%~s` round trip, whose
-// quoting produced `C:\"C:` in an earlier draft of this file.
-function shortName(dir) {
-  try {
-    return execFileSync('powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command',
-        `(New-Object -ComObject Scripting.FileSystemObject).GetFolder('${dir}').ShortPath`],
-      { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-  } catch { return null; }
-}
-
-// A name with spaces and >8 characters per component, so the 8.3 form really does differ. A
-// short-name lookup on an already-short path returns it unchanged, and a test built on one of
-// those would be green for the wrong reason.
-function aliasedTemp() {
-  // `.native` ON BOTH CALLS, and the fixture had the same defect as the helper it tests. On
-  // `windows-latest` the runner's own TEMP is ALREADY the 8.3 form, so a plain `realpathSync`
-  // left `C:\Users\RUNNER~1\…` as this fixture's idea of the canonical path — while
-  // `realpathSync.native` on the alias returned `C:\Users\runneradmin\…`, and the two
-  // disagreed. The gate then failed on its own baseline rather than on anything it gates.
-  const real = fs.realpathSync.native(fs.mkdtempSync(
-    path.join(fs.realpathSync.native(os.tmpdir()), 'geneseed alias case ')));
-  const a = aliasOf(real);
-  if (a === null || a.path === real) {
-    fs.rmSync(real, { recursive: true, force: true });
-    return null;
-  }
-  // THE VACUITY GUARD. Everything below is about the gap between two spellings; if there is no
-  // gap the tests would pass without exercising anything.
-  //
-  // `.native` ON BOTH SIDES, because a plain `realpathSync` does not collapse an 8.3 alias at
-  // all — this assertion is the first thing that would have reported the mechanism as unfit.
-  assert.equal(fs.realpathSync.native(a.path), real, 'the alias must name the same directory');
-  assert.notEqual(a.path, real);
-  return {
-    real,
-    alias: a.path,
-    kind: a.kind,
-    done: () => {
-      a.remove();
-      fs.rmSync(real, { recursive: true, force: true });
-    },
-  };
-}
-
-const ALIAS_SKIP = 'this platform/volume cannot produce a second path spelling';
+// THE ALIASING FIXTURE MOVED to `tests/helpers/alias.mjs`, and the move is the finding rather
+// than the tidy-up. It was written here, inline, inside a test about `makeSandbox` — and when
+// P3's falsifier reverted a real historical defect in `resolveOut`, nothing went red, because
+// the one fixture in the repository that could manufacture the environment that defect lives in
+// was locked inside a test about a different function. A fixture with one caller is a fixture
+// the next defect cannot reach.
 
 test('the root a sandbox hands out is canonical', async (t) => {
   const a = aliasedTemp();
