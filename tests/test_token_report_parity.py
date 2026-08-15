@@ -38,6 +38,9 @@ There is no clock in the output: the duration comes from timestamps inside the t
 never from `now`. This surface is fully deterministic and needs no destamp.
 """
 
+import argparse
+import contextlib
+import io
 import json
 import os
 import re
@@ -689,6 +692,33 @@ cell("argparse: --help is the whole option list at 80 columns",
                   b"by recency\n",
                   b"\n  --session SESSION     explicit session id (opencode)\n"])
 
+def _argparse_choose_from(choices: "list[str]") -> bytes:
+    """argparse's OWN rendering of the choice list, asked rather than guessed.
+
+    CPython changed this between 3.13 patch releases: the choices used to render
+    bare (`choose from claude, bob`) and now render quoted (`choose from 'claude',
+    'bob'`). `.github/workflows/ci.yml` pins `python-version: "3.13"` with no patch
+    digit, so a laptop on 3.13.5 and a runner on 3.13.14 disagree about what the
+    REFERENCE prints — and a literal here asserts one machine's interpreter, not
+    argparse's behaviour. This is the same shape as gh-139065's `_handle_long_word`
+    skew, which `tests/test_cli_reference.py` answers the same way: probe, do not pin.
+
+    Only the REFERENCE's expectation is derived. `expect_port` stays a literal on
+    purpose — after P4 there is no argparse to track, so the port's message is its
+    own frozen contract and must not silently follow CPython."""
+    p = argparse.ArgumentParser(prog="p", add_help=False)
+    p.add_argument("--x", choices=list(choices))
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        try:
+            p.parse_args(["--x", "nope"])
+        except SystemExit:
+            pass
+    m = re.search(r"\(choose from ([^)]*)\)", err.getvalue())
+    assert m, f"argparse did not render a choice list: {err.getvalue()!r}"
+    return m.group(1).encode()
+
+
 cell("argparse: an invalid --host choice is argparse's own refusal, exit 2",
      argv=["--host", "nope"],
      build=lambda home, proj: None,
@@ -697,7 +727,8 @@ cell("argparse: an invalid --host choice is argparse's own refusal, exit 2",
      expect_stdout_empty=True,
      expect_err=[b"usage: @PROG@ [-h]",
                  b"@PROG@: error: argument --host: invalid choice: 'nope' "
-                 b"(choose from claude, bob, opencode, copilot)"],
+                 b"(choose from " + _argparse_choose_from(
+                     ["claude", "bob", "opencode", "copilot"]) + b")"],
      expect_port=[b"@PROG@: error: argument --host: invalid choice: 'nope' "
                   b"(choose from claude, bob, opencode, copilot)"])
 
