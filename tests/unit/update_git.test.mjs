@@ -235,6 +235,117 @@ test('a fetch that fails is fetch_failed, and the reason is carried out', async 
   } finally { git(CO, 'remote', 'set-url', 'origin', ORIGIN); }
 });
 
+// ---------------------------------------------------------------------------------------------
+// `PullAndValidateTests` — fast-forward, doctor-gate, roll back exactly.
+//
+// A SECOND fixture, because these run destructively forward through a repository's history and
+// the five above leave theirs on an orphan root. The reference mocks `_git` AND `_run_doctor`;
+// here both are real — `pullAndValidate` merges with real git and `runDoctor` spawns the copy's
+// own `bin/geneseed-cli.mjs doctor --all --no-bundle`, so the rollback is proven against a tree
+// the doctor genuinely rejects rather than against a mock told to say no.
+//
+// ⚠ ORDERED AND CUMULATIVE, like `MeasureUpstream` above and for a sharper reason: the collision
+// and the fast-forward are the SAME upstream commit, blocked and then allowed. That is what makes
+// the collision arm mean something — a merge that was going to fail anyway proves nothing about a
+// guard.
+
+const CO2 = path.join(sb.path, 'checkout2');
+const ORIGIN2 = path.join(sb.path, 'origin2.git');
+const OTHER2 = path.join(sb.path, 'other2');
+
+copyCheckout(CO2, {});
+git(sb.path, 'init', '--bare', '-b', 'main', ORIGIN2);
+git(CO2, 'init', '-b', 'main');
+git(CO2, 'config', 'user.email', 'fixture@geneseed.test');
+git(CO2, 'config', 'user.name', 'fixture');
+git(CO2, 'add', '-A');
+git(CO2, 'commit', '-qm', 'the copied checkout');
+git(CO2, 'remote', 'add', 'origin', ORIGIN2);
+git(CO2, 'push', '-q', '-u', 'origin', 'main');
+git(sb.path, 'clone', '-q', ORIGIN2, OTHER2);
+git(OTHER2, 'config', 'user.email', 'fixture@geneseed.test');
+git(OTHER2, 'config', 'user.name', 'fixture');
+
+const U2 = await import(pathToFileURL(path.join(CO2, 'js', 'update.mjs')).href);
+const COLLIDE = 'an-upstream-addition.txt';
+
+test('a pull blocked by an untracked collision returns collision and changes nothing', () => {
+  commit(OTHER2, COLLIDE);
+  git(OTHER2, 'push', '-q');
+  git(CO2, 'fetch', '-q');
+  // The same name, untracked and with different content: git refuses rather than overwrite it.
+  fs.writeFileSync(path.join(CO2, COLLIDE), 'the user had this here first\n');
+  const before = git(CO2, 'rev-parse', 'HEAD');
+
+  const [ok, code, msg] = U2.pullAndValidate(() => {});
+  assert.equal(ok, false);
+  assert.equal(code, 'collision');
+  assert.ok(/collides with a local untracked file/.test(msg), msg);
+  assert.equal(git(CO2, 'rev-parse', 'HEAD'), before, 'a blocked pull still moved HEAD');
+  assert.equal(fs.readFileSync(path.join(CO2, COLLIDE), 'utf8'), 'the user had this here first\n',
+    "the blocked pull overwrote the user's file, which is the thing it refused to do");
+});
+
+test('a clean fast-forward passes the doctor and does not roll back', () => {
+  // The SAME commit as above, now unblocked. `runDoctor` really spawns and really passes, so
+  // this also asserts the copied checkout is a valid Geneseed source tree — which is what makes
+  // the rollback test below a statement about the pulled commit rather than about the fixture.
+  fs.unlinkSync(path.join(CO2, COLLIDE));
+  const before = git(CO2, 'rev-parse', 'HEAD');
+
+  const [ok, code] = U2.pullAndValidate(() => {});
+  assert.equal(ok, true, 'a clean fast-forward onto a healthy tree was rejected');
+  assert.equal(code, 'ready');
+  assert.notEqual(git(CO2, 'rev-parse', 'HEAD'), before, 'the fast-forward did not happen');
+  assert.ok(fs.existsSync(path.join(CO2, COLLIDE)), 'the pulled file never arrived');
+});
+
+test('a pulled source that fails the doctor is rolled back to the exact previous commit', () => {
+  // The property the whole verb exists for: an upgrade may never leave a user on a source tree
+  // that does not validate. The fault is a REAL one the doctor really rejects — a theme missing
+  // a template key, which is the theme-parity gate — pushed upstream and pulled in.
+  const themePath = path.join(OTHER2, 'themes', 'neutral.json');
+  const theme = JSON.parse(fs.readFileSync(themePath, 'utf8'));
+  assert.ok('VOICE' in theme, 'neutral.json no longer has a VOICE key — this fixture is stale');
+  delete theme.VOICE;
+  fs.writeFileSync(themePath, `${JSON.stringify(theme, null, 2)}\n`);
+  git(OTHER2, 'add', '-A');
+  git(OTHER2, 'commit', '-qm', 'break theme parity');
+  git(OTHER2, 'push', '-q');
+  git(CO2, 'fetch', '-q');
+
+  const before = git(CO2, 'rev-parse', 'HEAD');
+  const [ok, code, msg] = U2.pullAndValidate(() => {});
+  assert.equal(ok, false);
+  assert.equal(code, 'doctor_fail');
+  assert.match(msg, /rolled back/);
+  // EXACT, not merely "not the broken tip": the reference asserts `reset --hard <oldsha>` and
+  // the sha is the whole claim — rolling back to anything else silently moves the user.
+  assert.equal(git(CO2, 'rev-parse', 'HEAD'), before, 'the rollback did not land on the old sha');
+  assert.ok(!fs.existsSync(path.join(CO2, 'A-FILE-THAT-SHOULD-NOT-EXIST')));
+  const restored = JSON.parse(fs.readFileSync(path.join(CO2, 'themes', 'neutral.json'), 'utf8'));
+  assert.ok('VOICE' in restored, 'the rollback left the broken theme in the working tree');
+});
+
+// ---------------------------------------------------------------------------------------------
+// `NoCellCanReachTheNetwork` — the positive control for the ban this whole file runs under.
+
+test('a real fetch over https is refused by transport, not by luck', () => {
+  // Declaring a ban and running under one are two properties and only the second is worth
+  // anything. This runs the REAL `fetchStreaming` — no mock, no seam — against a network remote
+  // and requires git to refuse it in its own argument handling, before a connection is
+  // attempted. Without GIT_ALLOW_PROTOCOL=file the same call fetches, so the gate goes red the
+  // moment the ban stops being applied, here or in CI.
+  git(CO2, 'remote', 'set-url', 'origin', 'https://github.com/Arylmera/Geneseed.git');
+  try {
+    return U2.fetchStreaming().then(([code, out]) => {
+      assert.notEqual(code, 0, 'the fetch SUCCEEDED — the network ban is not being applied');
+      assert.match(out, /not allowed/,
+        `git failed for some reason other than the transport ban. git said: ${out}`);
+    });
+  } finally { git(CO2, 'remote', 'set-url', 'origin', ORIGIN2); }
+});
+
 test('git missing from PATH also classifies as fetch_failed', async () => {
   // The reference's `rc None` seam. Reached here through the real lookup, and it is a distinct
   // arm: `fetchStreaming` returns before spawning anything, so `measureUpstream` must classify
