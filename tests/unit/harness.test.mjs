@@ -23,8 +23,10 @@ import {
 } from '../../js/hooks.mjs';
 import {
   themeParityProblems, countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt,
-  themesToCheck, globalEmitProblems, renderedProblems,
+  themesToCheck, globalEmitProblems, renderedProblems, authoringProblems,
 } from '../../js/doctor.mjs';
+import { memoryDropIndex, discoverContext, resolveContextSets } from '../../js/hooks.mjs';
+import { memoryFactCount } from '../../js/status.mjs';
 import { stripSkillBodyLinks } from '../../js/native.mjs';
 import { stripCapabilityLinks } from '../../js/emit.mjs';
 import { themeOfDir } from '../../js/installs.mjs';
@@ -404,6 +406,116 @@ test('roman numerals bridge to LAW_META\'s arabic keys', () => {
     assert.equal(romanToInt(roman), n, roman);
   }
   assert.equal(romanToInt('nope'), 0);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The authoring gate on the specs themselves.
+
+test('the shipped specs and plugins pass the authoring gate', () => {
+  assert.deepEqual(authoringProblems(), []);
+});
+
+test('a spec whose first block is prose rather than a blockquote is flagged', () => {
+  // WHY THE FIRST BLOCK AND NOT ANY BLOCK. A later `>` line would let a naive check pass,
+  // and that drift is exactly what let `descOf()` silently extract the wrong description —
+  // the spec read fine to a human and shipped the wrong one-liner into every bundle.
+  const problems = withFault({
+    'src/skills/zzz-fixture-probe.md':
+      '# {{SKILL}}: zzz-fixture-probe\n\nSome prose that is NOT the description.\n\n'
+      + '> {{DESC_COMMIT}}\n',
+  }, (root) => gate(root, 'm.authoringProblems()'));
+  assert.ok(
+    problems.some((p) => p.includes('skills/zzz-fixture-probe.md')
+      && p.includes("not a '>' blockquote")),
+    JSON.stringify(problems));
+});
+
+// ---------------------------------------------------------------------------------------------
+// The memory store's index.
+//
+// `_memory_facts` HAS NO SINGLE SUCCESSOR, and that is a split rather than a loss. It built one
+// record per fact — name, description, body — for the TUI's memory screen, and the port kept the
+// half each surviving caller needs: `memoryFactCount` (status, the number) and
+// `js/web/api.mjs`'s `memoryItems` (the console's list, gated by the 114 web cells). What is
+// asserted here is the part with no other owner: that the index really tracks the store.
+
+test('the fact count sees the facts and skips the index and the readme', () => {
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'MEMORY.md'),
+      '# Memory Index\n- [a](a.md)\n- [b](b.md)\n', 'utf8');
+    fs.writeFileSync(path.join(d, 'README.md'), 'conv', 'utf8');
+    fs.writeFileSync(path.join(d, 'a.md'),
+      '---\nname: a\ndescription: alpha\n---\nbody A', 'utf8');
+    fs.writeFileSync(path.join(d, 'b.md'),
+      '---\nname: b\ndescription: beta\n---\nbody B', 'utf8');
+    // Two facts — MEMORY.md and README.md are the store's furniture, not entries in it.
+    assert.equal(memoryFactCount(d), 2);
+
+    memoryDropIndex(d, 'b');
+    const index = fs.readFileSync(path.join(d, 'MEMORY.md'), 'utf8');
+    assert.ok(!index.includes('(b.md)'), index);
+    assert.ok(index.includes('(a.md)'), 'dropping one pointer removed the other too');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Context discovery — what the agent is handed when a repo has no manifest.
+
+function contextFixture(d) {
+  fs.writeFileSync(path.join(d, 'README.md'), '# r', 'utf8');
+  fs.writeFileSync(path.join(d, 'CONTRIBUTING.md'), '# c', 'utf8');
+  fs.writeFileSync(path.join(d, 'notes.md'), '# n', 'utf8');
+  fs.mkdirSync(path.join(d, 'docs'));
+  fs.writeFileSync(path.join(d, 'docs', 'guide.md'), '# g', 'utf8');
+  fs.mkdirSync(path.join(d, 'node_modules'));
+  fs.writeFileSync(path.join(d, 'node_modules', 'junk.md'), 'x', 'utf8');
+  fs.mkdirSync(path.join(d, 'packages', 'foo'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'packages', 'foo', 'README.md'), '# foo', 'utf8');
+}
+
+const baseNames = (rows) => new Set(rows.map((r) => path.basename(r.path)));
+
+test('discovery sorts convention files eager and the rest lazy', () => {
+  withDir((d) => {
+    contextFixture(d);
+    const [eager, lazy] = discoverContext(d);
+    const en = baseNames(eager);
+    const ln = baseNames(lazy);
+    assert.ok(en.has('README.md'), [...en].join(','));
+    assert.ok(en.has('CONTRIBUTING.md'), [...en].join(','));
+    assert.ok(ln.has('notes.md'), 'a misc root .md should be lazy');
+    assert.ok(ln.has('guide.md'), 'the docs/ tree should be lazy');
+    assert.ok(!ln.has('junk.md'), 'node_modules was scanned');
+    assert.ok(lazy.some((l) => path.basename(path.dirname(l.path)) === 'foo'),
+      'a nested package README was not found');
+  });
+});
+
+test('an empty manifest falls back to discovery', () => {
+  withDir((d) => {
+    contextFixture(d);
+    fs.writeFileSync(path.join(d, 'context.json'), '{"context": []}', 'utf8');
+    const [eager, , source] = resolveContextSets(d);
+    assert.ok(eager.some((e) => path.basename(e.path) === 'README.md'),
+      'an empty manifest silenced discovery instead of falling back to it');
+    assert.ok(source.includes('auto-discovery'), source);
+  });
+});
+
+test('a manifest with extend layers on top of discovery', () => {
+  withDir((d) => {
+    contextFixture(d);
+    fs.writeFileSync(path.join(d, 'house.md'), '# house rules', 'utf8');
+    fs.writeFileSync(path.join(d, 'context.json'),
+      '{"extend": true, "context": [{"path": "house.md", "load": "eager", '
+      + '"description": "house rules"}]}', 'utf8');
+    const [eager, , source] = resolveContextSets(d);
+    const en = baseNames(eager);
+    assert.ok(en.has('README.md'), 'extend dropped the discovered set');
+    assert.ok(en.has('house.md'), 'extend dropped the manifest set');
+    // Not "auto-discovery": the source names a manifest, because one was honoured.
+    assert.ok(!source.includes('auto-discovery'), source);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
