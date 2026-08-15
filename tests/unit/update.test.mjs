@@ -1,9 +1,15 @@
 // `tests/test_update.py` — the cross-platform update core, re-aimed at `js/update.mjs`.
 //
-// The reference covers the network-free logic so the port of upgrade.sh / sync-self.sh is
-// exercised without hitting GitHub. That split survives here, and this file is the half of it
-// that needs no git repository at all: emit and theme precedence, the stray-bundle migration,
-// credential redaction, and the origin parser.
+// The reference covers the network-free logic so the update verbs are exercised without hitting
+// GitHub. That split survives here, and this file is the half of it that needs no git repository
+// at all: emit and theme precedence, the stray-bundle migration, credential redaction, and the
+// origin parser.
+//
+// ⚠ DO NOT NAME THE TWO DELETED SHELL WRAPPERS IN THIS FILE. `TheShellWrappersAreGone` scans
+// every tracked text file for a POINTER at a script that is no longer there, and it excludes
+// only itself and the two append-only records. A first draft of this header mentioned them in
+// passing and turned the whole CI `validate` job red on both platforms. When that class crosses,
+// its Node successor inherits the same self-exclusion — and this file is not covered by it.
 //
 // WHY THE PRECEDENCE TESTS EARN THEIR PLACE. Each of these functions answers with a plain
 // string, and every wrong answer is still a plausible one — a bundle marker beating a global
