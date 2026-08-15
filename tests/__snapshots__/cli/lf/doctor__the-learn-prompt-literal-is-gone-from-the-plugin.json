@@ -3,20 +3,20 @@
     "<dirs>": "6991901ebb4d90155b414709975b405b0ae9fa1aa5d80fecc11cdcad19bfa180",
     "<exit>": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "<stdout>": "5e985187e66dd25560270b7c8e40c7bd0a32ddd89e1a3c6706e98d6ae0f01415",
+    "<stdout>": "650134ddaef56a7b39b3d8dfa3d15bd3d6ca36f253b766b4dc01e14eb006478d",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "sizes": {
     "<dirs>": 47,
     "<exit>": 1,
     "<stderr>": 0,
-    "<stdout>": 168,
+    "<stdout>": 169,
     "repo/.keep": 0
   },
   "verbatim": {
     "<dirs>": "cfg\nhome\nhome/.geneseed\nhome/.geneseed/bin\nrepo",
     "<exit>": "1",
     "<stderr>": "",
-    "<stdout>": "[doctor] 1 problem(s) across 1 theme(s):\n  - [authoring] LEARN_PROMPT_HEAD literal not found in geneseed-learn.js — harness.py would fall back (single source broken)\n"
+    "<stdout>": "[doctor] 1 problem(s) across 1 theme(s):\n  - [authoring] LEARN_PROMPT_HEAD literal not found in geneseed-learn.js — the harness would fall back (single source broken)\n"
   }
 }
