@@ -164,13 +164,18 @@ export const MUTATIONS = [
     id: 'M6',
     name: 'make parseJson collapse an integral float',
     file: 'js/lib/pyfs.mjs',
-    find: 'export function parseJson(text) {',
-    replace: 'export function parseJson(text) {\n  if (text === null) return null;',
-    gate: null,
+    find: '      ? new PyNumber(value, context.source)',
+    replace: '      ? (Number.isInteger(value) ? value : new PyNumber(value, context.source))',
+    gate: UNIT,
     why: "`1.0` and `1` are different values to Python's json round-trip and the same value to "
-      + "JSON.parse. THE MUTATION ABOVE IS A NO-OP and is declared as such: a real one needs a "
-      + 'reviver change, and the corpus has no cell whose settings carry an integral float. '
-      + 'Listed rather than dropped so the hole is countable.',
+      + "JSON.parse. CLOSED AT P3/T7, after two phases declared ungated: the mutation above was "
+      + "a NO-OP that only documented the hole, because a real one needs the reviver and the "
+      + "corpus has no cell whose settings carry an integral float. This edit is the real thing "
+      + "- it drops the PyNumber wrapper for any integral value, so a read-modify-write of a "
+      + "user's `temperature: 1.0` writes back `1` and silently changes the value every "
+      + "consumer reads. tests/unit/py_primitives.test.mjs is the gate, and it is absolute "
+      + "rather than a comparison because after P4 these functions are not Python "
+      + "compatibility, they ARE the spec for what Geneseed writes to a user's disk.",
   },
   {
     id: 'M7',
