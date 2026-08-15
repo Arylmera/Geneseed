@@ -48,6 +48,7 @@ import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/diff.mjs';
 import { makeSandbox, TMP_ROOT, RELOCATION_VARS } from '../helpers/sandbox.mjs';
 import { webFixture, webFixtureTeardown, ROOT } from '../helpers/web_fixture.mjs';
+import { withGlobalInstalls as withGlobalInstallsFixture } from '../helpers/installs_fixture.mjs';
 
 // `js/web/api.mjs` keeps its own `samePath` module-private. Rebuilt here from the same two
 // primitives rather than exported from the product for a test's benefit — and it must be
@@ -1198,39 +1199,11 @@ test('the install list marks exactly the current view selected', () => {
 // owns NO exclusion logic of its own; it reuses the snapshot/add/remove trio verbatim, so the
 // round trip is exercising the WIRING rather than re-testing the exclusion engine.
 
-function withGlobalInstalls(hosts, fn) {
-  const sb = makeSandbox();
-  const saved = {};
-  for (const v of RELOCATION_VARS) saved[v] = process.env[v];
-  const claudeCfgDir = path.join(os.homedir(), '.claude');
-  try {
-    // Every host is pointed somewhere INSIDE this sandbox, so a host not in `hosts` resolves
-    // to a directory that does not exist and reports no install. Leaving one pointed at its
-    // real location would fold the developer's own excludes into the snapshot.
-    process.env.BOB_CONFIG_DIR = path.join(sb.path, 'bob-none');
-    process.env.COPILOT_CONFIG_DIR = path.join(sb.path, 'copilot-none');
-    process.env.OPENCODE_CONFIG_DIR = path.join(sb.path, 'opencode-none');
-
-    for (const host of hosts) {
-      const cfg = host === 'claude' ? claudeCfgDir : path.join(sb.path, `${host}-cfg`);
-      fs.mkdirSync(cfg, { recursive: true });
-      fs.writeFileSync(path.join(cfg, GLOBAL_MANIFEST), '{"owned": []}');
-      fs.writeFileSync(path.join(cfg, 'excludes.json'), '{"excludes": []}');
-      if (host === 'claude') fs.writeFileSync(path.join(cfg, 'CLAUDE.md'), 'x');
-      else if (host === 'bob') process.env.BOB_CONFIG_DIR = cfg;
-      else if (host === 'copilot') process.env.COPILOT_CONFIG_DIR = cfg;
-      else if (host === 'opencode') process.env.OPENCODE_CONFIG_DIR = cfg;
-    }
-    return fn({ st: neutral(), tmp: sb.path });
-  } finally {
-    fs.rmSync(claudeCfgDir, { recursive: true, force: true });
-    for (const [v, val] of Object.entries(saved)) {
-      if (val === undefined) delete process.env[v];
-      else process.env[v] = val;
-    }
-    sb.cleanup();
-  }
-}
+// The fixture moved to `tests/helpers/installs_fixture.mjs` when `tests/unit/excludes_guard.test.mjs`
+// needed the same one — a fixture with one caller is a fixture the next defect cannot reach.
+// This wrapper only adds the `webState` the endpoints take.
+const withGlobalInstalls = (hosts, fn) =>
+  withGlobalInstallsFixture(hosts, ({ tmp }) => fn({ st: neutral(), tmp }));
 
 test('the excludes endpoint round-trips an add and a remove', () => {
   withGlobalInstalls(['claude', 'bob'], ({ st, tmp }) => {
