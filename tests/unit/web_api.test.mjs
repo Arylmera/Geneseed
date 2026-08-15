@@ -22,7 +22,7 @@ import http from 'node:http';
 import { localHost, makeHandler, buildPlan } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
-  apiThemes, apiDoctor, apiInstalls, apiExcludes, apiSetup,
+  apiThemes, apiDoctor, apiInstalls, apiExcludes, apiSetup, viewCfg,
 } from '../../js/web/api.mjs';
 import { apiGraph } from '../../js/web/graph.mjs';
 import {
@@ -33,9 +33,14 @@ import {
 } from '../../js/web/docs.mjs';
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
-  apiInstallCmd, apiSelectView, apiExcludesMutate,
+  apiInstallCmd, apiSelectView, apiExcludesMutate, apiDeployCmd, globalEmitHostFor,
+  apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE,
 } from '../../js/web/actions.mjs';
-import { installState } from '../../js/installs.mjs';
+import { installState, themeOfDir, installTargets } from '../../js/installs.mjs';
+import { installDeactivate, installReactivate, installUninstall } from '../../js/uninstall.mjs';
+import { registryRecord, registryRoots } from '../../js/registry.mjs';
+import { parseOrigin, originDisplay } from '../../js/update.mjs';
+import { MCP_PRESETS as _P, mcpConfigFor, mcpState, mcpSetEnabled } from '../../js/mcp.mjs';
 import { MCP_PRESETS } from '../../js/mcp.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, pyResolve } from '../../js/hosts.mjs';
 import { normcase } from '../../js/lib/pyfs.mjs';
@@ -1842,5 +1847,484 @@ test('the detail conversation falls back to the session title', () => {
     ];
     box.write('s.detail.json', { timeline: [], conversation: turns });
     assert.deepEqual(apiActivityDetail(box.state, 's').conversation, turns);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Deploy: a fresh per-repo harness into a user-chosen folder, persisted in the installs list
+// through the registry — the open-ended sibling of the row Install.
+
+// A project emit for any host, through the shipping driver. `--out` and `--root` are the same
+// directory for a per-repo layer, which is what the deploy command itself builds.
+function emitProject(dir, emitName, theme = 'neutral') {
+  const proc = spawnSync(process.execPath,
+    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', emitName,
+      '--theme', theme, '--out', dir, '--root', dir],
+    { cwd: ROOT, encoding: 'utf8', windowsHide: true, env: process.env });
+  assert.equal(proc.status, 0, `emit ${emitName} into ${dir} failed:\n${proc.stdout}\n${proc.stderr}`);
+  return dir;
+}
+
+const after$ = (cmd, flag) => cmd.map(String)[cmd.map(String).indexOf(flag) + 1];
+
+test('the deploy command validates its host and its path', () => {
+  const st = neutral();
+  assert.match(apiDeployCmd(st, { host: 'nope', path: '/tmp' }).error, /unknown host/);
+  assert.match(apiDeployCmd(st, { host: 'opencode', path: '  ' }).error, /no folder/);
+  assert.match(apiDeployCmd(st, { host: 'opencode', path: '/no/such/dir/zzz' }).error,
+    /not a folder/);
+
+  const sb = makeSandbox();
+  try {
+    const plan = apiDeployCmd(st, { host: 'opencode', path: sb.path, theme: 'imperial' });
+    const cmd = plan.cmd.map(String);
+    assert.equal(after$(cmd, '--emit'), 'opencode', 'a deploy is a PROJECT emit, never global');
+    assert.equal(after$(cmd, '--theme'), 'imperial');
+    assert.equal(after$(cmd, '--out'), pyResolve(sb.path));
+    assert.equal(after$(cmd, '--root'), pyResolve(sb.path));
+  } finally { sb.cleanup(); }
+});
+
+test('a bogus deploy theme falls back to the state theme', () => {
+  const sb = makeSandbox();
+  try {
+    const cmd = apiDeployCmd(neutral(),
+      { host: 'claude', path: sb.path, theme: 'not-a-theme' }).cmd.map(String);
+    assert.equal(after$(cmd, '--theme'), 'neutral');
+    assert.equal(after$(cmd, '--emit'), 'claude');
+  } finally { sb.cleanup(); }
+});
+
+// Deploying INTO a host's own global config dir would make a project install that shadows the
+// global one at the same path. Refused by name.
+test('the deploy command refuses a host config dir', () => {
+  const sb = makeSandbox();
+  const saved = process.env.OPENCODE_CONFIG_DIR;
+  try {
+    process.env.OPENCODE_CONFIG_DIR = sb.path;
+    const res = apiDeployCmd(neutral(), { host: 'opencode', path: sb.path });
+    assert.match(res.error || '', /global config dir/);
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR;
+    else process.env.OPENCODE_CONFIG_DIR = saved;
+    sb.cleanup();
+  }
+});
+
+for (const host of ['bob', 'copilot']) {
+  test(`the deploy command maps ${host} to its project emit`, () => {
+    const sb = makeSandbox();
+    try {
+      const cmd = apiDeployCmd(neutral(),
+        { host, path: sb.path, theme: 'imperial' }).cmd.map(String);
+      assert.equal(after$(cmd, '--emit'), host, 'a deploy is a PROJECT emit, never global');
+      assert.equal(after$(cmd, '--theme'), 'imperial');
+    } finally { sb.cleanup(); }
+  });
+}
+
+// IBM Bob and GitHub Copilot are first-class hosts: a project layer plus their own agents file,
+// riding the CLAUDE-STYLE manifest lifecycle — deactivate stashes, reactivate restores.
+const HOST_LAYOUT = {
+  bob: { marker: '.bob', agents: 'AGENTS.md', cfg: ['.bob', 'settings.json'] },
+  copilot: { marker: '.github', agents: 'AGENTS.md', cfg: null },
+};
+
+for (const host of ['bob', 'copilot']) {
+  test(`the ${host} project emit rides the disable/reactivate lifecycle`, () => {
+    const sb = makeSandbox();
+    try {
+      const root = emitProject(sb.path, host);
+      const spec = HOST_LAYOUT[host];
+      assert.ok(fs.statSync(path.join(root, spec.agents)).isFile(), `no ${spec.agents}`);
+      assert.ok(fs.statSync(path.join(root, spec.marker)).isDirectory(), `no ${spec.marker}/`);
+      assert.equal(installState(root, host, 'project'), 'active');
+
+      const off = installDeactivate(root, host, 'project');
+      assert.equal(off.ok, true, JSON.stringify(off));
+      assert.equal(off.kind, host);
+      assert.equal(installState(root, host, 'project'), 'disabled');
+
+      const on = installReactivate(root, host, 'project');
+      assert.equal(on.ok, true, JSON.stringify(on));
+      assert.equal(installState(root, host, 'project'), 'active');
+    } finally { sb.cleanup(); }
+  });
+}
+
+test('bob is a flagless MCP host and its config lives under the project marker', () => {
+  const sb = makeSandbox();
+  try {
+    assert.equal(mcpConfigFor('bob', 'project', sb.path),
+      path.join(sb.path, '.bob', 'settings.json'));
+  } finally { sb.cleanup(); }
+});
+
+// A bob PROJECT install's data lives under `<repo>/.bob`, not at the bare root, and a restore
+// must render the BOB expected tree rather than OpenCode's — which would corrupt the agents'
+// frontmatter.
+//
+// THE SECOND HALF CHANGED SHAPE WITH THE SEAM. The reference compared FUNCTION IDENTITY
+// (`_global_emitter_for('bob-global') is build.emit_bob_global`); the port has no emitter
+// objects to compare, because the emit dispatch crossed to a rendered decision. Its twin
+// answers the HOST, and that is the value the restore actually routes on.
+test('the view cfg and the restore emitter are host-correct', () => {
+  assert.equal(viewCfg('bob', 'project', path.join('/r')), path.join('/r', '.bob'));
+  assert.equal(viewCfg('bob', 'global', path.join('/r')), path.join('/r'));   // global == root
+
+  assert.equal(globalEmitHostFor('bob-global'), 'bob');
+  assert.equal(globalEmitHostFor('claude-global'), 'claude');
+  assert.equal(globalEmitHostFor('opencode-global'), 'opencode');
+  assert.equal(globalEmitHostFor(null), 'opencode', 'the safe fallback moved');
+});
+
+// Bob shares Claude's FLAG-LESS `mcpServers` shape: disabling REMOVES the server, because a
+// stray `enabled: false` would be ignored by Bob and leave it live.
+test('a flagless host removes the entry instead of flagging it', () => {
+  const cfg = { mcpServers: { md: { command: 'uvx', args: ['x'] } } };
+  assert.equal(mcpState(cfg, 'md', 'bob'), 'enabled');
+  const off = mcpSetEnabled(cfg, 'md', false, 'bob');
+  assert.deepEqual(off.mcpServers || {}, {});
+});
+
+for (const host of ['bob', 'copilot']) {
+  test(`the ${host} theme is detected from its emitted agents file`, () => {
+    const sb = makeSandbox();
+    try {
+      emitProject(sb.path, host, 'imperial');
+      assert.equal(themeOfDir(sb.path), 'imperial');
+    } finally { sb.cleanup(); }
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// The registry: a deployed folder install persists in the installs list, and self-prunes the
+// moment its root marker goes.
+
+function withXdg(fn) {
+  const sb = makeSandbox();
+  const saved = process.env.XDG_CONFIG_HOME;
+  try {
+    process.env.XDG_CONFIG_HOME = path.join(sb.path, 'xdg');
+    fs.mkdirSync(process.env.XDG_CONFIG_HOME, { recursive: true });
+    return fn(sb.path);
+  } finally {
+    if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = saved;
+    sb.cleanup();
+  }
+}
+
+test('the registry round-trips a recorded root and prunes it with its marker', () => {
+  withXdg((tmp) => {
+    const live = path.join(tmp, 'live');
+    fs.mkdirSync(live, { recursive: true });
+    fs.writeFileSync(path.join(live, '.geneseed-emit'), 'opencode\n');
+
+    registryRecord(live);
+    registryRecord(live);                         // idempotent
+    const mine = installTargets().filter((r) => samePath(r[2], live));
+    assert.deepEqual(mine.map((r) => [r[0], r[1]]), [['opencode', 'project']]);
+
+    // Drop the marker: the registry self-prunes and the row disappears.
+    fs.rmSync(path.join(live, '.geneseed-emit'));
+    assert.deepEqual(registryRoots(), []);
+    assert.deepEqual(installTargets().filter((r) => samePath(r[2], live)), []);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The trash icon: the `remove` action permanently deletes a folder install and de-lists it.
+// memory/ and notebook/ follow the `memory` disposition, and the file removal never touches
+// them — so the DEFAULT `keep` cannot lose a learned fact.
+//
+// OpenCode project is the interesting case: no manifest, so the bundle dirs and AGENT.md are
+// reversed BY NAME, which the generator owns and clobbers on every run.
+function seedOpencodeProject(root) {
+  fs.mkdirSync(root, { recursive: true });
+  for (const d of ['.opencode', 'laws', 'agents', 'skills', 'memory', 'notebook']) {
+    fs.mkdirSync(path.join(root, d), { recursive: true });
+    fs.writeFileSync(path.join(root, d, 'f'), 'x');
+  }
+  fs.writeFileSync(path.join(root, 'AGENT.md'), '# rules\n');
+  fs.writeFileSync(path.join(root, 'opencode.json'),
+    JSON.stringify({ instructions: ['AGENT.md'], lsp: true }));
+  fs.writeFileSync(path.join(root, '.geneseed-emit'), 'opencode\n');
+  fs.writeFileSync(path.join(root, '.geneseed-theme'), 'neutral\n');
+  fs.writeFileSync(path.join(root, VERSION_MARKER), 'v\n');
+  return root;
+}
+
+test('removing an opencode project deletes its files and keeps memory', () => {
+  const sb = makeSandbox();
+  try {
+    const root = seedOpencodeProject(path.join(sb.path, 'repo'));
+    const res = installUninstall(root, 'opencode', 'project', 'keep');
+    assert.equal(res.ok, true, JSON.stringify(res));
+
+    for (const d of ['.opencode', 'laws', 'agents', 'skills']) {
+      assert.ok(!fs.existsSync(path.join(root, d)), `${d} should be gone`);
+    }
+    assert.ok(!fs.existsSync(path.join(root, 'AGENT.md')));
+
+    // opencode.json is KEPT; only its instructions entry is dropped. The file is the user's.
+    const instr = JSON.parse(fs.readFileSync(path.join(root, 'opencode.json'), 'utf8')).instructions;
+    assert.ok(!instr.includes('AGENT.md'));
+
+    // The markers go, so the registry row self-prunes.
+    for (const m of ['.geneseed-emit', '.geneseed-theme', VERSION_MARKER]) {
+      assert.ok(!fs.existsSync(path.join(root, m)), m);
+    }
+    // memory and notebook survive — the default disposition cannot lose a fact.
+    assert.ok(fs.existsSync(path.join(root, 'memory', 'f')));
+    assert.ok(fs.existsSync(path.join(root, 'notebook', 'f')));
+  } finally { sb.cleanup(); }
+});
+
+test('the memory disposition archives, then deletes', () => {
+  const sb = makeSandbox();
+  try {
+    const root = seedOpencodeProject(path.join(sb.path, 'repo2'));
+    assert.equal(installUninstall(root, 'opencode', 'project', 'archive').ok, true);
+    assert.ok(!fs.existsSync(path.join(root, 'memory')), 'archive left the live dir behind');
+    const archived = (name) => fs.readdirSync(path.join(root, name))
+      .some((d) => fs.existsSync(path.join(root, name, d, 'f')));
+    assert.ok(archived('archived-memory'), 'memory was moved aside but not preserved');
+    assert.ok(archived('archived-notebook'));
+
+    const root2 = seedOpencodeProject(path.join(sb.path, 'repo3'));
+    const res2 = installUninstall(root2, 'opencode', 'project', 'delete');
+    assert.equal(res2.ok, true);
+    assert.ok(!fs.existsSync(path.join(root2, 'memory')));
+    assert.ok(!fs.existsSync(path.join(root2, 'notebook')));
+    assert.equal(res2.memory, 'delete');
+  } finally { sb.cleanup(); }
+});
+
+// The remove action is DESTRUCTIVE and its path comes out of a request body, so the allowlist
+// is the whole of its safety.
+test('the remove action is wired and allowlisted', () => {
+  const sb = makeSandbox();
+  const cwd = process.cwd();
+  try {
+    const root = seedOpencodeProject(path.join(sb.path, 'repo4'));
+    process.chdir(root);                     // `.opencode/` makes this a discovered project
+    const st = neutral();
+    assert.throws(() => apiInstallToggle(st,
+      { host: 'opencode', path: '/nope', action: 'remove' }), NotFound);
+
+    const res = apiInstallToggle(st,
+      { host: 'opencode', path: process.cwd(), action: 'remove', memory: 'keep' });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.ok(!fs.existsSync(path.join(root, '.opencode')));
+  } finally { process.chdir(cwd); sb.cleanup(); }
+});
+
+// Real per-repo emits, manifest-backed, so remove must reverse them HOST-AGNOSTICALLY.
+for (const host of ['claude', 'bob', 'copilot']) {
+  test(`removing a ${host} project install reverses it and keeps its memory`, () => {
+    const sb = makeSandbox();
+    try {
+      const root = emitProject(sb.path, host);
+      const marker = HOST_LAYOUT[host] ? HOST_LAYOUT[host].marker : '.claude';
+      assert.equal(installState(root, host, 'project'), 'active');
+
+      const res = installUninstall(root, host, 'project', 'keep');
+      assert.equal(res.ok, true, JSON.stringify(res));
+      assert.equal(installState(root, host, 'project'), 'absent');
+      assert.ok(!fs.existsSync(path.join(root, marker, GLOBAL_MANIFEST)));
+      // The per-host store survives the removal under the default disposition.
+      assert.ok(fs.statSync(path.join(root, marker, 'memory')).isDirectory());
+    } finally { sb.cleanup(); }
+  });
+}
+
+test('a removal de-registers through the registry prune', () => {
+  withXdg((tmp) => {
+    const root = seedOpencodeProject(path.join(tmp, 'deployed'));
+    registryRecord(root);
+    assert.ok(registryRoots().some((r) => samePath(r, root)));
+    installUninstall(root, 'opencode', 'project', 'keep');
+    // `.geneseed-emit` is gone, so the registry prunes the row on the next read.
+    assert.deepEqual(registryRoots(), []);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The About page's origin.
+//
+// THE REFERENCE MOCKED `_origin_display` TO RETURN A CONSTRUCTED VALUE, so what it really
+// tested was the mapping from an OriginDisplay to the payload's two fields. ESM cannot rebind
+// the import, and the honest split is better anyway: the DECISION is `parseOrigin`, which is
+// pure and takes the URL directly, and the MAPPING is checkable against this checkout's own
+// origin.
+test('parseOrigin separates a GitHub origin from any other host', () => {
+  assert.equal(parseOrigin('https://gitlab.corp/team/gs').url, 'https://gitlab.corp/team/gs');
+  assert.ok(!parseOrigin('https://gitlab.corp/team/gs').githubSlug,
+    'a non-GitHub origin was given a GitHub slug, which gates the deep links in the UI');
+  assert.equal(parseOrigin('https://github.com/Own/Repo').githubSlug, 'Own/Repo');
+});
+
+// AND THE HALF THAT CANNOT BE REACHED, named rather than skipped silently: the non-GitHub arm
+// of the ABOUT PAYLOAD needs an install whose git origin is not GitHub, and `originDisplay()`
+// shells `git remote get-url origin` in this checkout. Changing that to prove a mapping would
+// edit the developer's own remote. The mapping is one `Boolean(od.githubSlug)`, its input is
+// gated absolutely above, and its GitHub arm is gated here.
+test('the about payload reports this install own origin and its GitHub flag', () => {
+  const body = apiDocsPage(neutral(), 'about', 'opencode');
+  const od = originDisplay();
+  assert.equal(body.repo, od.url);
+  assert.equal(body.repo_is_github, Boolean(od.githubSlug));
+});
+
+// ---------------------------------------------------------------------------------------------
+// `user-rules.md`: the seed-once stub, the parser, and the mutation/promotion endpoints —
+// including the fingerprint conflict gate and SPLICE FIDELITY, which is the property that keeps
+// a mutation inside one rule's block and out of the user's surrounding prose.
+//
+// THE STUB ARRIVES THROUGH A REAL EMIT. `ensureRulesStub` is private to `js/emit.mjs`, and
+// reaching for it would have meant widening the module's face for a test. An emit is how a user
+// gets the file, so an emit is what seeds the fixture — which also makes the seed-once test
+// stronger than the reference's: it proves the guard on the path that actually re-runs it.
+function rulesBox() {
+  const sb = makeSandbox();
+  const cfg = emitInto(path.join(sb.path, 'cfg'));
+  return { sb, cfg, file: path.join(cfg, RULES_FILE), state: webState('neutral', cfg) };
+}
+
+const withRules = (fn) => {
+  const box = rulesBox();
+  try { return fn(box); } finally { box.sb.cleanup(); }
+};
+
+test('the rules stub is seeded once and never overwritten', () => {
+  withRules((box) => {
+    assert.ok(fs.statSync(box.file).isFile());
+    fs.writeFileSync(box.file, 'MINE\n');
+    emitInto(box.cfg);                      // a rebuild, the way a user re-runs it
+    assert.equal(fs.readFileSync(box.file, 'utf8'), 'MINE\n',
+      "a rebuild overwrote the user's own rules file");
+  });
+});
+
+// The seeded format example is INDENTED, and the parser is anchored at column 0 — so the
+// example must not read as a live rule.
+test('the stub example does not parse as a rule', () => {
+  withRules((box) => {
+    const res = apiRules(box.state);
+    assert.equal(res.exists, true);
+    assert.deepEqual(res.rules, []);
+    assert.deepEqual(res.warnings, []);
+  });
+});
+
+test('a missing rules file reports not-seeded', () => {
+  withRules((box) => {
+    fs.rmSync(box.file);
+    const res = apiRules(box.state);
+    assert.equal(res.exists, false);
+    assert.deepEqual(res.rules, []);
+  });
+});
+
+// SPLICE FIDELITY: after add → update → delete the file is byte-identical to the seeded stub.
+// A mutation that rewrote the whole document would pass every other assertion here.
+test('add, update and delete round-trip while preserving the prose', () => {
+  withRules((box) => {
+    const before = fs.readFileSync(box.file, 'utf8');
+
+    const r1 = apiRulesMutate(box.state, {
+      op: 'add', fingerprint: apiRules(box.state).fingerprint,
+      title: 'No emoji', body: 'Plain text only.', scope: 'project',
+    });
+    assert.equal(r1.ok, true, JSON.stringify(r1));
+    assert.equal(Number(r1.id), 1);
+
+    const r2 = apiRulesMutate(box.state, {
+      op: 'update', id: 1, fingerprint: r1.fingerprint,
+      title: 'No emoji anywhere', body: 'Ever.', scope: 'user', trial_until: '2026-12-31',
+    });
+    assert.equal(r2.ok, true, JSON.stringify(r2));
+
+    const parsed = apiRules(box.state).rules;
+    assert.equal(parsed[0].title, 'No emoji anywhere');
+    assert.equal(parsed[0].scope, 'user');
+    assert.equal(parsed[0].status, 'trial');
+
+    const r3 = apiRulesMutate(box.state, { op: 'delete', id: 1, fingerprint: r2.fingerprint });
+    assert.equal(r3.ok, true, JSON.stringify(r3));
+
+    assert.equal(fs.readFileSync(box.file, 'utf8').replace(/\n+$/, ''),
+      before.replace(/\n+$/, ''),
+      'the file did not come back to the seeded stub — a mutation touched prose it does not own');
+  });
+});
+
+// The fingerprint is the whole concurrency story: two console tabs, or a hand edit between a
+// read and a write, must CONFLICT rather than clobber.
+test('a stale fingerprint conflicts instead of clobbering', () => {
+  withRules((box) => {
+    const fp = apiRules(box.state).fingerprint;
+    apiRulesMutate(box.state, { op: 'add', fingerprint: fp, title: 'First', body: 'Wins.' });
+
+    const res = apiRulesMutate(box.state,
+      { op: 'add', fingerprint: fp, title: 'Second', body: 'Loses.' });
+    assert.equal(res.ok, false);
+    assert.equal(res.error, 'conflict');
+    assert.deepEqual(apiRules(box.state).rules.map((r) => r.title), ['First']);
+  });
+});
+
+test('add rejects an empty title or an empty body', () => {
+  withRules((box) => {
+    const fp = apiRules(box.state).fingerprint;
+    for (const bad of [{ title: '', body: 'x' }, { title: 'x', body: ' ' }]) {
+      assert.throws(() => apiRulesMutate(box.state, { op: 'add', fingerprint: fp, ...bad }),
+        `${JSON.stringify(bad)} was accepted`);
+    }
+  });
+});
+
+test('duplicate rule ids warn', () => {
+  withRules((box) => {
+    fs.writeFileSync(box.file, '## R1 — A\nBody a.\n\n## R1 — B\nBody b.\n');
+    assert.ok(apiRules(box.state).warnings.includes('duplicate rule id R1'),
+      JSON.stringify(apiRules(box.state).warnings));
+  });
+});
+
+test('promote moves a memory into a trial rule', () => {
+  withRules((box) => {
+    const mem = path.join(box.cfg, 'memory');
+    fs.mkdirSync(mem, { recursive: true });
+    fs.writeFileSync(path.join(mem, 'MEMORY.md'),
+      '# Memory Index\n- [prefer-tabs](prefer-tabs.md) — hook\n');
+    fs.writeFileSync(path.join(mem, 'prefer-tabs.md'),
+      '---\nname: prefer-tabs\ndescription: use tabs\ntype: feedback\n---\n\n'
+      + 'Always use tabs here.\n');
+
+    const res = apiRulesPromote(box.state, {
+      name: 'prefer-tabs', fingerprint: apiRules(box.state).fingerprint, delete_memory: true,
+    });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.equal(res.deleted_memory, 'prefer-tabs');
+    assert.ok(!fs.existsSync(path.join(mem, 'prefer-tabs.md')));
+
+    const rule = apiRules(box.state).rules[0];
+    assert.equal(rule.status, 'trial', 'a promoted memory must start on trial, not approved');
+    assert.match(rule.source, /memory prefer-tabs/);
+    assert.equal(rule.body, 'Always use tabs here.');
+  });
+});
+
+// The name comes out of a request body and is joined onto the memory dir, so a separator or a
+// `..` would be an arbitrary-file read. `MEMORY` is in the list because the index is not a fact.
+test('promote rejects traversal and index names', () => {
+  withRules((box) => {
+    fs.mkdirSync(path.join(box.cfg, 'memory'), { recursive: true });
+    for (const bad of ['', 'a/b', '..\\x', 'MEMORY']) {
+      assert.throws(() => apiRulesPromote(box.state, { name: bad, fingerprint: '' }), NotFound,
+        `${JSON.stringify(bad)} resolved instead of 404ing`);
+    }
   });
 });
