@@ -42,7 +42,7 @@
  * `test_uninstall_removes_an_install_with_no_python_on_path` are what refute it.
  */
 import {
-  existsSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, statSync,
+  existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, statSync,
   unlinkSync,
 } from 'node:fs';
 import path from 'node:path';
@@ -81,9 +81,25 @@ const CLAUDE_STYLE = ['claude', 'bob', 'copilot'];
  * `ignore_errors` swallows and `rmSync` throws. The behaviour this preserves is the one
  * `_install_uninstall` step 3 was written around: an ignored error can leave the directory
  * standing while the call reports success, which is why the survivors sweep exists at all.
+ *
+ * THE DIRECTORY TEST IS THE PORT, NOT A PRECAUTION, and it was missing until P3's unit tier
+ * asked for it. `shutil.rmtree` REFUSES anything that is not a real directory: handed a file it
+ * raises `NotADirectoryError`, handed a symlink it raises outright ("Cannot call rmtree on a
+ * symbolic link"), and `ignore_errors=True` turns both into a no-op that leaves the thing on
+ * disk. `rmSync(recursive, force)` deletes all three without complaint. The gap is destructive
+ * in exactly one direction — the port removes what the reference preserves — and it is
+ * REACHABLE: `installDeactivate`'s rollback calls this on `root/.geneseed-disabled`, so a user
+ * with a plain FILE of that name at their install root loses it on the port and keeps it on the
+ * reference. No cell can see this; nothing plants a file where a stash directory belongs.
+ *
+ * `lstatSync`, not `statSync`, so a symlink to a directory is refused as the reference refuses
+ * it rather than followed.
  */
 function rmtreeQuiet(p) {
-  try { rmSync(p, { recursive: true, force: true }); } catch { /* ignore_errors=True */ }
+  try {
+    if (!lstatSync(p).isDirectory()) return;
+    rmSync(p, { recursive: true, force: true });
+  } catch { /* ignore_errors=True, and the missing-path case lands here too */ }
 }
 
 /** `Path.unlink()` inside a `try: ... except OSError: pass`. */

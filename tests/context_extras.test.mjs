@@ -7,13 +7,14 @@ import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import os from "node:os"
 import * as path from "node:path"
+import { makeSandbox } from "./helpers/sandbox.mjs";
 
 const PLUGIN = new URL("../adapters/opencode/plugins/geneseed-context.js", import.meta.url).href
 
 let tmp, repo
 
 before(async () => {
-  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gsextra-"))
+  tmp = makeSandbox("gsextra-").path
   repo = path.join(tmp, "repo")
   await fs.mkdir(repo)
   await fs.writeFile(path.join(repo, "README.md"), "# Extras Repo\nhello\n")

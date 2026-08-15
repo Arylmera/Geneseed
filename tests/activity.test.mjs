@@ -11,6 +11,7 @@ import os from "node:os"
 import path from "node:path"
 
 import GeneseedActivity from "../adapters/opencode/plugins/geneseed-activity.js"
+import { makeSandbox } from "./helpers/sandbox.mjs";
 const { sidOf, nextStatus, applyEvent, safeName, enabledFromFlag, acctTotals, errStr } = GeneseedActivity
 
 test("acctTotals: same id overwrites (streaming), new id adds (next turn)", () => {
@@ -94,7 +95,7 @@ test("safeName: keeps session ids filesystem-safe", () => {
 // This covers the hook wiring (the switch + IO) that the pure-helper tests above
 // don't — the one piece that has to match how OpenCode delivers events.
 test("event hook: full session lifecycle, filtering, and toggle (on disk)", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gs-act-"))
+  const tmp = makeSandbox("gs-act-").path
   const saved = process.env.OPENCODE_CONFIG_DIR
   process.env.OPENCODE_CONFIG_DIR = tmp
   const dir = path.join(tmp, "activity")
@@ -156,7 +157,7 @@ test("event hook: full session lifecycle, filtering, and toggle (on disk)", asyn
 
 // Integration: the v1.1 enrichment fields land on disk from real event shapes.
 test("event hook: v1.1 enrichment on disk (phase, tokens/cost, files, todos, blocked, error)", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gs-act-v11-"))
+  const tmp = makeSandbox("gs-act-v11-").path
   const saved = process.env.OPENCODE_CONFIG_DIR
   process.env.OPENCODE_CONFIG_DIR = tmp
   const read = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.json"), "utf8"))
@@ -225,7 +226,7 @@ test("event hook: v1.1 enrichment on disk (phase, tokens/cost, files, todos, blo
 // Integration: the v1.2 detail file gets a step timeline + uncapped files/todos,
 // and is removed with the session.
 test("event hook: v1.2 detail timeline on disk", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gs-act-v12-"))
+  const tmp = makeSandbox("gs-act-v12-").path
   const saved = process.env.OPENCODE_CONFIG_DIR
   process.env.OPENCODE_CONFIG_DIR = tmp
   const detail = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.detail.json"), "utf8"))
@@ -276,7 +277,7 @@ test("event hook: v1.2 detail timeline on disk", async () => {
 // Conversation transcript (compact timeline): chat.message appends user turns,
 // streaming assistant text appends/updates assistant turns — an ordered list on disk.
 test("chat.message + text → full conversation transcript in the detail file", async () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gs-act-conv-"))
+  const tmp = makeSandbox("gs-act-conv-").path
   const saved = process.env.OPENCODE_CONFIG_DIR
   process.env.OPENCODE_CONFIG_DIR = tmp
   const conv = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.detail.json"), "utf8")).conversation

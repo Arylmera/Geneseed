@@ -8,6 +8,7 @@ import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import os from "node:os"
 import * as path from "node:path"
+import { makeSandbox } from "./helpers/sandbox.mjs";
 
 // Module-level config in the plugin — must be set BEFORE the import below.
 process.env.GENESEED_WIKI_LAZY_LIMIT = "2"
@@ -18,7 +19,7 @@ process.env.GENESEED_CONTEXT_VISIBLE = "1"
 let tmp, text
 
 before(async () => {
-  tmp = await fs.mkdtemp(path.join(os.tmpdir(), "gswiki-"))
+  tmp = makeSandbox("gswiki-").path
   const vault = path.join(tmp, "Brain")
   for (const d of ["Areas", "Journal", ".obsidian"]) {
     await fs.mkdir(path.join(vault, d), { recursive: true })

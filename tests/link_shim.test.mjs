@@ -5,13 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { cmdLink, cmdUnlink } from '../js/link.mjs';
+import { makeSandbox } from './helpers/sandbox.mjs';
 
 const unix = process.platform !== 'win32';
 
 // A sandbox dir that is NOT on PATH, so cmdUnlink's PATH sweep cannot reach it; the
 // candidate list also carries ~/.local/bin and /usr/local/bin, which we must not touch.
 function sandbox() {
-  return mkdtempSync(path.join(os.tmpdir(), 'geneseed-link-'));
+  return makeSandbox('geneseed-link-').path;
 }
 
 test('link writes a regular Node shim, not a symlink to the bash launcher',

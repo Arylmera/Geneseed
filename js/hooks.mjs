@@ -640,7 +640,7 @@ function pluginLiteral(name, fallback) {
   return fallback;
 }
 
-const LEARN_PROMPT_HEAD = pluginLiteral('LEARN_PROMPT_HEAD',
+export const LEARN_PROMPT_HEAD = pluginLiteral('LEARN_PROMPT_HEAD',
   'Distil at most one durable, reusable memory from the notes below. '
   + 'When in doubt, output exactly: NOTHING.');
 const AGENT_LESSON_PROMPT = pluginLiteral('AGENT_LESSON_PROMPT',
@@ -721,7 +721,19 @@ function flattenTranscript(p) {
  * (this is what makes wiring `learn` to a Stop hook work with no redirection); anything
  * else is used as-is.
  */
-function readNotes(raw) {
+/**
+ * EXPORTED FOR THE UNIT TIER, and the rule this follows is written down once here for the three
+ * `learn` helpers below it.
+ *
+ * `docs/specs`'s P3 rule is: drive a property through the PUBLIC entry by default, and export a
+ * decision only when the property is invisible through that face. The `learn` verb's WIRING is
+ * already gated — 78 cells in the CLI matrix drive it end to end — so what a unit test would add
+ * there is nothing. What no cell can see is these three functions' behaviour on inputs a cell
+ * cannot produce: a model that answers NOTHING, a duplicate slug, a `README.md` beside the
+ * store, a transcript payload that is not JSON. Those are decisions over text, and the corpus
+ * reaches none of them.
+ */
+export function readNotes(raw) {
   const s = raw.trim();
   if (!s) return '';
   if (s[0] === '{') {
@@ -773,7 +785,7 @@ function globMd(dir) {
 }
 
 /** `_existing_slugs` — slugs already stored, so learn never re-emits a known fact. */
-function existingSlugs(memDir) {
+export function existingSlugs(memDir) {
   const skip = new Set(['memory', 'readme']);
   return new Set(globMd(memDir).map(stem).filter((s) => !skip.has(s.toLowerCase())));
 }
@@ -795,7 +807,7 @@ function buildLearnPrompt(notes, existing) {
  * pointer line to MEMORY.md. `existing` is MUTATED, so a reply carrying the same slug
  * twice writes it once.
  */
-function writeMemories(modelOutput, memDir, existing) {
+export function writeMemories(modelOutput, memDir, existing) {
   const written = [];
   const indexLines = [];
   for (let chunk of modelOutput.split(FILE_SEP_RE)) {

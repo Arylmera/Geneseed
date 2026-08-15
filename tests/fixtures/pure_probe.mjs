@@ -45,6 +45,7 @@ import {
   themeFlair, themePreview, truncd, tuiEntries,
 } from '../../js/tui.mjs';
 import { animOk, artFor, height, place, playLine, tile } from '../../js/anim.mjs';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 
 /**
  * P7c. `anim_ok` and `play_line` need two seams the reference probe also takes: the
@@ -84,7 +85,7 @@ function withEnvAndStdout(env, tty, fn) {
 /** One scratch dir per process for `write_text_linesep`, made on first use. */
 let SCRATCH = null;
 const scratchFile = () => {
-  if (SCRATCH === null) SCRATCH = mkdtempSync(path.join(tmpdir(), 'pure-probe-'));
+  if (SCRATCH === null) SCRATCH = makeSandbox('pure-probe-').path;
   return path.join(SCRATCH, 't.txt');
 };
 

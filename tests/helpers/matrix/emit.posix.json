@@ -1,0 +1,1423 @@
+{
+  "cells": [
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "biker"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "biker"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "commentator"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "commentator"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "cyberpunk"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "gamer"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "gamer"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "imperial"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "imperial"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "joker"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "joker"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "marvin"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "marvin"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "mean"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "mean"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "military"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "military"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "neutral"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "neutral"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "pirate"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "pirate"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "sports"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "sports"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "verstappen"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "files",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "opencode",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "opencode-global",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
+      "emit": "claude",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "claude",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "claude-global",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
+      "emit": "bob",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "bob",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "bob-global",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "copilot",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "lean",
+      "theme": "wizard"
+    },
+    {
+      "emit": "copilot-global",
+      "footprint": "full",
+      "theme": "wizard"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "posture": "peer",
+      "theme": "neutral"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "posture": "artisan",
+      "theme": "neutral"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "posture": "assistant",
+      "theme": "neutral"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "posture": "expert",
+      "theme": "neutral"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "posture": "mentor",
+      "theme": "neutral"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "mode": "direct",
+      "theme": "neutral"
+    },
+    {
+      "emit": "files",
+      "footprint": "lean",
+      "mode": "foreman",
+      "theme": "neutral"
+    }
+  ],
+  "deletion_cells": [
+    {
+      "before": {
+        "emit": "opencode-global",
+        "footprint": "lean",
+        "theme": "neutral"
+      },
+      "emit": "opencode-global",
+      "footprint": "full",
+      "label": "opencode-global/lean-to-full",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "claude",
+        "footprint": "lean",
+        "theme": "neutral"
+      },
+      "emit": "claude",
+      "footprint": "full",
+      "label": "claude/lean-to-full",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "claude-global",
+        "footprint": "lean",
+        "theme": "neutral"
+      },
+      "emit": "claude-global",
+      "footprint": "full",
+      "label": "claude-global/lean-to-full",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "bob",
+        "footprint": "lean",
+        "theme": "neutral"
+      },
+      "emit": "bob",
+      "footprint": "full",
+      "label": "bob/lean-to-full",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "bob-global",
+        "footprint": "lean",
+        "theme": "neutral"
+      },
+      "emit": "bob-global",
+      "footprint": "full",
+      "label": "bob-global/lean-to-full",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "copilot",
+        "footprint": "lean",
+        "theme": "neutral"
+      },
+      "emit": "copilot",
+      "footprint": "full",
+      "label": "copilot/lean-to-full",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "copilot-global",
+        "footprint": "lean",
+        "theme": "neutral"
+      },
+      "emit": "copilot-global",
+      "footprint": "full",
+      "label": "copilot-global/lean-to-full",
+      "sovereign": [],
+      "theme": "neutral"
+    },
+    {
+      "before": {
+        "emit": "opencode",
+        "footprint": "full",
+        "theme": "neutral"
+      },
+      "emit": "opencode",
+      "footprint": "full",
+      "label": "opencode/theme-swap",
+      "sovereign": [
+        "memory/README.md",
+        "notebook/README.md"
+      ],
+      "theme": "imperial"
+    },
+    {
+      "before": {
+        "emit": "opencode-global",
+        "footprint": "full",
+        "theme": "neutral"
+      },
+      "emit": "opencode-global",
+      "footprint": "full",
+      "label": "opencode-global/theme-swap",
+      "sovereign": [
+        "memory/README.md",
+        "notebook/README.md"
+      ],
+      "theme": "imperial"
+    }
+  ],
+  "platform": "posix"
+}

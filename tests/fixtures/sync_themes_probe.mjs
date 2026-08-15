@@ -12,16 +12,16 @@
  * and fail every case for a reason that has nothing to do with the port.
  */
 import {
-  mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync,
+  readFileSync, readdirSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { syncThemes } from '../../js/themes.mjs';
 import { withPyNewlines } from '../../js/lib/pyfs.mjs';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 
 const job = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-const tmp = mkdtempSync(path.join(tmpdir(), 'geneseed-themes-probe-'));
+const tmp = makeSandbox('geneseed-themes-probe-').path;
 const out = {};
 try {
   // Raw bytes, so the fixture lands identically on both hosts — `writeText` would translate.
