@@ -17,11 +17,14 @@ import path from 'node:path';
 
 import { spawnSync } from 'node:child_process';
 
-import { localHost } from '../../js/web/server.mjs';
+import http from 'node:http';
+
+import { localHost, makeHandler, buildPlan } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
-  apiThemes, apiDoctor, apiInstalls, apiExcludes,
+  apiThemes, apiDoctor, apiInstalls, apiExcludes, apiSetup,
 } from '../../js/web/api.mjs';
+import { apiGraph } from '../../js/web/graph.mjs';
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
   apiInstallCmd, apiSelectView, apiExcludesMutate,
@@ -1254,3 +1257,146 @@ test('removing an exclude that was never added is not ok', () => {
     assert.equal(res.ok, false);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// The citation graph.
+
+test('graph nodes are unique and every edge resolves', () => {
+  const g = apiGraph(neutral());
+  assert.ok(g.nodes.length > 0);
+  const ids = new Set(g.nodes.map((n) => n.id));
+  assert.equal(ids.size, g.nodes.length, 'two nodes share an id');
+  for (const n of g.nodes) assert.ok(['agent', 'skill', 'law'].includes(n.type), n.type);
+  assert.ok(g.nodes.some((n) => n.type === 'law'), 'no law reached the graph');
+
+  // Agents and skills cite EACH OTHER through Markdown cross-links, not only laws — otherwise
+  // the only citation targets are laws and the matrix collapses to a single law column.
+  const typeOf = Object.fromEntries(g.nodes.map((n) => [n.id, n.type]));
+  assert.ok(g.edges.some((e) => typeOf[e.target] !== 'law'),
+    'every edge targets a law — the graph has collapsed to one column');
+
+  for (const e of g.edges) {
+    assert.ok(ids.has(e.source), `dangling source ${e.source}`);
+    assert.ok(ids.has(e.target), `dangling target ${e.target}`);
+    assert.notEqual(e.source, e.target, 'a node cites itself');
+  }
+  const pairs = g.edges.map((e) => `${e.source} ${e.target}`);
+  assert.equal(pairs.length, new Set(pairs).size, 'duplicate edges');
+});
+
+// THE LAW-NOUN IS THEMED — `{{LAW}}` becomes "Dictate", "Code", "Directive" — so a hardcoded
+// `Rule|Law` reference regex found ZERO law edges under any non-neutral theme and the graph
+// rendered with no links at all. The console reads the DEPLOYED harness, so each theme is
+// emitted to its own target and graphed from there; every theme must yield the same non-empty
+// edge set.
+test('graph edges survive a themed law noun', () => {
+  const sb = makeSandbox();
+  try {
+    const graphFor = (theme) => {
+      const cfg = emitInto(path.join(sb.path, `cfg-${theme}`), { theme });
+      return apiGraph(webState(null, cfg));       // theme auto-detected from the install
+    };
+    const baseline = graphFor('neutral').edges.length;
+    assert.ok(baseline > 0, 'the neutral install produced no edges at all');
+
+    for (const theme of ['imperial', 'biker', 'military']) {
+      const g = graphFor(theme);
+      assert.equal(g.edges.length, baseline, `theme ${theme} dropped edges`);
+      const laws = new Set(g.nodes.filter((n) => n.type === 'law').map((n) => n.id));
+      assert.ok(g.edges.some((e) => laws.has(e.target)), `theme ${theme} found no law edges`);
+    }
+  } finally { sb.cleanup(); }
+});
+
+// ---------------------------------------------------------------------------------------------
+// The setup snapshot.
+
+test('the setup endpoint reports the install snapshot', () => {
+  const s = apiSetup(neutral());
+  for (const key of ['theme', 'accent', 'emit', 'source_fp', 'installed_fp', 'version_verdict',
+    'root', 'target', 'deployed', 'python', 'memory_dir', 'facts']) {
+    assert.ok(key in s, `no ${key} in the setup snapshot`);
+  }
+  assert.ok(s.root);
+  assert.equal(typeof s.deployed, 'boolean');
+
+  // THE ONE ASSERTION THAT INVERTS. The reference asserted `python` matches `^\d+\.\d+` — it
+  // reported the interpreter running the daemon. There is no interpreter here, and the port
+  // deliberately answers `null` rather than putting Node's version under a Python key. Asserted
+  // rather than skipped, because the field is one of the two live `python: null` API fields
+  // P4's residual sweep must remove, and a test that says nothing about it would let the field
+  // survive the cut by silence.
+  assert.equal(s.python, null,
+    'the setup snapshot reports a Python version — there is no interpreter to report');
+});
+
+// ---------------------------------------------------------------------------------------------
+// The handler, over a real socket. The 114 web cells own the shell in depth; these two are the
+// wiring check that the dispatcher is reachable at all and that the CSRF gate is on.
+
+async function serve(fn) {
+  const jm = new JobManager();
+  const handler = makeHandler(neutral(), jm, 'test-token', path.join(ROOT, 'web', 'dist'));
+  const srv = http.createServer(handler);
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  try {
+    return await fn(srv.address().port);
+  } finally {
+    await new Promise((r) => { srv.close(r); });
+  }
+}
+
+const fetchStatus = (port, urlPath, init = {}) =>
+  fetch(`http://127.0.0.1:${port}${urlPath}`, init);
+
+test('the overview endpoint answers over HTTP', async () => {
+  await serve(async (port) => {
+    const res = await fetchStatus(port, '/api/overview');
+    assert.equal(res.status, 200);
+    assert.ok('counts' in await res.json());
+  });
+});
+
+// A POST with no token is 403. The token is the only thing between a page in the user's browser
+// and every mutating endpoint on this daemon.
+test('a POST without the token is 403', async () => {
+  await serve(async (port) => {
+    const res = await fetchStatus(port, '/api/actions/doctor', { method: 'POST', body: '{}' });
+    assert.equal(res.status, 403);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `buildPlan` decides what `serve()` does about a missing `web/dist`.
+
+function planFixture({ dist = false, source = false } = {}) {
+  const sb = makeSandbox();
+  const webDir = path.join(sb.path, 'web');
+  const distDir = path.join(webDir, 'dist');
+  if (source) {
+    fs.mkdirSync(webDir, { recursive: true });
+    fs.writeFileSync(path.join(webDir, 'package.json'), '{}');
+  }
+  if (dist) {
+    fs.mkdirSync(distDir, { recursive: true });
+    fs.writeFileSync(path.join(distDir, 'index.html'), '<html></html>');
+  }
+  return { sb, webDir, distDir };
+}
+
+const PLANS = [
+  ['serve', { dist: true, source: true }, 'npm', true],
+  ['no-source', {}, 'npm', true],
+  ['no-npm', { source: true }, null, true],
+  ['no-tty', { source: true }, 'npm', false],
+  ['ask', { source: true }, 'npm', true],
+];
+
+for (const [expected, populate, npm, interactive] of PLANS) {
+  test(`buildPlan answers ${expected}`, () => {
+    const f = planFixture(populate);
+    try {
+      assert.equal(buildPlan(f.distDir, f.webDir, npm, interactive), expected);
+    } finally { f.sb.cleanup(); }
+  });
+}
