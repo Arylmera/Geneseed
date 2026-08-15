@@ -42,9 +42,20 @@ OTHER = "posix" if THIS == "win32" else "win32"
 
 #: The only places the two halves may differ, beyond the `PLATFORM_ONLY` cells themselves.
 #: Each entry is (document, cell id, field). Every one is a site where the reference branches
-#: on the host INSIDE cell data — the three the export's docstring names.
+#: on the host INSIDE cell data.
+#:
+#: DERIVED FROM THE DIFF, NOT FROM READING THE SOURCE. The first draft of this set held one
+#: entry — the `sys.platform` conditional visible in `harness_golden.py` — and the run against
+#: the posix half reported the other two, which come from `web_golden._MEM_CASE_FOLDED`: both
+#: implementations sort the catalog through `normcase`, so `MEMORY.md` files land under `m` on
+#: Windows and under `M` (0x4D, ahead of `a`) everywhere else. That is the PLATFORM'S ordering
+#: and not a preference, and the two `expect_re` rows are the absolute assertion about it that
+#: could not be written once. Finding them by measurement rather than by grep is the whole
+#: argument for having both halves.
 DECLARED_VALUE_DIFFS = {
     ("cli", "exclude/remove-a-case-differing-entry", "expect"),
+    ("web", "memory/deleting-a-fact-drops-its-file-and-its-index-line", "expect_re"),
+    ("web", "promote/without-the-opt-in-the-fact-stays-and-a-bad-name-is-a-404", "expect_re"),
 }
 
 

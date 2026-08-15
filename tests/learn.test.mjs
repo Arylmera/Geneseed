@@ -7,6 +7,7 @@ import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
 import { resolveAgentName, appendAgentLesson } from "../adapters/opencode/plugins/geneseed-learn.js"
+import { makeSandbox } from "./helpers/sandbox.mjs";
 
 test("resolveAgentName: reads agent from session meta, rejects garbage", () => {
   assert.equal(resolveAgentName({ agent: "reviewer" }), "reviewer")
@@ -20,7 +21,7 @@ test("resolveAgentName: reads agent from session meta, rejects garbage", () => {
 })
 
 test("appendAgentLesson: creates file, appends, caps at 100 bullets", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "gs-learn-"))
+  const dir = makeSandbox("gs-learn-").path
   const f = await appendAgentLesson(dir, "reviewer", "cite tests in findings")
   const text1 = await fs.readFile(f, "utf8")
   assert.match(text1, /^# reviewer — lessons\n/)
@@ -33,7 +34,7 @@ test("appendAgentLesson: creates file, appends, caps at 100 bullets", async () =
 })
 
 test("appendAgentLesson: collapses whitespace in the lesson", async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "gs-learn-"))
+  const dir = makeSandbox("gs-learn-").path
   const f = await appendAgentLesson(dir, "tester", "a  lesson\nwith\tbreaks")
   const text = await fs.readFile(f, "utf8")
   assert.match(text, /- \d{4}-\d{2}-\d{2}: a lesson with breaks\n$/)

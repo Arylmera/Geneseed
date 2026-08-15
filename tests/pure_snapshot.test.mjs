@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { DWIDTH_UNIDATA } from '../js/tui.mjs';
 import { winUserPathScript } from '../js/link.mjs';
 import { pyTextWrap } from '../js/cli.mjs';
+import { makeSandbox } from './helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PROBE = path.join(ROOT, 'tests', 'fixtures', 'pure_probe.mjs');
@@ -79,7 +80,7 @@ function normalise(value, prefixes) {
 }
 
 function runProbe(cases, asciiMode) {
-  const job = path.join(mkdtempSync(path.join(tmpdir(), 'pure-snap-')), 'job.json');
+  const job = path.join(makeSandbox('pure-snap-').path, 'job.json');
   writeFileSync(job, JSON.stringify({ cases }), 'utf8');
   const env = { ...process.env };
   delete env.GENESEED_TUI_ASCII;
