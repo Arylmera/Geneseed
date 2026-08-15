@@ -26,7 +26,8 @@ import { spawnSync } from 'node:child_process';
 import { sourceFingerprint, readVersion, versionIsNewer } from '../../js/emit.mjs';
 import { sourceReleaseVersion } from '../../js/opencode.mjs';
 import { versionVerdict, statusData, statusLines } from '../../js/status.mjs';
-import { VERSION_MARKER } from '../../js/hosts.mjs';
+import { uninstallGlobal, unmergeOpencodeJson } from '../../js/uninstall.mjs';
+import { VERSION_MARKER, GLOBAL_MANIFEST } from '../../js/hosts.mjs';
 import { CONFIG, ROOT, SRC, makeCfg } from '../../js/checkout.mjs';
 import { makeSandbox, homeOverrides } from '../helpers/sandbox.mjs';
 
@@ -243,6 +244,113 @@ test('the status box is a uniform-width frame', () => {
   for (const token of ['Geneseed', 'theme', 'components', 'version', 'source']) {
     assert.ok(blob.includes(token), `the panel never says '${token}'`);
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// UNINSTALL — the other end of the lifecycle, and the one where a mistake costs a user data.
+
+/**
+ * A real `opencode-global` install in `cfg`, via the relocation variable the product reads.
+ *
+ * The reference calls `build.emit_opencode_global(..., cfg=cfg)` and passes the target as an
+ * argument. Here the target is DISCOVERED from `OPENCODE_CONFIG_DIR` — the same substitution
+ * `test_web.py` established, and the one that makes these tests gate the resolver too.
+ */
+function globalInstall(d) {
+  const cfg = path.join(d, 'cfg');
+  fs.mkdirSync(cfg, { recursive: true });
+  const r = spawnSync(process.execPath,
+    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', 'opencode-global', '--theme', 'neutral'],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: {
+        ...process.env, ...homeOverrides(path.join(d, 'home')), OPENCODE_CONFIG_DIR: cfg,
+      },
+      maxBuffer: 1 << 26,
+      windowsHide: true,
+    });
+  if (r.status !== 0) {
+    throw new Error(`opencode-global emit failed (${r.status}): `
+      + `${(r.stderr || r.stdout || '').slice(-1500)}`);
+  }
+  return cfg;
+}
+
+/** `contextlib.redirect_stdout` — the unmerge warning goes there. */
+function captured(fn) {
+  const real = process.stdout.write.bind(process.stdout);
+  let buf = '';
+  process.stdout.write = (chunk) => { buf += chunk; return true; };
+  try { return [fn(), buf]; } finally { process.stdout.write = real; }
+}
+
+const instructionsOf = (cfg, name = 'opencode.json') =>
+  JSON.parse(fs.readFileSync(path.join(cfg, name), 'utf8')).instructions;
+
+test('a global uninstall removes what it owns and keeps the memory store', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    // Sanity FIRST: a removal test against a tree that was never installed passes by
+    // describing an absence nobody created.
+    assert.ok(fs.statSync(path.join(cfg, 'AGENT.md')).isFile());
+    assert.ok(fs.statSync(path.join(cfg, 'skills', 'ship', 'SKILL.md')).isFile());
+    assert.ok(fs.statSync(path.join(cfg, 'memory')).isDirectory());
+    const agentMd = path.join(cfg, 'AGENT.md').split(path.sep).join('/');
+    assert.ok(instructionsOf(cfg).includes(agentMd), JSON.stringify(instructionsOf(cfg)));
+
+    const summary = uninstallGlobal(cfg, false);
+
+    for (const gone of ['AGENT.md', 'skills', 'agents', GLOBAL_MANIFEST, VERSION_MARKER]) {
+      assert.ok(!fs.existsSync(path.join(cfg, gone)), `${gone} survived the uninstall`);
+    }
+    assert.ok(fs.statSync(path.join(cfg, 'memory')).isDirectory(),
+      'the memory store was removed — it is the user\'s, not the install\'s');
+    assert.ok(summary.unmerged);
+    assert.ok(!instructionsOf(cfg).includes(agentMd),
+      'opencode.json still points at an AGENT.md that no longer exists');
+  });
+});
+
+test('archiving memory MOVES the store and never deletes a fact', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    fs.writeFileSync(path.join(cfg, 'memory', 'fact.md'), 'a learned fact', 'utf8');
+    const summary = uninstallGlobal(cfg, true);
+    assert.ok(!fs.existsSync(path.join(cfg, 'memory')), 'the store was left behind, not moved');
+    assert.ok(fs.statSync(path.join(cfg, 'archived-memory')).isDirectory());
+    assert.notEqual(summary.archived, null);
+    const fact = path.join(summary.archived, 'fact.md');
+    assert.ok(fs.statSync(fact).isFile(), 'the fact did not survive the archive');
+    assert.equal(fs.readFileSync(fact, 'utf8'), 'a learned fact',
+      'the fact survived by name but not by content');
+  });
+});
+
+test('the unmerge warns and skips a JSONC file carrying comments', () => {
+  withDir((d) => {
+    const jc = path.join(d, 'opencode.jsonc');
+    const original = '// keep my notes\n{\n  "instructions": ["AGENT.md", "other.md"]\n}\n';
+    fs.writeFileSync(jc, original, 'utf8');
+    const [changed, said] = captured(
+      () => unmergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md'));
+    assert.equal(changed, false, 'a skipped file was reported as changed');
+    assert.ok(said.includes('has comments'), said);
+    assert.equal(fs.readFileSync(jc, 'utf8'), original,
+      'the user\'s comments were rewritten away');
+  });
+});
+
+test('the unmerge edits a comment-free JSONC file', () => {
+  // The other half, and the reason the test above is not just "never touch .jsonc": the
+  // refusal is about COMMENTS, not about the extension.
+  withDir((d) => {
+    const jc = path.join(d, 'opencode.jsonc');
+    fs.writeFileSync(jc, '{"instructions": ["AGENT.md", "other.md"]}', 'utf8');
+    const changed = unmergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md');
+    assert.equal(changed, true);
+    assert.deepEqual(JSON.parse(fs.readFileSync(jc, 'utf8')).instructions, ['other.md']);
+  });
 });
 
 test('colour adds ANSI without changing the line count', () => {
