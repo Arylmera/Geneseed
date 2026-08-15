@@ -23,8 +23,10 @@ import {
 } from '../../js/hooks.mjs';
 import {
   themeParityProblems, countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt,
-  themesToCheck,
+  themesToCheck, globalEmitProblems,
 } from '../../js/doctor.mjs';
+import { stripSkillBodyLinks } from '../../js/native.mjs';
+import { stripCapabilityLinks } from '../../js/emit.mjs';
 import { themeOfDir } from '../../js/installs.mjs';
 import { LAW_CLASS, LAW_CLASSES } from '../../js/inventory.mjs';
 import { PLUGIN_SRC, ROOT, SRC } from '../../js/checkout.mjs';
@@ -497,4 +499,212 @@ test('the sweep widens when what was detected is unknown or absent', () => {
   assert.deepEqual(themesToCheck(null, false, null, AVAIL), [...AVAIL].sort());
   // a detected name not among the available themes -> full sweep, not a dead theme
   assert.deepEqual(themesToCheck(null, false, 'ghost', AVAIL), [...AVAIL].sort());
+});
+
+// ---------------------------------------------------------------------------------------------
+// Where the memory store is — the resolver a global install depends on.
+
+/**
+ * `resolveMemoryDir(null)` in a child, with `$GENESEED_HARNESS` set and a cwd that has no
+ * store of its own. Returns `"<exit> <answer>"`.
+ *
+ * A SUBPROCESS, AND THE REFERENCE SAYS WHY: the defect this guards is a THROW that escapes
+ * the function, and an in-process call cannot tell "returned null" from "took the process
+ * down" the way an exit code can.
+ *
+ * THE SANDBOXED HOME IS PART OF THE QUESTION, not hygiene, and the reference does not say so
+ * because it never had to — its `setUpModule` calls `sandbox_process_home()` and the child
+ * inherits the result through `os.environ`. Measured here, both ways: with home sandboxed the
+ * answer is `null`; with the developer's real home it is `~/.config/opencode/memory`, because
+ * the resolver falls through to the OpenCode config dir and this machine HAS one. So an
+ * unsandboxed version of the test below would fail here and pass on a fresh machine, which is
+ * the worst shape a gate can have. It is stated rather than inherited.
+ */
+function memoryResolver(harnessVar, cwd, home) {
+  const env = { ...process.env, ...homeOverrides(home), GENESEED_HARNESS: harnessVar };
+  delete env.GENESEED_MEMORY;
+  const url = pathToFileURL(path.join(ROOT, 'js', 'hosts.mjs')).href;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {resolveMemoryDir} from ${JSON.stringify(url)};`
+    + 'process.stdout.write(String(resolveMemoryDir(null)));'],
+  { cwd, encoding: 'utf8', env, windowsHide: true });
+  return `${r.status} ${r.stdout}`;
+}
+
+test('the memory store is found in $GENESEED_HARNESS from an unrelated cwd', () => {
+  // A global install's store lives in $GENESEED_HARNESS/memory, not beside the repo — the
+  // resolver must find it from a working directory that has no memory/ of its own.
+  withDir((d) => {
+    const store = path.join(d, 'store');
+    const work = path.join(d, 'work');
+    fs.mkdirSync(path.join(store, 'memory'), { recursive: true });
+    fs.mkdirSync(work);
+    assert.equal(memoryResolver(store, work, path.join(d, 'home')),
+      `0 ${path.join(store, 'memory')}`);
+  });
+});
+
+test('a ~user $GENESEED_HARNESS is skipped, not raised', () => {
+  // THE FOURTH USER-CONTROLLED TILDE INPUT, and the one the `~user` refusal missed. Making
+  // `expanduser` THROW on `~user` guarded excludes.json, $GENESEED_ROOT and --root, and left
+  // $GENESEED_HARNESS bare. Unguarded it reaches `geneseed status` and the `learn` hook, whose
+  // entry point has no top-level try — so it is a stack trace on a hook path.
+  //
+  // ABSOLUTE, not a cross-comparison, and that is what lets it outlive the reference: two
+  // implementations that both crashed would agree with each other. Exit 0 and 'no store'.
+  withDir((d) => {
+    const work = path.join(d, 'work');
+    fs.mkdirSync(work);
+    assert.equal(memoryResolver('~nosuchuser-geneseed/store', work, path.join(d, 'home')),
+      '0 null', 'the port raised on $GENESEED_HARNESS=\'~user\'');
+  });
+});
+
+test('the ~user guard did not swallow a usable store', () => {
+  // The vacuity guard beside it: a guard that skipped the base UNCONDITIONALLY would pass the
+  // test above, so prove the same call still FINDS a real store.
+  withDir((d) => {
+    const store = path.join(d, 'store');
+    const work = path.join(d, 'work');
+    fs.mkdirSync(path.join(store, 'memory'), { recursive: true });
+    fs.mkdirSync(work);
+    const answer = memoryResolver(store, work, path.join(d, 'home'));
+    assert.ok(answer.startsWith('0 '), answer);
+    assert.ok(answer.includes('memory'), answer);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The global emit is link-clean.
+
+test('the global emit carries no unresolved token, dead link or escape', () => {
+  // The opencode-global AGENT.md/agents/skills/memory must carry no unresolved tokens, dead
+  // links, or non-hermetic escapes — memory links are relative and co-located with AGENT.md,
+  // so nothing should point outside the bundle.
+  for (const theme of ['neutral', 'imperial']) {
+    assert.deepEqual(globalEmitProblems(theme), [], theme);
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// `doctor` must name the FIX, not just the symptom.
+
+let DOCTOR_HOME = null;
+
+/**
+ * Run the real `doctor` verb out of the fixture copy.
+ *
+ * THE REFERENCE MOCKED `_doctor_collect` AND RETURNED CRAFTED PROBLEMS, so its three tests
+ * exercised `cmd_doctor`'s hint printing and nothing else. `cmdDoctor` calls `doctorCollect`
+ * through a module-internal reference, so there is no seam to mock — and the discovery route
+ * is better anyway: planting a REAL missing key proves the hint fires on the condition it
+ * claims to describe, end to end, rather than on a string someone typed into a mock.
+ *
+ * `--no-bundle` because the committed-bundle check is about `Harness/`, not about hints, and
+ * a checkout whose bundle is mid-rebuild would redden all three arms for an unrelated reason.
+ * `--theme neutral` keeps it to one theme: ~1.9s instead of a fourteen-theme sweep.
+ */
+function doctorInCopy() {
+  DOCTOR_HOME ??= makeSandbox('gs-dochome-');
+  const r = spawnSync(process.execPath,
+    [path.join(fixture(), 'bin', 'geneseed-cli.mjs'), 'doctor', '--theme', 'neutral',
+      '--no-bundle'],
+    {
+      cwd: fixture(),
+      encoding: 'utf8',
+      env: { ...process.env, ...homeOverrides(DOCTOR_HOME.path) },
+      maxBuffer: 1 << 26,
+      windowsHide: true,
+    });
+  return { rc: r.status, out: `${r.stdout || ''}${r.stderr || ''}` };
+}
+
+after(() => { DOCTOR_HOME?.cleanup(); });
+
+test('a parity failure prints the --sync-themes hint', () => {
+  const good = JSON.parse(fs.readFileSync(path.join(SRC, '..', 'themes', 'neutral.json'), 'utf8'));
+  const broken = { ...good };
+  delete broken.VOICE;
+  const { rc, out } = withFault({ 'themes/broken.json': JSON.stringify(broken) },
+    () => doctorInCopy());
+  assert.equal(rc, 1, out);
+  assert.ok(out.includes('missing key'), out);
+  assert.ok(out.includes('--sync-themes'),
+    `doctor reported a missing key without naming the fix:\n${out}`);
+});
+
+test('an unrelated failure has no --sync-themes hint', () => {
+  // The other side of the same claim, and the reason the hint is conditional at all: a doctor
+  // that printed it on every failure would be telling a maintainer to re-sync themes over a
+  // missing purpose line.
+  const { rc, out } = withFault({ 'src/skills/zzz-fixture-probe.md': 'no purpose line here\n' },
+    () => doctorInCopy());
+  assert.equal(rc, 1, out);
+  assert.ok(!out.includes('--sync-themes'), out);
+});
+
+test('a clean doctor run has no hint at all', () => {
+  const { rc, out } = doctorInCopy();
+  assert.equal(rc, 0, out);
+  assert.ok(!out.includes('--sync-themes'), out);
+});
+
+// ---------------------------------------------------------------------------------------------
+// De-linking: what a NATIVE host's copy of a spec may not carry.
+
+const REL_MD = /\]\((?!https?:\/\/)[^)\s]*\.md/;
+const PER_ROW = /\]\((?:agents|skills)\/[A-Za-z0-9_-]+\.md\)/;
+
+test('the skill-body stripper drops relative .md links and keeps URLs', () => {
+  const out = stripSkillBodyLinks(
+    'run [ship](ship.md) if unsure; via the [refactor Skill](refactor.md);\n'
+    + 'dispatch the [reviewer Agent](../agents/reviewer.md); copy '
+    + '[`_template.md`](_template.md); see [docs](https://example.com/x.md).');
+  assert.ok(out.includes('run ship if unsure'), out);
+  assert.ok(out.includes('the refactor Skill'), out);
+  assert.ok(out.includes('the reviewer Agent'), out);
+  assert.ok(out.includes('copy `_template.md`'), out);
+  assert.ok(!REL_MD.test(out), `a relative .md link survived: ${out}`);
+  assert.ok(out.includes('[docs](https://example.com/x.md)'), out);
+});
+
+test('the capability stripper drops per-row spec links and keeps folder pointers', () => {
+  // `{}` is the whole cfg this needs: the pattern is overridable per theme, and an empty
+  // config takes the default — which is the shape the reference's argument-less helper had.
+  const out = stripCapabilityLinks({},
+    '| [reviewer](agents/reviewer.md) | when ready |\n'
+    + '| [brainstorm](skills/brainstorm.md) | new design |\n'
+    + 'Specs live in [`agents/`](agents/) and [`skills/`](skills/).\n'
+    + 'Facts live in [`memory/`](memory/).');
+  assert.ok(out.includes('| reviewer | when ready |'), out);
+  assert.ok(out.includes('| brainstorm | new design |'), out);
+  assert.ok(!PER_ROW.test(out), `a per-row spec link survived: ${out}`);
+  assert.ok(out.includes('](agents/)'), out);
+  assert.ok(out.includes('](skills/)'), out);
+  assert.ok(out.includes('](memory/)'), out);
+});
+
+test('a portable bundle keeps its links and a native global strips them', () => {
+  // THE HALF THAT IS ABOUT THE EMIT RATHER THAN THE STRINGS, and it needs both directions:
+  // a stripper wired into BOTH paths, or into NEITHER, satisfies either side alone.
+  withDir((d) => {
+    const home = path.join(d, 'home');
+    const files = path.join(d, 'files');
+    const cfg = path.join(d, 'cfg');
+    fs.mkdirSync(cfg, { recursive: true });
+    generate(['--emit', 'files', '--theme', 'neutral', '--out', files], home);
+    assert.match(fs.readFileSync(path.join(files, 'skills', 'tdd.md'), 'utf8'), REL_MD,
+      'the portable bundle lost its in-body links — tdd links refactor.md and commit.md');
+    assert.match(fs.readFileSync(path.join(files, 'AGENT.md'), 'utf8'), PER_ROW,
+      'the portable AGENT.md lost its per-row capability links');
+
+    generate(['--emit', 'opencode-global', '--theme', 'neutral'], home,
+      { OPENCODE_CONFIG_DIR: cfg });
+    const native = fs.readFileSync(path.join(cfg, 'skills', 'tdd', 'SKILL.md'), 'utf8');
+    assert.ok(!REL_MD.test(native), `the native skill kept a relative link:\n${native}`);
+    assert.ok(native.includes('refactor'),
+      'the link was removed along with the words around it');
+    const agent = fs.readFileSync(path.join(cfg, 'AGENT.md'), 'utf8');
+    assert.ok(!PER_ROW.test(agent), 'the native AGENT.md kept its per-row spec links');
+  });
 });
