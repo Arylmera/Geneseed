@@ -26,6 +26,9 @@ import {
 } from '../../js/web/api.mjs';
 import { apiGraph } from '../../js/web/graph.mjs';
 import {
+  apiDocs, apiDocsPage, docGroups, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
+} from '../../js/web/docs.mjs';
+import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
   apiInstallCmd, apiSelectView, apiExcludesMutate,
 } from '../../js/web/actions.mjs';
@@ -1400,3 +1403,219 @@ for (const [expected, populate, npm, interactive] of PLANS) {
     } finally { f.sb.cleanup(); }
   });
 }
+
+// ---------------------------------------------------------------------------------------------
+// The Docs Claude/OpenCode selector: page and group tags drop from the menu, inline
+// `<!--harness:X-->` blocks strip per host, and malformed markers FAIL OPEN.
+
+test('the harness name defaults and validates', () => {
+  const st = neutral();
+  assert.equal(normHarness('claude', st), 'claude');
+  assert.equal(normHarness('opencode', st), 'opencode');
+  // Junk and null fall back to the install's own default rather than throwing.
+  assert.ok(['opencode', 'claude'].includes(normHarness('nonsense', st)));
+  assert.ok(['opencode', 'claude'].includes(normHarness(null, st)));
+});
+
+test('a harness block keeps the matching host and drops the other', () => {
+  const body = 'shared\n'
+    + '<!--harness:opencode-->\nopen only\n<!--/harness-->\n'
+    + '<!--harness:claude-->\nclaude only\n<!--/harness-->\ntail';
+  const oc = stripHarnessBlocks(body, 'opencode');
+  const cc = stripHarnessBlocks(body, 'claude');
+
+  assert.match(oc, /open only/);
+  assert.ok(!oc.includes('claude only'));
+  assert.match(cc, /claude only/);
+  assert.ok(!cc.includes('open only'));
+  // The markers themselves never survive.
+  for (const out of [oc, cc]) {
+    assert.ok(!out.includes('<!--harness'));
+    assert.ok(!out.includes('<!--/harness'));
+  }
+});
+
+test('a body with no markers passes through, and a dangling marker fails open', () => {
+  assert.equal(stripHarnessBlocks('plain text', 'claude'), 'plain text');
+  // An unbalanced marker must NOT blank the tail. Failing closed here would delete the rest
+  // of a page over one typo.
+  const broken = 'keep me\n<!--harness:claude-->\nand this too';
+  assert.equal(stripHarnessBlocks(broken, 'opencode'), broken);
+});
+
+// The early-out guard must catch any marker the open regex accepts — odd whitespace included —
+// or a stray-spaced marker leaks through unstripped, taking its contents with it.
+test('the strip guard is not narrower than its matcher', () => {
+  const out = stripHarnessBlocks('A\n<!--  harness:claude  -->\nSECRET\n<!--/harness-->\nB',
+    'opencode');
+  assert.ok(!out.includes('SECRET'));
+  assert.ok(!out.includes('<!--'));
+});
+
+// A marker shown as EXAMPLE TEXT inside a fence is not a marker. It must survive verbatim for
+// both hosts, fences intact.
+test('markers inside a code fence are left alone', () => {
+  const body = 'intro\n```\n<!--harness:opencode-->\nexample\n<!--/harness-->\n```\nouter';
+  for (const hn of ['opencode', 'claude']) {
+    const out = stripHarnessBlocks(body, hn);
+    assert.ok(out.includes('<!--harness:opencode-->'), hn);
+    assert.match(out, /example/);
+    assert.equal((out.match(/```/g) || []).length, 2, hn);
+  }
+});
+
+test('host-specific pages and groups appear only under their host', () => {
+  const idsFor = (hn) => new Set(apiDocs(neutral(), hn).groups.flatMap((g) => g.pages.map((p) => p.id)));
+  const oc = idsFor('opencode');
+  const cc = idsFor('claude');
+  assert.ok(oc.has('adapters-opencode'));
+  assert.ok(!cc.has('adapters-opencode'));
+  assert.ok(cc.has('mcp-claude-code'));
+  assert.ok(!oc.has('mcp-claude-code'));
+  // The whole Plugins GROUP is opencode-only — a group tag, not a page tag.
+  const claudeGroups = new Set(apiDocs(neutral(), 'claude').groups.map((g) => g.id));
+  assert.ok(!claudeGroups.has('plugins'));
+});
+
+test('the docs endpoint echoes the resolved harness', () => {
+  assert.equal(apiDocs(neutral(), 'claude').harness, 'claude');
+  assert.equal(apiDocs(neutral(), 'opencode').harness, 'opencode');
+});
+
+test('a docs page strips for its host', () => {
+  const st = neutral();
+  // `mcp-verify` slices SETUP.md; the opencode clause must vanish under claude.
+  const oc = apiDocsPage(st, 'mcp-verify', 'opencode').body;
+  const cc = apiDocsPage(st, 'mcp-verify', 'claude').body;
+  assert.match(oc, /opencode mcp/);
+  assert.ok(!cc.includes('opencode mcp'));
+  assert.ok(!(oc + cc).includes('<!--harness'));
+});
+
+// FAILING OPEN IS WHY THIS CANNOT BE A RENDERING CHECK. An unbalanced marker leaves the body
+// untouched — which is exactly what a correct page with no markers does — so the mistake is
+// invisible in the output and only the predicate can see it. Catch it here rather than as a
+// blank panel, or as a page that quietly shows the other host's text.
+test('every doc source and concept body has balanced harness markers', () => {
+  let checked = 0;
+  for (const g of docGroups()) {
+    for (const p of g.pages) {
+      let where;
+      let text;
+      if (p.kind === 'concept') { where = `concept:${p.id}`; text = p.body || ''; } else if (p.kind === 'markdown') {
+        where = p.source;
+        text = fs.readFileSync(path.join(ROOT, p.source), 'utf8');
+      } else continue;
+      checked += 1;
+      assert.ok(harnessBlocksBalanced(text.split('\n')),
+        `unbalanced harness markers in ${where}`);
+    }
+  }
+  assert.ok(checked > 0, 'no doc source was checked — the registry walk found nothing');
+});
+
+// The registry lives in `docs/web/` — a `_groups.json` plus one `.md` per page — not in a
+// source literal. A group that loses its pages, or a page whose frontmatter stops naming a real
+// group, silently VANISHES from the panel. Pin the shape rather than trust the glob.
+test('the docs registry loads every page from disk', () => {
+  const groups = docGroups();
+  assert.ok(groups.length > 0, 'docs registry loaded empty');
+  const ids = groups.flatMap((g) => g.pages.map((p) => p.id));
+  assert.equal(ids.length, new Set(ids).size, 'duplicate doc page id');
+
+  const onDisk = fs.readdirSync(path.join(ROOT, 'docs', 'web'))
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => f.slice(0, -3));
+  assert.deepEqual([...ids].sort(), [...onDisk].sort(),
+    'every docs/web/*.md must land in exactly one group');
+
+  for (const g of groups) {
+    assert.ok(g.pages.length > 0, `group ${g.id} has no pages`);
+    assert.ok(g.label, `group ${g.id} has no label`);
+  }
+});
+
+// Concept bodies carry `{N_LAWS}`/`{N_AGENTS}`/`{N_SKILLS}`, substituted at render time. Moving
+// the bodies out of source must not orphan that step: an unsubstituted placeholder renders as
+// literal braces on the page.
+test('no unsubstituted count placeholder survives rendering', () => {
+  const st = neutral();
+  for (const g of docGroups()) {
+    for (const p of g.pages) {
+      if (p.kind !== 'concept') continue;
+      assert.ok(!(apiDocsPage(st, p.id, null).body || '').includes('{N_'),
+        `page ${p.id} rendered an unsubstituted placeholder`);
+    }
+  }
+});
+
+// Anti-drift, and the reason it exists: "six plugins" went stale when activity landed. A new
+// adapters/opencode/plugins/geneseed-<name>.js must ship its own docs page, a bullet on the
+// plugins overview, and a mention in the README and SHIPPED.md rows.
+test('every plugin ships a docs page, an overview bullet and its README/SHIPPED rows', () => {
+  const st = neutral();
+  const pluginDir = path.join(ROOT, 'adapters', 'opencode', 'plugins');
+  const names = fs.readdirSync(pluginDir)
+    .filter((f) => f.startsWith('geneseed-') && f.endsWith('.js'))
+    .map((f) => f.slice('geneseed-'.length, -'.js'.length))
+    .sort();
+  assert.ok(names.length > 0, 'no plugins found — wrong directory?');
+
+  const pageIds = new Set(docGroups().flatMap((g) => g.pages.map((p) => p.id)));
+  const overview = apiDocsPage(st, 'plugins', 'opencode').body;
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  const shipped = fs.readFileSync(path.join(ROOT, 'SHIPPED.md'), 'utf8');
+  const row = /plugins \(([^)]*)\)/.exec(shipped);
+  assert.ok(row, 'SHIPPED.md lost its plugins (…) list');
+  const shippedNames = new Set(row[1].split(',').map((s) => s.trim()));
+
+  for (const name of names) {
+    assert.ok(pageIds.has(`plugin-${name}`), `geneseed-${name}.js has no docs page`);
+    assert.ok(overview.includes(`geneseed-${name}`),
+      `geneseed-${name} missing from the overview list`);
+    assert.ok(readme.includes(`geneseed-${name}`),
+      `geneseed-${name} missing from the README plugins row`);
+    assert.ok(shippedNames.has(name), `'${name}' missing from the SHIPPED.md plugins list`);
+  }
+  assert.deepEqual([...shippedNames].sort(), names,
+    'SHIPPED.md plugins list is out of sync with adapters/opencode/plugins/');
+});
+
+// Counts in concept prose are `{N_*}` placeholders resolved from the SAME inventory the rail
+// uses — never hardcoded numbers.
+test('concept counts are substituted live from the inventory', () => {
+  const st = neutral();
+  const inv = st.inventory;
+  for (const hn of ['opencode', 'claude']) {
+    for (const g of apiDocs(st, hn).groups) {
+      for (const p of g.pages) {
+        const body = apiDocsPage(st, p.id, hn).body || '';
+        assert.ok(!body.includes('{N_'), `${hn}/${p.id} leaked a placeholder`);
+      }
+    }
+  }
+  assert.match(apiDocsPage(st, 'skills', 'opencode').body,
+    new RegExp(String(inv.skills.length)));
+  assert.match(apiDocsPage(st, 'rules', 'opencode').body,
+    new RegExp(String(inv.laws.length)));
+});
+
+// Every `#/docs/<id>` link in a VISIBLE page must resolve to a page visible under the SAME
+// harness — no link dead-ends after filtering.
+test('no cross-harness dead links', () => {
+  const st = neutral();
+  for (const hn of ['opencode', 'claude']) {
+    const menu = apiDocs(st, hn);
+    const visible = new Set(menu.groups.flatMap((g) => g.pages.map((p) => p.id)));
+    for (const g of menu.groups) {
+      for (const p of g.pages) {
+        const body = apiDocsPage(st, p.id, hn).body || '';
+        for (const target of new Set([...body.matchAll(/#\/docs\/([a-z0-9-]+)/g)]
+          .map((m) => m[1]))) {
+          assert.ok(visible.has(target),
+            `${hn}: page '${p.id}' links to '${target}', which is hidden under ${hn}`);
+        }
+      }
+    }
+  }
+});

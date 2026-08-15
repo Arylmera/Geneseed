@@ -208,8 +208,13 @@ export function normHarness(value, state) {
  * A marker inside a ``` fence is example text, not a marker (the same rule `sliceSection`
  * uses). Its purpose is to FAIL OPEN: an unbalanced marker leaves the body untouched, so a
  * typo can never blank the rest of a page.
+ *
+ * EXPORTED FOR THE AUTHORING GATE, in the shape `installAgentEntryOf` established: failing
+ * open means a typo is INVISIBLE in the rendered output — the page simply shows everything,
+ * which is also what a correct page with no markers does. The only way to catch it is to ask
+ * the predicate directly, so `tests/unit/web_api.test.mjs` walks every doc source through it.
  */
-function harnessBlocksBalanced(lines) {
+export function harnessBlocksBalanced(lines) {
   let open = false;
   let inFence = false;
   for (const line of lines) {
