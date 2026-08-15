@@ -123,6 +123,41 @@ jobs:
       - name: doctor, from the port
         run: node bin/geneseed-cli.mjs doctor
 
+  # THE CELL HARNESSES, FROM NODE — the successor to the `cells` job above, running beside it
+  # for as long as both implementations exist. It replays the SAME recorded corpus against the
+  # SAME port; what it does not do is compare two implementations, which needs two.
+  #
+  # UBUNTU **AND** WINDOWS, which the Python `cells` job is not. That job is Linux-only as a
+  # budget decision, and the budget argument does not carry over: this replay is a spawn per
+  # cell with no second implementation to run, so the whole emit matrix is ~70 seconds rather
+  # than minutes. Every Windows defect this project has shipped — CRLF/LF, 8.3 short paths,
+  # console flashes, cp1252 — was invisible to a Linux-only job, and the `crlf` half of the
+  # corpus has no other replayer at all. Landing this BEFORE P4 deletes the Python jobs is the
+  # point: a platform that has never run the gate is a platform the gate says nothing about.
+  node-cells:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The recorded corpus, replayed. `--against` resolves to `emit/crlf` or `emit/lf` from
+      # this runner's line separator, so each half is replayed by the platform that recorded it.
+      - name: golden — the recorded emit corpus, replayed
+        run: node tests/golden.mjs --against tests/__snapshots__/emit
+      # The two self-comparisons, which have no corpus and need none: they compare a run against
+      # another run of the same implementation. `--idempotent` is the re-emit path real users
+      # are on from their second build onwards; `--deletion` is the only thing that makes the
+      # write-before-delete prune actually delete.
+      - name: golden — idempotence
+        run: node tests/golden.mjs --idempotent
+      - name: golden — the prune
+        run: node tests/golden.mjs --deletion
+
   # RECORD THE LINUX CORPUS — all three matrices. Manual dispatch only: `if:` keeps it off
   # every push, because it gates nothing and re-runs 691 cells.
   #

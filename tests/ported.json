@@ -32,14 +32,16 @@
       "python": "tests/golden.py",
       "kind": "harness",
       "py_tests": 0,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/helpers/golden.mjs",
+        "tests/golden.mjs",
+        "tests/unit/destamp.test.mjs",
+        "tests/unit/golden_flags.test.mjs",
         "tests/helpers/matrix/emit.win32.json",
-        "tests/helpers/matrix/emit.posix.json",
-        "tests/golden.test.mjs"
+        "tests/helpers/matrix/emit.posix.json"
       ],
-      "why": "The emit matrix. Its 259 cells are DATA and cross as JSON (exported from cells()/deletion_cells() while the reference lives, gated by an equality test against the live functions). What ports is the runtime: sandbox and env, _normalise, _destamp, _snapshot, _shim_health, corpus_normalise, _recompute_declared_lengths, orphan_check, and the --against/--idempotent/--deletion drivers. The --ref comparison half has no successor and needs none: it compares two implementations and there will be one."
+      "why": "The emit matrix. Its 259 cells are DATA and crossed as JSON; what ports is the runtime — normalise (five spellings, including the two \\uXXXX ones a non-ASCII --out found), destamp, snapshot, shim_health, corpus_normalise, recompute_declared_lengths, orphan_check. VALIDATED AGAINST THE THING ITSELF: all 259 cells replay green from Node against the CPython-recorded corpus in 70 seconds, plus 259/259 idempotent and 9/9 deletion. The --ref comparison half has no successor and needs none. Two defects the first draft had, both found by running it rather than by review: the streams must be DROPPED when the two sides ran a different number of times (emit two legitimately warns about files it now finds already there), and the per-cell sovereign carve-out excuses spaces seeded once by design — including the direction that FAILS when the carve-out excuses nothing, which a plain filter never checks."
     },
     {
       "python": "tests/harness_golden.py",
@@ -112,22 +114,22 @@
       "python": "tests/test_golden_destamp.py",
       "kind": "unit",
       "py_tests": 29,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/unit/destamp.test.mjs"
       ],
-      "why": "'The destamp must ASSERT before it passes anything through' — the property that keeps a normaliser from becoming a way to make any two runs equal. Its subject moves from golden._destamp to the Node destamp and every case survives; a destamp with no gate is how a whole class of bug goes invisible."
+      "why": "'The destamp must ASSERT before it passes anything through' — the property that keeps a normaliser from becoming a way to make any two runs equal. Every stamp is tested in BOTH directions: it fires on the shape it names and leaves verbatim the neighbouring value that must stay compared. The seeded fixtures are the sharpest cases — deadbeef1234 and 0000000000000000 are constants a pattern written for 'looks like a hash' would eat, and the only thing separating them from a live fingerprint is the exact length the implementation emits. One test was wrong on its first draft in the most instructive way: it asserted the node-banner pattern leaves a pre-release suffix verbatim, which the REFERENCE does not do either — a port test asserting a property the reference lacks is one that gets 'fixed' by breaking the port."
     },
     {
       "python": "tests/test_golden_sandbox.py",
       "kind": "unit",
       "py_tests": 28,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/unit/sandbox.test.mjs",
-        "tests/golden.test.mjs"
+        "tests/unit/golden_flags.test.mjs"
       ],
-      "why": "SPLIT ACROSS TWO SUCCESSORS, because the file has two subjects. Its CellEnvIsolationTests half is about the sandbox and has crossed: assert on the ENVIRONMENT, never by observing the leak — OPENCODE_CONFIG_DIR silently routed 135 files per cell into the real target and was byte-identical in all 259 cells. The other twenty-four are golden.py's own FLAG WIRING (--repeat, --jobs, --record/--against, --emits, --only) and corpus semantics (an unrecorded cell fails rather than skipping, an orphaned corpus entry is reported, the absolute tier runs in every mode), which belong to the replayer and land with it in T4."
+      "why": "SPLIT ACROSS TWO SUCCESSORS, because the file has two subjects. Its CellEnvIsolationTests half is about the sandbox: assert on the ENVIRONMENT, never by observing the leak — OPENCODE_CONFIG_DIR silently routed 135 files per cell into the real target and was byte-identical in all 259 cells. The rest is the replayer's FLAG WIRING, and it carries this project's own lesson that a narrowing flag needs a wiring test: --repeat once shipped with a correct gate that was not connected, so the flag reached neither side and the suite stayed green. Each flag is now tested for what it selects AND for whether it announces itself to the orphan check. The anchor-cell check is aimed at the corpus rather than the matrix, because the reference's first draft named the carriers as bare filenames, they never intersected the snapshot's sandbox-relative keys, and the verbatim text recorded EMPTY for all six with nothing failing."
     },
     {
       "python": "tests/test_sandbox_paths.py",
