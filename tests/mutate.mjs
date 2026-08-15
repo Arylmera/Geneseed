@@ -143,6 +143,24 @@ export const MUTATIONS = [
       + 'different function; it lives in tests/helpers/alias.mjs now.',
   },
   {
+    id: 'M13',
+    name: 'let rmtreeQuiet delete a file where shutil.rmtree refuses one',
+    file: 'js/uninstall.mjs',
+    find: '    if (!lstatSync(p).isDirectory()) return;\n',
+    replace: '',
+    gate: UNIT,
+    why: 'A REAL PORT DEFECT, found by porting tests/test_web.py rather than by review. '
+      + 'shutil.rmtree(p, ignore_errors=True) REFUSES anything that is not a real directory - a '
+      + 'file raises NotADirectoryError, a symlink raises outright - and ignore_errors turns '
+      + 'both into a no-op that leaves the thing on disk. rmSync(recursive, force) deletes all '
+      + 'three without complaint, so the port destroyed what the reference preserved. It is '
+      + 'REACHABLE: installDeactivate rolls back by calling this on root/.geneseed-disabled, so '
+      + 'a user with a plain FILE of that name at their install root lost it. NO CELL CAN SEE '
+      + 'IT - all 690 replay green with the defect in place, because nothing plants a file where '
+      + 'a stash directory belongs. The same shape as M5: the states worth fearing are the ones '
+      + 'a clean fixture cannot reach.',
+  },
+  {
     id: 'M6',
     name: 'make parseJson collapse an integral float',
     file: 'js/lib/pyfs.mjs',

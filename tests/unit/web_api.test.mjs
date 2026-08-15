@@ -20,12 +20,20 @@ import { spawnSync } from 'node:child_process';
 import { localHost } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
-  apiThemes, apiDoctor,
+  apiThemes, apiDoctor, apiInstalls,
 } from '../../js/web/api.mjs';
 import {
-  apiRestore, apiMcp, apiMcpToggle, buildOverride,
+  apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
 } from '../../js/web/actions.mjs';
 import { MCP_PRESETS } from '../../js/mcp.mjs';
+import { GLOBAL_MANIFEST, VERSION_MARKER, pyResolve } from '../../js/hosts.mjs';
+import { normcase } from '../../js/lib/pyfs.mjs';
+
+// `js/web/api.mjs` keeps its own `samePath` module-private. Rebuilt here from the same two
+// primitives rather than exported from the product for a test's benefit — and it must be
+// `normcase(pyResolve(...))` on both sides, because on Windows the two spellings this
+// comparison exists to reconcile differ in CASE as well as in shape.
+const samePath = (a, b) => normcase(pyResolve(a)) === normcase(pyResolve(b));
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/diff.mjs';
 import { makeSandbox, TMP_ROOT } from '../helpers/sandbox.mjs';
@@ -788,4 +796,225 @@ test('a Claude config does not have its string values mangled', () => {
   } finally {
     fs.rmSync(cfgPath, { force: true });
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// The Harness-installs switch.
+//
+// Deactivate MOVES owned artifacts into a sibling `.geneseed-disabled/` stash and strips the
+// AGENT.md `instructions` entry — never deleting a file — and reactivate restores the exact
+// prior bytes. The on-disk stash dir alone is the state; there is no recorded JSON flag.
+//
+// THE INSTALL IS DISCOVERED, NOT INJECTED — the same argument as the MCP block above. The
+// reference pinned `_install_targets` to a single seeded root; `installTargets()` resolves an
+// OpenCode global from `$OPENCODE_CONFIG_DIR`, so pointing that at the seeded root produces the
+// target through the product's own resolver.
+//
+// ONE ASSERTION HAD TO CHANGE SHAPE, and it is worth naming rather than quietly dropping. The
+// reference asserted `len(installs) == 1`, which was a property of its FAKE: real discovery also
+// yields a global row for claude, bob and copilot, all `absent`. The property under test is
+// about the ROW — its keys, its host, its scope, its path, its state — so the port selects the
+// row by path and asserts on it. The count assertion measured the monkeypatch, not the code.
+const DISABLED = '.geneseed-disabled';
+const asPosix = (p) => p.split(path.sep).join('/');
+
+function withGlobalRoot(fn) {
+  const sb = makeSandbox();
+  const saved = process.env.OPENCODE_CONFIG_DIR;
+  const root = path.join(sb.path, 'opencode');
+  fs.mkdirSync(root, { recursive: true });
+  process.env.OPENCODE_CONFIG_DIR = root;
+  try {
+    return fn({ root, tmp: sb.path });
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR;
+    else process.env.OPENCODE_CONFIG_DIR = saved;
+    sb.cleanup();
+  }
+}
+
+const agentEntry = (root) => `${asPosix(root)}/AGENT.md`;
+
+// A minimal GLOBAL install: AGENT.md + agents/x.md + a manifest listing them (plus
+// VERSION_MARKER, the one marker the real manifest carries) + an opencode.json whose
+// `instructions` already points at AGENT.md.
+function seedGlobal(root, opencodeText = null) {
+  fs.writeFileSync(path.join(root, 'AGENT.md'), '# Rules\nbody\n');
+  fs.mkdirSync(path.join(root, 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'agents', 'x.md'), '# agent x\n');
+  // VERSION_MARKER is the only marker that appears in `owned`; deactivate must leave it in
+  // place, so theme and version detection keep working while the install is disabled.
+  fs.writeFileSync(path.join(root, VERSION_MARKER), 'v\n');
+  fs.writeFileSync(path.join(root, GLOBAL_MANIFEST), JSON.stringify({
+    owned: ['AGENT.md', 'agents/x.md', VERSION_MARKER].sort(),
+  }));
+  fs.writeFileSync(path.join(root, 'opencode.json'),
+    opencodeText ?? JSON.stringify({ instructions: [agentEntry(root)], lsp: true }));
+}
+
+const instructionsOf = (root) => (JSON.parse(
+  fs.readFileSync(path.join(root, 'opencode.json'), 'utf8')).instructions || []);
+
+const rowFor = (state, root) => {
+  const rows = apiInstalls(state).installs;
+  const row = rows.find((r) => samePath(r.path, root));
+  assert.ok(row, `no install row for ${root}; discovery returned `
+    + `${JSON.stringify(rows.map((r) => [r.host, r.scope, r.path]))}`);
+  return row;
+};
+
+test('an install row carries its identity and its state per scope', () => {
+  withGlobalRoot(({ root, tmp }) => {
+    seedGlobal(root);
+    const row = rowFor(neutral(), root);
+    for (const key of ['id', 'host', 'scope', 'path', 'state']) assert.ok(key in row, `no ${key}`);
+    assert.equal(row.host, 'opencode');
+    assert.equal(row.scope, 'global');
+    assert.equal(row.state, 'active', 'manifest present and no stash must read active');
+
+    // `absent`: a root with neither a manifest nor a marker dir.
+    const empty = path.join(tmp, 'empty');
+    fs.mkdirSync(empty);
+    process.env.OPENCODE_CONFIG_DIR = empty;
+    assert.equal(rowFor(neutral(), empty).state, 'absent');
+  });
+});
+
+test('deactivate then reactivate restores the exact bytes', () => {
+  withGlobalRoot(({ root }) => {
+    seedGlobal(root);
+    const stash = path.join(root, DISABLED);
+    const agentBytes = fs.readFileSync(path.join(root, 'AGENT.md'));
+    const xBytes = fs.readFileSync(path.join(root, 'agents', 'x.md'));
+    const st = neutral();
+
+    let res = apiInstallToggle(st, { host: 'opencode', path: root, action: 'deactivate' });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.equal(res.kind, 'global');
+    assert.equal(res.moved, 2, 'AGENT.md + agents/x.md');
+
+    // The artifacts live under the stash at their ORIGINAL rel paths...
+    assert.ok(fs.statSync(stash).isDirectory());
+    assert.ok(fs.statSync(path.join(stash, 'AGENT.md')).isFile());
+    assert.ok(fs.statSync(path.join(stash, 'agents', 'x.md')).isFile());
+    // ...and NO file was deleted — the bytes are preserved in the stash.
+    assert.deepEqual(fs.readFileSync(path.join(stash, 'AGENT.md')), agentBytes);
+    assert.deepEqual(fs.readFileSync(path.join(stash, 'agents', 'x.md')), xBytes);
+    // The live copies are gone from the discovery path...
+    assert.ok(!fs.existsSync(path.join(root, 'AGENT.md')));
+    assert.ok(!fs.existsSync(path.join(root, 'agents', 'x.md')));
+    // ...and the emptied owned dir is pruned by uninstall's ancestor climb.
+    assert.ok(!fs.existsSync(path.join(root, 'agents')));
+    // The AGENT.md instructions entry is stripped.
+    assert.ok(!instructionsOf(root).includes(agentEntry(root)));
+    // VERSION_MARKER stays put — markers are excluded from the move.
+    assert.ok(fs.statSync(path.join(root, VERSION_MARKER)).isFile());
+    assert.ok(!fs.existsSync(path.join(stash, VERSION_MARKER)));
+    // The stash dir IS the flag.
+    assert.equal(rowFor(neutral(), root).state, 'disabled');
+
+    res = apiInstallToggle(st, { host: 'opencode', path: root, action: 'activate' });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.deepEqual(fs.readFileSync(path.join(root, 'AGENT.md')), agentBytes);
+    assert.deepEqual(fs.readFileSync(path.join(root, 'agents', 'x.md')), xBytes);
+    assert.ok(instructionsOf(root).includes(agentEntry(root)), 'the entry was not restored');
+    assert.ok(!fs.existsSync(stash), 'the stash survived a complete restore');
+    assert.equal(rowFor(neutral(), root).state, 'active');
+  });
+});
+
+// Plant a plain FILE named like the stash dir. `installState` gates on `isDir(root/DISABLED)`,
+// so a file leaves the state `active` and the operation is allowed to START — but every
+// `mkdir(stash/rel)` then fails, forcing a mid-operation failure and a full roll-back.
+test('deactivate rolls back on a failed move', () => {
+  withGlobalRoot(({ root }) => {
+    seedGlobal(root);
+    const stash = path.join(root, DISABLED);
+    const agentBytes = fs.readFileSync(path.join(root, 'AGENT.md'));
+    const xBytes = fs.readFileSync(path.join(root, 'agents', 'x.md'));
+    fs.writeFileSync(stash, 'not a dir\n');
+
+    const res = apiInstallToggle(neutral(),
+      { host: 'opencode', path: root, action: 'deactivate' });
+    assert.equal(res.ok, false);
+    assert.ok('failed' in res);
+    assert.ok(res.failed.length > 0);
+
+    // Everything is back where it started — no half-gutted install.
+    assert.deepEqual(fs.readFileSync(path.join(root, 'AGENT.md')), agentBytes);
+    assert.deepEqual(fs.readFileSync(path.join(root, 'agents', 'x.md')), xBytes);
+    // The config edit is the LAST step, so a move failure leaves it intact.
+    assert.ok(instructionsOf(root).includes(agentEntry(root)));
+    // Still ACTIVE — the blocking file is not a stash dir.
+    assert.equal(rowFor(neutral(), root).state, 'active');
+    // The blocking artifact is untouched: the engine deleted nothing.
+    assert.equal(fs.readFileSync(stash, 'utf8'), 'not a dir\n');
+  });
+});
+
+test('reactivate discards a stale stash when the files were re-created', () => {
+  withGlobalRoot(({ root }) => {
+    seedGlobal(root);
+    const stash = path.join(root, DISABLED);
+    const st = neutral();
+
+    let res = apiInstallToggle(st, { host: 'opencode', path: root, action: 'deactivate' });
+    assert.equal(res.ok, true);
+    assert.ok(fs.statSync(stash).isDirectory());
+
+    // `geneseed build` re-creating the live install while it is disabled: the manifest,
+    // AGENT.md and agents/ are all back on the discovery path.
+    seedGlobal(root);
+    assert.ok(fs.statSync(path.join(root, 'AGENT.md')).isFile());
+
+    res = apiInstallToggle(st, { host: 'opencode', path: root, action: 'activate' });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.ok('note' in res);
+    assert.match(res.note, /discarded/);
+    // The stale stash goes, the live files are untouched...
+    assert.ok(!fs.existsSync(stash));
+    assert.ok(fs.statSync(path.join(root, 'AGENT.md')).isFile());
+    // ...and the instructions entry is ensured present.
+    assert.ok(instructionsOf(root).includes(agentEntry(root)));
+    assert.equal(rowFor(neutral(), root).state, 'active');
+  });
+});
+
+// OpenCode prefers a present `opencode.jsonc`; a commented one must not be rewritten, because
+// that would drop the comments — so deactivate aborts up front.
+test('deactivate refuses a commented jsonc and moves nothing', () => {
+  withGlobalRoot(({ root }) => {
+    seedGlobal(root);
+    fs.rmSync(path.join(root, 'opencode.json'));
+    fs.writeFileSync(path.join(root, 'opencode.jsonc'),
+      `// my notes\n{\n  "instructions": ["${agentEntry(root)}"]\n}\n`);
+
+    const res = apiInstallToggle(neutral(),
+      { host: 'opencode', path: root, action: 'deactivate' });
+    assert.equal(res.ok, false);
+    assert.ok('error' in res);
+    // Nothing moved: live files in place, no stash created, comments intact.
+    assert.ok(fs.statSync(path.join(root, 'AGENT.md')).isFile());
+    assert.ok(fs.statSync(path.join(root, 'agents', 'x.md')).isFile());
+    assert.ok(!fs.existsSync(path.join(root, DISABLED)));
+    assert.match(fs.readFileSync(path.join(root, 'opencode.jsonc'), 'utf8'), /\/\/ my notes/);
+    assert.equal(rowFor(neutral(), root).state, 'active');
+  });
+});
+
+test('the install toggle rejects an unknown path', () => {
+  withGlobalRoot(({ root }) => {
+    seedGlobal(root);
+    assert.throws(() => apiInstallToggle(neutral(),
+      { path: '/no/such/root', action: 'deactivate' }), NotFound);
+  });
+});
+
+test('an unknown install action is not ok', () => {
+  withGlobalRoot(({ root }) => {
+    seedGlobal(root);
+    const res = apiInstallToggle(neutral(),
+      { host: 'opencode', path: root, action: 'bogus' });
+    assert.equal(res.ok, false);
+  });
 });
