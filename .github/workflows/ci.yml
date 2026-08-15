@@ -235,10 +235,30 @@ jobs:
       # corpus that was never replayed is committed, plausible and unusable.
       - name: replay the four CPython-oracle corpora against the port
         run: node --test tests/pure_snapshot.test.mjs
+      # THE CELL MATRICES, exported as JSON so the Node replayers can read them after
+      # `build.py` and `rituals/harness.py` are gone. Same deadline as everything else in this
+      # job and a sharper one: the matrices are the harnesses' DATA, ~6,700 of their ~9,600
+      # lines, and after P4 the functions that declare them do not exist.
+      #
+      # PER-PLATFORM, AND ONLY THIS RUNNER CAN WRITE THE POSIX HALF. Three sites bake the host
+      # into cell data — `_link_cells`' win32/posix arms, `exclude/remove-a-case-differing-
+      # entry`'s expected sentence, and `web_golden._MEM_CASE_FOLDED` — plus `_np()`, which is
+      # `str(Path(rel))` and so carries the platform's separator. `pathlib` takes its flavour
+      # from `os.name`, which no assignment to `sys.platform` changes, so the other half cannot
+      # be faked from Windows any more than the `lf` corpus can.
+      #
+      # `tests/test_matrix_export.py` then DIFFS the two committed halves and requires the
+      # residual to be exactly the declared set — Task 8c's method (the difference between two
+      # machines IS the detector) aimed at a matrix instead of at a corpus. Until this half is
+      # committed those three checks SKIP, loudly, and the union is unchecked.
+      - name: export the cell matrices from the reference (the posix half)
+        run: python tests/export_matrix.py
       - uses: actions/upload-artifact@v4
         with:
           name: snapshots-lf
-          path: tests/__snapshots__/
+          path: |
+            tests/__snapshots__/
+            tests/helpers/matrix/
 
   # The web UI (web/) is a Vite/React app with its own toolchain, so it gets a
   # dedicated job: lint, format check, unit tests, and a production build. Linux
