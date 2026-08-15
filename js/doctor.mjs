@@ -784,8 +784,7 @@ export function countTableProblems() {
 
   const skillFiles = srcStems('skills');
   for (const missing of [...skillFiles].filter((s) => !has(SKILL_CLASS, s)).sort()) {
-    problems.push(`[authoring] skills/${missing}.md has no category in SKILL_CLASS `
-      + '(_harness_tui.py)');
+    problems.push(`[authoring] skills/${missing}.md has no category in SKILL_CLASS`);
   }
   for (const stale of Object.keys(SKILL_CLASS).filter((s) => !skillFiles.has(s)).sort()) {
     problems.push(`[authoring] SKILL_CLASS lists '${stale}' but no skills/${stale}.md exists`);
@@ -796,8 +795,7 @@ export function countTableProblems() {
     ? [...readText(lawsMd).matchAll(LAW_HEADING_RE)].map((m) => m[1]) : [];
   for (const num of lawNums) {
     if (!has(LAW_CLASS, num)) {
-      problems.push(`[authoring] laws/universal.md rule ${num} has no class in LAW_CLASS `
-        + '(_harness_tui.py)');
+      problems.push(`[authoring] laws/universal.md rule ${num} has no class in LAW_CLASS`);
     }
   }
   // `sorted(LAW_CLASS.items())` — by the Roman numeral as a STRING, which is what Python

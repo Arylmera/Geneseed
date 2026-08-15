@@ -950,7 +950,7 @@ def _count_table_problems() -> list[str]:
     from _harness_tui import SKILL_CLASS
     skill_files = _src_stems("skills")
     for missing in sorted(skill_files - set(SKILL_CLASS)):
-        problems.append(f"[authoring] skills/{missing}.md has no category in SKILL_CLASS (_harness_tui.py)")
+        problems.append(f"[authoring] skills/{missing}.md has no category in SKILL_CLASS")
     for stale in sorted(set(SKILL_CLASS) - skill_files):
         problems.append(f"[authoring] SKILL_CLASS lists '{stale}' but no skills/{stale}.md exists")
 
@@ -965,7 +965,7 @@ def _count_table_problems() -> list[str]:
                           laws_md.read_text(encoding="utf-8")) if laws_md.is_file() else []
     for num in law_nums:
         if num not in LAW_CLASS:
-            problems.append(f"[authoring] laws/universal.md rule {num} has no class in LAW_CLASS (_harness_tui.py)")
+            problems.append(f"[authoring] laws/universal.md rule {num} has no class in LAW_CLASS")
     for num, klass in sorted(LAW_CLASS.items()):
         if klass not in LAW_CLASSES:
             problems.append(f"[authoring] LAW_CLASS['{num}'] = '{klass}' is not a known class {list(LAW_CLASSES)}")

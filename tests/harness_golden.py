@@ -2036,8 +2036,7 @@ def _doctor_cells() -> list[dict]:
            # Each message is a different check saying so.
            {"src/skills/zzz-doctor.md": _GOOD_SPEC},
            expect=["[authoring] skills/zzz-doctor.md exists but the AGENT.md table omits it",
-                   "[authoring] skills/zzz-doctor.md has no category in SKILL_CLASS "
-                   "(_harness_tui.py)",
+                   "[authoring] skills/zzz-doctor.md has no category in SKILL_CLASS",
                    "[authoring] skills/zzz-doctor has no row in registry.json",
                    "[authoring] README skills list omits 'zzz-doctor'"],
            expect_re=[r"\[authoring\] README skills badge says \d+ but src has \d+"]),

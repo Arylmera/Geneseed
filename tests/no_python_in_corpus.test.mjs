@@ -73,10 +73,11 @@ const DECLARED = {
   "scripts/token_report.py": "src/skills/token-report/VENDOR.md, stale since Task 3 renamed the "
     + "script to .mjs. DANGLING after P4",
 
-  // ---- and the one the PORT ITSELF prints ----
-  "_harness_tui.py": "js/doctor.mjs:788,800 names where SKILL_CLASS lives, and rituals/"
-    + "_harness_tui.py is where it lived. DANGLING after P4 — the one printed site Task 4 "
-    + "did not reach",
+  // NOTHING THE PORT PRINTS IS IN THIS TABLE, and that is the property Task 5b bought. The
+  // row that used to sit here was `_harness_tui.py`, the parenthetical on two doctor problems
+  // naming the module SKILL_CLASS/LAW_CLASS lived in. Every remaining row above is prose
+  // shipped inside a bundle or a fixture INPUT echoed back — none is a sentence the tool
+  // composes about itself. A new row that is neither is a printed site that got away.
 };
 
 /** Every recorded cell of one half, as `{corpus, file, doc}`. */
