@@ -28,7 +28,7 @@ import path from 'node:path';
 
 import {
   MCP_PRESETS, mcpPresetBlock, mcpApply, mcpState, mcpSetEnabled, mcpLoad, mcpSave,
-  mcpCommented, mcpConfigFor,
+  mcpCommented, mcpConfigFor, mcpKnownNames, mcpMeta,
 } from '../../js/mcp.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
@@ -134,6 +134,62 @@ test('the comment sniff detects only real comments', () => {
     // widening it to `.json` would refuse to write files that are plain JSON by definition.
     assert.equal(mcpCommented(path.join(d, 'c.json')), false);
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The LISTING — what the console shows. A user who adds a server by hand must see it, not only
+// the servers Geneseed ships a preset for.
+
+test('the known names union the presets with the config\'s own servers', () => {
+  // `custom` and `sentry` are NOT presets; `markitdown` IS — both branches in one config.
+  const names = mcpKnownNames({
+    mcp: {
+      custom: { type: 'local' },
+      sentry: { type: 'local' },
+      markitdown: { type: 'local' },
+    },
+  });
+  // The built-in presets come first, in their own order, then the user-added ones.
+  assert.deepEqual(names.slice(0, Object.keys(MCP_PRESETS).length), Object.keys(MCP_PRESETS));
+  assert.ok(names.includes('custom'), names.join(','));
+  assert.ok(names.includes('sentry'), names.join(','));
+  // No duplicate, even though markitdown is both a preset AND present in the config — the
+  // screen would otherwise offer to remove the same server twice.
+  assert.equal(names.length, new Set(names).size, names.join(','));
+});
+
+test('the known names survive an empty or missing mcp map', () => {
+  assert.deepEqual(mcpKnownNames({}), Object.keys(MCP_PRESETS));
+  assert.deepEqual(mcpKnownNames({ mcp: {} }), Object.keys(MCP_PRESETS));
+});
+
+test('meta falls back to the bare name for an unknown server', () => {
+  const [label, desc] = mcpMeta('custom');
+  assert.equal(label, 'custom', 'an unknown name must not throw or render blank');
+  assert.ok(desc, 'an unknown server got no description at all');
+  const [presetLabel] = mcpMeta(MARKITDOWN);
+  assert.equal(presetLabel, MCP_PRESETS[MARKITDOWN].label);
+});
+
+test('the starter presets are present and well formed', () => {
+  // The four starter MCP servers Geneseed ships, as SETUP.md documents them.
+  for (const name of ['markitdown', 'gitlab', 'gitlab-2', 'filesystem']) {
+    assert.ok(Object.hasOwn(MCP_PRESETS, name), `${name} is no longer a preset`);
+    const preset = MCP_PRESETS[name];
+    assert.ok(preset.label && preset.desc, `${name} has no label or description`);
+    assert.equal(preset.block.type, 'local');
+    assert.ok(preset.block.command.length, `${name} has an empty command`);
+  }
+  // The two GitLab presets share the zereight command and differ only by API URL / token.
+  for (const name of ['gitlab', 'gitlab-2']) {
+    assert.deepEqual(MCP_PRESETS[name].block.command, ['npx', '-y', '@zereight/mcp-gitlab']);
+    // AND NO TOKEN IN THE SOURCE. This is the one assertion in the file that is about
+    // secrets rather than about wiring: a preset that shipped a real token would put it in
+    // every install and in the repository.
+    assert.equal(MCP_PRESETS[name].block.environment.GITLAB_PERSONAL_ACCESS_TOKEN, '');
+  }
+  assert.deepEqual(MCP_PRESETS.filesystem.block.command.slice(0, 3),
+    ['npx', '-y', '@modelcontextprotocol/server-filesystem']);
 });
 
 test('every preset carries a block the applier can use', () => {
