@@ -28,7 +28,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { installUninstall } from '../../js/uninstall.mjs';
+import { installUninstall, cmdUninstall } from '../../js/uninstall.mjs';
+import { registryRecord, registryRoots } from '../../js/registry.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts.mjs';
 import { ROOT } from '../../js/checkout.mjs';
 import {
@@ -206,6 +207,84 @@ test('an unobstructed uninstall reports no incompleteness', () => {
     assert.ok(!JSON.stringify(summary).includes('incomplete'), JSON.stringify(summary));
     assert.ok(!err.toLowerCase().includes('retried'), err);
     assert.ok(!fs.existsSync(path.join(repo, '.geneseed-emit')));
+  });
+});
+
+/** The resolved spelling, which is what the registry stores and compares. */
+const resolved = (p) => fs.realpathSync.native(p);
+
+/** Move this process's home for the test's duration, so the registry is its own. */
+function withHome(dir, fn) {
+  const vars = homeOverrides(dir);
+  const saved = {};
+  for (const k of Object.keys(vars)) saved[k] = process.env[k];
+  Object.assign(process.env, vars);
+  try {
+    return fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+test('a locked file OUTSIDE agents/skills keeps the markers and the registry row', (t) => {
+  // THE HOLE THIS CLOSED, and it is the sharpest test in the class. `ownedDirsFor` only
+  // watches agents/ and skills/, so a locked owned file anywhere else — Bob's
+  // `rules/geneseed.md` — used to slip the survivors gate completely: step 3 deleted the ROOT
+  // markers the reversal had just promised were KEPT, the registry pruned the row while the
+  // install was still half-alive, and the command printed "done" with no incomplete flag. The
+  // user was then left with a broken install that nothing could find and no warning that
+  // anything had gone wrong.
+  //
+  // The reversal's `failed` list is what closes it, which is why this must be driven through
+  // `cmdUninstall` rather than the reversal alone: the bug lived in the step AFTER it.
+  withDir((d) => {
+    withHome(path.join(d, 'home'), () => {
+      const repo = path.join(d, 'repo');
+      fs.mkdirSync(repo, { recursive: true });
+      emit('bob', repo, path.join(d, 'home'));
+      fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'bob\n', 'utf8');
+      registryRecord(repo);
+      const cfg = path.join(repo, '.bob');
+      const stuck = path.join(cfg, 'rules', 'geneseed.md');
+      assert.ok(fs.existsSync(stuck), 'the bob emit wrote no rules/geneseed.md to lock');
+
+      const release = jam(stuck);
+      if (release === null) { t.skip(JAM_SKIP); return; }
+      let out;
+      let err;
+      try {
+        let rc;
+        [rc, out, err] = capturedErr(() => cmdUninstall({
+          target: repo, yes: true, archiveMemory: false,
+        }));
+        assert.equal(rc, 0, err);
+      } finally {
+        release();
+      }
+
+      assert.ok(out.includes('INCOMPLETE'), `a half-removed install reported done:\n${out}`);
+      assert.ok(fs.statSync(path.join(cfg, GLOBAL_MANIFEST)).isFile(), 'the manifest went');
+      assert.ok(fs.statSync(path.join(repo, '.geneseed-emit')).isFile(), 'the root marker went');
+      // THE REGISTRY ROW IS THE THIRD CASUALTY and the least visible: pruned, the install is
+      // gone from `upgrade`'s list while its files are still on disk.
+      assert.deepEqual(registryRoots().map((p) => resolved(p)), [resolved(repo)],
+        'the registry pruned a row whose install is still half-present');
+      // The reversal already warned twice; step 3 must not stack a third overlapping WARN.
+      assert.ok(!err.includes('could not fully remove'),
+        `a third overlapping warning was printed:\n${err}`);
+
+      // Obstacle gone -> the promised retry completes the whole teardown, registry included.
+      const [rc2] = capturedErr(() => cmdUninstall({
+        target: repo, yes: true, archiveMemory: false,
+      }));
+      assert.equal(rc2, 0);
+      assert.ok(!fs.existsSync(path.join(cfg, GLOBAL_MANIFEST)));
+      assert.ok(!fs.existsSync(path.join(repo, '.geneseed-emit')));
+      assert.deepEqual(registryRoots(), [], 'the row survived a completed uninstall');
+    });
   });
 });
 
