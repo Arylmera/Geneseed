@@ -23,7 +23,7 @@ import {
 } from '../../js/hooks.mjs';
 import {
   themeParityProblems, countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt,
-  themesToCheck, globalEmitProblems,
+  themesToCheck, globalEmitProblems, renderedProblems,
 } from '../../js/doctor.mjs';
 import { stripSkillBodyLinks } from '../../js/native.mjs';
 import { stripCapabilityLinks } from '../../js/emit.mjs';
@@ -682,6 +682,89 @@ test('the capability stripper drops per-row spec links and keeps folder pointers
   assert.ok(out.includes('](agents/)'), out);
   assert.ok(out.includes('](skills/)'), out);
   assert.ok(out.includes('](memory/)'), out);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The committed-bundle drift check — and the dialect blindness that hid inside it.
+//
+// The first two tests build the PORTABLE bundle, which is the only dialect a plain `build`
+// fixture can produce. For as long as they were the WHOLE coverage, a bundle emitted for a host
+// that catalogues natively was unreachable, and the check's dialect-blindness could not be seen:
+// it reported a freshly emitted OpenCode bundle as stale on every run, with no rebuild able to
+// clear it. That is the shape to look for — not a missing assertion, a missing INPUT.
+
+/** A real OpenCode project bundle, with the markers a DEPLOYED one carries. */
+function opencodeBundle(d, footprint = 'lean') {
+  const out = path.join(d, 'bundle');
+  generate(['--emit', 'opencode', '--theme', 'neutral', '--out', out, '--root', out,
+    '--footprint', footprint], path.join(d, 'home'));
+  // `.geneseed-emit` is written by the driver's `main()`, not by the emit function, so a
+  // fixture that reaches the emitter directly has to write it exactly as an install does.
+  fs.writeFileSync(path.join(out, '.geneseed-theme'), 'neutral\n', 'utf8');
+  fs.writeFileSync(path.join(out, '.geneseed-footprint'), `${footprint}\n`, 'utf8');
+  fs.writeFileSync(path.join(out, '.geneseed-emit'), 'opencode\n', 'utf8');
+  return out;
+}
+
+test('a fresh portable bundle is clean, and a tampered one is stale', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    generate(['--emit', 'files', '--theme', 'neutral', '--out', out], path.join(d, 'home'));
+    assert.deepEqual(renderedProblems(out), []);
+    fs.writeFileSync(path.join(out, 'AGENT.md'), 'tampered', 'utf8');
+    const probs = renderedProblems(out);
+    assert.ok(probs.some((p) => p.includes('AGENT.md') && p.includes('stale')),
+      JSON.stringify(probs));
+  });
+});
+
+test('a file missing from the bundle is reported', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    generate(['--emit', 'files', '--theme', 'neutral', '--out', out], path.join(d, 'home'));
+    fs.rmSync(path.join(out, 'laws', 'universal.md'));
+    const probs = renderedProblems(out);
+    assert.ok(probs.some((p) => p.includes('universal.md') && p.includes('missing')),
+      JSON.stringify(probs));
+  });
+});
+
+test('an absent bundle is a no-op, not a failure', () => {
+  assert.deepEqual(renderedProblems(path.join(ROOT, 'does-not-exist')), []);
+});
+
+test('an OpenCode bundle straight out of the emitter is not drift', () => {
+  // Its AGENT.md differs from a portable render BY CONSTRUCTION — the catalogue tables are
+  // collapsed to a pointer and the per-row spec links are stripped — so a check that renders
+  // the portable shape flags it forever and no rebuild can clear it.
+  withDir((d) => {
+    assert.deepEqual(renderedProblems(opencodeBundle(d)), []);
+  });
+});
+
+test('an OpenCode bundle still detects real drift', () => {
+  // The dialect awareness must not have bought that by switching the check off. This is the
+  // control on the test above, and without it "not drift" is satisfied by "never reports".
+  withDir((d) => {
+    const out = opencodeBundle(d);
+    const agentMd = path.join(out, 'AGENT.md');
+    fs.writeFileSync(agentMd, `${fs.readFileSync(agentMd, 'utf8')}\ntampered\n`, 'utf8');
+    const probs = renderedProblems(out);
+    assert.ok(probs.some((p) => p.includes('AGENT.md') && p.includes('stale')),
+      `real drift in an OpenCode bundle went unreported: ${JSON.stringify(probs)}`);
+  });
+});
+
+test('the de-linking carve-out does not cover a spec file', () => {
+  // The carve-out is scoped to AGENT.md ALONE. A tampered agent spec — a file it must not
+  // cover — is still drift, and this is what stops the carve-out widening silently.
+  withDir((d) => {
+    const out = opencodeBundle(d);
+    fs.writeFileSync(path.join(out, 'agents', 'reviewer.md'), 'tampered', 'utf8');
+    const probs = renderedProblems(out);
+    assert.ok(probs.some((p) => p.includes('reviewer.md') && p.includes('stale')),
+      `drift in a non-AGENT.md file went unreported: ${JSON.stringify(probs)}`);
+  });
 });
 
 test('a portable bundle keeps its links and a native global strips them', () => {
