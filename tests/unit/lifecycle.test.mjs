@@ -17,7 +17,7 @@
 //     site in `js/emit.mjs` rather than here. Its only caller warns or stays silent, so
 //     `false` and `null` are the same observation through an emit and six of its nine claims
 //     are invisible from outside.
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,11 +26,24 @@ import { spawnSync } from 'node:child_process';
 import { sourceFingerprint, readVersion, versionIsNewer } from '../../js/emit.mjs';
 import { sourceReleaseVersion } from '../../js/opencode.mjs';
 import { versionVerdict, statusData, statusLines } from '../../js/status.mjs';
-import { uninstallGlobal, unmergeOpencodeJson, uninstallResolve } from '../../js/uninstall.mjs';
+import {
+  uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
+} from '../../js/uninstall.mjs';
+import { registryRecord, registryRoots } from '../../js/registry.mjs';
 import { VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir } from '../../js/hosts.mjs';
 import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
 import { CONFIG, ROOT, SRC, makeCfg } from '../../js/checkout.mjs';
-import { makeSandbox, homeOverrides } from '../helpers/sandbox.mjs';
+import {
+  makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
+} from '../helpers/sandbox.mjs';
+
+// `setUpModule`/`tearDownModule`, ported. THIS FILE CALLS INTO THE PRODUCT IN PROCESS —
+// `cmdUninstall` and `uninstallGlobal` both run here rather than in a child — and the emit
+// path's hook-shim writer targets the ENVIRONMENT's home rather than any `--out`. Without
+// this, running the suite rewrites the developer's own machine-wide shim. The reference says
+// the same thing in `tests/test_home_sandbox.py`.
+sandboxProcessHome();
+after(() => { restoreProcessHome(); });
 
 const cfg = () => makeCfg();
 
@@ -278,12 +291,25 @@ function globalInstall(d) {
   return cfg;
 }
 
-/** `contextlib.redirect_stdout` — the unmerge warning goes there. */
+/**
+ * `contextlib.redirect_stdout` / `redirect_stderr`, and BOTH are needed here: the unmerge
+ * warning goes to stdout while every refusal `cmdUninstall` makes goes to stderr. Returned
+ * separately rather than joined, because "which stream said it" is part of the claim — a
+ * refusal on stdout would be invisible to a caller checking for errors.
+ */
 function captured(fn) {
-  const real = process.stdout.write.bind(process.stdout);
-  let buf = '';
-  process.stdout.write = (chunk) => { buf += chunk; return true; };
-  try { return [fn(), buf]; } finally { process.stdout.write = real; }
+  const outw = process.stdout.write.bind(process.stdout);
+  const errw = process.stderr.write.bind(process.stderr);
+  let out = '';
+  let err = '';
+  process.stdout.write = (chunk) => { out += chunk; return true; };
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  try {
+    return [fn(), out, err];
+  } finally {
+    process.stdout.write = outw;
+    process.stderr.write = errw;
+  }
 }
 
 const instructionsOf = (cfg, name = 'opencode.json') =>
@@ -501,6 +527,173 @@ test('an unknown target resolves to nothing', () => {
     const empty = path.join(d, 'nothing-here');
     fs.mkdirSync(empty);
     assert.equal(uninstallResolve(empty), null);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `cmdUninstall` — the full CLI path: resolve -> summary -> confirm -> remove -> print.
+//
+// This is the verb that used to tell per-repo users to `rm -rf` by hand, so every test below is
+// really about the same question: does it delete EXACTLY what Geneseed wrote, and nothing the
+// user did.
+
+const uninstallArgs = (target, { yes = true, archiveMemory = false } = {}) =>
+  ({ target, yes, archiveMemory });
+
+test('a Claude project uninstall unwires hooks and keeps the user\'s prose', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));
+    const claude = path.join(repo, '.claude');
+    // User prose AROUND the managed CLAUDE.md block must survive — the managed block is
+    // Geneseed's, the file is not.
+    const original = fs.readFileSync(path.join(repo, 'CLAUDE.md'), 'utf8');
+    fs.writeFileSync(path.join(repo, 'CLAUDE.md'),
+      `# my own project notes\n\n${original}\nmy own trailing note\n`, 'utf8');
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(claude, 'settings.local.json'), 'utf8'));
+    assert.ok(settings.hooks && Object.keys(settings.hooks).length,
+      'sanity: the emit did not wire any hooks, so unwiring them proves nothing');
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+
+    for (const gone of ['skills', 'agents', GLOBAL_MANIFEST]) {
+      assert.ok(!fs.existsSync(path.join(claude, gone)), `${gone} survived`);
+    }
+    assert.ok(fs.statSync(path.join(claude, 'memory')).isDirectory(), 'the memory store went');
+    assert.ok(fs.existsSync(path.join(repo, 'CLAUDE.md')),
+      'CLAUDE.md was deleted even though the user had written in it');
+    const remaining = fs.readFileSync(path.join(repo, 'CLAUDE.md'), 'utf8');
+    assert.ok(remaining.includes('my own project notes'), remaining);
+    assert.ok(remaining.includes('my own trailing note'), remaining);
+    const after2 = JSON.parse(fs.readFileSync(path.join(claude, 'settings.local.json'), 'utf8'));
+    assert.deepEqual(after2.hooks ?? {}, {}, 'Geneseed\'s hook groups were left wired');
+  });
+});
+
+test('an OpenCode project uninstall removes the files and the instructions entry', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'opencode', path.join(d, 'home'));
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
+    assert.ok(instructionsOf(repo).includes('AGENT.md'),
+      'sanity: the emit never wired an instructions entry');
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+
+    assert.ok(!fs.existsSync(path.join(repo, '.opencode')));
+    assert.ok(!fs.existsSync(path.join(repo, 'AGENT.md')));
+    assert.ok(fs.statSync(path.join(repo, 'memory')).isDirectory(), 'the memory store went');
+    assert.ok(!(instructionsOf(repo) ?? []).includes('AGENT.md'),
+      'opencode.json still points at a deleted AGENT.md');
+  });
+});
+
+test('an OpenCode uninstall goes by the manifest and leaves a hand-authored file', () => {
+  // The manifest is preferred over the old whole-tree rmtree, which ate everything under
+  // `.opencode/` indiscriminately. This is the test that says the difference is real.
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'opencode', path.join(d, 'home'));
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
+    const manifest = path.join(repo, '.opencode', GLOBAL_MANIFEST);
+    assert.ok(fs.statSync(manifest).isFile(),
+      'the opencode emit wrote no ownership manifest, so this test would pass by rmtree');
+    const mine = path.join(repo, '.opencode', 'agents', 'my-own-agent.md');
+    fs.writeFileSync(mine, "hand authored, not Geneseed's", 'utf8');
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+
+    // Everything Geneseed owned is gone…
+    assert.ok(!fs.existsSync(path.join(repo, '.opencode', 'agents', 'reviewer.md')));
+    assert.ok(!fs.existsSync(manifest));
+    assert.ok(!fs.existsSync(path.join(repo, 'AGENT.md')));
+    // …and the user's own file, in the very directory being cleaned, survived.
+    assert.ok(fs.statSync(mine).isFile(), 'the hand-authored agent was deleted');
+    assert.equal(fs.readFileSync(mine, 'utf8'), "hand authored, not Geneseed's");
+  });
+});
+
+test('a project uninstall deregisters the root from the install registry', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'claude\n', 'utf8');
+    registryRecord(repo);
+    assert.ok(registryRoots().map((r) => resolved(r)).includes(resolved(repo)),
+      'the record did not take, so the deregistration below proves nothing');
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0);
+    assert.deepEqual(registryRoots(), [],
+      'the registry still lists a root whose install has been removed — `upgrade` would '
+      + 'rebuild into it');
+  });
+});
+
+test('--archive-memory archives a project store', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));
+    const claude = path.join(repo, '.claude');
+    fs.writeFileSync(path.join(claude, 'memory', 'learned.md'), 'a fact', 'utf8');
+
+    const [rc] = captured(() => cmdUninstall(uninstallArgs(repo, { archiveMemory: true })));
+    assert.equal(rc, 0);
+    assert.ok(!fs.existsSync(path.join(claude, 'memory')));
+    const stampDirs = fs.readdirSync(path.join(claude, 'archived-memory'));
+    const hits = stampDirs
+      .map((s) => path.join(claude, 'archived-memory', s, 'learned.md'))
+      .filter((p) => fs.existsSync(p));
+    assert.equal(hits.length, 1, `expected exactly one archived copy, got ${hits.length}`);
+    assert.equal(fs.readFileSync(hits[0], 'utf8'), 'a fact');
+  });
+});
+
+test('no install at the target errors without raising', () => {
+  withDir((d) => {
+    const empty = path.join(d, 'empty');
+    fs.mkdirSync(empty);
+    const [rc, , err] = captured(() => cmdUninstall(uninstallArgs(empty)));
+    assert.equal(rc, 1);
+    assert.ok(err.includes('no Geneseed install detected'), err);
+  });
+});
+
+test('without --yes it refuses when non-interactive, and touches nothing', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));
+    // Force the non-interactive branch regardless of how the runner's stdin is attached,
+    // mirroring exactly what the verb checks. The reference replaces `sys.stdin.isatty`; here
+    // `isTTY` is a plain property, so it is set and restored the same way.
+    //
+    // FORCED RATHER THAN ASSUMED, and that matters on this platform: a redirected stdin still
+    // reads as a TTY to Python on Windows, so "the runner happens to be non-interactive" is
+    // not a safe premise for either implementation.
+    const saved = process.stdin.isTTY;
+    let rc;
+    let err;
+    try {
+      process.stdin.isTTY = false;
+      [rc, , err] = captured(() => cmdUninstall(uninstallArgs(repo, { yes: false })));
+    } finally {
+      process.stdin.isTTY = saved;
+    }
+    assert.equal(rc, 1);
+    assert.ok(err.includes('refusing to proceed without --yes'), err);
+    // Refusing must not PARTIALLY uninstall — the manifest is still there.
+    assert.ok(fs.existsSync(path.join(repo, '.claude', GLOBAL_MANIFEST)),
+      'the refusal removed something on its way out');
+  });
+});
+
+test('archiving a store moves it into a timestamped sibling', () => {
+  withDir((base) => {
+    const mem = path.join(base, 'memory');
+    fs.mkdirSync(mem, { recursive: true });
+    fs.writeFileSync(path.join(mem, 'MEMORY.md'), '# Memory Index\n- [x](x.md)\n', 'utf8');
+    const dest = archiveStore(mem);
+    assert.ok(!fs.existsSync(mem), 'the original was copied, not moved');
+    assert.equal(path.dirname(dest), path.join(base, 'archived-memory'));
+    assert.ok(fs.statSync(path.join(dest, 'MEMORY.md')).isFile(), 'the contents did not travel');
   });
 });
 
