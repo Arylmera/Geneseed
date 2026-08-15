@@ -95,6 +95,45 @@ test("a retirement names what makes the property unobservable", () => {
   }
 });
 
+// THE `why` HAD NO GATE AT ALL until this, which is the ledger's own failure mode reaching the
+// ledger. Every other field here is checked against reality; `why` — the field the phase plan
+// calls the deliverable, the one a later session reads to find out what a port cost — could be
+// empty, or could quietly stay "TODO", and every check in this file would still be green. A row
+// that names a Node successor without saying what changed is exactly the under-port this ledger
+// exists to make visible.
+//
+// AN ARRAY IS ALLOWED, and that is the second half of the fix. `test_harness.py`'s reason grew
+// past 20 kB as a single JSON string — seventeen blocks of findings with no way to see where one
+// ended — so a row may carry its reason as a list of paragraphs, exactly as `doc` above does.
+// The floor is deliberately low: this checks that somebody wrote something, not that they wrote
+// enough. The retirement rule five lines up is the strict one, because a retirement is where
+// coverage actually disappears.
+// SCOPED TO ROWS THAT ARE NOT RETIRED, and the first run of this gate is what established that
+// the two fields are a clean partition: all ten retired rows carry `retired` and no `why`, and
+// every other row carries `why`. A retirement's reason is gated five lines up and more strictly,
+// so asking for both would be asking twice for the same thing under two names.
+const reasonText = (r) => (Array.isArray(r.why) ? r.why.join("\n\n") : r.why);
+
+test("every row says what it cost", () => {
+  for (const r of rows.filter((r) => r.status !== "retired")) {
+    const why = reasonText(r);
+    assert.equal(
+      typeof why,
+      "string",
+      `${r.python}: why must be a string or an array of paragraphs, got ${typeof r.why}`,
+    );
+    assert.ok(
+      why.trim().length >= 80,
+      `${r.python}: why is ${why.trim().length} chars — a row that names a successor without ` +
+        `saying what the port cost is the under-port this ledger exists to catch`,
+    );
+    assert.ok(
+      !/^\s*(todo|tbd|wip)\b/i.test(why),
+      `${r.python}: why is still a placeholder`,
+    );
+  }
+});
+
 test("no file is claimed twice", () => {
   const seen = new Set();
   for (const r of rows) {
