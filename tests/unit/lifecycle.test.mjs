@@ -697,6 +697,162 @@ test('archiving a store moves it into a timestamped sibling', () => {
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// What a global uninstall says about the installs it did NOT touch, and the double-injection
+// warning a global Bob emit owes a surviving project Bob.
+//
+// BOTH NEED THE REGISTRY AND A CHILD EMIT TO SHARE ONE HOME, which the helpers above do not
+// give: `registryRecord` runs in THIS process and reads the process environment, while an emit
+// runs in a child that `homeOverrides` points at a different directory. So each test below
+// moves the PROCESS's home for its own duration and hands the child the same environment —
+// otherwise the child writes into one registry and the assertion reads another, and every one
+// of these tests passes for the wrong reason.
+
+/**
+ * Move this process's home (and any relocation var) for the duration of `fn`.
+ *
+ * THE RELOCATION VAR HAS TO BE ON THIS PROCESS, NOT ONLY ON THE CHILD, and the reference says
+ * why in its own fixture: `uninstallResolve`'s global arm only recognises a `--target` that IS
+ * the host's own `configDir()`. Set it for the child alone and the emit lands in the right
+ * place while the resolver — running here — still looks at the real one, so the uninstall
+ * reports "no install" and every assertion after it is about the wrong directory.
+ */
+function withHome(dir, fn, extra = {}) {
+  const vars = { ...homeOverrides(dir), ...extra };
+  const saved = {};
+  for (const k of Object.keys(vars)) saved[k] = process.env[k];
+  Object.assign(process.env, vars);
+  try {
+    return fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+/** An emit in a child that INHERITS this process's (already redirected) environment. */
+function emitInherited(argv, extraEnv = {}) {
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    env: { ...process.env, ...extraEnv },
+    maxBuffer: 1 << 26,
+    windowsHide: true,
+  });
+  return { rc: r.status, out: r.stdout || '', err: r.stderr || '' };
+}
+
+test('a global uninstall reports the project installs it did not touch', () => {
+  // A global uninstall never touches a project install — project hooks call the shared
+  // checkout by absolute path, not the config dir being removed — but the operator should
+  // still be told what else is out there, and told how to remove it.
+  withDir((d) => {
+    const gcfg = path.join(d, 'gcfg');
+    withHome(path.join(d, 'home'), () => {
+      const proj = path.join(d, 'proj');
+      fs.mkdirSync(gcfg, { recursive: true });
+      fs.mkdirSync(proj, { recursive: true });
+      const r1 = emitInherited(['--emit', 'claude', '--theme', 'neutral',
+        '--out', proj, '--root', proj]);
+      assert.equal(r1.rc, 0, r1.err.slice(-800));
+      fs.writeFileSync(path.join(proj, '.geneseed-emit'), 'claude\n', 'utf8');
+      registryRecord(proj);
+      const r2 = emitInherited(['--emit', 'opencode-global', '--theme', 'neutral'],
+        { OPENCODE_CONFIG_DIR: gcfg });
+      assert.equal(r2.rc, 0, r2.err.slice(-800));
+
+      const [rc, out] = captured(() => cmdUninstall(uninstallArgs(gcfg)));
+      assert.equal(rc, 0, out);
+      assert.ok(out.includes(resolved(proj)), out);
+      assert.ok(out.includes('claude:project'), out);
+      // THE COMMAND IS THE POINT. Naming a surviving install without saying how to remove it
+      // leaves the operator to guess the exact `--target` spelling the resolver accepts.
+      assert.ok(out.includes(`--target "${resolved(proj)}"`), out);
+    }, { OPENCODE_CONFIG_DIR: gcfg });
+  });
+});
+
+test('a global uninstall with no survivors prints no inventory', () => {
+  withDir((d) => {
+    const gcfg = path.join(d, 'gcfg');
+    withHome(path.join(d, 'home'), () => {
+      fs.mkdirSync(gcfg, { recursive: true });
+      const r = emitInherited(['--emit', 'opencode-global', '--theme', 'neutral'],
+        { OPENCODE_CONFIG_DIR: gcfg });
+      assert.equal(r.rc, 0, r.err.slice(-800));
+      const [rc, out] = captured(() => cmdUninstall(uninstallArgs(gcfg)));
+      assert.equal(rc, 0, out);
+      assert.ok(!out.includes('project install(s) remain'), out);
+    }, { OPENCODE_CONFIG_DIR: gcfg });
+  });
+});
+
+test('a global Bob emit warns when a project Bob install survives', () => {
+  // A PROJECT Bob install writes the full preamble into the repo-root AGENTS.md; a GLOBAL one
+  // writes it into `<cfg>/rules/geneseed.md`. With both present for the same repo, Bob may
+  // auto-load BOTH — the agent then reads its whole harness twice. The emit warns rather than
+  // removing anything, because which of the two the user wants is not the emit's call.
+  withDir((d) => {
+    const gcfg = path.join(d, 'gcfg');
+    withHome(path.join(d, 'home'), () => {
+      const proj = path.join(d, 'proj');
+      fs.mkdirSync(proj, { recursive: true });
+      const r1 = emitInherited(['--emit', 'bob', '--theme', 'neutral',
+        '--out', proj, '--root', proj]);
+      assert.equal(r1.rc, 0, r1.err.slice(-800));
+      fs.writeFileSync(path.join(proj, '.geneseed-emit'), 'bob\n', 'utf8');
+      registryRecord(proj);
+
+      const r2 = emitInherited(['--emit', 'bob-global', '--theme', 'neutral'],
+        { BOB_CONFIG_DIR: gcfg });
+      assert.ok(r2.err.includes(resolved(proj)), r2.err);
+      assert.ok(r2.err.includes(`--target "${resolved(proj)}"`), r2.err);
+      assert.ok(r2.err.includes('uninstall'), r2.err);
+      // NON-BLOCKING. A warning that aborted the emit would make the safe thing (installing
+      // globally) impossible for anyone who already has a project install.
+      assert.equal(r2.rc, 0, r2.err.slice(-800));
+      assert.ok(fs.statSync(path.join(gcfg, 'rules', 'geneseed.md')).isFile(),
+        'the warning stopped the global emit from completing');
+    }, { BOB_CONFIG_DIR: gcfg });
+  });
+});
+
+test('a global Bob emit is silent with no project survivors', () => {
+  withDir((d) => {
+    const gcfg = path.join(d, 'gcfg');
+    withHome(path.join(d, 'home'), () => {
+      const r = emitInherited(['--emit', 'bob-global', '--theme', 'neutral'],
+        { BOB_CONFIG_DIR: gcfg });
+      assert.equal(r.rc, 0, r.err.slice(-800));
+      assert.equal(r.err, '', `a clean machine was warned anyway:\n${r.err}`);
+    }, { BOB_CONFIG_DIR: gcfg });
+  });
+});
+
+test('a global Bob emit ignores a project install for another host', () => {
+  // Only a `bob` project marker qualifies. A registered claude or opencode project install is
+  // not a double injection, and warning about it would train the user to ignore the warning.
+  withDir((d) => {
+    const gcfg = path.join(d, 'gcfg');
+    withHome(path.join(d, 'home'), () => {
+      const proj = path.join(d, 'proj');
+      fs.mkdirSync(proj, { recursive: true });
+      const r1 = emitInherited(['--emit', 'claude', '--theme', 'neutral',
+        '--out', proj, '--root', proj]);
+      assert.equal(r1.rc, 0, r1.err.slice(-800));
+      fs.writeFileSync(path.join(proj, '.geneseed-emit'), 'claude\n', 'utf8');
+      registryRecord(proj);
+
+      const r2 = emitInherited(['--emit', 'bob-global', '--theme', 'neutral'],
+        { BOB_CONFIG_DIR: gcfg });
+      assert.equal(r2.rc, 0, r2.err.slice(-800));
+      assert.equal(r2.err, '', `a claude project install tripped the Bob warning:\n${r2.err}`);
+    }, { BOB_CONFIG_DIR: gcfg });
+  });
+});
+
 test('colour adds ANSI without changing the line count', () => {
   const d = statusData();
   const plain = statusLines(d, false);
