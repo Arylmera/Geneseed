@@ -723,6 +723,7 @@ cell("argparse: an invalid --host choice is argparse's own refusal, exit 2",
      argv=["--host", "nope"],
      build=lambda home, proj: None,
      prog_subst=True,
+     argparse_owns_the_choice_list=True,
      expect_rc=2,
      expect_stdout_empty=True,
      expect_err=[b"usage: @PROG@ [-h]",
@@ -860,6 +861,37 @@ class TokenReportParity(unittest.TestCase):
             squash = lambda b: re.sub(rb"\n +", b"\n ", b)   # noqa: E731
             out_p, out_n = squash(out_p), squash(out_n)
             err_p, err_n = squash(err_p), squash(err_n)
+
+        if spec.get("argparse_owns_the_choice_list"):
+            # CPython OWNS this rendering and CHANGES it. The invalid-choice message
+            # used to list the choices bare and now lists them quoted; the change
+            # landed inside 3.13, and ci.yml pins `python-version: "3.13"` with no
+            # patch digit — deliberately, because tracking the newest patch is what
+            # catches these. So the REFERENCE's spelling varies by runner while the
+            # PORT's cannot: it has no argparse to ask, and after P4 no CPython to
+            # follow. Freezing the port to today's spelling would just relocate the
+            # breakage to whichever machine disagrees next.
+            #
+            # So the choice LIST is normalised on both sides and everything around it
+            # stays byte-compared. The absolute assertions below are what stop that
+            # being a hole: each side must independently have rendered all four hosts,
+            # in order, inside a `(choose from …)`. A side that stopped listing them,
+            # or listed them wrongly, still fails — only the quoting is forgiven.
+            #
+            # Not changing token_report.mjs is deliberate too: the corpus hashes that
+            # file, so editing it moves all 518 emit cells, and the final recording
+            # from the living reference has already been taken.
+            shape = re.compile(rb"\(choose from ([^)]*)\)")
+            for side, blob in (("reference", err_p), ("port", err_n)):
+                m = shape.search(blob)
+                self.assertIsNotNone(
+                    m, f"the {side} printed no choice list at all: {blob!r}")
+                listed = re.findall(rb"[a-z]+", m.group(1))
+                self.assertEqual(
+                    listed, [b"claude", b"bob", b"opencode", b"copilot"],
+                    f"the {side} listed the wrong hosts, or lost their order")
+            err_p = shape.sub(rb"(choose from <CHOICES>)", err_p)
+            err_n = shape.sub(rb"(choose from <CHOICES>)", err_n)
 
         # ---- the comparison -------------------------------------------------
         if spec.get("residual"):
