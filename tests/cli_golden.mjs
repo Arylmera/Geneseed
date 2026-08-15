@@ -15,6 +15,7 @@
 //   ... --cli "node bin/geneseed-cli.mjs" --hook "node bin/geneseed-hook.mjs"
 //   ... --only doctor/ --limit 5
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -52,6 +53,56 @@ export function parseArgs(argv) {
   return a;
 }
 
+// ---------------------------------------------------------------------------------------
+// THE NINE CELLS THE FROZEN CORPUS BINDS TO ONE MACHINE
+// ---------------------------------------------------------------------------------------
+//
+// `status` renders a box panel and pads every row out to the widest one. The widest row is
+// usually `components`, which is machine-independent — but the `AGENT.md` row carries the
+// sandbox path, and once that path is long enough the panel widens to fit it. The padding is
+// computed BEFORE the path is normalised to `<HOME>`, so the recorded panel width is a direct
+// readout of the RECORDING MACHINE'S temp-root length.
+//
+// Measured: this laptop's temp root is 33 characters and GitHub's Windows runner's is 39
+// (`guill` against `runneradmin`), and those six characters push the `AGENT.md` row past the
+// `components` row — so all nine cells replay six columns wider on every row, ~84 bytes of
+// `<stdout>` each.
+//
+// THIS CANNOT BE NORMALISED AWAY AFTER THE FACT, and that is the part worth stating. A corpus
+// stamp added now would change only the LIVE side: the recorded snapshot is a sha256 taken over
+// the bytes as they stood under the stamp table in force when it was recorded, and the corpus
+// can never be re-recorded. So there is no widening of the normaliser that makes these nine
+// pass — only a declaration of where they hold.
+//
+// `docs/port-ledger.md` predicted exactly this ("a different Windows username reddens it, and
+// after the reference is deleted a red padding run is unanswerable"). What is new is that a
+// Windows CI job now exists to make it concrete: the Python `cells` job is Linux-only, so the
+// `crlf` half had never been replayed anywhere but the machine that recorded it.
+//
+// SKIPPED, LOUDLY, AND ONLY WHERE THEY CANNOT HOLD. On the recording machine the length matches
+// and all nine run. Anywhere else they are announced by name with both lengths printed, because
+// a skip is not a pass.
+const PANEL_CELLS = new Set([
+  'status/a-bogus-footprint-marker-warns-on-stderr',
+  'status/a-directory-named-like-a-fact-is-not-counted',
+  'status/agent-md-missing-is-called-out',
+  'status/an-opencode-global-install',
+  'status/memory-index-and-readme-are-not-facts',
+  'status/no-memory-store-found',
+  'status/posture-and-mode-in-the-carrier-change-nothing',
+  'status/the-ascii-overlay-swaps-every-glyph',
+  'status/theme-detected-from-the-agent-md-sigil',
+]);
+
+// The temp-root length the `crlf` corpus was recorded under. Measured, not guessed:
+// `C:\Users\guill\AppData\Local\Temp` is 33 characters. The `lf` half is recorded and replayed
+// on the same ubuntu image, where `/tmp` is 4 on both, so the check is a no-op there.
+const RECORDED_TMP_ROOT_LEN = process.platform === 'win32' ? 33 : 4;
+
+export function panelCellsHold() {
+  return fs.realpathSync.native(os.tmpdir()).length === RECORDED_TMP_ROOT_LEN;
+}
+
 export function narrowingReason(a) {
   const why = [];
   if (a.only) why.push(`--only ${a.only}`);
@@ -77,12 +128,19 @@ export function narrowingReason(a) {
  * where `execvpe` resolves against the CHILD's PATH and `CreateProcess` resolves against the
  * parent's. `process.execPath` is not under ROOT, so `repoint` leaves it alone and a checkout
  * cell still runs the copy's script with the machine's own node.
+ *
+ * A SCRIPT, NOT ANY TOKEN THAT NAMES SOMETHING. The first draft resolved every argument whose
+ * name existed under ROOT, which turned the VERB `web` — in `node bin/geneseed-cli.mjs web` —
+ * into `<ROOT>/web`, the source directory of the console. The CLI answered `invalid choice` and
+ * all 114 web cells reported their server as failing to start. A candidate command is an
+ * interpreter plus a script plus verbs, and only the script is a path.
  */
 export function resolveCli(cmd) {
   return cmd.split(' ').filter(Boolean).map((tok, i) => {
     if (i === 0) return tok === 'node' ? process.execPath : tok;
+    if (!/\.(?:mjs|cjs|js)$/.test(tok)) return tok;
     const abs = path.resolve(ROOT, tok);
-    return fs.existsSync(abs) ? abs : tok;
+    return fs.existsSync(abs) && fs.statSync(abs).isFile() ? abs : tok;
   });
 }
 
@@ -142,9 +200,19 @@ function main(argv) {
   console.log(`[cli-golden] not run on this platform (${other.length}): ${other.join(', ')}`);
 
   const bins = { cli: resolveCli(a.cli), hook: resolveCli(a.hook) };
+  const panelsHold = panelCellsHold();
+  if (!panelsHold) {
+    console.log(`[cli-golden] ${PANEL_CELLS.size} PANEL cells SKIPPED — this machine's temp root `
+      + `is ${fs.realpathSync.native(os.tmpdir()).length} characters and the corpus was recorded `
+      + `under ${RECORDED_TMP_ROOT_LEN}. status pads its box before the path is normalised, so `
+      + `the recorded width is a readout of the recorder's path length and no stamp added now `
+      + `can reach a sha256 taken before it existed:\n`
+      + [...PANEL_CELLS].map((c) => `    ${c}`).join('\n'));
+  }
   const failures = [];
   let done = 0;
   for (const cell of cells) {
+    if (!panelsHold && PANEL_CELLS.has(cell.id)) { done += 1; continue; }
     const snap = runCell(bins[cell.bin || 'hook'], cell);
     if (typeof snap === 'string') {
       failures.push(`  ${cell.id}: CLI failed\n    ${snap}`);

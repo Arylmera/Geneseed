@@ -61,14 +61,14 @@
       "python": "tests/web_golden.py",
       "kind": "harness",
       "py_tests": 0,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/helpers/web_golden.mjs",
+        "tests/web_golden.mjs",
         "tests/helpers/matrix/web.win32.json",
-        "tests/helpers/matrix/web.posix.json",
-        "tests/web_golden.test.mjs"
+        "tests/helpers/matrix/web.posix.json"
       ],
-      "why": "The web console matrix: 114 cells, each a request script over one reused connection against a daemon started with --daemon-internal --port 0. Cells cross as JSON once the request bodies (the only non-JSON values in any of the three matrices) are base64-encoded. The runtime that ports: _drive, _wait_for_record, _stop, _decode_body, the dynamic and corpus stamp tables, _corpus_normalise, run_cell, check_expectations."
+      "why": "The web console matrix: 114 cells, each a request script over ONE reused connection against a daemon started with --daemon-internal --port 0. That shape is the point — keep-alive, caching and compression are properties of a CONNECTION, and a harness that opened a socket per request could not see any of them; Node reaches it with a keepAlive agent capped at one socket. 114/114 replay green from Node, orphan check clean, from both entries. Four things had to be reproduced rather than translated: rawHeaders (the recorded header column is a transcript of the order and spelling the server sent, which Node's parsed headers object loses); no Accept-Encoding unless the cell sends one, because the gzip branch is chosen by the header's presence; the gzip body compared INFLATED, since the two runtimes' zlib builds emit different DEFLATE streams at identical settings and a port cannot fix or be blamed for that; and clockRepl subtracting the timezone offset, because date.fromtimestamp is local where toISOString is UTC. The one cell that disagreed was a THIRD regex-layer divergence: Python's re.sub replacement is a template where `\\` means one literal backslash, and JavaScript's String.replace gives `\\` no meaning at all — so the same spelling emitted one backslash too many inside a JSON string. It surfaced as VACUOUS rather than as a byte diff, because the cell's own expect names the tag the substitution produces: the absolute tier doing exactly the job it was ported for."
     },
     {
       "python": "tests/snapshot_io.py",

@@ -168,6 +168,17 @@ jobs:
       # PRINTS the half it did not run, so a run says out loud what it skipped.
       - name: cli_golden — the recorded CLI corpus, replayed
         run: node tests/cli_golden.mjs --against tests/__snapshots__/cli
+      # The web console corpus — 114 cells, each a request script over one reused connection
+      # against a daemon started with `--daemon-internal --port 0`.
+      #
+      # BOTH ENTRIES, because a second driver does not inherit the first's proof: `js/web/
+      # server.mjs` is the daemon's own entry and `bin/geneseed-cli.mjs web` is the CLI's. That
+      # was P4a's finding and it matters most here, since a corpus replay is the only one of the
+      # two gates that survives the reference.
+      - name: web_golden — the recorded web corpus, replayed from both entries
+        run: |
+          node tests/web_golden.mjs --against tests/__snapshots__/web --cli "node js/web/server.mjs"
+          node tests/web_golden.mjs --against tests/__snapshots__/web --cli "node bin/geneseed-cli.mjs web"
 
   # RECORD THE LINUX CORPUS — all three matrices. Manual dispatch only: `if:` keeps it off
   # every push, because it gates nothing and re-runs 691 cells.
