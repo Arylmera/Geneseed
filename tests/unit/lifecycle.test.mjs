@@ -26,8 +26,9 @@ import { spawnSync } from 'node:child_process';
 import { sourceFingerprint, readVersion, versionIsNewer } from '../../js/emit.mjs';
 import { sourceReleaseVersion } from '../../js/opencode.mjs';
 import { versionVerdict, statusData, statusLines } from '../../js/status.mjs';
-import { uninstallGlobal, unmergeOpencodeJson } from '../../js/uninstall.mjs';
-import { VERSION_MARKER, GLOBAL_MANIFEST } from '../../js/hosts.mjs';
+import { uninstallGlobal, unmergeOpencodeJson, uninstallResolve } from '../../js/uninstall.mjs';
+import { VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir } from '../../js/hosts.mjs';
+import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
 import { CONFIG, ROOT, SRC, makeCfg } from '../../js/checkout.mjs';
 import { makeSandbox, homeOverrides } from '../helpers/sandbox.mjs';
 
@@ -350,6 +351,156 @@ test('the unmerge edits a comment-free JSONC file', () => {
     const changed = unmergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md');
     assert.equal(changed, true);
     assert.deepEqual(JSON.parse(fs.readFileSync(jc, 'utf8')).instructions, ['other.md']);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `uninstallResolve` — a bare `--target` (or the cwd) into [host, scope, root], for BOTH global
+// and project installs.
+
+/** `--emit <kind> --out <repo> --root <repo>` — a project install, made by the public entry. */
+function projectInstall(repo, kind, home) {
+  fs.mkdirSync(repo, { recursive: true });
+  const r = spawnSync(process.execPath,
+    [path.join(ROOT, 'bin', 'geneseed.mjs'), '--emit', kind, '--theme', 'neutral',
+      '--out', repo, '--root', repo],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: { ...process.env, ...homeOverrides(home) },
+      maxBuffer: 1 << 26,
+      windowsHide: true,
+    });
+  if (r.status !== 0) {
+    throw new Error(`emit ${kind} failed (${r.status}): `
+      + `${(r.stderr || r.stdout || '').slice(-1500)}`);
+  }
+  return repo;
+}
+
+/** `os.chdir` with the reference's tearDown, which every one of these tests needs. */
+function inCwd(dir, fn) {
+  const saved = process.cwd();
+  process.chdir(dir);
+  try { return fn(); } finally { process.chdir(saved); }
+}
+
+// `pyResolve(repo)` is what every branch of the resolver returns, so the expectation is the
+// resolved spelling — not the one the fixture happened to hand out.
+const resolved = (p) => fs.realpathSync.native(p);
+
+test('an explicit repo target resolves to that project', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));
+    assert.deepEqual(uninstallResolve(repo), ['claude', 'project', resolved(repo)]);
+  });
+});
+
+test('an explicit marker-dir target resolves to its parent', () => {
+  // The pre-existing single-target convention: point straight at `.claude/` itself.
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));
+    assert.deepEqual(uninstallResolve(path.join(repo, '.claude')),
+      ['claude', 'project', resolved(repo)]);
+  });
+});
+
+test('with no target the cwd is what qualifies', () => {
+  withDir((d) => {
+    const repo = projectInstall(path.join(d, 'repo'), 'opencode', path.join(d, 'home'));
+    // An OpenCode project install carries no manifest — the emit marker is what qualifies
+    // the root.
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
+    inCwd(repo, () => {
+      assert.deepEqual(uninstallResolve(null), ['opencode', 'project', resolved(repo)]);
+    });
+  });
+});
+
+test('a cwd reached under a SECOND SPELLING still resolves to the same root', (t) => {
+  // THE REFERENCE SKIPS THIS EVERYWHERE BUT WINDOWS, and it does not have to. Its version
+  // calls GetShortPathNameW, so 8.3 is the only alias it knows and every POSIX run reports
+  // the test as skipped — the property (the cwd fallback CANONICALISES rather than returning
+  // `cwd()` verbatim) is platform-independent and was simply ungated off Windows.
+  // `tests/helpers/alias.mjs` produces an 8.3 name where one exists and a junction/symlink
+  // where one does not, so this now runs on both.
+  //
+  // The bug it reproduces was real and came from CI: chdir-ing into the short form returned a
+  // root that compared UNEQUAL to the same directory's resolved path.
+  const alias = aliasedTemp();
+  // A LOUD skip, not a silent return. A test that quietly passes when its fixture could not
+  // be built reports coverage it does not have — which is the same failure as the reference's
+  // POSIX skip, only harder to see.
+  if (alias === null) { t.skip(ALIAS_SKIP); return; }
+  try {
+    const repo = projectInstall(path.join(alias.real, 'repo'), 'opencode',
+      path.join(alias.real, 'home'));
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
+    const viaAlias = path.join(alias.alias, 'repo');
+    assert.notEqual(viaAlias, repo, `${ALIAS_SKIP} (${alias.kind})`);
+    inCwd(viaAlias, () => {
+      assert.deepEqual(uninstallResolve(null), ['opencode', 'project', resolved(repo)]);
+    });
+  } finally {
+    alias.done();
+  }
+});
+
+test('no target and no project marker falls back to the OpenCode global default', () => {
+  withDir((d) => {
+    inCwd(d, () => {
+      const hit = uninstallResolve(null);
+      // The host and the scope are the claim; the path is compared last because comparing
+      // `opencodeConfigDir()` with itself is only a statement about which BRANCH was taken.
+      assert.equal(hit[0], 'opencode');
+      assert.equal(hit[1], 'global');
+      assert.equal(hit[2], opencodeConfigDir());
+    });
+  });
+});
+
+test('someone else\'s plain .claude/ does not hijack the default', () => {
+  // A repo with the user's OWN `.claude/` — no Geneseed manifest, no emit marker — is NOT a
+  // Geneseed project install. Bare `uninstall` must keep the legacy global default, and an
+  // explicit `--target` at the repo must find NOTHING rather than offering to delete it.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(path.join(repo, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.claude', 'settings.json'), '{}', 'utf8');
+    inCwd(repo, () => {
+      const hit = uninstallResolve(null);
+      assert.equal(hit[0], 'opencode');
+      assert.equal(hit[1], 'global');
+    });
+    assert.equal(uninstallResolve(repo), null);
+    assert.equal(uninstallResolve(path.join(repo, '.claude')), null);
+  });
+});
+
+test('a global config dir target is classified global, not project', () => {
+  // `--target <global cfg dir>` must resolve global even though the directory is NAMED like a
+  // project marker (`~/.claude`, `~/.bob`) — never `<host>:project` rooted at its parent,
+  // which would offer to uninstall the user's HOME. Driven through $BOB_CONFIG_DIR so no real
+  // home is touched, which is also the only way the port can reach it at all.
+  withDir((d) => {
+    const gdir = path.join(d, '.bob');
+    fs.mkdirSync(gdir, { recursive: true });
+    const saved = process.env.BOB_CONFIG_DIR;
+    process.env.BOB_CONFIG_DIR = gdir;
+    try {
+      assert.deepEqual(uninstallResolve(gdir), ['bob', 'global', resolved(gdir)]);
+    } finally {
+      if (saved === undefined) delete process.env.BOB_CONFIG_DIR;
+      else process.env.BOB_CONFIG_DIR = saved;
+    }
+  });
+});
+
+test('an unknown target resolves to nothing', () => {
+  withDir((d) => {
+    const empty = path.join(d, 'nothing-here');
+    fs.mkdirSync(empty);
+    assert.equal(uninstallResolve(empty), null);
   });
 });
 
