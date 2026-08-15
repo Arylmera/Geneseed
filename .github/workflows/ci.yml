@@ -157,6 +157,17 @@ jobs:
         run: node tests/golden.mjs --idempotent
       - name: golden — the prune
         run: node tests/golden.mjs --deletion
+      # The CLI verb corpus — 317 cells over 25 verbs, and the ~800 absolute `expect_*`
+      # assertions they carry inline. The absolute tier runs FIRST against the candidate, so a
+      # cell that has stopped exercising what it names is reported VACUOUS rather than compared:
+      # a corpus recorded from an implementation that had gone silent would otherwise say
+      # nothing, green, forever.
+      #
+      # This job also asserts the PLATFORM UNION from either host — every id declared for this
+      # platform is built, every id declared for the other is absent, neither half empty — and
+      # PRINTS the half it did not run, so a run says out loud what it skipped.
+      - name: cli_golden — the recorded CLI corpus, replayed
+        run: node tests/cli_golden.mjs --against tests/__snapshots__/cli
 
   # RECORD THE LINUX CORPUS — all three matrices. Manual dispatch only: `if:` keeps it off
   # every push, because it gates nothing and re-runs 691 cells.

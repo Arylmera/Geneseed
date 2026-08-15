@@ -30,12 +30,21 @@
 // `process.execPath`, which on Windows is `C:\Program Files\nodejs\node.exe`. A property of the
 // interface being tested, not of this file.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
+// THE ECHO GOES THROUGH THE PLATFORM'S LINE SEPARATOR, and the reply below does not. That
+// asymmetry is the reference's, reproduced deliberately: the echo is written with
+// `Path.write_text` (text mode, so `\n` becomes `os.linesep`) while the reply is written to
+// `sys.stdout.buffer` as raw bytes. Getting it wrong is invisible in a terminal and worth 37
+// bytes per prompt against the `crlf` corpus — which is exactly what the first draft of this
+// file cost, on every `learn` cell at once.
 const echo = process.env.FAKE_LLM_ECHO;
 if (echo) {
   fs.mkdirSync(path.dirname(echo), { recursive: true });
-  fs.writeFileSync(echo, Buffer.from(process.argv[2] ?? '', 'utf8'));
+  const prompt = process.argv[2] ?? '';
+  fs.writeFileSync(echo, Buffer.from(os.EOL === '\n' ? prompt : prompt.replaceAll('\n', os.EOL),
+    'utf8'));
 }
 
 const src = process.env.FAKE_LLM_OUT;

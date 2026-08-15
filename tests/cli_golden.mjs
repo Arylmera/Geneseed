@@ -69,13 +69,18 @@ export function narrowingReason(a) {
  * the spawn produced no output, so every `expect` failed, and the report read like the port had
  * gone silent rather than like the harness had pointed at nothing.
  *
- * The INTERPRETER is left as a bare name on purpose — `repoint` rewrites paths under ROOT into
- * the copied checkout, and a checkout cell must run the copy's script with the machine's own
- * `node`, not a `node` inside the copy.
+ * THE INTERPRETER IS RESOLVED TOO, and leaving it bare was the second half of the same bug.
+ * Several cells REPLACE `PATH` — the `link`/`unlink` ones hand the verb a PATH with no
+ * `powershell` on it, which is how the "said nothing about PATH" branch is reached honestly —
+ * and `spawnSync` then cannot find a bare `node` at all: 12 cells reported `spawn node ENOENT`
+ * and were scored as the CLI crashing. The reference hit the mirror image of this on Linux,
+ * where `execvpe` resolves against the CHILD's PATH and `CreateProcess` resolves against the
+ * parent's. `process.execPath` is not under ROOT, so `repoint` leaves it alone and a checkout
+ * cell still runs the copy's script with the machine's own node.
  */
 export function resolveCli(cmd) {
   return cmd.split(' ').filter(Boolean).map((tok, i) => {
-    if (i === 0) return tok;
+    if (i === 0) return tok === 'node' ? process.execPath : tok;
     const abs = path.resolve(ROOT, tok);
     return fs.existsSync(abs) ? abs : tok;
   });

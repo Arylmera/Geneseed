@@ -77,7 +77,29 @@ const TMP_ROOT = fs.realpathSync.native(os.tmpdir());
  * and losing 318 green cells to a temp entry nobody reads is the wrong trade. At most one temp
  * tree is left behind on a race.
  */
-export function makeSandbox(prefix = 'gs-') {
+/**
+ * THE DEFAULT PREFIX IS FIVE CHARACTERS, AND THAT IS A BYTE-FIDELITY CONSTRAINT, not a style.
+ *
+ * `mkdtempSync` appends exactly six random characters, so a five-character prefix produces an
+ * 11-character directory name — the same length CPython's `tempfile.mkdtemp()` produces with
+ * its default `tmp` prefix and eight random characters. The name itself is irrelevant: every
+ * sandbox path is normalised to `<SB>`/`<HOME>` before comparison.
+ *
+ * THE LENGTH IS NOT. `status` renders a box panel and pads each row out to the widest one, and
+ * the padding is computed BEFORE the path is normalised — so the recorded panel width is a
+ * direct readout of the recording harness's sandbox path length. Measured: a `gs-cli-` prefix
+ * (13 characters) made every `status` cell replay two columns wider than the corpus, in the box
+ * borders that carry no path tag and are therefore compared in full.
+ *
+ * `docs/port-ledger.md` already names this class — "a LENGTH, not a value" — and states that a
+ * different Windows username reddens it and that after the reference is deleted a red padding
+ * run is unanswerable. This is the same hazard reached from the other side: the corpus cannot
+ * be re-recorded, so the replayer reproduces the recorder's conditions, exactly as it already
+ * reproduces `text=True` newline translation and `write_text`'s line-separator rule.
+ */
+export const CPYTHON_MKDTEMP_PREFIX = 'tmpgs';
+
+export function makeSandbox(prefix = CPYTHON_MKDTEMP_PREFIX) {
   const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(TMP_ROOT, prefix)));
   return {
     path: dir,

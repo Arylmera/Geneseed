@@ -44,7 +44,18 @@ const STAMPS = [
   // the port, not a defect in it. Anchored at line start and requiring a non-empty value, so a
   // side that stopped writing the line leaves no tag and its cell's `expect` fails rather than
   // comparing equal to nothing.
-  [/^command: .+$/gm, 'command: <ARGV>'],
+  //
+  // `[^\n]+` AND NOT `.+$`, AND THE DIFFERENCE IS ONE BYTE PER CELL. Python's `re.M` `$`
+  // matches only before a `\n`; JavaScript's `m` flag also treats `\r`, `<U+2028>` and `<U+2029>`
+  // as line terminators. So Python's greedy `.+$` consumes the `\r` of a CRLF line and the
+  // replacement eats it, while the same pattern here backtracks to before the `\r` and leaves
+  // it. The reference's install log ends `command: <ARGV>\n`; this one ended
+  // `command: <ARGV>\r\n`, and that was the last of 317 cells to disagree.
+  //
+  // Found by running the REFERENCE harness over the same cell with the same Node binary
+  // against the same corpus: it passed, which located the byte in this replayer rather than in
+  // the port. A cross-implementation oracle is worth most on the one cell that is left.
+  [/^command: [^\n]+/gm, 'command: <ARGV>'],
   // The Windows link shim's one real line: an interpreter and an entry point. Two non-empty
   // quoted values required, for the reason above. `@echo off` and the double carriage return
   // are outside the match and stay byte-compared.
@@ -54,7 +65,8 @@ const STAMPS = [
   [/^exec "[^"\r\n]+" "[^"\r\n]+" "\$@"/gm, 'exec "<RUNNER>" "<ENTRY>" "$@"'],
   // `linked <dest> -> <entry>` names the same entry point in stdout. Anchored to the one
   // message this verb prints, so it cannot reach any other `->` in the corpus.
-  [/^(geneseed: linked .+) -> .+$/gm, '$1 -> <ENTRY>'],
+  // `[^\n]` for the reason the `command:` entry above gives at length.
+  [/^(geneseed: linked [^\n]+) -> [^\n]+/gm, '$1 -> <ENTRY>'],
 ];
 
 // The build date and the live source fingerprint are NOT destamped here, deliberately: they
@@ -180,6 +192,11 @@ export function copyCheckout(dst, faults) {
   plant(dst, faults);
 }
 
+// THROUGH `writeText`, for the same reason `seed` is: the reference plants a fault with
+// `Path.write_text`, whose text mode translates `\n` to the platform separator. A raw write made
+// every planted file one byte short per line — `bundle/context.json` recorded at 18 bytes
+// replayed at 17. The same rule in a second place, which is why both call the product's owner of
+// it rather than each keeping a copy.
 function plant(dst, faults) {
   for (const [rel, text] of Object.entries(faults || {})) {
     const p = path.join(dst, rel);
@@ -188,7 +205,7 @@ function plant(dst, faults) {
       continue;
     }
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, Buffer.from(text, 'utf8'));
+    writeText(p, text);
   }
 }
 
@@ -371,8 +388,8 @@ export function repoint(cli, checkout) {
 export function runCell(cli, cell) {
   const faults = cell.checkout;
   const gitstate = cell.git;
-  const sb = makeSandbox('gs-cli-');
-  const ctd = makeSandbox('gs-ck-');
+  const sb = makeSandbox();
+  const ctd = makeSandbox();
   try {
     const home = path.join(sb.path, 'home');
     const repo = path.join(sb.path, 'repo');

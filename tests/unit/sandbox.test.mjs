@@ -67,8 +67,13 @@ function shortName(dir) {
 // short-name lookup on an already-short path returns it unchanged, and a test built on one of
 // those would be green for the wrong reason.
 function aliasedTemp() {
-  const real = fs.realpathSync(fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),
-    'geneseed alias case ')));
+  // `.native` ON BOTH CALLS, and the fixture had the same defect as the helper it tests. On
+  // `windows-latest` the runner's own TEMP is ALREADY the 8.3 form, so a plain `realpathSync`
+  // left `C:\Users\RUNNER~1\…` as this fixture's idea of the canonical path — while
+  // `realpathSync.native` on the alias returned `C:\Users\runneradmin\…`, and the two
+  // disagreed. The gate then failed on its own baseline rather than on anything it gates.
+  const real = fs.realpathSync.native(fs.mkdtempSync(
+    path.join(fs.realpathSync.native(os.tmpdir()), 'geneseed alias case ')));
   const a = aliasOf(real);
   if (a === null || a.path === real) {
     fs.rmSync(real, { recursive: true, force: true });

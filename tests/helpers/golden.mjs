@@ -267,7 +267,7 @@ export function shimHealth(sandbox, emit) {
  * passes and the prune's `old_owned - owned` is always empty.
  */
 export function runCell(gen, cell, { repeat = 1 } = {}) {
-  const sb = makeSandbox('gs-emit-');
+  const sb = makeSandbox();
   try {
     const home = path.join(sb.path, 'home');
     const out = path.join(sb.path, 'out');

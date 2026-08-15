@@ -47,14 +47,15 @@
       "python": "tests/harness_golden.py",
       "kind": "harness",
       "py_tests": 0,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/helpers/cli_golden.mjs",
+        "tests/cli_golden.mjs",
+        "tests/unit/py_regex.test.mjs",
         "tests/helpers/matrix/cli.win32.json",
-        "tests/helpers/matrix/cli.posix.json",
-        "tests/cli_golden.test.mjs"
+        "tests/helpers/matrix/cli.posix.json"
       ],
-      "why": "The CLI verb matrix, and the single highest-value port out of the Python suite: its ~800 expect/expect_absent/expect_re/expect_silent/expect_files/expect_absent_files assertions are the only ones that say what the tool SHOULD print rather than what it did, and they are what stops a corpus recorded from an implementation that went silent from freezing that silence as correct. The 317 cells carry those assertions inline and cross as JSON with them. The runtime that ports: _seed, _subst, _copy_checkout, _clone_checkout, _git_template, _repoint, run_cell, check_expectations, _destamp."
+      "why": "The CLI verb matrix, and the single highest-value port out of the Python suite: the ~800 absolute expect_* assertions carried inline in its 317 cells are the only ones that say what the tool SHOULD print rather than what it did, and the four hook verbs are silent on almost every path by design — so a corpus recorded from an implementation that had gone silent would say nothing, green, forever. The absolute tier therefore runs FIRST, against the candidate: a cell that has stopped exercising what it names is VACUOUS, never compared and never blessed. 317/317 replay green from Node with the orphan check clean. FIVE FIXTURE DEFECTS were found by running it rather than reading it, each a way the replayer must reproduce the RECORDER's conditions: a relative binary path (all cells vacuous), the seeded world's and the planted faults' \n->os.linesep translation, the fake LLM's echo (37 bytes per prompt) against its raw-bytes reply, the sandbox NAME LENGTH (status pads before normalisation, so CPython's 11-character mkdtemp names are frozen into the corpus), and Python's re.M `$` matching only before \n where JavaScript's `m` also treats \r as a terminator. The last one was located by running the REFERENCE harness over that one cell with the same Node binary against the same corpus: it passed, which put the byte in the replayer rather than in the port — a cross-implementation oracle earning its keep on the very last cell, and exactly the capability P4 removes."
     },
     {
       "python": "tests/web_golden.py",
