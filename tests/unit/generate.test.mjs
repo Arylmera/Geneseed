@@ -13,10 +13,12 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import {
-  substitute, effectiveTheme, themedRel, destRel, renderAll, STRUCTURE,
+  substitute, effectiveTheme, themedRel, destRel, renderAll, renderFile, STRUCTURE,
 } from '../../js/render.mjs';
 import { build } from '../../js/emit.mjs';
-import { isVendoredPath } from '../../js/native.mjs';
+import { isVendoredPath, loadAgentOverrides, writeNativeLayer } from '../../js/native.mjs';
+import { writePrimaryAgent, writeCommandLayer } from '../../js/opencode.mjs';
+import { mergeOpencodeJson } from '../../js/settings.mjs';
 import { themeFiles } from '../../js/installs.mjs';
 import { ROOT, makeCfg, discoverNames } from '../../js/checkout.mjs';
 import { parseDriverArgs, emitGlobalInto } from '../../bin/geneseed.mjs';
@@ -373,6 +375,172 @@ test('the notebook charter is agent-owned after seeding', () => {
     fs.writeFileSync(charter, '# My rules\nmine now\n');
     buildInto(out);
     assert.equal(fs.readFileSync(charter, 'utf8'), '# My rules\nmine now\n');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// A cycle in the INCLUDE graph — `CircularIncludeTests`.
+//
+// The reference rebinds `_build_core.SRC` to a temp dir, which §3.1 of the handoff records as an
+// injection point ESM does not have. It does not need one: `renderFile` resolves every include
+// against `cfg.src`, so the source root travels as an argument and a two-file source tree is a
+// plain object override. `copyCheckout` is for gates that re-enter through a child process.
+
+function renderInTempSrc(files, entry) {
+  return withDir((d) => {
+    for (const [name, body] of Object.entries(files)) fs.writeFileSync(path.join(d, name), body);
+    return renderFile({ ...makeCfg(), src: d }, path.join(d, entry), {});
+  });
+}
+
+test('a mutual include cycle is marked rather than recursed', () => {
+  const out = renderInTempSrc(
+    { 'a.md': 'A\n<!-- INCLUDE: b.md -->\n', 'b.md': 'B\n<!-- INCLUDE: a.md -->\n' }, 'a.md');
+  assert.ok(out.includes('<!-- CIRCULAR INCLUDE: a.md -->'));
+  // b IS inlined once before the hop back to a is caught: the marker replaces the edge that
+  // closes the cycle, not the whole subtree. A guard that bailed on first sight of any repeat
+  // would lose b's text entirely and still satisfy the line above.
+  assert.ok(out.includes('B'));
+});
+
+test('a self include is marked', () => {
+  assert.ok(renderInTempSrc({ 's.md': 'S\n<!-- INCLUDE: s.md -->\n' }, 's.md')
+    .includes('<!-- CIRCULAR INCLUDE: s.md -->'));
+});
+
+// ---------------------------------------------------------------------------------------------
+// The native agent layer — `NativeLayerTests` and `OpencodeExtrasTests`.
+//
+// What an agent is ALLOWED to do, which is the one thing in this file where a wrong decision is
+// not a cosmetic difference: a read-only reviewer that silently gained `edit` would look
+// identical in every emitted tree the corpus records except for four lines of front matter.
+
+const itemsOf = () => renderAll(cfg(), 'neutral').items;
+const native = (d, overrides = null) =>
+  writeNativeLayer(itemsOf(), path.join(d, 'agents'), path.join(d, 'skills'), overrides,
+    { src: cfg().src });
+
+test('read-only agents get a permission block and an editing agent does not', () => {
+  withDir((d) => {
+    native(d);
+    const agent = (n) => read(d, 'agents', `${n}.md`);
+    const [reviewer, explorer, architect, tester] =
+      ['reviewer', 'explorer', 'architect', 'tester'].map(agent);
+
+    // Read-only agents are denied edit and webfetch outright.
+    assert.match(reviewer, /permission:/);
+    assert.match(reviewer, /edit: deny/);
+    assert.match(reviewer, /webfetch: deny/);
+    // reviewer and explorer opt in to read-only bash and get `ask`; architect never opted in
+    // and is denied outright. The pair is the point — one `deny` proves nothing about whether
+    // the opt-in is read at all.
+    assert.match(reviewer, /"\*": ask/);
+    assert.match(explorer, /"\*": ask/);
+    assert.match(architect, /bash: deny/);
+    assert.ok(!architect.includes('"*": ask'));
+    // tester edits test files, so it is not read-only and carries no block at all.
+    assert.ok(!tester.includes('permission:'));
+  });
+});
+
+test('agent overrides are absent, parsed, or malformed — never fatal', () => {
+  withDir((d) => {
+    assert.deepEqual(loadAgentOverrides(d), {});                     // absent -> {}
+    fs.writeFileSync(path.join(d, 'agent-overrides.json'),
+      '{"agents": {"reviewer": {"model": "x/y", "temperature": 0.1}}}');
+    assert.equal(loadAgentOverrides(d).reviewer.model, 'x/y');
+    // Malformed degrades to {} rather than throwing: the file is user-editable and a typo in
+    // it must cost the overrides, not the emit.
+    fs.writeFileSync(path.join(d, 'agent-overrides.json'), '{ not json');
+    assert.deepEqual(loadAgentOverrides(d), {});
+  });
+});
+
+test('an override emits model and temperature only where one is set', () => {
+  withDir((d) => {
+    // THE OVERRIDES COME THROUGH THE PRODUCT'S OWN READER, and that is not decoration. A
+    // hand-built `{ temperature: 0.1 }` makes `pyStr` throw outright: it refuses a bare JS
+    // number because Python's `str` renders int 1 and float 1.0 differently and `JSON.parse`
+    // has already collapsed the two. `parseJson` is what carries the distinction, so the only
+    // faithful stand-in for the reference's Python dict literal is the JSON that produced it —
+    // which also makes this the real pipeline, the loader above feeding the writer here.
+    fs.writeFileSync(path.join(d, 'agent-overrides.json'),
+      '{"agents": {"reviewer": {"model": "anthropic/claude-haiku-4-5", "temperature": 0.1}}}');
+    native(d, loadAgentOverrides(d));
+    assert.match(read(d, 'agents', 'reviewer.md'), /model: anthropic\/claude-haiku-4-5/);
+    assert.match(read(d, 'agents', 'reviewer.md'), /temperature: 0\.1/);
+    // No override means no key at all, not an empty one: the agent inherits the host model,
+    // and an emitted `model:` with nothing behind it would pin it to the empty string.
+    assert.ok(!read(d, 'agents', 'tester.md').includes('model:'));
+  });
+});
+
+test('the primary agent and the command layer are opt-in', () => {
+  withDir((d) => {
+    // `truthyEnv` is read at CALL time here, not at import as `js/tui.mjs`'s tiers are, so
+    // this needs no child process — but it does need the restore, because the variable is
+    // process-wide and every later test in this file renders too.
+    const before = { GENESEED_PRIMARY: process.env.GENESEED_PRIMARY,
+      GENESEED_COMMANDS: process.env.GENESEED_COMMANDS };
+    delete process.env.GENESEED_PRIMARY;
+    delete process.env.GENESEED_COMMANDS;
+    const items = itemsOf();
+    // The source the driver hands in. Transcribed rather than exported, and self-checking:
+    // if it moved, `writePrimaryAgent` returns null and the opt-in assertion below fails.
+    const primarySrc = path.join(ROOT, 'adapters', 'opencode', 'agents', 'orchestrator.md');
+    assert.ok(isFile(primarySrc), 'the orchestrator source moved — this fixture is stale');
+    const c = { ...cfg(), primaryAgentSrc: primarySrc };
+    try {
+      assert.equal(writePrimaryAgent(c, path.join(d, 'agents'), {}), null, 'primary was on by default');
+      assert.deepEqual(writeCommandLayer(c, items, path.join(d, 'command')), []);
+
+      process.env.GENESEED_PRIMARY = '1';
+      process.env.GENESEED_COMMANDS = '1';
+      const p = writePrimaryAgent(c, path.join(d, 'agents'), {});
+      assert.ok(p, 'GENESEED_PRIMARY=1 did not produce the orchestrator');
+      assert.match(fs.readFileSync(p, 'utf8'), /mode: primary/);
+      const cmds = writeCommandLayer(c, items, path.join(d, 'command'));
+      assert.ok(cmds.some((x) => path.basename(x) === 'commit.md'));
+    } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k]; else process.env[k] = v;
+      }
+    }
+  });
+});
+
+test('the default permission policy is added only when absent', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    mergeOpencodeJson(p, 'AGENT.md');                                // fresh -> gets the default
+    let data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.ok('permission' in data);
+    assert.equal(data.permission.bash['rm -rf *'], 'ask');
+    // The Law XX backstop: every commit AND push is gated, not only a force-push.
+    assert.equal(data.permission.bash['git commit*'], 'ask');
+    assert.equal(data.permission.bash['git push*'], 'ask');
+
+    // An existing policy is never overwritten — the user's own answer wins over the default,
+    // including one that is strictly more permissive than ours.
+    fs.writeFileSync(p, '{"permission": {"bash": "allow"}}');
+    mergeOpencodeJson(p, 'AGENT.md');
+    data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.equal(data.permission.bash, 'allow');
+  });
+});
+
+test('a merge preserves an mcp block it does not own', () => {
+  // The markitdown MCP server — and any server the user added — lives under `mcp`. A re-emit
+  // merges `instructions` and must touch nothing else in the file.
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      mcp: { markitdown: { type: 'local', command: ['markitdown-mcp'], enabled: true } },
+    }));
+    mergeOpencodeJson(p, 'AGENT.md');
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    assert.deepEqual(data.mcp.markitdown.command, ['markitdown-mcp']);
+    assert.ok(JSON.stringify(data.instructions).includes('AGENT.md'));
   });
 });
 
