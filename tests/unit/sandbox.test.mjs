@@ -29,20 +29,37 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 // A SECOND spelling of `real` naming the same directory, or null if this platform cannot make
 // one.
 //
-// A JUNCTION ON WINDOWS RATHER THAN THE 8.3 SHORT NAME, and the choice is deliberate. The 8.3
-// alias is what the GitHub runner's TEMP actually holds, so it is the more faithful fixture —
-// but producing one needs a `cmd.exe` round trip whose quoting is its own source of bugs (the
-// first draft of this file returned `C:\"C:`), and 8.3 names are a per-volume feature that
-// `fsutil 8dot3name` can switch off, so it would skip on exactly the machines that most need
-// the check. A directory junction needs no elevation, works on every NTFS volume, and produces
-// the SAME property under test: a second path spelling that `realpath` collapses to the first.
-// The bug this guards against is the gap between the two spellings, not the mechanism that
-// creates it. POSIX gets the symlink that duality already exists for.
+// TWO MECHANISMS ON WINDOWS, AND THE ORDER IS THE LESSON OF THIS FILE. An earlier draft used a
+// directory junction ALONE, because it needs no elevation and no subprocess — and a junction is
+// a fine fixture for the wrong bug. `fs.realpathSync` resolves junctions, so the gate was green
+// while `makeSandbox` handed out unexpanded 8.3 short names, and all 259 emit cells then failed
+// on `windows-latest` with the raw sandbox root leaking into every stream. The mechanism that
+// was dropped for convenience was the one carrying the defect.
+//
+// So the 8.3 short name is tried FIRST — it is what GitHub's runner actually holds — and the
+// junction is the fallback for a volume where `fsutil 8dot3name` has switched short names off.
+// Both are second spellings; only one of them separates `realpathSync` from
+// `realpathSync.native`.
 function aliasOf(real) {
+  if (process.platform === 'win32') {
+    const short = shortName(real);
+    if (short && short !== real) return { path: short, kind: '8.3', remove: () => {} };
+  }
   const link = `${real}-alias`;
   try {
     fs.symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
-    return link;
+    return { path: link, kind: 'link', remove: () => { try { fs.unlinkSync(link); } catch { /* gone */ } } };
+  } catch { return null; }
+}
+
+// Through the Scripting.FileSystemObject rather than a `cmd.exe` `for /%~s` round trip, whose
+// quoting produced `C:\"C:` in an earlier draft of this file.
+function shortName(dir) {
+  try {
+    return execFileSync('powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command',
+        `(New-Object -ComObject Scripting.FileSystemObject).GetFolder('${dir}').ShortPath`],
+      { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch { return null; }
 }
 
@@ -52,20 +69,24 @@ function aliasOf(real) {
 function aliasedTemp() {
   const real = fs.realpathSync(fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),
     'geneseed alias case ')));
-  const alias = aliasOf(real);
-  if (alias === null || alias === real) {
+  const a = aliasOf(real);
+  if (a === null || a.path === real) {
     fs.rmSync(real, { recursive: true, force: true });
     return null;
   }
   // THE VACUITY GUARD. Everything below is about the gap between two spellings; if there is no
   // gap the tests would pass without exercising anything.
-  assert.equal(fs.realpathSync(alias), real, 'the alias must name the same directory');
-  assert.notEqual(alias, real);
+  //
+  // `.native` ON BOTH SIDES, because a plain `realpathSync` does not collapse an 8.3 alias at
+  // all — this assertion is the first thing that would have reported the mechanism as unfit.
+  assert.equal(fs.realpathSync.native(a.path), real, 'the alias must name the same directory');
+  assert.notEqual(a.path, real);
   return {
     real,
-    alias,
+    alias: a.path,
+    kind: a.kind,
     done: () => {
-      try { fs.unlinkSync(alias); } catch { /* junction may already be gone */ }
+      a.remove();
       fs.rmSync(real, { recursive: true, force: true });
     },
   };
@@ -86,8 +107,16 @@ test('the root a sandbox hands out is canonical', async (t) => {
     // from a platform that never had the problem.
     const bareUnderAlias = fs.mkdtempSync(path.join(os.tmpdir(), 'bare-'));
     assert.ok(bareUnderAlias.startsWith(a.alias), 'the alias did not reach mkdtemp');
-    assert.notEqual(fs.realpathSync(bareUnderAlias), bareUnderAlias,
+    assert.notEqual(fs.realpathSync.native(bareUnderAlias), bareUnderAlias,
       'the alias did not survive into the result');
+    // THE SECOND CONTROL, and the one an earlier draft did not have. The gap this fixture is
+    // about is only visible to `.native` when the alias is an 8.3 short name — a plain
+    // `realpathSync` returns it unchanged. Asserting that here is what makes the choice of
+    // mechanism part of the test rather than an implementation detail of the fixture.
+    if (a.kind === '8.3') {
+      assert.equal(fs.realpathSync(bareUnderAlias), bareUnderAlias,
+        'realpathSync collapsed an 8.3 alias — the premise this fixture rests on has changed');
+    }
     fs.rmSync(bareUnderAlias, { recursive: true, force: true });
 
     // A FRESH IMPORT, because the module resolves its temp base ONCE at load — which is the

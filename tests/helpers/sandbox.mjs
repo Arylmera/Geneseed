@@ -54,7 +54,19 @@ export function homeOverrides(home) {
 //
 // `realpath` rather than a Windows branch, because POSIX reaches the same duality through
 // symlinks (`/tmp -> /private/tmp` on macOS).
-const TMP_ROOT = fs.realpathSync(os.tmpdir());
+//
+// `.native`, AND THAT SUFFIX IS THE WHOLE BUG. Node's `fs.realpathSync` resolves symlinks and
+// junctions but LEAVES AN 8.3 SHORT NAME ALONE; only `fs.realpathSync.native` goes through
+// `GetFinalPathNameByHandle` and expands it, which is what Python's `os.path.realpath` has done
+// since 3.8. Measured: `realpathSync('…\\GEE1E8~1')` returns the short spelling unchanged,
+// `.native` returns `…\\geneseed short name probe`.
+//
+// Without it this replayer reproduced the exact defect the reference recorded — all 259 emit
+// cells failed on `windows-latest` with the raw sandbox root leaking into every `<stdout>`,
+// because the root handed out was short and the child's own resolve expanded it, so the tag
+// matched nothing. The developer's machine cannot produce a short `TEMP`; GitHub's runner
+// spells it `C:\Users\RUNNER~1\…`.
+const TMP_ROOT = fs.realpathSync.native(os.tmpdir());
 
 /**
  * One cell's temp dir: canonical, and with a teardown that cannot raise.
@@ -66,7 +78,7 @@ const TMP_ROOT = fs.realpathSync(os.tmpdir());
  * tree is left behind on a race.
  */
 export function makeSandbox(prefix = 'gs-') {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(TMP_ROOT, prefix)));
+  const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(TMP_ROOT, prefix)));
   return {
     path: dir,
     cleanup() {
