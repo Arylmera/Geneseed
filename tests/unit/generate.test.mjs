@@ -12,12 +12,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { substitute, effectiveTheme, themedRel, destRel, renderAll } from '../../js/render.mjs';
+import {
+  substitute, effectiveTheme, themedRel, destRel, renderAll, STRUCTURE,
+} from '../../js/render.mjs';
 import { build } from '../../js/emit.mjs';
 import { isVendoredPath } from '../../js/native.mjs';
 import { themeFiles } from '../../js/installs.mjs';
 import { ROOT, makeCfg, discoverNames } from '../../js/checkout.mjs';
-import { parseDriverArgs } from '../../bin/geneseed.mjs';
+import { parseDriverArgs, emitGlobalInto } from '../../bin/geneseed.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';
@@ -54,10 +56,16 @@ function captured(fn) {
   }
 }
 
-/** `build.build(theme, out, footprint)` — in process, narration swallowed. */
-function buildInto(out, cfgOpts = {}, buildOpts = {}) {
-  const [, , err] = captured(() => build(makeCfg(cfgOpts), 'neutral', out, buildOpts));
-  return err;
+/**
+ * `build.build(theme, out, footprint)` — in process, narration captured.
+ *
+ * Returns both streams: several claims below are about a WARNING, and `build` writes the
+ * merge warning to stdout and the suspicious-marker warning to stderr.
+ */
+function buildInto(out, cfgOver = {}, buildOpts = {}) {
+  const [, out_, err] = captured(
+    () => build({ ...makeCfg(), ...cfgOver }, 'neutral', out, buildOpts));
+  return { out: out_, err };
 }
 
 const read = (...p) => fs.readFileSync(path.join(...p), 'utf8');
@@ -365,6 +373,158 @@ test('the notebook charter is agent-owned after seeding', () => {
     fs.writeFileSync(charter, '# My rules\nmine now\n');
     buildInto(out);
     assert.equal(fs.readFileSync(charter, 'utf8'), '# My rules\nmine now\n');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// A themed DIR_* rename between two builds into the SAME out — `SrcDirRenameOrphanTests`.
+//
+// Shipped themes never vary DIR_* today: STRUCTURE always wins over a theme's own value, which
+// is exactly what `structure overrides a theme voice` above asserts. So the rename has to be
+// SIMULATED, and where the reference mutates the module-level dict `build()` resolves against,
+// the port takes it as `cfg.structure` — the injection point `js/render.mjs` documents for this
+// class by name. That is a straight improvement rather than a workaround: `makeCfg()` hands back
+// a fresh object per call, so there is no global to restore and no way for one test's rename to
+// leak into the next.
+
+const renamed = (over) => ({ structure: { ...STRUCTURE, ...over } });
+
+test('a DIR_LAWS rename prunes the old dir instead of orphaning it', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    assert.ok(fs.statSync(path.join(out, 'laws')).isDirectory());
+    buildInto(out, renamed({ DIR_LAWS: 'ordinances' }));
+    assert.ok(!fs.existsSync(path.join(out, 'laws')),
+      'the old DIR_LAWS dir was orphaned, not pruned');
+    assert.ok(isFile(out, 'ordinances', 'universal.md'));
+  });
+});
+
+test('renaming DIR_AGENTS and DIR_SKILLS together prunes both old dirs', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    buildInto(out, renamed({ DIR_AGENTS: 'specialists', DIR_SKILLS: 'rites' }));
+    assert.ok(!fs.existsSync(path.join(out, 'agents')));
+    assert.ok(!fs.existsSync(path.join(out, 'skills')));
+    assert.ok(fs.statSync(path.join(out, 'specialists')).isDirectory());
+    assert.ok(fs.statSync(path.join(out, 'rites')).isDirectory());
+  });
+});
+
+test('a rename round-trips back without leftovers', () => {
+  // Renaming out and back must leave exactly the original dir: no trace of the intermediate
+  // name survives the second flip. The marker has to be rewritten on every build for this to
+  // hold — a marker written only when the name CHANGES passes the first flip and fails here.
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    buildInto(out, renamed({ DIR_LAWS: 'ordinances' }));
+    assert.ok(fs.statSync(path.join(out, 'ordinances')).isDirectory());
+    buildInto(out);
+    assert.ok(fs.statSync(path.join(out, 'laws')).isDirectory());
+    assert.ok(!fs.existsSync(path.join(out, 'ordinances')));
+  });
+});
+
+test('a first build into a non-bundle dir never wipes user content', () => {
+  // The prior-dirs marker may only prune inside an ESTABLISHED bundle. A first render into an
+  // arbitrary repo must not delete a directory the user owns just because the name collides.
+  withDir((d) => {
+    const out = path.join(d, 'repo');
+    fs.mkdirSync(path.join(out, 'laws'), { recursive: true });
+    fs.writeFileSync(path.join(out, 'laws', 'mine.md'), 'user content');
+    const { out: said } = buildInto(out);   // no .geneseed-theme / -version yet
+    assert.ok(isFile(out, 'laws', 'mine.md'), 'a first build deleted a user directory');
+    // The reference only redirected this warning away to keep its output clean. Asserting it
+    // instead is what keeps the test from passing vacuously: without it, a build that never
+    // looked at `laws/` at all satisfies the line above just as well as one that looked and
+    // deliberately kept its hands off.
+    assert.match(said, /already exists and .* is not a Geneseed bundle/);
+  });
+});
+
+test('a suspicious prior dir name never reaches the recursive delete', () => {
+  // `.geneseed-srcdirs.json` is a plain file a user or another tool can edit, and the name in
+  // it is joined onto `out` and handed to a recursive delete. Each value below is a different
+  // way to escape that join. All four must warn, complete the build, and delete nothing.
+  withDir((d) => {
+    const bundle = path.join(d, 'bundle');
+    buildInto(bundle);
+
+    // Three targets a corrupt value could otherwise reach, one per escape shape.
+    fs.writeFileSync(path.join(d, 'sentinel.txt'), 'parent content');   // '..'
+    const victim = path.join(d, 'victim');                              // an absolute path
+    fs.mkdirSync(path.join(victim, 'sub'), { recursive: true });
+    fs.writeFileSync(path.join(victim, 'sub', 'keep.md'), 'x');
+    const nested = path.join(bundle, 'a', 'b');                         // a multi-segment reach-in
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'keep.md'), 'x');
+
+    // Written by NAME rather than read from an exported constant, and that is deliberate: the
+    // file is an INPUT here. If the product renamed its marker, the build would simply ignore
+    // this one and no warning would arrive — the assertion fails loudly rather than drifting.
+    const marker = path.join(bundle, '.geneseed-srcdirs.json');
+    for (const bad of ['..', victim, 'a/b', ['laws'], 123]) {
+      fs.writeFileSync(marker, JSON.stringify({ laws: bad }));
+      const { err } = buildInto(bundle);   // must not throw, must warn
+      assert.match(err, /WARN/, `value ${JSON.stringify(bad)} was accepted in silence`);
+      assert.ok(err.includes('.geneseed-srcdirs.json'),
+        'the warning does not name the file the user has to go and fix');
+    }
+    assert.ok(isFile(d, 'sentinel.txt'), "'..' escaped to the bundle's parent");
+    assert.ok(isFile(victim, 'sub', 'keep.md'), 'an absolute path replaced out entirely');
+    assert.ok(isFile(nested, 'keep.md'), "'a/b' reached into nested content");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// full -> lean -> full must not orphan the standalone laws dir — `FootprintOrphanRegressionTests`.
+//
+// Regression coverage, not a fresh claim: the owned-file manifest already prunes these, because
+// the lean-mode standalone laws/ is tracked in `owned` and falls out of the old-minus-new diff.
+// It stays because the manifest is what would silently stop covering it.
+
+for (const host of ['opencode', 'claude']) {
+  test(`${host} global: a lean-to-full switch prunes the standalone laws dir`, () => {
+    withDir((d) => {
+      const cfgDir = path.join(d, 'cfg');
+      for (const footprint of ['lean', 'full']) {
+        captured(() => emitGlobalInto(host,
+          { theme: 'neutral', out: path.join(d, `b-${footprint}`), cfgDir, footprint }));
+        if (footprint === 'lean') {
+          assert.ok(isFile(cfgDir, 'laws', 'universal.md'),
+            'lean did not ship the standalone laws dir in the first place');
+        }
+      }
+      assert.ok(!fs.existsSync(path.join(cfgDir, 'laws')),
+        'the lean-mode standalone laws/ survived the switch to full');
+    });
+  });
+}
+
+test('excludes.json is seeded once, user-owned, and never in the manifest', () => {
+  // The user's own folder exclusion list. Same contract as context.json, wiki.jsonc and
+  // user-rules.md — and the manifest assertion is the mechanism behind it: a global emit
+  // prunes what it owns, so being ABSENT from `owned` is what makes the file survive.
+  withDir((d) => {
+    const cfgDir = path.join(d, 'cfg');
+    const emit = () => captured(() => emitGlobalInto('claude',
+      { theme: 'neutral', out: path.join(d, 'b'), cfgDir, footprint: 'full' }));
+    emit();
+    const dest = path.join(cfgDir, 'excludes.json');
+    assert.ok(isFile(dest), 'excludes.json was never seeded');
+    assert.deepEqual(JSON.parse(fs.readFileSync(dest, 'utf8')).excludes, []);
+
+    const manifest = JSON.parse(read(cfgDir, '.geneseed-manifest.json'));
+    assert.ok(manifest.owned.length > 0, 'an empty manifest agrees with anything');
+    assert.ok(!manifest.owned.includes('excludes.json'));
+
+    const mine = '{"excludes": [{"path": "C:/x"}]}';
+    fs.writeFileSync(dest, mine);
+    emit();
+    assert.deepEqual(JSON.parse(fs.readFileSync(dest, 'utf8')).excludes, [{ path: 'C:/x' }]);
   });
 });
 
