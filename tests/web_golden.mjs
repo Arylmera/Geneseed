@@ -50,6 +50,38 @@ export function parseArgs(argv) {
   return a;
 }
 
+// ---------------------------------------------------------------------------------------
+// THE TWO CELLS THE FROZEN CORPUS BINDS TO THE RECORDER'S WORKING TREE
+// ---------------------------------------------------------------------------------------
+//
+// These two `view/` cells run against the REAL checkout — they declare no `checkout` faults, so
+// `doctor` scans `ROOT` — and `doctor`'s rendered-bundle check reads `Harness/`, which is
+// GITIGNORED. On the machine that recorded the `crlf` half that directory exists and is stale,
+// so the recorded body carries seven `[rendered] … stale` problems and `"ok": false`. On a fresh
+// checkout there is no bundle at all, the check returns on its first line, and the body is
+// `"ok": true, "problems": []` — 462 bytes against 1142.
+//
+// The `lf` half is consistent because it was recorded on the same clean CI image it is replayed
+// on. Only the developer's machine has a bundle, which is why the Python `cells` job — Linux
+// only — could never have seen this.
+//
+// SAME CLASS AS THE NINE `status` CELLS, DIFFERENT MECHANISM, AND A SHARPER PRECONDITION. That
+// one is a path LENGTH and can only be compared against a measured constant; this one is a
+// directory that either exists or does not, so the guard is the state itself rather than a proxy
+// for it.
+//
+// `docs/port-ledger.md` already carries the general form of this — "the fingerprint of the
+// operator's own build … which no sandbox can fence off (there is no env hook for ROOT)". These
+// two are that hazard reaching a web body instead of a status panel.
+const BUNDLE_CELLS = new Set([
+  'view/selecting-a-detected-install-repoints-every-later-read',
+  'view/an-unknown-pair-and-a-malformed-body-are-both-404',
+]);
+
+export function bundleCellsHold() {
+  return fs.existsSync(path.join(ROOT, 'Harness'));
+}
+
 export function narrowingReason(a) {
   const why = [];
   if (a.only) why.push(`--only ${a.only}`);
@@ -76,9 +108,17 @@ async function main(argv) {
   console.log(`[web-golden] ${cells.length} cells, against ${path.relative(ROOT, against)}, `
     + `cli=${a.cli}`);
 
+  const bundleHolds = bundleCellsHold();
+  if (!bundleHolds) {
+    console.log(`[web-golden] ${BUNDLE_CELLS.size} BUNDLE cells SKIPPED — this checkout has no `
+      + 'Harness/ (it is gitignored), so doctor reports a clean rendered bundle where the '
+      + 'recorder had a stale one. The recorded body carries the recorder\'s own build:\n'
+      + [...BUNDLE_CELLS].map((c) => `    ${c}`).join('\n'));
+  }
   const failures = [];
   let done = 0;
   for (const cell of cells) {
+    if (!bundleHolds && BUNDLE_CELLS.has(cell.id)) { done += 1; continue; }
     // THE SHARED CLOCK, one per cell. The recorded bodies carry `<NOW>`/`<OLDER>`/`<STALE>`
     // tags computed from whatever second the recording used, so any second works here as long
     // as the seeding and the tagging agree on it — which is exactly why it is a value passed to
