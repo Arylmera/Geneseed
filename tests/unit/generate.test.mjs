@@ -17,8 +17,10 @@ import {
 } from '../../js/render.mjs';
 import { build } from '../../js/emit.mjs';
 import { isVendoredPath, loadAgentOverrides, writeNativeLayer } from '../../js/native.mjs';
-import { writePrimaryAgent, writeCommandLayer } from '../../js/opencode.mjs';
-import { mergeOpencodeJson } from '../../js/settings.mjs';
+import {
+  writePrimaryAgent, writeCommandLayer, ensureAgentOverridesStub, sourceReleaseVersion,
+} from '../../js/opencode.mjs';
+import { mergeOpencodeJson, opencodeTarget, readJsonc } from '../../js/settings.mjs';
 import { themeFiles } from '../../js/installs.mjs';
 import { ROOT, makeCfg, discoverNames } from '../../js/checkout.mjs';
 import { parseDriverArgs, emitGlobalInto } from '../../bin/geneseed.mjs';
@@ -375,6 +377,269 @@ test('the notebook charter is agent-owned after seeding', () => {
     fs.writeFileSync(charter, '# My rules\nmine now\n');
     buildInto(out);
     assert.equal(fs.readFileSync(charter, 'utf8'), '# My rules\nmine now\n');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// agent-overrides.json's version stamp — `AgentOverridesVersionTests`.
+//
+// Stamped at creation, never rewritten on re-emit, and a drift notice that fires ONLY when the
+// file carries real overrides. The last clause is the whole design: every install has this file,
+// so a notice that fired on the empty stub would fire for everyone on every release and be
+// trained away before it ever meant anything.
+
+test('the overrides stub is stamped with the current version at creation', () => {
+  withDir((d) => {
+    ensureAgentOverridesStub(cfg(), d);
+    const data = JSON.parse(read(d, 'agent-overrides.json'));
+    assert.equal(data._version, sourceReleaseVersion(cfg()));
+    assert.deepEqual(data.agents, {});
+  });
+});
+
+test('a re-emit never rewrites an existing overrides file', () => {
+  withDir((d) => {
+    const dest = path.join(d, 'agent-overrides.json');
+    const custom = '{"_version": "0.1.0", "agents": {"reviewer": {"model": "x/y"}}}';
+    fs.writeFileSync(dest, custom);
+    captured(() => ensureAgentOverridesStub(cfg(), d));   // a no-op on the user's file
+    assert.equal(fs.readFileSync(dest, 'utf8'), custom);
+  });
+});
+
+for (const [name, body, expect] of [
+  ['a drifted version with real overrides', { _version: '0.0.1', agents: { reviewer: { model: 'x/y' } } },
+    'agent-overrides.json was written for Geneseed 0.0.1'],
+  ['a legacy file with no _version key at all', { agents: { reviewer: { model: 'x/y' } } },
+    'unknown version'],
+]) {
+  test(`the drift notice fires on ${name}`, () => {
+    withDir((d) => {
+      fs.writeFileSync(path.join(d, 'agent-overrides.json'), JSON.stringify(body));
+      const [, out] = captured(() => ensureAgentOverridesStub(cfg(), d));
+      assert.ok(out.includes(expect), `notice missing; got ${JSON.stringify(out)}`);
+      // The notice is useless without the version to compare against.
+      assert.ok(out.includes(sourceReleaseVersion(cfg())));
+    });
+  });
+}
+
+for (const [name, body] of [
+  ['the version matches', () => ({ _version: sourceReleaseVersion(cfg()), agents: { reviewer: { model: 'x/y' } } })],
+  ['the overrides are empty, even with a drifted version', () => ({ _version: '0.0.1', agents: {} })],
+]) {
+  test(`the drift notice stays silent when ${name}`, () => {
+    withDir((d) => {
+      fs.writeFileSync(path.join(d, 'agent-overrides.json'), JSON.stringify(body()));
+      const [, out, err] = captured(() => ensureAgentOverridesStub(cfg(), d));
+      assert.equal(out, '', `expected silence, got ${JSON.stringify(out)}`);
+      assert.equal(err, '');
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// JSONC-aware config writes — `OpencodeJsoncTests`.
+//
+// OpenCode reads opencode.jsonc in preference to opencode.json, so Geneseed has to operate on a
+// present .jsonc — and must never rewrite one carrying comments, which a JSON round trip would
+// silently delete. The refusal is the feature; the warning is what makes it usable.
+
+// `readJsonc` parses through `parseJson`, so every number comes back as a PyNumber carrying the
+// int/float distinction Python has and `JSON.parse` discards (the file gets written BACK, and a
+// user's `"temperature": 1.0` must not return as `1` — the mutation that collapses it is M6).
+// Transcribing the reference's `assertEqual(data, {"a": 1})` therefore fails on the wrapper
+// rather than on the parse. Round-tripping through JSON compares the VALUES, which is the claim.
+const plain = (v) => JSON.parse(JSON.stringify(v));
+
+test('readJsonc strips comments and trailing commas', () => {
+  const [data, had] = readJsonc('{\n  // a line comment\n  "a": 1, /* block */\n  "b": [1, 2,],\n}');
+  assert.deepEqual(plain(data), { a: 1, b: [1, 2] });
+  assert.equal(had, true);
+});
+
+test('slashes inside a string are not comments', () => {
+  // The $schema URL contains `//`. A naive stripper eats the rest of the line and the file
+  // stops parsing — which the caller would then read as "malformed, do not touch".
+  const [data, had] = readJsonc('{"$schema": "https://opencode.ai/config.json", "instructions": []}');
+  assert.equal(data.$schema, 'https://opencode.ai/config.json');
+  assert.equal(had, false);
+});
+
+test('the trailing-comma strip is string-aware', () => {
+  // A string value containing `,]` or `, }` must round-trip byte-faithfully...
+  const [data] = readJsonc('{"n": "fix [1,2,] and {b, }"}');
+  assert.equal(data.n, 'fix [1,2,] and {b, }');
+  // ...while genuine structural trailing commas are still removed. Both halves, or the test
+  // is equally satisfied by a stripper that does nothing at all.
+  assert.deepEqual(plain(readJsonc('[1,2,]')[0]), [1, 2]);
+  assert.deepEqual(plain(readJsonc('{"a":1,}')[0]), { a: 1 });
+});
+
+test('malformed JSONC returns null, which is not the same as empty', () => {
+  // null (unparseable) is distinct from {} (legitimately empty): writers refuse to rewrite a
+  // file they could not parse, and `{}` would license clobbering it.
+  const [data, had] = readJsonc('{not json at all');
+  assert.equal(data, null);
+  assert.equal(had, false);
+});
+
+test('the target prefers an existing .jsonc', () => {
+  withDir((d) => {
+    const j = path.join(d, 'opencode.json');
+    assert.equal(opencodeTarget(j), j);                    // neither exists -> .json
+    fs.writeFileSync(path.join(d, 'opencode.jsonc'), '{}');
+    assert.equal(opencodeTarget(j), path.join(d, 'opencode.jsonc'));
+  });
+});
+
+test('a merge targets an existing comment-free .jsonc and creates no .json', () => {
+  withDir((d) => {
+    const j = path.join(d, 'opencode.json');
+    const jc = path.join(d, 'opencode.jsonc');
+    fs.writeFileSync(jc, '{"instructions": []}');
+    const [, out] = captured(() => mergeOpencodeJson(j, 'AGENT.md'));
+    assert.equal(out, '', 'a comment-free .jsonc warned when it could simply be written');
+    assert.ok(!fs.existsSync(j), 'a stray opencode.json was created beside the .jsonc');
+    const data = JSON.parse(fs.readFileSync(jc, 'utf8'));
+    assert.ok(JSON.stringify(data.instructions).includes('AGENT.md'));
+    assert.ok('permission' in data);
+  });
+});
+
+test('a merge warns about and refuses to rewrite a commented .jsonc', () => {
+  withDir((d) => {
+    const j = path.join(d, 'opencode.json');
+    const jc = path.join(d, 'opencode.jsonc');
+    const original = '// my notes\n{\n  "instructions": []\n}\n';
+    fs.writeFileSync(jc, original);
+    const [, out] = captured(() => mergeOpencodeJson(j, 'AGENT.md'));
+    assert.match(out, /has comments/);
+    assert.ok(out.includes('AGENT.md'), 'the refusal did not say what to add by hand');
+    assert.equal(fs.readFileSync(jc, 'utf8'), original, 'the comments were rewritten away');
+    assert.ok(!fs.existsSync(j), 'refusing to write the .jsonc wrote a .json instead');
+  });
+});
+
+test('an already-wired commented .jsonc is a silent no-op', () => {
+  // The refusal above is a warning the user is expected to ACT on. Repeating it on a file that
+  // already carries everything the merge would add is how a warning gets trained away.
+  withDir((d) => {
+    const j = path.join(d, 'opencode.json');
+    const jc = path.join(d, 'opencode.jsonc');
+    const original = '// notes\n{\n  "instructions": ["AGENT.md"],\n'
+      + '  "permission": {"bash": "allow"},\n  "lsp": true\n}\n';
+    fs.writeFileSync(jc, original);
+    const [, out] = captured(() => mergeOpencodeJson(j, 'AGENT.md'));
+    assert.equal(out, '', `expected silence, got ${JSON.stringify(out)}`);
+    assert.equal(fs.readFileSync(jc, 'utf8'), original);
+  });
+});
+
+test('a merge returns the resolved target, not the path it was asked about', () => {
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'opencode.jsonc'), '{"instructions": []}');
+    const got = captured(() => mergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md'))[0];
+    assert.equal(path.basename(got), 'opencode.jsonc');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// A merge that cannot read or cannot write — `OpencodeJsonMergeFailureTests`.
+//
+// Best-effort, but never SILENT about it: the harness does not auto-load without this wiring, so
+// a swallowed failure leaves a user with an install that looks complete and does nothing.
+//
+// The reference simulates both with `unittest.mock`, patching `Path.read_text` and `os.replace`,
+// and its docstring says chmod is not reliable cross-platform. ESM has no equivalent patch — and
+// it does not need one, because §3.5 measured what DOES take on this platform. A real denied ACL
+// is also a stronger fixture than a mock: a mock proves the handler catches the exception someone
+// decided to throw, where this proves it catches the one the operating system actually raises.
+//
+// ONE ASSERTION CANNOT CROSS, and getting it wrong is what the first draft of this pair did.
+// `js/settings.mjs`'s own `pyOsError` docblock already records that Python renders `[Errno 13]
+// Permission denied: '...'` where Node renders its own message, and that the two cannot be made
+// to agree — so the reference's literal "Permission denied" was rewritten as a case-insensitive
+// match on the same words. It still failed: a denied ACL on Windows raises EPERM, "operation not
+// permitted", and the phrase never appears. Guessing a second constant would only move the
+// guess, because the wording belongs to the platform.
+//
+// What the reference's assertion was really standing in for is that the OS's own reason is
+// RELAYED rather than swallowed, and the portable form of that is the errno code Node puts at
+// the front of every fs error. A warning that named the file but not the reason would leave the
+// user knowing something failed and nothing about what to fix.
+
+/**
+ * Make a real path refuse a real operation, or return `null` so the caller skips LOUDLY.
+ *
+ * `retry_gap.test.mjs`'s `jam()` in a second register: (D) denies delete, (R) denies read and
+ * (W) denies the create of the temp file `atomicWriteJson` renames into place.
+ */
+function deny(p, right, probe) {
+  const user = process.env.USERNAME || process.env.USER || '';
+  let release;
+  if (process.platform === 'win32') {
+    if (spawnSync('icacls', [p, '/deny', `${user}:(${right})`], { encoding: 'utf8' }).status !== 0) {
+      return null;
+    }
+    release = () => { spawnSync('icacls', [p, '/remove:d', user], { encoding: 'utf8' }); };
+  } else {
+    const mode = fs.statSync(p).mode;
+    fs.chmodSync(p, right === 'R' ? 0o000 : 0o555);
+    release = () => { fs.chmodSync(p, mode); };
+  }
+  // PROVE IT TOOK. Running elevated, or on a filesystem that ignores ACLs, the deny is a
+  // no-op and every assertion below silently becomes one about an ordinary successful merge.
+  let blocked = false;
+  try { probe(); } catch { blocked = true; }
+  if (!blocked) { release(); return null; }
+  return release;
+}
+
+const DENY_SKIP = 'this platform cannot make a real path refuse a real operation';
+
+test('a read failure warns and never overwrites the file it could not read', (t) => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    const original = '{"instructions": ["keep-me.md"]}';
+    fs.writeFileSync(p, original);
+    const release = deny(p, 'R', () => fs.readFileSync(p, 'utf8'));
+    if (!release) { t.skip(DENY_SKIP); return; }
+    let err;
+    try {
+      err = captured(() => mergeOpencodeJson(p, 'AGENT.md'))[2];
+    } finally {
+      release();
+    }
+    assert.match(err, /WARN/);
+    assert.ok(err.includes(p), 'the warning does not name the file');
+    assert.match(err, /\(E[A-Z]+: /, 'the warning names the file but not the reason');
+    assert.ok(err.includes('AGENT.md'), 'no manual-wiring instruction was given');
+    // Never overwritten: a merge that could not read the file must not replace it with the
+    // default config, which would delete "keep-me.md" from a user's own instructions.
+    assert.equal(fs.readFileSync(p, 'utf8'), original);
+  });
+});
+
+test('a write failure warns and does not crash the emit', (t) => {
+  withDir((d) => {
+    const dir = path.join(d, 'cfg');
+    fs.mkdirSync(dir);
+    const p = path.join(dir, 'opencode.json');
+    const release = deny(dir, 'W', () => fs.writeFileSync(path.join(dir, '.probe'), 'x'));
+    if (!release) { t.skip(DENY_SKIP); return; }
+    let result;
+    let err;
+    try {
+      [result, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md'));   // must not throw
+    } finally {
+      release();
+    }
+    assert.equal(result, p, 'the resolved target was lost on the failure path');
+    assert.match(err, /WARN/);
+    assert.ok(err.includes(p));
+    assert.match(err, /\(E[A-Z]+: /, 'the warning names the file but not the reason');
+    assert.ok(err.includes('AGENT.md'), 'no manual-wiring instruction was given');
   });
 });
 
