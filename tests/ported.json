@@ -56,9 +56,9 @@
       "python": "tests/snapshot_io.py",
       "kind": "harness",
       "py_tests": 0,
-      "status": "todo",
+      "status": "done",
       "node": ["tests/helpers/snapshot_io.mjs"],
-      "why": "The one owner for reading a recorded cell snapshot and diffing it against a live one. 58 lines, no reference involvement, read by all three replayers — the first thing P3 ports and the thing that proves the corpus format is understood before anything drives it."
+      "why": "The one owner for reading a recorded cell snapshot and diffing it against a live one. 58 lines, no reference involvement, read by all three replayers — the first thing P3 ports and the thing that proves the corpus format is understood before anything drives it. `write` crossed too, against the plan's first instinct: the round trip is the cheapest honest test of `read`, and port-ledger item 2 leaves re-blessing on the table."
     },
     {
       "python": "tests/record_help.py",
@@ -72,9 +72,9 @@
       "python": "tests/test_snapshot_io.py",
       "kind": "unit",
       "py_tests": 4,
-      "status": "todo",
+      "status": "done",
       "node": ["tests/unit/snapshot_io.test.mjs"],
-      "why": "Absolute assertions over the snapshot format. Re-aims at tests/helpers/snapshot_io.mjs with no other change of subject."
+      "why": "Its four cases crossed and a fifth kind was added, because the Python four test the module against ITSELF — a round trip agrees with itself whichever way it is wrong, which was fine while the module was the only thing that had ever written the corpus and is not fine now that 1,381 CPython-written documents can never be re-recorded. The load-bearing test parses every one of them, rebuilds it through this writer's own key ordering and requires byte equality: 453 of the 1,381 carry non-ASCII and every one of them reddens under ensure_ascii=True, so the claim is exercised rather than declared."
     },
     {
       "python": "tests/test_golden_destamp.py",
