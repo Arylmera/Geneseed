@@ -26,6 +26,9 @@ import {
 } from '../../js/web/api.mjs';
 import { apiGraph } from '../../js/web/graph.mjs';
 import {
+  apiActivity, apiActivityDetail, apiActivityToggle,
+} from '../../js/web/activity.mjs';
+import {
   apiDocs, apiDocsPage, docGroups, normHarness, stripHarnessBlocks, harnessBlocksBalanced,
 } from '../../js/web/docs.mjs';
 import {
@@ -1618,4 +1621,226 @@ test('no cross-harness dead links', () => {
       }
     }
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// The live-activity reader: globs `<target>/activity/*.json`, prunes dead and stale writers
+// (self-cleaning their files), and never raises on a missing directory or a garbage file.
+
+function activityBox() {
+  const sb = makeSandbox();
+  return {
+    sb,
+    state: webState('neutral', sb.path),
+    write(name, entry) {
+      const d = path.join(sb.path, 'activity');
+      fs.mkdirSync(d, { recursive: true });
+      const p = path.join(d, name);
+      fs.writeFileSync(p, JSON.stringify(entry));
+      return p;
+    },
+  };
+}
+
+// `time.time()` is SECONDS. `Date.now()` is milliseconds, and handing the reader a millisecond
+// stamp makes every entry look 55 years in the future — which passes the staleness check by
+// accident and would make the prune test below vacuous rather than red.
+const nowSec = () => Date.now() / 1000;
+
+const withActivity = (fn) => {
+  const box = activityBox();
+  try { return fn(box); } finally { box.sb.cleanup(); }
+};
+
+test('a missing activity dir reads empty and enabled', () => {
+  withActivity(({ state }) => {
+    const res = apiActivity(state);
+    assert.deepEqual(res.activity, []);
+    assert.equal(res.enabled, true);
+  });
+});
+
+test('a live entry is globbed', () => {
+  withActivity((box) => {
+    box.write('ses_a.json', {
+      session_id: 'ses_a', agent: 'reviewer', title: 'fix it', cwd: '/repo',
+      status: 'busy', pid: process.pid, updated_at: nowSec(),
+    });
+    const acts = apiActivity(box.state).activity;
+    assert.equal(acts.length, 1);
+    assert.equal(acts[0].agent, 'reviewer');
+    assert.equal(acts[0].status, 'busy');
+  });
+});
+
+// A pid that is virtually never alive. The file is REMOVED, not just filtered: a dead writer
+// that leaves its snapshot behind would haunt the console forever.
+test('a dead pid is pruned and its file self-cleans', () => {
+  withActivity((box) => {
+    const p = box.write('ses_dead.json', {
+      session_id: 'ses_dead', status: 'busy', pid: 2147483647, updated_at: nowSec(),
+    });
+    assert.deepEqual(apiActivity(box.state).activity, []);
+    assert.ok(!fs.existsSync(p), 'the stale file was filtered but not removed');
+  });
+});
+
+test('a stale entry is pruned even with a live pid', () => {
+  withActivity((box) => {
+    box.write('ses_old.json', {
+      session_id: 'ses_old', status: 'idle', pid: process.pid, updated_at: nowSec() - 10000,
+    });
+    assert.deepEqual(apiActivity(box.state).activity, []);
+  });
+});
+
+test('a garbage file never raises', () => {
+  withActivity((box) => {
+    const d = path.join(box.sb.path, 'activity');
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, 'broken.json'), '{ not json');
+    assert.deepEqual(apiActivity(box.state).activity, []);
+  });
+});
+
+test('the v1.1 fields pass through', () => {
+  withActivity((box) => {
+    box.write('s.json', {
+      session_id: 's', status: 'busy', pid: process.pid, updated_at: nowSec(),
+      model: 'opus', phase: 'Editing x', cost: 0.62, tokens: 48000,
+      files: { count: 2, additions: 10, deletions: 1, items: [] },
+      todos: { done: 1, total: 3, items: [] },
+      error: 'oops', blocked_on: null, turn_started_at: nowSec(),
+    });
+    const e = apiActivity(box.state).activity[0];
+    assert.equal(e.model, 'opus');
+    assert.equal(e.phase, 'Editing x');
+    assert.equal(e.error, 'oops');
+
+    // A PARSED NUMBER IS A `PyNumber`, NOT A JS NUMBER, and that is the port working rather
+    // than leaking. `parseJson` keeps each number's SOURCE SPELLING so a read-modify-write
+    // round-trips `1.0` as `1.0` instead of collapsing it to `1` — the exact distinction
+    // `tests/mutate.mjs`'s M6 is about. The reader hands the parsed object through, so the
+    // wrapper reaches the caller and `jsonDumps` unwraps it on the way out.
+    assert.equal(Number(e.cost), 0.62);
+    assert.equal(Number(e.tokens), 48000);
+    assert.equal(Number(e.files.count), 2);
+    assert.equal(Number(e.todos.done), 1);
+  });
+});
+
+// A pre-v1.1 writer omits the new keys and the reader must fill SAFE defaults — `null` for the
+// structured ones, `0` for the numeric ones, because the console arithmetics them.
+test('a v1 file gets safe defaults', () => {
+  withActivity((box) => {
+    box.write('s.json', {
+      session_id: 's', status: 'idle', pid: process.pid, updated_at: nowSec(),
+    });
+    const e = apiActivity(box.state).activity[0];
+    assert.equal(e.model, null);
+    assert.equal(e.phase, null);
+    assert.equal(e.files, null);
+    // THE DEFAULTS ARE RAW JS NUMBERS where a parsed field is a `PyNumber` — the reader
+    // SUPPLIES these rather than reading them, so nothing was parsed to keep a spelling of.
+    // Asserted strictly on purpose: it is the one place in this file where the difference
+    // between "read from the file" and "filled in by the reader" is observable.
+    assert.equal(e.cost, 0);
+    assert.equal(e.tokens, 0);
+  });
+});
+
+test('activity is enabled by default', () => {
+  withActivity(({ state }) => assert.equal(apiActivity(state).enabled, true));
+});
+
+test('the activity toggle persists and gates the output', () => {
+  withActivity((box) => {
+    box.write('ses_a.json', {
+      session_id: 'ses_a', status: 'busy', pid: process.pid, updated_at: nowSec(),
+    });
+    assert.equal(apiActivity(box.state).activity.length, 1);
+
+    assert.deepEqual(apiActivityToggle(box.state, { enabled: false }),
+      { ok: true, enabled: false });
+    assert.ok(fs.statSync(path.join(box.sb.path, '.geneseed-activity')).isFile());
+
+    // Disabled: the output is gated to [] and the flag reads off. The FILES are left for the
+    // plugin to clear on its next event rather than deleted here.
+    const out = apiActivity(box.state);
+    assert.equal(out.enabled, false);
+    assert.deepEqual(out.activity, []);
+
+    apiActivityToggle(box.state, { enabled: true });
+    assert.equal(apiActivity(box.state).enabled, true);
+    assert.equal(apiActivity(box.state).activity.length, 1);
+  });
+});
+
+// `*.detail.json` is the v1.2 timeline sidecar, not a session snapshot.
+test('the activity list skips detail files', () => {
+  withActivity((box) => {
+    box.write('s.json',
+      { session_id: 's', status: 'busy', pid: process.pid, updated_at: nowSec() });
+    box.write('s.detail.json', { timeline: [{ kind: 'tool' }], files: null, todos: null });
+    assert.deepEqual(apiActivity(box.state).activity.map((a) => a.session_id), ['s']);
+  });
+});
+
+test('the detail endpoint returns the session and its timeline', () => {
+  withActivity((box) => {
+    box.write('s.json', {
+      session_id: 's', status: 'busy', pid: process.pid, updated_at: nowSec(),
+      files: { count: 1, items: [{ file: 'a' }] },
+    });
+    box.write('s.detail.json', {
+      timeline: [{ kind: 'tool', label: 'Editing a.js' }],
+      files: { count: 9,
+        items: Array.from({ length: 20 }, (_, i) => ({ file: `f${i}.js`, additions: 1, deletions: 0 })) },
+      todos: { done: 1, total: 2, items: [{ content: 'a', status: 'completed' }] },
+    });
+    const res = apiActivityDetail(box.state, 's');
+    assert.equal(res.session.session_id, 's');
+    assert.equal(res.timeline[0].label, 'Editing a.js');
+    // The detail file's UNCAPPED lists win over the snapshot's capped ones — the snapshot caps
+    // for the rail, the detail pane wants everything.
+    assert.equal(res.session.files.items.length, 20);
+    assert.equal(Number(res.session.todos.total), 2);   // a parsed number — see above
+  });
+});
+
+test('the detail endpoint 404s on an unknown session', () => {
+  withActivity(({ state }) => {
+    assert.throws(() => apiActivityDetail(state, 'nope'), NotFound);
+  });
+});
+
+test('the detail endpoint tolerates a missing detail file', () => {
+  withActivity((box) => {
+    box.write('s.json',
+      { session_id: 's', status: 'idle', pid: process.pid, updated_at: nowSec() });
+    const res = apiActivityDetail(box.state, 's');
+    assert.deepEqual(res.timeline, []);
+    assert.equal(res.session.session_id, 's');
+  });
+});
+
+test('the detail conversation falls back to the session title', () => {
+  withActivity((box) => {
+    box.write('s.json', {
+      session_id: 's', title: 'the very first ask', status: 'busy',
+      pid: process.pid, updated_at: nowSec(),
+    });
+    // No detail file: a single opening user turn synthesised from the session title.
+    assert.deepEqual(apiActivityDetail(box.state, 's').conversation,
+      [{ role: 'user', text: 'the very first ask' }]);
+
+    // With a captured transcript it is returned as-is, in order.
+    const turns = [
+      { role: 'user', text: 'add a toggle' },
+      { role: 'assistant', text: 'done' },
+      { role: 'user', text: 'make it 50/50' },
+    ];
+    box.write('s.detail.json', { timeline: [], conversation: turns });
+    assert.deepEqual(apiActivityDetail(box.state, 's').conversation, turns);
+  });
 });
