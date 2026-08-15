@@ -160,7 +160,12 @@
       "node": [
         "tests/unit/generate.test.mjs"
       ],
-      "why": "Unit tests of the generator. Re-aimed at js/generate.mjs — re-derived from the property, not transcribed from the Python: the per-footprint character ceiling (two identical bundles that both doubled pass byte equality perfectly), prune ownership and the memory/notebook carve-out, idempotence."
+      "why": [
+        "Unit tests of the generator. Re-aimed at js/generate.mjs — re-derived from the property, not transcribed from the Python: the per-footprint character ceiling (two identical bundles that both doubled pass byte equality perfectly), prune ownership and the memory/notebook carve-out, idempotence.",
+        "IN PROGRESS: the pure-render block crosses first — Substitute (2), ThemeStructure (3), DestRel (2), RenderAll (2) and Footprint (3), twelve Python into ten Node in tests/unit/generate.test.mjs. 12 of 83. What belongs in this file at all is the layer the CORPUS CANNOT SEE: 259 emitted trees are already compared byte for byte, so nothing here re-checks that a bundle comes out right. It checks the rules applied BEFORE any of those bytes exist, where a wrong answer is not a different byte but a different DECISION.",
+        "THE SHAPE TRAP OF THIS ROW, hit immediately: renderAll returns { theme, items } with each item { rel, text, src }, where the Python returns a tuple of tuples — the same data under the field names its own docstring already used. Destructuring it positionally, which is what a transcription of the reference does, yields undefined and reads as \"the function is missing\" rather than as a shape mismatch. Worth knowing before the remaining 71, because most of them call renderAll.",
+        "TWO ASSERTIONS CARRY THE WEIGHT of the block. An UNKNOWN token is left verbatim on purpose so doctor can flag it — substituting an empty string would make a typo render as a silent gap in the prose the agent reads, indistinguishable from an intentional blank. And a LEAN build must still ship the complete laws/universal.md: lean trims what AGENT.md INLINES, never what BINDS, so a build that shipped a condensed law file would silently narrow the agent's law while every other assertion in the class stayed green."
+      ]
     },
     {
       "python": "tests/test_harness.py",
