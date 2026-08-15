@@ -28,7 +28,9 @@ import { sourceReleaseVersion } from '../../js/opencode.mjs';
 import { versionVerdict, statusData, statusLines } from '../../js/status.mjs';
 import {
   uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
+  projectQualifies,
 } from '../../js/uninstall.mjs';
+import { emitHostScopeOf } from '../../js/installs.mjs';
 import { registryRecord, registryRoots } from '../../js/registry.mjs';
 import { VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir } from '../../js/hosts.mjs';
 import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
@@ -850,6 +852,78 @@ test('a global Bob emit ignores a project install for another host', () => {
       assert.equal(r2.rc, 0, r2.err.slice(-800));
       assert.equal(r2.err, '', `a claude project install tripped the Bob warning:\n${r2.err}`);
     }, { BOB_CONFIG_DIR: gcfg });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Two hosts at one project root, and the shared helper both call sites read.
+
+test('uninstalling one host reports the other still installed here', () => {
+  // Two hosts at the same repo root is an ordinary state — `claude` and `bob` write into
+  // different marker dirs — and removing one leaves the other silently in place. The operator
+  // is told, because nothing else will tell them.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    const home = path.join(d, 'home');
+    fs.mkdirSync(repo, { recursive: true });
+    projectInstall(repo, 'claude', home);
+    projectInstall(repo, 'bob', home);
+    const [rc, out] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0, out);
+    assert.ok(out.includes('also found bob:project here'), out);
+  });
+});
+
+test('a single host reports nothing extra', () => {
+  // The control: "also found" must be about a real second install, not a line printed always.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo, { recursive: true });
+    projectInstall(repo, 'claude', path.join(d, 'home'));
+    const [rc, out] = captured(() => cmdUninstall(uninstallArgs(repo)));
+    assert.equal(rc, 0, out);
+    assert.ok(!out.includes('also found'), out);
+  });
+});
+
+test('the emit marker is read into a host and a scope', () => {
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, '.geneseed-emit'), 'bob-global\n', 'utf8');
+    assert.deepEqual(emitHostScopeOf(d), ['bob', 'global']);
+  });
+});
+
+test('no emit marker reads as nothing, not as a default', () => {
+  // `null`, never a guessed host. A default here would make `projectQualifies` answer true for
+  // any directory at all, and the uninstall resolver would offer to remove strangers' folders.
+  withDir((d) => {
+    assert.equal(emitHostScopeOf(d), null);
+  });
+});
+
+test('an opencode project qualifies through the shared helper', () => {
+  // OpenCode is the host with no project manifest, so `projectQualifies` falls through to the
+  // emit marker — which is the branch `emitHostScopeOf` exists to serve, and the reason both
+  // call sites read one helper instead of parsing the marker twice.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    projectInstall(repo, 'opencode', path.join(d, 'home'));
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
+    assert.equal(projectQualifies(repo, 'opencode'), true);
+  });
+});
+
+test('an unrecognised target is described by the target, not by a default', () => {
+  // Reaching the error branch always means `--target` was GIVEN — the no-target path falls
+  // back to the OpenCode global default and never returns null — so the message must name
+  // what the user typed. Falling back to the default path here would tell someone their
+  // OpenCode config is missing when they asked about a directory somewhere else entirely.
+  withDir((d) => {
+    const empty = path.join(d, 'nothing');
+    fs.mkdirSync(empty, { recursive: true });
+    const [rc, , err] = captured(() => cmdUninstall(uninstallArgs(empty)));
+    assert.equal(rc, 1);
+    assert.ok(err.includes(resolved(empty)), err);
   });
 });
 

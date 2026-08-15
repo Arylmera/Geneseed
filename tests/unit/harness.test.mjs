@@ -23,9 +23,12 @@ import {
 } from '../../js/hooks.mjs';
 import {
   themeParityProblems, countTableProblems, proseMirrorProblems, lawMetaProblems, romanToInt,
-  themesToCheck, globalEmitProblems, renderedProblems, authoringProblems,
+  themesToCheck, globalEmitProblems, renderedProblems, authoringProblems, claudeBobEmitProblems,
 } from '../../js/doctor.mjs';
-import { memoryDropIndex, discoverContext, resolveContextSets } from '../../js/hooks.mjs';
+import {
+  memoryDropIndex, discoverContext, resolveContextSets, resolveAgentName, appendAgentLesson,
+  consolidateMemory,
+} from '../../js/hooks.mjs';
 import { memoryFactCount } from '../../js/status.mjs';
 import { stripSkillBodyLinks } from '../../js/native.mjs';
 import { stripCapabilityLinks } from '../../js/emit.mjs';
@@ -515,6 +518,125 @@ test('a manifest with extend layers on top of discovery', () => {
     assert.ok(en.has('house.md'), 'extend dropped the manifest set');
     // Not "auto-discovery": the source names a manifest, because one was honoured.
     assert.ok(!source.includes('auto-discovery'), source);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// doctor's claude/bob per-repo check — the blind spot that let dead links ship.
+//
+// `doctorCollect` used to validate only the `files` build and opencode-global; the claude/bob
+// PER-REPO emit was never checked, which is exactly why the CLAUDE.md / AGENTS.md dead
+// skill-table links shipped unnoticed.
+
+test('the claude/bob per-repo emit is clean on the shipped tree', () => {
+  assert.deepEqual(claudeBobEmitProblems('neutral'), []);
+});
+
+test('the claude/bob check catches the dead link it was written for', () => {
+  // REINTRODUCE THE EXACT REGRESSION. The dead link is a property of the RENDER, not of a file
+  // on disk: `CAPABILITY_LINK_RE` lost its optional path-prefix group, so `.claude/skills/x.md`
+  // style links stopped being stripped and pointed at nothing in the emitted bundle.
+  //
+  // The reference monkeypatches `_build_core.CAPABILITY_LINK_RE`. Here it is a module const in
+  // `js/emit.mjs` with no injection point left (`cfg.capabilityLinkRe` was the Python driver's
+  // seam and the Node path supplies none), so the narrowed pattern is PLANTED IN THE COPY and
+  // the check is run out of it — the same discovery route the theme and count gates use.
+  const real = fs.readFileSync(path.join(ROOT, 'js', 'emit.mjs'), 'utf8');
+  const wide = '/\\[([^\\]]+)\\]\\((?:(?!https?:\\/\\/|\\/)[A-Za-z0-9_.-]+\\/)*'
+    + '(?:agents|skills)\\/[A-Za-z0-9_-]+\\.md\\)/g';
+  const narrow = '/\\[([^\\]]+)\\]\\((?:agents|skills)\\/[A-Za-z0-9_-]+\\.md\\)/g';
+  assert.ok(real.includes(wide),
+    'the CAPABILITY_LINK_RE literal has been reworded — this fault no longer plants anything');
+  const problems = withFault({ 'js/emit.mjs': real.replace(wide, narrow) },
+    (root) => gate(root, "m.claudeBobEmitProblems('neutral')"));
+  assert.ok(problems.some((p) => p.includes('dead link') && p.includes('skills/')),
+    `expected a seeded dead skill link, got: ${JSON.stringify(problems.slice(0, 5))}`);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Per-agent lessons — the Python twin of the OpenCode learn plugin's child-session branch.
+
+test('an agent name is normalised or refused, never interpolated blind', () => {
+  // THE REFUSALS ARE A PATH-TRAVERSAL GUARD, not tidiness: the name becomes a FILENAME under
+  // `memory/agents/`, so `../evil` reaching the join is a write outside the store.
+  assert.equal(resolveAgentName('Reviewer'), 'reviewer');
+  assert.equal(resolveAgentName('user-advocate'), 'user-advocate');
+  assert.equal(resolveAgentName('../evil'), null);
+  assert.equal(resolveAgentName('has space'), null);
+  assert.equal(resolveAgentName(''), null);
+  assert.equal(resolveAgentName(null), null);
+});
+
+/**
+ * `Path.read_text()` — INCLUDING its universal-newline decode, which is the part that matters.
+ *
+ * `writeText` translates `\n` to `os.linesep`, so on Windows a lesson file really is CRLF on
+ * disk (M1 in the mutation matrix is exactly that translation, so the bytes are already gated).
+ * The reference asserts `text.startswith("# reviewer — lessons\n")` and passes anyway, because
+ * Python's text-mode read collapses `\r\n` back to `\n` before it ever sees the string — a
+ * dependency its assertion never states. A raw `readFileSync(..., 'utf8')` does not, so the
+ * first port of these two tests failed on the separator rather than on anything they are about.
+ */
+const readTextPy = (p) => fs.readFileSync(p, 'utf8').split('\r\n').join('\n');
+
+test('a lesson file is created, appended, and capped at a hundred', () => {
+  withDir((mem) => {
+    const f = appendAgentLesson(mem, 'reviewer', 'cite tests in findings');
+    const text = readTextPy(f);
+    assert.ok(text.startsWith('# reviewer — lessons\n'), JSON.stringify(text.slice(0, 40)));
+    assert.match(text, /- \d{4}-\d{2}-\d{2}: cite tests in findings\n$/);
+    for (let i = 0; i < 120; i += 1) appendAgentLesson(mem, 'reviewer', `lesson ${i}`);
+    const bullets = readTextPy(f).split('\n').filter((l) => l.startsWith('- '));
+    // THE CAP DROPS FROM THE FRONT. A cap that kept the FIRST hundred would freeze the file
+    // after a week and quietly stop recording anything the agent learned since.
+    assert.equal(bullets.length, 100);
+    assert.ok(bullets.at(-1).includes('lesson 119'), bullets.at(-1));
+  });
+});
+
+test('a lesson collapses its whitespace onto one bullet', () => {
+  // A lesson arrives from a model and can carry newlines and tabs. One bullet per lesson is
+  // what makes the cap above countable at all.
+  withDir((mem) => {
+    const f = appendAgentLesson(mem, 'tester', 'a  lesson\nwith\tbreaks');
+    assert.match(readTextPy(f), /- \d{4}-\d{2}-\d{2}: a lesson with breaks\n$/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `learn --consolidate` — rebuild MEMORY.md from the fact files that are really on disk.
+
+test('consolidate re-indexes an orphan and prunes a dead line', () => {
+  withDir((mem) => {
+    fs.writeFileSync(path.join(mem, 'new-fact.md'),
+      '---\nname: new-fact\ndescription: a new fact\ntype: project\n---\nbody\n', 'utf8');
+    fs.writeFileSync(path.join(mem, 'MEMORY.md'),
+      '# Memory Index\n- [gone](gone.md) — stale\n', 'utf8');
+    const report = consolidateMemory(mem);
+    const index = fs.readFileSync(path.join(mem, 'MEMORY.md'), 'utf8');
+    assert.ok(index.includes('new-fact.md'), index);
+    assert.ok(!index.includes('gone.md'), index);
+    // The DESCRIPTION is carried across, not just the link — an index of bare filenames is
+    // not something the agent can choose from.
+    assert.ok(index.includes('a new fact'), index);
+    assert.deepEqual(report.added, ['new-fact']);
+    assert.deepEqual(report.pruned, ['gone']);
+  });
+});
+
+test('consolidate skips the index and the readme, and reports duplicates', () => {
+  withDir((mem) => {
+    for (const slug of ['a', 'b']) {
+      fs.writeFileSync(path.join(mem, `${slug}.md`),
+        `---\nname: ${slug}\ndescription: same desc\n---\nx\n`, 'utf8');
+    }
+    fs.writeFileSync(path.join(mem, 'README.md'), 'not a fact\n', 'utf8');
+    const report = consolidateMemory(mem);
+    const index = fs.readFileSync(path.join(mem, 'MEMORY.md'), 'utf8');
+    assert.ok(!index.includes('README.md'), index);
+    // REPORTED, NOT MERGED. Two facts with the same description are a judgement call for the
+    // user; consolidating them automatically would delete one of their memories.
+    assert.deepEqual(report.duplicates, [['a', 'b']]);
   });
 });
 
