@@ -1,0 +1,390 @@
+{
+  "doc": [
+    "THE TWO-SIDED PARTITION. Every tests/*.py that has ever existed in this repository names",
+    "either its Node successor or a written reason it is retired. Never both, never neither.",
+    "",
+    "WHY THIS FILE EXISTS. P3 replaces ~36,600 lines of Python test code with a Node suite an",
+    "order of magnitude smaller. 'Smaller and more honest' and 'smaller because we quietly",
+    "dropped coverage' produce the same line count and the same green build. This ledger is the",
+    "only mechanism that tells them apart: tests/ported.test.mjs fails on a .py file with no row,",
+    "on a row naming a .py that is not there, on a row naming a Node file that does not exist,",
+    "and on a row whose recorded test count no longer matches the file. Under-porting becomes a",
+    "red build instead of an absence.",
+    "",
+    "A RETIRED ROW IS NOT A SHRUG. Its reason must name what makes the property unobservable —",
+    "a subject that no longer exists, or a surviving gate that covers it — because 'the",
+    "comparison dies with the reference' is true of every cross-implementation test in this",
+    "suite and is therefore an argument for nothing. Where a parity file carries an absolute",
+    "half beside its comparison (a corpus, a coverage gate over a live primitive), the row names",
+    "a successor for that half rather than retiring the file whole.",
+    "",
+    "py_tests IS RE-DERIVED, NOT TRUSTED. The gate counts `def test_` in the file itself and",
+    "fails on a mismatch, so a Python test added after this ledger was written cannot hide",
+    "inside a row that already looks accounted for.",
+    "",
+    "reference_deleted FLIPS EXACTLY ONCE, in P4's deletion commit. While it is false every row",
+    "must name a .py that is on disk; once it is true no tests/*.py may exist at all and no row",
+    "may still be `todo`. That turns the cut from a claim in a commit message into an assertion."
+  ],
+  "reference_deleted": false,
+  "rows": [
+    {
+      "python": "tests/golden.py",
+      "kind": "harness",
+      "py_tests": 0,
+      "status": "todo",
+      "node": ["tests/helpers/golden.mjs", "tests/helpers/matrix.json", "tests/golden.test.mjs"],
+      "why": "The emit matrix. Its 259 cells are DATA and cross as JSON (exported from cells()/deletion_cells() while the reference lives, gated by an equality test against the live functions). What ports is the runtime: sandbox and env, _normalise, _destamp, _snapshot, _shim_health, corpus_normalise, _recompute_declared_lengths, orphan_check, and the --against/--idempotent/--deletion drivers. The --ref comparison half has no successor and needs none: it compares two implementations and there will be one."
+    },
+    {
+      "python": "tests/harness_golden.py",
+      "kind": "harness",
+      "py_tests": 0,
+      "status": "todo",
+      "node": ["tests/helpers/cli_golden.mjs", "tests/helpers/cli_matrix.json", "tests/cli_golden.test.mjs"],
+      "why": "The CLI verb matrix, and the single highest-value port out of the Python suite: its ~800 expect/expect_absent/expect_re/expect_silent/expect_files/expect_absent_files assertions are the only ones that say what the tool SHOULD print rather than what it did, and they are what stops a corpus recorded from an implementation that went silent from freezing that silence as correct. The 317 cells carry those assertions inline and cross as JSON with them. The runtime that ports: _seed, _subst, _copy_checkout, _clone_checkout, _git_template, _repoint, run_cell, check_expectations, _destamp."
+    },
+    {
+      "python": "tests/web_golden.py",
+      "kind": "harness",
+      "py_tests": 0,
+      "status": "todo",
+      "node": ["tests/helpers/web_golden.mjs", "tests/helpers/web_matrix.json", "tests/web_golden.test.mjs"],
+      "why": "The web console matrix: 114 cells, each a request script over one reused connection against a daemon started with --daemon-internal --port 0. Cells cross as JSON once the request bodies (the only non-JSON values in any of the three matrices) are base64-encoded. The runtime that ports: _drive, _wait_for_record, _stop, _decode_body, the dynamic and corpus stamp tables, _corpus_normalise, run_cell, check_expectations."
+    },
+    {
+      "python": "tests/snapshot_io.py",
+      "kind": "harness",
+      "py_tests": 0,
+      "status": "todo",
+      "node": ["tests/helpers/snapshot_io.mjs"],
+      "why": "The one owner for reading a recorded cell snapshot and diffing it against a live one. 58 lines, no reference involvement, read by all three replayers — the first thing P3 ports and the thing that proves the corpus format is understood before anything drives it."
+    },
+    {
+      "python": "tests/record_help.py",
+      "kind": "tool",
+      "py_tests": 0,
+      "status": "retired",
+      "retired": "RETIRED: its oracle is argparse. It calls parser.format_help() on build_argparser() to record the 26 help fixtures and the textwrap matrix; when the parser goes there is nothing left to ask. The fixtures it produced survive as tests/__snapshots__/help and textwrap.json and are replayed with no Python by tests/cli_help.test.mjs and tests/pure_snapshot.test.mjs. What is LOST is the ability to re-record them, which is docs/port-ledger.md's handed-to-P4 item 2 and must be decided there rather than here: either the help text becomes effectively immutable or the fixtures get re-blessed from the port and degrade from regression gate to determinism check."
+    },
+
+    {
+      "python": "tests/test_snapshot_io.py",
+      "kind": "unit",
+      "py_tests": 4,
+      "status": "todo",
+      "node": ["tests/unit/snapshot_io.test.mjs"],
+      "why": "Absolute assertions over the snapshot format. Re-aims at tests/helpers/snapshot_io.mjs with no other change of subject."
+    },
+    {
+      "python": "tests/test_golden_destamp.py",
+      "kind": "unit",
+      "py_tests": 29,
+      "status": "todo",
+      "node": ["tests/unit/destamp.test.mjs"],
+      "why": "'The destamp must ASSERT before it passes anything through' — the property that keeps a normaliser from becoming a way to make any two runs equal. Its subject moves from golden._destamp to the Node destamp and every case survives; a destamp with no gate is how a whole class of bug goes invisible."
+    },
+    {
+      "python": "tests/test_golden_sandbox.py",
+      "kind": "unit",
+      "py_tests": 28,
+      "status": "todo",
+      "node": ["tests/unit/sandbox.test.mjs"],
+      "why": "The sandbox must actually contain the emits it runs. Re-aims at tests/helpers/sandbox.mjs. Assert on the ENVIRONMENT, never by observing the leak — OPENCODE_CONFIG_DIR silently routed 135 files per cell into the real target and was byte-identical in all 259 cells."
+    },
+    {
+      "python": "tests/test_sandbox_paths.py",
+      "kind": "unit",
+      "py_tests": 11,
+      "status": "todo",
+      "node": ["tests/unit/sandbox.test.mjs"],
+      "why": "Sandbox roots are CANONICAL — the 8.3-short-path finding that leaked a raw sandbox name into 45 byte comparisons and made one cell vacuous on GitHub's Windows runner. The gate MANUFACTURES the aliasing rather than waiting for a runner to supply it, which is what makes it portable to Node at all."
+    },
+    {
+      "python": "tests/test_home_sandbox.py",
+      "kind": "unit",
+      "py_tests": 7,
+      "status": "todo",
+      "node": ["tests/unit/sandbox.test.mjs"],
+      "why": "No test module may emit into the developer's real home. Same subject as the two rows above and the same successor; the three are one property of tests/helpers/sandbox.mjs seen from three directions."
+    },
+    {
+      "python": "tests/test_build.py",
+      "kind": "unit",
+      "py_tests": 83,
+      "status": "todo",
+      "node": ["tests/unit/generate.test.mjs"],
+      "why": "Unit tests of the generator. Re-aimed at js/generate.mjs — re-derived from the property, not transcribed from the Python: the per-footprint character ceiling (two identical bundles that both doubled pass byte equality perfectly), prune ownership and the memory/notebook carve-out, idempotence."
+    },
+    {
+      "python": "tests/test_harness.py",
+      "kind": "unit",
+      "py_tests": 199,
+      "py_tests_unrun": 13,
+      "status": "todo",
+      "node": ["tests/unit/harness.test.mjs", "tests/unit/lifecycle.test.mjs"],
+      "why": "The largest unit file in the suite and the widest re-aim: the CLI's own logic, now js/. Carries the ONLY gate on _harness_supports/_stale_factory_hint (port-ledger row 8), which is cell-unreachable in the reference too — that property has no comparison anywhere and must land absolutely on the Node side or it is lost outright. THIRTEEN OF ITS TESTS HAVE NEVER RUN: lines 1997-2194 are pytest-style module-level functions taking tmp_path/monkeypatch/capsys, and CI's `python -m unittest discover` collects TestCase methods only — 199 ran, 212 are written, and pytest appears in no workflow or config file in this repo. They cover the global-excludes guard: sovereign_bypass inside and outside an excluded tree, the degraded arm, cmd_context and cmd_git_gate falling silent, the exclude add/remove round-trip, the user-bob-stub carve-out, and the end-to-end guard reading the written file. The port must treat them as UNPROVEN CLAIMS, not as coverage: write the Node gate first, then find out whether the behaviour it asserts is actually there."
+    },
+    {
+      "python": "tests/test_claude.py",
+      "kind": "unit",
+      "py_tests": 48,
+      "status": "todo",
+      "node": ["tests/unit/claude.test.mjs"],
+      "why": "The Claude Code host emit. Carries the user-file safety class — a pre-existing settings.json with the user's own hooks, commented JSONC, a stale claim set, invalid JSON, claim-on-create, the managed CLAUDE.md block — which is the class of bug that destroys a user's own file and which a fresh-sandbox emit never reaches by construction."
+    },
+    {
+      "python": "tests/test_update.py",
+      "kind": "unit",
+      "py_tests": 52,
+      "status": "todo",
+      "node": ["tests/unit/update.test.mjs"],
+      "why": "The cross-platform update core. Re-aims at js/update.mjs."
+    },
+    {
+      "python": "tests/test_web.py",
+      "kind": "unit",
+      "py_tests": 136,
+      "status": "todo",
+      "node": ["tests/unit/web_api.test.mjs"],
+      "why": "136 in-process api_X(state) tests become apiX(state) in node:test. web_golden.py's own docstring says the HTTP cells were designed NOT to replace them: cells for the shell, corpus for the functions. Porting the cells and dropping these would leave the shell proved and the functions unasserted."
+    },
+    {
+      "python": "tests/test_winterm.py",
+      "kind": "unit",
+      "py_tests": 28,
+      "status": "retired",
+      "retired": "RETIRED: its subject is rituals/_winterm.py, the Windows VT curses shim, whose only caller is the full-screen panel. The panel is dropped by a locked decision (design 3.3) and js/tui.mjs refuses instead of painting; there is no Node twin to re-aim at and building one would be building the panel. tests/test_tui_boundary.py's structural half is what asserts the absence until P4, and P4 deletes that too once there is no panel left to forbid."
+    },
+    {
+      "python": "tests/test_emit_modes.py",
+      "kind": "unit",
+      "py_tests": 14,
+      "status": "todo",
+      "node": ["tests/unit/emit_modes.test.mjs"],
+      "why": "Fixture tests for the three emit modes. Re-aims at js/generate.mjs; the mode axis is one of the two the 259-cell matrix sweeps only once, so the fixture is what varies it."
+    },
+    {
+      "python": "tests/test_emit_smoke.py",
+      "kind": "unit",
+      "py_tests": 6,
+      "status": "todo",
+      "node": ["tests/unit/emit_smoke.test.mjs"],
+      "why": "Every --emit mode in every footprint must build clean. Cheap, broad, and the first thing to redden on a structural break; keeps its shape and changes its runtime."
+    },
+    {
+      "python": "tests/test_registry.py",
+      "kind": "unit",
+      "py_tests": 24,
+      "status": "todo",
+      "node": ["tests/unit/registry.test.mjs"],
+      "why": "The three source-wide authoring gates from the entity registry. Their subject is src/ — the content tree, not either implementation — so the port is a change of runtime with no change of claim."
+    },
+    {
+      "python": "tests/test_atomic_config.py",
+      "kind": "unit",
+      "py_tests": 4,
+      "status": "todo",
+      "node": ["tests/unit/atomic_config.test.mjs"],
+      "why": "Atomic write guarantee for user-owned config: opencode.json and settings.json must never be left truncated and must leave no litter. A data-loss property, which is the tier that is never simplified away."
+    },
+    {
+      "python": "tests/test_hook_form.py",
+      "kind": "unit",
+      "py_tests": 14,
+      "status": "todo",
+      "node": ["tests/unit/hook_form.test.mjs"],
+      "why": "Every emitted non-gate hook ends with '|| exit 0' and every GATE hook does not, because a crashing gate must fail closed. Both halves are the assertion — the partition, not the presence — and both are declared mutants in tests/helpers/mutate.mjs."
+    },
+
+    {
+      "python": "tests/test_web_server.py",
+      "kind": "artifact",
+      "py_tests": 16,
+      "status": "todo",
+      "node": ["tests/unit/web_server.test.mjs"],
+      "why": "HTTP-level properties the cells cannot see through their own transport: keep-alive, compression, caching. Also the live probe behind port-ledger row 3 — /api/pick-folder must answer 501 on POST and fall through to the SPA on GET, which is a probe rather than a reading of DECLINED_POST."
+    },
+    {
+      "python": "tests/test_web_daemon.py",
+      "kind": "artifact",
+      "py_tests": 15,
+      "status": "todo",
+      "node": ["tests/unit/web_daemon.test.mjs"],
+      "why": "The web verb's parts no cell or corpus reaches. Carries port-ledger row 7: it re-derives _npm_build's unreachability from `git ls-files`, so untracking web/dist/index.html fails the test instead of quietly making the arm live."
+    },
+    {
+      "python": "tests/test_web_jobs.py",
+      "kind": "artifact",
+      "py_tests": 8,
+      "status": "todo",
+      "node": ["tests/unit/web_jobs.test.mjs"],
+      "why": "The job runner's argvs, which no response body carries. Also the declaration-read behind port-ledger row 9 — a gate on a declaration, weaker than a probe, and declared as such at both sites; the port must keep the weakness visible rather than dropping the row."
+    },
+    {
+      "python": "tests/test_opencode_guard.py",
+      "kind": "artifact",
+      "py_tests": 3,
+      "status": "todo",
+      "node": ["tests/unit/opencode_guard.test.mjs"],
+      "why": "The OpenCode guard plugin's rule/memory speed bump (Law VI), exercised through the shipped plugin. Its subject is an emitted artifact, so the port changes the runner and nothing else."
+    },
+    {
+      "python": "tests/test_package_manifest.py",
+      "kind": "artifact",
+      "py_tests": 26,
+      "status": "todo",
+      "node": ["tests/unit/package_manifest.test.mjs"],
+      "why": "Rewritten rather than translated: a real `npm pack`, installed into a throwaway consumer, all three views against the two-sided SHIPS/WITHHELD partition. The Python version reasons about files[] from the outside; the Node version can be the same gate P4 needs anyway (install into a container with no python on PATH)."
+    },
+    {
+      "python": "tests/test_docs_claims.py",
+      "kind": "artifact",
+      "py_tests": 23,
+      "status": "todo",
+      "node": ["tests/unit/docs.test.mjs"],
+      "why": "The claims the top-level docs make, gated against the tree. Counting sentences derived rather than transcribed. P5 adds the check the Python suite could not have: every fenced `geneseed ` command in the docs parsed against the CLI table."
+    },
+    {
+      "python": "tests/test_cli_reference.py",
+      "kind": "artifact",
+      "py_tests": 12,
+      "status": "todo",
+      "node": ["tests/unit/cli_table.test.mjs"],
+      "why": "PARTIAL, and the split is the point. The half that walks build_argparser() and asserts js/cli-table.json equals it field for field is the strongest gate in the file and dies with argparse — nothing replaces it, and P4 is where the table stops having an oracle. What survives is every claim the table makes ABOUT THE PORT: that each declared verb dispatches, that each declared flag is read, that the help fixtures match the table."
+    },
+
+    {
+      "python": "tests/test_pure_function_parity.py",
+      "kind": "parity",
+      "py_tests": 48,
+      "status": "todo",
+      "node": ["tests/pure_snapshot.test.mjs", "tests/unit/pure_functions.test.mjs"],
+      "why": "PARTIAL. The corpus half already has its Node home: tests/pure_snapshot.test.mjs replays primitives/, dwidth.json and textwrap.json with no Python. What does NOT yet cross is the coverage tier — 'the corpus reaches every exported primitive' — which is what stops the corpus from silently ceasing to exercise a function it names. Carries port-ledger rows 11, 12 and 13; row 13's minute_stamp guards must keep SKIPPING loudly rather than passing when the replaying machine's UTC offset differs."
+    },
+    {
+      "python": "tests/test_win_user_path.py",
+      "kind": "parity",
+      "py_tests": 10,
+      "status": "todo",
+      "node": ["tests/pure_snapshot.test.mjs", "tests/unit/win_user_path.test.mjs"],
+      "why": "PARTIAL. win_user_path.json already replays against winUserPathScript in pure_snapshot.test.mjs. What must still land is the STATED half of port-ledger row 4 — that the spawn arm carries no logic — which today lives in this file's docstring and nowhere else. A registry-write success arm no test may run needs its emptiness asserted, not described."
+    },
+    {
+      "python": "tests/test_node_cli_parity.py",
+      "kind": "parity",
+      "py_tests": 17,
+      "status": "todo",
+      "node": ["tests/unit/node_cli.test.mjs"],
+      "why": "Named 'parity' and misnamed: its docstring says these are the Node driver's own gates, the ones a byte comparison structurally cannot give. Every assertion is already absolute and about js/ — the child_process ban, the passthrough refutations, the interpreter discovery-then-refuse. Porting is a change of runner."
+    },
+    {
+      "python": "tests/test_hook_cli_parity.py",
+      "kind": "parity",
+      "py_tests": 38,
+      "status": "todo",
+      "node": ["tests/unit/hook_cli.test.mjs"],
+      "why": "Same shape as the row above, and it additionally owns ThePlatformDeclaredCellsAreDeclared, which asserts PLATFORM_ONLY from either host: every id declared for this platform is built, every id declared for the other is absent, and neither half is empty. That gate must move WITH the cell matrix or the union stops being a union."
+    },
+    {
+      "python": "tests/test_spawn_hygiene.py",
+      "kind": "parity",
+      "py_tests": 4,
+      "status": "todo",
+      "node": ["tests/unit/spawn_hygiene.test.mjs"],
+      "why": "Every capturing spawn suppresses the Windows console window. The 'on BOTH sides' half dies; the Node half is the one that ships, and it is the gate that a human — not a byte comparison — found was needed, because a console window is not a byte."
+    },
+    {
+      "python": "tests/test_token_report_parity.py",
+      "kind": "parity",
+      "py_tests": 5,
+      "status": "todo",
+      "node": ["tests/unit/token_report.test.mjs"],
+      "why": "PARTIAL and mostly surviving: 'the known limits are still exactly these two', 'the corpus reaches every exported primitive' and 'every host and every trap is covered' are absolute claims about a SHIPPED script. Only test_every_primitive_matches_python retires. The script deliberately reproduces Python semantics it documents in prose, which is also why it is one of the two legitimate hits P4's no-python scan must not forbid."
+    },
+    {
+      "python": "tests/test_maintainer_tools_parity.py",
+      "kind": "parity",
+      "py_tests": 14,
+      "status": "todo",
+      "node": ["tests/unit/maintainer_tools.test.mjs"],
+      "why": "PARTIAL, and the ratio is the argument: ten of its fourteen tests are absolute — the churn guarantee's exact bytes, the no-op case really leaving bytes alone, the fallback case really reaching the fallback, the destamp removing only what it claims, nothing surviving the sandbox. Written before the port existed, it found three divergences by being written; the absolute tier is why."
+    },
+    {
+      "python": "tests/test_settings_parity.py",
+      "kind": "parity",
+      "py_tests": 5,
+      "status": "todo",
+      "node": ["tests/unit/settings_jsonc.test.mjs"],
+      "why": "PARTIAL. The wiring comparison retires; the JSONC corpus and both hook-sniff shapes do not. JSONC parsing is a live product property — users hand-edit settings.json with comments — and its answers are absolute, not relative to an implementation."
+    },
+    {
+      "python": "tests/test_native_layer_parity.py",
+      "kind": "parity",
+      "py_tests": 4,
+      "status": "todo",
+      "node": ["tests/unit/py_primitives.test.mjs"],
+      "why": "PARTIAL. The tree comparison retires into the emit corpus; test_python_number_rendering_agrees does not. Number rendering is parseJson's int/float round-trip and jsonDumps' separators — the bytes on users' disks, per design 5.1 — and after P4 those functions are not Python compatibility, they ARE the spec. A spec needs an absolute corpus, not a comparison."
+    },
+    {
+      "python": "tests/test_opencode_extras_parity.py",
+      "kind": "parity",
+      "py_tests": 4,
+      "status": "todo",
+      "node": ["tests/unit/py_primitives.test.mjs"],
+      "why": "PARTIAL, same split and same successor as the row above: test_json_container_rendering_agrees is about the JSON container primitives, and 'the corpus reaches the shapes the emitted files do not' is exactly the vacuity gate that must travel with them. The extras comparison itself retires into the emit corpus."
+    },
+    {
+      "python": "tests/test_render_parity.py",
+      "kind": "parity",
+      "py_tests": 2,
+      "status": "retired",
+      "retired": "RETIRED: both tests are about the comparison and its matrix — one runs the two render cores against each other, the other asserts the matrix covers every theme and axis. With one runtime the first has no second operand, and the coverage it guarded is subsumed: the 259-cell emit corpus sweeps every theme x emit x footprint and is replayed against the port with no Python. Nothing here is a claim the corpus does not already carry."
+    },
+    {
+      "python": "tests/test_emit_boundary.py",
+      "kind": "structural",
+      "py_tests": 9,
+      "status": "retired",
+      "retired": "RETIRED by design 4/P3, and the retirement was PAID FOR IN ADVANCE: the four boundary branches this file uniquely reached were re-created as recorded cells in P1, before the freeze, precisely so that deleting it would not delete them. Its subject is 'python build.py renders the same bytes whichever runtime ran' — a claim about a process boundary that P4 removes."
+    },
+    {
+      "python": "tests/test_seam_coverage.py",
+      "kind": "structural",
+      "py_tests": 5,
+      "status": "retired",
+      "retired": "RETIRED by design 4/P3: it measures which emits cross the Node seam and pins the answer against prose. There is no seam once there is one runtime — the measurement's subject is the Python-to-Node boundary itself, and the answer has been 'all nine' since P4e."
+    },
+    {
+      "python": "tests/test_build_config_owner.py",
+      "kind": "structural",
+      "py_tests": 11,
+      "status": "retired",
+      "retired": "RETIRED by design 4/P3: 'the generator's mutable configuration has exactly ONE owner' is an ast-based gate over build.py, asserting a single-owner property of a file being deleted. js/ has had one owner for the same configuration since P2 by construction rather than by gate — there is no second module that could claim it."
+    },
+    {
+      "python": "tests/test_emit_phase_order.py",
+      "kind": "structural",
+      "py_tests": 5,
+      "status": "todo",
+      "node": ["tests/unit/emit_phase_order.test.mjs"],
+      "why": "NOT retired, converted. The invariant — RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY, per emit — is live and load-bearing. What retires is reading it out of a parse tree: js/emit.mjs emits its phase boundaries and the test asserts the observed sequence. Stronger than the ast version (it sees what RAN, not what is written) and it needs no parser in a repo whose CI advertises zero dependencies."
+    },
+    {
+      "python": "tests/test_tui_boundary.py",
+      "kind": "structural",
+      "py_tests": 20,
+      "status": "retired",
+      "retired": "RETIRED AT P4, NOT AT P3 — it is the gate that keeps the panel dropped while a panel still exists to drop, and deleting it early removes the only assertion that js/tui.mjs and js/menu.mjs paint nothing. P4 deletes it in the same commit that deletes rituals/: with no panel, its structural half has no subject and its behavioural half was a positive control over Python. Port-ledger rows 1 and 6 lose their assertion there and must be rewritten as the honest statement that the panel is gone."
+    },
+
+    {
+      "python": "tests/gen_cli_reference.py",
+      "kind": "tool",
+      "py_tests": 0,
+      "gone": true,
+      "status": "retired",
+      "retired": "RETIRED IN P2, already deleted. It generated cli.json from build_argparser(). P2 split the file's three roles instead of ranking them: the table moved byte-for-byte to js/cli-table.json as an OWNED product document, nothing generates it any more, and the frozen-oracle copy was dropped outright because it was byte-identical to the table and only `import harness` could ever have re-recorded it — which would have made every legitimate future CLI edit an unblessable red."
+    }
+  ]
+}
