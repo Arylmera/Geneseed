@@ -20,24 +20,26 @@ import { spawnSync } from 'node:child_process';
 import { localHost } from '../../js/web/server.mjs';
 import {
   NotFound, webState, apiOverview, apiCatalog, apiItem, specDesc, apiDiff,
-  apiThemes, apiDoctor, apiInstalls,
+  apiThemes, apiDoctor, apiInstalls, apiExcludes,
 } from '../../js/web/api.mjs';
 import {
   apiRestore, apiMcp, apiMcpToggle, buildOverride, apiInstallToggle,
+  apiInstallCmd, apiSelectView, apiExcludesMutate,
 } from '../../js/web/actions.mjs';
+import { installState } from '../../js/installs.mjs';
 import { MCP_PRESETS } from '../../js/mcp.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, pyResolve } from '../../js/hosts.mjs';
 import { normcase } from '../../js/lib/pyfs.mjs';
+import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
+import { diffCollect } from '../../js/diff.mjs';
+import { makeSandbox, TMP_ROOT, RELOCATION_VARS } from '../helpers/sandbox.mjs';
+import { webFixture, webFixtureTeardown, ROOT } from '../helpers/web_fixture.mjs';
 
 // `js/web/api.mjs` keeps its own `samePath` module-private. Rebuilt here from the same two
 // primitives rather than exported from the product for a test's benefit — and it must be
 // `normcase(pyResolve(...))` on both sides, because on Windows the two spellings this
 // comparison exists to reconcile differ in CASE as well as in shape.
 const samePath = (a, b) => normcase(pyResolve(a)) === normcase(pyResolve(b));
-import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
-import { diffCollect } from '../../js/diff.mjs';
-import { makeSandbox, TMP_ROOT } from '../helpers/sandbox.mjs';
-import { webFixture, webFixtureTeardown, ROOT } from '../helpers/web_fixture.mjs';
 
 const FIXTURE = webFixture();
 after(webFixtureTeardown);
@@ -1015,6 +1017,240 @@ test('an unknown install action is not ok', () => {
     seedGlobal(root);
     const res = apiInstallToggle(neutral(),
       { host: 'opencode', path: root, action: 'bogus' });
+    assert.equal(res.ok, false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Install creation: `apiInstallCmd` resolves the build command for an install or a re-theme,
+// keyed on the (host, path) allowlist. It installs an absent row, rebuilds an active one,
+// refuses a disabled one and 404s an unknown pair.
+//
+// ALL THREE STATES ARE BUILT, NOT DECLARED. The reference faked both `_install_targets` and
+// `_install_state`, which meant the states under test were the test's own opinion of what
+// `absent`/`active`/`disabled` look like. Here each one is produced the way the product decides
+// it — a manifest for `active`, a `.geneseed-disabled/` DIRECTORY for `disabled`, nothing at all
+// for `absent` — so a change to `installState`'s rules reddens this instead of sailing past a
+// lookup table.
+function withThreeInstalls(fn) {
+  const sb = makeSandbox();
+  const cwd = process.cwd();
+  const savedOc = process.env.OPENCODE_CONFIG_DIR;
+  try {
+    // active: an OpenCode global carrying a manifest.
+    const oc = path.join(sb.path, 'oc');
+    fs.mkdirSync(oc, { recursive: true });
+    fs.writeFileSync(path.join(oc, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    process.env.OPENCODE_CONFIG_DIR = oc;
+
+    // disabled: an OpenCode PROJECT — `.opencode/` makes it a project install, and the stash
+    // DIRECTORY is what `installState` reads as disabled.
+    const proj = path.join(sb.path, 'proj');
+    fs.mkdirSync(path.join(proj, '.opencode'), { recursive: true });
+    fs.mkdirSync(path.join(proj, DISABLED), { recursive: true });
+    process.chdir(proj);
+
+    // absent: `~/.claude` under the sandboxed home, which nothing has created.
+    const cl = path.join(os.homedir(), '.claude');
+    assert.ok(!fs.existsSync(path.join(cl, GLOBAL_MANIFEST)),
+      `${cl} already carries a manifest — the absent case is not absent and this test is `
+      + 'measuring something else');
+
+    const st = neutral();
+    assert.equal(installState(oc, 'opencode', 'global'), 'active');
+    assert.equal(installState(process.cwd(), 'opencode', 'project'), 'disabled');
+    assert.equal(installState(cl, 'claude', 'global'), 'absent');
+    return fn({ st, oc, cl, proj: process.cwd() });
+  } finally {
+    process.chdir(cwd);
+    if (savedOc === undefined) delete process.env.OPENCODE_CONFIG_DIR;
+    else process.env.OPENCODE_CONFIG_DIR = savedOc;
+    sb.cleanup();
+  }
+}
+
+test('the install command for an absent global target', () => {
+  withThreeInstalls(({ st, cl }) => {
+    const plan = apiInstallCmd(st, { host: 'claude', path: cl });
+    assert.ok('cmd' in plan, JSON.stringify(plan));
+    const cmd = plan.cmd.map(String);
+    assert.ok(cmd.includes('claude-global'));
+    assert.ok(cmd.includes('neutral'), 'a new install must inherit the current voice');
+    assert.ok(!cmd.includes('--out'), 'a global install takes no out/root');
+  });
+});
+
+test('the install command honours a valid picked theme', () => {
+  withThreeInstalls(({ st, cl }) => {
+    const plan = apiInstallCmd(st, { host: 'claude', path: cl, theme: 'imperial' });
+    assert.ok(plan.cmd.map(String).includes('imperial'));
+  });
+});
+
+// The theme comes out of a request body and lands in an argv, so a bogus one must never reach
+// the command line — it falls back to the state's theme instead.
+test('the install command rejects a bogus theme and falls back', () => {
+  withThreeInstalls(({ st, cl }) => {
+    const plan = apiInstallCmd(st, { host: 'claude', path: cl, theme: '../evil' });
+    const cmd = plan.cmd.map(String);
+    assert.ok(!cmd.includes('../evil'), 'a path-shaped theme reached the argv');
+    assert.ok(cmd.includes('neutral'));
+  });
+});
+
+test('an active install rebuilds in place with the same build command', () => {
+  withThreeInstalls(({ st, oc }) => {
+    const plan = apiInstallCmd(st, { host: 'opencode', path: oc, theme: 'imperial' });
+    assert.ok('cmd' in plan, JSON.stringify(plan));
+    const cmd = plan.cmd.map(String);
+    assert.ok(cmd.includes('opencode-global'));
+    assert.ok(cmd.includes('imperial'));
+  });
+});
+
+test('a disabled install is refused rather than rebuilt', () => {
+  withThreeInstalls(({ st, proj }) => {
+    const plan = apiInstallCmd(st, { host: 'opencode', path: proj });
+    assert.ok('error' in plan, JSON.stringify(plan));
+    assert.match(plan.error, /disabled/);
+  });
+});
+
+test('an unknown (host, path) pair raises NotFound', () => {
+  withThreeInstalls(({ st }) => {
+    assert.throws(() => apiInstallCmd(st, { host: 'claude', path: '/no/such/root' }), NotFound);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The harness selector: `apiSelectView` re-points the whole console at a detected install
+// (target, theme, emit) and `apiInstalls` marks the current one selected.
+
+function withTwoViews(fn) {
+  const sb = makeSandbox();
+  const savedOc = process.env.OPENCODE_CONFIG_DIR;
+  try {
+    const oc = path.join(sb.path, 'oc');
+    fs.mkdirSync(oc, { recursive: true });
+    process.env.OPENCODE_CONFIG_DIR = oc;
+
+    // The claude view, with its OWN markers — the point of the test is that selecting it reads
+    // those rather than keeping the opencode view's.
+    const cl = path.join(os.homedir(), '.claude');
+    fs.mkdirSync(cl, { recursive: true });
+    fs.writeFileSync(path.join(cl, '.geneseed-emit'), 'claude-global');
+    fs.writeFileSync(path.join(cl, '.geneseed-theme'), 'imperial');
+
+    return fn({ st: webState('neutral', oc), oc, cl });
+  } finally {
+    fs.rmSync(path.join(os.homedir(), '.claude'), { recursive: true, force: true });
+    if (savedOc === undefined) delete process.env.OPENCODE_CONFIG_DIR;
+    else process.env.OPENCODE_CONFIG_DIR = savedOc;
+    sb.cleanup();
+  }
+}
+
+test('selecting a view re-points target, theme and emit', () => {
+  withTwoViews(({ st, cl }) => {
+    const res = apiSelectView(st, { host: 'claude', path: cl });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    assert.ok(samePath(st.target, cl));
+    assert.equal(st.theme, 'imperial', "the theme was not read from the selected install");
+    assert.equal(st.emit, 'claude-global', 'the emit was not read from the selected install');
+  });
+});
+
+test('selecting an unknown pair raises NotFound', () => {
+  withTwoViews(({ st }) => {
+    assert.throws(() => apiSelectView(st, { host: 'claude', path: '/no/such/root' }), NotFound);
+  });
+});
+
+test('the install list marks exactly the current view selected', () => {
+  withTwoViews(({ st, cl }) => {
+    let selected = apiInstalls(st).installs.filter((r) => r.selected);
+    assert.equal(selected.length, 1, 'more than one row claimed to be the current view');
+    assert.equal(selected[0].host, 'opencode', 'the state starts pointed at the opencode view');
+
+    apiSelectView(st, { host: 'claude', path: cl });
+    selected = apiInstalls(st).installs.filter((r) => r.selected);
+    assert.equal(selected.length, 1);
+    assert.equal(selected[0].host, 'claude');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// GET/POST /api/excludes — the web mirror of `harness exclude add|remove|list`. The endpoint
+// owns NO exclusion logic of its own; it reuses the snapshot/add/remove trio verbatim, so the
+// round trip is exercising the WIRING rather than re-testing the exclusion engine.
+
+function withGlobalInstalls(hosts, fn) {
+  const sb = makeSandbox();
+  const saved = {};
+  for (const v of RELOCATION_VARS) saved[v] = process.env[v];
+  const claudeCfgDir = path.join(os.homedir(), '.claude');
+  try {
+    // Every host is pointed somewhere INSIDE this sandbox, so a host not in `hosts` resolves
+    // to a directory that does not exist and reports no install. Leaving one pointed at its
+    // real location would fold the developer's own excludes into the snapshot.
+    process.env.BOB_CONFIG_DIR = path.join(sb.path, 'bob-none');
+    process.env.COPILOT_CONFIG_DIR = path.join(sb.path, 'copilot-none');
+    process.env.OPENCODE_CONFIG_DIR = path.join(sb.path, 'opencode-none');
+
+    for (const host of hosts) {
+      const cfg = host === 'claude' ? claudeCfgDir : path.join(sb.path, `${host}-cfg`);
+      fs.mkdirSync(cfg, { recursive: true });
+      fs.writeFileSync(path.join(cfg, GLOBAL_MANIFEST), '{"owned": []}');
+      fs.writeFileSync(path.join(cfg, 'excludes.json'), '{"excludes": []}');
+      if (host === 'claude') fs.writeFileSync(path.join(cfg, 'CLAUDE.md'), 'x');
+      else if (host === 'bob') process.env.BOB_CONFIG_DIR = cfg;
+      else if (host === 'copilot') process.env.COPILOT_CONFIG_DIR = cfg;
+      else if (host === 'opencode') process.env.OPENCODE_CONFIG_DIR = cfg;
+    }
+    return fn({ st: neutral(), tmp: sb.path });
+  } finally {
+    fs.rmSync(claudeCfgDir, { recursive: true, force: true });
+    for (const [v, val] of Object.entries(saved)) {
+      if (val === undefined) delete process.env[v];
+      else process.env[v] = val;
+    }
+    sb.cleanup();
+  }
+}
+
+test('the excludes endpoint round-trips an add and a remove', () => {
+  withGlobalInstalls(['claude', 'bob'], ({ st, tmp }) => {
+    const repo = path.join(tmp, 'vault');
+    fs.mkdirSync(repo);
+
+    assert.equal(apiExcludesMutate(st, { action: 'add', path: repo }).ok, true);
+    const snap = apiExcludes(st);
+    assert.equal(snap.excludes.length, 1);
+    // MIRROR THE PRODUCT'S CANONICALISATION rather than the path that was handed in: the add
+    // stores the RESOLVED path with separators normalised to `/`, and on a Windows runner that
+    // expands the 8.3 short temp name. Comparing against the raw argument passes on this
+    // laptop and fails on CI, which is the defect this comment exists to prevent.
+    assert.equal(snap.excludes[0].path.replace(/\/+$/, ''), asPosix(pyResolve(repo)));
+
+    assert.equal(apiExcludesMutate(st, { action: 'remove', path: repo }).ok, true);
+    assert.deepEqual(apiExcludes(st).excludes, []);
+  });
+});
+
+test('the excludes endpoint rejects a malformed body', () => {
+  const st = neutral();
+  for (const body of [{}, { action: 'add' }, { path: '/x' },
+    { action: 'bogus', path: '/x' }, null]) {
+    assert.equal(apiExcludesMutate(st, body).ok, false,
+      `${JSON.stringify(body)} was accepted`);
+  }
+});
+
+// Never excluded, so the remove finds nothing: `ok` false, never a crash.
+test('removing an exclude that was never added is not ok', () => {
+  withGlobalInstalls(['claude', 'bob'], ({ st, tmp }) => {
+    const res = apiExcludesMutate(st,
+      { action: 'remove', path: path.join(tmp, 'never-excluded') });
     assert.equal(res.ok, false);
   });
 });
