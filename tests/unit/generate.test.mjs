@@ -18,7 +18,9 @@ import {
 import { build } from '../../js/emit.mjs';
 import {
   isVendoredPath, loadAgentOverrides, writeNativeLayer, descBlockProblem,
+  validateIsVendored, VENDORED_SKILL_DIRS,
 } from '../../js/native.mjs';
+import { cmdValidate, validateSandboxProblems } from '../../js/doctor.mjs';
 import { syncThemes } from '../../js/themes.mjs';
 import { writeText } from '../../js/lib/pyfs.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
@@ -28,7 +30,7 @@ import {
 import { mergeOpencodeJson, opencodeTarget, readJsonc } from '../../js/settings.mjs';
 import { themeFiles } from '../../js/installs.mjs';
 import { ROOT, makeCfg, discoverNames } from '../../js/checkout.mjs';
-import { parseDriverArgs, emitGlobalInto } from '../../bin/geneseed.mjs';
+import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../bin/geneseed.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';
@@ -78,6 +80,10 @@ function buildInto(out, cfgOver = {}, buildOpts = {}) {
 }
 
 const read = (...p) => fs.readFileSync(path.join(...p), 'utf8');
+
+/** `Path.rglob("*")` filtered to files — absolute paths, order irrelevant (only counted). */
+const rglobFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true, recursive: true })
+  .filter((e) => e.isFile()).map((e) => path.join(e.parentPath ?? e.path, e.name));
 const isFile = (...p) => fs.existsSync(path.join(...p)) && fs.statSync(path.join(...p)).isFile();
 
 /**
@@ -383,6 +389,185 @@ test('the notebook charter is agent-owned after seeding', () => {
     buildInto(out);
     assert.equal(fs.readFileSync(charter, 'utf8'), '# My rules\nmine now\n');
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The dry run — `ValidateOnlyTests`.
+//
+// Render and emit into a throwaway sandbox, run doctor-grade checks, write nothing real.
+//
+// THE VERB MOVED, and that is the one structural difference in this class. `--validate-only` was
+// a flag on the generator; in the port `bin/geneseed.mjs` refuses it with exit 2 and a pointer,
+// because validating runs the doctor and the generator is under a transitive ban on starting a
+// process. It lives on the CLI binary as `geneseed validate`, deliberately outside the 26-verb
+// table (`bin/geneseed-cli.mjs` carries the argument).
+//
+// AND IT IS THE ONE VERB NO RECORDED CELL REACHES. `golden.py`'s `_argv` never emitted
+// `--validate-only`, so the flag was ungated across implementations for the whole port; the only
+// gate is `tests/test_maintainer_tools_parity.py`, whose comparison half retires at the cut. So
+// every claim below is written ABSOLUTELY about the port rather than as a comparison — these
+// nine are what is left holding the verb once the reference is gone.
+
+function validateRun(dir, extra) {
+  return spawnSync(process.execPath,
+    [path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'validate', ...extra],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      maxBuffer: 1 << 26,
+      windowsHide: true,
+      // A REAL HOME, sandboxed. The doctor's shim check reads the machine-wide hook shim, so
+      // without this the verdict depends on the developer's own install — and the emit half
+      // would REWRITE it. Measured, not guessed: a bare run on this machine reported the shim
+      // dead and repaired it as a side effect.
+      env: { ...process.env, ...homeOverrides(path.join(dir, 'home')) },
+    });
+}
+
+test('a clean theme exits zero and writes nothing', () => {
+  withDir((d) => {
+    const target = path.join(d, 'Harness');
+    assert.ok(!fs.existsSync(target));
+    const r = validateRun(d, ['--theme', 'neutral', '--emit', 'files', '--out', target]);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.ok(r.stdout.includes('would write'));
+    assert.ok(r.stdout.includes('ok'));
+    // The whole point of the verb.
+    assert.ok(!fs.existsSync(target), '--out was created by a dry run');
+  });
+});
+
+test('an existing --out is left byte-identical and untouched', () => {
+  // Not just "absent stays absent". A user runs this against a real prior bundle, and with a
+  // DIFFERENT theme — the case where a validate that quietly emitted would rewrite every file
+  // in it. mtime as well as content, so a rewrite with identical bytes still fails.
+  withDir((d) => {
+    const target = path.join(d, 'Harness');
+    buildInto(target);
+    const marker = path.join(target, 'AGENT.md');
+    const beforeMtime = fs.statSync(marker).mtimeNs;
+    const beforeText = fs.readFileSync(marker, 'utf8');
+    const r = validateRun(d, ['--theme', 'imperial', '--emit', 'files', '--out', target]);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(fs.statSync(marker).mtimeNs, beforeMtime, 'the dry run rewrote --out');
+    assert.equal(fs.readFileSync(marker, 'utf8'), beforeText);
+  });
+});
+
+test('an unknown theme exits non-zero and says so', () => {
+  withDir((d) => {
+    const r = validateRun(d, ['--theme', 'not-a-real-theme', '--emit', 'files']);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stdout + r.stderr, /unknown theme/);
+  });
+});
+
+test('verbose lists paths where quiet lists counts only', () => {
+  withDir((d) => {
+    const quiet = validateRun(d, ['--theme', 'neutral', '--emit', 'files']);
+    const verbose = validateRun(d, ['--theme', 'neutral', '--emit', 'files', '-v']);
+    assert.equal(quiet.status, 0, quiet.stdout + quiet.stderr);
+    assert.equal(verbose.status, 0, verbose.stdout + verbose.stderr);
+    // The per-file line prefix, colon and all — `would write` without it is the COUNT line,
+    // which both modes print, so the colon is the entire discriminator.
+    assert.ok(!quiet.stdout.includes('would write:'));
+    assert.ok(verbose.stdout.includes('would write:'));
+    assert.ok(verbose.stdout.includes('AGENT.md'));
+  });
+});
+
+test('the sandbox scan catches an unresolved token and a dead link', () => {
+  // The target-specific half, independent of the doctor: whatever the source tree looks like,
+  // what was just RENDERED has to survive its own scan.
+  withDir((d) => {
+    fs.writeFileSync(path.join(d, 'AGENT.md'),
+      'unresolved {{NOT_A_REAL_TOKEN}} and a [dead link](missing/file.md)\n');
+    const problems = validateSandboxProblems(d);
+    assert.ok(problems.some((p) => p.includes('unresolved token')), problems.join('\n'));
+    assert.ok(problems.some((p) => p.includes('dead link')), problems.join('\n'));
+  });
+});
+
+test('validate runs the doctor and relays its verdict', () => {
+  // Proof the two halves are WIRED, not that the doctor works — it has its own tests. A
+  // swallowed doctor call leaves a validate that passes on a source tree the doctor rejects.
+  const [rc, report] = captured(() => cmdValidate({
+    theme: 'neutral', emit: 'files', out: 'Harness', root: null, footprint: 'full',
+    verbose: false,
+  }));
+  assert.equal(rc, 0, report);
+  assert.ok(report.includes('[doctor]'), 'the doctor never spoke');
+  assert.ok(report.includes('ok'));
+});
+
+test('a distinct --root counts and scans the native layer too', () => {
+  // With a distinct --root the per-repo opencode emit SPLITS: the bundle under out, the
+  // native layer (.opencode/, opencode.json) under root. Before the fix the native layer was
+  // neither counted nor validated — 86 files reported against 191 written.
+  //
+  // The expected count is derived from a REAL split emit rather than transcribed, and the
+  // derivation is then asserted to have found something: a ground truth of zero native files
+  // would make the comparison agree with a validate that scanned only the bundle.
+  const expected = withDir((d) => {
+    const rootDir = path.join(d, 'root');
+    const outDir = path.join(rootDir, 'bundle');
+    captured(() => emitProjectInto('opencode',
+      { theme: 'neutral', out: outDir, root: rootDir, footprint: 'full' }));
+    const all = rglobFiles(rootDir);
+    const nNative = all.filter((p) => !p.startsWith(outDir + path.sep)).length;
+    assert.ok(nNative > 0, 'the split emit wrote nothing outside the bundle');
+    return all.length;
+  });
+
+  const [, report] = captured(() => cmdValidate({
+    theme: 'neutral', emit: 'opencode', out: 'ignored-out', root: 'ignored-root',
+    footprint: 'full', verbose: false,
+  }));
+  const m = /would write (\d+) file/.exec(report);
+  assert.ok(m, report);
+  assert.equal(Number(m[1]), expected);
+});
+
+test('the hermeticity scan survives an 8.3 short-form sandbox root', (t) => {
+  // Windows CI hands back temp dirs that resolve through an 8.3 short name (`RUNNER~1`), while
+  // the scan resolves each link TARGET long-form. Comparing the two made `within` reject EVERY
+  // relative link rather than only escaping ones, and CI reported `skills/workflow.md ->
+  // council.md` as non-hermetic. Reproduced deterministically rather than waiting for a runner.
+  if (process.platform !== 'win32') { t.skip('8.3 short paths are a Windows-only concept'); return; }
+  withDir((d) => {
+    // Python reaches GetShortPathNameW through ctypes; Node has no equivalent, and cmd's `%~s`
+    // modifier is the same API by another door.
+    const r = spawnSync('cmd', ['/c', `for %I in ("${d}") do @echo %~sI`],
+      { encoding: 'utf8', windowsHide: true });
+    const short = (r.stdout || '').trim();
+    if (r.status !== 0 || !short) { t.skip('cmd could not produce a short name'); return; }
+    if (short === d) { t.skip('no distinct 8.3 short name is available for this path'); return; }
+
+    fs.writeFileSync(path.join(d, 'workflow.md'), 'see [council](council.md)\n');
+    fs.writeFileSync(path.join(d, 'council.md'), '# council\n');
+    assert.deepEqual(validateSandboxProblems(short), []);
+  });
+});
+
+test('the vendored exemption finds skills/ at every host depth', () => {
+  // A vendored skill folder is copied verbatim and its own upstream cross-links are not ours
+  // to resolve. The per-repo native layers nest one level deeper than a files bundle, so a
+  // check anchored at the root reports every vendored cross-link as a dead link.
+  const [vendored] = [...VENDORED_SKILL_DIRS];
+  assert.ok(vendored, 'no vendored skill dirs — every case below is vacuous');
+  for (const [rel, want] of [
+    [`skills/${vendored}/README.md`, true],
+    [`.opencode/skills/${vendored}/SKILL.md`, true],
+    [`.claude/skills/${vendored}/SKILL.md`, true],
+    [`.bob/skills/${vendored}/nested/deep.md`, true],
+    [`.github/skills/${vendored}/SKILL.md`, true],
+    ['skills/commit.md', false],                     // a flat skill, not vendored
+    ['.claude/skills/council/SKILL.md', false],      // native, not vendored
+    [`${vendored}/loose.md`, false],                 // the vendored name without skills/
+    [`docs/${vendored}/note.md`, false],
+  ]) {
+    assert.equal(validateIsVendored(rel.split('/').join(path.sep)), want, rel);
+  }
 });
 
 // ---------------------------------------------------------------------------------------------
