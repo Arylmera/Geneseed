@@ -83,19 +83,19 @@ cd Geneseed
 git clone https://github.com/Arylmera/Geneseed.git
 cd Geneseed
 .\geneseed.cmd setup      # the wizard — or bare .\geneseed.cmd for the main menu
-# PowerShell-native twin: .\geneseed.ps1 [setup]
+# PowerShell runs a .cmd directly, so this is the PowerShell spelling too
 ```
 
-The launcher finds Python on its own (the `py` launcher, else `python` on PATH); if `python3` is missing on macOS, `xcode-select --install` or Homebrew provides it. The full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+ `conhost` — via a stdlib-only ANSI backend; an older console degrades gracefully to the same wizard as plain text prompts.
+Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PATH`, and nothing else. Set `GENESEED_NODE` to an absolute path if `node` is not on `PATH` — under a version manager that only patches interactive shells, say. The full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+ `conhost` — via a stdlib-only ANSI backend; an older console degrades gracefully to the same wizard as plain text prompts.
 
 **Already installed from a clone?** `geneseed migrate` moves every install you have onto the npm shape in one pass, all-or-nothing, without touching hooks or login items it did not write. Your old clone keeps working for a full release — there is no cliff. See [Migrate an existing install](docs/web/migrate.md).
 
 ### 🐍 What still needs Python — said plainly
 
-25 of the 25 subcommands run from Node, along with all four hooks, every web-console endpoint and both generators — producing byte-identical output, gated on every commit across every theme × host × footprint. So an npx install is Python-free **for the harness itself**, with exactly three exceptions. None is on the install path; all three are named here rather than discovered later.
+25 of the 25 subcommands run from Node, along with all four hooks, every web-console endpoint and both generators — producing byte-identical output, gated on every commit across every theme × host × footprint. So an npx install is Python-free **for the harness itself**, and since the token-report script crossed, for everything it ships as well. One exception remains, and it is a screen rather than a command.
 
 - **0 commands have no Node twin**: 25 of the 25 subcommands, and all four hook verbs, answer from the Node entry points. What is still Python is a SCREEN, not a command: the full-screen browse panel that `geneseed tui` and `geneseed menu` open on a terminal. From Node both refuse the panel by name and print the command list instead — the panel itself is `python rituals/harness.py tui` (or `menu`), from a checkout. Off a terminal, which is how scripts and CI run them, the two runtimes print the same bytes and exit the same way.
-- **One Python script rides inside the harness you install — and two more skills shell out to `python3` without shipping one.** The `token-report` skill is a script, not prose, so **every bundle carries** exactly one file that needs an interpreter: `src/skills/token-report/scripts/token_report.py`. It runs only when the agent invokes that one skill. On top of it, `daydream` runs `python3 -c` for weighted random sampling and `herdr` runs `python3 -c` twice to pull a field out of JSON — neither ships a Python file of its own, but both need `python3` on PATH the moment they're used. No other file in a bundle is Python, and no other skill shells out to it, on any host, theme or footprint — a test freezes both.
+- **Nothing you install needs an interpreter any more.** The `token-report` skill is a script rather than prose, and it is now `scripts/token_report.mjs`, run with `node`; `daydream` and `herdr`, which used to hand inline code to `python3` without shipping a file of their own, call `node -e` instead. So **every bundle carries** nothing that needs one: no Python file, and no skill that shells out to an interpreter, on any host, theme or footprint. Three tests freeze that — one scans every tracked file for inline code handed to an interpreter, one globs the bundle source, and one drives the ported script against its frozen predecessor over seeded transcripts for all four hosts and compares the bytes.
 - **`upgrade` / `update` / `sync-self` / `bootstrap` are for a git checkout.** They `git pull` the install's own origin. From an npm install they stop before touching anything and name `npm install -g geneseed@latest` as the update instead.
 
 One more honest edge, in the web console rather than the CLI: the **"browse…" folder picker** opens an OS-native dialog, which only the Python server can do. On the Node server the button reports that it is unavailable and the field beside it stays editable — type or paste the path.
@@ -246,13 +246,12 @@ Geneseed/
 ├── bin/                  the Node entry points — geneseed-cli.mjs (the CLI), geneseed-hook.mjs
 │                         (the four hook verbs), geneseed.mjs (the generator driver)
 ├── js/                   the Node harness — generator, hooks, web server, doctor, installs
-├── cli.json              the argument parser as data; both runtimes read it
+│                         (js/cli-table.json is the CLI as data; both runtimes read it)
 ├── build.py              generator (stdlib only)
-├── geneseed              launcher (bash): bare `./geneseed` = interactive main menu; + subcommands
+├── geneseed              launcher (bash): a shim over bin/geneseed-cli.mjs — bare `./geneseed`
+│                         = interactive main menu; + every subcommand the CLI carries
 │                         (`./geneseed link` puts it on PATH so `geneseed` runs from anywhere)
-├── geneseed.cmd          native Windows launcher (cmd.exe) — same subcommands, no bash
-├── geneseed.ps1          native Windows launcher (PowerShell) — same subcommands, no bash
-├── bootstrap             one-shot: update everything (sync + upgrade), then run setup
+├── geneseed.cmd          the same shim for cmd.exe / PowerShell — no bash needed
 ├── harness.config.json   default theme + metadata (the one owner of the version)
 ├── src/                  canonical source — edit here
 │   ├── AGENT.md.tmpl     the entrypoint, rendered to AGENT.md
@@ -336,7 +335,7 @@ Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Aryl
 
 Three things that bite when you don't know them:
 
-- **`rituals/harness.py` and `cli.json` change together.** The argument parser is data now: `cli.json` carries it, `bin/geneseed-cli.mjs` cannot parse a single verb without it, and `doctor` compares a sha256 of `rituals/harness.py` against the digest inside the file. Edit the parser, then run `python tests/gen_cli_reference.py` (it exits non-zero when it changed the file, so it doubles as a drift check) and commit both. A mismatch is a loud doctor problem on **both** binaries — which is the intended failure, not a surprise.
+- **`js/cli-table.json` IS the CLI.** The argument parser is data, and that file is the owned document — not a generated one. `bin/geneseed-cli.mjs` cannot parse a single verb without it, `bin/geneseed-hook.mjs` renders `--help` from it, and the console's `cli` docs page is a filtered view of it. While `rituals/harness.py` still exists, `tests/test_cli_reference.py` asserts that its argparse tree and this table describe the same CLI field for field — so edit the parser and the table together, or that test names the command that disagrees.
 - **The version has one owner: `harness.config.json`.** `package.json` mirrors it and a test fails the fork. Never `npm version` — it edits one of the two.
 - **Publishing is deliberate and manual.** `.github/workflows/publish.yml` uses npm trusted publishing (OIDC); there is no `NPM_TOKEN` in this repository and there must not be one. It runs only from Actions → publish → Run workflow, and the npm-side trusted publisher is keyed on that workflow's **filename** — renaming the file breaks publishing with no local symptom, which is why the file names itself in its own header and a test asserts the two agree.
 

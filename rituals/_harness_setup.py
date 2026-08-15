@@ -346,7 +346,7 @@ def _collect_setup_lines() -> "dict | None":
         out = root
     elif emit == "files":
         out = _ask("Output dir for the bundle", "Harness")
-    print("\nAbout to run:  python build.py "
+    print("\nAbout to run:  geneseed build "
           + " ".join(_setup_build_args(theme, emit, out, root, footprint, posture, mode)))
     if not _confirm("Proceed?", True):
         return None
@@ -443,7 +443,7 @@ def _setup_lines() -> int:
         except Exception as e:
             print(f"! could not export local edits ({e}) — continuing.")
     argv = _setup_build_args(theme, emit, out, root, footprint, posture, mode)
-    print("Running:  python build.py " + " ".join(argv))
+    print("Running:  geneseed build " + " ".join(argv))
     rc = run([sys.executable, str(BUILD), *argv]).returncode
     if rc != 0:
         sys.stderr.write("[setup] build failed — no harness written (see the output above).\n")
@@ -468,7 +468,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     line prompts on Windows / no-TTY / any curses failure."""
     if not sys.stdin.isatty():
         sys.stderr.write("[setup] needs an interactive terminal. Non-interactive? e.g.:\n"
-                         "  python build.py --emit opencode-global --theme neutral\n")
+                         "  geneseed build --emit opencode-global --theme neutral\n")
         return 1
     try:
         import curses

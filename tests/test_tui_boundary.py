@@ -262,11 +262,23 @@ class ThePortNeverOpensAPanel(unittest.TestCase):
         cls.rc = json.loads(proc.stderr.decode("utf-8"))["rc"]
 
     def test_on_a_tty_it_refuses_and_says_where_the_panel_is(self):
+        """THE NAME OF THIS TEST IS NOW HALF WRONG, and that is the finding rather than an
+        oversight: there is nowhere to send the reader. The refusal used to end "run `python
+        rituals/harness.py tui` for the panel", which was a real fallback while the panel
+        existed. It is the Python this migration deletes, so P2 took the pointer out instead
+        of re-aiming it — a refusal naming a file that will not be there is worse than one
+        that simply says the screen does not exist.
+
+        What is asserted instead is that the refusal still OFFERS something: the three verbs
+        that do work off a panel. Dropping that clause too would leave a bare "unavailable",
+        which is the dead end this test was written to forbid."""
         self.assertEqual(self.rc, 1)
         self.assertIn("full-screen panel unavailable", self.stdout)
-        self.assertIn("python rituals/harness.py tui", self.stdout,
-                      "the refusal must name the entry that DOES have the panel, or it is "
-                      "a dead end rather than a fallback")
+        self.assertNotIn("harness.py", self.stdout,
+                         "the refusal may not name a file this migration deletes")
+        self.assertIn("Use `harness setup`, `doctor`, or `build`.", self.stdout,
+                      "the refusal must still offer what DOES work, or it is a dead end "
+                      "rather than a fallback")
 
     def test_it_leaves_none_of_a_panel_behind(self):
         """The load-bearing half. Each mark is something a drawn panel necessarily writes,

@@ -9,8 +9,8 @@ self-discipline.
 ## Install
 
 Merge [`settings.json`](settings.json) into your repo's `.claude/settings.json`.
-(Not your *user* settings: the hook commands are repo-relative — `python
-rituals/harness.py …` — so at user scope they would fire and fail in every
+(Not your *user* settings: the hook commands are repo-relative — `node
+bin/geneseed-hook.mjs …` — so at user scope they would fire and fail in every
 repo that doesn't vendor the harness. A generated global install wires
 absolute-path hooks instead — `geneseed setup` does that for you.) It:
 
@@ -57,7 +57,7 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   it with `GENESEED_MEMORY=/abs/path/to/memory`.
 
 Adjust the paths if your harness bundle is not at the repository root. On Windows
-the commands are identical (`python rituals/harness.py …`).
+the commands are identical (`node bin/geneseed-hook.mjs …`).
 
 Why inject rather than instruct? Rule XVIII tells the agent to read the project
 context at startup, but startup rituals are exactly what agents skip. The

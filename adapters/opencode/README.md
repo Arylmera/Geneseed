@@ -36,7 +36,7 @@ native **skills**, so they're dispatchable rather than just described in prose. 
 generator produces all of it from the same `src/`, so it never drifts:
 
 ```
-python build.py --emit opencode --target /path/to/your-repo
+geneseed build --emit opencode --target /path/to/your-repo
 ```
 
 That writes, on top of the normal bundle (note the **plural** dir names — canonical
@@ -80,7 +80,7 @@ your-repo/
   subfolder, add `--root <repo>` — `opencode.json` and `.opencode/` are written to
   the repo root while the whole bundle (incl. `context.json`) stays in `--out`, and
   the instruction path is prefixed (`["Harness/AGENT.md"]`):
-  `python build.py --emit opencode --out repo/Harness --root repo`.
+  `geneseed build --emit opencode --out repo/Harness --root repo`.
 
 ### Keeping it in sync — `geneseed upgrade`
 
@@ -95,8 +95,8 @@ cd Geneseed
 ./geneseed upgrade imperial     # force a theme while upgrading
 ```
 
-On Windows use `.\geneseed.cmd upgrade` (or `.\geneseed.ps1`) — same subcommands,
-no bash.
+On Windows use `.\geneseed.cmd upgrade` — same subcommands, no bash, and PowerShell
+runs it directly.
 
 The native layer is **opt-in**. To (re)generate subagents, native skills, and an
 `opencode.json` on upgrade, set `GENESEED_EMIT=opencode` (or
@@ -288,7 +288,7 @@ For "the harness is global, zero per-repo files," render straight into OpenCode'
 global config dir:
 
 ```
-python build.py --emit opencode-global          # add --theme imperial if wanted
+geneseed build --emit opencode-global          # add --theme imperial if wanted
 ```
 
 It is **self-contained** — it writes only into the config dir (`$OPENCODE_CONFIG_DIR`,

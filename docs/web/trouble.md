@@ -11,14 +11,14 @@ Run `./geneseed link` (macOS/Linux) or `.\geneseed.cmd link` (Windows) from the 
 
 <!--harness:opencode-->
 ### The agent doesn't load my project docs
-On OpenCode the `geneseed-context` plugin must be installed. Re-run `geneseed setup` or `python build.py --emit opencode-global`. Verify with `geneseed doctor`.
+On OpenCode the `geneseed-context` plugin must be installed. Re-run `geneseed setup` or `geneseed build --emit opencode-global`. Verify with `geneseed doctor`.
 <!--/harness-->
 
 ### `doctor` reports unresolved theme tokens
-A theme JSON is missing a key the templates reference. Compare with `themes/neutral.json` — every key there must exist in your theme. Re-render: `python build.py --theme <yours>`.
+A theme JSON is missing a key the templates reference. Compare with `themes/neutral.json` — every key there must exist in your theme. Re-render: `geneseed build --theme <yours>`.
 
 ### `doctor` reports drift between bundle and src
-A committed `Harness/` snapshot fell behind. Re-render and commit: `python build.py && git add Harness`. If the drift is intentional local edits, use the **Changes** page to export them as an improvements file and back-port.
+A committed `Harness/` snapshot fell behind. Re-render and commit: `geneseed build && git add Harness`. If the drift is intentional local edits, use the **Changes** page to export them as an improvements file and back-port.
 
 ### Web UI shows 'no deployed harness'
 Run `geneseed setup` to install. The UI works read-only without a deployment but most actions are disabled.

@@ -7,7 +7,7 @@ since P10e — plugins. This module gates the other kind of counting sentence, t
 
 Seven claims, and each one was wrong at least once during this port:
 
-* **"these commands have no Node twin"** — derived from `cli.json`'s subparser list
+* **"these commands have no Node twin"** — derived from the CLI table's subparser list
   minus the two Node entry tables. Transcribing that list is exactly the
   copy-of-a-value-under-test this port forbids, so the docs name the verbs and this
   test derives the set they must equal. It moved in P5a, P5c, P5d, P5e, P5f, P5g,
@@ -81,13 +81,13 @@ def _verbs_of(entry: Path) -> set[str]:
 
 
 def _python_only_verbs() -> set[str]:
-    """Subparsers in `cli.json` that neither Node entry point answers.
+    """Subparsers in the CLI table that neither Node entry point answers.
 
-    `cli.json` carries argparse's `update` alias as its own row; it is the same
+    The table carries argparse's `update` alias as its own row; it is the same
     subparser as `upgrade` and is folded away here so the set is about COMMANDS a
     user cannot run from Node, not about names.
     """
-    spec = json.loads((ROOT / "cli.json").read_text(encoding="utf-8"))
+    spec = json.loads((ROOT / "js" / "cli-table.json").read_text(encoding="utf-8"))
     names = {c["name"] for c in spec["commands"]}
     node = _verbs_of(ROOT / "bin" / "geneseed-cli.mjs") | _verbs_of(ROOT / "bin" / "geneseed-hook.mjs")
     # An alias of a verb that crossed has crossed. `update` aliases `upgrade`.
@@ -131,25 +131,25 @@ class TheDocsNameTheVerbsThatStillNeedPython(unittest.TestCase):
 
         `tui` was the last verb, so the set is legitimately EMPTY now — and "assert it is
         empty" is precisely the vacuous gate the old control existed to prevent, because a
-        scrape that found no `cli.json`, or that parsed neither entry table, produces the
+        scrape that found no CLI table, or that parsed neither entry table, produces the
         same empty set for the opposite reason. So the control moved to the DERIVATION's
         inputs instead of its output: both sides must be non-empty and they must PARTITION
         the command list. A broken scrape fails that; a verb that genuinely stopped crossing
         fails `test_each_doc_names_exactly_the_verbs_with_no_node_twin` and lands back in
         the docs, which is where it belongs.
         """
-        spec = json.loads((ROOT / "cli.json").read_text(encoding="utf-8"))
+        spec = json.loads((ROOT / "js" / "cli-table.json").read_text(encoding="utf-8"))
         names = {c["name"] for c in spec["commands"]}
         cli = _verbs_of(ROOT / "bin" / "geneseed-cli.mjs")
         hook = _verbs_of(ROOT / "bin" / "geneseed-hook.mjs")
-        self.assertGreater(len(names), 20, "cli.json parsed to almost nothing")
+        self.assertGreater(len(names), 20, "js/cli-table.json parsed to almost nothing")
         self.assertGreater(len(cli), 20, "bin/geneseed-cli.mjs's verb table did not scrape")
         self.assertEqual(len(hook), 4, f"the hook entry's verbs scraped as {sorted(hook)}")
-        # The partition: every name in `cli.json` is answered by one of the two entries, or
+        # The partition: every name in the CLI table is answered by one of the two entries, or
         # is the `update` alias of one that is. This is the same statement as "the set is
         # empty", made from the other direction — it cannot be satisfied by reading nothing.
         self.assertEqual(names - cli - hook, set(),
-                         "cli.json has commands neither Node entry answers — P7b left the "
+                         "js/cli-table.json has commands neither Node entry answers — P7b left the "
                          "set empty, so this is a regression or a docs update this test "
                          "wants")
         self.assertEqual(_python_only_verbs(), set())
@@ -167,7 +167,7 @@ class TheDocsNameTheVerbsThatStillNeedPython(unittest.TestCase):
                          for v in _backticked(m.group(2))}
                 self.assertEqual(
                     named, left,
-                    f"{path.name} names {sorted(named)} as Python-only but cli.json minus "
+                    f"{path.name} names {sorted(named)} as Python-only but the CLI table minus "
                     f"the two Node entry tables is {sorted(left)}")
 
     def test_each_doc_counts_them_correctly(self):
@@ -255,7 +255,7 @@ class TheDocsCountTheSubcommandsThatCrossed(unittest.TestCase):
     PAT = re.compile(r"(\w+) of the (\w+) subcommands")
 
     def _figures(self) -> tuple[int, int]:
-        spec = json.loads((ROOT / "cli.json").read_text(encoding="utf-8"))
+        spec = json.loads((ROOT / "js" / "cli-table.json").read_text(encoding="utf-8"))
         # argparse's `update` alias is a second NAME for `upgrade`'s subparser, not a
         # second subcommand; fold it away so the denominator counts commands.
         total = len({c["name"] for c in spec["commands"]} - {"update"})
@@ -286,11 +286,20 @@ class TheDocsCountTheSubcommandsThatCrossed(unittest.TestCase):
 
 
 class TheDocsNameThePythonThatRidesInsideABundle(unittest.TestCase):
-    '''"No Python needed" is FALSE in exactly one place and the docs have to say so.
+    '''"No Python needed" is now TRUE, and the docs have to say THAT — provably.
 
-    Derived by globbing `src/` — the tree every bundle is rendered from — rather than
-    by trusting `test_package_manifest.PYTHON_IN_THE_PRODUCT`, so the two gates fail
-    independently. Today the answer is `token_report.py` and nothing else.
+    Derived by globbing `src/` — the tree every bundle is rendered from — rather than by
+    trusting `test_package_manifest.PYTHON_IN_THE_PRODUCT`, so the two gates fail
+    independently. Since P2 Task 3 the answer is: nothing.
+
+    THE OLD POSITIVE CONTROL DIED WITH ITS SUBJECT. It asserted `_scripts() ==
+    {"token_report.py"}`, which was what stopped the doc assertion below from passing
+    vacuously — a glob that finds nothing satisfies "every file found is named in the
+    docs" for free. The replacement cannot be another statement about `src/`, because
+    the true statement about `src/` is now emptiness. So the control moved to the
+    SENTENCE: the docs must still carry a marker, it must still be found by the same
+    regex, and it must now assert the empty claim in words. A doc that simply deleted
+    the paragraph fails.
     '''
 
     MARKER = re.compile(r"every bundle carries[^\n]*?:([^\n]*)")
@@ -298,12 +307,31 @@ class TheDocsNameThePythonThatRidesInsideABundle(unittest.TestCase):
     def _scripts(self) -> set[str]:
         return {p.name for p in (ROOT / "src").rglob("*.py")}
 
-    def test_the_glob_finds_the_one_script(self):
-        """Positive control: the assertion below is vacuous if `src/` has no Python."""
-        self.assertEqual(self._scripts(), {"token_report.py"},
-                         "the set of Python files inside the bundle source has changed — "
-                         "the docs claim and test_package_manifest's declaration both "
-                         "need the new row")
+    def test_the_bundle_source_carries_no_python_at_all(self):
+        self.assertEqual(self._scripts(), set(),
+                         "Python is back inside the bundle source — the docs claim and "
+                         "test_package_manifest's declaration both need the new row, and "
+                         "'no Python needed' is false again")
+
+    def test_each_doc_still_states_the_claim_rather_than_dropping_it(self):
+        """The control: emptiness must be ASSERTED, not achieved by deleting the words.
+
+        `test_each_doc_names_every_python_file_a_bundle_carries` below is satisfied by
+        any document that never mentions the subject. This one is not.
+        """
+        for path in (README, SETUP):
+            with self.subTest(doc=path.name):
+                text = _read(path)
+                m = self.MARKER.search(text)
+                self.assertIsNotNone(
+                    m, f"{path.name} no longer says what Python a bundle carries. The "
+                       "sentence is not obsolete now that the answer is 'none' — it is "
+                       "the only place the reader is told, and P10a measured the cost "
+                       "of leaving it unsaid")
+                self.assertRegex(
+                    m.group(1), r"\bnone\b|\bno\b|\bnothing\b",
+                    f"{path.name}'s 'every bundle carries' clause reads {m.group(1)!r}, "
+                    "which states neither a file nor the absence of one")
 
     def test_each_doc_names_every_python_file_a_bundle_carries(self):
         want = self._scripts()
@@ -512,7 +540,7 @@ class TheMigrateNoteAdvisesARealWebAction(unittest.TestCase):
     the bug's shape: it is green for whatever string was typed last, so it says yes to
     the next wrong one just as readily. These assertions derive what a valid `web`
     invocation *is* — the launcher name from `package.json`'s `bin`, the verb, its
-    action `choices` and its option names from `cli.json`, and the branch that actually
+    action `choices` and its option names from the CLI table, and the branch that actually
     daemonises from `cmd_web`'s own dispatch. Advice naming no action, an action that
     is not offered, an unknown flag, or an action that does not daemonise each fails,
     and each fails by name.
@@ -541,7 +569,7 @@ class TheMigrateNoteAdvisesARealWebAction(unittest.TestCase):
                                  "bytes, so one of them is about to go red")
 
     def test_the_advice_names_a_launcher_this_package_installs(self):
-        """`cli.json`'s `prog` is `harness` — the launcher name is the npm `bin` key, so
+        """The table's `prog` is `harness` — the launcher name is the npm `bin` key, so
         that is where it is derived from."""
         bins = json.loads(_read(ROOT / "package.json"))["bin"]
         for rel in self._SOURCES:
@@ -552,14 +580,14 @@ class TheMigrateNoteAdvisesARealWebAction(unittest.TestCase):
 
     def test_the_advice_names_a_real_web_action(self):
         """The regression itself: an argv that names no action is not a daemon."""
-        spec = json.loads(_read(ROOT / "cli.json"))
+        spec = json.loads(_read(ROOT / "js" / "cli-table.json"))
         commands = {c["name"]: c for c in spec["commands"]}
-        self.assertGreater(len(commands), 20, "cli.json parsed to almost nothing")
+        self.assertGreater(len(commands), 20, "js/cli-table.json parsed to almost nothing")
         for rel in self._SOURCES:
             tokens = self._advice(rel).split()[1:]
             verb, rest = tokens[0], tokens[1:]
             self.assertIn(verb, commands, f"{rel.as_posix()} advises the verb '{verb}', "
-                                          "which cli.json does not declare")
+                                          "which the CLI table does not declare")
             cmd = commands[verb]
             known = {n for o in cmd["options"] for n in o["names"]}
             positional = [t for t in rest if not t.startswith("-")]

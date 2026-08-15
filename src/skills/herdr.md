@@ -50,7 +50,7 @@ herdr pane read 1-1 --source recent --lines 50
 
 ```bash
 NEW_PANE=$(herdr pane split 1-2 --direction right --no-focus \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["pane"]["pane_id"])')
+  | node -e 'console.log(JSON.parse(require("fs").readFileSync(0,"utf8")).result.pane.pane_id)')
 herdr pane run "$NEW_PANE" "npm run dev"
 ```
 
@@ -107,7 +107,7 @@ Without `--label`, `workspace create` keeps cwd-based naming and `tab create` ke
 
 ```bash
 NEW_PANE=$(herdr pane split 1-2 --direction right --no-focus \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["pane"]["pane_id"])')
+  | node -e 'console.log(JSON.parse(require("fs").readFileSync(0,"utf8")).result.pane.pane_id)')
 herdr pane run "$NEW_PANE" "npm run dev"
 herdr wait output "$NEW_PANE" --match "ready" --timeout 30000
 herdr pane read "$NEW_PANE" --source recent --lines 20

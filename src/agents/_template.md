@@ -12,9 +12,8 @@
   4. Define the DESC_<NAME> token (hyphens -> underscores, uppercased) in ALL theme
      JSONs under themes/ — the parity gate fails if any theme is missing it.
   5. Bump the `agents-N` count badge in README.md (doctor checks it against the real
-     file count; the test counts derive from src/ and need no edit), then run:
-     python rituals/harness.py doctor --all
-     and python -m unittest discover -s tests.
+     file count; the test counts derive from src/ and need no edit), then run
+     `./geneseed doctor --all` and the repository's test suites.
 -->
 # {{AGENT}}: <name>
 

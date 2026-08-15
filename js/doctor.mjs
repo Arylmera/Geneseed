@@ -34,8 +34,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { CONFIG, PLUGIN_SRC, ROOT, SRC, THEMES, WORKFLOW_SRC, makeCfg } from './checkout.mjs';
-import { cliReferenceProblems } from './cli.mjs';
-import { main as driverMain, emitGlobalInto, emitProjectInto } from '../bin/geneseed.mjs';
+import {
+  buildInto, main as driverMain, emitGlobalInto, emitProjectInto,
+} from '../bin/geneseed.mjs';
 import { stripCapabilityLinks } from './emit.mjs';
 import { hostCatalogsNatively, pyResolve } from './hosts.mjs';
 import { EMIT_HOST_SCOPE, footprintOfDir, installedDefaults, themeFiles } from './installs.mjs';
@@ -51,8 +52,8 @@ import { SHIM_ARGV, hookShimPath } from './settings.mjs';
 import { pySplitLines } from './lib/pydiff.mjs';
 import { NO_WINDOW } from './lib/pyproc.mjs';
 import {
-  comparePaths, normcase, parseJson, pyPrint, pyRepr, pyStr, pyWhich, readText,
-  withDiscardableStderr,
+  comparePaths, normcase, parseJson, pyPrint, pyPrintErr, pyRepr, pyStr, pyStripSpace, pyWhich,
+  readText, withDiscardableStderr,
 } from './lib/pyfs.mjs';
 
 // --------------------------------------------------------------------------------------
@@ -783,8 +784,7 @@ export function countTableProblems() {
 
   const skillFiles = srcStems('skills');
   for (const missing of [...skillFiles].filter((s) => !has(SKILL_CLASS, s)).sort()) {
-    problems.push(`[authoring] skills/${missing}.md has no category in SKILL_CLASS `
-      + '(_harness_tui.py)');
+    problems.push(`[authoring] skills/${missing}.md has no category in SKILL_CLASS`);
   }
   for (const stale of Object.keys(SKILL_CLASS).filter((s) => !skillFiles.has(s)).sort()) {
     problems.push(`[authoring] SKILL_CLASS lists '${stale}' but no skills/${stale}.md exists`);
@@ -795,8 +795,7 @@ export function countTableProblems() {
     ? [...readText(lawsMd).matchAll(LAW_HEADING_RE)].map((m) => m[1]) : [];
   for (const num of lawNums) {
     if (!has(LAW_CLASS, num)) {
-      problems.push(`[authoring] laws/universal.md rule ${num} has no class in LAW_CLASS `
-        + '(_harness_tui.py)');
+      problems.push(`[authoring] laws/universal.md rule ${num} has no class in LAW_CLASS`);
     }
   }
   // `sorted(LAW_CLASS.items())` — by the Roman numeral as a STRING, which is what Python
@@ -900,11 +899,14 @@ export function authoringProblems() {
   let m = null;
   try { m = LEARN_PROMPT_RE.exec(readText(plugin)); } catch { m = null; }
   if (!m) {
+    // "the harness", not `harness.py`: both implementations load this literal, and the file
+    // the old wording named is the one this migration deletes. Moved on both sides at once —
+    // these two strings are byte-compared by the live doctor comparison.
     problems.push('[authoring] LEARN_PROMPT_HEAD literal not found in '
-      + 'geneseed-learn.js — harness.py would fall back (single source broken)');
+      + 'geneseed-learn.js — the harness would fall back (single source broken)');
   } else if (m[1] !== loadLearnPromptHead()) {
     problems.push('[authoring] LEARN_PROMPT_HEAD drifted between geneseed-learn.js '
-      + "and harness.py's loaded copy");
+      + "and the harness's loaded copy");
   }
   const node = pyWhich('node');
   if (node) {
@@ -948,8 +950,8 @@ export function themesToCheck(theme, allThemes, detected, available) {
 }
 
 /** `tempfile.TemporaryDirectory()` — created, handed to `fn`, removed whatever happens. */
-function withTempDir(fn) {
-  const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-doctor-'));
+function withTempDir(fn, prefix = 'geneseed-doctor-') {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), prefix));
   try { return fn(tmp); } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 
@@ -1095,11 +1097,13 @@ export function doctorCollect({
   problems = problems.concat(ran('colors', 'Colour themes', colorThemeProblems()));
   problems = problems.concat(ran('authoring', 'Authoring gates', authoringProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
-  // P10c. The ONE check in this file whose fault neither implementation can construct from
-  // its own state — `cli.json` is generated from a Python parser — and the only one both
-  // perform by hashing the same file rather than by re-deriving the value. See `js/cli.mjs`
-  // for why it is a digest and not a regenerate-and-compare.
-  problems = problems.concat(ran('cli', 'CLI reference', cliReferenceProblems()));
+  // P10c's `cli` check is GONE, and the reason is not that it stopped mattering. It hashed
+  // `rituals/harness.py` and compared that against a digest baked into `cli.json`, to catch a
+  // parser edited without regenerating the table. P2 made the table the OWNED document
+  // (`js/cli-table.json`), so there is no generator to fall behind and no second file to hash
+  // — the digest was a claim about a file this migration deletes. What replaces it is
+  // `tests/test_cli_reference.py`'s argparse-vs-table equality, for as long as the parser is
+  // still here to walk.
   if (!noBundle) {
     // `Path(bundle).expanduser().resolve()`, which `pyResolve` already IS — the default is
     // deliberately NOT resolved, because the Python's `ROOT / "Harness"` is not either and
@@ -1146,8 +1150,15 @@ export function cmdDoctor(args) {
         + '`./geneseed update` (or re-sync src/), then re-check.\n');
     }
     if (problems.some((p) => p.startsWith('[themes]') && p.includes('missing key'))) {
+      // `./geneseed build --sync-themes`, and the spelling is a one-shot decision frozen in
+      // two fixtures, so it is argued here. The FRONT DOOR, not an interpreter and a file:
+      // `build` forwards its extra arguments to the generator on both sides, so the tip names
+      // a command that works today AND after the Python is deleted — which the old
+      // `python build.py --sync-themes` would not. The `./` prefix matches the sibling tip
+      // five lines up (`./geneseed update`) and is honest about the audience: this problem is
+      // only reachable while authoring themes in a checkout, which is where `./geneseed` is.
       pyPrint('  tip: a theme is missing a key another theme defines — run '
-        + '`python build.py --sync-themes` to fill it from _TEMPLATE.json, '
+        + '`./geneseed build --sync-themes` to fill it from _TEMPLATE.json, '
         + 'then restyle the added key(s) and re-check.\n');
     }
     if (note) pyPrint(`${note}\n`);
@@ -1157,5 +1168,184 @@ export function cmdDoctor(args) {
     + 'links, nothing escapes the bundle; themes in parity; specs carry purpose '
     + 'lines; rendered bundle in sync\n');
   if (note) pyPrint(`${note}\n`);
+  return 0;
+}
+
+// --------------------------------------------------------------------------------------
+// validate  —  `build.py --validate-only`, on this binary because it runs the doctor
+// --------------------------------------------------------------------------------------
+
+/**
+ * `build._validate_sandbox_problems` — the unresolved-token / dead-link / non-hermetic-link
+ * scan over an already-rendered sandbox tree.
+ *
+ * A NEAR-TWIN OF `checkBuild` ABOVE, AND DELIBERATELY NOT IT, because the reference is two
+ * functions and they differ in three observable ways: the token list is `sorted(set(...))`
+ * here and bare `set(...)` there, the message carries no `[theme]` prefix (the caller adds
+ * `[emit]` instead), and an unreadable file is SKIPPED rather than raised. Python duplicates
+ * the loop because `build.py` cannot import the harness tree; here the two live in one file
+ * and the duplication is eight lines — every primitive underneath (`rglob`, `stripCode`,
+ * `linkProblems`, `readText`) is the shared one, which is the half that could actually drift.
+ */
+export function validateSandboxProblems(sandbox) {
+  const out = pyResolve(sandbox);
+  const problems = [];
+  for (const md of rglob(out)) {
+    if (!md.endsWith('.md') || !isFile(md)) continue;
+    const rel = path.relative(out, md);
+    if (validateIsVendored(rel)) continue;
+    let text;
+    // `except (OSError, UnicodeDecodeError): continue` — binary or unreadable, nothing here.
+    try { text = readText(md); } catch { continue; }
+    for (const tok of sortedUnique(text.match(TOKEN_RE) ?? [])) {
+      problems.push(`unresolved token ${tok} in ${rel}`);
+    }
+    problems.push(...linkProblems(md, text, out, rel));
+  }
+  return problems;
+}
+
+/**
+ * `subprocess.run(..., capture_output=True, text=True)` around an IN-PROCESS call.
+ *
+ * The reference shells to `harness.py doctor`; this calls `cmdDoctor` directly, and the
+ * difference has to be undone in one place: a child's `capture_output` hands the parent
+ * UNIVERSAL-NEWLINE text, so `r.stdout` holds `\n` on Windows even though the child wrote
+ * `\r\n`. `pyPrint` inside `cmdDoctor` writes `\r\n`. Without the fold, the `.strip()` below
+ * would leave every interior line CRLF and the re-print would double the translation.
+ */
+function captureStreams(fn) {
+  const chunks = { out: [], err: [] };
+  const realOut = process.stdout.write.bind(process.stdout);
+  const realErr = process.stderr.write.bind(process.stderr);
+  process.stdout.write = (c) => { chunks.out.push(String(c)); return true; };
+  process.stderr.write = (c) => { chunks.err.push(String(c)); return true; };
+  let code;
+  try {
+    code = fn();
+  } finally {
+    process.stdout.write = realOut;
+    process.stderr.write = realErr;
+  }
+  const decode = (xs) => xs.join('').replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  return { code, out: decode(chunks.out), err: decode(chunks.err) };
+}
+
+/**
+ * `build._validate_only` — render + emit the requested target into a throwaway sandbox, run
+ * every validation a real build would gate on, print what WOULD have been written, and return
+ * the exit code. Nothing under the sandbox survives, and no marker, manifest or registry row
+ * is ever written for real.
+ *
+ * WHY IT IS HERE AND NOT ON THE GENERATOR DRIVER, which is where its flag lives. The
+ * source-tree half of the check IS the doctor, and this module starts a process (`node --check`
+ * over the OpenCode plugins). `bin/geneseed.mjs` is under a transitive ban on reaching any
+ * module that can, gated twice — `tests/test_node_cli_parity.py` greps the driver's source and
+ * `tests/test_hook_cli_parity.py` walks its relative imports. Siting the tool on the CLI
+ * binary, which already carries the doctor, crosses it with neither gate amended and without
+ * the dynamic `import()` that would evade the walk.
+ *
+ * THE MARKER GUARANTEE COMES FREE, and that is why `emitProjectInto`/`emitGlobalInto`/
+ * `buildInto` are used rather than `driverMain(['--emit', …])`: the driver writes
+ * `.geneseed-emit`/`.geneseed-footprint` and records an install-registry row AFTER the
+ * dispatch, so routing through it would register a temp directory that is deleted a
+ * millisecond later. The reference calls the emit functions directly for the same reason.
+ *
+ * THE EMIT'S OWN STDOUT IS NOT SWALLOWED. `globalEmitProblems` above wraps its call in
+ * `swallowStdout` and this deliberately does not: `_validate_only` has no `redirect_stdout`,
+ * so the ~200 lines of emit summary ARE part of what a dry run shows the operator.
+ *
+ * NO CELL CAN REACH THIS. `golden.py`'s `_argv` never emitted `--validate-only`, so the flag
+ * was ungated across implementations for the whole port; the gate is the corpus in
+ * `tests/test_maintainer_tools_parity.py`, which runs the reference and this side over the
+ * same flags and compares stdout, stderr and the exit code.
+ */
+export function cmdValidate(args) {
+  const problems = [];
+  const scan = withTempDir((tmpRaw) => {
+    // `.resolve()` mirrors `_check_build`'s: on Windows a temp dir can come back in 8.3
+    // short form (`RUNNER~1`) while every link TARGET below is resolved long-form, and
+    // `within` then rejects every relative link rather than only the escaping ones.
+    const tmp = pyResolve(tmpRaw);
+    // With a distinct `--root` the per-repo emits split their output — the bundle under
+    // `out`, the native layer under `root` — so the sandbox bundle nests INSIDE the sandbox
+    // root and the scan covers both layers.
+    const root = args.root ? path.join(tmp, 'root') : path.join(tmp, 'out');
+    const sandbox = args.root ? path.join(root, 'bundle') : root;
+    const cfgDir = path.join(tmp, 'cfg');
+    const emit = args.emit;
+    const opts = { theme: args.theme, footprint: args.footprint };
+    let scanDirs;
+    try {
+      if (emit.endsWith('-global')) {
+        emitGlobalInto(emit.slice(0, -'-global'.length), { ...opts, out: sandbox, cfgDir });
+        scanDirs = [cfgDir];
+      } else if (emit === 'files') {
+        buildInto({ ...opts, out: sandbox });
+        scanDirs = [sandbox];
+      } else {
+        emitProjectInto(emit, { ...opts, out: sandbox, root });
+        scanDirs = [root];
+      }
+    } catch (e) {
+      // `except SystemExit as e` — a DELIBERATE refusal from the render (an unknown theme,
+      // an incomplete source), interpolated as `{e}`.
+      //
+      // THE EXIT CODE AND NOT THE MESSAGE, measured rather than assumed: the reference's
+      // render half is ALREADY this port. `_build_render.build` calls `_build_core.run_node`,
+      // which ends `raise SystemExit(res.get("exit", 1))` — an INTEGER — so every refusal
+      // that crosses the seam arrives here as `SystemExit(1)` and `str(e)` is `'1'`, not the
+      // sentence `load_theme` wrote on stderr on the way out. A port that printed `e.message`
+      // says `unknown theme 'x'` where the reference says `1`. The corpus in
+      // `tests/test_maintainer_tools_parity.py` is what found it; nothing else could.
+      if (e && e.exitCode !== undefined) {
+        pyPrint(`[validate-only] render/emit FAILED for theme '${args.theme}' `
+          + `emit '${emit}': ${e.exitCode}\n`);
+        return null;
+      }
+      throw e;
+    }
+
+    const written = scanDirs.filter(isDir).flatMap((d) => rglob(d)).filter(isFile)
+      .sort(comparePaths);
+    pyPrint(`[validate-only] theme=${args.theme} emit=${emit} `
+      + `footprint=${args.footprint}\n`);
+    pyPrint(`[validate-only] would write ${written.length} file(s) under ${args.out}`
+      + (args.root ? ` (root ${args.root})` : '')
+      + ' — nothing was actually written (sandboxed).\n');
+    if (args.verbose) {
+      let base = scanDirs[0];
+      for (const p of written) {
+        for (const d of scanDirs) {
+          if (within(p, d)) { base = d; break; }
+        }
+        pyPrint(`  would write: ${path.relative(base, p)}\n`);
+      }
+    }
+    for (const d of scanDirs) {
+      for (const p of validateSandboxProblems(d)) problems.push(`[${emit}] ${p}`);
+    }
+    return scanDirs;
+  }, 'geneseed-validate-');
+  if (scan === null) return 1;
+
+  // The source-tree-wide checks (theme parity, authoring gates, AGENT.md table parity,
+  // colour themes) do not depend on --out/--root/--emit at all and already live fully tested
+  // in the doctor, so they run through it rather than being re-derived. The reference SHELLS
+  // to `harness.py doctor --theme T --no-bundle`; one process is what this port has.
+  const doctor = captureStreams(() => cmdDoctor({ theme: args.theme, noBundle: true }));
+  if (pyStripSpace(doctor.out)) pyPrint(`${pyStripSpace(doctor.out)}\n`);
+  if (pyStripSpace(doctor.err)) pyPrintErr(`${pyStripSpace(doctor.err)}\n`);
+  if (doctor.code !== 0) {
+    problems.push(`[doctor] source-tree validation failed for theme '${args.theme}' `
+      + '(see output above)');
+  }
+
+  if (problems.length) {
+    pyPrint(`[validate-only] ${problems.length} problem(s):\n`);
+    for (const p of problems) pyPrint(`  - ${p}\n`);
+    return 1;
+  }
+  pyPrint('[validate-only] ok — would render and emit cleanly, no problems found.\n');
   return 0;
 }

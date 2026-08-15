@@ -7,7 +7,7 @@
     "home/.config/opencode/.geneseed-manifest.json": "b3ec7b19ffccaae42455096759e00977f6e8582c527b00b805d9cfe6abfd531f",
     "home/.config/opencode/.geneseed-theme": "1a3376a1e42e75f0d137b6a8baa4b46fad019cb3d13a6dccdd4d944903bd0791",
     "home/.config/opencode/AGENT.md": "d4f692ece5b2ac85395de11f78e68ce11f5a02d6a86db46bd313f554707ceb2e",
-    "home/.config/opencode/improvements/improvements-<STAMP>.md": "b4b6b59413ebddff8872806bfe9edcb015cb2ed443766d6eb095d958448e2063",
+    "home/.config/opencode/improvements/improvements-<STAMP>.md": "9474d6b1ef907d6dcc8a5609adcdc3d5bfe3ca1fa1a3496a862fb2b4d50c57f5",
     "home/.geneseed-install.log": "84b9d06fc0462b988fc733cebd26e6313924eeffaae008cfd0205d7462edd23c",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
@@ -19,7 +19,7 @@
     "home/.config/opencode/.geneseed-manifest.json": 23,
     "home/.config/opencode/.geneseed-theme": 8,
     "home/.config/opencode/AGENT.md": 69,
-    "home/.config/opencode/improvements/improvements-<STAMP>.md": 58023,
+    "home/.config/opencode/improvements/improvements-<STAMP>.md": 58024,
     "home/.geneseed-install.log": 225,
     "repo/.keep": 0
   },

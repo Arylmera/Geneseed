@@ -102,19 +102,20 @@ function main(argv) {
   }
   const spec = VERBS[verb];
   if (!spec) {
-    // "elsewhere", not "still Python": since P5c some verbs also answer from
-    // `bin/geneseed-cli.mjs`, and naming that file here would mean this entry carrying a
-    // copy of its sibling's verb table — the one thing
+    // "elsewhere", not a file name: naming `bin/geneseed-cli.mjs` here would mean this entry
+    // carrying a copy of its sibling's verb table — the one thing
     // `test_the_two_entry_points_carry_disjoint_verb_sets` exists to keep from happening.
-    // `rituals/harness.py` answers all 24, so it is the command that is always right.
+    // The COMMAND is not a table: `geneseed` is this package's `bin` entry for the CLI
+    // (package.json), it answers every non-hook verb, and it survives the deletion of the
+    // `python rituals/harness.py <verb>` this line used to print.
     return die(2, `invalid choice: '${verb}'. This entry point carries only the four HOOK `
       + `verbs (${Object.keys(VERBS).join(', ')}); every other harness subcommand lives `
-      + 'elsewhere — run `python rituals/harness.py ' + verb + '`.');
+      + 'elsewhere — run `geneseed ' + verb + '`.');
   }
   // `<verb> --help`, for the same reason and by the same owner as `bin/geneseed-cli.mjs`:
   // argparse holds `-h` at the parser, so this entry's `parse` calls it an unrecognized
   // argument. The four hook verbs are four of the reference's 26 and had the same gap.
-  // `js/cli.mjs` reads `cli.json` lazily, inside its functions, so importing it costs this
+  // `js/cli.mjs` reads the CLI table lazily, inside its functions, so importing it costs this
   // entry a module parse and no file read on the hook path.
   if (argv.slice(1).some((t) => t === '-h' || t === '--help')) {
     const rc = printHelp('geneseed-hook', verb);

@@ -1826,19 +1826,6 @@ _SHIM_WORLD = {"home/.geneseed/bin/geneseed-hook.cmd": _BROKEN_SHIM,
                "home/.geneseed/bin/geneseed-hook": _BROKEN_SHIM}
 
 
-def _stale_cli_json() -> str:
-    """The real `cli.json` with its digest replaced — a reference generated from a parser
-    that is not the one in the copy.
-
-    Built from the checkout's own file rather than from a literal, because the literal would
-    be a 23 kB copy of a generated document and this file's whole subject is that such copies
-    rot. Only the digest is planted; everything the readers consume stays valid, so the cell
-    reaches the CHECK and not a JSON error."""
-    d = json.loads((ROOT / "cli.json").read_text(encoding="utf-8"))
-    d["source_sha256"] = "0" * 64
-    return json.dumps(d, indent=2, ensure_ascii=False) + "\n"
-
-
 def _doctor_cells() -> list[dict]:
     def dr(name, argv=("doctor", "--theme", "neutral"), checkout=None, world=None,
            steps=None, **kw):
@@ -1985,7 +1972,7 @@ def _doctor_cells() -> list[dict]:
         dr("the-learn-prompt-literal-is-gone-from-the-plugin", src_only,
            {"adapters/opencode/plugins/geneseed-learn.js": "// nothing to extract\n"},
            expect=["[authoring] LEARN_PROMPT_HEAD literal not found in geneseed-learn.js "
-                   "— harness.py would fall back (single source broken)"],
+                   "— the harness would fall back (single source broken)"],
            expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
         dr("the-loaded-copy-follows-the-plugin-rather-than-a-constant", src_only,
            {"adapters/opencode/plugins/geneseed-learn.js":
@@ -2049,8 +2036,7 @@ def _doctor_cells() -> list[dict]:
            # Each message is a different check saying so.
            {"src/skills/zzz-doctor.md": _GOOD_SPEC},
            expect=["[authoring] skills/zzz-doctor.md exists but the AGENT.md table omits it",
-                   "[authoring] skills/zzz-doctor.md has no category in SKILL_CLASS "
-                   "(_harness_tui.py)",
+                   "[authoring] skills/zzz-doctor.md has no category in SKILL_CLASS",
                    "[authoring] skills/zzz-doctor has no row in registry.json",
                    "[authoring] README skills list omits 'zzz-doctor'"],
            expect_re=[r"\[authoring\] README skills badge says \d+ but src has \d+"]),
@@ -2100,30 +2086,14 @@ def _doctor_cells() -> list[dict]:
                      "This run's own emit has refreshed it; no further action needed."],
              expect_re=[r"\[doctor\] 2 problem\(s\) across 1 theme\(s\)"]),
 
-        # -------------------------------------------------------------- the CLI reference
-        # P10c. `cli.json` is generated from `harness.build_argparser()` and BOTH
-        # implementations read it — the console's `cli` docs page, and
-        # `bin/geneseed-cli.mjs`'s own argument parser, which used to carry a second
-        # hand-written transcription of the same 43 `add_argument` calls.
-        #
-        # THE CHECK IS A DIGEST OF `rituals/harness.py` AND NOT A REGENERATE-AND-COMPARE,
-        # because regenerating needs argparse and only one side has it — and a check one
-        # binary cannot perform is a check it passes SILENTLY (P4e's fifth hole). Hashing one
-        # file is something both do equally well, so this cell reports a DIFFERENCE if either
-        # ever stops doing it, instead of two implementations agreeing on saying nothing.
-        #
-        # THE CHECK'S OTHER ARM — a missing or unparseable `cli.json` — IS UNREACHABLE FROM
-        # ANY CELL HERE, and that is a property of the port rather than a gap: this entry
-        # cannot dispatch a verb without the file, so a copy without one has the Node side
-        # refusing `doctor` outright while the reference runs it and reports the problem. The
-        # two legitimately diverge there (Python has argparse; Node has only the file), and
-        # `tests/test_cli_reference.py` asserts each side's behaviour absolutely instead.
-        dr("a-cli-reference-generated-from-another-parser-is-stale", src_only,
-           {"cli.json": _stale_cli_json()},
-           expect=["[cli] cli.json is stale: rituals/harness.py has changed since it was "
-                   "generated — regenerate it from a checkout with "
-                   "`python tests/gen_cli_reference.py`"],
-           expect_re=[r"\[doctor\] 1 problem\(s\) across 1 theme\(s\)"]),
+        # THE CLI-REFERENCE CELL IS GONE, AND SO IS THE CHECK IT COVERED. P10c's `cli` check
+        # hashed `rituals/harness.py` against a digest baked into `cli.json`; P2 moved the
+        # table to `js/cli-table.json` and made it the OWNED document, so there is no
+        # generator to fall behind and nothing to hash. The cell built its own fixture FROM
+        # the checkout's `cli.json` — it cannot be re-pointed, because the fault it planted no
+        # longer exists on either side. What replaces it is `tests/test_cli_reference.py`'s
+        # argparse-vs-table equality, which is Python-only by nature and always was the only
+        # gate that could see a HAND EDIT rather than a stale regeneration.
 
         # ------------------------------------------------------------------ theme scoping
         # No `--theme` and no `--all`: the sweep scopes to the theme THIS host installed,
@@ -2697,7 +2667,7 @@ def _uninstall_cells() -> list[dict]:
 
 #: Both lines of the refusal, exactly as `cmd_setup` writes them in one `sys.stderr.write`.
 _SETUP_REFUSAL = ["[setup] needs an interactive terminal. Non-interactive? e.g.:",
-                  "  python build.py --emit opencode-global --theme neutral"]
+                  "  geneseed build --emit opencode-global --theme neutral"]
 
 
 def _setup_cells() -> list[dict]:
@@ -2936,7 +2906,7 @@ def _menu_cells() -> list[dict]:
     return [
         mb("off-a-tty-prints-the-command-list", ["menu"],
            expect=["Geneseed — no interactive menu here. Get started with:  "
-                   "python harness.py setup",
+                   "geneseed setup",
                    "Other commands:  bootstrap · update · build · doctor · diff · tui · web",
                    "On a VT-capable terminal, a bare `./geneseed` opens the interactive "
                    "menu of these."],
@@ -2960,12 +2930,12 @@ def _home_cells() -> list[dict]:
            # bearing half: a port that started the daemon anyway would print the opening
            # line, spawn a detached server on port 4747 and leave it running.
            expect=["Geneseed — no interactive menu here. Get started with:  "
-                   "python harness.py setup"],
+                   "geneseed setup"],
            expect_absent=["opening the web console", "Geneseed UI on", "already running on"]),
         hb("the-opt-out-knob-refuses-before-anything-else", ["home"],
            env={"GENESEED_NO_WEB": "1"},
            expect=["Geneseed — no interactive menu here. Get started with:  "
-                   "python harness.py setup"],
+                   "geneseed setup"],
            expect_absent=["opening the web console"]),
     ]
 

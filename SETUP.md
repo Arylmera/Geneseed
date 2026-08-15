@@ -43,14 +43,14 @@ named here rather than found later:
   off a terminal, which is how scripts and CI run them, the two runtimes print the same
   bytes. `home` opens the web console from either. Every other command in this guide runs from either
   runtime.
-- **One Python script rides inside the harness you install — and two more skills shell
-  out to `python3` without shipping one.** The `token-report` skill is a script rather
-  than prose, so **every bundle carries** one interpreter-dependent file: `src/skills/token-report/scripts/token_report.py`.
-  It runs only when the agent invokes that skill. `daydream` also runs `python3 -c` for
-  weighted random sampling, and `herdr` runs `python3 -c` twice to pull a field out of
-  JSON — neither ships a Python file of its own, but both need `python3` on PATH the
-  moment they're used. No other file in a bundle is Python, and no other skill shells out to it — on any
-  host, any theme, either footprint — and a test freezes both.
+- **Nothing you install needs an interpreter.** The `token-report` skill is a script
+  rather than prose, and it ships as `scripts/token_report.mjs`, run with `node`;
+  `daydream` and `herdr`, which used to hand inline code to `python3` without shipping
+  a file of their own, call `node -e` instead.
+  So **every bundle carries** nothing that needs one: no Python file, and no skill that
+  shells out to an interpreter — on any host, any theme, either footprint. Three tests
+  freeze that, down to a byte-for-byte comparison of the ported script against the one
+  it replaced.
 - **The self-update commands are for a git checkout.** `upgrade`, `update`, `sync-self`
   and `bootstrap` `git pull` the install's own origin. From an npm install they stop
   before touching anything and name `npm install -g geneseed@latest` instead.
@@ -288,8 +288,9 @@ part: it copies any key the template has but a theme is missing into that theme
 which keys were added so you can restyle them in that theme's voice. It never deletes
 a key a theme has that the template doesn't — those are only reported. The edit is
 surgical (only the inserted lines change; nothing is reformatted), and the exit code
-doubles as a CI drift check: non-zero when it had to change files, `0` when every
-theme was already in sync.
+doubles as a CI drift check: `1` when it had to change files, `0` when every theme was
+already in sync, and `2` when `_TEMPLATE.json` itself is missing or unreadable — the one
+case where a `0` would have meant "in sync" without having checked anything.
 
 ### Footprint (lean vs full)
 
@@ -325,11 +326,15 @@ the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wiza
 remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
 host (OpenCode, Claude Code, Bob, Copilot).
 
-### Dry-run a build (`--validate-only`)
+### Dry-run a build (`validate`)
 
 ```
-python build.py --validate-only --theme imperial --emit opencode --out /path/to/repo/Harness
+geneseed validate --theme imperial --emit opencode --out /path/to/repo/Harness
 ```
+
+(It is a verb on the CLI rather than a flag on the generator because it runs `doctor`, and
+the generator is deliberately unable to start a process. `python build.py --validate-only
+…` is the same tool with the same flags.)
 
 Renders and emits the requested `--theme`/`--emit`/`--out`/`--root`/`--footprint`
 combination into a throwaway sandbox — nothing under the real `--out`/`--root` is
@@ -853,11 +858,11 @@ it does the same job:
 echo 'geneseed() { "'"$PWD"'/geneseed" "$@"; }' >> ~/.zshrc   # or ~/.bashrc
 ```
 
-**Windows** — use the native launcher `geneseed.cmd` (cmd) or `geneseed.ps1` (PowerShell),
-which route to the same Python CLI with no bash:
+**Windows** — use the native launcher `geneseed.cmd`, which routes to the same Node CLI with
+no bash. PowerShell runs a `.cmd` directly, so it is the PowerShell spelling too:
 
 ```powershell
-.\geneseed.cmd setup            # or: .\geneseed.ps1 setup
+.\geneseed.cmd setup
 .\geneseed.cmd link             # writes a geneseed.cmd shim into %LOCALAPPDATA%\Geneseed\bin
                                 # and adds that dir to your user PATH (no admin / symlink needed)
 ```

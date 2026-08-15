@@ -105,34 +105,32 @@ For each note, assign a sampling weight based on recency:
 ### 3b. Weighted random sampling
 Generate 50 unique pairs using weighted random sampling:
 
-Use Bash with Python for the random sampling:
+Use Bash with Node for the random sampling:
 ```bash
-python3 -c "
-import json, random, sys
+node -e "
+const notes = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+const historyPairs = new Set();  // populated from history.json, as 'pathA\0pathB'
 
-notes = json.loads(sys.stdin.read())
-history_pairs = set()  # populated from history.json
+// Build weighted pool
+const pool = [];
+notes.forEach((note, i) => {
+  const w = note.days_ago <= 7 ? 3 : (note.days_ago <= 30 ? 2 : 1);
+  for (let k = 0; k < w; k++) pool.push(i);
+});
 
-# Build weighted pool
-pool = []
-for i, note in enumerate(notes):
-    w = 3 if note['days_ago'] <= 7 else (2 if note['days_ago'] <= 30 else 1)
-    pool.extend([i] * w)
+const draw = () => pool[Math.floor(Math.random() * pool.length)];
+const pairs = new Map();
+for (let attempts = 0; pairs.size < 50 && attempts < 500; attempts++) {
+  const a = draw(), b = draw();
+  if (a === b) continue;
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  if (pairs.has(lo + ',' + hi)) continue;
+  if (historyPairs.has(notes[lo].path + '\0' + notes[hi].path)) continue;
+  pairs.set(lo + ',' + hi, [lo, hi]);
+}
 
-pairs = set()
-attempts = 0
-while len(pairs) < 50 and attempts < 500:
-    a = random.choice(pool)
-    b = random.choice(pool)
-    if a != b:
-        pair = (min(a, b), max(a, b))
-        pair_key = (notes[pair[0]]['path'], notes[pair[1]]['path'])
-        if pair not in pairs and pair_key not in history_pairs:
-            pairs.add(pair)
-    attempts += 1
-
-result = [{'a': notes[p[0]], 'b': notes[p[1]]} for p in pairs]
-print(json.dumps(result))
+const result = [...pairs.values()].map(([x, y]) => ({ a: notes[x], b: notes[y] }));
+console.log(JSON.stringify(result));
 " <<< 'NOTES_JSON_HERE'
 ```
 

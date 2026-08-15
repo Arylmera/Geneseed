@@ -15,9 +15,10 @@
  *     whole CLI surface into a second table that would describe verbs `bin/geneseed-cli.mjs`
  *     cannot even run. This port's standing rule is that a copy of a value under test stops
  *     being the value under test, and this would be the largest copy in it. **PAID IN P10c**,
- *     by the fix the deferral named: the parser's metadata is generated into `cli.json` and
- *     both implementations read that file. `js/cli.mjs` is the reader, doctor is what fails
- *     when the file and the parser part company, and `bin/geneseed-cli.mjs`'s `VERBS` table
+ *     by the fix the deferral named: the parser's metadata became a FILE both implementations
+ *     read — `js/cli-table.json` since P2. `js/cli.mjs` is the reader,
+ *     `tests/test_cli_reference.py` is what fails when the table and the parser part company
+ *     for as long as the parser exists, and `bin/geneseed-cli.mjs`'s `VERBS` table
  *     — which was a SECOND transcription of the same 43 calls — reads it too, so the port
  *     ended with one description of the CLI where it had been heading for three.
  *   * `about` called `_update._origin_display()`, which shells out to `git remote get-url`.

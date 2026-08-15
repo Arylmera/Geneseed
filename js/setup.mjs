@@ -299,7 +299,7 @@ export function collectSetupLines() {
   } else if (emit === 'files') {
     out = ask('Output dir for the bundle', 'Harness');
   }
-  pyPrint(`\nAbout to run:  python build.py ${
+  pyPrint(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode).join(' ')}\n`);
   if (!confirm('Proceed?', true)) return null;
   return { theme, posture, mode, emit, out, root, footprint };
@@ -418,9 +418,14 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
  * so a refusal returns a code instead of killing the wizard.
  *
  * ONE THING THE REFERENCE DOES THAT THIS DOES NOT, stated in the module header's terms. The
- * `python build.py` in the printed plan is the reference's own wording, kept verbatim: it is
- * compared byte-for-byte by the corpus, and rewriting it to `geneseed build` is P10's
- * documentation pass, not a silent edit here.
+ * printed plan used to say `python build.py <args>` on both sides — the reference's own
+ * wording, kept verbatim because the corpus compares it byte-for-byte. P2 rewrote it to
+ * `geneseed build <args>` in BOTH implementations at once, for the reason the whole task
+ * exists: the deletion phase may not move a recorded byte, so a string frozen in the corpus
+ * can only change while both sides are still here to be re-recorded together. `geneseed
+ * build` is not a paraphrase — it forwards its extra arguments to this generator on both
+ * sides (`_harness_build.cmd_build`, and `driverMain` here), so the line still names a
+ * command the reader can type, and names one that survives the deletion.
  *
  * `theme_anim.play_line` USED TO BE THE SECOND, and P7c crossed it — `js/anim.mjs`, gated by
  * `_theme_anim_cases()` in `tests/test_pure_function_parity.py`. The bare `catch` around it
@@ -451,7 +456,7 @@ export function setupLines() {
     }
   }
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode);
-  pyPrint(`Running:  python build.py ${argv.join(' ')}\n`);
+  pyPrint(`Running:  geneseed build ${argv.join(' ')}\n`);
   const rc = driverMain(argv);
   if (rc !== 0) {
     pyPrintErr('[setup] build failed — no harness written (see the output above).\n');
@@ -480,7 +485,7 @@ export function setupLines() {
 export function cmdSetup() {
   if (!process.stdin.isTTY) {
     pyPrintErr('[setup] needs an interactive terminal. Non-interactive? e.g.:\n'
-      + '  python build.py --emit opencode-global --theme neutral\n');
+      + '  geneseed build --emit opencode-global --theme neutral\n');
     return 1;
   }
   return setupLines();

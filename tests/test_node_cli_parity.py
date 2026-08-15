@@ -209,14 +209,37 @@ class NodeDriverSurface(unittest.TestCase):
                 self.assertFalse(out.exists(),
                                  f"--emit {emit} refused but still wrote to {out}")
 
-    def test_the_two_maintainer_flags_refuse_rather_than_run(self):
-        """--sync-themes rewrites the CHECKOUT's themes/*.json; --validate-only needs a
-        Python doctor. Both must say so instead of doing something adjacent."""
-        for flag in ("--sync-themes", "--validate-only"):
-            r = run_cli([flag])
-            self.assertEqual(r.returncode, 2, f"{flag} should exit 2, got {r.returncode}")
-            self.assertIn("python build.py", r.stderr,
-                          f"{flag}'s refusal must name the command that does work")
+    def test_sync_themes_runs_here_and_validate_only_points_at_the_other_binary(self):
+        """The two maintainer flags, REWRITTEN IN P2 when both of them crossed.
+
+        They used to be one assertion — "both refuse with exit 2, naming `python build.py`"
+        — and the split is the whole shape of the port's answer to them:
+
+          * `--sync-themes` needs nothing this driver may not have, so it RUNS here. On an
+            in-sync checkout that is a no-op with exit 0, which is also the safety property
+            worth asserting: the tool that rewrites committed files must write nothing when
+            there is nothing to write. `tests/test_maintainer_tools_parity.py` is where its
+            behaviour is compared against the reference over inputs a checkout cannot be in.
+          * `--validate-only` CANNOT run here. Its second half is the doctor and the doctor
+            starts a process; `test_the_driver_imports_no_child_process_module` above and
+            `test_the_generator_driver_still_reaches_no_child_process_module` in
+            `tests/test_hook_cli_parity.py` are what forbid it. So this flag still refuses,
+            and what its refusal must name is the CLI verb that does the work — not an
+            interpreter, which is the property Task 4 makes universal.
+        """
+        before = {p: p.read_bytes() for p in (ROOT / "themes").glob("*.json")}
+        r = run_cli(["--sync-themes"])
+        self.assertEqual(r.returncode, 0,
+                         f"--sync-themes on an in-sync checkout must be a no-op with exit 0; "
+                         f"got {r.returncode}. stderr: {r.stderr.strip()[:300]}")
+        self.assertIn("all themes already carry every template key.", r.stdout)
+        self.assertEqual({p: p.read_bytes() for p in (ROOT / "themes").glob("*.json")}, before,
+                         "--sync-themes rewrote a theme file on an already-in-sync checkout")
+
+        r = run_cli(["--validate-only"])
+        self.assertEqual(r.returncode, 2, f"--validate-only should exit 2, got {r.returncode}")
+        self.assertIn("geneseed validate", r.stderr,
+                      "--validate-only's refusal must name the verb that does the work")
 
     def test_a_bundle_in_a_subfolder_matches_python(self):
         """The `--root` axis, which the acceptance matrix cannot reach.

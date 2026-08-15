@@ -59,6 +59,11 @@ import { ROOT, CONFIG, THEMES, discoverNames, makeCfg } from '../js/checkout.mjs
 // for a reader. See js/registry.mjs.
 import { registryRecord, registryRoots } from '../js/registry.mjs';
 
+// P2. `--sync-themes` crossed into its own module rather than into this file: it is 90 lines
+// of textual surgery over committed files with a corpus of its own, and it is the half of the
+// maintainer pair that needs nothing this driver is banned from having.
+import { syncThemes } from '../js/themes.mjs';
+
 /** The nine `--emit` choices, in build.py:337-338's order. */
 const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
   'bob', 'bob-global', 'copilot', 'copilot-global'];
@@ -237,6 +242,22 @@ function parseArgs(argv, defaults) {
   const choices = choicesFor();
   for (const flag of Object.keys(choices)) choice(flag, args[VALUED[flag]], choices[flag]);
   return args;
+}
+
+/**
+ * The generator's OWN flag surface, for the one consumer that is not this driver.
+ *
+ * `geneseed validate` takes `--theme/--emit/--out/--root/--footprint/-v` — the reference's
+ * `--validate-only` reads exactly the flags `build.py`'s parser already produced, so the port
+ * hands the CLI this parser rather than a second one beside it. That is not tidiness: a
+ * hand-rolled copy would have its own `--target` alias, its own `choices` lists and its own
+ * `-h`, and `test_the_help_text_names_every_flag_the_reference_takes` gates only this one.
+ *
+ * `withPyNewlines` because the refusal and `-h` paths WRITE: called from `bin/geneseed.mjs`
+ * they sit inside `main`'s funnel, and called from the CLI binary they would not.
+ */
+export function parseDriverArgs(argv) {
+  return withPyNewlines(() => parseArgs(argv, configDefaults()));
 }
 
 function choice(flag, value, allowed) {
@@ -731,10 +752,17 @@ function emitClaudeGlobal(cfg, args, out) {
     cfgDir, claudeMd: path.join(cfgDir, 'CLAUDE.md'), scope: 'global', host: 'claude', out,
     hookOpts,
   });
+  // "Hooks call the harness by absolute path", not `harness.py` — and this one was already
+  // WRONG on this side rather than merely about to be: P5b made this driver bake `<node>
+  // bin/geneseed-hook.mjs` into the hooks it writes, so the sentence named a file its own
+  // emit does not use. The two drivers bake different entries and printed the same claim;
+  // the neutral wording is true of both, and stays true when only one is left. It is frozen
+  // in the `claude-global` cells' recorded stdout, which is why it moves here rather than in
+  // the deletion phase, which may not move a recorded byte.
   process.stdout.write(`[geneseed] claude-global -> ${cfgDir}: ${r.nAgents} subagents, `
     + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
     + `${r.memStatus}, ${r.nbStatus}. No plugins/workflows/themes (no Claude analogue); `
-    + '~/.claude/plugins is never touched. Hooks call harness.py by absolute path; set '
+    + '~/.claude/plugins is never touched. Hooks call the harness by absolute path; set '
     + 'GENESEED_HARNESS only to relocate memory.\n');
   return cfgDir;
 }
@@ -854,11 +882,31 @@ const GLOBAL_EMITS = {
  * `footprint: 'full'` is the Python signature default that `_claude_bob_emit_problems`'s
  * three-positional call leaves in place, inherited here rather than re-decided.
  */
-const PROJECT_EMITS = { claude: emitClaude, bob: emitBob, copilot: emitCopilot };
+const PROJECT_EMITS = {
+  claude: emitClaude, bob: emitBob, copilot: emitCopilot,
+  // P2. `opencode` joins the three for `cmdValidate`, which has to be able to render EVERY
+  // `--emit` choice into its sandbox and not only the three doctor already scans. Its call
+  // shape is `emitClaude`'s exactly — `(cfg, args, out)` — so the row is the whole change.
+  opencode: emitOpencode,
+};
 
 export function emitProjectInto(host, { theme, out, root, footprint = 'full' }) {
   const emit = PROJECT_EMITS[host];
   return withPyNewlines(() => emit(makeCfg(), { theme, footprint, root }, out));
+}
+
+/**
+ * The ninth `--emit` choice — a plain `files` bundle — for the same caller and the same
+ * reason: `_validate_only`'s `else` branch is `build(args.theme, sandbox, args.footprint)`,
+ * a DIRECT call that reaches neither `writeMarkers` nor `registryRecord`.
+ *
+ * `nativeCatalog: false` is that three-positional call's signature default, inherited here
+ * exactly as `run` inherits it below.
+ */
+export function buildInto({ theme, out, footprint = 'lean' }) {
+  return withPyNewlines(
+    () => build(makeCfg(), theme, out, { footprint, nativeCatalog: false }),
+  );
 }
 
 export function emitGlobalInto(host, { theme, out, cfgDir, footprint }) {
@@ -907,20 +955,24 @@ export function main(argv) {
 function run(argv) {
   const args = parseArgs(argv, configDefaults());
 
-  // Both refuse rather than silently doing something else. See docs/specs' P4 entry:
-  // --sync-themes WRITES to themes/*.json in the checkout's own source tree — maintainer
-  // tooling like golden.py and the pytest rig, which npx does not ship either. And
-  // --validate-only's second half shells to `harness.py doctor`, which itself re-spawns
-  // build.py, so porting it here would make a four-deep node -> python -> python -> node
-  // chain to reach a check that has no cross-implementation gate in the first place
-  // (golden.py's `_argv` never emits either flag).
-  if (args.syncThemes) {
-    die(2, '--sync-themes is a maintainer tool that rewrites this checkout\'s themes/*.json '
-      + 'and is not part of the npx surface. Run: python build.py --sync-themes');
-  }
+  // P2 crossed both of the flags this branch used to refuse, and they landed in two
+  // different places because the transitive `child_process` ban splits them.
+  //
+  // `--sync-themes` is HERE, because it needs nothing this driver may not have: it reads
+  // `themes/`, rewrites the files textually, and prints. `js/themes.mjs` carries it.
+  // Non-zero when files were CHANGED (0 == already in sync), so CI can run it as a drift
+  // check — build.py:393-397's mapping, and a refusal (exit 2) if the template is unreadable.
+  if (args.syncThemes) return syncThemes() ? 1 : 0;
+  // `--validate-only` is NOT, and cannot be: its source-tree half is the doctor, and
+  // `js/doctor.mjs` starts a process (`node --check` over the OpenCode plugins). This driver
+  // is under a transitive ban on reaching any such module, gated twice — by a source grep in
+  // `tests/test_node_cli_parity.py` and by an import walk in `tests/test_hook_cli_parity.py`.
+  // So the tool crossed onto the CLI binary, which already carries the doctor, and this flag
+  // points at it rather than silently building for real into the caller's `--out`.
   if (args.validateOnly) {
-    die(2, '--validate-only is not ported: its source-tree half runs `harness.py doctor`, '
-      + 'which is still Python. Run: python build.py --validate-only');
+    die(2, '--validate-only lives on the CLI entry point, because it runs the doctor and '
+      + 'this generator may not start a process. Run: geneseed validate '
+      + '[--theme T] [--emit E] [--out O] [--root R] [--footprint F] [-v]');
   }
 
   // Every `--emit` choice has crossed as of P4e, so this branch is now unreachable — and it
@@ -928,8 +980,11 @@ function run(argv) {
   // a tenth emit added to `EMITS` and not to `PORTED` refuses loudly here instead of falling
   // through the dispatch's `else` and silently building a plain bundle.
   if (!PORTED.has(args.emit)) {
-    die(3, `--emit ${args.emit} has not crossed to the Node driver yet (only `
-      + `${[...PORTED].join(', ')} has). Run: python build.py --emit ${args.emit}`);
+    // The `Run: python build.py --emit <e>` tail is gone. It named the fallback for an emit
+    // this driver could not do, and there is no longer a second driver to fall back TO — the
+    // partition is now "known" vs "not a thing", and only the refusal is left to say so.
+    die(3, `--emit ${args.emit} is not one this driver builds (only `
+      + `${[...PORTED].join(', ')} are).`);
   }
 
   const out = resolveOut(args.out);

@@ -1,40 +1,29 @@
 #!/usr/bin/env bash
 #
-# Geneseed — front door. One launcher for everything.
+# Geneseed — front door. A thin shim: it finds the checkout and hands every argument
+# to the Node CLI, which owns the verbs, the parsing and the refusals.
 #
-#     ./geneseed                          open the web console (interactive + GUI), else the TUI menu
-#     ./geneseed menu                     force the interactive TUI menu (pick any action)
-#     ./geneseed tui                      open the control panel (browse)
-#     ./geneseed web [start|stop|status]  local browser UI — foreground, or as a background daemon
-#     ./geneseed setup                    guided, dependency-free install wizard
-#     ./geneseed bootstrap [ref] [theme]  update everything, then run setup
-#     ./geneseed update    [ref] [theme]  update everything (sync + upgrade), no setup
-#     ./geneseed build [args]             render the bundle
-#     ./geneseed doctor [args]            validate (themes, parity, authoring, drift)
-#     ./geneseed diff [args]              compare a deployed harness against source
-#     ./geneseed context|learn|prompt [args]
-#     ./geneseed upgrade [ref] [theme]    self-upgrade from the published source
-#     ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
-#     ./geneseed link [dir]               put `geneseed` on PATH (run it from anywhere)
-#     ./geneseed unlink                   remove the on-PATH launcher shim
-#     ./geneseed help
+#     ./geneseed                    open the web console, else the TUI menu (`home`)
+#     ./geneseed <command> [args]   anything bin/geneseed-cli.mjs carries
+#     ./geneseed --help             the verb list, printed by the CLI itself
 #
-# Bare `./geneseed` opens the local web console when the environment can show it
-# (an interactive terminal with a GUI browser), and otherwise drops to the
-# interactive TUI menu listing every action. `geneseed menu` forces the menu, and
-# GENESEED_NO_WEB=1 disables the web-first default. Thin wrapper over
-# `python3 rituals/harness.py <cmd>` (+ the scripts); no deps. On Windows, use the
-# native launchers `geneseed.cmd` / `geneseed.ps1` (same subcommands, no bash).
+# NO VERB TABLE HERE, deliberately. This launcher used to enumerate the commands it
+# would forward, and that list had gone stale: `migrate`, `exclude` and `rule-gate`
+# all existed, all fell to its `*)` arm and all exited 2 — while `geneseed.cmd`
+# passed everything through, so the two front doors disagreed about what the harness
+# could do. One CLI, one verb table, one refusal. `./geneseed` in a checkout now
+# behaves exactly like the `geneseed` an `npm i -g` puts on PATH, because that is
+# this same entry point (package.json `bin`). The four HOOK verbs (`context`,
+# `learn`, `git-gate`, `rule-gate`) live on `bin/geneseed-hook.mjs` and are reached
+# by hooks with a baked absolute path; the CLI's refusal names that file.
 #
-# `bootstrap`/`update` exec into the bootstrap script so this launcher is replaced
-# before sync-self rewrites it on disk.
-
+# $GENESEED_NODE overrides the interpreter — the analogue of the $PYTHON knob this
+# file carried while the harness was Python. Unset, a bare `node` is used.
 set -eo pipefail
-# Resolve through symlinks so the launcher works when invoked via a symlink: HERE
-# must be the real repo dir, not the link's dir, or rituals/harness.py and the
-# sibling scripts would not be found. `geneseed link` writes a shim naming this file
-# by absolute path rather than a symlink, so the loop is no longer what makes an
-# on-PATH launcher work — it still covers a hand-made symlink and an older install.
+# Resolve through symlinks so HERE is the real repo dir. `geneseed link` writes a
+# shim naming its entry by absolute path rather than a symlink, but an install made
+# before it did left ~/.local/bin/geneseed pointing at THIS file, and this loop is
+# the only reason those still work.
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do
   dir="$(cd -P "$(dirname "$SOURCE")" && pwd)"
@@ -42,94 +31,9 @@ while [ -h "$SOURCE" ]; do
   case "$SOURCE" in /*) ;; *) SOURCE="$dir/$SOURCE" ;; esac
 done
 HERE="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-# Pick the first interpreter that actually RUNS — on Windows Git Bash, `python3`
-# resolves to the Microsoft Store alias stub, which exists on PATH but only prints
-# an install hint and exits non-zero. $PYTHON still overrides everything.
-# This probe is deliberately INLINED here (and copied in `bootstrap`), not sourced from
-# a shared file: the front door must find Python to even reach the self-heal path below,
-# so it cannot depend on a sibling file that a corrupted rituals/ might be missing. The
-# duplication is load-bearing — do not "DRY" it into one sourced helper.
-PY="${PYTHON:-}"
-if [ -z "$PY" ]; then
-  for c in python3 python py; do
-    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'pass' >/dev/null 2>&1; then PY="$c"; break; fi
-  done
-  PY="${PY:-python3}"
-fi
 
-# Bare `./geneseed` opens the web console when the environment can show it
-# (interactive + GUI browser), else the interactive TUI menu — see cmd_home.
+# Bare `./geneseed` is the `home` verb — the web console when the environment can
+# show it (interactive + GUI browser), else the interactive TUI menu; GENESEED_NO_WEB=1
+# disables the web-first default. The CLI entry requires a verb, so the default is here.
 if [ "$#" -eq 0 ]; then set -- home; fi
-cmd="$1"
-case "$cmd" in
-  upgrade|sync-self)
-    # Self-update commands must survive a STALE factory. A partial update (sync-self
-    # refreshed THIS launcher but `upgrade` never refreshed rituals/) leaves a new launcher
-    # over an old harness.py that has never heard of `upgrade`/`sync-self` — argparse there
-    # hard-fails with "invalid choice". Probe harness support first (a side-effect-free
-    # `--help` exits 0 iff the subcommand exists); on a miss, self-heal by driving
-    # rituals/_update.py directly (the same code cmd_upgrade/cmd_sync_self call), so the
-    # front door can always repair itself instead of dead-ending on a raw argparse error.
-    if "$PY" "$HERE/rituals/harness.py" "$cmd" --help >/dev/null 2>&1; then
-      exec "$PY" "$HERE/rituals/harness.py" "$@"
-    fi
-    echo "geneseed: installed factory predates '$cmd' - self-healing via rituals/_update.py ..." >&2
-    if "$PY" - "$HERE/rituals/_update.py" <<'PY' >/dev/null 2>&1
-import sys, importlib.util as u
-try:
-    s = u.spec_from_file_location("_u", sys.argv[1])
-    m = u.module_from_spec(s); s.loader.exec_module(m)
-    sys.exit(0 if hasattr(m, "main") else 1)
-except Exception:
-    sys.exit(1)
-PY
-    then
-      exec "$PY" "$HERE/rituals/_update.py" "$@"
-    fi
-    # Both the factory AND _update.py predate the self-heal — give the exact manual cure.
-    echo "geneseed: rituals/_update.py is also too old to self-heal - refresh it by hand, then retry:" >&2
-    echo "  cd \"$HERE\" && git pull --ff-only && ./geneseed $cmd" >&2
-    exit 2
-    ;;
-  home|menu|tui|web|setup|build|rebuild-all|theme|doctor|diff|context|learn|prompt|version|status|uninstall|link|unlink|git-gate)
-    # Cross-platform Python CLI (single source of truth). link/unlink also live there
-    # (cmd_link/cmd_unlink) — they need a current harness but are not self-update paths,
-    # so a stale factory there is a normal error, not a bootstrap paradox.
-    exec "$PY" "$HERE/rituals/harness.py" "$@"
-    ;;
-  bootstrap)
-    shift || true; exec "$HERE/bootstrap" "$@"
-    ;;
-  update)
-    shift || true; exec "$HERE/bootstrap" --no-setup "$@"
-    ;;
-  -h|--help|help)
-    cat <<'USAGE'
-geneseed — front door for the Geneseed harness
-
-  ./geneseed                          open the web console (interactive + GUI), else the TUI menu
-  ./geneseed menu                     force the interactive TUI menu (pick any action)
-  ./geneseed tui                      open the control panel (browse)
-  ./geneseed web [start|stop|status]  local browser UI — foreground, or a background daemon
-  ./geneseed setup                    guided install wizard
-                                      (GENESEED_NO_WEB=1 disables the web-first default)
-  ./geneseed bootstrap [ref] [theme]  update everything, then run setup
-  ./geneseed update    [ref] [theme]  update everything (sync + upgrade)
-  ./geneseed build|doctor|diff|context|learn|prompt [args]
-  ./geneseed version                  installed vs current-source fingerprint
-  ./geneseed status                   install dashboard as text (theme/mode/counts)
-  ./geneseed uninstall [--yes]        remove a global install (keeps memory)
-  ./geneseed upgrade [ref] [theme]    self-upgrade from the published source
-  ./geneseed sync-self [ref]          refresh the launcher + upgrade scripts
-  ./geneseed link [dir]               put `geneseed` on PATH so it runs from any directory
-                                      (default ~/.local/bin; pass a dir to override)
-  ./geneseed unlink                   remove the on-PATH launcher shim
-
-Once linked and on PATH, drop the leading `./` — just `geneseed`, `geneseed build`, etc.
-USAGE
-    ;;
-  *)
-    echo "geneseed: unknown command '$cmd' — try: ./geneseed help" >&2
-    exit 2
-    ;;
-esac
+exec "${GENESEED_NODE:-node}" "$HERE/bin/geneseed-cli.mjs" "$@"

@@ -3,20 +3,20 @@
     "<dirs>": "db73d8ac5750186f01724744b857a3b79923562e133753bfcf2d0c8e5d432257",
     "<exit>": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "<stdout>": "44f78fa101aa61529ff6d32a33459b108abef7e8010ce33ff73b3192f26c0130",
+    "<stdout>": "1d3a8147f0086ee316b00f05248c05e533e390cb9e70cae0935c86fe3c867521",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "sizes": {
     "<dirs>": 13,
     "<exit>": 1,
     "<stderr>": 0,
-    "<stdout>": 243,
+    "<stdout>": 234,
     "repo/.keep": 0
   },
   "verbatim": {
     "<dirs>": "cfg\nhome\nrepo",
     "<exit>": "0",
     "<stderr>": "",
-    "<stdout>": "Geneseed — no interactive menu here. Get started with:  python harness.py setup\nOther commands:  bootstrap · update · build · doctor · diff · tui · web\nOn a VT-capable terminal, a bare `./geneseed` opens the interactive menu of these.\n"
+    "<stdout>": "Geneseed — no interactive menu here. Get started with:  geneseed setup\nOther commands:  bootstrap · update · build · doctor · diff · tui · web\nOn a VT-capable terminal, a bare `./geneseed` opens the interactive menu of these.\n"
   }
 }

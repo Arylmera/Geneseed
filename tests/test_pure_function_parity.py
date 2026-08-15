@@ -1535,7 +1535,7 @@ class TheWizardAgreesOnEveryAnswerNoCellCanGive(unittest.TestCase):
                       "(default)", out)
         self.assertIn("claude-global — Claude Code global config dir", out)
         self.assertIn("full — Full — every law's complete text inlined", out)
-        self.assertIn("About to run:  python build.py --theme pirate --emit claude-global "
+        self.assertIn("About to run:  geneseed build --theme pirate --emit claude-global "
                       "--footprint full --posture artisan --mode foreman", out)
         self.assertIn('{"theme":"pirate","posture":"artisan","mode":"foreman",'
                       '"emit":"claude-global"', out)

@@ -225,11 +225,12 @@ def _cli_reference() -> dict:
 
     THIS USED TO WALK `harness.build_argparser()` LIVE, and P10c is where it stopped. Node
     cannot introspect argparse, so a Node twin of this page could only be a hand-written copy
-    of 24 subparsers and 43 `add_argument` calls — the largest copy-of-a-value-under-test the
+    of 25 subparsers and 46 `add_argument` calls — the largest copy-of-a-value-under-test the
     port would have contained, describing verbs `bin/geneseed-cli.mjs` cannot even run. The
-    parser's metadata is generated into `cli.json` instead and both implementations read that
-    one file; `harness._cli_reference_problems` is what makes a stale one a doctor problem
-    rather than a page that quietly lies. The payload is unchanged, key for key."""
+    metadata is a FILE both implementations read instead — `js/cli-table.json` since P2, where
+    it also stopped being generated and became the owned document. `tests/test_cli_reference.py`
+    is what makes a table that has parted company with the parser a failure, for as long as
+    the parser exists. The payload is unchanged, key for key."""
     return harness.load_cli_reference()
 
 

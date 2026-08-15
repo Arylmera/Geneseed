@@ -553,11 +553,14 @@ class TheShellWrappersAreGone(unittest.TestCase):
     existed. What replaces them is not new: it is `geneseed upgrade`, `python rituals/harness.py
     upgrade`, and now `node bin/geneseed-cli.mjs upgrade`.
 
-    THE ONE THING THAT MUST NOT GO WITH THEM is `_update.main()`. All three launchers (`geneseed`,
-    `geneseed.cmd`, `geneseed.ps1`) probe `harness.py <cmd> --help` and, on a miss, fall back to
-    `python rituals/_update.py <cmd>` to self-heal a factory too old to know the subcommand.
-    That is a STABLE CONTRACT, it never went through either wrapper, and `AliasTests` below is
-    what keeps it answering.
+    `_update.main()` USED TO BE THE ONE THING THAT COULD NOT GO WITH THEM, and P2 Task 4 ended
+    that. The launchers probed `harness.py <cmd> --help` and, on a miss, fell back to `python
+    rituals/_update.py <cmd>` to self-heal a factory too old to know the subcommand. Both are
+    now thin Node shims with no probe and no fallback, and the reason is not neglect: the
+    stale-factory paradox was a PYTHON one. A shim that execs `bin/geneseed-cli.mjs` out of
+    the same checkout cannot be newer than the entry point it runs, and a Node CLI that has
+    never heard of `upgrade` could not be repaired by a Python module the same migration
+    deletes. `AliasTests` below still keeps `main()` answering for as long as it is here.
     """
 
     #: The two files.

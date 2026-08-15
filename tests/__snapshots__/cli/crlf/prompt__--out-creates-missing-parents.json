@@ -5,7 +5,7 @@
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<stdout>": "220754c936932565f7152f86deda74cf52e296c5ef471d99e7ad0533feb93559",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "repo/deep/er/p.md": "4d4975e0508bfb79b94c9ee80606c43af6b879980b99b1438a8803dc87eef4e2"
+    "repo/deep/er/p.md": "336330d6e2cd07552aa3d61ff1452191e7f081545dfb77e5f1b4bd6b749bc60e"
   },
   "sizes": {
     "<dirs>": 36,
@@ -13,7 +13,7 @@
     "<stderr>": 0,
     "<stdout>": 38,
     "repo/.keep": 0,
-    "repo/deep/er/p.md": 393220
+    "repo/deep/er/p.md": 393302
   },
   "verbatim": {
     "<dirs>": "cfg\nhome\nrepo\nrepo/deep\nrepo/deep/er",

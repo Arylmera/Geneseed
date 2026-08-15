@@ -546,9 +546,9 @@ srv.listen(0, '127.0.0.1', async () => {
         """The route partition, one level in.
 
         `api_docs_page` dispatches on five KINDS. P6d crossed three, P8c `about`, and P10c
-        the last one — `cli`, which used to walk `harness.build_argparser()` (24 subparsers
-        and 43 `add_argument` calls, none of which a Node twin can introspect) and now reads
-        the generated `cli.json` on both sides.
+        the last one — `cli`, which used to walk `harness.build_argparser()` (25 subparsers
+        and 46 `add_argument` calls, none of which a Node twin can introspect) and now reads
+        `js/cli-table.json` on both sides.
 
         SO `NOT_PORTED_KINDS` IS EMPTY, AND THIS CHECK IS AT ITS STRONGEST THERE: it now says
         every kind the reference dispatches on is answered by the port, and a SIXTH kind
