@@ -1,4 +1,4 @@
-// `tests/test_claude.py` — the Claude Code host emit. `ClaudeEmitTests` first.
+// `tests/test_claude.py` — the Claude Code host emit: `ClaudeEmitTests` and `ClaudeSafetyTests`.
 //
 // THE SEAM IS THE SAME ONE THE REFERENCE USES, which is unusual for this port and worth saying:
 // `build.emit_claude_global(theme, cfg=…)` and `build.emit_claude(theme, out, root)` are direct
@@ -27,6 +27,7 @@ import path from 'node:path';
 
 import { emitGlobalInto, emitProjectInto } from '../../bin/geneseed.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts.mjs';
+import { uninstallGlobal } from '../../js/uninstall.mjs';
 import { hookShimPath, GENESEED_HOOK_SNIFF } from '../../js/settings.mjs';
 import { ROOT } from '../../js/checkout.mjs';
 import { makeSandbox, sandboxProcessHome, restoreProcessHome } from '../helpers/sandbox.mjs';
@@ -227,5 +228,133 @@ test('a folder emit round-trips into the repo, with machine paths kept out of th
     for (const line of ['settings.local.json', 'wiki.jsonc', 'agent-overrides.json']) {
       assert.ok(gi.includes(line), `${line} is not gitignored`);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `ClaudeSafetyTests` — a pre-existing, user-owned `~/.claude` is never clobbered, and the
+// uninstall removes only what Geneseed owns.
+//
+// DISTINCT FROM `tests/unit/user_files.test.mjs`, which was written first and gates the CLAIM
+// mechanism itself (`writeNativeLayer` over a seeded file — it is what kills mutation M5). This
+// is the same property one level up: a whole emit over a directory the user already lives in,
+// and then the whole uninstall. The mechanism being right is not the same as the emit and the
+// teardown both USING it, and the second half is where the sticky-`whole` bug below lived.
+
+/** The reference's `setUp`: a `.claude` a user already has content in, colliding by name. */
+function seededUserCfg(d) {
+  const cfg = path.join(d, 'dotclaude');
+  fs.mkdirSync(path.join(cfg, 'skills', 'impeccable'), { recursive: true });
+  fs.mkdirSync(path.join(cfg, 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({
+    model: 'opus',
+    hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo mine' }] }] },
+  }));
+  // `impeccable` is ALSO a Geneseed skill name — the collision is the test.
+  fs.writeFileSync(path.join(cfg, 'skills', 'impeccable', 'SKILL.md'), 'USER SKILL');
+  fs.writeFileSync(path.join(cfg, 'agents', 'mine.md'), 'USER AGENT');
+  fs.writeFileSync(path.join(cfg, 'CLAUDE.md'), '# my notes\nkeep this\n');
+  return cfg;
+}
+
+test('an emit over a directory the user already lives in preserves everything of theirs', () => {
+  withDir((d) => {
+    const cfg = seededUserCfg(d);
+    globalEmit('claude', path.join(d, 'bundle'), cfg);
+
+    const man = readJson(cfg, GLOBAL_MANIFEST);
+    const owned = new Set(man.owned);
+    assert.ok(owned.size > 0, 'an empty manifest agrees with every claim below');
+
+    // Untouched AND not adopted. Adoption is the quieter failure: the file survives this emit
+    // and is deleted by the next uninstall, having been recorded as Geneseed's.
+    assert.equal(read(cfg, 'agents', 'mine.md'), 'USER AGENT');
+    assert.ok(!owned.has('agents/mine.md'), 'a user file was adopted into the manifest');
+
+    // The prose survives AROUND the managed block, which is why the block exists.
+    const cm = read(cfg, 'CLAUDE.md');
+    assert.ok(cm.includes('keep this'), 'the user\'s CLAUDE.md prose was overwritten');
+    assert.ok(cm.includes('<!-- BEGIN GENESEED -->'));
+    assert.ok(!man.managed.claude_md.whole,
+      'the file was claimed WHOLE, so the uninstall will delete the prose with it');
+
+    // Their settings key and their own hook survive, and Geneseed's are added beside them.
+    const s = readJson(cfg, 'settings.json');
+    assert.equal(s.model, 'opus');
+    assert.ok(hookCmds(s).includes('echo mine'), "the user's own hook was dropped");
+    assert.ok(hookCmds(s).some((c) => c.includes('git-gate')), 'no Geneseed hook was merged in');
+  });
+});
+
+test('a user skill sharing a Geneseed name wins, and is not adopted', () => {
+  withDir((d) => {
+    const cfg = seededUserCfg(d);
+    globalEmit('claude', path.join(d, 'bundle'), cfg);
+    assert.equal(read(cfg, 'skills', 'impeccable', 'SKILL.md'), 'USER SKILL',
+      'the emit overwrote a same-named user skill');
+    const owned = new Set(readJson(cfg, GLOBAL_MANIFEST).owned);
+    assert.ok(!owned.has('skills/impeccable/SKILL.md'));
+    // The counterpart, so "the user copy wins" is not satisfied by an emit that wrote no
+    // skills at all: a skill the user does NOT have is still delivered and still owned.
+    assert.ok([...owned].some((o) => o.startsWith('skills/') && o !== 'skills/impeccable/SKILL.md'),
+      'no Geneseed skill was written, so the collision above proves nothing');
+  });
+});
+
+test('the uninstall removes only what it owned, and leaves every user artefact', () => {
+  withDir((d) => {
+    const cfg = seededUserCfg(d);
+    globalEmit('claude', path.join(d, 'bundle'), cfg);
+    assert.ok(fs.existsSync(path.join(cfg, 'agents', 'reviewer.md')),
+      'the emit wrote no agent, so its removal below would prove nothing');
+
+    captured(() => uninstallGlobal(cfg, false, 'claude'));
+
+    assert.equal(read(cfg, 'agents', 'mine.md'), 'USER AGENT');
+    assert.equal(read(cfg, 'skills', 'impeccable', 'SKILL.md'), 'USER SKILL');
+    assert.ok(read(cfg, 'CLAUDE.md').includes('keep this'));
+    assert.ok(!read(cfg, 'CLAUDE.md').includes('<!-- BEGIN GENESEED -->'));
+
+    const s = readJson(cfg, 'settings.json');
+    assert.equal(s.model, 'opus');
+    assert.ok(hookCmds(s).includes('echo mine'));
+    assert.deepEqual(geneseedCmds(s), [], 'Geneseed hooks were not unwired');
+
+    assert.ok(!fs.existsSync(path.join(cfg, 'agents', 'reviewer.md')));
+    assert.ok(!fs.existsSync(path.join(cfg, GLOBAL_MANIFEST)));
+  });
+});
+
+test('prose added after Geneseed created CLAUDE.md survives the uninstall', () => {
+  // THE STICKY-`whole` REGRESSION. Geneseed CREATES CLAUDE.md when the directory is empty and
+  // used to record that it owned the whole file — so the uninstall deleted it outright, eating
+  // any prose the user had added since. The teardown must excise the BLOCK and keep the rest,
+  // and "the file was created by us" is a fact about one moment, not a standing licence.
+  withDir((d) => {
+    const cfg = path.join(d, 'fresh');
+    fs.mkdirSync(cfg);
+    globalEmit('claude', path.join(d, 'bundle'), cfg);
+    const cm = path.join(cfg, 'CLAUDE.md');
+    fs.appendFileSync(cm, '\nMY LATER NOTES\n');
+
+    captured(() => uninstallGlobal(cfg, false, 'claude'));
+
+    assert.ok(fs.existsSync(cm), 'the user prose was deleted along with the file');
+    assert.ok(read(cm).includes('MY LATER NOTES'));
+    assert.ok(!read(cm).includes('<!-- BEGIN GENESEED -->'));
+  });
+});
+
+test('a CLAUDE.md Geneseed created and nobody edited is removed entirely', () => {
+  // The other half of the same rule, and what keeps the fix above from leaving litter: with no
+  // user prose, the excision leaves an empty file and the file goes. Same end state the old
+  // whole-file delete produced, reached without the risk.
+  withDir((d) => {
+    const cfg = path.join(d, 'pristine');
+    fs.mkdirSync(cfg);
+    globalEmit('claude', path.join(d, 'bundle'), cfg);
+    assert.ok(fs.existsSync(path.join(cfg, 'CLAUDE.md')), 'the emit never wrote CLAUDE.md');
+    captured(() => uninstallGlobal(cfg, false, 'claude'));
+    assert.ok(!fs.existsSync(path.join(cfg, 'CLAUDE.md')));
   });
 });
