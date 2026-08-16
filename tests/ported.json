@@ -649,11 +649,21 @@
       "python": "tests/test_settings_parity.py",
       "kind": "parity",
       "py_tests": 5,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/settings_jsonc.test.mjs"
+        "tests/unit/settings_jsonc.test.mjs",
+        "tests/__snapshots__/jsonc.json"
       ],
-      "why": "PARTIAL. The wiring comparison retires; the JSONC corpus and both hook-sniff shapes do not. JSONC parsing is a live product property — users hand-edit settings.json with comments — and its answers are absolute, not relative to an implementation."
+      "why": [
+        "PARTIAL, as the row predicted. AUDITED PER CLASS: 2 classes, 5 methods → 3 cross, 2 retire. Successor `tests/unit/settings_jsonc.test.mjs` (7 tests) plus a new recorded corpus at `tests/__snapshots__/jsonc.json`. The wiring comparison retires into the emit corpus; JSONC parsing does not, because it is a LIVE PRODUCT PROPERTY — users hand-edit settings.json and opencode.json with comments, and every emit re-reads what they wrote.",
+        "THE CORPUS IS RECORDED, NOT TRANSCRIBED, and that is the difference between this row and the four frozen literals earlier in the wave. Twenty-four inputs with twenty-four answers is past the size where a hand-copied table can be trusted, so the reference's own `_read_jsonc` was run over its own `JSONC_CORPUS` on 2026-08-16 and the answers frozen — the `tests/__snapshots__/help/` pattern, applied a second time.",
+        "⚠ THE ANSWER IS RECORDED AS RENDERED TEXT, NOT AS A JSON VALUE, and the corpus carries that argument in its own `doc` field. A JSON document cannot hold Python's int/float distinction, and `{\"float\": 1.0, \"int\": 20, \"exp\": 1e3}` → `{\"float\": 1.0, \"int\": 20, \"exp\": 1000.0}` is a row that exists for exactly that. Recording the VALUE would have collapsed all three spellings on the way into the file, and the corpus would then have certified the bug it was written to prevent.",
+        "⚠ AND ONE AMBIGUITY IS RECORDED RATHER THAN RESOLVED: `null` is the reference's answer both for an input that does not parse and for the literal `null`, and it does not distinguish them. Inventing a distinction the reference does not have is the trap that has fired twice in this port, so the corpus carries `isNull` and says why.",
+        "THE COVERAGE GATE WAS RE-AIMED, NOT DROPPED. The reference asserted its own cell list still contained ten named states — the right shape while one file drove all ten. They are spread across six Node files now, so the successor is a MAP from each state to the test that owns it, and every entry is CHECKED against the file it names, because a pointer at a test that no longer exists asserts nothing.",
+        "TWO OF THE TEN HAD NO NODE OWNER, and were WRITTEN rather than waved through — checked before claiming coverage, which is the standing rule this port keeps re-learning. `claude/user-hooks-survive`: the merge writes Geneseed's groups into a file the user already has hooks in, and theirs must come back untouched (asserted with the control that the merge really did add its own, or 'theirs survived' is true of a no-op). `claude/invalid-json`: a settings.json the parser cannot read must be REFUSED and named, never replaced with a fresh config — the one case where guessing costs the user everything.",
+        "TWO SHAPES THE REFERENCE'S OWN CORPUS GATE DID NOT NAME are now asserted, and both are already in its corpus: an escaped quote before a `//`, and a string ending in a backslash. A stripper that scans for `//` without tracking string state gets those two wrong in opposite directions.",
+        "`test_every_name_with_a_consumer_outside_the_unit_is_driven` RETIRES WITH THE COMPARISON IT GATED. It re-derived, by `ast`, the set of `_build_settings` names that a caller outside the unit can hold, and required the comparison file to drive each one. Its subject is that file's cell list; with the cell list gone there is nothing left for it to be about, and the surviving claim — that each of those behaviours is still gated — is what the state map above now carries."
+      ]
     },
     {
       "python": "tests/test_native_layer_parity.py",
