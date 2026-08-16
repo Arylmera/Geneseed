@@ -1,4 +1,5 @@
-// `tests/test_claude.py` — the Claude Code host emit: `ClaudeEmitTests` and `ClaudeSafetyTests`.
+// `tests/test_claude.py` — the Claude Code host emit: `ClaudeEmitTests`, `ClaudeSafetyTests` and
+// `ClaudeActivationTests`.
 //
 // THE SEAM IS THE SAME ONE THE REFERENCE USES, which is unusual for this port and worth saying:
 // `build.emit_claude_global(theme, cfg=…)` and `build.emit_claude(theme, out, root)` are direct
@@ -26,8 +27,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { emitGlobalInto, emitProjectInto } from '../../bin/geneseed.mjs';
-import { GLOBAL_MANIFEST } from '../../js/hosts.mjs';
-import { uninstallGlobal } from '../../js/uninstall.mjs';
+import { GLOBAL_MANIFEST, VERSION_MARKER } from '../../js/hosts.mjs';
+import { uninstallGlobal, installDeactivate, installReactivate } from '../../js/uninstall.mjs';
+import { installState } from '../../js/installs.mjs';
 import { hookShimPath, GENESEED_HOOK_SNIFF } from '../../js/settings.mjs';
 import { ROOT } from '../../js/checkout.mjs';
 import { makeSandbox, sandboxProcessHome, restoreProcessHome } from '../helpers/sandbox.mjs';
@@ -356,5 +358,144 @@ test('a CLAUDE.md Geneseed created and nobody edited is removed entirely', () =>
     assert.ok(fs.existsSync(path.join(cfg, 'CLAUDE.md')), 'the emit never wrote CLAUDE.md');
     captured(() => uninstallGlobal(cfg, false, 'claude'));
     assert.ok(!fs.existsSync(path.join(cfg, 'CLAUDE.md')));
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `ClaudeActivationTests` — deactivate / reactivate, and the re-emit that must prune rather than
+// stack.
+//
+// THE STASH IS THE SUBJECT. Deactivating moves every owned file into `.geneseed-disabled/<host>/`
+// and unwires the settings; reactivating puts them back. Every failure in this class leaves an
+// install a user cannot use again without hand-editing their own config directory, which is why
+// the state machine is asserted at each step rather than only at the ends.
+
+/** The reference's `setUp`: a user's own CLAUDE.md, then a real global emit over it. */
+function activatedCfg(d, host = 'claude', name = 'dotclaude') {
+  const cfg = path.join(d, name);
+  fs.mkdirSync(cfg, { recursive: true });
+  if (host === 'claude') fs.writeFileSync(path.join(cfg, 'CLAUDE.md'), '# mine\nkeep\n');
+  globalEmit(host, path.join(d, `bundle-${name}`), cfg);
+  return cfg;
+}
+
+test('deactivate then reactivate round-trips, and the user prose never moves', () => {
+  withDir((d) => {
+    const cfg = activatedCfg(d);
+    assert.equal(installState(cfg, 'claude', 'global'), 'active');
+
+    const off = captured(() => installDeactivate(cfg, 'claude', 'global'));
+    assert.ok(off.ok, JSON.stringify(off));
+    assert.equal(installState(cfg, 'claude', 'global'), 'disabled');
+
+    // Stashed HOST-TAGGED, so two hosts sharing a directory cannot overwrite each other's stash.
+    assert.ok(!fs.existsSync(path.join(cfg, 'agents', 'reviewer.md')));
+    assert.ok(fs.existsSync(path.join(cfg, '.geneseed-disabled', 'claude', 'agents', 'reviewer.md')));
+    let cm = read(cfg, 'CLAUDE.md');
+    assert.ok(!cm.includes('<!-- BEGIN GENESEED -->'), 'the managed block survived the deactivate');
+    assert.ok(cm.includes('keep'), "the user's prose was stashed along with the block");
+    assert.deepEqual(geneseedCmds(readJson(cfg, 'settings.json')), [], 'hooks are still wired');
+    // The markers stay: a disabled install is still an install, and `status` must find it.
+    assert.ok(fs.existsSync(path.join(cfg, VERSION_MARKER)));
+
+    const on = captured(() => installReactivate(cfg, 'claude', 'global'));
+    assert.ok(on.ok, JSON.stringify(on));
+    assert.equal(installState(cfg, 'claude', 'global'), 'active');
+    assert.ok(fs.existsSync(path.join(cfg, 'agents', 'reviewer.md')));
+    cm = read(cfg, 'CLAUDE.md');
+    assert.ok(cm.includes('<!-- BEGIN GENESEED -->'));
+    assert.ok(cm.includes('keep'));
+    assert.ok(geneseedCmds(readJson(cfg, 'settings.json')).length > 0, 'hooks were not re-wired');
+    assert.ok(!fs.existsSync(path.join(cfg, '.geneseed-disabled')), 'the stash was not cleaned up');
+  });
+});
+
+test('a reactivate after a re-emit while disabled discards the stale stash', () => {
+  // `geneseed build` does not know an install is disabled, so it re-creates every file live. A
+  // restore that then tried to move the stash back would collide with all of them, and the
+  // install would sit "disabled" until a user deleted `.geneseed-disabled` by hand.
+  withDir((d) => {
+    const cfg = activatedCfg(d);
+    captured(() => installDeactivate(cfg, 'claude', 'global'));
+    assert.equal(installState(cfg, 'claude', 'global'), 'disabled');
+    globalEmit('claude', path.join(d, 'bundle2'), cfg);            // re-created while disabled
+
+    const res = captured(() => installReactivate(cfg, 'claude', 'global'));
+    assert.ok(res.ok, JSON.stringify(res));
+    assert.ok((res.note ?? '').includes('discarded'),
+      `the stale stash was consumed silently: ${JSON.stringify(res)}`);
+    assert.ok(!fs.existsSync(path.join(cfg, '.geneseed-disabled')));
+    assert.ok(fs.existsSync(path.join(cfg, 'agents', 'reviewer.md')));
+    assert.equal(installState(cfg, 'claude', 'global'), 'active');
+  });
+});
+
+test('the same discard works for Bob global, which has no managed AGENTS.md block', () => {
+  // NOT A DUPLICATE OF THE TEST ABOVE, and the difference is the reason it exists: Bob GLOBAL
+  // writes no managed block into AGENTS.md — `rules/geneseed.md` carries the preamble instead —
+  // so a relive guard that keyed on the block would never fire here, and this host alone would
+  // get stuck disabled.
+  withDir((d) => {
+    const cfg = activatedCfg(d, 'bob', 'dotbob');
+    assert.equal(installState(cfg, 'bob', 'global'), 'active');
+    captured(() => installDeactivate(cfg, 'bob', 'global'));
+    assert.equal(installState(cfg, 'bob', 'global'), 'disabled');
+    globalEmit('bob', path.join(d, 'bundle-bob2'), cfg);
+
+    const res = captured(() => installReactivate(cfg, 'bob', 'global'));
+    assert.ok(res.ok, JSON.stringify(res));
+    assert.ok((res.note ?? '').includes('discarded'), JSON.stringify(res));
+    assert.ok(!fs.existsSync(path.join(cfg, '.geneseed-disabled')));
+    assert.ok(fs.existsSync(path.join(cfg, 'rules', 'geneseed.md')));
+    assert.equal(installState(cfg, 'bob', 'global'), 'active');
+  });
+});
+
+test('a re-emit prunes a managed hook group that is no longer canonical', () => {
+  // The stacking failure: a group recorded in an older form (an old interpreter path, or the
+  // pre-`|| exit 0` shape) must be REPLACED on re-emit, not left beside the new one. A
+  // duplicated Stop group runs `learn` twice on every stop, and nothing reports it.
+  withDir((d) => {
+    const cfg = activatedCfg(d);
+    const man = readJson(cfg, GLOBAL_MANIFEST);
+    const claims = man.managed.settings_hooks;
+    const stop = claims.find((r) => r.event === 'Stop');
+    assert.ok(stop, 'no Stop group was recorded, so there is nothing to make stale');
+    const stale = { event: 'Stop', group: JSON.parse(JSON.stringify(stop.group)) };
+    const canonical = stale.group.hooks[0].command;
+    assert.ok(canonical.includes('|| exit 0'), `the canonical hook form has changed: ${canonical}`);
+    stale.group.hooks[0].command = canonical.replace('|| exit 0', '|| true');
+
+    // The old install, faithfully: the stale form in the FILE and in the manifest's claims.
+    const s = readJson(cfg, 'settings.json');
+    s.hooks.Stop = [stale.group];
+    fs.writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify(s));
+    man.managed.settings_hooks = [...claims.filter((r) => r.event !== 'Stop'), stale];
+    fs.writeFileSync(path.join(cfg, GLOBAL_MANIFEST), JSON.stringify(man));
+
+    globalEmit('claude', path.join(d, 'bundle2'), cfg);
+
+    const stops = readJson(cfg, 'settings.json').hooks.Stop;
+    assert.equal(stops.length, 1, `the stale Stop group was not pruned: ${JSON.stringify(stops)}`);
+    assert.ok(stops[0].hooks[0].command.includes('|| exit 0'));
+    // And the MANIFEST too, or the next unwire tries to remove a group that is not there.
+    const recorded = readJson(cfg, GLOBAL_MANIFEST).managed.settings_hooks
+      .filter((r) => r.event === 'Stop').map((r) => r.group.hooks[0].command);
+    assert.equal(recorded.length, 1, JSON.stringify(recorded));
+    assert.ok(recorded[0].includes('|| exit 0'));
+  });
+});
+
+test('deactivating leaves no empty skill folders behind', () => {
+  // Skills are emitted as FOLDERS, so stashing the file leaves a husk unless the walk climbs.
+  // A husk is not cosmetic: `skills/tdd/` with nothing in it is what a host lists as an
+  // installed-but-broken skill.
+  withDir((d) => {
+    const cfg = activatedCfg(d);
+    assert.ok(fs.existsSync(path.join(cfg, 'skills', 'tdd', 'SKILL.md')),
+      'the emit wrote no skill, so nothing below is being tested');
+    captured(() => installDeactivate(cfg, 'claude', 'global'));
+    assert.ok(!fs.existsSync(path.join(cfg, 'skills', 'tdd')), 'an empty skill folder was left');
+    assert.ok(!fs.existsSync(path.join(cfg, 'skills')), 'an empty skills/ was left');
   });
 });
