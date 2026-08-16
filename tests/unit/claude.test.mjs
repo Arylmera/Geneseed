@@ -25,9 +25,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../bin/geneseed.mjs';
-import { GLOBAL_MANIFEST, VERSION_MARKER, HOSTS } from '../../js/hosts.mjs';
+import { cmdRebuildAll } from '../../js/generate.mjs';
+import {
+  GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir,
+} from '../../js/hosts.mjs';
 import {
   uninstallGlobal, installDeactivate, installReactivate, installUninstall,
 } from '../../js/uninstall.mjs';
@@ -786,5 +790,98 @@ test('a re-emit prunes a pre---root git-gate group instead of stacking beside it
     const gitGates = cmds.filter((c) => c.includes('git-gate'));
     assert.equal(gitGates.length, 1, `expected 1 git-gate, got ${gitGates.length}: ${cmds}`);
     assert.ok(gitGates.every((c) => c.includes('--root')), `git-gate lost --root: ${gitGates}`);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `RebuildAllTests` — rebuild every ACTIVE install, best-effort.
+//
+// THE REFERENCE MOCKS FOUR THINGS AND ONE OF THEM DOES NOT EXIST HERE. It replaces
+// `_install_targets`, `_install_state`, `_theme_of_dir` and `run`, and asserts on the argv of the
+// calls `run` recorded. `cmdRebuildAll` calls `driverMain(argv)` IN PROCESS — there is no `run`
+// to replace, and a recorded argv would be a copy of the value under test anyway.
+//
+// SO THE INSTALLS ARE REAL AND SO IS THE FAILURE. Two global installs are emitted through the
+// CLI into directories the resolvers discover, and one of them is given a `.geneseed-theme`
+// naming a theme that does not exist — a marker a user can produce by hand, or by keeping an
+// install across a checkout that dropped a theme. MEASURED: the generator exits 1 on it.
+//
+// AND THE "NEVER CREATED" ARM COMES FREE. `installTargets` always yields a global row per host,
+// so bob and copilot are present as candidates with nothing installed. They are the reference's
+// third row, supplied by the product rather than by the fixture, and what must be true of them
+// is that the run leaves no directory behind.
+
+/** Like `captured`, but hands back what was written. */
+function capturedOut(fn) {
+  const outw = process.stdout.write.bind(process.stdout);
+  const errw = process.stderr.write.bind(process.stderr);
+  let out = '';
+  let err = '';
+  process.stdout.write = (c) => { out += c; return true; };
+  process.stderr.write = (c) => { err += c; return true; };
+  try { return [fn(), out, err]; } finally {
+    process.stdout.write = outw;
+    process.stderr.write = errw;
+  }
+}
+
+/** A global install through the PUBLIC entry, so markers and the registry are written too. */
+function cliGlobalEmit(kind) {
+  const r = spawnSync(process.execPath,
+    [path.join(String(ROOT), 'bin', 'geneseed.mjs'), '--emit', kind, '--theme', 'neutral'],
+    { cwd: String(ROOT), encoding: 'utf8', env: process.env, maxBuffer: 1 << 26, windowsHide: true });
+  assert.equal(r.status, 0, `${kind} emit failed (${r.status}): ${(r.stderr || '').slice(-800)}`);
+}
+
+test('rebuild-all rebuilds every active install, survives one failing, and creates none', () => {
+  withDir((d) => {
+    const savedEnv = {};
+    for (const v of ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'COPILOT_CONFIG_DIR']) {
+      savedEnv[v] = process.env[v];
+    }
+    // Every host inside the sandbox, including the two nothing is installed into — leaving one
+    // resolved to its real location would fold the developer's own install into the run.
+    process.env.OPENCODE_CONFIG_DIR = path.join(d, 'oc-cfg');
+    process.env.BOB_CONFIG_DIR = path.join(d, 'bob-none');
+    process.env.COPILOT_CONFIG_DIR = path.join(d, 'copilot-none');
+    try {
+      cliGlobalEmit('claude-global');
+      cliGlobalEmit('opencode-global');
+      const claudeCfg = claudeConfigDir();
+      const ocCfg = opencodeConfigDir();
+      assert.equal(installState(claudeCfg, 'claude', 'global'), 'active');
+      assert.equal(installState(ocCfg, 'opencode', 'global'), 'active');
+
+      // The failure, made real: a theme marker naming a theme this checkout does not have.
+      fs.writeFileSync(path.join(ocCfg, '.geneseed-theme'), 'no-such-theme\n');
+
+      const [rc, out, err] = capturedOut(() => cmdRebuildAll());
+
+      assert.equal(rc, 1, 'a failing install must make the whole run non-zero');
+      const lines = out.split('\n').filter((l) => /^\[rebuild-all] \w+:global /.test(l));
+      assert.equal(lines.length, 2,
+        `an install with nothing in it was rebuilt (or an active one skipped):\n${out}`);
+      assert.ok(lines.some((l) => l.includes('emit=claude-global')), out);
+      assert.ok(lines.some((l) => l.includes('emit=opencode-global')), out);
+      // EXACTLY ONE FAILED, AND IT IS THE ONE THAT WAS BROKEN. "Best effort" is the whole claim
+      // of the class, and `rc === 1` alone is equally satisfied by a run in which BOTH installs
+      // failed — CLAUDE.md would still be on disk from the emit above, so the artefact cannot
+      // settle it either. The count and the name can.
+      const failed = err.split('\n').filter((l) => l.includes('FAILED'));
+      assert.equal(failed.length, 1, `expected one failing install, got:\n${err}`);
+      assert.ok(failed[0].includes('opencode:global'), failed[0]);
+      assert.equal(installState(claudeCfg, 'claude', 'global'), 'active');
+
+      // An absent install is never CREATED. A rebuild that treated a candidate row as a target
+      // would install Geneseed into two hosts the user never asked for.
+      for (const v of ['BOB_CONFIG_DIR', 'COPILOT_CONFIG_DIR']) {
+        assert.ok(!fs.existsSync(process.env[v]), `${v} was created by rebuild-all`);
+      }
+    } finally {
+      for (const [v, val] of Object.entries(savedEnv)) {
+        if (val === undefined) delete process.env[v]; else process.env[v] = val;
+      }
+      fs.rmSync(claudeConfigDir(), { recursive: true, force: true });
+    }
   });
 });
