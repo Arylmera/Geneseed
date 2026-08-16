@@ -306,6 +306,56 @@ test('a user theme survives a rebuild, branded or not', () => {
   });
 });
 
+test('the primary and command layers are emitted only when their env vars ask for them', () => {
+  // THE TWO OPT-IN LAYERS, and the reason they need a cell of their own: both are OFF by
+  // default, so `GENESEED_PRIMARY` and `GENESEED_COMMANDS` are unreachable from any default emit
+  // AND from all 259 recorded cells — `cellEnv` clears every `GENESEED_*` knob by prefix, which
+  // is what keeps the matrix meaning the same thing on every machine. `test_opencode_extras_
+  // parity.py`'s matrix required a cell for each and nothing in this port had one.
+  //
+  // A PARTITION, not a presence check: the same emit is run twice and the DIFFERENCE is the
+  // claim, so a layer that shipped unconditionally fails just as loudly as one that never ships.
+  const filesUnder = (d) => {
+    const out = [];
+    const walk = (dir) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else out.push(path.relative(d, p).split(path.sep).join('/'));
+      }
+    };
+    walk(d);
+    return out;
+  };
+  const run = (on) => withDir((d) => {
+    for (const k of ['GENESEED_PRIMARY', 'GENESEED_COMMANDS']) {
+      if (on) process.env[k] = '1'; else delete process.env[k];
+    }
+    try {
+      emitOpencode('neutral', path.join(d, 'bundle'), d);
+      return filesUnder(d);
+    } finally {
+      for (const k of ['GENESEED_PRIMARY', 'GENESEED_COMMANDS']) delete process.env[k];
+    }
+  });
+  const off = run(false);
+  const on = run(true);
+  const added = on.filter((f) => !off.includes(f)).sort();
+  assert.ok(off.length > 100, `only ${off.length} files in a default emit, so the diff is thin`);
+  assert.deepEqual(added, [
+    '.opencode/agents/orchestrator.md',
+    '.opencode/command/commit.md',
+    '.opencode/command/debug.md',
+    '.opencode/command/plan.md',
+    '.opencode/command/research.md',
+    '.opencode/command/review-response.md',
+    '.opencode/command/ship.md',
+  ], 'the opt-in layers no longer add exactly the primary agent and the six commands');
+  // And nothing is REMOVED by turning them on: these layers add, they do not replace.
+  assert.deepEqual(off.filter((f) => !on.includes(f)), [],
+    'turning the opt-in layers on removed a file the default emit writes');
+});
+
 // ---------------------------------------------------------------------------------------------
 // `emit_opencode_global` — the shared-config deployment
 
