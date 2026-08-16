@@ -376,6 +376,41 @@ export const MUTATIONS = [
       + 'answer every request successfully and write the wrong layer. The one recorded cell that '
       + 'touches the endpoint covers its two REFUSAL arms, where no command is produced at all.',
   },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7, with `tests/unit/web_server.test.mjs`.
+  //
+  // ⚠ NUMBERING: docblocks in `js/web/server.mjs` and `js/web/docs.mjs` cite mutations as "M23",
+  // "M30" and so on. Those belong to the NPX PORT's own mutation log and are unrelated to this
+  // matrix, which runs M1..M23 of its own. Do not read a citation there as a row here.
+  {
+    id: 'M22',
+    name: 'give /api/activity the 409 treatment',
+    file: 'js/web/server.mjs',
+    find: "  ['/api/activity', [apiActivityToggle, false]],",
+    replace: "  ['/api/activity', [apiActivityToggle, true]],",
+    gate: UNIT,
+    why: 'THE REVERSE MUTATION, and it is the invisible direction. A port that gave every POST '
+      + 'the 409 rule is caught by four recorded cells; giving `/api/activity` alone that rule is '
+      + 'caught by none, because every toggle a cell can perform SUCCEEDS and the failing arm '
+      + 'needs the flag write to raise — which the two runtimes worded differently and no byte '
+      + 'comparison could hold. The convention column is the table `doPost` looks up, so the gate '
+      + 'is on the dispatch and not on a declaration.',
+  },
+  {
+    id: 'M23',
+    name: 'consult the POST declarations on a GET',
+    file: 'js/web/server.mjs',
+    find: '  return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
+    replace: '  return NOT_PORTED.has(path) || DECLINED_POST.has(path)\n'
+      + '    || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
+    gate: UNIT,
+    why: 'PORT-LEDGER ROW 3, AS A DEFECT. This is the one-line collapse the split into separate '
+      + 'GET and POST declarations exists to prevent: every exported set stays exactly as '
+      + 'written, so every partition test that READS them stays green, while a GET to '
+      + '`/api/pick-folder` answers 501 instead of falling through to the SPA that owns the path. '
+      + 'Only a probe of the running dispatcher can see it, which is why row 3 is a probe and not '
+      + 'a declaration — and why the row says so at both sites.',
+  },
 ];
 
 function run(argv) {

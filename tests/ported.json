@@ -383,11 +383,20 @@
       "python": "tests/test_web_server.py",
       "kind": "artifact",
       "py_tests": 16,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/web_server.test.mjs"
+        "tests/unit/web_server.test.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "HTTP-level properties the cells cannot see through their own transport: keep-alive, compression, caching. Also the live probe behind port-ledger row 3 — /api/pick-folder must answer 501 on POST and fall through to the SPA on GET, which is a probe rather than a reading of DECLINED_POST."
+      "why": [
+        "HTTP-level properties the cells cannot see through their own transport, plus the route PARTITION they are structurally blind to. AUDITED PER CLASS: 3 classes, 16 methods → 14 cross, 1 already covered, 1 retired. Successor `tests/unit/web_server.test.mjs`. Carries port-ledger row 3, whose column was updated in the same commit.",
+        "THE SOCKET HALF RE-AIMS RATHER THAN MOVING UP A LAYER. The reference drove a real `ThreadingHTTPServer` because connection reuse and a leftover request body only exist at the socket level; the same is true of `node:http`, so the eight tests start `makeHandler` on a real listener. ONE ASSERTION GOT STRONGER: keep-alive is proved by SOCKET IDENTITY (`res.socket` is the same object across two requests through a `maxSockets: 1` agent), where the reference asserted only that the second request also answered 200 — which a server that closed the connection and a client that silently redialled satisfies perfectly. The drain test asserts identity too, for the same reason.",
+        "THE PARTITION HALF HIT THE SAME WALL AS THE HELP-FLAG SCRAPE AND TOOK THE SAME ANSWER. It read the reference's routes with `ast` on the argument that 'the table has to come from the thing under test' — correct then, and impossible now: the thing under test is the only implementation, so a gate scraped from it would agree with any drift. The four sets (20 GET paths, 14 POST paths, the 7 `200 if … else 409` conditionals, the 5 docs kinds) were read out of the reference on 2026-08-16 with its own `ast` readers and are FROZEN in the successor. The test is the second party now.",
+        "⚠ PORT-LEDGER ROW 3 IS A PROBE AND STAYS ONE. `/api/pick-folder` is DECLINED, never ported — an OS-native folder dialog on the daemon host — and the claim is driven through the real dispatcher: POST must answer 501, and GET must NOT, because a GET falls through to the SPA. That pair is what refuses the one-line collapse of the POST declarations back into the GET set, which leaves every exported set exactly as written and every set-reading test green. Now gated as M23, killed.",
+        "M22 IS THE REVERSE MUTATION THE REFERENCE'S DOCSTRING CALLED INVISIBLE, and it was right: giving `/api/activity` the 409 treatment leaves all 114 web cells green (confirmed by running them, not by argument). Every toggle a cell can perform SUCCEEDS, so the failing arm never fires, and reaching it needs the flag write to raise — which the two runtimes worded differently and no byte comparison could hold. The convention column is the table `doPost` looks up, so this is a gate on the dispatch rather than on a declaration.",
+        "ONE TEST RETIRES AND ONE WAS ALREADY COVERED, which is the `api_setup.python` pair. The reference reported the interpreter running the daemon; that is a statement about a tree P4 deletes. The port's half — `python: null`, because there is no interpreter and putting Node's version under that key would be a lie the About page prints — was ALREADY asserted inside `tests/unit/web_api.test.mjs`'s full-snapshot test, which is the stronger site because it also requires the key to exist. Re-asserting it here would be a second owner of one claim, so the successor asserts the POINTER instead: the covering line must still be in that file.",
+        "TWO SMALLER STRENGTHENINGS. `assets are plain when gzip is not accepted` sends `Accept-Encoding: identity` rather than omitting the header, so the claim cannot start passing for the wrong reason if a client default ever adds one. And the dispatcher probe runs IN PROCESS with its own server rather than as a `node -e` string — same `GIT_DIR` guard (pointed at a path that does not exist, so `preflight()` always takes its 422 arm and no probe can start a real `git pull` of this checkout), same `'nowhere'` dist and fresh JobManager so no job file lands in the developer's install, and no prose in a shell argument."
+      ]
     },
     {
       "python": "tests/test_web_daemon.py",
