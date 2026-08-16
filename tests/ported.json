@@ -547,12 +547,19 @@
       "python": "tests/test_win_user_path.py",
       "kind": "parity",
       "py_tests": 10,
-      "status": "todo",
+      "status": "done",
       "node": [
+        "tests/unit/win_user_path.test.mjs",
         "tests/pure_snapshot.test.mjs",
-        "tests/unit/win_user_path.test.mjs"
+        "tests/__snapshots__/win_user_path.json"
       ],
-      "why": "PARTIAL. win_user_path.json already replays against winUserPathScript in pure_snapshot.test.mjs. What must still land is the STATED half of port-ledger row 4 — that the spawn arm carries no logic — which today lives in this file's docstring and nowhere else. A registry-write success arm no test may run needs its emptiness asserted, not described."
+      "why": [
+        "PARTIAL, as the row predicted. AUDITED PER CLASS: 3 classes, 10 methods → 5 cross, 2 already covered, 3 retired. Successor `tests/unit/win_user_path.test.mjs` (6 tests). The recorded corpus half already replays against `winUserPathScript` in `tests/pure_snapshot.test.mjs`; the three builder-vs-builder comparisons retire.",
+        "WHY THE ABSOLUTE HALF SURVIVES AND THE COMPARISON DOES NOT, in the reference's own words: a comparison of two builders is green when BOTH are wrong, and the apostrophe bug is exactly the kind two implementations share when one is copied from the other. So each property is asserted against the port's output directly — the `''` escape and its even-quote-count guard, the `-notcontains`, the empty-segment filter, the remove arm's `-ne $d`, and the machine-scope refusal over every recorded row and both actions.",
+        "⚠ PORT-LEDGER ROW 4'S STATED HALF IS NOW ASSERTED RATHER THAN DESCRIBED, which is what this row existed for. The success arm of the PowerShell spawn cannot be gated by anything short of editing this machine's registry — no test in this repo may run that, because the edit outlives the cell, the suite and the checkout. The argument for accepting the gap is that the spawn carries NO LOGIC: it hands the pure builder's output to PowerShell and maps the outcome. That claim lived in a test docstring and nowhere else. The successor checks it — one `spawnSync`, the builder's output passed through unchanged, no string work on the directory, `directory` referenced exactly twice, and a statement ceiling — so that if logic ever drifts INTO the spawn, the ungated region grows and something says so. An honestly-declared gap turns into a hidden one exactly when nobody re-checks the reason it was acceptable.",
+        "⚠ AND A VACUOUS PASS WAS CAUGHT BY ITS OWN SIBLING. `win_user_path.json`'s `corpus` key is the recording's NAME — a string — and the rows live in `cases`. The first draft read `RECORDING.corpus` as the row map, so `Object.values('win_user_path')` gave thirteen single characters and the machine-scope test ran twenty-six times over one-letter directories and PASSED. Only the corpus-soundness test failing on `.includes` of undefined exposed it. The rows are derived from `cases` now. A scan that finds something is not the same as a scan that finds the right thing.",
+        "The corpus-soundness test is kept and strengthened the way the JSONC one was: each row is checked against what its NAME claims — the apostrophe row carries one, the doubled-apostrophe row carries an already-doubled pair (the input proving the escape is not applied twice), the UNC row starts with two backslashes, the semicolon row carries a separator, the empty row is empty. A row that exercises none of the four hazards is a comment, not a test."
+      ]
     },
     {
       "python": "tests/test_node_cli_parity.py",
