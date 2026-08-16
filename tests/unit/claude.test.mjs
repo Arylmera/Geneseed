@@ -1,5 +1,5 @@
-// `tests/test_claude.py` — the Claude Code host emit: `ClaudeEmitTests`, `ClaudeSafetyTests` and
-// `ClaudeActivationTests`.
+// `tests/test_claude.py` — the Claude Code host emit: `ClaudeEmitTests`, `ClaudeSafetyTests`,
+// `ClaudeActivationTests` and `InstallTargetsTests`.
 //
 // THE SEAM IS THE SAME ONE THE REFERENCE USES, which is unusual for this port and worth saying:
 // `build.emit_claude_global(theme, cfg=…)` and `build.emit_claude(theme, out, root)` are direct
@@ -27,12 +27,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { emitGlobalInto, emitProjectInto } from '../../bin/geneseed.mjs';
-import { GLOBAL_MANIFEST, VERSION_MARKER } from '../../js/hosts.mjs';
+import { GLOBAL_MANIFEST, VERSION_MARKER, HOSTS } from '../../js/hosts.mjs';
 import { uninstallGlobal, installDeactivate, installReactivate } from '../../js/uninstall.mjs';
-import { installState } from '../../js/installs.mjs';
+import { installState, installTargets } from '../../js/installs.mjs';
 import { hookShimPath, GENESEED_HOOK_SNIFF } from '../../js/settings.mjs';
 import { ROOT } from '../../js/checkout.mjs';
-import { makeSandbox, sandboxProcessHome, restoreProcessHome } from '../helpers/sandbox.mjs';
+import {
+  makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
+} from '../helpers/sandbox.mjs';
 
 sandboxProcessHome();
 test.after(() => { restoreProcessHome(); });
@@ -497,5 +499,98 @@ test('deactivating leaves no empty skill folders behind', () => {
     captured(() => installDeactivate(cfg, 'claude', 'global'));
     assert.ok(!fs.existsSync(path.join(cfg, 'skills', 'tdd')), 'an empty skill folder was left');
     assert.ok(!fs.existsSync(path.join(cfg, 'skills')), 'an empty skills/ was left');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `InstallTargetsTests` — what `installTargets()` reports, and the phantom it must not report.
+//
+// THE REFERENCE REBINDS `build.HOSTS[host]["config_dir"]` TO A LAMBDA. ESM cannot, and
+// `tests/helpers/installs_fixture.mjs`'s header already settled that this is not a loss: three of
+// the four hosts resolve their global config dir from an ENVIRONMENT VARIABLE, and the fourth
+// (`claudeConfigDir`) is `~/.claude` flat, which a sandboxed HOME moves. Redirecting those runs
+// the resolver the product actually calls, so a defect in DISCOVERY reddens here rather than
+// being replaced by the test.
+//
+// AND FOR CLAUDE THE HONEST FIXTURE IS THE REAL BUG. The phantom this guard exists for is
+// `$HOME/.claude` seen from a process whose cwd IS `$HOME` — which is exactly the web daemon's
+// situation. Pointing HOME at the cwd does not simulate that case, it reproduces it.
+
+const ENV_FOR_HOST = {
+  opencode: 'OPENCODE_CONFIG_DIR', bob: 'BOB_CONFIG_DIR', copilot: 'COPILOT_CONFIG_DIR',
+};
+
+/**
+ * Compare install roots as the OS sees them — `installTargets` reports CANDIDATES, and most of
+ * them do not exist, so a bare `realpathSync` over the rows throws on the first empty host.
+ * Sandbox paths need the resolution: `%TEMP%` is an 8.3 short name on Windows.
+ */
+const realOrSelf = (p) => (fs.existsSync(p)
+  ? fs.realpathSync.native(p) : path.resolve(String(p)));
+
+/** Run `fn` with `cwd` current and `host`'s global config dir resolved to `cfgDir`. */
+function asHostGlobal(host, cwd, cfgDir, fn) {
+  const cwd0 = process.cwd();
+  const overrides = host === 'claude' ? homeOverrides(cwd) : { [ENV_FOR_HOST[host]]: cfgDir };
+  const saved = Object.fromEntries(Object.keys(overrides).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, overrides);
+  process.chdir(cwd);
+  try { return fn(); } finally {
+    process.chdir(cwd0);
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+}
+
+test('every host reports a global row, and every row is a host/scope/root triple', () => {
+  const rows = installTargets();
+  assert.ok(rows.length > 0, 'no install targets at all');
+  assert.ok(rows.every((r) => r.length === 3), JSON.stringify(rows));
+  const scopes = new Set(rows.map(([h, s]) => `${h} ${s}`));
+  // The config dirs always exist as CANDIDATES, whether or not anything is installed in them.
+  assert.ok(scopes.has('opencode global'), [...scopes].join(', '));
+  assert.ok(scopes.has('claude global'), [...scopes].join(', '));
+});
+
+test('no host doubles its own global config dir as a phantom project', () => {
+  // Toggling a phantom would hit the global's own files: `deactivate` on the project row would
+  // stash the global install, and `status` would show one install twice. Asserted for EVERY
+  // host, because claude/bob share the `~/.X` shape and opencode does not — the guard has to
+  // hold across both.
+  for (const spec of HOSTS) {
+    withDir((d) => {
+      const cwd = path.join(d, 'cfg');
+      const cfgDir = path.join(cwd, spec.projectMarker);          // <cwd>/<marker> IS the global
+      fs.mkdirSync(cfgDir, { recursive: true });
+      fs.writeFileSync(path.join(cfgDir, GLOBAL_MANIFEST), '{}');
+
+      const mine = asHostGlobal(spec.host, cwd, cfgDir,
+        () => installTargets().filter(([h]) => h === spec.host)
+          .map(([, s, r]) => [s, realOrSelf(r)]));
+
+      assert.ok(!mine.some(([s, r]) => s === 'project' && r === realOrSelf(cwd)),
+        `${spec.host}: a phantom project row aliases its own global — ${JSON.stringify(mine)}`);
+      assert.ok(mine.some(([s, r]) => s === 'global' && r === realOrSelf(cfgDir)),
+        `${spec.host}: the global row is missing entirely — ${JSON.stringify(mine)}`);
+    });
+  }
+});
+
+test('a genuine per-repo marker is still reported as a project', () => {
+  // The counterpart, and the reason the guard is written as "the marker dir IS the global dir"
+  // rather than "the marker dir exists": a repo's `.claude` is not `~/.claude`, and a guard that
+  // over-suppressed would make every per-repo install invisible to status, rebuild-all and
+  // uninstall at once.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(path.join(repo, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.claude', GLOBAL_MANIFEST), '{}');
+    const cwd0 = process.cwd();
+    process.chdir(repo);
+    try {
+      const rows = installTargets().map(([h, s, r]) => `${h} ${s} ${realOrSelf(r)}`);
+      assert.ok(rows.includes(`claude project ${realOrSelf(repo)}`), JSON.stringify(rows));
+    } finally { process.chdir(cwd0); }
   });
 });
