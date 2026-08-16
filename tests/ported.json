@@ -316,91 +316,169 @@
       "python": "tests/test_emit_modes.py",
       "kind": "unit",
       "py_tests": 14,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/emit_modes.test.mjs"
+        "tests/unit/emit_modes.test.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "Fixture tests for the three emit modes. Re-aims at js/generate.mjs; the mode axis is one of the two the 259-cell matrix sweeps only once, so the fixture is what varies it."
+      "why": [
+        "Fixture tests for the three emit modes. AUDITED PER CLASS: 4 classes (one is the temp-dir base with no methods), 14 methods, all 14 cross. Successor `tests/unit/emit_modes.test.mjs`. Every assertion was already absolute and about the emitted tree, so this is a change of runner.",
+        "THE SEAM WAS ALREADY THERE, which is the standing question answered yes for the third time this wave. `buildInto`, `emitProjectInto` and `emitGlobalInto` all take the target as a PARAMETER — exported for `js/diff.mjs`, `js/doctor.mjs` and `js/web/actions.mjs` — so there is no child process, no copied checkout and no redirected `--out` anywhere in the file. `sandboxProcessHome()` is still required, because the hook-shim writer ignores every one of those parameters and targets the ENVIRONMENT's home.",
+        "WHAT THIS ADDS OVER THE 259-CELL CORPUS IS THE RE-EMIT HISTORY, not the mode axis alone. Every recorded cell emits into a fresh sandbox; every claim here is about a SECOND emit over a tree whose manifest was edited in between — a stale owned entry, a deleted manifest, a user file whose name collides with a shipped spec. A corpus records only states a cell can reach, and no cell can reach any of these.",
+        "ONE ASSERTION CHANGED ITS ORACLE AND IS BETTER FOR IT. The reference matched `_build_core.CAPABILITY_LINK_RE` against the emitted AGENT.md. The port's twin is a module-private default that `cfg.capabilityLinkRe` overrides, so a copy of the pattern here would be a second place to be wrong and would go stale the day the default moves. The successor asks the product's own `stripCapabilityLinks` instead: if the text carries no link, stripping it is a NO-OP — plus a positive control on a text that plainly does carry one, without which the claim passes against a stripper that does nothing at all.",
+        "TWO VACUITY GUARDS ADDED. The AGENT.md table comparison asserts more than ten specs were rendered, because both of its directions hold trivially over an empty set; and the legacy-migration test asserts the bootstrapped manifest claimed SOMETHING, because 'nothing pre-existing was claimed' is equally satisfied by a bootstrap that wrote an empty manifest.",
+        "M29 IS THE ONE DEFECT NO CELL CAN REACH AND NO OTHER GATE HOLDS: claim-on-create skipping a user-authored file SILENTLY. The skip itself is correct — a pre-existing file whose name collides with a shipped spec is the user's, and it is neither overwritten nor claimed — but without the line the user sees a successful emit and a reviewer agent that is still their old one, with nothing anywhere saying which of the two is on disk. Every recorded cell emits into a fresh sandbox, so no file ever collides."
+      ]
     },
     {
       "python": "tests/test_emit_smoke.py",
       "kind": "unit",
       "py_tests": 6,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/unit/emit_smoke.test.mjs"
       ],
-      "why": "Every --emit mode in every footprint must build clean. Cheap, broad, and the first thing to redden on a structural break; keeps its shape and changes its runtime."
+      "why": [
+        "Every --emit mode in every footprint must build clean. AUDITED PER CLASS: 1 class, 6 methods, all 6 ported, none retired. This is the one row in the wave that really is only a change of runner — every assertion was already absolute and about the emitted tree.",
+        "EIGHTEEN BUILDS, NOT SEVENTY-TWO. The reference re-emitted inside each of its six methods, four of which want the same (mode, footprint) tree; one memoised build per pair serves all of them. Same coverage, a quarter of the wall clock, and safe only because nothing in the file writes into the tree it reads — which is stated at the memo rather than assumed.",
+        "WHAT THIS FILE ADDS OVER THE 259-CELL CORPUS, WHICH IS LESS THAN IT LOOKS AND IS WORTH WRITING DOWN. The carrier is inside every emit cell's snapshot, so the shape claims — where it lands, the Rules section, the capability tables, the native-layer counts, the Bob stub's size — are all ALSO gated byte for byte by the corpus. The ceiling is not, and cannot be: a corpus proves UNCHANGED, never SMALL ENOUGH, and a change that legitimately regrows the carrier moves the recording along with it. That is the whole reason the file survives the port.",
+        "AND IT IS WHY THIS ROW ADDS NO MUTATION. Every product mutation that would break a shape claim here moves recorded bytes first, so the emit corpus reddens before this file does; inventing a row to have one would measure the corpus. The ceiling, the one claim no corpus can make, is by construction unreachable from a one-string product edit for the same reason. Stated rather than left as a silence, on the matrix's own principle that an ungated mutation is declared rather than omitted.",
+        "TWO ASSERTIONS THE REFERENCE DID NOT HAVE, both partitions left to chance. `natively > 0` — with no host declaring `native_catalog`, every row takes the else branch, the whole strip half is untested and the test stays green. And a FLOOR under the ceiling: a maximum alone is satisfied by an emit that wrote almost nothing, which is exactly what a collapsed render produces, so half the ceiling now says the carrier is still a carrier.",
+        "`cellEnv` REPLACES THE FIVE HAND-WRITTEN HOME VARIABLES and is the superset: it also clears every `*_CONFIG_DIR` relocation knob, which a developer keeping a harness in a git-tracked folder really does export and which would otherwise send the four `-global` modes into their real install. The character count goes through a `readTextPy` — the third site of that one-liner, for the third time for the same reason: `writeText` translates to `os.linesep`, so on Windows the carrier really is CRLF on disk (gated as M1) and a raw byte count would make the ceiling ~3% tighter there for a reason that is not the harness's size."
+      ]
     },
     {
       "python": "tests/test_registry.py",
       "kind": "unit",
       "py_tests": 24,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/registry.test.mjs"
+        "tests/unit/authoring_gates.test.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "The three source-wide authoring gates from the entity registry. Their subject is src/ — the content tree, not either implementation — so the port is a change of runtime with no change of claim."
+      "why": [
+        "The three source-wide authoring gates from the entity registry, plus the lifecycle badge the TUI and the web catalog read. Subject is src/ — the content tree, not either implementation — so nothing here was a comparison. AUDITED PER CLASS: 4 classes, 24 methods, all 24 ported, none retired. Successor `tests/unit/authoring_gates.test.mjs`, named for the `[authoring]` prefix all three gates print.",
+        "THE ROW'S OWN 'change of runtime with no change of claim' WAS WRONG ABOUT THE COST, and only reading it said so: the claims cross unchanged, the FIXTURE does not. `_FakeTree` monkeypatched six module globals — `_harness_build.ROOT` and `_build_core.SRC/THEMES/PLUGIN_SRC/WORKFLOW_SRC/VENDORED_SKILL_DIRS` — and built a two-file tree underneath them. ESM cannot rebind an imported binding, and the standing question (does the port already take this as a PARAMETER?) answers no for all six: five are derived from `js/checkout.mjs`'s own file location and the sixth is a `const` in `js/native.mjs`. So the fixture is P5g's copy-the-checkout, `import`ed by module path so the copy's own ROOT resolves there.",
+        "ONE COPY SERVES TWENTY OF THE TWENTY-FOUR, and that is a property of the gates rather than a saving: `registryProblems`, `secretProblems` and `vendorPinProblems` re-read `registry.json`, `src/` and the VENDOR.md files at CALL time, so a single module instance answers any number of on-disk states. Only `VENDORED_SKILL_DIRS` is baked at import, so only the listed-but-absent-folder row needs a second copy — with the declaration line in `js/native.mjs` rewritten, which is what that `mock.patch.object` becomes. The rewrite asserts the anchor is present first, or the fault would apply to nothing and the row would pass by planting nothing.",
+        "THE FAULTS LAND ON A REAL TREE, which is strictly the harder input. `_FakeTree` gave the registry gate one agent and one skill; here all 67 shipped rows are present and the planted fault is one more, so a gate that reported every entity would pass the reference's fixture and fail this one. `test_flags_malformed_fields` gained the count the reference did not have — four faults, four problems — because four containments alone are equally satisfied by a gate that reports every field of every row. And the untouched copy is asserted SILENT under all three gates before anything is planted.",
+        "NOTHING GATED THESE THREE FUNCTIONS BEFORE. A repo-wide search of `tests/` for `registryProblems`, `secretProblems` and `vendorPinProblems` found the package manifest's row and nothing else: they were reachable only through `geneseed doctor`, which prints one `ok` line when all three are silent, so deleting any of them was invisible to every Node gate in the repo. Three mutation rows now say so — M17 the orphan half of the registry gate, M18 the credential sweep echoing what it found, M19 an empty registry relabelling the whole shipped catalogue as the user's own work. All three killed, each by exactly one test and exactly the predicted one.",
+        "M18 IS A SECURITY DEFECT RATHER THAN A COVERAGE ONE, and it is the reason the reference's oddest-looking assertion is kept verbatim. The sweep reports file:line and the KIND only, because doctor runs in CI and echoing the match would republish the credential into every build log — turning the gate that exists to stop a leak into the thing that publishes it. A report is still produced under the mutation, so every count and every containment stays green; only the explicit 'and it does NOT contain the planted secret' can see it.",
+        "`registryKeys` IS NOT EXPORTED, and that turned out to be the better outcome. The reference asserted `set(entities) == _registry_keys()` — the gate's own function on one side of the equality, the compare-a-value-with-itself shape this port has been bitten by before. The successor redoes the walk from the tree by hand and asserts the walk FOUND something (>50 entities), because a dead walk agrees with an empty registry.",
+        "TWO WORDINGS DIFFER FROM THE REFERENCE'S FIXTURE AND ARE RIGHT TO. The port's four swept trees are `src`, `themes`, `adapters/opencode/plugins` and `adapters/opencode/workflows`, where `_FakeTree` put the last two at the repo root; the claim is about the four roots `sourceFingerprint()` hashes — the material that ends up inside a user's bundle — not about where they sit. And the inventory row asserts membership in `ENTITY_STATUSES` STRICTLY, excluding the two derived states `entityStatus` can also return: on the shipped tree that says every rendered entity carries a real registry row, which is the registry gate's claim reached through the object the catalogs actually consume."
+      ]
     },
     {
       "python": "tests/test_atomic_config.py",
       "kind": "unit",
       "py_tests": 4,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/atomic_config.test.mjs"
+        "tests/unit/atomic_config.test.mjs",
+        "tests/helpers/deny.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "Atomic write guarantee for user-owned config: opencode.json and settings.json must never be left truncated and must leave no litter. A data-loss property, which is the tier that is never simplified away."
+      "why": [
+        "Atomic write guarantee for user-owned config: opencode.json and settings.json must never be left truncated and must leave no litter. A data-loss property, which is the tier that is never simplified away — these files belong to the USER, Geneseed only merges into them, and a truncated settings.json is their whole Claude configuration gone. AUDITED PER CLASS: 2 classes, 4 methods, all 4 cross. Successor tests/unit/atomic_config.test.mjs.",
+        "THE MONKEYPATCH BECAME A REAL DENIAL, and the substitute is better than the original rather than a workaround: the reference replaced os.replace with a function raising OSError(\"disk full\"); a mock proves the handler catches the exception someone decided to throw, an ACL proves it catches the one the OS raises. That difference has already paid once in this port, when a denied ACL on Windows raised EPERM where the reference asserted the phrase \"Permission denied\".",
+        "⚠ ONE MOCK BECAME TWO FIXTURES, BECAUSE os.replace = boom FAILS AT A POINT NO DENIAL REACHES. Denying write on the PARENT stops atomicWriteJson at the temp write, before the rename — which gates \"the original survives\" and never reaches the rmSync(tmp) litter cleanup, since no temp was created. Reaching that needs the temp write to SUCCEED and the rename to fail, and the denial fixture cannot produce it: MEASURED, a delete-denied target does not stop a rename on Windows (the first draft skipped for exactly that reason), and no POSIX mode bit on a FILE stops one either, because that right belongs to the directory. A non-empty DIRECTORY at the target does, on both platforms.",
+        "THE WARNING THE REFERENCE NAMED IN ITS OWN TITLE AND NEVER ASSERTED is asserted here. `test_failed_write_leaves_original_settings_intact_and_warns` checked the return value and the file and said nothing about the warning — and silence is the worst outcome on that path: the emit reports success, the excludes are missing, and the preamble loads twice in every session with no way for the user to know why. The successor requires WARN, the file name, the errno prefix (the portable form of \"the reason is relayed\") and the entry to add by hand.",
+        "M28 IS THE HALF OF THE GUARANTEE THAT IS NOT ABOUT THE TARGET: no cell fails a rename, so nothing in 690 recorded cells reaches the catch. A leaked settings.json.geneseed-tmp sits in the user own config directory holding a full copy of the config the write was about to make — a disclosure as well as litter.",
+        "`deny()` and `DENY_SKIP` MOVED to tests/helpers/deny.mjs on this, their THIRD caller (after `retry_gap.test.mjs`'s `jam()` and `generate.test.mjs`'s own copy). The knowledge is not about any call site: it is the measured answer to what actually blocks an operation on each platform, and three plausible mechanisms do NOT work on Windows — an open handle, the read-only attribute, and a read-only parent. A fixture with one caller is a fixture the next defect cannot reach."
+      ]
     },
     {
       "python": "tests/test_hook_form.py",
       "kind": "unit",
       "py_tests": 14,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/hook_form.test.mjs"
+        "tests/unit/hook_form.test.mjs",
+        "tests/unit/claude.test.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "Every emitted non-gate hook ends with '|| exit 0' and every GATE hook does not, because a crashing gate must fail closed. Both halves are the assertion — the partition, not the presence — and both are declared mutants in tests/helpers/mutate.mjs."
+      "why": [
+        "Every emitted non-gate hook ends with '|| exit 0' and every GATE hook does not, because a crashing gate must fail closed. Both halves are the assertion — the partition, not the presence. AUDITED PER CLASS: 2 classes, 14 methods → 12 cross, 1 already covered, 1 retired. Successor `tests/unit/hook_form.test.mjs`.",
+        "THE REFERENCE ONLY HAD HALF OF ITS OWN PARTITION, and the successor closes it. It asserted each named gate SHIPS (so the exemption is not silently protecting nothing) and that every non-gate hook ends with the escape hatch. It never asserted that the EXEMPT hooks decline it — a gate that grew '|| exit 0' would be exempted from the rule by the very list that names it, and fail OPEN on every crash, which is the failure the partition exists to prevent. Both non-gate and gate arms also now assert they checked something, so an exemption that swallowed the whole set cannot pass.",
+        "EVERY INJECTION POINT WAS ALREADY A PARAMETER — the standing question, answered yes four times: `shimRel`, `hookShimPath`, `hookShimBody` and `writeHookShim` all take `platform`, and `hookShimBody` takes the runner and entry. So the reference's hardest test needs no hand-written bodies: it asks the REAL GENERATOR for each shim shape. That is strictly stronger than the transcription it replaces, because a transcription that drifted from the generator would pass while the real body failed — which is precisely the bug the test exists for. Measured: a Windows host now gates the POSIX arm, and M27 fired on the `linux` shape from this laptop.",
+        "TWO MONKEYPATCHES BECAME REAL FAILURES. The reference replaced `_write_hook_shim` with a lambda returning None to reach the fallback; the successor points `GENESEED_HOME` at a regular FILE, so the mkdir under it fails with ENOTDIR and `writeHookShim` returns null through its own catch. A monkeypatch proves the caller handles the value someone decided to return; this proves it handles the one the OS produces.",
+        "ONE NEW TEST WITH NO REFERENCE COUNTERPART: `hookPrefix` must THROW without a runner and entry. Its own docblock calls this the worst failure mode in the unit — `undefined` bakes `\"undefined\" \"undefined\" %*` into the shim, every hook in the install dies, and nothing reports it, because the hooks signal through stdout and return 0 on every path while the shim is excluded from the emit corpus by name.",
+        "ONE TEST WAS ALREADY COVERED and one RETIRES INTO ANOTHER. `test_emitted_commands_name_the_shim_not_the_checkout` is asserted by `tests/unit/claude.test.mjs` inside a real global emit, which is the stronger site. `test_the_port_exempts_the_same_two_tokens` compared the port's `SHIM_ARGV` against Python's — two literal sets are two places to be wrong, and there is one set now; what the pair protected is asserted directly in the placeholder test, which requires the exemption to cover exactly the two placeholders.",
+        "TWO MUTATIONS, both in the gap the emit corpus leaves. THE SHIM IS EXCLUDED FROM THAT CORPUS BY NAME — its body bakes the runner and checkout of whoever wrote it — and `shimHealth` replaces the comparison with a check that the quoted paths merely EXIST. M26 emits the shim path even when the write failed: a command naming a shim that is not there fails on EVERY hook (9009 under cmd.exe, 127 under sh) and takes both gates down silently, and `shimHealth` cannot see it either, because with no shim on disk there is no body to read. M27 drops `$@` from the exemption — THE ONE MUTATION HERE THAT IS NOT INVENTED, since it is the defect that shipped: every Linux and macOS install had doctor reporting a healthy shim as dead, and both implementations had it because the port copied the rule faithfully."
+      ]
     },
     {
       "python": "tests/test_web_server.py",
       "kind": "artifact",
       "py_tests": 16,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/web_server.test.mjs"
+        "tests/unit/web_server.test.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "HTTP-level properties the cells cannot see through their own transport: keep-alive, compression, caching. Also the live probe behind port-ledger row 3 — /api/pick-folder must answer 501 on POST and fall through to the SPA on GET, which is a probe rather than a reading of DECLINED_POST."
+      "why": [
+        "HTTP-level properties the cells cannot see through their own transport, plus the route PARTITION they are structurally blind to. AUDITED PER CLASS: 3 classes, 16 methods → 14 cross, 1 already covered, 1 retired. Successor `tests/unit/web_server.test.mjs`. Carries port-ledger row 3, whose column was updated in the same commit.",
+        "THE SOCKET HALF RE-AIMS RATHER THAN MOVING UP A LAYER. The reference drove a real `ThreadingHTTPServer` because connection reuse and a leftover request body only exist at the socket level; the same is true of `node:http`, so the eight tests start `makeHandler` on a real listener. ONE ASSERTION GOT STRONGER: keep-alive is proved by SOCKET IDENTITY (`res.socket` is the same object across two requests through a `maxSockets: 1` agent), where the reference asserted only that the second request also answered 200 — which a server that closed the connection and a client that silently redialled satisfies perfectly. The drain test asserts identity too, for the same reason.",
+        "THE PARTITION HALF HIT THE SAME WALL AS THE HELP-FLAG SCRAPE AND TOOK THE SAME ANSWER. It read the reference's routes with `ast` on the argument that 'the table has to come from the thing under test' — correct then, and impossible now: the thing under test is the only implementation, so a gate scraped from it would agree with any drift. The four sets (20 GET paths, 14 POST paths, the 7 `200 if … else 409` conditionals, the 5 docs kinds) were read out of the reference on 2026-08-16 with its own `ast` readers and are FROZEN in the successor. The test is the second party now.",
+        "⚠ PORT-LEDGER ROW 3 IS A PROBE AND STAYS ONE. `/api/pick-folder` is DECLINED, never ported — an OS-native folder dialog on the daemon host — and the claim is driven through the real dispatcher: POST must answer 501, and GET must NOT, because a GET falls through to the SPA. That pair is what refuses the one-line collapse of the POST declarations back into the GET set, which leaves every exported set exactly as written and every set-reading test green. Now gated as M23, killed.",
+        "M22 IS THE REVERSE MUTATION THE REFERENCE'S DOCSTRING CALLED INVISIBLE, and it was right: giving `/api/activity` the 409 treatment leaves all 114 web cells green (confirmed by running them, not by argument). Every toggle a cell can perform SUCCEEDS, so the failing arm never fires, and reaching it needs the flag write to raise — which the two runtimes worded differently and no byte comparison could hold. The convention column is the table `doPost` looks up, so this is a gate on the dispatch rather than on a declaration.",
+        "ONE TEST RETIRES AND ONE WAS ALREADY COVERED, which is the `api_setup.python` pair. The reference reported the interpreter running the daemon; that is a statement about a tree P4 deletes. The port's half — `python: null`, because there is no interpreter and putting Node's version under that key would be a lie the About page prints — was ALREADY asserted inside `tests/unit/web_api.test.mjs`'s full-snapshot test, which is the stronger site because it also requires the key to exist. Re-asserting it here would be a second owner of one claim, so the successor asserts the POINTER instead: the covering line must still be in that file.",
+        "TWO SMALLER STRENGTHENINGS. `assets are plain when gzip is not accepted` sends `Accept-Encoding: identity` rather than omitting the header, so the claim cannot start passing for the wrong reason if a client default ever adds one. And the dispatcher probe runs IN PROCESS with its own server rather than as a `node -e` string — same `GIT_DIR` guard (pointed at a path that does not exist, so `preflight()` always takes its 422 arm and no probe can start a real `git pull` of this checkout), same `'nowhere'` dist and fresh JobManager so no job file lands in the developer's install, and no prose in a shell argument."
+      ]
     },
     {
       "python": "tests/test_web_daemon.py",
       "kind": "artifact",
       "py_tests": 15,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/web_daemon.test.mjs"
+        "tests/unit/web_daemon.test.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "The web verb's parts no cell or corpus reaches. Carries port-ledger row 7: it re-derives _npm_build's unreachability from `git ls-files`, so untracking web/dist/index.html fails the test instead of quietly making the arm live."
+      "why": [
+        "The `web` verb's parts no cell or corpus reaches. AUDITED PER CLASS: 5 classes, 15 methods → 11 cross, 4 retired. Successor `tests/unit/web_daemon.test.mjs`. Carries port-ledger row 7, whose column was updated in the same commit.",
+        "ALL FOUR RETIREMENTS ARE THE SAME SHAPE and it is worth naming, because it is the shape most of this file has: the reference paired every twin assertion with a control asserting the same property of ITSELF. `the reference still declares the web subparser`, `the reference dispatches restart to a detached web restart`, `the reference writes the response before it starts the stopper`, `the reference launches its own interpreter`. Each control's subject is a file P4 deletes; each twin survives and is named at the successor that carries it, so the retirement is checkable rather than prose.",
+        "THE SUBPARSER CONTROL WAS ABSORBED RATHER THAN DROPPED. It existed because a renamed `wb = sub.add_parser` would make the `ast` reader return four empty lists and every equality would then hold against an equally empty copy. With the four lists frozen from the reference (4 actions, 2 options, 2 flags, 1 int) there is nothing left to go empty, and the freeze is the same protection.",
+        "AND THE GATE ASKS `cliSpec('web')`, NOT THE SOURCE. P10c replaced the CLI row's own hand-written positionals/options/flags/ints — a second transcription of the same subparser — with `{ fn: cmdWeb }` plus a surface derived from `js/cli-table.json`. So this asks the module the entry point itself calls: a `cliSpec` that stopped deriving `ints` would still leave `'--port'` in the file for a scrape to find, and could not fool this.",
+        "⚠ `/api/restart` IS THE ONE ROUTE WHERE PROBING COSTS MORE THAN THE ASSURANCE, and rule 7 is left VISIBLE rather than quietly satisfied. It spawns a detached `web restart` that outlives its caller, so a probe would bind 4747 on the developer's machine and serve this checkout forever — `tests/unit/web_server.test.mjs`'s dispatcher probe runs in that same environment and deliberately does not ask. The dispatch is read from source and the successor says so in place.",
+        "⚠ PORT-LEDGER ROW 7 GAINED ITS SECOND DIRECTION. The reference asserted `web/dist/index.html` is TRACKED, which is what makes `buildPlan` answer `serve` in every checkout a cell can build. The successor also asserts the file EXISTS ON DISK — tracked-but-absent is a real working-tree state in which the `ask` arm is reachable here and now, and the original claim would still hold.",
+        "TWO MUTATIONS, both real defects invisible to every other gate, both killed by exactly the predicted test. M24 drops one of the three `openBrowser` arms: every cell that reaches `serve` passes `--no-browser`, because a gate that popped a browser window on the developer's screen would be worse than the bug it caught, so the consumers are COUNTED — and a port that dropped one opens no window on `web start`, the arm a real user takes most often. M25 runs `npm run build` before `npm install`, which fails on a fresh checkout with a missing vite: the exact situation the path exists for, and unreachable from every cell by row 7's own construction.",
+        "THE STOP ORDERING IS ASSERTED DETERMINISTICALLY BECAUSE THE BEHAVIOURAL GATE IS A RACE. `web_golden`'s shutdown cell fails only when the scheduler happens to lose the response — measured at 5 losses in 40 runs on a loaded 16-core box, in two shapes (nothing written; headers written and body not), and never on an idle machine. A CI run that reproduces a 12% flake proves the bug exists; one that does not proves nothing. The port reaches the guarantee by a different means than the reference did — closing inside the response's `finish` handler rather than writing before starting a shutdown thread — so what is asserted is the port's own mechanism, not a translation of the reference's."
+      ]
     },
     {
       "python": "tests/test_web_jobs.py",
       "kind": "artifact",
       "py_tests": 8,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/web_jobs.test.mjs"
+        "tests/unit/web_jobs.test.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "The job runner's argvs, which no response body carries. Also the declaration-read behind port-ledger row 9 — a gate on a declaration, weaker than a probe, and declared as such at both sites; the port must keep the weakness visible rather than dropping the row."
+      "why": [
+        "The job runner's argvs, which no response body carries. AUDITED PER CLASS: 3 classes, 8 methods → 7 cross, 1 retired. Successor `tests/unit/web_jobs.test.mjs`. Carries port-ledger row 9, whose 'where it is asserted' column was updated in the same commit.",
+        "MEASURED WHILE PORTING, AND IT IS STRONGER THAN THE REFERENCE'S OWN DOCSTRING CLAIMED: the `$ <argv>` echo line is normalised to `<ARGV>` WHOLE in the recorded web corpus, not merely at its head. So all 114 cells are blind to every argument the job runner resolves, not just to the interpreter that starts it. Confirmed by running M20 against the corpus: 114/114 green with `--yes` deleted from the uninstall argv.",
+        "THE TAIL COMPARISON IS THE HALF THAT CANNOT SURVIVE, so it is not weakened — it is FROZEN. Every tail was measured from the reference on 2026-08-16 while it still existed and is now asserted as a literal. That is strictly stronger than the comparison: two implementations that had both drifted the same way agreed with each other, and a literal taken before the drift does not. Same move as `test_node_cli_parity.py`'s help-flag table — when the second party dies, the test becomes the second party.",
+        "ONE TEST RETIRES: `test_the_reference_argv_head_is_python_and_a_py_file`, a statement about a tree P4 deletes. The pair existed to prove the two runners are different implementations; after the cut that reduces to 'the runner is Node', which the surviving half asserts both positively (`process.execPath` plus a named `.mjs` entry) and negatively (no `python`, no `harness.py`, no `build.py` anywhere in the argv).",
+        "⚠ PORT-LEDGER ROW 9, AND ITS WEAKNESS IS KEPT VISIBLE RATHER THAN QUIETLY UPGRADED. `NOT_PORTED_ACTIONS` emptied at P10b, so the dispatcher's 501 arm is unreachable by construction and no probe can reach it — every remaining action either starts a job in the developer's checkout or writes a shim and edits the real user PATH. The claim rests on READING THE SET out of the module. That is a gate on a declaration, it is weaker than a probe, and it is said so at both sites.",
+        "THE INLINE DECLARATION GOT THE OPPOSITE TREATMENT AND IS NOW STRONGER. The reference cross-checked `INLINE_ACTIONS` against its own `action ==` comparisons read with `ast` — a second reading of the same source. Each of the three now names a RECORDED CELL that really drives the dispatcher (`restore__the-source-render-wins…`, `actions__install-and-deploy-refuse-every-body…`), and the cell's existence is asserted on BOTH corpus halves, because a pointer at a cell that does not exist asserts nothing.",
+        "TWO MUTATIONS, both invisible to the whole web corpus and both killed by exactly the predicted test. M20 drops `--yes` from the uninstall argv — a real hazard, not a cosmetic one: the web Settings runs it as a background job with no terminal, so the verb blocks on a confirmation nobody can answer and the job hangs until the daemon is killed. M21 makes the deploy resolver ignore the requested host and write the host-agnostic bundle everywhere, which every request would answer successfully.",
+        "`export`'s bare trailing `--out` was checked rather than assumed to be a truncation: `diff`'s `--out` is `nargs: '?'` in `js/cli-table.json`, so a valueless flag is legal and means the default location. Both implementations emit it that way. `apiInstallCmd` is deliberately NOT gated here — its (host, path) pair must be one of the DETECTED install targets, so a fixture would have to fabricate a detected install, which is a second implementation of the detector inside the gate; the recorded refusal cell drives it through the real detector instead."
+      ]
     },
     {
       "python": "tests/test_opencode_guard.py",
       "kind": "artifact",
       "py_tests": 3,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/unit/opencode_guard.test.mjs"
       ],
-      "why": "The OpenCode guard plugin's rule/memory speed bump (Law VI), exercised through the shipped plugin. Its subject is an emitted artifact, so the port changes the runner and nothing else."
+      "why": [
+        "The OpenCode guard plugin's rule/memory speed bump (Law VI), exercised through the shipped plugin. Its subject is an emitted artifact, so the port changes the runner and nothing else.",
+        "CLOSED — 3 of 3, one class, audited as a script. A change of runner and almost nothing else: the subject is an emitted artefact and the reference already drove it by WRITING A JAVASCRIPT DRIVER to a temp file and spawning node at it. Here the driver IS the test — the plugin is imported, its hook table built, and tool.execute.before called the way OpenCode calls it. One process instead of two, and the module under test is reached directly rather than through a string in a Python file that nothing type-checked.",
+        "TWO ASSERTIONS PAST THE REFERENCE, both about the wiring rather than the behaviour: the plugin must EXPORT something OpenCode can call (GeneseedGuard or a default), and that factory must register a tool.execute.before hook at all. The reference reached both through `??` chains that would have produced an opaque TypeError in its driver; here a plugin that stopped being loadable says so in one line. Order is preserved and stated as the subject: the state is per-path and one call deep, so each first/re-issued pair runs in that order, once, against one module instance.",
+        "One deliberate change: the ordinary-code probe writes `app.ts` where the reference wrote `app.py`. The claim is that an ordinary code file is neither a rule nor a memory and the extension carries none of it, so there is no reason to plant a .py string in a tree whose next phase sweeps for them. Three mutations, predicted then run, all killed: the bump becoming a TRAP (a re-issued write refused, which silently loses what the user asked to be remembered), the memory match no longer anchored on THIS install (so a project's own memory/ folder is caught — the difference between a guard on an install and a guard on a word), and the rules file no longer counting as a rule store."
+      ]
     },
     {
       "python": "tests/test_package_manifest.py",
@@ -416,21 +494,39 @@
       "python": "tests/test_docs_claims.py",
       "kind": "artifact",
       "py_tests": 23,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/unit/docs.test.mjs"
       ],
-      "why": "The claims the top-level docs make, gated against the tree. Counting sentences derived rather than transcribed. P5 adds the check the Python suite could not have: every fenced `geneseed ` command in the docs parsed against the CLI table."
+      "why": [
+        "The claims the top-level docs make, gated against the tree. AUDITED PER CLASS: 8 classes, 23 methods → 22 cross, 1 retired. Successor `tests/unit/docs.test.mjs` (23 tests). ⚠ THIS IS ALSO P5'S GATE, landing before P5's doc rewrite on purpose — the finish plan asks for it by name, because a doc rewrite with no gate in front of it is a rewrite nothing checks.",
+        "Almost all of it is a change of runner: every claim is already absolute and about the docs and the tree. The counting sentences stay DERIVED rather than transcribed — the verbs with no Node twin (from the CLI table minus both entry tables), the plugin and theme counts (over the files `doctor`'s prose mirror is not handed), and both halves of `N of the M subcommands`, since the denominator moves too.",
+        "⚠ THE NEW CHECK THE PYTHON SUITE COULD NOT HAVE, and it found something on its first run. Every fenced `geneseed …` command in the four present-tense docs is parsed against `js/cli-table.json` — verb and flags. The reference could not do this: its parser was argparse, so enumerating a subparser's options meant introspecting a live object. The table is a document now, so it is a lookup.",
+        "⚠ AND WHAT IT FOUND WAS A GATE DEFECT, NOT A DOC DEFECT — checked before believing it. It reported SETUP.md for `geneseed validate`, which IS a real verb: `bin/geneseed-cli.mjs` answers it at an `if (verb === 'validate')` before the table, deliberately, because `--validate-only` is a GENERATOR flag and `harness.py` never had a `validate` subparser for the table to describe. The docs were right. The exception is now NAMED rather than waved through: the extras are derived from the entry's own `verb === '…'` comparisons and asserted to be exactly `['validate']`, so a SECOND undeclared verb fails instead of quietly widening the hole — and the cost is stated, since its flags have no row to be checked against.",
+        "⚠ `ThePublishWorkflowIsDeliberate` CARRIES SEVEN OF THE TWENTY-THREE AND HAS THE ONLY SILENT FAILURE MODE IN THE FILE. npm's trusted publisher is keyed on `owner/repo` PLUS the workflow FILENAME: rename the file and the workflow still runs, still mints an OIDC token, and npm just refuses it — nothing local can rehearse that. So the workflow is DISCOVERED (the one file under `.github/workflows/` that runs `npm publish`) rather than named by a constant, because a constant would be a second copy of the value under test: renaming both would pass while the npm side still pointed at the old name. The self-reference is the only thing that cannot be renamed into agreement by accident.",
+        "The credential check reads the workflow with COMMENTS STRIPPED, and that is a gate defect the reference found in ITSELF on its first run — the file's own header explains that there is no NPM_TOKEN, and the check fired on the sentence saying so. A claim about what a workflow USES cannot be made against its prose. Carried over verbatim in intent.",
+        "ONE TEST RETIRES: `test_both_implementations_advise_the_same_argv`, which compared `rituals/_harness_build.py`'s autostart advice against `js/migrate.mjs`'s. What it protected is not the equality but that the advice is a REAL invocation, and the three tests beside it derive exactly that — the launcher from `package.json`'s `bin`, the verb and its `choices` from the CLI table, and the branch that actually daemonises from `cmdWeb`'s own dispatch. It shipped wrong once, advising `geneseed web --no-browser`, which names NO action and falls through to the foreground `serve()`: a path that writes no daemon record, so `web stop`/`restart`/`status` cannot see the server the user was told to launch at every login. A literal check of the corrected sentence would only re-transcribe the bug's shape.",
+        "`cmdWeb`'s dispatch is read from `js/web/server.mjs` now rather than from `_harness_tui.py`'s `ast`, and the daemonising branch is identified by the function it returns rather than by a method-name set — the port dispatches with `return startDaemon(...)` where the reference called a method on self."
+      ]
     },
     {
       "python": "tests/test_cli_reference.py",
       "kind": "artifact",
       "py_tests": 12,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/cli_table.test.mjs"
+        "tests/unit/cli_table.test.mjs",
+        "tests/cli_help.test.mjs",
+        "tests/pure_snapshot.test.mjs"
       ],
-      "why": "PARTIAL, and the split is the point. The half that walks build_argparser() and asserts js/cli-table.json equals it field for field is the strongest gate in the file and dies with argparse — nothing replaces it, and P4 is where the table stops having an oracle. What survives is every claim the table makes ABOUT THE PORT: that each declared verb dispatches, that each declared flag is read, that the help fixtures match the table."
+      "why": [
+        "PARTIAL, and the split is the point. AUDITED PER CLASS: 5 classes (one is a TextWrapper subclass with no methods), 12 methods → 6 cross into `tests/unit/cli_table.test.mjs` (5 distinct tests), 4 already covered, 2 retired.",
+        "⚠ THE STRONGEST GATE IN THE FILE DIES AND NOTHING REPLACES IT, which is recorded here rather than papered over. `test_the_committed_table_is_what_the_parser_describes` walks `build_argparser()` and asserts `js/cli-table.json` equals it field for field — 25 subparsers and 46 `add_argument` calls. P4 is where the table stops having an ORACLE. What stands in for it is not an equivalent: it is `tests/cli_help.test.mjs`'s recorded corpus, frozen while the parser existed, plus this file's checks on every claim the table makes about the program that READS it. A recording is regression evidence; it is not a second opinion.",
+        "FOUR WERE ALREADY COVERED and were checked claim by claim rather than assumed: the hidden-argument equality and the whole-formatter agreement are `tests/cli_help.test.mjs`'s (against the recorded corpus, which is the stronger site because it also pins the wrap column the fixtures were taken at), and the line breaker is `tests/pure_snapshot.test.mjs`'s `textwrap.json`.",
+        "⚠ PORT-LEDGER-STYLE OBLIGATION MET WITHOUT ONE: the table's `hidden` rows are the surface a careless transcription drops, and each binds a real value — `geneseed upgrade v1 imperial`, `sync-self v1`, `bootstrap main imperial`, `web --daemon-internal`, which the recorded web cells pass 95 times a run. The successor does not re-assert the equality (two owners of one claim drift apart); it asserts the POINTER at the owner, plus the one thing a pointer cannot carry — that the table still HAS hidden rows, or the owner is comparing two empty sets.",
+        "THREE DEFECTS IN MY OWN FIRST DRAFT, all caught by running it, none a port defect. (1) The VERBS scrape used `^\\s*` and so matched the nested `fn:` of every `name: { fn: cmdX }` row, reporting `fn` as an undescribed verb; it anchors on the two-space indent now. (2) The hidden-argument filter was applied GLOBALLY by dest — but `ref` is hidden on `upgrade` and VISIBLE on `bootstrap`, so the visible one read as a leak. Hiddenness is a property of an argument OF A COMMAND. (3) The `COLUMNS` junk cases asserted that `80x` must not yield 78, which conflates 'parsed as 80' with 'fell back to a terminal that happens to be 80 columns wide'; the deterministic claim is that a value `int()` refuses gives the SAME answer as no value at all, and that is what is asserted over nine junk spellings `Number.parseInt` would read the leading digits of half of.",
+        "THE REFUSAL PAIR IS THE DIVERGENCE THE PORT BOUGHT, and it is gated where no cell can reach it: the reference compiles its parser in and this entry READS it, so a tree with no `js/cli-table.json` is a state a comparison could only report as a failure. What must hold is that the entry REFUSES — naming the verb, naming the fix — rather than parsing with an empty spec, which accepts every token and binds none: `uninstall --target X` would run against the DEFAULT target while the operator believes they named one. ⚠ Its control is `version`, not `exclude list`, and P7a is why — `exclude list` exits 0 with a global install present and 1 without, so it passed on a laptop with Geneseed installed and failed everywhere else. A control whose answer depends on the machine is not a control."
+      ]
     },
     {
       "python": "tests/test_pure_function_parity.py",
@@ -469,28 +565,46 @@
       "python": "tests/test_win_user_path.py",
       "kind": "parity",
       "py_tests": 10,
-      "status": "todo",
+      "status": "done",
       "node": [
+        "tests/unit/win_user_path.test.mjs",
         "tests/pure_snapshot.test.mjs",
-        "tests/unit/win_user_path.test.mjs"
+        "tests/__snapshots__/win_user_path.json"
       ],
-      "why": "PARTIAL. win_user_path.json already replays against winUserPathScript in pure_snapshot.test.mjs. What must still land is the STATED half of port-ledger row 4 — that the spawn arm carries no logic — which today lives in this file's docstring and nowhere else. A registry-write success arm no test may run needs its emptiness asserted, not described."
+      "why": [
+        "PARTIAL, as the row predicted. AUDITED PER CLASS: 3 classes, 10 methods → 5 cross, 2 already covered, 3 retired. Successor `tests/unit/win_user_path.test.mjs` (6 tests). The recorded corpus half already replays against `winUserPathScript` in `tests/pure_snapshot.test.mjs`; the three builder-vs-builder comparisons retire.",
+        "WHY THE ABSOLUTE HALF SURVIVES AND THE COMPARISON DOES NOT, in the reference's own words: a comparison of two builders is green when BOTH are wrong, and the apostrophe bug is exactly the kind two implementations share when one is copied from the other. So each property is asserted against the port's output directly — the `''` escape and its even-quote-count guard, the `-notcontains`, the empty-segment filter, the remove arm's `-ne $d`, and the machine-scope refusal over every recorded row and both actions.",
+        "⚠ PORT-LEDGER ROW 4'S STATED HALF IS NOW ASSERTED RATHER THAN DESCRIBED, which is what this row existed for. The success arm of the PowerShell spawn cannot be gated by anything short of editing this machine's registry — no test in this repo may run that, because the edit outlives the cell, the suite and the checkout. The argument for accepting the gap is that the spawn carries NO LOGIC: it hands the pure builder's output to PowerShell and maps the outcome. That claim lived in a test docstring and nowhere else. The successor checks it — one `spawnSync`, the builder's output passed through unchanged, no string work on the directory, `directory` referenced exactly twice, and a statement ceiling — so that if logic ever drifts INTO the spawn, the ungated region grows and something says so. An honestly-declared gap turns into a hidden one exactly when nobody re-checks the reason it was acceptable.",
+        "⚠ AND A VACUOUS PASS WAS CAUGHT BY ITS OWN SIBLING. `win_user_path.json`'s `corpus` key is the recording's NAME — a string — and the rows live in `cases`. The first draft read `RECORDING.corpus` as the row map, so `Object.values('win_user_path')` gave thirteen single characters and the machine-scope test ran twenty-six times over one-letter directories and PASSED. Only the corpus-soundness test failing on `.includes` of undefined exposed it. The rows are derived from `cases` now. A scan that finds something is not the same as a scan that finds the right thing.",
+        "The corpus-soundness test is kept and strengthened the way the JSONC one was: each row is checked against what its NAME claims — the apostrophe row carries one, the doubled-apostrophe row carries an already-doubled pair (the input proving the escape is not applied twice), the UNC row starts with two backslashes, the semicolon row carries a separator, the empty row is empty. A row that exercises none of the four hazards is a comment, not a test."
+      ]
     },
     {
       "python": "tests/test_node_cli_parity.py",
       "kind": "parity",
       "py_tests": 17,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/node_cli.test.mjs"
+        "tests/unit/node_driver.test.mjs",
+        "tests/helpers/sandbox.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "Named 'parity' and misnamed: its docstring says these are the Node driver's own gates, the ones a byte comparison structurally cannot give. Every assertion is already absolute and about js/ — the child_process ban, the passthrough refutations, the interpreter discovery-then-refuse. Porting is a change of runner."
+      "why": [
+        "Named 'parity' and misnamed, as its own docstring said: these are the Node driver's own gates, the ones a byte comparison structurally cannot give. AUDITED PER CLASS: 3 classes, 17 methods, 16 ported and 1 retired. Successor `tests/unit/node_driver.test.mjs` — `driver`, not `cli`, because the subject is `bin/geneseed.mjs` the generator and `tests/unit/hook_cli.test.mjs` already owns `bin/geneseed-cli.mjs`.",
+        "ONLY FOUR OF THE SEVENTEEN RAN THE REFERENCE, and each of those four already carried an ABSOLUTE assertion about the reference which the comparison then propagated to the port — `assertIn(b'd\\u00e9p\\u00f4t', raw['py'])` before `assertEqual(a, b)`. So nothing crossed as a comparison and nothing needed to: the four keep their jobs (`--root`, the non-ASCII registry, the stacking warning, the orphan VERIFY) with the measured answer written at each, taken from the reference while it still existed.",
+        "WHAT AN ABSOLUTE ASSERTION HAS TO BUY THAT A COMPARISON GETS FREE: its vacuity guard. Three of the four gained a control the reference did not need. `--root` became a PARTITION — with the flag `opencode.json` lands at the root carrying `Harness/AGENT.md`, without it beside the bundle carrying `AGENT.md` — because a port that derived one value from the other passes either half alone. The registry claim became the whole document (no byte above 0x7F anywhere in `installs.json`), which is what `ensure_ascii=True` actually means and which the reference never asserted. VERIFY gained the re-emit that must print NOTHING, without which 'the planted hook made it speak' is equally satisfied by a check that speaks on every run.",
+        "ONE TEST DID NOT CROSS. `test_the_driver_imports_no_child_process_module` retires into `the generator driver still reaches no child-process module` in `tests/unit/hook_cli.test.mjs`, which is the same claim strictly enlarged: the reference read `bin/geneseed.mjs`'s own source for three banned specifiers, which a single `import … from './js/hooks.mjs'` walks straight past, leaving child_process in the driver's process with the driver's own source still clean. The successor walks the transitive closure. The pointer is ASSERTED rather than described — a retirement whose named gate can be deleted is prose.",
+        "THE ONE ROW WHOSE SECOND PARTY DIED is `test_the_help_text_names_every_flag_the_reference_takes`. It scraped `build.py`'s `add_argument` calls precisely so that a flag added to either side alone would fail, and `usage()` renders straight out of `VALUED`/`FLAGS` — so a gate scraped from the driver would agree with the driver by construction and assert nothing. The replacement makes the TEST the second party: a frozen table checked in three directions — set equality against the two parse tables in the source, `parseDriverArgs` acceptance per flag in both `--flag value` and `--flag=value` spellings AND binding the dest the table names (the only place `--target`'s aliasing to `out` is stated anywhere), and containment in the rendered help — plus the negative, that an unknown flag is still refused with exit 2.",
+        "THE EXIT-3 BRANCH IS UNREACHABLE AND IS SAID SO OUT LOUD. `PORTED` is `new Set(EMITS)` now that all nine emits have crossed, so `if (!PORTED.has(args.emit)) die(3, …)` cannot fire for any value that got past `choice` — meaning the reference's own refusal loop ran zero times too. The successor asserts the partition from the source and exercises the reachable neighbour, the `choice` refusal one layer up.",
+        "TWO HELPERS MOVED ON THEIR SECOND CALLER. `pathWithoutPython`/`strippedEnv` left `tests/unit/hook_cli.test.mjs` for `tests/helpers/sandbox.mjs`, and the move made them stricter: the shared helper clears `$PYTHON`, the documented discovery override that `cellEnv` leaves alone and that hook_cli's copy never cleared — a green run there could have been measuring a developer's exported shell rather than the port. `walkFiles` is exported from `tests/helpers/golden.mjs` because `filesIn` filters the shim OUT and the shim is exactly what these gates go looking for; one walker rather than a private twin.",
+        "THREE NEW MUTATION ROWS, all killed, each by exactly the predicted test and by that test alone (attribution checked, not inferred from the directory gate). M14 drops the registry prune-on-read WRITE — invisible to all 259 cells because every cell's registry starts empty, so `kept` always equals `original`. M15 makes `copilotConfigDir` ignore `$COPILOT_CONFIG_DIR` — unreachable from the matrix for a safety reason, since `cellEnv` clears every relocation variable to stop ~126 global cells rendering into the developer's real install. M16 drops the `--root` prefix from the recorded instruction path — `argvFor` never passes `--root`, so `relUnder` returns the empty string in all 259 cells and the deleted prefix was never once non-empty in the acceptance test."
+      ]
     },
     {
       "python": "tests/test_hook_cli_parity.py",
       "kind": "parity",
       "py_tests": 38,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/unit/hook_cli.test.mjs",
         "tests/cli_golden.mjs",
@@ -516,7 +630,11 @@
         "Five mutations, all killed, four exactly as predicted: a second spawn site in js/hooks.mjs, doctor's literal argv changed, an undeclared js/web/ module importing child_process (which reddens BOTH the directory scan and the CLI walk), and js/render.mjs importing it — the last being the case a source grep on bin/geneseed.mjs alone cannot see, which is the whole reason that walk is transitive. LEFT: 13 tests over 3 classes — ExcludeWiringIsOwnershipTracked 2, TheGateDocumentIsWhatAHostHonours 2, and TheEntryRefusesRatherThanNoOps 9, where 6 of the 9 run BOTH implementations and each needs its absolute half found before the comparison is dropped.",
         "BLOCK 4 IS SURVEYED TEST BY TEST AND NOT YET WRITTEN — the last 13, and the shape is uniform: ELEVEN of them are per-implementation LOOPS whose Node arm is already absolute, so each crosses by keeping that arm and dropping the Python one. ExcludeWiringIsOwnershipTracked (2) drives `exclude add`/`remove` over a seeded install and asserts the claudeMdExcludes entry is unwired only when this program wrote it — the precondition reached BEHAVIOURALLY (one add, then delete the install's excludes.json, which erases the record while leaving the wiring as another writer would) rather than by guessing the entry string. TheGateDocumentIsWhatAHostHonours (2) is already absolute against a literal, which is the whole point of it: both implementations could carry the same typo'd permissionDecision key forever while every gate in every install silently stopped gating. Of TheEntryRefusesRatherThanNoOps (9), the unported-verb refusal and the no-verb refusal are absolute already; the mutually-exclusive theme flags, the link shim, the install log and the mistyped flag each keep their Node arm plus their positive control.",
         "THE ONE THAT NEEDS A DECISION IS test_the_two_entry_points_agree_on_stdout_BYTES, and its residue is the most valuable thing left in this row. The equality dies; what it was watching is that the two sides print the same NEWLINES, which every recorded cell folds away because the harness decodes with universal newlines before comparing. Its absolute residue is the same M1-shaped claim tests/unit/wizard.test.mjs already carries for the setup prompts: on Windows every newline the port writes must be os.linesep, with a BARE LF COUNT OF ZERO. It must be asserted over the SAME THREE ROWS the reference uses and for the reason the docstring gives — `context` covers the hooks, `prompt` is ~400 KB of rendered tree through a CLI module that could reach process.stdout.write directly and leave the hook row green, and `build` covers the generator's ~25 raw print sites, which no gate could see until `harness build` started calling the driver's main in-process. Counted, not sampled.",
-        "FIXTURES BLOCK 4 NEEDS THAT ARE NOT YET IN NODE: harness_golden._repoint (rewrite a candidate argv to run out of a copied checkout — cli_golden.mjs has resolveCli, which is a different job) and _NO_NETWORK_ENV, used by the install-log and mistyped-flag rows so `bootstrap` fails at its first step in a checkout copy neither run may write to. GENESEED_LOG puts the log somewhere assertable. The link-shim row is Windows-shaped (%LOCALAPPDATA%\\Geneseed\\bin\\geneseed.cmd) and its POSIX half already has its own home in tests/link_shim.test.mjs, which is the file that skips on Windows — check what that file already asserts BEFORE writing the row, claim by claim, because this row has now produced three already-covered findings out of four classes audited that way."
+        "FIXTURES BLOCK 4 NEEDS THAT ARE NOT YET IN NODE: harness_golden._repoint (rewrite a candidate argv to run out of a copied checkout — cli_golden.mjs has resolveCli, which is a different job) and _NO_NETWORK_ENV, used by the install-log and mistyped-flag rows so `bootstrap` fails at its first step in a checkout copy neither run may write to. GENESEED_LOG puts the log somewhere assertable. The link-shim row is Windows-shaped (%LOCALAPPDATA%\\Geneseed\\bin\\geneseed.cmd) and its POSIX half already has its own home in tests/link_shim.test.mjs, which is the file that skips on Windows — check what that file already asserts BEFORE writing the row, claim by claim, because this row has now produced three already-covered findings out of four classes audited that way.",
+        "BLOCK 4 LANDED AND THE ROW IS CLOSED — 38 of 38, on a per-CLASS audit run as a script: 8 classes, 38 methods, 34 cross, 3 were already covered by cli_golden.mjs, 1 retires. The 13 were as surveyed: eleven per-implementation loops whose Node arm was already absolute, so each crossed by keeping that arm. Two fixtures the survey said were missing were ALREADY IN NODE and the survey was wrong about it — `repoint` and `cloneCheckout` are both exported from tests/helpers/cli_golden.mjs. Only the two-key no-network env had to be written out, and it is inlined at its two call sites with the argument beside it rather than exported for two readers.",
+        "THE LINK-SHIM ROW WAS AUDITED BEFORE IT WAS WRITTEN, as the brief demanded, and it is genuinely uncovered: tests/link_shim.test.mjs skips on Windows and its four claims are about symlinks versus a regular Node shim and about what unlink removes — none of them about the shim naming its own runtime's entry point by ABSOLUTE path. So it landed, Windows-gated, with both directions the reference asserted (names its own, does not name the other) plus the absolute runner check that stops a bare `node` PATH could re-resolve.",
+        "THE STDOUT-BYTES RESIDUE IS THE MOST VALUABLE THING IN THE BLOCK. The equality dies; what it watched is a difference the whole recorded matrix STRUCTURALLY cannot see, because every cell reads stdout through a decoder with universal newlines and folds CRLF and LF to the same string before anything compares. The absolute residue — every newline the port writes is the platform's, bare-LF count ZERO — is asserted over the same three rows and for the reasons the reference gives: `context` covers the hooks, `prompt` is ~400 KB of rendered tree through a CLI module that could reach process.stdout.write directly and leave the hook row green, and `build` covers the generator's ~25 raw print sites, which nothing could see until `build` began calling the driver's main in-process. Counted, never sampled.",
+        "FOUR MUTATIONS, ALL KILLED, AND THE FOURTH TOOK THREE ATTEMPTS — twice it was a NO-OP rather than a survival, which is rail 6 landing on the mutation itself. Flipping the idempotent re-add guard to `true` sets ownership to get(priorWired, …), which is UNDEFINED once the record has been deleted, so `remove` had nothing to unwire and the entry survived anyway — green for the right reason, not the wrong one. To fabricate ownership the branch has to CLAIM THE ENTRY IT FOUND, and written that way it reddens immediately. The other three: a typo'd permissionDecision key (which reddens both gate rows and is exactly the defect two implementations could have shared forever), the hook entry answering a verb it must refuse (five tests red — the partition again), and the newline funnel removed."
       ]
     },
     {
@@ -533,54 +651,100 @@
       "python": "tests/test_token_report_parity.py",
       "kind": "parity",
       "py_tests": 5,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/token_report.test.mjs"
+        "tests/unit/token_report.test.mjs",
+        "tests/__snapshots__/token_report_primitives.json",
+        "tests/fixtures/token_report_probe.mjs"
       ],
-      "why": "PARTIAL and mostly surviving: 'the known limits are still exactly these two', 'the corpus reaches every exported primitive' and 'every host and every trap is covered' are absolute claims about a SHIPPED script. Only test_every_primitive_matches_python retires. The script deliberately reproduces Python semantics it documents in prose, which is also why it is one of the two legitimate hits P4's no-python scan must not forbid."
+      "why": [
+        "⚠ THE ROW WITH A DEADLINE, AND IT IS MET. Its oracle is `tests/fixtures/token_report_oracle.py`, which P4 deletes, so the corpus AND its answers had to be taken while that file still existed. Recorded 2026-08-16 into `tests/__snapshots__/token_report_primitives.json`: 266 rows over all fourteen exports, plus the two declared limits. AUDITED PER CLASS: 3 classes, 5 methods → 4 cross, 1 retired. (`TokenReportParity`'s behavioural cells are attached with `setattr` and are not `def test_`, which is why `py_tests` is 5 and not the cell count.)",
+        "WHY A DE-PYTHON PORT SHIPS A SCRIPT THAT REPRODUCES PYTHON, since that reads like a contradiction: `src/skills/token-report/scripts/token_report.mjs` reads transcripts written by Python tooling and must render the same numbers the same way — `f\"{x:.1f}\"`, `round()`'s banker's rounding, `f\"{n:,}\"`, `len()` in code points, `json.dumps`' separators. It documents those semantics in prose, which is why it is one of the two legitimate hits P4's no-python scan must not forbid. After the cut this corpus IS the specification for them.",
+        "THE COMPARISON BECAME A REPLAY, the third use of that move this phase and the largest. What was asked of CPython row by row is now frozen — strictly stronger than the comparison was, because two implementations that had both drifted the same way agreed with each other and a recording taken before the drift does not.",
+        "⚠ AND THE RECORDING BIT ME IN EXACTLY THE WAY THE REFERENCE WARNS ABOUT. The first draft stored `pyInt('99999999999999999999')`'s Python answer as a NUMBER; JSON round-tripped the arbitrary-precision int into the very double the port produces, the declared limit read as CLOSED, and the test failed against a port that was behaving correctly. The reference says it in its own comment — 'the JSON transport of this very corpus cannot carry them either'. Both limits are recorded as `python_text` now and compared as `String(x)`. Same lesson as the JSONC corpus one commit earlier: when the distinction is what the corpus is FOR, record the rendering, never the value.",
+        "TWO ASSERTIONS THE RECORDING CARRIES SO THE REPLAYER DOES NOT HAVE TO KNOW THEM: `sign_only` names `pyStrCmp` and `comparePaths`, whose ordering MAGNITUDE is unspecified in both languages and which the reference compared by sign; and `exported_primitives` is the reference's own required list, so 'the corpus reaches every exported primitive' checks against a frozen fourteen rather than against whatever the corpus happens to contain.",
+        "ONE TEST RETIRES AND ONE IS HALVED. `test_every_host_and_every_trap_is_covered` is a coverage claim about CELLS — the behavioural py-vs-node comparison — and that corpus dies with the reference. `test_both_implementations_exist` asserted the ORACLE and the PORT both exist; the oracle half goes with P4, and what survives is the claim that matters afterwards: the script these 266 rows describe is on a PRODUCT path, and every primitive named in the corpus is still named by it.",
+        "⚠ TWO DEFECTS IN MY OWN FIRST DRAFT, both caught by running it: the script path was `token-report/token_report.mjs` where the reference's `SCRIPTS` constant says `token-report/scripts/`, and the limits comparison above. Neither was a port defect; both were the fixture."
+      ]
     },
     {
       "python": "tests/test_maintainer_tools_parity.py",
       "kind": "parity",
       "py_tests": 14,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/maintainer_tools.test.mjs"
+        "tests/unit/maintainer_tools.test.mjs",
+        "tests/__snapshots__/sync_themes.json",
+        "tests/fixtures/sync_themes_probe.mjs",
+        "tests/unit/generate.test.mjs"
       ],
       "why": [
-        "PARTIAL, and the ratio is the argument: ten of its fourteen tests are absolute — the churn guarantee's exact bytes, the no-op case really leaving bytes alone, the fallback case really reaching the fallback, the destamp removing only what it claims, nothing surviving the sandbox. Written before the port existed, it found three divergences by being written; the absolute tier is why.",
-        "OBSERVED FLAKY AND THEN DIAGNOSED, 2026-08-15/16 — ValidateOnlyAgreesWithTheReference/test_every_case_agrees_on_stdout_stderr_and_the_exit_code (flags='--theme neutral --emit files') failed in two of four full `python -m unittest discover -s tests` runs and passed every time in isolation. THE MECHANISM IS THE MACHINE-WIDE HOOK SHIM, not chance. The test runs the two implementations BACK TO BACK over the same flags; each runs validate, which runs the doctor, whose [shim] check reads ~/.geneseed/bin/geneseed-hook.cmd — and whose emit REWRITES it when it is stale, announcing 'This run's own emit has refreshed it; no further action needed'. So when something earlier in the suite leaves that shim pointing at a vanished temp dir, the FIRST implementation to run prints the repair line and the second, finding it already correct, does not. Their stdout differs and the comparison fails. Evidence beyond the reasoning: the shim's interpreter path came back spelled `node.exe` before a full run and `node.EXE` after one, so the two implementations really do both write it and they do not agree on the casing. The coupling is to the DEVELOPER'S MACHINE, shared mutable state neither implementation owns, and it is why a cell could never adjudicate this verb. Not fixed: the comparison half dies at P4, and the absolute half already landed in tests/unit/generate.test.mjs's ValidateOnly block, which runs ONE implementation and passes a sandboxed home to every child — so it cannot have this and cannot rewrite the shim either."
+        "PARTIAL, and the ratio was the argument. AUDITED PER CLASS: 2 classes, 14 methods → 9 cross into `tests/unit/maintainer_tools.test.mjs` (11 tests), 4 already covered, 1 retired. THE LAST ROW OF P3.",
+        "THE CORPUS IS RECORDED — the fourth use of that move this phase and the one with the most at stake: twenty cases whose inputs no cell can build, taken from `tests/fixtures/sync_themes_probe.py` on 2026-08-16 into `tests/__snapshots__/sync_themes.json` and replayed against the Node probe beside it. Ten of the reference's fourteen were already ABSOLUTE — the churn guarantee's exact bytes, the no-op case really leaving bytes alone, the fallback case really reaching the fallback, the template's one container value — which is what made this row cheap. Written before the port existed, that file found three divergences by being written, and the absolute tier is why.",
+        "⚠ STDOUT AND STDERR ARE RECORDED AS BASE64, not as text, and that is not caution: the newline translation AND the em dash both live in this comparison. A text round trip through JSON would erase the first, and the whole reason `--sync-themes` has a byte corpus is that it rewrites files a maintainer has committed. Same lesson as the JSONC and token-report recordings — when the distinction is what the corpus is FOR, record the rendering, never the value.",
+        "THE POSITIVE CONTROLS TRAVELLED WITH IT and are the reason a replay is not weaker here than a comparison was: without them, twenty cases that all answered nothing would satisfy every replay perfectly — recorded silence replayed as silence. Five named outputs, five (changed, exit) pairs, and the corpus-shape check that both directions and the refusal are present.",
+        "⚠ THE `--validate-only` COMPARISON RETIRES, AND ITS FLAKE IS THE ROW'S OWN FINDING RATHER THAN AN EXCUSE. It ran both implementations back to back; each runs `validate` → `doctor`, whose `[shim]` check reads the machine-wide hook shim and whose emit REWRITES it when stale, announcing that it did. So when anything earlier in the suite left that shim pointing at a vanished temp dir, the FIRST implementation printed the repair line and the second did not, and their stdout differed. Evidence beyond the reasoning: the shim's interpreter path came back spelled `node.exe` before a full run and `node.EXE` after one — both implementations really do write it and they disagree on the casing. The coupling is to shared mutable state on the DEVELOPER'S MACHINE that neither implementation owns, which is why no cell could ever adjudicate that verb.",
+        "IT WAS DELIBERATELY NOT FIXED, and the four absolute tests beside it were already covered before this row began: `tests/unit/generate.test.mjs`'s ValidateOnly block runs ONE implementation and hands every child a sandboxed home, so it cannot have the flake and cannot rewrite the shim either. The successor asserts the POINTER at that block rather than duplicating it — a retirement whose named gate can be deleted is prose."
       ]
     },
     {
       "python": "tests/test_settings_parity.py",
       "kind": "parity",
       "py_tests": 5,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/settings_jsonc.test.mjs"
+        "tests/unit/settings_jsonc.test.mjs",
+        "tests/__snapshots__/jsonc.json"
       ],
-      "why": "PARTIAL. The wiring comparison retires; the JSONC corpus and both hook-sniff shapes do not. JSONC parsing is a live product property — users hand-edit settings.json with comments — and its answers are absolute, not relative to an implementation."
+      "why": [
+        "PARTIAL, as the row predicted. AUDITED PER CLASS: 2 classes, 5 methods → 3 cross, 2 retire. Successor `tests/unit/settings_jsonc.test.mjs` (7 tests) plus a new recorded corpus at `tests/__snapshots__/jsonc.json`. The wiring comparison retires into the emit corpus; JSONC parsing does not, because it is a LIVE PRODUCT PROPERTY — users hand-edit settings.json and opencode.json with comments, and every emit re-reads what they wrote.",
+        "THE CORPUS IS RECORDED, NOT TRANSCRIBED, and that is the difference between this row and the four frozen literals earlier in the wave. Twenty-four inputs with twenty-four answers is past the size where a hand-copied table can be trusted, so the reference's own `_read_jsonc` was run over its own `JSONC_CORPUS` on 2026-08-16 and the answers frozen — the `tests/__snapshots__/help/` pattern, applied a second time.",
+        "⚠ THE ANSWER IS RECORDED AS RENDERED TEXT, NOT AS A JSON VALUE, and the corpus carries that argument in its own `doc` field. A JSON document cannot hold Python's int/float distinction, and `{\"float\": 1.0, \"int\": 20, \"exp\": 1e3}` → `{\"float\": 1.0, \"int\": 20, \"exp\": 1000.0}` is a row that exists for exactly that. Recording the VALUE would have collapsed all three spellings on the way into the file, and the corpus would then have certified the bug it was written to prevent.",
+        "⚠ AND ONE AMBIGUITY IS RECORDED RATHER THAN RESOLVED: `null` is the reference's answer both for an input that does not parse and for the literal `null`, and it does not distinguish them. Inventing a distinction the reference does not have is the trap that has fired twice in this port, so the corpus carries `isNull` and says why.",
+        "THE COVERAGE GATE WAS RE-AIMED, NOT DROPPED. The reference asserted its own cell list still contained ten named states — the right shape while one file drove all ten. They are spread across six Node files now, so the successor is a MAP from each state to the test that owns it, and every entry is CHECKED against the file it names, because a pointer at a test that no longer exists asserts nothing.",
+        "TWO OF THE TEN HAD NO NODE OWNER, and were WRITTEN rather than waved through — checked before claiming coverage, which is the standing rule this port keeps re-learning. `claude/user-hooks-survive`: the merge writes Geneseed's groups into a file the user already has hooks in, and theirs must come back untouched (asserted with the control that the merge really did add its own, or 'theirs survived' is true of a no-op). `claude/invalid-json`: a settings.json the parser cannot read must be REFUSED and named, never replaced with a fresh config — the one case where guessing costs the user everything.",
+        "TWO SHAPES THE REFERENCE'S OWN CORPUS GATE DID NOT NAME are now asserted, and both are already in its corpus: an escaped quote before a `//`, and a string ending in a backslash. A stripper that scans for `//` without tracking string state gets those two wrong in opposite directions.",
+        "`test_every_name_with_a_consumer_outside_the_unit_is_driven` RETIRES WITH THE COMPARISON IT GATED. It re-derived, by `ast`, the set of `_build_settings` names that a caller outside the unit can hold, and required the comparison file to drive each one. Its subject is that file's cell list; with the cell list gone there is nothing left for it to be about, and the surviving claim — that each of those behaviours is still gated — is what the state map above now carries."
+      ]
     },
     {
       "python": "tests/test_native_layer_parity.py",
       "kind": "parity",
       "py_tests": 4,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/py_primitives.test.mjs"
+        "tests/unit/py_primitives.test.mjs",
+        "tests/unit/emit_gates.test.mjs",
+        "tests/unit/generate.test.mjs",
+        "tests/unit/emit_modes.test.mjs"
       ],
-      "why": "PARTIAL. The tree comparison retires into the emit corpus; test_python_number_rendering_agrees does not. Number rendering is parseJson's int/float round-trip and jsonDumps' separators — the bytes on users' disks, per design 5.1 — and after P4 those functions are not Python compatibility, they ARE the spec. A spec needs an absolute corpus, not a comparison."
+      "why": [
+        "PARTIAL, as the row predicted, and now CLOSED. AUDITED PER CLASS: 2 classes, 4 methods → 1 crosses, 2 already covered, 1 retired. The tree comparison retires into the emit corpus; number rendering does not, because after P4 those functions are not Python compatibility, they ARE the spec for the bytes on a user's disk.",
+        "`test_python_number_rendering_agrees` is answered by `tests/unit/py_primitives.test.mjs` — the integral-float round trip, the CPython float spellings (including the two-digit exponent padding JS does not do), and the nested-container guard that stops a top-level-only wrapper passing.",
+        "`test_the_overrides_fixture_exercises_every_frontmatter_branch` is answered by `tests/unit/generate.test.mjs` — `an override emits model and temperature only where one is set` and `agent overrides are absent, parsed, or malformed — never fatal` between them reach the model, variant, temperature, null-temperature and empty-model branches.",
+        "⚠ `test_the_matrix_covers_every_branch` REQUIRED TWO CELLS NOTHING IN THIS PORT HAD, and the row was deliberately held at `todo` for one commit rather than flipped on a claim the ledger gate cannot check. `colors-invalid-slot` and `colors-no-default` are now `tests/unit/emit_gates.test.mjs`'s two new tests. All fourteen shipped themes carry the same valid AGENT_COLORS map with a `_default`, so the validation else-branch and the `_default` injection are dead in every emit anyone can run from this checkout — which is exactly why the reference needed a SYNTHETIC theme and why the 259-cell corpus is blind to both.",
+        "DRIVEN THROUGH THE PUBLIC ENTRY, not by exporting the private resolver: `agentColorMap` is module-private, so one `copyCheckout` carries a synthetic `themes/gsprobe.json` and the colour is read back out of the emitted agent files — the place a user would look. Three answers in one map: an INVALID slot (warns, falls back to secondary), a VALID slot beside it (without which 'reviewer is secondary' is equally satisfied by a resolver that ignores the map), and NO `_default` (so every unlisted agent proves the injection). A second test deletes the key entirely and asserts the built-in table is used WHOLE — its answers are not all `secondary`, which is what says the fallback is the table rather than the bare default.",
+        "⚠ AND THE WARNING FIRES ONCE PER AGENT, WHICH IS THE REFERENCE'S OWN SHAPE. The first draft of that assertion required exactly one and went red at 17. `_agent_color(stem, theme)` calls `_agent_color_map(theme)` on every lookup, so the map is re-validated per agent and the warning repeats; `agentColor` does the same. The parity harness compared the warning STREAM, so the repetition is pinned rather than incidental — 'fixing' it would have diverged the two implementations on a channel a cell compares. §7's trap, reached from the fixture side for the third time this session."
+      ]
     },
     {
       "python": "tests/test_opencode_extras_parity.py",
       "kind": "parity",
       "py_tests": 4,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/py_primitives.test.mjs"
+        "tests/unit/py_primitives.test.mjs",
+        "tests/unit/emit_modes.test.mjs",
+        "tests/unit/generate.test.mjs"
       ],
-      "why": "PARTIAL, same split and same successor as the row above: test_json_container_rendering_agrees is about the JSON container primitives, and 'the corpus reaches the shapes the emitted files do not' is exactly the vacuity gate that must travel with them. The extras comparison itself retires into the emit corpus."
+      "why": [
+        "PARTIAL, same split and same successors as the native-layer row, and now CLOSED. AUDITED PER CLASS: 2 classes, 4 methods → 2 cross, 1 already covered, 1 retired. The extras comparison retires into the emit corpus; the JSON container primitives do not.",
+        "`test_json_container_rendering_agrees` and its vacuity gate both landed in `tests/unit/py_primitives.test.mjs` as a CONTAINERS table: empty and nested containers, ensure_ascii including an astral character CPython emits as a surrogate PAIR, and sort_keys asserted RECURSIVELY — a sort applied only at the top level passes a one-level row, and an already-sorted corpus cannot tell either from a missing sort. The corpus gate travels with it: if the table decayed to the flat string/int maps the emitted themes actually carry, the separator and sort questions would go untested while every row still passed.",
+        "⚠ `sortKeys` IS AN OPTION, NOT THE DEFAULT, and the first draft asserted sorted output from a plain `jsonDumpsCompact` and went RED. I had measured `json.dumps(o, sort_keys=True)` and then held the port to a property its own default does not have. Both columns are CPython's now, taken separately, because `js/settings.mjs` has call sites of each. The fixtures are built through `parseJson` rather than as object literals, because a bare JS number makes `pyStr` throw on purpose — measured, the first draft threw.",
+        "⚠ `test_the_matrix_covers_every_branch` REQUIRED A `GENESEED_PRIMARY` CELL AND A `GENESEED_COMMANDS` CELL, and nothing in this port drove either layer at all. Both are OFF by default, so they are unreachable from any default emit AND from all 259 recorded cells — `cellEnv` clears every `GENESEED_*` knob by prefix, which is what keeps the matrix meaning the same thing on every machine. The row was held at `todo` for one commit rather than flipped on a claim nothing checked.",
+        "The successor is a PARTITION in `tests/unit/emit_modes.test.mjs`, not a presence check: the same emit runs twice and the DIFFERENCE is the claim, so a layer that shipped unconditionally fails as loudly as one that never ships. Measured: exactly `.opencode/agents/orchestrator.md` plus the six `.opencode/command/*.md`, and nothing is REMOVED by turning them on — these layers add, they do not replace.",
+        "The four named overrides cells (`overrides-stale`, `overrides-empty-agents`, `overrides-current-version`, `primary-with-overrides`) are covered by `tests/unit/generate.test.mjs`'s overrides block — the stub stamped at creation, the re-emit that never rewrites an existing file, and the absent/parsed/malformed partition — now joined by the primary layer above."
+      ]
     },
     {
       "python": "tests/test_render_parity.py",
@@ -614,11 +778,23 @@
       "python": "tests/test_emit_phase_order.py",
       "kind": "structural",
       "py_tests": 5,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/emit_phase_order.test.mjs"
+        "tests/unit/emit_phase_order.test.mjs",
+        "js/emit.mjs",
+        "bin/geneseed.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "NOT retired, converted. The invariant — RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY, per emit — is live and load-bearing. What retires is reading it out of a parse tree: js/emit.mjs emits its phase boundaries and the test asserts the observed sequence. Stronger than the ast version (it sees what RAN, not what is written) and it needs no parser in a repo whose CI advertises zero dependencies."
+      "why": [
+        "T8, AND THE LAST PRODUCT CHANGE OF THE PORT. AUDITED PER CLASS: 1 class, 5 methods, all 5 cross. Successor `tests/unit/emit_phase_order.test.mjs`. Every emit runs its stages in one order — RENDER* → WIRE* → PRUNE → MANIFEST → VERIFY — because RENDER writes files Geneseed owns wholesale while WIRE reconciles files the USER co-owns, and because WIRE is what fills the `managed` record MANIFEST writes and every teardown unwires exactly what was wired.",
+        "⚠ THE FINDING THAT DECIDED THE SUCCESSOR, and it was measured rather than assumed: THIS PORT DOES NOT HAVE THE REFERENCE'S SHAPE. The reference gated the order with five `ast` walks over its own generator, and could, because it keeps `_claude_render` / `_claude_wire` as two dispatchers and therefore two statements at every call site — a shape its own docstring calls 'not incidental, it is what leaves this walker something to check'. Here `claudeWire` is a real function but BOTH OpenCode emits INLINE their merge, and PRUNE/MANIFEST/VERIFY are not in `js/emit.mjs` at all — they are in `bin/geneseed.mjs`'s three driver bodies. A source walker would have had to span two files and would still have been reading source rather than watching a run.",
+        "SO THE ORDER WAS MADE OBSERVABLE. `phaseLog(phase)` in `js/emit.mjs`, called at eleven sites across the two files: RENDER at the top of `build` and the three render entry points, WIRE at `claudeWire` and at the two inlined OpenCode merges, PRUNE and MANIFEST in each of the three driver bodies, VERIFY at the settings-integrity call. The successor drives all nine emits through the REAL driver and reads the order out of the log. That is strictly the better gate: it reports what actually executed, in the order it executed, including which branch a given host took.",
+        "⚠ BEHIND `GENESEED_PHASE_LOG`, WHICH IS THE WHOLE SAFETY ARGUMENT, AND IT WAS VERIFIED RATHER THAN ARGUED. `cellEnv` clears every `GENESEED_*` knob by prefix, so no recorded cell can turn it on; after the product change all three corpora replayed green — 259 + 317 + 114 — and `git diff --numstat tests/__snapshots__` was empty. Not one recorded byte moved. It writes to STDERR, never stdout: stdout is the decision channel every Geneseed hook signals through.",
+        "THE MEASURED SEQUENCES, all nine monotone: `files` RENDER (and nothing else — it touches nothing the user co-owns); `opencode` RENDER RENDER WIRE PRUNE MANIFEST (two RENDERs because the emit calls `build` for the bundle before its own layer); `opencode-global` RENDER WIRE PRUNE MANIFEST; claude/claude-global/bob/bob-global RENDER WIRE PRUNE MANIFEST VERIFY; copilot/copilot-global the same without VERIFY, which is the documented split — Copilot writes no settings file, so there is nothing to re-read.",
+        "FOUR OF THE FIVE BECAME RUNTIME CLAIMS; THE FIFTH STAYS STATIC ON PURPOSE. No runtime log can prove a negative about a call that did not happen on the path a test drove, so `no wiring call escapes the phase map` still reads source — but it derives the wiring set the way the reference did, by scanning `js/settings.mjs` for filesystem mutation rather than hand-listing it ('a hand-list contains exactly the names someone remembered, which is how `_opencode_target` went unmeasured for three phases'), and then requires every function in `js/emit.mjs` that calls one to be WIRE-marked.",
+        "⚠ ONE FIXTURE BUG, CAUGHT BY ITS OWN FAILURE MESSAGE: the first draft returned the sandbox path and asserted the post-emit markers afterwards — against a directory the `finally` had already removed. It reported 'the driver no longer writes .geneseed-emit' about a driver that had just written it. The inspection now runs INSIDE the try. And the marker list is `.geneseed-emit` + `.geneseed-footprint` only: `.geneseed-theme` lands in `out` for this emit as a side effect of `build()`, but the driver writes it deliberately only for the `-global` emits, and a required-marker list should not depend on that coincidence.",
+        "TWO MUTATIONS, both killed. M30 folds the Claude wire marker away — the exact shape the reference's own vacuity guard was built for, since such an emit still renders, prunes, manifests and is perfectly MONOTONE while having no WIRE at all; it died twice over, to the per-emit partition AND to the static gate. M31 logs the boundaries to stdout instead of stderr, which is the decision channel a hook's JSON verdict travels on; it took four of the five tests with it."
+      ]
     },
     {
       "python": "tests/test_tui_boundary.py",

@@ -17,14 +17,16 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { parseArgs, resolveCli, selectCells } from '../cli_golden.mjs';
-import { checkExpectations } from '../helpers/cli_golden.mjs';
-import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
+import { checkExpectations, cloneCheckout, repoint } from '../helpers/cli_golden.mjs';
+import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const read = (...p) => readFileSync(path.join(ROOT, ...p), 'utf8');
@@ -628,29 +630,11 @@ test('each declared module spawns only what its row declares', () => {
 // it. `node` is invoked by absolute path, so stripping PATH cannot take the runtime out from under
 // the test.
 
-/** PATH with every directory holding an interpreter removed, and what was removed. */
-function pathWithoutPython() {
-  const names = process.platform === 'win32'
-    ? ['python.exe', 'python3.exe', 'py.exe'] : ['python', 'python3'];
-  const kept = [];
-  const dropped = [];
-  for (const entry of (process.env.PATH ?? '').split(path.delimiter)) {
-    if (entry && names.some((n) => existsSync(path.join(entry, n)))) dropped.push(entry);
-    else kept.push(entry);
-  }
-  return { stripped: kept.join(path.delimiter), dropped };
-}
-
-/** A sandbox home plus the stripped PATH. The `dropped` guard is asserted by every caller. */
-function strippedEnv(t, home) {
-  const { stripped, dropped } = pathWithoutPython();
-  // The vacuity guard: on a machine whose PATH never held a python, "it ran without one" is true
-  // and meaningless.
-  assert.ok(dropped.length > 0, 'PATH held no python at all, so this run proves nothing about '
-    + 'whether the entry point would have found one');
-  t.diagnostic(`${dropped.length} PATH entries held an interpreter and were removed`);
-  return { ...cellEnv(home), PATH: stripped };
-}
+// `pathWithoutPython`/`strippedEnv` MOVED TO `tests/helpers/sandbox.mjs` in P3 T7, when
+// `tests/unit/node_driver.test.mjs` became their second caller. The vacuity guard moved with
+// them rather than staying at each call site, and the helper now also clears `$PYTHON` — the
+// documented discovery override that `cellEnv` leaves alone, so that a green run here cannot be
+// measuring a developer's exported shell.
 
 const runEntry = (entry, argv, env, cwd, input = '') => spawnSync(process.execPath,
   [path.join(ROOT, ...entry.split('/')), ...argv],
@@ -767,6 +751,365 @@ test('uninstall removes an install with no python on PATH', (t) => {
     // user's own file with it.
     assert.ok(existsSync(path.join(cfg, 'PROFILE.md')),
       'an unowned file was deleted — this removed by directory, not by manifest');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// `ExcludeWiringIsOwnershipTracked` (2), `TheGateDocumentIsWhatAHostHonours` (2) and
+// `TheEntryRefusesRatherThanNoOps` (9) — the last thirteen.
+//
+// Eleven of them were per-implementation LOOPS whose Node arm was already absolute, so each
+// crosses by keeping that arm and dropping the Python one. What is asserted did not change; what
+// went away is a second process per case.
+
+const run = (entry, argv, env, cwd) => spawnSync(process.execPath,
+  [path.isAbsolute(entry) ? entry : path.join(ROOT, ...entry.split('/')), ...argv],
+  { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+
+/** home + repo, with a claude install the exclude verb can find. */
+function excludeWorld(sb) {
+  const home = path.join(sb.path, 'home');
+  const repo = path.join(sb.path, 'repo');
+  mkdirSync(path.join(home, '.claude'), { recursive: true });
+  mkdirSync(repo, { recursive: true });
+  writeFileSync(path.join(home, '.claude', '.geneseed-manifest.json'), '{"owned": []}\n', 'utf8');
+  return { home, repo };
+}
+
+const excludesOf = (repo) => {
+  const p = path.join(repo, '.claude', 'settings.local.json');
+  if (!existsSync(p)) return null;
+  return JSON.parse(readFileSync(p, 'utf8')).claudeMdExcludes ?? null;
+};
+
+test('exclude remove unwires what exclude add wired', () => {
+  // The positive control, and it is not optional: without it the test below passes on an
+  // implementation that never unwires anything at all.
+  const sb = makeSandbox('hookcli-wire-');
+  try {
+    const { home, repo } = excludeWorld(sb);
+    const env = cellEnv(home);
+    assert.ok([0, 1].includes(run(CLI, ['exclude', 'add', repo], env, repo).status));
+    assert.ok(excludesOf(repo), 'add wired nothing, so the removal below proves nothing');
+    assert.ok([0, 1].includes(run(CLI, ['exclude', 'remove', repo], env, repo).status));
+    assert.ok(!excludesOf(repo), 'remove left behind the claudeMdExcludes entry add wrote');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('exclude add does not claim wiring it found rather than created', () => {
+  // The entry is present and OUR record of it is not — a project install's own wiring, or a hand
+  // edit. Fabricating ownership there makes the next `remove` delete a line Geneseed never wrote.
+  //
+  // The precondition is reached BEHAVIOURALLY rather than by guessing the entry string: one `add`
+  // creates both, then the install's `excludes.json` is deleted, which erases the record while
+  // leaving the wiring in the repo exactly as another writer would have left it.
+  const sb = makeSandbox('hookcli-own-');
+  try {
+    const { home, repo } = excludeWorld(sb);
+    const env = cellEnv(home);
+    run(CLI, ['exclude', 'add', repo], env, repo);
+    const before = excludesOf(repo);
+    assert.ok(before, 'add wired nothing, so this case has no precondition');
+    rmSync(path.join(home, '.claude', 'excludes.json'));
+
+    run(CLI, ['exclude', 'add', repo], env, repo);
+    run(CLI, ['exclude', 'remove', repo], env, repo);
+    assert.deepEqual(excludesOf(repo), before,
+      'exclude add claimed ownership of a claudeMdExcludes entry it found rather than created, '
+      + 'and the following remove deleted it');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+// `TheGateDocumentIsWhatAHostHonours` was ALREADY absolute against a literal, and that is its
+// whole point: a cross-implementation comparison is structurally blind to a defect both sides
+// share, so both could carry a typo'd `permissionDecison` key forever while every gate in every
+// install silently stopped gating.
+const GATE_DOCUMENT = {
+  hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'ask' },
+};
+
+function decision(argv, payload) {
+  const r = spawnSync(process.execPath, [path.join(ROOT, ...HOOK.split('/')), ...argv],
+    { cwd: ROOT, input: JSON.stringify(payload), encoding: 'utf8' });
+  assert.equal(r.status, 0, 'a PreToolUse hook must exit 0 on every path — a non-zero one breaks '
+    + `the tool call it was watching. stderr: ${r.stderr.slice(0, 300)}`);
+  return JSON.parse(r.stdout);
+}
+
+for (const [verb, payload, law] of [
+  ['git-gate', { tool_name: 'Bash', tool_input: { command: 'git commit -m x' } }, 'Law XX'],
+  ['rule-gate', { tool_name: 'Write', tool_input: { file_path: '/x/user-rules.md' } }, 'Law VI'],
+]) {
+  test(`${verb} emits the document the host reads`, () => {
+    const got = decision([verb], payload);
+    const { permissionDecisionReason, ...rest } = got.hookSpecificOutput;
+    assert.deepEqual({ hookSpecificOutput: rest }, GATE_DOCUMENT);
+    assert.ok(permissionDecisionReason.includes(law),
+      `the reason does not cite ${law}: ${permissionDecisionReason}`);
+  });
+}
+
+test('an unported verb refuses loudly', () => {
+  // Every Geneseed hook returns 0 and signals through stdout, so a silent no-op and a success are
+  // the SAME observation. The refusal is what makes the difference visible, and it names the
+  // command that does work. `exclude` is the interesting one: a verb the SIBLING Node binary
+  // answers, so "some Node entry handles it" is true while "this one does" must stay false — the
+  // shim bakes exactly one of the two.
+  for (const verb of ['doctor', 'build', 'status', 'uninstall', 'exclude']) {
+    const r = run(HOOK, [verb], process.env, ROOT);
+    assert.equal(r.status, 2, `${verb} must refuse with exit 2, got ${r.status}`);
+    assert.ok(r.stderr.includes(`run \`geneseed ${verb}\``),
+      `the refusal must name the command that does work, not merely repeat the verb: ${r.stderr}`);
+    assert.equal(r.stdout, '',
+      'a refusal must print nothing on stdout: that is the channel a host parses as a verdict');
+  }
+});
+
+test('no verb at all refuses', () => {
+  const r = run(HOOK, [], process.env, ROOT);
+  assert.equal(r.status, 2, r.stderr.slice(0, 200));
+  assert.equal(r.stdout, '');
+});
+
+test('two mutually exclusive theme flags are refused, and one of them is not', () => {
+  // A mutually-exclusive group is BEHAVIOUR even though its wording is not reproduced, and the two
+  // are separable — which is why this is a hand-written gate rather than a cell. A cell would
+  // compare argparse's usage block against one line of the CLI entry and fail on text neither side
+  // promises. What is promised is the refusal itself: both flavour flags together is an error, not
+  // a silent pick of whichever the parser saw first.
+  const sb = makeSandbox('hookcli-theme-');
+  try {
+    const env = cellEnv(path.join(sb.path, 'home'));
+    const r = run(CLI, ['theme', 'mine', '--from', 'tokyonight', '--solid-only',
+      '--transparent-only'], env, ROOT);
+    assert.equal(r.status, 2, `both flavour flags were accepted: ${r.stdout.slice(0, 200)}`);
+    assert.equal(r.stdout, '', 'it printed on stdout while refusing');
+    // The positive control the reference got from its own second implementation: ONE of the flags
+    // is accepted, so the refusal above is about the PAIR and not about the verb.
+    const ok = run(CLI, ['theme', 'mine', '--from', 'tokyonight', '--solid-only',
+      '--dir', sb.path], env, ROOT);
+    assert.equal(ok.status, 0, ok.stderr.slice(0, 300));
+    assert.ok(existsSync(path.join(sb.path, 'geneseed-mine.json')),
+      'the accepted invocation wrote no theme, so the refusal is not about the pair');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('every newline the entry points write is the platform\'s', () => {
+  // WHAT IS LEFT OF `test_the_two_entry_points_agree_on_stdout_BYTES`, and it is the one difference
+  // the whole recorded matrix structurally cannot see: every cell reads stdout through a decoder
+  // with universal newlines, so a hook printing CRLF and a hook printing LF are folded to the same
+  // string before anything compares. That is not a gap in a cell — it is a property the harness's
+  // own transport erases.
+  //
+  // The equality dies with the reference. The absolute residue is that the port writes the
+  // PLATFORM's line ending, which is what the reference did through `sys.stdout` and what
+  // `js/hooks.mjs`'s translating funnels and `withPyNewlines` were added to reproduce.
+  //
+  // THE SAME THREE ROWS, for the reasons the reference's docstring gives. `context` covers the
+  // hooks. `prompt` is ~400 KB of rendered tree through a CLI module that could reach
+  // `process.stdout.write` directly and leave the hook row green. `build` covers the generator's
+  // ~25 raw print sites, which nothing could see until `build` started calling the driver's main
+  // in-process. Counted, never sampled: a containment check is satisfied by one translated line in
+  // a stream of untranslated ones.
+  const sb = makeSandbox('hookcli-nl-');
+  try {
+    const home = path.join(sb.path, 'home');
+    mkdirSync(home, { recursive: true });
+    writeFileSync(path.join(sb.path, 'README.md'), '# bytes\n', 'utf8');
+    const env = { ...cellEnv(home), GENESEED_OUT: path.join(sb.path, 'bundle') };
+    const win = process.platform === 'win32';
+    let total = 0;
+    for (const [entry, argv] of [[HOOK, ['context', '--root', sb.path]],
+      [CLI, ['prompt']], [CLI, ['build']]]) {
+      const r = spawnSync(process.execPath,
+        [path.join(ROOT, ...entry.split('/')), ...argv],
+        { cwd: sb.path, env, maxBuffer: 256 * 1024 * 1024 });
+      const out = r.stdout;
+      assert.ok(out.length > 0,
+        `${entry} ${argv[0]} printed nothing, so this row would pass on a silent implementation`);
+      const lf = out.filter((b) => b === 0x0a).length;
+      const crlf = out.filter((b, i) => b === 0x0a && out[i - 1] === 0x0d).length;
+      total += lf;
+      if (win) {
+        assert.equal(lf - crlf, 0, `${entry} ${argv[0]} wrote ${lf - crlf} BARE line feeds of `
+          + `${lf} — its output no longer goes through the os.linesep translation the reference's `
+          + 'text layer applies, and no recorded cell can see it');
+      } else {
+        assert.equal(out.filter((b) => b === 0x0d).length, 0,
+          `${entry} ${argv[0]} wrote carriage returns on a POSIX host`);
+      }
+    }
+    assert.ok(total > 500, `only ${total} newlines across the three rows, so the rule above was `
+      + 'asserted against almost nothing');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('the improvements filename is stamped the declared way', () => {
+  // THE ASSERTION THE CELL HARNESS GAVE UP TO STOP BEING FLAKY. `diff --out` names its file after
+  // the clock to the second, and a cell ran two implementations back to back — so a second
+  // boundary between them reported a difference that was only time passing. The harness normalises
+  // the filename out of the comparison, which buys stability and costs exactly one thing: with the
+  // digits gone, nothing can say the FORMAT is right. `improvements-2026-08-09.md` would normalise
+  // to the same token. A comparison made tolerant of a value owes an absolute assertion about that
+  // value somewhere else, and this is it.
+  const sb = makeSandbox('hookcli-impr-');
+  try {
+    const home = path.join(sb.path, 'home');
+    const cfg = path.join(home, '.config', 'opencode');
+    mkdirSync(cfg, { recursive: true });
+    writeFileSync(path.join(cfg, '.geneseed-manifest.json'),
+      JSON.stringify({ owned: ['AGENT.md'] }), 'utf8');
+    writeFileSync(path.join(cfg, '.geneseed-theme'), 'neutral\n', 'utf8');
+    writeFileSync(path.join(cfg, 'AGENT.md'), '# local\n', 'utf8');
+    const r = run(CLI, ['diff', '--out'], cellEnv(home), sb.path);
+    assert.equal(r.status, 0, r.stderr.slice(0, 400));
+    const written = readdirSync(path.join(cfg, 'improvements'));
+    assert.equal(written.length, 1, `wrote ${written} instead of one report`);
+    assert.match(written[0], /^improvements-\d{8}-\d{6}\.md$/,
+      'the improvements filename is stamped a different way than declared');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('the link shim names this runtime\'s own entry point', {
+  skip: process.platform === 'win32' ? false
+    : 'the .cmd shim is the Windows arm of `link`; the POSIX arm is tests/link_shim.test.mjs',
+}, () => {
+  // THE DEBT THE SHIM'S STAMP OWES. `link` writes a `.cmd` whose one real line is
+  // `"<runner>" "<entry>" %*`, and the harness normalises it — a normalisation with no absolute
+  // assertion beside it is a value nothing gates. The negative half is the point: a shim naming
+  // the OTHER runtime's entry point puts the wrong program on the user's PATH, and after the cut
+  // there is no other runtime to name.
+  const sb = makeSandbox('hookcli-link-');
+  try {
+    const home = path.join(sb.path, 'home');
+    const bindir = path.join(home, 'AppData', 'Local', 'Geneseed', 'bin');
+    // PATH is that bin dir and nothing else, so `link` takes its already-on-PATH branch — without
+    // it this test would spawn PowerShell against the real user registry.
+    const env = { ...cellEnv(home), PATH: bindir };
+    const r = run(CLI, ['link'], env, sb.path);
+    assert.equal(r.status, 0, r.stderr.slice(0, 400));
+    assert.ok(r.stdout.includes('is on your user PATH'),
+      'link did not take the already-on-PATH branch — this test would have written to the '
+      + 'developer\'s own environment');
+    const shim = readFileSync(path.join(bindir, 'geneseed.cmd'), 'utf8');
+    const line = shim.split('\n').find((ln) => ln.trim().endsWith('%*'));
+    assert.ok(line, `link wrote no argv line into the shim:\n${shim}`);
+    const posix = line.replaceAll('\\', '/');
+    assert.ok(posix.includes('bin/geneseed-cli.mjs'),
+      'the shim does not name this runtime\'s own entry point');
+    assert.ok(!posix.includes('harness.py'), 'the shim names the Python entry point');
+    // The runner, absolutely: the shim must name the RUNNING binary by absolute path, never a
+    // bare `node` that PATH could re-resolve.
+    const runner = line.split('"')[1];
+    assert.ok(path.isAbsolute(runner), `a relative runner was baked into the shim: ${runner}`);
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('the install log names this runtime\'s own command', () => {
+  // THE SAME DEBT IN A FILE. `command: <argv>` is persisted into the install log so a user can
+  // re-run the step that failed, and the harness normalises the line for the same reason. The
+  // negative half is why this is not "the tails match": a log naming a Python entry point tells a
+  // user of a no-Python install to run a command they have no interpreter for.
+  //
+  // The failure is provoked the way the cell provokes it — an origin nothing can reach, in a
+  // checkout copy this run may write to and the developer's may not.
+  const sb = makeSandbox('hookcli-log-');
+  try {
+    const ck = path.join(sb.path, 'checkout');
+    cloneCheckout(ck, 'origin=https://127.0.0.1:1/owner/repo.git', {});
+    const log = path.join(sb.path, 'install.log');
+    const env = {
+      ...cellEnv(path.join(sb.path, 'home')),
+      // The harness's own no-network pair: git refuses any transport but a local path before a
+      // socket is opened, and never prompts for credentials.
+      GIT_ALLOW_PROTOCOL: 'file',
+      GIT_TERMINAL_PROMPT: '0',
+      GENESEED_LOG: log,
+      GENESEED_OUT: path.join(sb.path, 'bundle'),
+    };
+    const argv = repoint([process.execPath, path.join(ROOT, ...CLI.split('/'))], ck);
+    const r = spawnSync(argv[0], [...argv.slice(1), 'bootstrap', '--no-setup'],
+      { cwd: ck, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    assert.equal(r.status, 1, 'the step was expected to FAIL — without a failed step nothing '
+      + `writes a diagnosis at all\n${r.stdout.slice(-600)}`);
+    const written = readFileSync(log, 'utf8');
+    const line = written.split('\n').find((ln) => ln.startsWith('command: '));
+    assert.ok(line, `no \`command:\` line in the install log:\n${written.slice(-600)}`);
+    const posix = line.replaceAll('\\', '/');
+    assert.ok(posix.includes('bin/geneseed-cli.mjs'),
+      'the log does not name this runtime\'s own entry point');
+    assert.ok(!posix.includes('harness.py'), 'the log names the Python entry point');
+    assert.ok(line.trimEnd().endsWith(' upgrade'),
+      `the recorded command does not end in the subcommand that ran: ${line}`);
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('a mistyped flag is refused by the variadic sink', () => {
+  // `bootstrap` is the one verb here with a variadic positional, and a sink that absorbed an
+  // unknown OPTION would be the most dangerous parse bug in this entry point: `bootstrap
+  // --no-setpu` would run an update AND a setup wizard while the user believes they asked for
+  // neither.
+  //
+  // RUN INSIDE A `dirty` CLONE, belt and braces: the refusal must happen BEFORE anything
+  // dispatches, and if it regressed the command it would run is an update — so it is pointed at a
+  // throwaway checkout whose own preflight would refuse it anyway, never at the developer's.
+  const sb = makeSandbox('hookcli-sink-');
+  try {
+    const ck = path.join(sb.path, 'checkout');
+    cloneCheckout(ck, 'dirty', {});
+    const env = {
+      ...cellEnv(path.join(sb.path, 'home')),
+      GIT_ALLOW_PROTOCOL: 'file',
+      GIT_TERMINAL_PROMPT: '0',
+    };
+    const argv = repoint([process.execPath, path.join(ROOT, ...CLI.split('/'))], ck);
+    const r = spawnSync(argv[0], [...argv.slice(1), 'bootstrap', 'main', '--no-setpu'],
+      { cwd: ck, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    assert.equal(r.status, 2,
+      `a mistyped flag was not refused (exit ${r.status})\n${r.stdout.slice(-500)}`);
+    assert.ok(r.stderr.includes('--no-setpu'), `the refusal does not name it: ${r.stderr}`);
+    assert.ok(!r.stdout.includes('step 1/1'), 'the update step started before refusing');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('an emitted hook command shape runs through the shell', () => {
+  // END TO END, through the real shell, with the `|| exit 0` a real emitted command carries — the
+  // one path that exercises the QUOTING rather than the argv list.
+  //
+  // cwd is the install and not a scratch dir: `context` stands down silently when cwd is not a
+  // project with docs, which is the exact shape of the disabled hook this exists to detect.
+  const sb = makeSandbox('hookcli-shell-');
+  try {
+    const home = path.join(sb.path, 'home');
+    mkdirSync(home, { recursive: true });
+    writeFileSync(path.join(sb.path, 'README.md'), '# through the shell\n', 'utf8');
+    const command = `"${process.execPath}" "${path.join(ROOT, ...HOOK.split('/'))}" `
+      + `context --root "${sb.path}" || exit 0`;
+    const r = spawnSync(command, { shell: true, cwd: sb.path, env: cellEnv(home),
+      encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    assert.equal(r.status, 0,
+      `the emitted-shape command failed:\n  ${command}\n  stderr: ${r.stderr.slice(0, 300)}`);
+    assert.ok(r.stdout.includes('# through the shell'),
+      'the hook ran but injected nothing — these hooks signal through stdout, so a silent one is '
+      + 'a disabled one');
   } finally {
     sb.cleanup();
   }

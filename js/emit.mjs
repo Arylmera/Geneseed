@@ -643,7 +643,43 @@ function safePriorDirName(out, priorName) {
  * lines verbatim: Python interpolates `str(Path)`, which is backslash-separated on
  * Windows, and re-deriving it here would differ by separator in every message.
  */
+/**
+ * THE PHASE BOUNDARY MARKER — T8, and the whole of what this port owes
+ * `tests/test_emit_phase_order.py`.
+ *
+ * Every emit runs its stages in one order: RENDER* → WIRE* → PRUNE → MANIFEST → VERIFY. RENDER
+ * writes files Geneseed owns wholesale; WIRE reconciles files the USER co-owns (the
+ * CLAUDE.md/AGENTS.md managed block, settings(.local).json, opencode.json) by reading what is
+ * already there and merging into it. WIRE must precede MANIFEST because wiring is what fills the
+ * `managed` record the manifest writes, and every teardown path unwires exactly what was wired.
+ *
+ * WHY A RUNTIME LOG AND NOT A SOURCE WALK. The reference gated this with five `ast` walks over
+ * its own generator, and could, because it keeps `_claude_render` / `_claude_wire` as two
+ * dispatchers and therefore two statements at every call site — a shape its own docstring calls
+ * "not incidental, it is what leaves this walker something to check". THIS PORT DOES NOT HAVE
+ * THAT SHAPE: `claudeWire` is a real function but the two OpenCode emits inline their merge
+ * (`emitOpencodeRender`, `emitOpencodeGlobalRender`), and PRUNE/MANIFEST/VERIFY are not in this
+ * module at all — they are in `bin/geneseed.mjs`'s driver bodies. A walker would have to span two
+ * files and would still be reading source rather than watching a run.
+ *
+ * So the order is made OBSERVABLE instead, which is strictly the better gate: it reports what
+ * actually executed, in the order it executed, including the branch a given host took.
+ *
+ * ⚠ BEHIND AN ENV VAR THE THREE REPLAYERS DO NOT SET, and that is the entire safety argument.
+ * `cellEnv` clears every `GENESEED_*` knob by prefix, so no recorded cell can turn this on and
+ * the emit corpus cannot move by one byte. It writes to STDERR, never stdout: stdout is the
+ * decision channel every Geneseed hook signals through, and a stray byte there turns a blocking
+ * gate into a silently permissive one.
+ *
+ * Read at CALL time, not at import, so one process can drive several emits under it.
+ */
+export function phaseLog(phase) {
+  if (!process.env.GENESEED_PHASE_LOG) return;
+  process.stderr.write(`[geneseed:phase] ${phase}\n`);
+}
+
 export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog = false } = {}) {
+  phaseLog('RENDER');
   const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog });
   assertSourceComplete(cfg, `theme '${themeName}'`);
   mkdirSync(out, { recursive: true });
@@ -747,6 +783,7 @@ export function stripCapabilityLinks(cfg, text) {
  * in exactly one place rather than duplicating it for one boolean.
  */
 export function emitOpencodeRender(cfg, job) {
+  phaseLog('RENDER');
   const {
     theme: _theme, out, root, footprint, nativeCatalog, oldOwned, manifestExisted, agentPath,
   } = job;
@@ -786,6 +823,7 @@ export function emitOpencodeRender(cfg, job) {
   // WIRE — the one file of this emit the user co-owns. `agentPath` arrives decided
   // (`_rel_under` is the Python side by design), and only the BASENAME is consumed
   // downstream: `opencode.json`, or the `.jsonc` sibling when that is what is on disk.
+  phaseLog('WIRE');
   const cfgName = path.basename(mergeOpencodeJson(path.join(root, 'opencode.json'), agentPath));
 
   return {
@@ -942,6 +980,7 @@ function shipLeanLaws(items, theme, cfgDir, owned) {
  * input, and `Path.as_posix()` is the Python side's spelling of it.
  */
 export function emitOpencodeGlobalRender(cfg, job) {
+  phaseLog('RENDER');
   const {
     theme: themeName, cfgDir, out, footprint, nativeCatalog, oldOwned, agentPath,
   } = job;
@@ -1006,6 +1045,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // us. Inlined the way `emitOpencodeRender`'s is (one call, the same merge, the same
   // file name), while the Python side keeps it a separate `_opencode_global_wire_py`:
   // that split is what `tests/test_emit_phase_order.py` walks, and it walks the Python.
+  phaseLog('WIRE');
   const cfgName = path.basename(mergeOpencodeJson(path.join(cfgDir, 'opencode.json'),
     agentPath));
 
@@ -1038,6 +1078,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
  * a path, not from a render.
  */
 export function emitClaudeRender(cfg, job) {
+  phaseLog('RENDER');
   const {
     theme: themeName, cfgDir, claudeMd, scope, out, footprint, host, nativeCatalog,
     oldOwned,
@@ -1178,6 +1219,7 @@ export function emitClaudeRender(cfg, job) {
  * always a string, so `''` is the only falsy value either language sees.
  */
 function claudeWire(job, claudeMdText, hasAgentText) {
+  phaseLog('WIRE');
   const { cfgDir, claudeMd, scope, host, oldManaged, preambleExclude, hookOpts } = job;
   const old = oldManaged && typeof oldManaged === 'object' && !Array.isArray(oldManaged)
     ? oldManaged : {};

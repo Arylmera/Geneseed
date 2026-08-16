@@ -180,14 +180,23 @@ export const MUTATIONS = [
   {
     id: 'M7',
     name: 'make an emit non-idempotent',
-    file: 'js/emit.mjs',
-    find: 'export function sourceFingerprint(',
-    replace: 'export function sourceFingerprint(',
-    gate: null,
-    why: 'The re-emit path is what every real user is on from their second build onwards. '
-      + '`golden.mjs --idempotent` is the gate and it exists; what is missing is a one-string '
-      + 'edit that reaches it without also breaking the corpus replay, which would make the '
-      + 'mutation prove the wrong gate. Declared, ungated.',
+    file: 'js/settings.mjs',
+    find: '    writeText(p, pre + block + lstripNewlines(post));',
+    replace: '    writeText(p, pre + block + post);',
+    gate: IDEMPOTENT,
+    why: 'CLOSED IN P3 T7, after two phases declared ungated. The re-emit path is what every '
+      + 'real user is on from their second build onwards, and `golden.mjs --idempotent` has '
+      + 'always been the gate; what was missing was a one-string edit that reaches it WITHOUT '
+      + 'also breaking the single-emit corpus replay, because a mutation that reddens both '
+      + 'proves the wrong gate.\n'
+      + '    THE SEAM IS THE `updated` BRANCH OF `managedBlockWrite`, which runs ONLY when the '
+      + 'carrier already exists and already carries the markers — that is, never on a first '
+      + 'emit into a fresh sandbox, and always on a re-emit. Dropping `lstripNewlines` from the '
+      + 'tail leaves the first emit byte-identical and makes CLAUDE.md grow a blank line on '
+      + 'EVERY subsequent build. Measured before it was written down: `--against --limit 12` '
+      + 'green, `--idempotent --only neutral/claude` red at 23186 -> 23188 bytes.\n'
+      + '    The defect is the one a user meets and a fixture never does: a file that grows by '
+      + 'two bytes per build is invisible for a week and then is a diff nobody can explain.',
   },
   {
     id: 'M8',
@@ -248,6 +257,293 @@ export const MUTATIONS = [
       + '`.native` a second time on the result, so either call alone is enough and neither is '
       + 'individually load-bearing. A mutation that does not reproduce the defect it names is '
       + 'a row that measures nothing, and the only thing that can tell you is running it.',
+  },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7. Three defects the ACCEPTANCE MATRIX IS STRUCTURALLY BLIND TO, added with
+  // `tests/unit/node_driver.test.mjs` — the file whose whole subject is the axes no cell varies.
+  // Each one would be byte-identical across all 259 emit cells, which is the argument for the
+  // gate existing and therefore the argument for the row.
+  {
+    id: 'M14',
+    name: 'drop the registry prune-on-read write',
+    file: 'js/registry.mjs',
+    find: '  if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {\n'
+      + '    registrySave(kept);',
+    replace: '  if (false) {\n    registrySave(kept);',
+    gate: UNIT,
+    why: 'The prune is a WRITE performed by a READ, and it is the part of that path most likely '
+      + 'to be wrong. Every golden cell emits into a fresh sandbox whose registry is empty, so '
+      + '`kept` equals `original` in all 259 of them and deleting the write is invisible to the '
+      + 'entire matrix. The gate seeds a row pointing at a directory that no longer exists and '
+      + 'requires the file to come back without it.',
+  },
+  {
+    id: 'M15',
+    name: 'make copilotConfigDir ignore its relocation variable',
+    file: 'js/hosts.mjs',
+    find: '  const env = process.env.COPILOT_CONFIG_DIR;',
+    replace: '  const env = null;',
+    gate: UNIT,
+    why: 'UNREACHABLE BY CONSTRUCTION FROM THE MATRIX, and for a safety reason: `cellEnv` CLEARS '
+      + 'every relocation variable, because leaving one set renders ~126 global cells into the '
+      + "developer's real install. So a resolver that ignored its variable is byte-identical in "
+      + "all 259 cells while writing into the user's real config dir on every machine that "
+      + 'exports it. This is the M30 shape the per-host table was built for: the hazard had been '
+      + 'generalised to Copilot in prose and not in the gate.',
+  },
+  {
+    id: 'M16',
+    name: 'drop the --root prefix from the recorded instruction path',
+    file: 'bin/geneseed.mjs',
+    find: "  const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';",
+    replace: "  const agentPath = 'AGENT.md';",
+    gate: UNIT,
+    why: '`argvFor` builds every cell out of `--theme/--emit/--footprint/--out` plus an optional '
+      + '`--posture`/`--mode`, so `out === root` in all 259 cells, `relUnder` returns the empty '
+      + 'string every time and the prefix this mutation deletes was never once non-empty in the '
+      + 'acceptance test. The instruction path `opencode.json` records — the whole reason '
+      + '`--root` exists — is INDISTINGUISHABLE to the gate that is otherwise this port\'s '
+      + 'acceptance test, which is why the successor asserts it as a partition rather than a '
+      + 'containment.',
+  },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7, with `tests/unit/authoring_gates.test.mjs`. Doctor's three source-wide authoring
+  // gates had NO test in `tests/` at all — a repo-wide search found the package manifest's row
+  // and nothing else. They were reachable only through `geneseed doctor`, which prints one `ok`
+  // line when all three are silent, so every mutation below previously survived everything.
+  {
+    id: 'M17',
+    name: 'drop the orphan half of the registry gate',
+    file: 'js/doctor.mjs',
+    find: "  problems.push(...[...present].filter((k) => !expected.has(k)).sort()\n"
+      + "    .map((key) => `[authoring] registry.json lists '${key}' but no such entity "
+      + "exists`));\n",
+    replace: '',
+    gate: UNIT,
+    why: 'The gate is two-way on purpose and only one direction is obvious. A row whose spec is '
+      + 'gone is the silent half: the entity shows no lifecycle badge in the TUI and the web '
+      + 'catalog while doctor stays green, because the loud reader and the forgiving reader are '
+      + 'different functions over the same file.',
+  },
+  {
+    id: 'M18',
+    name: 'make the credential sweep echo what it found',
+    file: 'js/doctor.mjs',
+    find: '            problems.push(`[authoring] possible ${label} in ${rel}:${i + 1} — a `\n'
+      + "              + 'credential must never be committed');",
+    replace: '            problems.push(`[authoring] possible ${label} in ${rel}:${i + 1} '
+      + '(${line}) — a `\n'
+      + "              + 'credential must never be committed');",
+    gate: UNIT,
+    why: 'THE ONE MUTATION HERE THAT IS A SECURITY DEFECT RATHER THAN A COVERAGE ONE. The sweep '
+      + 'reports file:line and the KIND only, because doctor runs in CI and echoing the match '
+      + 'would republish the credential into every build log — turning the gate that exists to '
+      + 'stop a leak into the thing that publishes it. A report is still produced, so every '
+      + 'count and every containment assertion stays green; only an explicit "and it does NOT '
+      + 'contain the planted secret" can see it.',
+  },
+  {
+    id: 'M19',
+    name: 'let an empty registry relabel the shipped catalogue as personal',
+    file: 'js/inventory.mjs',
+    find: "    return Object.keys(registry).length ? 'personal' : 'unknown';",
+    replace: "    return 'personal';",
+    gate: UNIT,
+    why: '`loadRegistry` is forgiving by design — a missing or corrupt registry.json yields `{}` '
+      + 'rather than breaking the browser. This mutation makes that forgiveness lie: every '
+      + 'shipped agent and skill would be badged as the user\'s own work in the TUI and the web '
+      + 'catalog, on exactly the machines where the file failed to read. The emptiness check '
+      + 'belongs to the REGISTRY and not to the row, and that is the distinction this kills.',
+  },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7, with `tests/unit/web_jobs.test.mjs`. MEASURED WHILE ADDING THESE: the `$ <argv>` echo
+  // line in the recorded web corpus normalises the WHOLE argv to `<ARGV>`, not merely its head
+  // — so all 114 cells are blind to every argument the job runner resolves, and the reference's
+  // own docstring understated it. Both rows below are therefore invisible to the entire corpus.
+  {
+    id: 'M20',
+    name: 'drop --yes from the uninstall job argv',
+    file: 'js/web/jobs.mjs',
+    find: "    uninstall: [[NODE(), CLI(), 'uninstall', '--yes']],",
+    replace: "    uninstall: [[NODE(), CLI(), 'uninstall']],",
+    gate: UNIT,
+    why: 'A REAL HAZARD AND NOT A COSMETIC ONE: the web Settings runs uninstall as a background '
+      + 'job with no terminal attached, so without `--yes` the verb blocks on a confirmation '
+      + 'prompt nobody can answer and the job hangs until the daemon is killed. Nothing observes '
+      + 'it: the argv is not serialised to a client, and the one place it appears — the `$` echo '
+      + 'line — is normalised whole in every recorded cell.',
+  },
+  {
+    id: 'M21',
+    name: 'make the deploy resolver ignore the requested host',
+    file: 'js/web/actions.mjs',
+    find: "  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode);",
+    replace: "  const argv = setupBuildArgs(theme || 'neutral', 'files', root, root, fp, pos, mode);",
+    gate: UNIT,
+    why: "`apiDeployCmd`'s `{cmd: [...]}` is handed straight to the job runner and never reaches "
+      + 'the wire, so a resolver that deployed the host-agnostic bundle to every host would '
+      + 'answer every request successfully and write the wrong layer. The one recorded cell that '
+      + 'touches the endpoint covers its two REFUSAL arms, where no command is produced at all.',
+  },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7, with `tests/unit/web_server.test.mjs`.
+  //
+  // ⚠ NUMBERING: docblocks in `js/web/server.mjs` and `js/web/docs.mjs` cite mutations as "M23",
+  // "M30" and so on. Those belong to the NPX PORT's own mutation log and are unrelated to this
+  // matrix, which runs M1..M23 of its own. Do not read a citation there as a row here.
+  {
+    id: 'M22',
+    name: 'give /api/activity the 409 treatment',
+    file: 'js/web/server.mjs',
+    find: "  ['/api/activity', [apiActivityToggle, false]],",
+    replace: "  ['/api/activity', [apiActivityToggle, true]],",
+    gate: UNIT,
+    why: 'THE REVERSE MUTATION, and it is the invisible direction. A port that gave every POST '
+      + 'the 409 rule is caught by four recorded cells; giving `/api/activity` alone that rule is '
+      + 'caught by none, because every toggle a cell can perform SUCCEEDS and the failing arm '
+      + 'needs the flag write to raise — which the two runtimes worded differently and no byte '
+      + 'comparison could hold. The convention column is the table `doPost` looks up, so the gate '
+      + 'is on the dispatch and not on a declaration.',
+  },
+  {
+    id: 'M23',
+    name: 'consult the POST declarations on a GET',
+    file: 'js/web/server.mjs',
+    find: '  return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
+    replace: '  return NOT_PORTED.has(path) || DECLINED_POST.has(path)\n'
+      + '    || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
+    gate: UNIT,
+    why: 'PORT-LEDGER ROW 3, AS A DEFECT. This is the one-line collapse the split into separate '
+      + 'GET and POST declarations exists to prevent: every exported set stays exactly as '
+      + 'written, so every partition test that READS them stays green, while a GET to '
+      + '`/api/pick-folder` answers 501 instead of falling through to the SPA that owns the path. '
+      + 'Only a probe of the running dispatcher can see it, which is why row 3 is a probe and not '
+      + 'a declaration — and why the row says so at both sites.',
+  },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7, with `tests/unit/web_daemon.test.mjs`. Both defects are real and both are invisible
+  // to every other gate in the repo, for the same reason: the arms they break are the ones no
+  // harness may drive, because driving them costs a browser window on the developer's screen or
+  // a real `npm install` in the checkout.
+  {
+    id: 'M24',
+    name: 'stop consulting --no-browser on the daemon-came-up arm',
+    file: 'js/web/server.mjs',
+    find: '      if (openBrowser) openUrl(rec.url);',
+    replace: '      if (false && openBrowser) openUrl(rec.url);',
+    gate: UNIT,
+    why: 'THE ONE BRANCH NO HARNESS MAY DRIVE. Every cell that reaches `serve` passes '
+      + '`--no-browser`, because a gate that popped a browser window on the developer\'s screen '
+      + 'would be worse than the bug it caught — so the flag\'s three consumers are COUNTED '
+      + 'instead. Dropping one leaves `web start` opening no window at all, on the arm a real '
+      + 'user takes most often, and nothing else in this repo would notice.',
+  },
+  {
+    id: 'M25',
+    name: 'run the npm build before the install',
+    file: 'js/web/server.mjs',
+    find: "  for (const step of [['install'], ['run', 'build']]) {",
+    replace: "  for (const step of [['run', 'build'], ['install']]) {",
+    gate: UNIT,
+    why: '`npm run build` before `npm install` fails on a fresh checkout with a missing vite, '
+      + 'which is the exact situation this path exists for. It is unreachable from every cell BY '
+      + 'CONSTRUCTION — `web/dist/index.html` is tracked, so `buildPlan` answers `serve` in any '
+      + 'checkout a cell can build (port-ledger row 7) — so the order is asserted as source and '
+      + 'this row is what says the assertion is load-bearing.',
+  },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7, with `tests/unit/hook_form.test.mjs`. THE SHIM IS EXCLUDED FROM THE EMIT CORPUS BY
+  // NAME — its body bakes the runner and checkout of whoever wrote it, so it would differ in
+  // every cell and drown every real finding. `shimHealth` replaces the comparison and checks
+  // only that the quoted paths EXIST. Both rows below live in that gap.
+  {
+    id: 'M26',
+    name: 'emit the shim path even when the shim could not be written',
+    file: 'js/settings.mjs',
+    find: '  if (shim !== null) return `"${shim}"`;',
+    replace: '  if (true) return `"${shim}"`;',
+    gate: UNIT,
+    why: 'THE WORST OUTCOME THIS UNIT HAS, and no cell reaches the arm. A command naming a shim '
+      + 'that does not exist fails on EVERY hook — 9009 under cmd.exe, 127 under sh — and takes '
+      + 'both gates down with it, silently, because Geneseed\'s hooks return 0 on every path and '
+      + 'signal through stdout. `shimHealth` cannot see it either: with no shim on disk there is '
+      + 'no body for it to read, and it treats an absent shim as legitimate for the emits that '
+      + 'wire no hooks. The fallback to the direct form is what makes the failure survivable.',
+  },
+  {
+    id: 'M27',
+    name: 'drop the POSIX argv placeholder from the shim exemption',
+    file: 'js/settings.mjs',
+    find: "export const SHIM_ARGV = new Set(['$@', '%*']);",
+    replace: "export const SHIM_ARGV = new Set(['%*']);",
+    gate: UNIT,
+    why: 'THE ONE MUTATION IN THIS PAIR THAT IS NOT INVENTED — it is the defect the first Linux '
+      + 'run of the cell harnesses found, and BOTH implementations had it, because the port '
+      + 'copied the rule faithfully. The shim checker pulls every double-quoted token out of the '
+      + 'body and requires each to name an existing file; the POSIX body ends `"$@"`, QUOTED, '
+      + 'because the quoting is what keeps an emitted `--root "<cfg>"` intact. Without the '
+      + 'exemption every Linux and macOS install had doctor reporting a perfectly healthy shim '
+      + 'as "pointed at $@, which does not exist — every hook in every install was dead", and '
+      + '`validate` failed on it. Kept as a permanent regression gate, and it fires on either '
+      + 'platform because the successor asks the generator for BOTH shim shapes.',
+  },
+  {
+    id: 'M28',
+    name: 'leave the scratch file behind when the atomic rename fails',
+    file: 'js/settings.mjs',
+    find: '    rmSync(tmp, { force: true });\n',
+    replace: '',
+    gate: UNIT,
+    why: 'THE HALF OF THE ATOMIC GUARANTEE THAT IS NOT ABOUT THE TARGET. No cell fails a rename, '
+      + 'so nothing in 690 recorded cells reaches this catch. A leaked `settings.json'
+      + '.geneseed-tmp` sits in the user\'s own config directory, where the next emit\'s '
+      + 'directory listing finds it and the user has to work out whose it is — and it holds a '
+      + 'full copy of the config the write was about to make, which is a disclosure as well as '
+      + 'litter.',
+  },
+  {
+    id: 'M29',
+    name: 'skip a user-authored file silently instead of saying so',
+    file: 'js/native.mjs',
+    find: "    warn(`[geneseed] kept your existing ${rel} — skipped Geneseed's copy to avoid `\n"
+      + "      + 'clobbering it');",
+    replace: '',
+    gate: UNIT,
+    why: 'CLAIM-ON-CREATE IS CORRECT AND SILENT IS NOT. A pre-existing file whose name collides '
+      + "with a shipped spec is the user's, so the emit leaves it and does NOT claim it — but "
+      + 'without the line, the user sees a successful emit and a reviewer agent that is still '
+      + 'their old one, with nothing anywhere saying which of the two is on disk. No cell can '
+      + 'reach it: every recorded cell emits into a fresh sandbox, so no file ever collides.',
+  },
+  // ------------------------------------------------------------------------------------------
+  // T8, with `tests/unit/emit_phase_order.test.mjs`. The phase markers ARE product code — they
+  // are the only thing that makes the emit's stage order observable at all, now that the port
+  // has no two-dispatcher seam for a source walker to read.
+  {
+    id: 'M30',
+    name: 'fold the Claude wire stage away',
+    file: 'js/emit.mjs',
+    find: "function claudeWire(job, claudeMdText, hasAgentText) {\n  phaseLog('WIRE');\n",
+    replace: 'function claudeWire(job, claudeMdText, hasAgentText) {\n',
+    gate: UNIT,
+    why: "THE EXACT SHAPE THE REFERENCE'S OWN VACUITY GUARD WAS BUILT FOR. An emit whose wire "
+      + 'was folded into its render sibling still renders, still prunes, still manifests and is '
+      + 'still perfectly MONOTONE — it simply has no WIRE at all, and nothing but a per-emit '
+      + "partition notices. Here the marker is the wire's only witness, so deleting it is the "
+      + 'observable form of the same defect.',
+  },
+  {
+    id: 'M31',
+    name: 'log the phase boundaries to stdout',
+    file: 'js/emit.mjs',
+    find: '  process.stderr.write(`[geneseed:phase] ${phase}\\n`);',
+    replace: '  process.stdout.write(`[geneseed:phase] ${phase}\\n`);',
+    gate: UNIT,
+    why: 'STDOUT IS THE DECISION CHANNEL. Every Geneseed hook returns 0 on every path and '
+      + 'signals its verdict as JSON on stdout, so one stray byte there turns a blocking gate '
+      + 'into a silently permissive one that still reports success. The emit corpus cannot see '
+      + 'this either way, because it never sets the variable; what catches it is that the phase '
+      + 'gate reads the stream the marker is SUPPOSED to be on.',
   },
 ];
 

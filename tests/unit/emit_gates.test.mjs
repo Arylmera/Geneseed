@@ -52,6 +52,111 @@ function mustEmit(genRoot, argv, home, extraEnv = {}) {
 
 const SLOTS = new Set(['primary', 'secondary', 'accent', 'success', 'warning', 'error', 'info']);
 
+// ---------------------------------------------------------------------------------------------
+// THE AGENT_COLORS VALIDATION FALLBACK — the two branches `test_native_layer_parity.py`'s matrix
+// required by name (`colors-invalid-slot`, `colors-no-default`) and that NOTHING in this port
+// reached, checked before it was claimed.
+//
+// WHY NO CELL CAN GET HERE. All fourteen shipped themes carry the same valid map with a
+// `_default`, so the validation loop's else-branch and the `_default` injection are dead in every
+// emit anyone can run from this checkout — which is exactly why the reference needed a SYNTHETIC
+// theme, and why the 259-cell corpus is blind to both.
+//
+// DRIVEN THROUGH THE PUBLIC ENTRY, not by exporting the private resolver. `agentColorMap` is
+// module-private; the porting rule asks for the public face first, and the face is an emit whose
+// theme file this test wrote. One copied checkout carries the synthetic theme, and the colour is
+// read back out of the emitted agent files — the same place a user would look.
+const PROBE_THEME = 'gsprobe';
+
+/** `themes/<PROBE_THEME>.json`: neutral, with AGENT_COLORS replaced by the three shapes. */
+function probeThemeText() {
+  const neutral = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', 'neutral.json'), 'utf8'));
+  neutral.AGENT_COLORS = {
+    // (1) an INVALID slot: must warn and fall back to `secondary`.
+    reviewer: 'chartreuse',
+    // (2) a VALID slot, so the fallback cannot be "everything becomes secondary".
+    architect: 'accent',
+    // (3) …and NO `_default` key, so every agent with no row of its own proves the injection.
+  };
+  return `${JSON.stringify(neutral, null, 2)}\n`;
+}
+
+const colourOf = (dir, name) => (/^color:\s*(\S+)\s*$/m
+  .exec(fs.readFileSync(path.join(dir, 'agents', `${name}.md`), 'utf8')) ?? [])[1];
+
+test('an invalid AGENT_COLORS slot warns and falls back, and a missing _default is injected', () => {
+  withDir((d) => {
+    const co = path.join(d, 'checkout');
+    copyCheckout(co, { [`themes/${PROBE_THEME}.json`]: probeThemeText() });
+    const cfg = path.join(d, 'cfg');
+    fs.mkdirSync(cfg, { recursive: true });
+    const r = mustEmit(co, ['--emit', 'opencode-global', '--theme', PROBE_THEME],
+      path.join(d, 'home'), { OPENCODE_CONFIG_DIR: cfg });
+
+    // (1) THE WARNING, naming the key, the bad value and the slot it fell back to. A silent
+    // fallback would leave an author's typo rendering a plausible colour forever.
+    assert.match(r.out, /AGENT_COLORS\['reviewer'\] = 'chartreuse' is not a valid OpenCode theme/,
+      `no warning for the invalid slot:\n${r.out.slice(-800)}`);
+    assert.match(r.out, /falling back to 'secondary'/);
+    assert.equal(colourOf(cfg, 'reviewer'), 'secondary',
+      'the invalid slot was written through to the emitted agent');
+
+    // (2) THE CONTROL. Without a valid row beside it, "reviewer is secondary" is equally
+    // satisfied by a resolver that ignores the map entirely.
+    assert.equal(colourOf(cfg, 'architect'), 'accent',
+      'a VALID slot did not survive, so the fallback above proves nothing about validation');
+
+    // (3) THE INJECTED `_default`. Every other agent has no row in this map at all, and the
+    // resolver must still answer a real slot rather than undefined.
+    const others = fs.readdirSync(path.join(cfg, 'agents'))
+      // `_`-prefixed files are prose scaffolds, not agents, and carry no `color:` line at all —
+      // the same exclusion `srcStems` and the AGENT.md table walk both make.
+      .filter((f) => f.endsWith('.md') && !f.startsWith('_'))
+      .map((f) => f.slice(0, -3))
+      .filter((n) => n !== 'reviewer' && n !== 'architect');
+    assert.ok(others.length > 2, `only ${others.length} agents had no row, so this is thin`);
+    for (const n of others) {
+      assert.equal(colourOf(cfg, n), 'secondary',
+        `${n} has no AGENT_COLORS row and the map carries no _default, so it must take the `
+        + 'injected one');
+    }
+    // ⚠ ONE WARNING PER AGENT, AND THAT IS THE REFERENCE'S OWN SHAPE — asserted here only after
+    // reading it, because the first draft of this line required exactly ONE and went red at 17.
+    // `_agent_color(stem, theme)` calls `_agent_color_map(theme)` on every lookup, so the map is
+    // re-validated per agent and the warning repeats; `agentColor` does the same. The parity
+    // harness compared the WARNING STREAM, so the repetition is pinned rather than incidental,
+    // and "fix" it and the two implementations diverge on a channel a cell compares. §7's trap,
+    // third time this session: do not assert a property the reference does not have.
+    const warnings = (r.out.match(/is not a valid OpenCode theme slot/g) ?? []).length;
+    assert.equal(warnings, others.length + 2,
+      `the warning fired ${warnings} times for ${others.length + 2} agents — it is emitted once `
+      + 'per lookup, so a change in either direction is a change in the emitted stream');
+  });
+});
+
+test('a theme with no AGENT_COLORS map at all falls back to the built-in one', () => {
+  // The OTHER unreachable branch beside the two above: `isPlainObject(raw)` is false, so the
+  // module's own table is used whole. A shipped theme always has the key, so this too is
+  // synthetic-only — and it is the branch that decides what an author's brand-new theme file
+  // looks like before they have written a colour map.
+  withDir((d) => {
+    const co = path.join(d, 'checkout');
+    const neutral = JSON.parse(fs.readFileSync(path.join(ROOT, 'themes', 'neutral.json'), 'utf8'));
+    delete neutral.AGENT_COLORS;
+    copyCheckout(co, { [`themes/${PROBE_THEME}.json`]: `${JSON.stringify(neutral, null, 2)}\n` });
+    const cfg = path.join(d, 'cfg');
+    fs.mkdirSync(cfg, { recursive: true });
+    const r = mustEmit(co, ['--emit', 'opencode-global', '--theme', PROBE_THEME],
+      path.join(d, 'home'), { OPENCODE_CONFIG_DIR: cfg });
+    assert.ok(!r.out.includes('is not a valid OpenCode theme slot'),
+      'the built-in fallback map is itself being reported as invalid');
+    // The built-in table's own answers, which are NOT all `secondary` — that is what says the
+    // fallback is the table rather than the bare default.
+    assert.equal(colourOf(cfg, 'reviewer'), 'warning');
+    assert.equal(colourOf(cfg, 'architect'), 'primary');
+  });
+});
+
 test('the emitted theme is complete, valid and accent tinted', () => {
   const t = themeJson({ ACCENT: 'cyan' });
   assert.equal(t.$schema, 'https://opencode.ai/theme.json');

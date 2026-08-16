@@ -1,0 +1,152 @@
+{
+  "doc": "readJsonc's answers, RECORDED FROM THE REFERENCE (rituals/_build_settings.py's _read_jsonc) on 2026-08-16 while it still existed. Replayed by tests/unit/settings_jsonc.test.mjs. `rendered` is json.dumps of the loaded value, not the value itself, because a JSON document cannot carry Python's int/float distinction and two of these rows exist for exactly that. `isNull` is true both for an input that does not parse and for the literal `null`; the reference does not distinguish them either, and that ambiguity is recorded rather than resolved.",
+  "recorded_with": {
+    "python": "3.13"
+  },
+  "rows": [
+    {
+      "src": "{\"a\": 1}",
+      "rendered": "{\"a\": 1}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "{}",
+      "rendered": "{}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "",
+      "rendered": null,
+      "isNull": true,
+      "hadComments": false
+    },
+    {
+      "src": "   ",
+      "rendered": null,
+      "isNull": true,
+      "hadComments": false
+    },
+    {
+      "src": "// leading\n{\"a\": 1}",
+      "rendered": "{\"a\": 1}",
+      "isNull": false,
+      "hadComments": true
+    },
+    {
+      "src": "{\"a\": 1} // trailing",
+      "rendered": "{\"a\": 1}",
+      "isNull": false,
+      "hadComments": true
+    },
+    {
+      "src": "{/* block */ \"a\": 1}",
+      "rendered": "{\"a\": 1}",
+      "isNull": false,
+      "hadComments": true
+    },
+    {
+      "src": "{\"a\": 1, /* multi\nline */ \"b\": 2}",
+      "rendered": "{\"a\": 1, \"b\": 2}",
+      "isNull": false,
+      "hadComments": true
+    },
+    {
+      "src": "{\"$schema\": \"https://opencode.ai/config.json\"}",
+      "rendered": "{\"$schema\": \"https://opencode.ai/config.json\"}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "{\"note\": \"it's a // not-comment\"}",
+      "rendered": "{\"note\": \"it's a // not-comment\"}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "{\"note\": \"escaped \\\" then // still a string\"}",
+      "rendered": "{\"note\": \"escaped \\\" then // still a string\"}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "{\"a\": [1, 2, 3,], }",
+      "rendered": "{\"a\": [1, 2, 3]}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "{\"a\": [1, 2, 3,],\n  }",
+      "rendered": "{\"a\": [1, 2, 3]}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "{\"nested\": {\"b\": [ {\"c\": 1,}, ],}}",
+      "rendered": "{\"nested\": {\"b\": [{\"c\": 1}]}}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "{\"a\": 1,,}",
+      "rendered": null,
+      "isNull": true,
+      "hadComments": false
+    },
+    {
+      "src": "{ not json at all",
+      "rendered": null,
+      "isNull": true,
+      "hadComments": false
+    },
+    {
+      "src": "[1, 2, 3]",
+      "rendered": "[1, 2, 3]",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "\"just a string\"",
+      "rendered": "\"just a string\"",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "null",
+      "rendered": null,
+      "isNull": true,
+      "hadComments": false
+    },
+    {
+      "src": "{\"float\": 1.0, \"int\": 20, \"exp\": 1e3}",
+      "rendered": "{\"float\": 1.0, \"int\": 20, \"exp\": 1000.0}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "{\"unicode\": \"a — b\", \"emoji\": \"😀\"}",
+      "rendered": "{\"unicode\": \"a \\u2014 b\", \"emoji\": \"\\ud83d\\ude00\"}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "{\"2\": \"numeric key\", \"b\": 1}",
+      "rendered": "{\"2\": \"numeric key\", \"b\": 1}",
+      "isNull": false,
+      "hadComments": false
+    },
+    {
+      "src": "{\"a\": 1 /* unterminated",
+      "rendered": null,
+      "isNull": true,
+      "hadComments": true
+    },
+    {
+      "src": "{\"a\": \"trailing backslash in string \\\\\"}",
+      "rendered": "{\"a\": \"trailing backslash in string \\\\\"}",
+      "isNull": false,
+      "hadComments": false
+    }
+  ]
+}

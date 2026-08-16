@@ -37,7 +37,7 @@ import {
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  build, emitOpencodeRender, emitOpencodeGlobalRender, emitClaudeRender,
+  build, emitOpencodeRender, emitOpencodeGlobalRender, emitClaudeRender, phaseLog,
 } from '../js/emit.mjs';
 import { settingsIntegrityCheck } from '../js/settings.mjs';
 import { writeText, parseJson, jsonDumpsIndent, withPyNewlines } from '../js/lib/pyfs.mjs';
@@ -545,8 +545,10 @@ function emitOpencode(cfg, args, out) {
     });
   const { owned, stats, cfgName } = rendered;
 
+  phaseLog('PRUNE');
   pruneOwned(oc, oldOwned, owned);
 
+  phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
     _comment: 'Files owned by Geneseed\'s per-repo OpenCode emit (--emit opencode). '
       + 'Do not edit; removed on re-emit. A pre-existing file not in this '
@@ -603,8 +605,10 @@ function emitOpencodeGlobal(cfg, args, out) {
     });
   const { owned, stats, memStatus, nbStatus, cfgName } = rendered;
 
+  phaseLog('PRUNE');
   pruneOwned(cfgDir, oldOwned, owned);
 
+  phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
     _comment: 'Files owned by Geneseed\'s --emit opencode-global. '
       + 'Do not edit; removed on re-emit. The memory and notebook '
@@ -670,8 +674,10 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   });
   const { owned, stats, memStatus, nbStatus, managed } = rendered;
 
+  phaseLog('PRUNE');
   pruneOwned(cfgDir, oldOwned, owned);
 
+  phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
     _comment: "Files owned by Geneseed's Claude emit. Do not edit; removed on "
       + 're-emit. The memory and notebook stores are NOT listed — never '
@@ -698,6 +704,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // deleting this call is byte-identical in all 259 cells. `test_verify_reports_an_orphaned
   // _geneseed_hook` plants the fault that makes it speak.
   if (!isCopilot) {
+    phaseLog('VERIFY');
     settingsIntegrityCheck(
       path.join(cfgDir, managed.settings_file || 'settings.json'), managed, 'present');
   }
