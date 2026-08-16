@@ -403,9 +403,10 @@
       "python": "tests/test_web_jobs.py",
       "kind": "artifact",
       "py_tests": 8,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/web_jobs.test.mjs"
+        "tests/unit/web_jobs.test.mjs",
+        "tests/mutate.mjs"
       ],
       "why": [
         "The job runner's argvs, which no response body carries. AUDITED PER CLASS: 3 classes, 8 methods → 7 cross, 1 retired. Successor `tests/unit/web_jobs.test.mjs`. Carries port-ledger row 9, whose 'where it is asserted' column was updated in the same commit.",
