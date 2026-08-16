@@ -1,5 +1,6 @@
 // `tests/test_claude.py` — the Claude Code host emit: `ClaudeEmitTests`, `ClaudeSafetyTests`,
-// `ClaudeActivationTests`, `InstallTargetsTests`, `CopilotEmitTests` and `GitGateRootTests`.
+// `ClaudeActivationTests`, `InstallTargetsTests`, `CopilotEmitTests`, `GitGateRootTests`,
+// `RebuildAllTests` and `ProjectBypassesGlobalTests`.
 //
 // THE SEAM IS THE SAME ONE THE REFERENCE USES, which is unusual for this port and worth saying:
 // `build.emit_claude_global(theme, cfg=…)` and `build.emit_claude(theme, out, root)` are direct
@@ -30,8 +31,9 @@ import { spawnSync } from 'node:child_process';
 import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../bin/geneseed.mjs';
 import { cmdRebuildAll } from '../../js/generate.mjs';
 import {
-  GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir,
+  GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
 } from '../../js/hosts.mjs';
+import { BOB_RULES_STUB } from '../../js/emit.mjs';
 import {
   uninstallGlobal, installDeactivate, installReactivate, installUninstall,
 } from '../../js/uninstall.mjs';
@@ -66,6 +68,13 @@ function captured(fn) {
 
 const read = (...p) => fs.readFileSync(path.join(...p), 'utf8');
 const readJson = (...p) => JSON.parse(read(...p));
+
+/**
+ * `Path.read_text` — universal newlines. `writeText` translates `\n` to `os.linesep`, so an
+ * emitted file really is CRLF on Windows and a comparison against a `\n` source literal fails
+ * here where it passes in the reference. Only used where the whole text is the assertion.
+ */
+const readTextPy = (p) => fs.readFileSync(p, 'utf8').split('\r\n').join('\n');
 
 const globalEmit = (host, out, cfgDir) => captured(
   () => emitGlobalInto(host, { theme: 'neutral', out, cfgDir, footprint: 'full' }));
@@ -884,4 +893,234 @@ test('rebuild-all rebuilds every active install, survives one failing, and creat
       fs.rmSync(claudeConfigDir(), { recursive: true, force: true });
     }
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `ProjectBypassesGlobalTests` — a project install must suppress the SAME HOST's global preamble,
+// and each host does it its own way.
+//
+// WHY THE THREE HOSTS DIVERGE HERE, which is the whole class. Claude has a native
+// `claudeMdExcludes` key, so the project install names the global `CLAUDE.md` in it. Bob has no
+// such key with known semantics, so its bypass is a SHADOWING rules file instead. Copilot has no
+// hook or settings surface at all. Getting this wrong does not fail loudly — it doubles the
+// preamble in every turn of every session, which reads as the model being verbose.
+
+/** Claude project installs write the personal `settings.local.json`; Bob keeps `settings.json`. */
+const projectSettings = (repo, marker = '.claude') => readJson(repo, marker,
+  marker === '.bob' ? 'settings.json' : 'settings.local.json');
+
+/** The opt-out env must not leak into any test that did not set it. */
+function withoutStackGlobal(fn) {
+  const saved = {};
+  for (const k of ['GENESEED_STACK_GLOBAL', 'GENESEED_ROOT']) {
+    saved[k] = process.env[k];
+    delete process.env[k];
+  }
+  try { return fn(); } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+}
+
+test('a Claude project emit writes the exclude and a scoped context hook', () => {
+  withoutStackGlobal(() => withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    projectEmit('claude', repo, undefined);
+    const s = projectSettings(repo);
+
+    // POSIX SPELLING, because the entries are glob patterns where a backslash escapes — a
+    // Windows-separated path there matches nothing and the global preamble stacks silently.
+    const want = path.resolve(path.join(claudeConfigDir(), 'CLAUDE.md')).split(path.sep).join('/');
+    assert.ok((s.claudeMdExcludes ?? []).includes(want),
+      `the global CLAUDE.md is not excluded: ${JSON.stringify(s.claudeMdExcludes)}`);
+
+    // The context hook is scope-aware: `--root` is the PROJECT's own .claude.
+    const ctx = hookCmds(s).filter((c) => c.includes('context'));
+    assert.ok(ctx.length > 0 && ctx[0].includes('--root'), JSON.stringify(ctx));
+    assert.ok(ctx[0].includes(path.join(repo, '.claude')), ctx[0]);
+
+    // Recorded, so deactivate and uninstall can remove exactly it and nothing else.
+    const managed = readJson(repo, '.claude', GLOBAL_MANIFEST).managed;
+    assert.ok((managed.settings_excludes ?? []).includes(want), JSON.stringify(managed));
+  }));
+});
+
+test('a Claude global emit writes no exclude at all', () => {
+  // The counterpart: there is nothing above a global install to suppress, and an exclude
+  // written there would silence the very file that install just wrote.
+  withoutStackGlobal(() => withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    globalEmit('claude', path.join(d, 'bundle'), cfg);
+    assert.ok(!('claudeMdExcludes' in readJson(cfg, 'settings.json')));
+  }));
+});
+
+test('a Bob project emit ships a slim rules stub and no exclude', () => {
+  // Bob's bypass is the rules file, NOT claudeMdExcludes — a Claude-only key whose Bob
+  // semantics are unknown. The project ships `.bob/rules/geneseed.md`, always injected and
+  // SHADOWING the same-named global rule, and it is a STUB: the root AGENTS.md already
+  // auto-loads the preamble, so a full second copy would double the per-turn token cost.
+  withoutStackGlobal(() => withDir((d) => {
+    const repo = path.join(d, 'bobrepo');
+    fs.mkdirSync(repo);
+    projectEmit('bob', repo, undefined);
+    assert.ok(!('claudeMdExcludes' in projectSettings(repo, '.bob')));
+
+    // ⚠ READ AS PYTHON READS. `writeText` translates `\n` to `os.linesep`, so this file really
+    // is CRLF on Windows (gated as mutation M1), while `BOB_RULES_STUB` is a `\n` source
+    // literal. The reference's `read_text` collapses the pair and the comparison passes there;
+    // Node's does not. Reproducing the decode keeps the assertion whole — weakening it to a
+    // `.includes()` would stop it from noticing an edit to the stub's body.
+    const stub = readTextPy(path.join(repo, '.bob', 'rules', 'geneseed.md'));
+    assert.equal(stub, BOB_RULES_STUB);
+    assert.ok(stub.length < 1000, 'the stub rides every turn — keep it slim');
+    assert.ok(stub.includes('AGENTS.md'), 'the stub does not point at the real carrier');
+
+    // …and the preamble itself is in the root AGENTS.md managed block, not duplicated.
+    const agentsMd = read(repo, 'AGENTS.md');
+    assert.ok(agentsMd.includes('<!-- BEGIN GENESEED -->'));
+    assert.ok(agentsMd.length > stub.length);
+    assert.ok(new Set(readJson(repo, '.bob', GLOBAL_MANIFEST).owned).has('rules/geneseed.md'));
+  }));
+});
+
+test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md', () => {
+  // A global `~/.bob/AGENTS.md` is not auto-loaded by Bob, so writing one would be a file
+  // nothing reads. `rules/geneseed.md` is the channel that actually injects, and at global
+  // scope it carries the whole preamble rather than the stub.
+  withoutStackGlobal(() => withDir((d) => {
+    const cfg = path.join(d, 'dotbob');
+    globalEmit('bob', path.join(d, 'bundle'), cfg);
+    const rules = read(cfg, 'rules', 'geneseed.md');
+    assert.notEqual(rules, BOB_RULES_STUB);
+    assert.ok(rules.length > 5000, `the global rules file is only ${rules.length} bytes`);
+    assert.ok(!fs.existsSync(path.join(cfg, 'AGENTS.md')));
+
+    // No managed block to record — but it must still read as Claude-STYLE, or `cmd_uninstall`
+    // picks OpenCode's reversal for `~/.bob` and leaves the manifest's files behind.
+    const managed = readJson(cfg, GLOBAL_MANIFEST).managed;
+    assert.ok(!('claude_md' in managed));
+    assert.equal(manifestIsClaude(cfg), true);
+    assert.ok(!('claudeMdExcludes' in readJson(cfg, 'settings.json')));
+  }));
+});
+
+test('a Bob global re-emit self-heals a stale AGENTS.md, both ways', () => {
+  // Older Bob-global emits wrote AGENTS.md as a managed block. A re-emit must clean up after
+  // the version that made it — deleting a file Geneseed created WHOLE, excising the block from
+  // one the user has written in — rather than leaving a second stale copy of the preamble.
+  withoutStackGlobal(() => withDir((d) => {
+    const cfg = path.join(d, 'dotbob2');
+    const out = path.join(d, 'bundle');
+    globalEmit('bob', out, cfg);
+    const stale = path.join(cfg, 'AGENTS.md');
+    const mp = path.join(cfg, GLOBAL_MANIFEST);
+
+    // (a) created by Geneseed, no user prose -> deleted outright.
+    fs.writeFileSync(stale, '<!-- BEGIN GENESEED -->\nold preamble\n<!-- END GENESEED -->\n');
+    let man = readJson(mp);
+    man.managed.claude_md = { rel: 'AGENTS.md', whole: true };
+    fs.writeFileSync(mp, `${JSON.stringify(man, null, 2)}\n`);
+    globalEmit('bob', out, cfg);
+    assert.ok(!fs.existsSync(stale), 'the stale whole-file AGENTS.md survived');
+    assert.ok(!('claude_md' in readJson(mp).managed), 'the stale claim was kept');
+
+    // (b) the user has written in it -> the block goes, their prose stays.
+    fs.writeFileSync(stale, 'my own notes\n<!-- BEGIN GENESEED -->\nold\n<!-- END GENESEED -->\n');
+    man = readJson(mp);
+    man.managed.claude_md = { rel: 'AGENTS.md', whole: false };
+    fs.writeFileSync(mp, `${JSON.stringify(man, null, 2)}\n`);
+    globalEmit('bob', out, cfg);
+    assert.ok(fs.existsSync(stale), "the user's own AGENTS.md was deleted");
+    assert.ok(read(stale).includes('my own notes'));
+    assert.ok(!read(stale).includes('BEGIN GENESEED'));
+  }));
+});
+
+test('a Bob re-emit strips an exclude an older emit had written', () => {
+  // Older emits put the global AGENTS.md into claudeMdExcludes. A re-emit must remove it from
+  // BOTH the settings file and the manifest — carrying it forward would leave Bob honouring a
+  // Claude-only key against a file that is no longer the carrier.
+  withoutStackGlobal(() => withDir((d) => {
+    const repo = path.join(d, 'bobrepo2');
+    fs.mkdirSync(repo);
+    projectEmit('bob', repo, undefined);
+
+    const staleEntry = path.resolve(path.join(bobConfigDir(), 'AGENTS.md'));
+    const sp = path.join(repo, '.bob', 'settings.json');
+    const s = readJson(sp);
+    s.claudeMdExcludes = [staleEntry];
+    fs.writeFileSync(sp, `${JSON.stringify(s, null, 2)}\n`);
+    const mp = path.join(repo, '.bob', GLOBAL_MANIFEST);
+    const man = readJson(mp);
+    man.managed.settings_excludes = [staleEntry];
+    fs.writeFileSync(mp, `${JSON.stringify(man, null, 2)}\n`);
+
+    projectEmit('bob', repo, undefined);
+    assert.ok(!('claudeMdExcludes' in projectSettings(repo, '.bob')));
+    assert.ok(!('settings_excludes' in readJson(mp).managed));
+  }));
+});
+
+test('GENESEED_STACK_GLOBAL suppresses the exclude, and toggles cleanly both ways', () => {
+  // The opt-out for someone who WANTS both preambles. Asserted as a round trip rather than
+  // once: an emit that only ever added, or only ever removed, would pass a single direction.
+  withoutStackGlobal(() => withDir((d) => {
+    const repo = path.join(d, 'repo2');
+    fs.mkdirSync(repo);
+
+    process.env.GENESEED_STACK_GLOBAL = '1';
+    projectEmit('claude', repo, undefined);
+    assert.ok(!('claudeMdExcludes' in projectSettings(repo)), 'the opt-out was ignored');
+
+    delete process.env.GENESEED_STACK_GLOBAL;
+    projectEmit('claude', repo, undefined);
+    assert.ok('claudeMdExcludes' in projectSettings(repo), 'the exclude was not restored');
+
+    process.env.GENESEED_STACK_GLOBAL = '1';
+    projectEmit('claude', repo, undefined);
+    assert.ok(!('claudeMdExcludes' in projectSettings(repo)), 'the exclude was not stripped again');
+  }));
+});
+
+test('a re-emit migrates hooks out of the team-shared settings.json', () => {
+  // An older install wired machine-absolute hooks into the SHARED settings.json — the file a
+  // team commits. A re-emit must unwire them there, through the recorded claims, and wire
+  // settings.local.json instead; otherwise every teammate keeps inheriting hooks pointing at
+  // one developer's interpreter, for ever.
+  withoutStackGlobal(() => withDir((d) => {
+    const repo = path.join(d, 'repo3');
+    fs.mkdirSync(repo);
+    projectEmit('claude', repo, undefined);
+    const cfg = path.join(repo, '.claude');
+
+    // Rewind to the old layout: the hooks live in settings.json and the manifest says so.
+    fs.writeFileSync(path.join(cfg, 'settings.json'), read(cfg, 'settings.local.json'));
+    fs.unlinkSync(path.join(cfg, 'settings.local.json'));
+    const man = readJson(cfg, GLOBAL_MANIFEST);
+    man.managed.settings_file = 'settings.json';
+    fs.writeFileSync(path.join(cfg, GLOBAL_MANIFEST), JSON.stringify(man));
+
+    projectEmit('claude', repo, undefined);
+    assert.deepEqual(geneseedCmds(readJson(cfg, 'settings.json')), [],
+      'hooks were left in the team-shared settings.json');
+    assert.ok(geneseedCmds(projectSettings(repo)).length > 0,
+      'the hooks did not arrive in the personal file either — they were just lost');
+    assert.equal(readJson(cfg, GLOBAL_MANIFEST).managed.settings_file, 'settings.local.json');
+  }));
+});
+
+test("the Bob global rules pointers climb out of rules/ to reach the stores", () => {
+  // `~/.bob`'s carrier is `rules/geneseed.md`, one level BELOW the stores it points at, so its
+  // pointers must climb. A bare `memory/` resolves under `rules/`, where nothing exists — and
+  // nothing errors either; the model simply finds an empty store.
+  withoutStackGlobal(() => withDir((d) => {
+    const cfg = path.join(d, 'dotbob3');
+    globalEmit('bob', path.join(d, 'bundle'), cfg);
+    const rules = read(cfg, 'rules', 'geneseed.md');
+    assert.ok(rules.includes('../memory'), 'the memory pointer does not climb');
+    assert.ok(!rules.includes('(memory/'), 'a bare memory/ pointer survived');
+  }));
 });
