@@ -442,6 +442,42 @@ export const MUTATIONS = [
       + 'checkout a cell can build (port-ledger row 7) — so the order is asserted as source and '
       + 'this row is what says the assertion is load-bearing.',
   },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7, with `tests/unit/hook_form.test.mjs`. THE SHIM IS EXCLUDED FROM THE EMIT CORPUS BY
+  // NAME — its body bakes the runner and checkout of whoever wrote it, so it would differ in
+  // every cell and drown every real finding. `shimHealth` replaces the comparison and checks
+  // only that the quoted paths EXIST. Both rows below live in that gap.
+  {
+    id: 'M26',
+    name: 'emit the shim path even when the shim could not be written',
+    file: 'js/settings.mjs',
+    find: '  if (shim !== null) return `"${shim}"`;',
+    replace: '  if (true) return `"${shim}"`;',
+    gate: UNIT,
+    why: 'THE WORST OUTCOME THIS UNIT HAS, and no cell reaches the arm. A command naming a shim '
+      + 'that does not exist fails on EVERY hook — 9009 under cmd.exe, 127 under sh — and takes '
+      + 'both gates down with it, silently, because Geneseed\'s hooks return 0 on every path and '
+      + 'signal through stdout. `shimHealth` cannot see it either: with no shim on disk there is '
+      + 'no body for it to read, and it treats an absent shim as legitimate for the emits that '
+      + 'wire no hooks. The fallback to the direct form is what makes the failure survivable.',
+  },
+  {
+    id: 'M27',
+    name: 'drop the POSIX argv placeholder from the shim exemption',
+    file: 'js/settings.mjs',
+    find: "export const SHIM_ARGV = new Set(['$@', '%*']);",
+    replace: "export const SHIM_ARGV = new Set(['%*']);",
+    gate: UNIT,
+    why: 'THE ONE MUTATION IN THIS PAIR THAT IS NOT INVENTED — it is the defect the first Linux '
+      + 'run of the cell harnesses found, and BOTH implementations had it, because the port '
+      + 'copied the rule faithfully. The shim checker pulls every double-quoted token out of the '
+      + 'body and requires each to name an existing file; the POSIX body ends `"$@"`, QUOTED, '
+      + 'because the quoting is what keeps an emitted `--root "<cfg>"` intact. Without the '
+      + 'exemption every Linux and macOS install had doctor reporting a perfectly healthy shim '
+      + 'as "pointed at $@, which does not exist — every hook in every install was dead", and '
+      + '`validate` failed on it. Kept as a permanent regression gate, and it fires on either '
+      + 'platform because the successor asks the generator for BOTH shim shapes.',
+  },
 ];
 
 function run(argv) {

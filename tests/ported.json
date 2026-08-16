@@ -373,11 +373,21 @@
       "python": "tests/test_hook_form.py",
       "kind": "unit",
       "py_tests": 14,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/hook_form.test.mjs"
+        "tests/unit/hook_form.test.mjs",
+        "tests/unit/claude.test.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "Every emitted non-gate hook ends with '|| exit 0' and every GATE hook does not, because a crashing gate must fail closed. Both halves are the assertion — the partition, not the presence — and both are declared mutants in tests/helpers/mutate.mjs."
+      "why": [
+        "Every emitted non-gate hook ends with '|| exit 0' and every GATE hook does not, because a crashing gate must fail closed. Both halves are the assertion — the partition, not the presence. AUDITED PER CLASS: 2 classes, 14 methods → 12 cross, 1 already covered, 1 retired. Successor `tests/unit/hook_form.test.mjs`.",
+        "THE REFERENCE ONLY HAD HALF OF ITS OWN PARTITION, and the successor closes it. It asserted each named gate SHIPS (so the exemption is not silently protecting nothing) and that every non-gate hook ends with the escape hatch. It never asserted that the EXEMPT hooks decline it — a gate that grew '|| exit 0' would be exempted from the rule by the very list that names it, and fail OPEN on every crash, which is the failure the partition exists to prevent. Both non-gate and gate arms also now assert they checked something, so an exemption that swallowed the whole set cannot pass.",
+        "EVERY INJECTION POINT WAS ALREADY A PARAMETER — the standing question, answered yes four times: `shimRel`, `hookShimPath`, `hookShimBody` and `writeHookShim` all take `platform`, and `hookShimBody` takes the runner and entry. So the reference's hardest test needs no hand-written bodies: it asks the REAL GENERATOR for each shim shape. That is strictly stronger than the transcription it replaces, because a transcription that drifted from the generator would pass while the real body failed — which is precisely the bug the test exists for. Measured: a Windows host now gates the POSIX arm, and M27 fired on the `linux` shape from this laptop.",
+        "TWO MONKEYPATCHES BECAME REAL FAILURES. The reference replaced `_write_hook_shim` with a lambda returning None to reach the fallback; the successor points `GENESEED_HOME` at a regular FILE, so the mkdir under it fails with ENOTDIR and `writeHookShim` returns null through its own catch. A monkeypatch proves the caller handles the value someone decided to return; this proves it handles the one the OS produces.",
+        "ONE NEW TEST WITH NO REFERENCE COUNTERPART: `hookPrefix` must THROW without a runner and entry. Its own docblock calls this the worst failure mode in the unit — `undefined` bakes `\"undefined\" \"undefined\" %*` into the shim, every hook in the install dies, and nothing reports it, because the hooks signal through stdout and return 0 on every path while the shim is excluded from the emit corpus by name.",
+        "ONE TEST WAS ALREADY COVERED and one RETIRES INTO ANOTHER. `test_emitted_commands_name_the_shim_not_the_checkout` is asserted by `tests/unit/claude.test.mjs` inside a real global emit, which is the stronger site. `test_the_port_exempts_the_same_two_tokens` compared the port's `SHIM_ARGV` against Python's — two literal sets are two places to be wrong, and there is one set now; what the pair protected is asserted directly in the placeholder test, which requires the exemption to cover exactly the two placeholders.",
+        "TWO MUTATIONS, both in the gap the emit corpus leaves. THE SHIM IS EXCLUDED FROM THAT CORPUS BY NAME — its body bakes the runner and checkout of whoever wrote it — and `shimHealth` replaces the comparison with a check that the quoted paths merely EXIST. M26 emits the shim path even when the write failed: a command naming a shim that is not there fails on EVERY hook (9009 under cmd.exe, 127 under sh) and takes both gates down silently, and `shimHealth` cannot see it either, because with no shim on disk there is no body to read. M27 drops `$@` from the exemption — THE ONE MUTATION HERE THAT IS NOT INVENTED, since it is the defect that shipped: every Linux and macOS install had doctor reporting a healthy shim as dead, and both implementations had it because the port copied the rule faithfully."
+      ]
     },
     {
       "python": "tests/test_web_server.py",
