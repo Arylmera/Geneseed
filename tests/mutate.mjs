@@ -249,6 +249,54 @@ export const MUTATIONS = [
       + 'individually load-bearing. A mutation that does not reproduce the defect it names is '
       + 'a row that measures nothing, and the only thing that can tell you is running it.',
   },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7. Three defects the ACCEPTANCE MATRIX IS STRUCTURALLY BLIND TO, added with
+  // `tests/unit/node_driver.test.mjs` — the file whose whole subject is the axes no cell varies.
+  // Each one would be byte-identical across all 259 emit cells, which is the argument for the
+  // gate existing and therefore the argument for the row.
+  {
+    id: 'M14',
+    name: 'drop the registry prune-on-read write',
+    file: 'js/registry.mjs',
+    find: '  if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {\n'
+      + '    registrySave(kept);',
+    replace: '  if (false) {\n    registrySave(kept);',
+    gate: UNIT,
+    why: 'The prune is a WRITE performed by a READ, and it is the part of that path most likely '
+      + 'to be wrong. Every golden cell emits into a fresh sandbox whose registry is empty, so '
+      + '`kept` equals `original` in all 259 of them and deleting the write is invisible to the '
+      + 'entire matrix. The gate seeds a row pointing at a directory that no longer exists and '
+      + 'requires the file to come back without it.',
+  },
+  {
+    id: 'M15',
+    name: 'make copilotConfigDir ignore its relocation variable',
+    file: 'js/hosts.mjs',
+    find: '  const env = process.env.COPILOT_CONFIG_DIR;',
+    replace: '  const env = null;',
+    gate: UNIT,
+    why: 'UNREACHABLE BY CONSTRUCTION FROM THE MATRIX, and for a safety reason: `cellEnv` CLEARS '
+      + 'every relocation variable, because leaving one set renders ~126 global cells into the '
+      + "developer's real install. So a resolver that ignored its variable is byte-identical in "
+      + "all 259 cells while writing into the user's real config dir on every machine that "
+      + 'exports it. This is the M30 shape the per-host table was built for: the hazard had been '
+      + 'generalised to Copilot in prose and not in the gate.',
+  },
+  {
+    id: 'M16',
+    name: 'drop the --root prefix from the recorded instruction path',
+    file: 'bin/geneseed.mjs',
+    find: "  const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';",
+    replace: "  const agentPath = 'AGENT.md';",
+    gate: UNIT,
+    why: '`argvFor` builds every cell out of `--theme/--emit/--footprint/--out` plus an optional '
+      + '`--posture`/`--mode`, so `out === root` in all 259 cells, `relUnder` returns the empty '
+      + 'string every time and the prefix this mutation deletes was never once non-empty in the '
+      + 'acceptance test. The instruction path `opencode.json` records — the whole reason '
+      + '`--root` exists — is INDISTINGUISHABLE to the gate that is otherwise this port\'s '
+      + 'acceptance test, which is why the successor asserts it as a partition rather than a '
+      + 'containment.',
+  },
 ];
 
 function run(argv) {

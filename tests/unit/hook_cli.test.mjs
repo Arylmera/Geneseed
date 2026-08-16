@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parseArgs, resolveCli, selectCells } from '../cli_golden.mjs';
 import { checkExpectations, cloneCheckout, repoint } from '../helpers/cli_golden.mjs';
-import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
+import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const read = (...p) => readFileSync(path.join(ROOT, ...p), 'utf8');
@@ -630,29 +630,11 @@ test('each declared module spawns only what its row declares', () => {
 // it. `node` is invoked by absolute path, so stripping PATH cannot take the runtime out from under
 // the test.
 
-/** PATH with every directory holding an interpreter removed, and what was removed. */
-function pathWithoutPython() {
-  const names = process.platform === 'win32'
-    ? ['python.exe', 'python3.exe', 'py.exe'] : ['python', 'python3'];
-  const kept = [];
-  const dropped = [];
-  for (const entry of (process.env.PATH ?? '').split(path.delimiter)) {
-    if (entry && names.some((n) => existsSync(path.join(entry, n)))) dropped.push(entry);
-    else kept.push(entry);
-  }
-  return { stripped: kept.join(path.delimiter), dropped };
-}
-
-/** A sandbox home plus the stripped PATH. The `dropped` guard is asserted by every caller. */
-function strippedEnv(t, home) {
-  const { stripped, dropped } = pathWithoutPython();
-  // The vacuity guard: on a machine whose PATH never held a python, "it ran without one" is true
-  // and meaningless.
-  assert.ok(dropped.length > 0, 'PATH held no python at all, so this run proves nothing about '
-    + 'whether the entry point would have found one');
-  t.diagnostic(`${dropped.length} PATH entries held an interpreter and were removed`);
-  return { ...cellEnv(home), PATH: stripped };
-}
+// `pathWithoutPython`/`strippedEnv` MOVED TO `tests/helpers/sandbox.mjs` in P3 T7, when
+// `tests/unit/node_driver.test.mjs` became their second caller. The vacuity guard moved with
+// them rather than staying at each call site, and the helper now also clears `$PYTHON` — the
+// documented discovery override that `cellEnv` leaves alone, so that a green run here cannot be
+// measuring a developer's exported shell.
 
 const runEntry = (entry, argv, env, cwd, input = '') => spawnSync(process.execPath,
   [path.join(ROOT, ...entry.split('/')), ...argv],

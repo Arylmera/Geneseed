@@ -210,6 +210,62 @@ export function cellEnv(home) {
   return env;
 }
 
+/**
+ * PATH with every directory holding an interpreter removed, and what was removed.
+ *
+ * THE DYNAMIC HALF OF THE PASSTHROUGH REFUTATION, and it lives here rather than in either of its
+ * two callers because it is a claim about the MACHINE, not about a verb. `run(['python',
+ * 'harness.py', <verb>])` is byte-identical to a real port in every recorded cell — the reference
+ * is what it would be running. With no python anywhere on PATH there is nothing for such a call
+ * to find, so an answer is proof the Node code produced it.
+ *
+ * REMOVAL, NOT A SHADOWING STUB, and that is a correction rather than a preference. The first
+ * version of this dropped a `python.cmd` sentinel at the front of PATH and asserted it was never
+ * written. It was VACUOUS on Windows: since the batch-file argument-injection fix (CVE-2024-27980)
+ * Node refuses to run a `.cmd` through `spawn` without `shell: true`, so a passthrough spawning a
+ * bare `python` never reached the trap and the gate passed a mutation built to break it. An absent
+ * interpreter is absent to every spawn mechanism.
+ *
+ * Returning `dropped` is the vacuity guard — see `strippedEnv`.
+ */
+export function pathWithoutPython() {
+  const names = process.platform === 'win32'
+    ? ['python.exe', 'python3.exe', 'py.exe'] : ['python', 'python3'];
+  const kept = [];
+  const dropped = [];
+  for (const entry of (process.env.PATH ?? '').split(path.delimiter)) {
+    if (entry && names.some((n) => fs.existsSync(path.join(entry, n)))) dropped.push(entry);
+    else kept.push(entry);
+  }
+  return { stripped: kept.join(path.delimiter), dropped };
+}
+
+/**
+ * A sandbox home plus the stripped PATH, with the vacuity guard already applied.
+ *
+ * On a machine whose PATH never held a python, "it ran without one" is true and meaningless, so
+ * the guard is not optional and therefore is not left to the caller — the reference left it to
+ * the caller and every caller had to repeat it.
+ *
+ * `$PYTHON` is dropped too. It was the documented discovery override and `cellEnv` does not clear
+ * it; nothing reads it any more, and clearing it here is what says so. Without that, a green run
+ * could be measuring the developer's exported shell rather than the port.
+ *
+ * `t` is a `node:test` context, used only for the diagnostic line — a run that removed four PATH
+ * entries and one that removed one are different experiments and the log should say which.
+ */
+export function strippedEnv(t, home) {
+  const { stripped, dropped } = pathWithoutPython();
+  if (dropped.length === 0) {
+    throw new Error('PATH held no python at all, so this run proves nothing about whether the '
+      + 'entry point would have found one — the gate needs a python to remove');
+  }
+  t.diagnostic(`${dropped.length} PATH entries held an interpreter and were removed`);
+  const env = { ...cellEnv(home), PATH: stripped };
+  delete env.PYTHON;
+  return env;
+}
+
 function envGet(name) {
   for (const [k, v] of Object.entries(process.env)) {
     if (k.toLowerCase() === name.toLowerCase()) return v;

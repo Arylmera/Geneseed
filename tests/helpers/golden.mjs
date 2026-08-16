@@ -184,7 +184,11 @@ const SHIM_ARGV = new Set(['$@', '%*']);
 // the generator would let the gate drift along with the thing it gates.
 const HOOK_EMITS = new Set(['claude', 'claude-global', 'bob', 'bob-global']);
 
-function walkFiles(dir, base = dir, out = []) {
+// EXPORTED IN P3 T7, because `tests/unit/node_driver.test.mjs` needs the walk `filesIn` cannot
+// give it: that one filters the shim OUT, and the shim is exactly what the driver's own gates
+// go looking for. One walker rather than a second copy beside it — a private twin is how the
+// deletion matrix and the byte comparison would come to disagree about what a file is.
+export function walkFiles(dir, base = dir, out = []) {
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
   for (const e of entries) {
