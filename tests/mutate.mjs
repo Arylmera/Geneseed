@@ -180,14 +180,23 @@ export const MUTATIONS = [
   {
     id: 'M7',
     name: 'make an emit non-idempotent',
-    file: 'js/emit.mjs',
-    find: 'export function sourceFingerprint(',
-    replace: 'export function sourceFingerprint(',
-    gate: null,
-    why: 'The re-emit path is what every real user is on from their second build onwards. '
-      + '`golden.mjs --idempotent` is the gate and it exists; what is missing is a one-string '
-      + 'edit that reaches it without also breaking the corpus replay, which would make the '
-      + 'mutation prove the wrong gate. Declared, ungated.',
+    file: 'js/settings.mjs',
+    find: '    writeText(p, pre + block + lstripNewlines(post));',
+    replace: '    writeText(p, pre + block + post);',
+    gate: IDEMPOTENT,
+    why: 'CLOSED IN P3 T7, after two phases declared ungated. The re-emit path is what every '
+      + 'real user is on from their second build onwards, and `golden.mjs --idempotent` has '
+      + 'always been the gate; what was missing was a one-string edit that reaches it WITHOUT '
+      + 'also breaking the single-emit corpus replay, because a mutation that reddens both '
+      + 'proves the wrong gate.\n'
+      + '    THE SEAM IS THE `updated` BRANCH OF `managedBlockWrite`, which runs ONLY when the '
+      + 'carrier already exists and already carries the markers — that is, never on a first '
+      + 'emit into a fresh sandbox, and always on a re-emit. Dropping `lstripNewlines` from the '
+      + 'tail leaves the first emit byte-identical and makes CLAUDE.md grow a blank line on '
+      + 'EVERY subsequent build. Measured before it was written down: `--against --limit 12` '
+      + 'green, `--idempotent --only neutral/claude` red at 23186 -> 23188 bytes.\n'
+      + '    The defect is the one a user meets and a fixture never does: a file that grows by '
+      + 'two bytes per build is invisible for a week and then is a diff nobody can explain.',
   },
   {
     id: 'M8',
