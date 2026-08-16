@@ -1,5 +1,10 @@
-// `tests/test_harness.py`'s `HookIntegrityCheckerTests` — after any settings merge or unwire,
-// does what the manifest CLAIMS still match what the settings file actually contains?
+// `tests/test_harness.py`'s `HookIntegrityCheckerTests` AND `tests/test_claude.py`'s
+// `SettingsIntegrityCheckTests` — after any settings merge or unwire, does what the manifest
+// CLAIMS still match what the settings file actually contains?
+//
+// Two Python rows, one subject: the second class was found to overlap this file almost entirely
+// when its row came up, so its four remaining claims were added here rather than copied into a
+// second file. They are grouped under their own heading below.
 //
 // LOUD WARNING, NEVER AN AUTO-FIX, and that is the whole design rather than a limitation. The
 // file is the user's: their own hooks live in it beside Geneseed's, and a checker that
@@ -12,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { settingsIntegrityCheck } from '../../js/settings.mjs';
+import { settingsIntegrityCheck, unwireClaudeSettings } from '../../js/settings.mjs';
 import { claudeUninstall } from '../../js/uninstall.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts.mjs';
 import { ROOT } from '../../js/checkout.mjs';
@@ -96,6 +101,12 @@ test('a Geneseed-shaped entry the manifest never claimed is flagged', () => {
     writeJson(settingsPath, settings);
     const warnings = settingsIntegrityCheck(settingsPath, managed, 'present');
     assert.ok(warnings.some((w) => w.includes('NOT recorded')), JSON.stringify(warnings));
+    // FLAGGED IS NOT REMOVED, asserted of the CHECKER itself and not only of the uninstall
+    // below. `tests/test_claude.py`'s version of this makes that its second half, and it is a
+    // different claim: a checker that tidied away what it reported would be rewriting the
+    // user's file to make its own bookkeeping true.
+    assert.ok('PostToolUse' in (readJson(settingsPath).hooks ?? {}),
+      'the integrity check deleted the entry it had just reported');
   });
 });
 
@@ -135,5 +146,84 @@ test('an orphan survives the unwire and is flagged afterwards, never removed', (
     const survivor = readJson(settingsPath);
     assert.ok('PostToolUse' in (survivor.hooks ?? {}),
       'the uninstall deleted a hook group Geneseed never recorded');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `tests/test_claude.py`'s `SettingsIntegrityCheckTests` — the four claims its version makes that
+// `HookIntegrityCheckerTests` above does not.
+//
+// FIVE OF ITS SEVEN WERE ALREADY HERE, which is the finding rather than a coincidence: this file
+// was written for a different Python row and the two classes overlap almost entirely. What was
+// missing is the whole `absent`/missing-file half — every test above asks the checker about a
+// file that EXISTS, and three of the four below are about the states it reaches when one does
+// not, or when the unwire that was supposed to clean it up declined to run.
+
+test('a clean uninstall leaves nothing for the absent check to report', () => {
+  // THE CONTROL FOR THE OTHER DIRECTION, and the counterpart to the orphan test above. That one
+  // proves `expect: absent` SPEAKS when something lingers; without this, a checker that
+  // complained about every unwired install would satisfy it just as well. The manifest is read
+  // BEFORE the uninstall on purpose — the uninstall deletes it, and the claims it recorded are
+  // exactly what the settings file must no longer satisfy.
+  withDir((d) => {
+    const { cfg, managed, settingsPath } = claudeInstall(d);
+    assert.ok((managed.settings_hooks ?? []).length > 0,
+      'the install recorded no hooks, so "they are all gone" is vacuous');
+    claudeUninstall(cfg, false);
+    // The settings file is the USER'S and survives the uninstall; only the claims go.
+    assert.ok(fs.existsSync(settingsPath), 'the uninstall deleted the user\'s settings file');
+    assert.deepEqual(settingsIntegrityCheck(settingsPath, managed, 'absent'), []);
+  });
+});
+
+test('a settings file that should exist and does not is flagged', () => {
+  withDir((d) => {
+    const managed = { settings_hooks: [{ event: 'Stop', group: { hooks: [] } }] };
+    const missing = path.join(d, 'never-created', 'settings.json');   // the dir is absent too
+    assert.ok(settingsIntegrityCheck(missing, managed, 'present').length > 0,
+      'hooks were claimed to be wired into a file that is not there, and nothing said so');
+  });
+});
+
+test('a settings file that should be gone and is missing entirely is clean', () => {
+  // The same absence, the opposite expectation — and the pair is the point. A checker that
+  // keyed on the file rather than on the EXPECTATION would be red here after every uninstall
+  // that removed the file, which is the ordinary case.
+  withDir((d) => {
+    const managed = { settings_hooks: [{ event: 'Stop', group: { hooks: [] } }] };
+    const missing = path.join(d, 'never-created', 'settings.json');
+    assert.deepEqual(settingsIntegrityCheck(missing, managed, 'absent'), []);
+  });
+});
+
+test('a commented settings file the unwire refused to touch is still checked', () => {
+  // THE CASE WHERE TWO SILENCES WOULD COMPOUND. `unwireClaudeSettings` will not rewrite a file
+  // carrying comments — it cannot preserve them through a JSON round trip, and dropping a
+  // user's comments to remove a hook is not a trade it may make on its own. So it returns false
+  // and the hooks LINGER after an uninstall. If the checker also went quiet on `hadComments`,
+  // the install would report itself cleanly removed while still wired, which is precisely the
+  // state the call sites claim to guard against.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    fs.mkdirSync(cfg, { recursive: true });
+    const sp = path.join(cfg, 'settings.json');
+    const group = {
+      hooks: [{ type: 'command', command: '"python" "x/rituals/harness.py" learn' }],
+    };
+    fs.writeFileSync(sp,
+      `// my precious comments\n${JSON.stringify({ hooks: { Stop: [group] } }, null, 2)}`,
+      'utf8');
+    const managed = { settings_hooks: [{ event: 'Stop', group }] };
+
+    // The unwire bails on the comments — and SAYS so through its return value, which is what
+    // lets the caller know the removal did not happen.
+    assert.equal(unwireClaudeSettings(sp, managed.settings_hooks), false);
+
+    const [problems, err] = capturedErr(() => settingsIntegrityCheck(sp, managed, 'absent'));
+    assert.ok(problems.some((w) => w.includes('still present')), JSON.stringify(problems));
+    assert.ok(err.includes('WARN'), `the warning never reached stderr:\n${err}`);
+    // READ-ONLY. The checker looked at the user's commented file and did not rewrite it either.
+    assert.ok(fs.readFileSync(sp, 'utf8').includes('my precious comments'),
+      'the integrity check rewrote the commented file the unwire had declined to touch');
   });
 });
