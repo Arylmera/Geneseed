@@ -626,11 +626,21 @@
       "python": "tests/test_token_report_parity.py",
       "kind": "parity",
       "py_tests": 5,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/token_report.test.mjs"
+        "tests/unit/token_report.test.mjs",
+        "tests/__snapshots__/token_report_primitives.json",
+        "tests/fixtures/token_report_probe.mjs"
       ],
-      "why": "PARTIAL and mostly surviving: 'the known limits are still exactly these two', 'the corpus reaches every exported primitive' and 'every host and every trap is covered' are absolute claims about a SHIPPED script. Only test_every_primitive_matches_python retires. The script deliberately reproduces Python semantics it documents in prose, which is also why it is one of the two legitimate hits P4's no-python scan must not forbid."
+      "why": [
+        "⚠ THE ROW WITH A DEADLINE, AND IT IS MET. Its oracle is `tests/fixtures/token_report_oracle.py`, which P4 deletes, so the corpus AND its answers had to be taken while that file still existed. Recorded 2026-08-16 into `tests/__snapshots__/token_report_primitives.json`: 266 rows over all fourteen exports, plus the two declared limits. AUDITED PER CLASS: 3 classes, 5 methods → 4 cross, 1 retired. (`TokenReportParity`'s behavioural cells are attached with `setattr` and are not `def test_`, which is why `py_tests` is 5 and not the cell count.)",
+        "WHY A DE-PYTHON PORT SHIPS A SCRIPT THAT REPRODUCES PYTHON, since that reads like a contradiction: `src/skills/token-report/scripts/token_report.mjs` reads transcripts written by Python tooling and must render the same numbers the same way — `f\"{x:.1f}\"`, `round()`'s banker's rounding, `f\"{n:,}\"`, `len()` in code points, `json.dumps`' separators. It documents those semantics in prose, which is why it is one of the two legitimate hits P4's no-python scan must not forbid. After the cut this corpus IS the specification for them.",
+        "THE COMPARISON BECAME A REPLAY, the third use of that move this phase and the largest. What was asked of CPython row by row is now frozen — strictly stronger than the comparison was, because two implementations that had both drifted the same way agreed with each other and a recording taken before the drift does not.",
+        "⚠ AND THE RECORDING BIT ME IN EXACTLY THE WAY THE REFERENCE WARNS ABOUT. The first draft stored `pyInt('99999999999999999999')`'s Python answer as a NUMBER; JSON round-tripped the arbitrary-precision int into the very double the port produces, the declared limit read as CLOSED, and the test failed against a port that was behaving correctly. The reference says it in its own comment — 'the JSON transport of this very corpus cannot carry them either'. Both limits are recorded as `python_text` now and compared as `String(x)`. Same lesson as the JSONC corpus one commit earlier: when the distinction is what the corpus is FOR, record the rendering, never the value.",
+        "TWO ASSERTIONS THE RECORDING CARRIES SO THE REPLAYER DOES NOT HAVE TO KNOW THEM: `sign_only` names `pyStrCmp` and `comparePaths`, whose ordering MAGNITUDE is unspecified in both languages and which the reference compared by sign; and `exported_primitives` is the reference's own required list, so 'the corpus reaches every exported primitive' checks against a frozen fourteen rather than against whatever the corpus happens to contain.",
+        "ONE TEST RETIRES AND ONE IS HALVED. `test_every_host_and_every_trap_is_covered` is a coverage claim about CELLS — the behavioural py-vs-node comparison — and that corpus dies with the reference. `test_both_implementations_exist` asserted the ORACLE and the PORT both exist; the oracle half goes with P4, and what survives is the claim that matters afterwards: the script these 266 rows describe is on a PRODUCT path, and every primitive named in the corpus is still named by it.",
+        "⚠ TWO DEFECTS IN MY OWN FIRST DRAFT, both caught by running it: the script path was `token-report/token_report.mjs` where the reference's `SCRIPTS` constant says `token-report/scripts/`, and the limits comparison above. Neither was a port defect; both were the fixture."
+      ]
     },
     {
       "python": "tests/test_maintainer_tools_parity.py",
@@ -736,11 +746,23 @@
       "python": "tests/test_emit_phase_order.py",
       "kind": "structural",
       "py_tests": 5,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/emit_phase_order.test.mjs"
+        "tests/unit/emit_phase_order.test.mjs",
+        "js/emit.mjs",
+        "bin/geneseed.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "NOT retired, converted. The invariant — RENDER* -> WIRE* -> PRUNE -> MANIFEST -> VERIFY, per emit — is live and load-bearing. What retires is reading it out of a parse tree: js/emit.mjs emits its phase boundaries and the test asserts the observed sequence. Stronger than the ast version (it sees what RAN, not what is written) and it needs no parser in a repo whose CI advertises zero dependencies."
+      "why": [
+        "T8, AND THE LAST PRODUCT CHANGE OF THE PORT. AUDITED PER CLASS: 1 class, 5 methods, all 5 cross. Successor `tests/unit/emit_phase_order.test.mjs`. Every emit runs its stages in one order — RENDER* → WIRE* → PRUNE → MANIFEST → VERIFY — because RENDER writes files Geneseed owns wholesale while WIRE reconciles files the USER co-owns, and because WIRE is what fills the `managed` record MANIFEST writes and every teardown unwires exactly what was wired.",
+        "⚠ THE FINDING THAT DECIDED THE SUCCESSOR, and it was measured rather than assumed: THIS PORT DOES NOT HAVE THE REFERENCE'S SHAPE. The reference gated the order with five `ast` walks over its own generator, and could, because it keeps `_claude_render` / `_claude_wire` as two dispatchers and therefore two statements at every call site — a shape its own docstring calls 'not incidental, it is what leaves this walker something to check'. Here `claudeWire` is a real function but BOTH OpenCode emits INLINE their merge, and PRUNE/MANIFEST/VERIFY are not in `js/emit.mjs` at all — they are in `bin/geneseed.mjs`'s three driver bodies. A source walker would have had to span two files and would still have been reading source rather than watching a run.",
+        "SO THE ORDER WAS MADE OBSERVABLE. `phaseLog(phase)` in `js/emit.mjs`, called at eleven sites across the two files: RENDER at the top of `build` and the three render entry points, WIRE at `claudeWire` and at the two inlined OpenCode merges, PRUNE and MANIFEST in each of the three driver bodies, VERIFY at the settings-integrity call. The successor drives all nine emits through the REAL driver and reads the order out of the log. That is strictly the better gate: it reports what actually executed, in the order it executed, including which branch a given host took.",
+        "⚠ BEHIND `GENESEED_PHASE_LOG`, WHICH IS THE WHOLE SAFETY ARGUMENT, AND IT WAS VERIFIED RATHER THAN ARGUED. `cellEnv` clears every `GENESEED_*` knob by prefix, so no recorded cell can turn it on; after the product change all three corpora replayed green — 259 + 317 + 114 — and `git diff --numstat tests/__snapshots__` was empty. Not one recorded byte moved. It writes to STDERR, never stdout: stdout is the decision channel every Geneseed hook signals through.",
+        "THE MEASURED SEQUENCES, all nine monotone: `files` RENDER (and nothing else — it touches nothing the user co-owns); `opencode` RENDER RENDER WIRE PRUNE MANIFEST (two RENDERs because the emit calls `build` for the bundle before its own layer); `opencode-global` RENDER WIRE PRUNE MANIFEST; claude/claude-global/bob/bob-global RENDER WIRE PRUNE MANIFEST VERIFY; copilot/copilot-global the same without VERIFY, which is the documented split — Copilot writes no settings file, so there is nothing to re-read.",
+        "FOUR OF THE FIVE BECAME RUNTIME CLAIMS; THE FIFTH STAYS STATIC ON PURPOSE. No runtime log can prove a negative about a call that did not happen on the path a test drove, so `no wiring call escapes the phase map` still reads source — but it derives the wiring set the way the reference did, by scanning `js/settings.mjs` for filesystem mutation rather than hand-listing it ('a hand-list contains exactly the names someone remembered, which is how `_opencode_target` went unmeasured for three phases'), and then requires every function in `js/emit.mjs` that calls one to be WIRE-marked.",
+        "⚠ ONE FIXTURE BUG, CAUGHT BY ITS OWN FAILURE MESSAGE: the first draft returned the sandbox path and asserted the post-emit markers afterwards — against a directory the `finally` had already removed. It reported 'the driver no longer writes .geneseed-emit' about a driver that had just written it. The inspection now runs INSIDE the try. And the marker list is `.geneseed-emit` + `.geneseed-footprint` only: `.geneseed-theme` lands in `out` for this emit as a side effect of `build()`, but the driver writes it deliberately only for the `-global` emits, and a required-marker list should not depend on that coincidence.",
+        "TWO MUTATIONS, both killed. M30 folds the Claude wire marker away — the exact shape the reference's own vacuity guard was built for, since such an emit still renders, prunes, manifests and is perfectly MONOTONE while having no WIRE at all; it died twice over, to the per-emit partition AND to the static gate. M31 logs the boundaries to stdout instead of stderr, which is the decision channel a hook's JSON verdict travels on; it took four of the five tests with it."
+      ]
     },
     {
       "python": "tests/test_tui_boundary.py",

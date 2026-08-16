@@ -506,6 +506,36 @@ export const MUTATIONS = [
       + 'their old one, with nothing anywhere saying which of the two is on disk. No cell can '
       + 'reach it: every recorded cell emits into a fresh sandbox, so no file ever collides.',
   },
+  // ------------------------------------------------------------------------------------------
+  // T8, with `tests/unit/emit_phase_order.test.mjs`. The phase markers ARE product code — they
+  // are the only thing that makes the emit's stage order observable at all, now that the port
+  // has no two-dispatcher seam for a source walker to read.
+  {
+    id: 'M30',
+    name: 'fold the Claude wire stage away',
+    file: 'js/emit.mjs',
+    find: "function claudeWire(job, claudeMdText, hasAgentText) {\n  phaseLog('WIRE');\n",
+    replace: 'function claudeWire(job, claudeMdText, hasAgentText) {\n',
+    gate: UNIT,
+    why: "THE EXACT SHAPE THE REFERENCE'S OWN VACUITY GUARD WAS BUILT FOR. An emit whose wire "
+      + 'was folded into its render sibling still renders, still prunes, still manifests and is '
+      + 'still perfectly MONOTONE — it simply has no WIRE at all, and nothing but a per-emit '
+      + "partition notices. Here the marker is the wire's only witness, so deleting it is the "
+      + 'observable form of the same defect.',
+  },
+  {
+    id: 'M31',
+    name: 'log the phase boundaries to stdout',
+    file: 'js/emit.mjs',
+    find: '  process.stderr.write(`[geneseed:phase] ${phase}\\n`);',
+    replace: '  process.stdout.write(`[geneseed:phase] ${phase}\\n`);',
+    gate: UNIT,
+    why: 'STDOUT IS THE DECISION CHANNEL. Every Geneseed hook returns 0 on every path and '
+      + 'signals its verdict as JSON on stdout, so one stray byte there turns a blocking gate '
+      + 'into a silently permissive one that still reports success. The emit corpus cannot see '
+      + 'this either way, because it never sets the variable; what catches it is that the phase '
+      + 'gate reads the stream the marker is SUPPOSED to be on.',
+  },
 ];
 
 function run(argv) {
