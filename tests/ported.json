@@ -504,11 +504,20 @@
       "python": "tests/test_cli_reference.py",
       "kind": "artifact",
       "py_tests": 12,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/cli_table.test.mjs"
+        "tests/unit/cli_table.test.mjs",
+        "tests/cli_help.test.mjs",
+        "tests/pure_snapshot.test.mjs"
       ],
-      "why": "PARTIAL, and the split is the point. The half that walks build_argparser() and asserts js/cli-table.json equals it field for field is the strongest gate in the file and dies with argparse — nothing replaces it, and P4 is where the table stops having an oracle. What survives is every claim the table makes ABOUT THE PORT: that each declared verb dispatches, that each declared flag is read, that the help fixtures match the table."
+      "why": [
+        "PARTIAL, and the split is the point. AUDITED PER CLASS: 5 classes (one is a TextWrapper subclass with no methods), 12 methods → 6 cross into `tests/unit/cli_table.test.mjs` (5 distinct tests), 4 already covered, 2 retired.",
+        "⚠ THE STRONGEST GATE IN THE FILE DIES AND NOTHING REPLACES IT, which is recorded here rather than papered over. `test_the_committed_table_is_what_the_parser_describes` walks `build_argparser()` and asserts `js/cli-table.json` equals it field for field — 25 subparsers and 46 `add_argument` calls. P4 is where the table stops having an ORACLE. What stands in for it is not an equivalent: it is `tests/cli_help.test.mjs`'s recorded corpus, frozen while the parser existed, plus this file's checks on every claim the table makes about the program that READS it. A recording is regression evidence; it is not a second opinion.",
+        "FOUR WERE ALREADY COVERED and were checked claim by claim rather than assumed: the hidden-argument equality and the whole-formatter agreement are `tests/cli_help.test.mjs`'s (against the recorded corpus, which is the stronger site because it also pins the wrap column the fixtures were taken at), and the line breaker is `tests/pure_snapshot.test.mjs`'s `textwrap.json`.",
+        "⚠ PORT-LEDGER-STYLE OBLIGATION MET WITHOUT ONE: the table's `hidden` rows are the surface a careless transcription drops, and each binds a real value — `geneseed upgrade v1 imperial`, `sync-self v1`, `bootstrap main imperial`, `web --daemon-internal`, which the recorded web cells pass 95 times a run. The successor does not re-assert the equality (two owners of one claim drift apart); it asserts the POINTER at the owner, plus the one thing a pointer cannot carry — that the table still HAS hidden rows, or the owner is comparing two empty sets.",
+        "THREE DEFECTS IN MY OWN FIRST DRAFT, all caught by running it, none a port defect. (1) The VERBS scrape used `^\\s*` and so matched the nested `fn:` of every `name: { fn: cmdX }` row, reporting `fn` as an undescribed verb; it anchors on the two-space indent now. (2) The hidden-argument filter was applied GLOBALLY by dest — but `ref` is hidden on `upgrade` and VISIBLE on `bootstrap`, so the visible one read as a leak. Hiddenness is a property of an argument OF A COMMAND. (3) The `COLUMNS` junk cases asserted that `80x` must not yield 78, which conflates 'parsed as 80' with 'fell back to a terminal that happens to be 80 columns wide'; the deterministic claim is that a value `int()` refuses gives the SAME answer as no value at all, and that is what is asserted over nine junk spellings `Number.parseInt` would read the leading digits of half of.",
+        "THE REFUSAL PAIR IS THE DIVERGENCE THE PORT BOUGHT, and it is gated where no cell can reach it: the reference compiles its parser in and this entry READS it, so a tree with no `js/cli-table.json` is a state a comparison could only report as a failure. What must hold is that the entry REFUSES — naming the verb, naming the fix — rather than parsing with an empty spec, which accepts every token and binds none: `uninstall --target X` would run against the DEFAULT target while the operator believes they named one. ⚠ Its control is `version`, not `exclude list`, and P7a is why — `exclude list` exits 0 with a global install present and 1 without, so it passed on a laptop with Geneseed installed and failed everywhere else. A control whose answer depends on the machine is not a control."
+      ]
     },
     {
       "python": "tests/test_pure_function_parity.py",
