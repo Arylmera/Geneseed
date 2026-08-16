@@ -396,11 +396,16 @@
       "python": "tests/test_opencode_guard.py",
       "kind": "artifact",
       "py_tests": 3,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/unit/opencode_guard.test.mjs"
       ],
-      "why": "The OpenCode guard plugin's rule/memory speed bump (Law VI), exercised through the shipped plugin. Its subject is an emitted artifact, so the port changes the runner and nothing else."
+      "why": [
+        "The OpenCode guard plugin's rule/memory speed bump (Law VI), exercised through the shipped plugin. Its subject is an emitted artifact, so the port changes the runner and nothing else.",
+        "CLOSED — 3 of 3, one class, audited as a script. A change of runner and almost nothing else: the subject is an emitted artefact and the reference already drove it by WRITING A JAVASCRIPT DRIVER to a temp file and spawning node at it. Here the driver IS the test — the plugin is imported, its hook table built, and tool.execute.before called the way OpenCode calls it. One process instead of two, and the module under test is reached directly rather than through a string in a Python file that nothing type-checked.",
+        "TWO ASSERTIONS PAST THE REFERENCE, both about the wiring rather than the behaviour: the plugin must EXPORT something OpenCode can call (GeneseedGuard or a default), and that factory must register a tool.execute.before hook at all. The reference reached both through `??` chains that would have produced an opaque TypeError in its driver; here a plugin that stopped being loadable says so in one line. Order is preserved and stated as the subject: the state is per-path and one call deep, so each first/re-issued pair runs in that order, once, against one module instance.",
+        "One deliberate change: the ordinary-code probe writes `app.ts` where the reference wrote `app.py`. The claim is that an ordinary code file is neither a rule nor a memory and the extension carries none of it, so there is no reason to plant a .py string in a tree whose next phase sweeps for them. Three mutations, predicted then run, all killed: the bump becoming a TRAP (a re-issued write refused, which silently loses what the user asked to be remembered), the memory match no longer anchored on THIS install (so a project's own memory/ folder is caught — the difference between a guard on an install and a guard on a word), and the rules file no longer counting as a rule store."
+      ]
     },
     {
       "python": "tests/test_package_manifest.py",
