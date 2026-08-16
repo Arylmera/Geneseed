@@ -30,6 +30,7 @@ import { spawnSync } from 'node:child_process';
 
 import { emitGlobalInto, emitProjectInto, hookRunnerEntry } from '../../bin/geneseed.mjs';
 import { cmdRebuildAll } from '../../js/generate.mjs';
+import { globalHookStandingDown, cmdContext } from '../../js/hooks.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
 } from '../../js/hosts.mjs';
@@ -1122,5 +1123,99 @@ test("the Bob global rules pointers climb out of rules/ to reach the stores", ()
     const rules = read(cfg, 'rules', 'geneseed.md');
     assert.ok(rules.includes('../memory'), 'the memory pointer does not climb');
     assert.ok(!rules.includes('(memory/'), 'a bare memory/ pointer survived');
+  }));
+});
+
+// ---------------------------------------------------------------------------------------------
+// The detector itself — `globalHookStandingDown` and the `context` verb in front of it.
+//
+// ⚠ THE FIXTURE'S OWN PRECONDITION, and the reference hit it too. The detector walks cwd AND
+// EVERY PARENT looking for a marker dir carrying the manifest. The sandbox lives under the user
+// profile, so on a developer machine that walk can escape it and find a REAL install — under the
+// product that is correct behaviour, but in a test it makes an "elsewhere" directory look like a
+// project install. The reference solved it by monkeypatching the manifest FILENAME to a sentinel;
+// ESM cannot rebind that, so the interference is MEASURED instead and the two assertions that
+// depend on absence are skipped with the offending path named. Measured at the time of writing:
+// no interfering ancestor on this machine, and none is possible under a CI runner's /tmp.
+
+/** The first ancestor of `dir` carrying `<marker>/<manifest>`, or null. */
+function ancestorInstall(dir, marker) {
+  let d = path.resolve(dir);
+  for (;;) {
+    const up = path.dirname(d);
+    if (up === d) return null;
+    d = up;
+    if (fs.existsSync(path.join(d, marker, GLOBAL_MANIFEST))) return path.join(d, marker);
+  }
+}
+
+const mkInstall = (parent, marker = '.claude') => {
+  const d = path.join(parent, marker);
+  fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), '{}');
+  return d;
+};
+
+test('the global hook stands down only for a project install of its own host', (t) => {
+  withoutStackGlobal(() => withDir((d) => {
+    const gcfg = mkInstall(path.join(d, 'home'));               // the ~/.claude analogue
+    const repo = path.join(d, 'repo');
+    const pcfg = mkInstall(repo);                               // the project's own .claude
+
+    // In the repo, the global hook stands down — the project's hook is about to inject.
+    assert.equal(globalHookStandingDown(gcfg, repo), true);
+    // The project's OWN hook never stands down for itself. Path equality is case-folded on
+    // Windows, which is why this is an identity check and not a string compare.
+    assert.equal(globalHookStandingDown(pcfg, repo), false);
+    // The up-walk: a subdirectory of the repo still counts as being in it.
+    const sub = path.join(repo, 'a', 'b');
+    fs.mkdirSync(sub, { recursive: true });
+    assert.equal(globalHookStandingDown(gcfg, sub), true);
+
+    // The two that depend on finding NOTHING — see the header.
+    const empty = path.join(d, 'elsewhere');
+    fs.mkdirSync(empty);
+    const blocker = ancestorInstall(empty, '.claude');
+    if (blocker) t.diagnostic(`skipped: an ancestor of the sandbox is a .claude install (${blocker})`);
+    else assert.equal(globalHookStandingDown(gcfg, empty), false, 'the global hook went silent '
+      + 'outside any project, so nothing would inject at all');
+
+    // PER HOST: a project `.claude` must never silence a global `.bob`. Different marker,
+    // different install — the two hosts stack deliberately.
+    const bobg = mkInstall(path.join(d, 'bobhome'), '.bob');
+    const bobBlocker = ancestorInstall(repo, '.bob');
+    if (bobBlocker) t.diagnostic(`skipped: an ancestor of the sandbox is a .bob install (${bobBlocker})`);
+    else assert.equal(globalHookStandingDown(bobg, repo), false,
+      "a project .claude silenced a global .bob — the hosts' hooks are not independent");
+  }));
+});
+
+test('the context verb is silent when it stands down, and the opt-out un-silences it', (t) => {
+  // The detector, reached through the verb a hook actually runs. Silence is the contract: the
+  // global hook writes NOTHING in a repo that has its own install, because whatever it wrote
+  // would be a second copy of the same context.
+  withoutStackGlobal(() => withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    projectEmit('claude', repo, undefined);          // a real project install + repo/CLAUDE.md
+    const gcfg = mkInstall(path.join(d, 'home'));     // a foreign global install
+    process.env.GENESEED_ROOT = repo;
+
+    const blocker = ancestorInstall(repo, '.claude');
+    if (blocker) t.diagnostic(`fixture note: an ancestor .claude install exists (${blocker})`);
+
+    const [rc, silent] = capturedOut(() => cmdContext({ root: gcfg }));
+    assert.equal(rc, 0, 'standing down is not an error');
+    assert.equal(silent.trim(), '', `the global hook injected in a repo that has its own:\n${silent}`);
+
+    // The project's own hook DOES inject — without this the silence above is equally satisfied
+    // by a verb that has stopped producing anything at all.
+    const [, own] = capturedOut(() => cmdContext({ root: path.join(repo, '.claude') }));
+    assert.ok(own.includes('PROJECT CONTEXT'), `the project hook injected nothing:\n${own}`);
+
+    // The opt-out: GENESEED_STACK_GLOBAL makes the global hook inject too, deliberately.
+    process.env.GENESEED_STACK_GLOBAL = '1';
+    const [, stacked] = capturedOut(() => cmdContext({ root: gcfg }));
+    assert.ok(stacked.includes('PROJECT CONTEXT'), `the opt-out was ignored:\n${stacked}`);
   }));
 });
