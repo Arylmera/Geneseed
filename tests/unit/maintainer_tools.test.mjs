@@ -31,6 +31,14 @@
  *     the strongest form and it is claimed only where it is true, rather than dropped everywhere
  *     because it cannot hold everywhere.
  *
+ * ⚠ AND THE NEWLINE WAS NOT THE ONLY ONE — ubuntu stayed red after that split, on the SORT
+ * ORDER. `sorted(Path)` compares through `_str_normcase`, so the reference visits `apple.json`
+ * before `Zebra.json` here and after it there. One row of the twenty can observe this, and it is
+ * the row named for it; its order is now RE-DERIVED for the running platform instead of
+ * replayed, which is stronger than the recording was. The general lesson is bigger than either
+ * bug: A RECORDING IS OF ONE MACHINE, and "which properties vary by machine" is a question to
+ * ask of the whole corpus at recording time, not one defect to fix per red run.
+ *
  * ⚠ THE `--validate-only` HALF IS NOT HERE, and its absence is the row's own finding. That
  * comparison was OBSERVED FLAKY and then DIAGNOSED: it runs both implementations back to back,
  * each runs `validate` → `doctor`, whose `[shim]` check reads the machine-wide hook shim and
@@ -83,6 +91,29 @@ const folded = (buf) => Buffer.from(buf.toString('utf8').replaceAll('\r\n', '\n'
 /** True only on the platform the corpus was recorded on, where raw bytes are a fair claim. */
 const HOME_PLATFORM = process.platform === CORPUS.recorded_on;
 
+/**
+ * ⚠ THE SECOND MACHINE-VARYING PROPERTY IN THIS CORPUS, and the one row that can see it.
+ *
+ * `theme_files()` sorts with Python's `sorted()` over `Path` objects, which compare through
+ * `_str_normcase` — LOWER-CASED on Windows, the raw string on posix. So `apple.json` precedes
+ * `Zebra.json` here and follows it on the ubuntu runner, and both implementations are right on
+ * both platforms; `js/installs.mjs`'s own docblock says so, and `comparePaths` is built on the
+ * same `normcase`. The recording froze this machine's collation and the first fix asserted it
+ * everywhere, which is how `validate (ubuntu-latest)` stayed red after the newline split.
+ *
+ * The order is therefore RE-DERIVED for the running platform below rather than replayed, which
+ * is a STRONGER claim than the recording carried — a replay agrees with whatever it recorded.
+ */
+const COLLATION_ROW = 'theme-files-are-visited-in-the-references-order';
+const lines = (buf) => buf.toString('utf8').split('\n').filter((ln) => ln !== '');
+
+/**
+ * Python's key for `sorted(Path)`, written out rather than imported from `js/lib/pyfs.mjs`.
+ * Deriving the expectation from the code under test would make this agree with any drift in it.
+ */
+const pyPathKey = (n) => (process.platform === 'win32' ? n.toLowerCase() : n);
+const byPyPath = (a, b) => (pyPathKey(a) < pyPathKey(b) ? -1 : pyPathKey(a) > pyPathKey(b) ? 1 : 0);
+
 // Run every case ONCE, at module scope: twenty child processes is the whole cost of this file.
 const ANSWERS = Object.fromEntries(CORPUS.rows.map((r) => [r.name, runProbe(r)]));
 
@@ -105,16 +136,60 @@ test('the recording is the shape it claims to be', () => {
 test('the printed report is what the reference printed', () => {
   for (const row of CORPUS.rows) {
     const got = ANSWERS[row.name];
-    assert.deepEqual(folded(got.out), folded(b64(row.stdout_b64)),
-      `${row.name}: \`--sync-themes\` printed different CONTENT — the em dash lives in this `
-      + `comparison too.\n  want: ${text(row.stdout_b64).slice(0, 300)}\n`
-      + `  got:  ${got.out.toString('utf8').replaceAll('\r\n', '\n').slice(0, 300)}`);
+    const detail = `\n  want: ${text(row.stdout_b64).slice(0, 300)}\n`
+      + `  got:  ${got.out.toString('utf8').replaceAll('\r\n', '\n').slice(0, 300)}`;
+    if (row.name === COLLATION_ROW) {
+      // WHICH lines were printed is platform-free; the ORDER they came in is this platform's
+      // collation and is asserted, re-derived, in its own test below. Relaxed for this row
+      // ALONE — the other nineteen keep the exact sequence, and the survey that established
+      // that is in the collation test.
+      assert.deepEqual(lines(folded(got.out)).sort(), lines(folded(b64(row.stdout_b64))).sort(),
+        `${row.name}: a different SET of report lines was printed${detail}`);
+    } else {
+      assert.deepEqual(folded(got.out), folded(b64(row.stdout_b64)),
+        `${row.name}: \`--sync-themes\` printed different CONTENT — the em dash lives in this `
+        + `comparison too.${detail}`);
+    }
     assert.deepEqual(folded(got.err), folded(b64(row.stderr_b64)), `${row.name}: stderr differs`);
     if (HOME_PLATFORM) {
       assert.deepEqual(got.out, b64(row.stdout_b64),
         `${row.name}: the RAW BYTES differ on the platform this corpus was recorded on`);
       assert.deepEqual(got.err, b64(row.stderr_b64), `${row.name}: raw stderr bytes differ`);
     }
+  }
+});
+
+test('theme files are visited in THIS platform\'s Path collation order', () => {
+  const row = byName[COLLATION_ROW];
+  const themes = Object.keys(row.files).filter((n) => n !== '_TEMPLATE.json');
+
+  // ⚠ THE FIXTURE MUST BE ABLE TO TELL THE TWO ORDERS APART, or this passes vacuously on both
+  // platforms while asserting nothing — the same trap `win_user_path.json` fell into. `Zebra`
+  // and `apple` disagree under case-folded and code-point collation; two lower-case names would
+  // not, and would leave the whole row decorative.
+  const codePoint = [...themes].sort();
+  const caseFolded = [...themes].sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : 1));
+  assert.notDeepEqual(codePoint, caseFolded,
+    `the recorded names ${themes} sort identically under both collations, so this row cannot `
+    + 'observe the property it is named for');
+
+  const want = [...themes].sort(byPyPath);
+  const out = ANSWERS[COLLATION_ROW].out.toString('utf8');
+  const got = themes.map((n) => [n, out.indexOf(n)]).filter(([, i]) => i >= 0)
+    .sort((a, b) => a[1] - b[1]).map(([n]) => n);
+  assert.deepEqual(got, themes.length ? want : [],
+    `\`--sync-themes\` visited ${got} but Python's sorted(Path) orders them ${want} on `
+    + `${process.platform}`);
+
+  // AND THE DERIVATION IS TIED BACK TO A MEASUREMENT. `pyPathKey` is my reading of
+  // `_str_normcase`; on the platform this corpus was recorded on, that reading must reproduce
+  // the order the REFERENCE actually printed. Without this the rule above is only an argument.
+  if (HOME_PLATFORM) {
+    const recorded = lines(b64(row.stdout_b64)).map((ln) => themes.find((n) => ln.includes(n)))
+      .filter(Boolean);
+    assert.deepEqual(recorded, want,
+      `the reference printed ${recorded} on ${CORPUS.recorded_on}, but the collation rule this `
+      + `test derives says ${want} — the rule is wrong, not the recording`);
   }
 });
 
