@@ -402,11 +402,21 @@
       "python": "tests/test_web_daemon.py",
       "kind": "artifact",
       "py_tests": 15,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/web_daemon.test.mjs"
+        "tests/unit/web_daemon.test.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "The web verb's parts no cell or corpus reaches. Carries port-ledger row 7: it re-derives _npm_build's unreachability from `git ls-files`, so untracking web/dist/index.html fails the test instead of quietly making the arm live."
+      "why": [
+        "The `web` verb's parts no cell or corpus reaches. AUDITED PER CLASS: 5 classes, 15 methods → 11 cross, 4 retired. Successor `tests/unit/web_daemon.test.mjs`. Carries port-ledger row 7, whose column was updated in the same commit.",
+        "ALL FOUR RETIREMENTS ARE THE SAME SHAPE and it is worth naming, because it is the shape most of this file has: the reference paired every twin assertion with a control asserting the same property of ITSELF. `the reference still declares the web subparser`, `the reference dispatches restart to a detached web restart`, `the reference writes the response before it starts the stopper`, `the reference launches its own interpreter`. Each control's subject is a file P4 deletes; each twin survives and is named at the successor that carries it, so the retirement is checkable rather than prose.",
+        "THE SUBPARSER CONTROL WAS ABSORBED RATHER THAN DROPPED. It existed because a renamed `wb = sub.add_parser` would make the `ast` reader return four empty lists and every equality would then hold against an equally empty copy. With the four lists frozen from the reference (4 actions, 2 options, 2 flags, 1 int) there is nothing left to go empty, and the freeze is the same protection.",
+        "AND THE GATE ASKS `cliSpec('web')`, NOT THE SOURCE. P10c replaced the CLI row's own hand-written positionals/options/flags/ints — a second transcription of the same subparser — with `{ fn: cmdWeb }` plus a surface derived from `js/cli-table.json`. So this asks the module the entry point itself calls: a `cliSpec` that stopped deriving `ints` would still leave `'--port'` in the file for a scrape to find, and could not fool this.",
+        "⚠ `/api/restart` IS THE ONE ROUTE WHERE PROBING COSTS MORE THAN THE ASSURANCE, and rule 7 is left VISIBLE rather than quietly satisfied. It spawns a detached `web restart` that outlives its caller, so a probe would bind 4747 on the developer's machine and serve this checkout forever — `tests/unit/web_server.test.mjs`'s dispatcher probe runs in that same environment and deliberately does not ask. The dispatch is read from source and the successor says so in place.",
+        "⚠ PORT-LEDGER ROW 7 GAINED ITS SECOND DIRECTION. The reference asserted `web/dist/index.html` is TRACKED, which is what makes `buildPlan` answer `serve` in every checkout a cell can build. The successor also asserts the file EXISTS ON DISK — tracked-but-absent is a real working-tree state in which the `ask` arm is reachable here and now, and the original claim would still hold.",
+        "TWO MUTATIONS, both real defects invisible to every other gate, both killed by exactly the predicted test. M24 drops one of the three `openBrowser` arms: every cell that reaches `serve` passes `--no-browser`, because a gate that popped a browser window on the developer's screen would be worse than the bug it caught, so the consumers are COUNTED — and a port that dropped one opens no window on `web start`, the arm a real user takes most often. M25 runs `npm run build` before `npm install`, which fails on a fresh checkout with a missing vite: the exact situation the path exists for, and unreachable from every cell by row 7's own construction.",
+        "THE STOP ORDERING IS ASSERTED DETERMINISTICALLY BECAUSE THE BEHAVIOURAL GATE IS A RACE. `web_golden`'s shutdown cell fails only when the scheduler happens to lose the response — measured at 5 losses in 40 runs on a loaded 16-core box, in two shapes (nothing written; headers written and body not), and never on an idle machine. A CI run that reproduces a 12% flake proves the bug exists; one that does not proves nothing. The port reaches the guarantee by a different means than the reference did — closing inside the response's `finish` handler rather than writing before starting a shutdown thread — so what is asserted is the port's own mechanism, not a translation of the reference's."
+      ]
     },
     {
       "python": "tests/test_web_jobs.py",

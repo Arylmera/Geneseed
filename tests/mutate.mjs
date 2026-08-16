@@ -411,6 +411,37 @@ export const MUTATIONS = [
       + 'Only a probe of the running dispatcher can see it, which is why row 3 is a probe and not '
       + 'a declaration — and why the row says so at both sites.',
   },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7, with `tests/unit/web_daemon.test.mjs`. Both defects are real and both are invisible
+  // to every other gate in the repo, for the same reason: the arms they break are the ones no
+  // harness may drive, because driving them costs a browser window on the developer's screen or
+  // a real `npm install` in the checkout.
+  {
+    id: 'M24',
+    name: 'stop consulting --no-browser on the daemon-came-up arm',
+    file: 'js/web/server.mjs',
+    find: '      if (openBrowser) openUrl(rec.url);',
+    replace: '      if (false && openBrowser) openUrl(rec.url);',
+    gate: UNIT,
+    why: 'THE ONE BRANCH NO HARNESS MAY DRIVE. Every cell that reaches `serve` passes '
+      + '`--no-browser`, because a gate that popped a browser window on the developer\'s screen '
+      + 'would be worse than the bug it caught — so the flag\'s three consumers are COUNTED '
+      + 'instead. Dropping one leaves `web start` opening no window at all, on the arm a real '
+      + 'user takes most often, and nothing else in this repo would notice.',
+  },
+  {
+    id: 'M25',
+    name: 'run the npm build before the install',
+    file: 'js/web/server.mjs',
+    find: "  for (const step of [['install'], ['run', 'build']]) {",
+    replace: "  for (const step of [['run', 'build'], ['install']]) {",
+    gate: UNIT,
+    why: '`npm run build` before `npm install` fails on a fresh checkout with a missing vite, '
+      + 'which is the exact situation this path exists for. It is unreachable from every cell BY '
+      + 'CONSTRUCTION — `web/dist/index.html` is tracked, so `buildPlan` answers `serve` in any '
+      + 'checkout a cell can build (port-ledger row 7) — so the order is asserted as source and '
+      + 'this row is what says the assertion is load-bearing.',
+  },
 ];
 
 function run(argv) {
