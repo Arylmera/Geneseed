@@ -25,6 +25,23 @@
 //     the reference's Windows branch — run the child, exit with its status. The Unix test
 //     asserts a call to `os.execv` that cannot be made.
 //
+// A THIRD REEXEC TEST LANDS HERE TOO — `tests/test_update.py`'s
+// `TheHandoffKeepsWhatWasAlreadyPrinted`, which is a different claim from the two above and does
+// NOT become history. Off a terminal, `os.execv` replaces the process image and Python's stdio
+// buffers go with it, so `geneseed bootstrap > log.txt` lost `[geneseed] ✓ update complete.` on
+// every Unix run for as long as the verb existed. The port cannot reproduce the mechanism — Node
+// has no `execv`, so `reexec` is always the reference's Windows branch — but the CONTRACT is the
+// same on both and Node has its own way to break it: `process.exit()` truncates pending async
+// writes to a pipe exactly as `execv` discarded buffered ones.
+//
+// IT RETIRES INTO A GATE THAT IS ALREADY STRONGER, and the last test in this file is what stops
+// that retirement from being a promise. The recorded cell
+// `bootstrap__without-no-setup-it-hands-off-to-a-FRESH-setup-process` runs the real handoff with
+// stdout on a PIPE — which is the exact condition under which the bug fires, and the reason the
+// reference had to spell its own test as a subprocess — and compares the whole stream as bytes,
+// on both platform halves. Where the reference makes two `assertIn`s, the cell pins 299 bytes of
+// parent output, the successor's own stderr, and the exit code the successor handed back.
+//
 // ONE THING IS OWED ELSEWHERE, and it is written down rather than assumed covered: the
 // reference's step command names an interpreter and a `.py`, and the port's names
 // `process.execPath` plus this repo's own CLI, so no spelling of `python` can reach it. That is
@@ -34,6 +51,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { diagnoseFailedStep } from '../../js/update.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -138,5 +156,49 @@ test('a step that cannot write its log still returns its lines', () => {
     if (saved === undefined) delete process.env.GENESEED_LOG;
     else process.env.GENESEED_LOG = saved;
     sb.cleanup();
+  }
+});
+
+/**
+ * THE GATE ON THE RETIREMENT, not a second copy of it.
+ *
+ * `TheHandoffKeepsWhatWasAlreadyPrinted` retires into a recorded cell (see the header), and a
+ * retirement whose named gate can be deleted or re-blessed into vacuity is prose. This asserts
+ * the cell still SAYS what the retirement claims it says: the parent's pre-handoff lines are in
+ * `<stdout>`, the successor really ran and left its own words in `<stderr>`, and the successor's
+ * status came back as the process exit code. On BOTH halves, because the failure the reference
+ * documents is a POSIX one and the `lf` half is the only recording made on POSIX.
+ *
+ * It reads the snapshot rather than re-running the verb: re-running is `tests/cli_golden.mjs`'s
+ * job and doing it again here would be a slower copy of a gate that already exists. What is
+ * missing without this is the link between the two — nothing else in the tree records that this
+ * particular cell is load-bearing for a property that has no other owner.
+ */
+test('the recorded handoff cell still carries both sides of the handoff', () => {
+  const CELL = 'bootstrap__without-no-setup-it-hands-off-to-a-FRESH-setup-process.json';
+  const here = path.dirname(fileURLToPath(import.meta.url));       // tests/unit
+  const root = path.join(path.dirname(here), '__snapshots__', 'cli');
+  for (const half of ['crlf', 'lf']) {
+    const file = path.join(root, half, CELL);
+    assert.ok(fs.existsSync(file),
+      `${half}/${CELL} is gone — TheHandoffKeepsWhatWasAlreadyPrinted retired into it`);
+    const cell = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const out = cell.verbatim?.['<stdout>'] ?? '';
+    const err = cell.verbatim?.['<stderr>'] ?? '';
+
+    // Printed BEFORE the handoff, by the process that is about to be replaced. The first is the
+    // step banner and the last is the line the reference names as the one Unix actually lost.
+    assert.match(out, /step 1\/1: Update & rebuild/,
+      `${half}: the cell no longer records anything printed before the handoff`);
+    assert.match(out, /update complete/,
+      `${half}: the cell lost the last line printed before the handoff — which is exactly the `
+      + 'line os.execv discarded, and the property this cell is retained for');
+    // Printed AFTER it, by the successor — without which the cell is equally satisfied by a
+    // `reexec` that quietly did nothing at all.
+    assert.match(err, /\[setup\] needs an interactive terminal/,
+      `${half}: the cell no longer shows the successor process running`);
+    // And the successor's status, which `reexec` returns rather than swallowing.
+    assert.equal(cell.verbatim?.['<exit>'], '1',
+      `${half}: the successor's exit code is no longer propagated through the handoff`);
   }
 });
