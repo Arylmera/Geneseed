@@ -30,7 +30,7 @@ import { createHash } from 'node:crypto';
 import {
   chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync,
 } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { EOL, homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -596,6 +596,121 @@ test('the fence corpus still describes the real tree', () => {
   assert.ok(longest < 4, `${where} now holds a run of ${longest} backticks, so fenceFor no longer `
     + 'always returns the floor and the matrix CAN cover it — write the prompt cell and relax '
     + 'this test');
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE BYTE-BEARING PRIMITIVES AND THEIR PLATFORM DECLARATION —
+// `TheByteBearingPrimitivesAgree`, `ThePlatformSensitiveAnswersAreDeclared` and
+// `TheTildeUserFormIsADeliberateDivergence`, whose comparisons retire into the replay above and
+// whose absolute halves land here.
+
+test('the linesep corpus records this platform\'s translation', () => {
+  // A comparison alone passes on two implementations that both write LF — the RIGHT answer on
+  // POSIX and the wrong one on Windows, and no equality can tell those apart. So the answer for
+  // `a\nb` is stated against os.linesep absolutely: the day either the writer or the recording
+  // stops translating, this names it. Both are checked, because they can rot separately — the
+  // corpus was recorded on a machine whose linesep is this one's.
+  const want = Buffer.from(`a${EOL}b`, 'utf8').toString('hex');
+  assert.equal(runProbe([{ fn: 'write_text_linesep', args: ['a\nb'] }], false)[0], want,
+    'writeText no longer translates a bare newline to this platform\'s line ending');
+  const recorded = primitives?.cases.find(
+    (c) => c.fn === 'write_text_linesep' && c.args.length === 1 && c.args[0] === 'a\nb');
+  assert.ok(recorded, 'the corpus has no write_text_linesep case for a bare newline');
+  assert.equal(recorded.result, want,
+    `the recording says ${recorded.result} for a\\nb and this platform's line ending is `
+    + `${JSON.stringify(EOL)} — one of the two belongs to another operating system`);
+});
+
+test('both platform halves of str(Path(x)) are recorded and cover the same inputs', () => {
+  // THE HOLE THIS CLOSES, and the mechanism changed shape on the way across. The reference kept a
+  // hand-written PLATFORM_EXPECTED table and checked it in five directions, because a comparison
+  // between two implementations cannot say what the right answer IS — only that both sides give
+  // the same one. The port needs no table: `tests/__snapshots__/primitives/win32.json` and
+  // `posix.json` are BOTH in the tree, each recorded by the reference on that operating system, so
+  // the two halves of the declaration are the two recordings.
+  //
+  // WHAT DID NOT CROSS, stated rather than left implicit. The reference could derive
+  // platform-sensitivity INDEPENDENTLY, by calling `PureWindowsPath` and `PurePosixPath` from one
+  // host — both import anywhere. `pyPathStr` reads `path.sep` with no parameter, and no child
+  // process can change it, so there is nothing here that can re-derive the split from the CODE. A
+  // recording that drifted from the port on the platform this run is not on would be invisible;
+  // what catches it is the other platform's own CI job replaying its own half.
+  const halves = ['win32', 'posix'].map((p) => [p, load(path.join('primitives', `${p}.json`))]);
+  for (const [name, doc] of halves) {
+    assert.ok(doc, `tests/__snapshots__/primitives/${name}.json is missing — one half of the `
+      + 'declaration is gone, and a half that is not there is indistinguishable from a half that '
+      + 'was never true');
+  }
+  const pick = (doc) => new Map(doc.cases.filter((c) => c.fn === 'py_path_str')
+    .map((c) => [JSON.stringify(c.args), c.result]));
+  const [[, win], [, posix]] = halves;
+  const w = pick(win);
+  const p = pick(posix);
+  assert.ok(w.size > 0, 'no py_path_str cases in the win32 half at all');
+  assert.deepEqual([...w.keys()].sort(), [...p.keys()].sort(),
+    'the two halves probe different inputs, so a row can be declared on one platform and not '
+    + 'exercised on the other');
+  const differ = [...w.keys()].filter((k) => JSON.stringify(w.get(k)) !== JSON.stringify(p.get(k)));
+  // The positive control the whole mechanism rests on: if the two recordings agreed everywhere,
+  // the platform axis would be a table with one side and every assertion about it vacuous.
+  assert.ok(differ.length > 0, `all ${w.size} py_path_str inputs answer the same on both `
+    + 'platforms, so this corpus cannot see the operating system at all');
+  assert.ok(differ.length < w.size, 'every input is platform-sensitive, which means the corpus '
+    + 'holds nothing that should agree — the control has no negative side');
+  // Declared, not asserted: a green run says what it did NOT check on this host.
+  const other = PLATFORM === 'win32' ? 'posix' : 'win32';
+  const otherHalf = PLATFORM === 'win32' ? p : w;
+  console.log(`[pure-snapshot] ${differ.length} of ${w.size} str(Path(x)) answers differ by `
+    + `platform; the ${other} half below was DECLARED and not asserted on this ${PLATFORM} run:`);
+  for (const k of differ) console.log(`    ${k} -> ${JSON.stringify(otherHalf.get(k))}`);
+});
+
+test('the tilde-user form is refused rather than guessed', () => {
+  // A byte-bearing case UNTIL the project decided the port should not reproduce `ntpath`'s rule
+  // for it. `ntpath.expanduser('~someuser/x')` swaps the last component of %USERPROFILE% and hands
+  // back a path for an account that may not exist; the port REFUSES the form, because this is the
+  // single primitive every config-dir variable and every --target/--dir/--bundle/--out passes
+  // through, and the old behaviour returned it untouched so that `--target ~someone/x` created a
+  // literal `~someone` directory in the cwd.
+  //
+  // THE REFUSAL IS THE CRASH. Nothing in the probe's dispatch catches it, so an uncaught throw
+  // exits non-zero with a message — which is a normal, catchable CLI error rather than a silent
+  // wrong path.
+  const job = path.join(makeSandbox('pure-tilde-').path, 'job.json');
+  writeFileSync(job, JSON.stringify({ cases: [{ fn: 'expanduser', args: ['~unknownuser/x'] }] }),
+    'utf8');
+  const r = spawnSync(process.execPath, [PROBE, job], { cwd: ROOT, encoding: 'utf8' });
+  assert.notEqual(r.status, 0, `the probe exited 0 for ~unknownuser/x and answered ${r.stdout}`);
+  assert.match(r.stderr, /~unknownuser\/x/, r.stderr.slice(-400));
+  assert.match(r.stderr, /refusing/, r.stderr.slice(-400));
+});
+
+test('the reference\'s own tilde rule is written down for both platforms', () => {
+  // RECAST AS HISTORY. The reference asserted its own behaviour here, on whichever platform was
+  // running, and that arm dies with it. What must not die is the FACT, because the divergence
+  // above is only meaningful against what it diverges FROM — and because this table is where the
+  // project's second wrong belief was caught. The class first claimed POSIX "returns the path
+  // unchanged": true of `posixpath.expanduser`, false of the `Path.expanduser` the reference
+  // actually calls, which raises RuntimeError for a home directory it cannot determine. The first
+  // Linux run reported an ERROR rather than a failure, which is how it surfaced.
+  //
+  // A table with one side is exactly the shape that let the first wrong belief survive, so both
+  // are written and both are checked for content.
+  const REFERENCE_RULE = {
+    win32: 'expands — ntpath swaps the last component of %USERPROFILE%, and pathlib hands that '
+      + 'back happily even for an account that does not exist',
+    posix: 'raises RuntimeError — pathlib refuses a home directory it could not determine, so '
+      + 'the reference and the port already agreed in KIND there and differed only in which '
+      + 'exception said so',
+  };
+  assert.deepEqual(Object.keys(REFERENCE_RULE).sort(), ['posix', 'win32'],
+    'both operating systems\' rules have to be written down');
+  for (const [name, rule] of Object.entries(REFERENCE_RULE)) {
+    assert.ok(rule.trim().length > 40, `the ${name} rule is not written down, only named`);
+  }
+  const other = PLATFORM === 'win32' ? 'posix' : 'win32';
+  console.log(`[pure-snapshot] \`~unknownuser/x\` under the deleted reference on ${other} — `
+    + `declared, never run on this ${PLATFORM} host: ${REFERENCE_RULE[other]}`);
 });
 
 test('every corpus names a patch-independent interpreter', () => {
