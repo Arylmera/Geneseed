@@ -685,6 +685,55 @@ test('the width sweep still produces the recorded runs', { skip: dwidth ? false
   }
 });
 
+test('the width tables name a unicode version, in the source and at runtime', () => {
+  // `tests/test_pure_function_parity.py`'s `TheWidthTablesDeclareTheUnicodeTheyEncode`, and it is
+  // asserted on EVERY host — including the ones that skip the sweep, which is the whole point of
+  // it being its own claim. The tables are a snapshot of one Unicode version and have to say
+  // which one, or the corpus above cannot tell "the port is wrong" from "this machine's Unicode
+  // is newer".
+  //
+  // READ OUT OF THE SOURCE BY REGEX as well as imported. A gate on a DECLARATION must not be
+  // satisfiable by the declaration being deleted and the value arriving some other way; the
+  // import proves the value, the regex proves the form, and the two agreeing is what says the
+  // constant a reader finds beside the tables is the one the code uses.
+  const src = readFileSync(path.join(ROOT, 'js', 'tui.mjs'), 'utf8');
+  const m = /export const DWIDTH_UNIDATA = '([^']+)';/.exec(src);
+  assert.ok(m, 'js/tui.mjs no longer declares DWIDTH_UNIDATA in that form — the width tables are '
+    + 'a snapshot of one Unicode version and have to say which one');
+  assert.match(m[1], /^\d+\.\d+\.\d+$/,
+    `DWIDTH_UNIDATA is ${JSON.stringify(m[1])}, which is not a Unicode version`);
+  assert.equal(m[1], DWIDTH_UNIDATA, 'the declaration in the source and the exported value differ');
+});
+
+test('the width sweep is a sweep and not a handful of runs', { skip: dwidth ? false
+  : 'tests/__snapshots__/dwidth.json has not been recorded' }, () => {
+  // The second half of the corpus's positive control, and it is separate because it fails
+  // differently: "all three widths appear" is satisfied by a probe that returned three runs and
+  // stopped. This asserts the SHAPE — the sweep starts where it says it starts, spans the space,
+  // and reaches the two regions a BMP-only table would silently miss.
+  assert.equal(dwidth.rle[0][0], dwidth.range[0], 'the sweep does not start at its own range');
+  assert.ok(dwidth.rle.length > 200, `the sweep collapsed to ${dwidth.rle.length} runs`);
+  assert.ok(dwidth.rle.some(([cp]) => cp >= 0x1f000), 'the sweep never reached the astral emoji '
+    + 'rule, where the port stops consulting a table and answers by range');
+  assert.ok(dwidth.rle.some(([cp, w]) => cp >= 0x10000 && w === 0),
+    'the sweep never reached a combining mark above the BMP, so the port\'s table is untested '
+    + 'there');
+});
+
+test('the display width does not read the display tier', { skip: dwidth ? false
+  : 'tests/__snapshots__/dwidth.json has not been recorded' }, () => {
+  // THE ASSERTION THAT LICENSES SWEEPING ONE GLYPH MODE. `dwidth` reads no tier constant, so the
+  // corpus runs it once — and that is a claim, not a definition. It is the kind of coupling a
+  // later phase adds by accident, because every function beside it in `js/tui.mjs` DOES read the
+  // tier, and the corpus would then be a half-measurement with nothing saying so.
+  const plain = runProbe([{ fn: 'dwidth_rle', args: dwidth.range }], false)[0];
+  const ascii = runProbe([{ fn: 'dwidth_rle', args: dwidth.range }], true)[0];
+  assert.ok(plain.length > 200, `the sweep answered ${plain.length} runs`);
+  assert.deepStrictEqual(ascii, plain,
+    'the display width changed with GENESEED_TUI_ASCII, so the recorded sweep gates one tier and '
+    + 'says nothing about the other');
+});
+
 test('pyTextWrap still answers every recorded wrap', { skip: textwrapCorpus ? false
   : 'tests/__snapshots__/textwrap.json has not been recorded' }, () => {
   // THE ONE CPYTHON ORACLE P1 LEFT AS A LIVE COMPARISON. `tests/test_cli_reference.py`'s
