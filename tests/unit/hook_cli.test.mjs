@@ -17,13 +17,14 @@
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { parseArgs, resolveCli, selectCells } from '../cli_golden.mjs';
 import { checkExpectations } from '../helpers/cli_golden.mjs';
+import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const read = (...p) => readFileSync(path.join(ROOT, ...p), 'utf8');
@@ -385,4 +386,388 @@ test('--only narrows the matrix, and an empty selection is refused', () => {
   assert.notEqual(r.status, 0, `the replayer accepted an empty selection:\n${r.stdout}`);
   assert.match(`${r.stdout}${r.stderr}`, /selection is empty/,
     `it refused for some other reason:\n${r.stderr.slice(-500)}`);
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE PASSTHROUGH REFUTATIONS — `TheHookEntryIsNotAPassthrough` (3) and
+// `TheHarnessCliIsNotAPassthrough` (6).
+//
+// A shell around `python rituals/harness.py` would pass every recorded cell perfectly, because it
+// would BE the reference. So the refutation is two-sided and neither side is enough alone: a
+// STATIC allow-list of what may start a process, and DYNAMIC runs of the verbs that must never
+// start one with every Python stripped from PATH. Static alone cannot see an absolute-path
+// `spawn('C:/Python313/python.exe')`; dynamic alone cannot see a spawn on a path no test reaches.
+//
+// EVERY MODULE ALLOWED TO START A PROCESS, with the exact thing it may start. The criterion for a
+// row is NOT "this verb spawns" — `build` spawns on the reference and is refused here — it is that
+// there is no in-process equivalent AND the spawned thing is not this program. `node --check`
+// compiles ESM in a way `vm.Script` cannot; `java -version` asks a foreign toolchain a question
+// about itself. `js/web/jobs.mjs` breaks the second half on purpose and its argument is isolation:
+// the reference's daemon is THREADED and this one is not, so an in-process job would block the
+// event loop that serves the progress poll watching it.
+//
+// ⚠ THE REFERENCE'S `entry` COLUMN IS DROPPED, MEASURED RATHER THAN ASSUMED. It existed to say
+// which entry point's walk should expect a row, and all seven rows say `cli` — so the filter
+// selected every row and filtered nothing, which is a partition with one side and the exact defect
+// this file catches in three other places. Dropping it changes no assertion: the CLI walk already
+// compared against all seven. The hook entry's own single spawn is gated by name below, which is
+// what the column's one interesting row (`hooks.mjs`, delegated) was pointing at anyway.
+const ALLOWED_SPAWNS = {
+  'hooks.mjs': {
+    gatedBy: 'the only spawn in the hook entry is the model CLI',
+    what: '`$GENESEED_LLM` — the model CLI `learn` shells out to',
+  },
+  'doctor.mjs': {
+    binding: '{ spawnSync }',
+    calls: 1,
+    what: '`node --check <plugin>`',
+    literals: ["spawnSync(node, ['--check', js]", "const node = pyWhich('node');"],
+  },
+  'setup.mjs': {
+    binding: '{ spawnSync }',
+    calls: 1,
+    what: '`java -version`',
+    literals: ["spawnSync(java, ['-version']", "const java = pyWhich('java');"],
+  },
+  'link.mjs': {
+    binding: '{ spawnSync }',
+    calls: 1,
+    what: '`powershell -NoProfile -Command <script>` — the persistent USER Path',
+    literals: ["const r = spawnSync('powershell',",
+      "['-NoProfile', '-Command', winUserPathScript(action, directory)],"],
+  },
+  'update.mjs': {
+    binding: '{ spawn, spawnSync }',
+    calls: 6,
+    spawnCalls: 1,
+    what: '`git …` (the update transport), `taskkill /T` (a timed-out fetch\'s tree), and '
+      + '`node bin/geneseed-{cli,}.mjs` re-executed over the PULLED source',
+    literals: ["const exe = pyWhich('git');",
+      "spawnSync('taskkill', ['/F', '/T', '/PID', String(child.pid)]",
+      "[path.join(String(cand), 'bin', 'geneseed-cli.mjs'), 'doctor', '--all', '--no-bundle'],",
+      "[path.join(String(here), 'bin', 'geneseed.mjs'), ...buildArgs],",
+      "[path.join(String(here), 'bin', 'geneseed-cli.mjs'), 'rebuild-all'],",
+      "const r = spawnSync(argv[0], argv.slice(1), { stdio: 'inherit', ...NO_WINDOW });",
+      'child = spawn(exe, args, {'],
+  },
+  'web/server.mjs': {
+    binding: '{ spawn, spawnSync }',
+    calls: 1,
+    spawnCalls: 2,
+    what: '`node bin/geneseed-cli.mjs web --daemon-internal …` (the detached daemon), '
+      + '`npm install` / `npm run build`, and the desktop\'s URL opener',
+    literals: ["const cmd = [process.execPath, join(ROOT, 'bin', 'geneseed-cli.mjs'), 'web',",
+      "detached: true, windowsHide: true, stdio: ['ignore', out, out],",
+      "const plan = buildPlan(dist, webDir, pyWhich('npm'), Boolean(process.stdin.isTTY));",
+      'const r = spawnSync(win ? `"${npm}"` : npm, step, {',
+      "? [process.env.COMSPEC || 'cmd.exe', ['/d', '/s', '/c', `start \"\" \"${url}\"`],",
+      "(process.platform === 'darwin' ? ['open', [url], {}] : ['xdg-open', [url], {}]);"],
+  },
+  'web/jobs.mjs': {
+    binding: '{ spawn, spawnSync }',
+    calls: 1,
+    spawnCalls: 1,
+    what: '`node bin/geneseed-cli.mjs <verb>` (the job) and `taskkill /T` (its cancel)',
+    literals: ["spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)]",
+      'const NODE = () => process.execPath;',
+      "const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');",
+      "const GEN = () => path.join(ROOT, 'bin', 'geneseed.mjs');",
+      'p = spawn(cmd[0], cmd.slice(1), {'],
+  },
+};
+
+/** Every module a file reaches through relative imports, transitively, including itself. */
+function importClosure(entry) {
+  const seen = new Set();
+  const queue = [entry];
+  while (queue.length) {
+    const f = queue.pop();
+    if (seen.has(f) || !existsSync(f) || !statSync(f).isFile()) continue;
+    seen.add(f);
+    const text = readFileSync(f, 'utf8');
+    for (const m of text.matchAll(/from\s+'(\.[^']+)'/g)) {
+      queue.push(path.resolve(path.dirname(f), m[1]));
+    }
+  }
+  return seen;
+}
+
+const importsChildProcess = (text) => /^\s*import\s.*'node:child_process'/m.test(text);
+
+test('the generator driver still reaches no child-process module', () => {
+  // `bin/geneseed.mjs` is banned from spawning AT ALL, and a source grep on the driver alone
+  // cannot see an import one module deep: a single `import` of `js/hooks.mjs` would put
+  // child_process in the driver's process with its own source still clean. So the walk is
+  // transitive, which is the same assertion one level out.
+  const closure = importClosure(path.join(ROOT, 'bin', 'geneseed.mjs'));
+  assert.ok(closure.size > 1, 'the import walk found no modules, so it proves nothing');
+  for (const f of closure) {
+    const text = readFileSync(f, 'utf8');
+    for (const banned of ['node:child_process', "'child_process'", '"child_process"']) {
+      assert.ok(!text.includes(banned),
+        `bin/geneseed.mjs reaches ${banned} through ${path.relative(ROOT, f)} — the Node `
+        + 'generator must not be able to spawn an interpreter');
+    }
+  }
+});
+
+test('the only spawn in the hook entry is the model CLI', () => {
+  // STATIC, and narrower than the driver's ban because it has to be: `learn` genuinely spawns —
+  // `$GENESEED_LLM` is the whole verb — so "imports no child-process module" is not the property.
+  // The property is that there is exactly ONE spawn site and it is the model CLI, which is what
+  // makes the dynamic half below meaningful: an absolute-path `spawn('C:/Python313/python.exe')`
+  // never consults PATH and so would never notice that PATH lost anything.
+  const text = read('js', 'hooks.mjs');
+  // THE IMPORT, not a scan for call sites. A `\bexec\s*\(` scan matches every `SOME_RE.exec(...)`
+  // in the file — it fired on three of them — and would still miss `cp.exec()` behind a namespace
+  // import. Naming the one binding that may be imported closes both.
+  const imports = [...text.matchAll(/import\s+(.+?)\s+from\s+'node:child_process'/g)]
+    .map((m) => m[1]);
+  assert.deepEqual(imports, ['{ spawnSync }'],
+    `js/hooks.mjs imports ${imports} from child_process; exactly one binding is allowed`);
+  assert.equal((text.match(/(?<![.\w])spawnSync\s*\(/g) ?? []).length, 1,
+    'js/hooks.mjs has more than one spawnSync call site');
+  assert.ok(text.includes('const argv = pyWords(llm);'),
+    'the one spawn no longer takes its command from $GENESEED_LLM');
+  // The entry point must not spawn either — and again the check is the IMPORT, not the word: a
+  // scan for the string fired on the module docblock, which explains at length why the DRIVER may
+  // not have one.
+  assert.ok(!importsChildProcess(read(...HOOK.split('/'))),
+    `${HOOK} imports child_process; only js/hooks.mjs's model CLI may`);
+});
+
+test('the CLI entry reaches child_process only where it is declared', () => {
+  // STATIC and transitive, for the same reason the driver's is. Since the CLI statically imports
+  // `js/web/server.mjs`, this equality covers the daemon launcher and the job runner as well as
+  // `node --check` and `java -version`.
+  const closure = importClosure(path.join(ROOT, ...CLI.split('/')));
+  assert.ok(closure.size > 2, 'the import walk found almost nothing, so it proves nothing');
+  const importers = [];
+  for (const f of closure) {
+    const text = readFileSync(f, 'utf8');
+    if (importsChildProcess(text)) importers.push(path.relative(path.join(ROOT, 'js'), f));
+    for (const banned of ["'child_process'", '"child_process"']) {
+      assert.ok(!text.includes(banned),
+        `${CLI} reaches a bare ${banned} through ${path.relative(ROOT, f)} — the allow-list is `
+        + 'the `node:` specifier only');
+    }
+  }
+  assert.deepEqual(sorted(importers.map((p) => p.replaceAll('\\', '/'))),
+    sorted(Object.keys(ALLOWED_SPAWNS)),
+    'child_process is imported by a module with no row in the allow-list, or a row names a module '
+    + 'that no longer imports it — each row is declared with the exact argv it may start');
+});
+
+test('the web module tree spawns only from the declared modules', () => {
+  // A TRANSITIVE WALK FROM `js/web/server.mjs` WOULD PROVE THE WRONG THING: that graph reaches
+  // `js/doctor.mjs`, `js/setup.mjs` and `js/hooks.mjs`, three modules that legitimately spawn and
+  // are declared above. An equality over it would either fail or re-declare all three here, which
+  // puts one module's decision in two files. So this is a DIRECTORY scan keyed on the `web/`
+  // prefix — every spawning file under `js/web/` has a row.
+  const dir = path.join(ROOT, 'js', 'web');
+  const declared = new Set();
+  for (const name of readdirSync(dir).filter((n) => n.endsWith('.mjs'))) {
+    const text = readFileSync(path.join(dir, name), 'utf8');
+    if (importsChildProcess(text)) declared.add(`web/${name}`);
+    for (const banned of ["'child_process'", '"child_process"']) {
+      assert.ok(!text.includes(banned), `js/web/${name} reaches a bare ${banned}`);
+    }
+  }
+  assert.ok(declared.size > 0,
+    'the scan found no spawning module under js/web/, so this equality is vacuous');
+  assert.deepEqual(sorted(declared),
+    sorted(Object.keys(ALLOWED_SPAWNS).filter((r) => r.startsWith('web/'))),
+    'a module under js/web/ starts a process without a row — the web daemon is the one place in '
+    + 'this port allowed to spawn THIS PROGRAM, and the argument for each argv belongs in the row');
+});
+
+test('each declared module spawns only what its row declares', () => {
+  // The half a module list cannot state: WHAT each one starts. The call-site scan is anchored on
+  // the import BINDING rather than on the word, and the argv is asserted literally, because a
+  // second call site reusing the binding to start an interpreter would satisfy a count alone.
+  let checked = 0;
+  for (const [rel, spec] of Object.entries(ALLOWED_SPAWNS)) {
+    if (spec.gatedBy) {
+      // A DELEGATED ROW names the test that owns its argv instead of repeating the literals.
+      // Checked rather than trusted: a pointer at a test that no longer exists asserts nothing.
+      assert.ok(read('tests', 'unit', 'hook_cli.test.mjs').includes(`test('${spec.gatedBy}'`),
+        `js/${rel} delegates its argv assertion to a test named ${JSON.stringify(spec.gatedBy)}, `
+        + 'which is not in this file — the delegation is the whole gate');
+      continue;
+    }
+    const text = read('js', ...rel.split('/'));
+    const imports = [...text.matchAll(/import\s+(.+?)\s+from\s+'node:child_process'/g)]
+      .map((m) => m[1]);
+    assert.deepEqual(imports, [spec.binding],
+      `js/${rel} imports ${imports}; exactly one binding is allowed and it is ${spec.binding}`);
+    assert.equal((text.match(/(?<![.\w])spawnSync\s*\(/g) ?? []).length, spec.calls,
+      `js/${rel} no longer has ${spec.calls} spawnSync call site(s); ${spec.what} is all it may `
+      + 'start');
+    // THE ASYNC FORM IS COUNTED SEPARATELY: a count that only knew `spawnSync` would let a second
+    // `spawn(...)` naming an interpreter in. `spawnSync(` does not match this pattern, so the two
+    // counts partition the call sites rather than overlapping.
+    assert.equal((text.match(/(?<![.\w])spawn\s*\(/g) ?? []).length, spec.spawnCalls ?? 0,
+      `js/${rel} no longer has ${spec.spawnCalls ?? 0} async spawn call site(s)`);
+    for (const literal of spec.literals) {
+      assert.ok(text.includes(literal),
+        `js/${rel} no longer spawns ${spec.what} the declared way — a spawn taking its command `
+        + 'from anywhere else would be the passthrough this entry exists not to be');
+    }
+    checked += 1;
+  }
+  assert.ok(checked >= 6, `only ${checked} rows were checked against their source`);
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE DYNAMIC HALF — the verbs run with every Python stripped from PATH.
+//
+// This is what makes the allow-list mean "does not shell back to Python" rather than merely
+// "spawns little". `run(['python', 'harness.py', <verb>])` is byte-identical to a real port in
+// every recorded cell, because the reference is what it would be running. With no python anywhere
+// on PATH there is nothing for such a call to find, so an answer is proof the Node code produced
+// it. `node` is invoked by absolute path, so stripping PATH cannot take the runtime out from under
+// the test.
+
+/** PATH with every directory holding an interpreter removed, and what was removed. */
+function pathWithoutPython() {
+  const names = process.platform === 'win32'
+    ? ['python.exe', 'python3.exe', 'py.exe'] : ['python', 'python3'];
+  const kept = [];
+  const dropped = [];
+  for (const entry of (process.env.PATH ?? '').split(path.delimiter)) {
+    if (entry && names.some((n) => existsSync(path.join(entry, n)))) dropped.push(entry);
+    else kept.push(entry);
+  }
+  return { stripped: kept.join(path.delimiter), dropped };
+}
+
+/** A sandbox home plus the stripped PATH. The `dropped` guard is asserted by every caller. */
+function strippedEnv(t, home) {
+  const { stripped, dropped } = pathWithoutPython();
+  // The vacuity guard: on a machine whose PATH never held a python, "it ran without one" is true
+  // and meaningless.
+  assert.ok(dropped.length > 0, 'PATH held no python at all, so this run proves nothing about '
+    + 'whether the entry point would have found one');
+  t.diagnostic(`${dropped.length} PATH entries held an interpreter and were removed`);
+  return { ...cellEnv(home), PATH: stripped };
+}
+
+const runEntry = (entry, argv, env, cwd, input = '') => spawnSync(process.execPath,
+  [path.join(ROOT, ...entry.split('/')), ...argv],
+  { cwd, env, input, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+
+test('the pure hook verbs run with no python on PATH', (t) => {
+  // `context`, `git-gate` and `rule-gate` spawn nothing at all, so a passthrough's
+  // `spawn('python', …)` dies with ENOENT where a real implementation never notices.
+  const sb = makeSandbox('hookcli-pure-');
+  try {
+    const home = path.join(sb.path, 'home');
+    mkdirSync(home, { recursive: true });
+    writeFileSync(path.join(sb.path, 'README.md'), '# proof\n', 'utf8');
+    const env = strippedEnv(t, home);
+
+    const ctx = runEntry(HOOK, ['context'], env, sb.path);
+    assert.equal(ctx.status, 0, `context failed: ${ctx.stderr.slice(0, 400)}`);
+    assert.ok(ctx.stdout.includes('# proof'),
+      'context produced nothing with python off PATH — it is driving the Python CLI rather than '
+      + 'being a second implementation');
+
+    const gate = runEntry(HOOK, ['git-gate'], env, sb.path,
+      JSON.stringify({ tool_input: { command: 'git commit -m x' } }));
+    assert.equal(gate.status, 0, gate.stderr.slice(0, 400));
+    assert.ok(gate.stdout.includes('permissionDecision'),
+      'git-gate stopped gating with python off PATH');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('exclude reads a real install with no python on PATH', (t) => {
+  const sb = makeSandbox('hookcli-excl-');
+  try {
+    const home = path.join(sb.path, 'home');
+    const repo = path.join(sb.path, 'repo');
+    const cfg = path.join(home, '.claude');
+    mkdirSync(cfg, { recursive: true });
+    mkdirSync(repo, { recursive: true });
+    writeFileSync(path.join(cfg, '.geneseed-manifest.json'), '{"owned": []}\n', 'utf8');
+    writeFileSync(path.join(cfg, 'excludes.json'),
+      JSON.stringify({ excludes: [{ path: repo.replaceAll('\\', '/') }] }), 'utf8');
+    const r = runEntry(CLI, ['exclude', 'list'], strippedEnv(t, home), repo);
+    assert.equal(r.status, 0, `exclude list failed: ${r.stderr.slice(0, 400)}`);
+    assert.ok(r.stdout.includes('[claude]'),
+      'exclude list produced no install row with python off PATH');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('doctor validates the build with no python on PATH', (t) => {
+  // The verb the allow-list was opened for, refuted the same way. `doctor` is the most
+  // spawn-shaped verb that has crossed — a full build, five emits and a `node --check` per plugin
+  // — and the one where a passthrough would be least visible, since its output would be the
+  // reference's own. `--no-bundle` and one theme, because this asserts the plumbing rather than
+  // the checks; those are gated one planted fault at a time elsewhere.
+  //
+  // The sandboxed home matters more here than anywhere else: doctor EMITS, every emit rewrites the
+  // machine-wide hook shim, and an unsandboxed run would repoint the developer's own installs at
+  // this test's temp directory.
+  //
+  // ⚠ WHAT THIS DOES NOT SEE, measured by a mutation whose prediction was wrong. Pointing
+  // `js/doctor.mjs`'s lookup at `python` instead of `node` leaves this GREEN: the check is silent
+  // on success, so a lookup that finds nothing skips its spawn and doctor still reports the theme
+  // clean. Only the allow-list row above catches it, by the literal argv. So this test is the
+  // passthrough refutation it was written to be — the verb completes with no interpreter anywhere
+  // — and it is NOT evidence that the declared spawn happened. The two halves are not redundant
+  // and this is the direction that cannot cover the other.
+  const sb = makeSandbox('hookcli-doc-');
+  try {
+    const home = path.join(sb.path, 'home');
+    mkdirSync(home, { recursive: true });
+    const r = runEntry(CLI, ['doctor', '--theme', 'neutral', '--no-bundle'],
+      strippedEnv(t, home), ROOT);
+    assert.equal(r.status, 0, `doctor failed with python off PATH:\n${r.stdout.slice(-2000)}\n`
+      + `${r.stderr.slice(-2000)}`);
+    assert.ok(r.stdout.includes('[doctor] ok — 1 theme(s) clean'), r.stdout.slice(-1500));
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('uninstall removes an install with no python on PATH', (t) => {
+  // The first verb that DELETES, and the refutation matters more here than for any verb before it:
+  // a passthrough that dies with ENOENT on a machine with no python leaves the install half
+  // removed and the operator told it succeeded.
+  //
+  // ASSERTED ON THE FILESYSTEM rather than on stdout — the whole verb is what is left behind, and
+  // a passthrough that printed the right words while deleting nothing is exactly what a recorded
+  // cell cannot see either.
+  const sb = makeSandbox('hookcli-unin-');
+  try {
+    const home = path.join(sb.path, 'home');
+    const repo = path.join(sb.path, 'repo');
+    const cfg = path.join(home, '.claude');
+    mkdirSync(path.join(cfg, 'agents'), { recursive: true });
+    mkdirSync(repo, { recursive: true });
+    writeFileSync(path.join(cfg, '.geneseed-manifest.json'), JSON.stringify({
+      owned: ['agents/advocate.md'], managed: { settings_file: 'settings.json' },
+    }), 'utf8');
+    writeFileSync(path.join(cfg, 'agents', 'advocate.md'), '# owned\n', 'utf8');
+    writeFileSync(path.join(cfg, 'PROFILE.md'), '# mine\n', 'utf8');
+
+    const r = runEntry(CLI, ['uninstall', '--yes', '--target', cfg], strippedEnv(t, home), repo);
+    assert.equal(r.status, 0, `uninstall failed with python off PATH:\n${r.stdout.slice(-1500)}\n`
+      + `${r.stderr.slice(-1500)}`);
+    assert.ok(!existsSync(path.join(cfg, 'agents', 'advocate.md')),
+      'the owned file survived with python off PATH — the verb is driving the Python CLI');
+    assert.ok(!existsSync(path.join(cfg, '.geneseed-manifest.json')),
+      'the manifest survived, so nothing completed');
+    // The positive control, in the test that proves the deletion happened at all: an
+    // implementation that met both assertions above with an `rmtree` would meet them and take the
+    // user's own file with it.
+    assert.ok(existsSync(path.join(cfg, 'PROFILE.md')),
+      'an unowned file was deleted — this removed by directory, not by manifest');
+  } finally {
+    sb.cleanup();
+  }
 });
