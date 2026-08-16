@@ -27,16 +27,21 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync,
+} from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { DWIDTH_UNIDATA } from '../js/tui.mjs';
+import { makeCfg } from '../js/checkout.mjs';
 import { winUserPathScript } from '../js/link.mjs';
 import { pyTextWrap } from '../js/cli.mjs';
 import { pySplitLines } from '../js/lib/pydiff.mjs';
+import { renderAll } from '../js/render.mjs';
+import { modeOptions, postureOptions, themeOptions } from '../js/setup.mjs';
 import { makeSandbox } from './helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -80,12 +85,26 @@ function normalise(value, prefixes) {
   return value;
 }
 
-function runProbe(cases, asciiMode) {
+/**
+ * `extraEnv` drives an axis whose two states are "set" and "NOT PRESENT AT ALL" — a `null`
+ * value REMOVES the variable, which is the only way to reach the second state of
+ * `NoDefaultCurrentDirectoryInExePath`. Removed CASE-INSENSITIVELY: `{ ...process.env }` is a
+ * snapshot of the OS's own spelling, and Windows hands the block back in whatever case it was
+ * set in, so a `delete env.NoDefault…` matching nothing leaves the variable in the child and
+ * the axis silently runs one state twice. (The same trap the reference's `_run` documents.)
+ */
+function runProbe(cases, asciiMode, extraEnv = null) {
   const job = path.join(makeSandbox('pure-snap-').path, 'job.json');
   writeFileSync(job, JSON.stringify({ cases }), 'utf8');
   const env = { ...process.env };
   delete env.GENESEED_TUI_ASCII;
   if (asciiMode) env.GENESEED_TUI_ASCII = '1';
+  for (const [k, v] of Object.entries(extraEnv ?? {})) {
+    for (const existing of Object.keys(env).filter((e) => e.toLowerCase() === k.toLowerCase())) {
+      delete env[existing];
+    }
+    if (v !== null) env[k] = v;
+  }
   const p = spawnSync(process.execPath, [PROBE, job], { cwd: ROOT, env, encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024 });
   assert.equal(p.status, 0, `pure_probe.mjs failed (${p.status}):\n${p.stderr}`);
@@ -365,6 +384,218 @@ test('the agent-entry corpus can see the absolute rule it depends on', { skip: c
       && ls.some((e) => typeof e === 'string' && !'/\\'.includes(e.slice(0, 1))));
   assert.ok(both.length > 0, 'no case pairs a rootless-absolute entry with a relative one, so '
     + 'the corpus cannot see which entry the predicate skips');
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE THREE COVERAGE CLAIMS THAT ARE NOT ABOUT THE RECORDED CORPUS AT ALL, and finding that out
+// is the whole story of this block.
+//
+// `tests/__snapshots__/primitives/*.json` holds 1 950 cases over 63 functions — and `build_plan`,
+// `daemon_args`, `restart_args`, `py_which` and `manifest_is_claude` are in NONE of them. The
+// reference's class assembles its inputs as `_cases() + _manifest_cases(tmp) + _which_cases(tmp) +
+// _web_daemon_cases(tmp)`, and only the first is machine-independent enough to be written down;
+// the other three seed a temporary directory and name it in their own arguments, so the recorder
+// skips them. The comparison was therefore the ONLY thing that ever ran those five functions
+// through a probe, and at the cut they lose their exerciser entirely — not just their oracle.
+//
+// So these three own their fixtures. They are NOT gated on `coverageSkip`: nothing here reads the
+// recording, which means they still run on a platform whose corpus has never been recorded.
+
+/** `_which_cases` — a seeded PATH, because `pyWhich` reads the filesystem. */
+function whichCases(tmp) {
+  const a = path.join(tmp, 'whichA');
+  const b = path.join(tmp, 'whichB');
+  for (const d of [a, b]) mkdirSync(d, { recursive: true });
+  // Windows finds `zzhit` through PATHEXT; POSIX needs the name as spelled and the exec bit.
+  for (const [d, names] of [[a, ['zzhit.cmd', 'zzhit']], [b, ['zzhit.cmd', 'zzhit', 'zzonly']]]) {
+    for (const n of names) {
+      writeFileSync(path.join(d, n), '', 'utf8');
+      chmodSync(path.join(d, n), 0o755);
+    }
+  }
+  mkdirSync(path.join(a, 'zzdir'), { recursive: true });   // a DIRECTORY with a command's name
+  writeFileSync(path.join(a, 'zznotexec'), '', 'utf8');
+  chmodSync(path.join(a, 'zznotexec'), 0o644);
+  const sep = path.delimiter;
+  const both = `${a}${sep}${b}`;
+  return [
+    ['zzhit', a],
+    ['zzhit.cmd', a],                       // already spelled: PATHEXT is not appended
+    ['zzonly', both],                       // second entry wins only because the first misses
+    ['zzonly', a],                          // ...and misses entirely when it is absent
+    ['zzdir', a],                           // a directory is never the answer
+    ['zznotexec', a],                       // POSIX: no exec bit. Windows: found.
+    ['zzmissing', both],
+    ['zzhit', ''],                          // an empty PATH is one empty entry, not none
+    ['zzhit', `${sep}${a}`],                // a leading empty entry is searched, as `.`
+    ['zzhit', `${a}${sep}${a}`],            // deduped by normcase
+    ['zzhit', `${a.replaceAll('\\', '/')}${sep}${b}`],
+    [path.join(a, 'zzhit.cmd'), both],      // a path, not a name: checked as given
+    ['nosuch/zzhit', both],
+    // THE CASE THE WHOLE AXIS BELOW EXISTS FOR. `geneseed`/`geneseed.cmd` is a real file at the
+    // repo root and the probe runs with `cwd: ROOT`, so a port that prepends `.` unconditionally
+    // answers with it here. Every other case names a directory the cwd is not.
+    ['geneseed', a],
+    ['node', process.env.PATH ?? ''],       // the one call the verb actually makes
+  ].map(([cmd, p]) => ({ fn: 'py_which', args: [cmd, p] }));
+}
+
+test('the curdir rule is driven in both of its environment states', {
+  skip: process.platform === 'win32' ? false
+    : 'NeedCurrentDirectoryForExePath is a Windows API — on POSIX `shutil.which` has no such axis',
+}, () => {
+  // `NoDefaultCurrentDirectoryInExePath` is an INPUT to `shutil.which`, and until CI ran this
+  // corpus nothing varied it: Git Bash defines it and so does this repo's developer machine, so
+  // every recording measured ONE state, `pyWhich` was written to match that state, and the port
+  // answered null where the reference answered `.\geneseed.CMD` the first time it ran somewhere
+  // the variable was absent.
+  //
+  // WHAT THE REFERENCE ASSERTED AND WHAT SURVIVES. It compared the two implementations under both
+  // states and then guarded against vacuity — "the variable changed nothing, so this ran the same
+  // state twice". The comparison dies; the vacuity guard is the half that was always the point,
+  // and asking the reference (`python -m unittest tests.test_pure_function_parity`, while it is
+  // still here) says exactly which case carries it: of fifteen, ONE answer moves, and it is
+  // `geneseed`. That is stronger than "the two runs differ" — it says `.` went in at the FRONT of
+  // the search and displaced nothing else.
+  const tmp = makeSandbox('pure-which-');
+  try {
+    const cases = whichCases(tmp.path);
+    const defined = runProbe(cases, false, { NoDefaultCurrentDirectoryInExePath: '1' });
+    const absent = runProbe(cases, false, { NoDefaultCurrentDirectoryInExePath: null });
+    assert.equal(defined.length, cases.length);
+
+    const moved = cases
+      .map((c, i) => i)
+      .filter((i) => JSON.stringify(defined[i]) !== JSON.stringify(absent[i]));
+    assert.equal(moved.length, 1, 'the variable moved '
+      + `${moved.length} of ${cases.length} answers (${moved.map((i) => cases[i].args[0])}). `
+      + 'Zero means this ran one state twice and the corpus still cannot see the '
+      + 'current-directory rule; more than one means `.` is displacing entries rather than being '
+      + 'prepended to them.');
+    const [i] = moved;
+    assert.equal(cases[i].args[0], 'geneseed',
+      'the case that moves is not the separator-free name only the cwd can resolve');
+    assert.equal(defined[i], null,
+      'the current directory was searched with NoDefaultCurrentDirectoryInExePath DEFINED');
+    // Derived, not transcribed: the answer must be a `.`-relative path, its extension must have
+    // come from PATHEXT rather than from the disk (`geneseed.cmd` is lower case on disk and the
+    // answer carries PATHEXT's spelling), and it must name a file that is really there.
+    const m = /^\.[\\/]geneseed(\.[^.\\/]+)$/.exec(absent[i] ?? '');
+    assert.ok(m, `with the variable absent the answer was ${JSON.stringify(absent[i])}, not a `
+      + 'cwd-relative geneseed');
+    const pathext = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
+    assert.ok(pathext.some((e) => e === m[1]),
+      `${m[1]} is not one of PATHEXT's spellings (${pathext.join(';')})`);
+    assert.ok(existsSync(path.join(ROOT, absent[i])), `${absent[i]} does not exist under ${ROOT}`);
+  } finally {
+    tmp.cleanup();
+  }
+});
+
+/** `_web_daemon_cases` — P6h's three, each here for a reason no cell can cover. */
+function webDaemonCases(tmp) {
+  const [built, bare, nosrc] = ['web-built', 'web-bare', 'web-nosrc'].map((n) => path.join(tmp, n));
+  for (const d of [built, bare, nosrc]) mkdirSync(path.join(d, 'dist'), { recursive: true });
+  writeFileSync(path.join(built, 'dist', 'index.html'), '<html>', 'utf8');
+  for (const d of [built, bare]) writeFileSync(path.join(d, 'package.json'), '{}', 'utf8');
+  const cases = [];
+  // (dist, webDir, npm, interactive) -> the five answers, in the order `buildPlan` tests them.
+  // `serve` first, because a built dist short-circuits every question below it.
+  for (const [dist, webDir, npm, tty] of [
+    [path.join(built, 'dist'), built, 'npm', true],      // serve
+    [path.join(built, 'dist'), built, null, false],      // serve — dist wins over both
+    [path.join(nosrc, 'dist'), nosrc, 'npm', true],      // no-source
+    [path.join(bare, 'dist'), bare, null, true],         // no-npm
+    [path.join(bare, 'dist'), bare, '', true],           // no-npm — `!npm` is falsy, not null
+    [path.join(bare, 'dist'), bare, 'npm', false],       // no-tty
+    [path.join(bare, 'dist'), bare, 'npm', true],        // ask
+  ]) cases.push({ fn: 'build_plan', args: [dist, webDir, npm, tty] });
+  for (const [port, theme] of [[4747, null], [4747, 'imperial'], [0, null], [65535, 'néutral'],
+    // An EMPTY theme is falsy in both languages, so the flag is DROPPED rather than passed empty
+    // — which would reach the child as `--theme` with the next flag as its value.
+    [4747, '']]) {
+    cases.push({ fn: 'daemon_args', args: [port, theme] });
+    cases.push({ fn: 'restart_args', args: [theme] });
+  }
+  return cases;
+}
+
+test('the web-daemon corpus reaches every answer it claims', () => {
+  // The shape a green mutation keeps asking for: an equality between two functions that both
+  // returned one constant satisfied the reference's whole-corpus comparison forever. `buildPlan`
+  // has five answers and only two are reachable from a cell — the other three need a run that
+  // then blocks forever (`serve`, `ask`) or a machine without npm — so naming all five here is
+  // what makes this the gate for them.
+  const tmp = makeSandbox('pure-daemon-');
+  try {
+    const cases = webDaemonCases(tmp.path);
+    const answers = runProbe(cases, false);
+    const pick = (fn) => cases.map((c, i) => [c, answers[i]]).filter(([c]) => c.fn === fn)
+      .map(([, a]) => a);
+
+    const plans = pick('build_plan');
+    assert.deepEqual([...new Set(plans)].sort(), ['ask', 'no-npm', 'no-source', 'no-tty', 'serve'],
+      `the build-plan corpus answers ${JSON.stringify([...new Set(plans)])}, so it cannot tell `
+      + 'buildPlan from a constant');
+    // The argv the daemon is LAUNCHED with. The binary differs per side by design — each
+    // re-executes itself — but the flags may not, and nothing else can compare them: no cell may
+    // start a daemon, so a twin that dropped `--daemon-internal` would start a server that never
+    // writes a record, and every observation of it would be the same twelve-second timeout the
+    // reference produces when the child genuinely fails.
+    const daemon = pick('daemon_args');
+    const plain = ['--daemon-internal', '--port', '4747', '--no-browser'];
+    assert.ok(daemon.some((a) => JSON.stringify(a) === JSON.stringify(plain)),
+      `no plain daemon argv in ${JSON.stringify(daemon)}`);
+    assert.ok(daemon.some((a) => JSON.stringify(a) === JSON.stringify([...plain, '--theme',
+      'imperial'])), `no themed daemon argv in ${JSON.stringify(daemon)}`);
+    assert.ok(pick('restart_args').some((a) => JSON.stringify(a)
+      === JSON.stringify(['restart', '--no-browser'])), 'no plain restart argv');
+    // The empty theme reaches BOTH builders and is dropped by both — the case that would
+    // otherwise send `--theme` with the next token as its value.
+    assert.equal(daemon.filter((a) => JSON.stringify(a) === JSON.stringify(plain)).length, 2,
+      'the empty theme did not produce the same argv as no theme at all');
+  } finally {
+    tmp.cleanup();
+  }
+});
+
+test('the fence corpus still describes the real tree', () => {
+  // `js/generate.mjs` states that no CELL can vary the fence, and that is a claim about the
+  // CONTENT of `src/` rather than about the code — so it is re-derived here instead of trusted.
+  // The day a source file grows a four-backtick run the claim stops holding, a `prompt` cell
+  // becomes able to cover the branch, and this fails to say so.
+  //
+  // SWEPT WIDER THAN THE REFERENCE, which rendered one theme at the default posture. Posture and
+  // mode STRIP blocks, so a single render leaves source text unscanned, and theme substitutes
+  // vocabulary that lands in the rendered file — three axes, every combination. The axes are READ
+  // from the option tables rather than listed, so a posture added tomorrow is swept without an
+  // edit here; a list would have gone stale silently, which is the failure this whole test is
+  // about. Measured: 140 renders, 13 440 files, ~1.4 s.
+  let longest = 0;
+  let where = null;
+  let scanned = 0;
+  for (const [theme] of themeOptions()) {
+    for (const [posture] of postureOptions()) {
+      for (const [mode] of modeOptions()) {
+        const { items } = renderAll(makeCfg({ posture, mode }), theme);
+        for (const { rel, text } of items) {
+          if (text === null) continue;
+          scanned += 1;
+          for (const m of text.matchAll(/`+/g)) {
+            if (m[0].length > longest) { longest = m[0].length; where = `${rel} @ ${theme}/${posture}/${mode}`; }
+          }
+        }
+      }
+    }
+  }
+  // A vacuous scan agrees with anything: no files, or a regex that never matched, would satisfy
+  // `longest < 4` perfectly.
+  assert.ok(scanned > 1000, `the sweep rendered ${scanned} files`);
+  assert.ok(longest > 0, 'not one backtick in the whole rendered tree — the scan found nothing, '
+    + 'so `longest < 4` is a statement about the regex and not about `src/`');
+  assert.ok(longest < 4, `${where} now holds a run of ${longest} backticks, so fenceFor no longer `
+    + 'always returns the floor and the matrix CAN cover it — write the prompt cell and relax '
+    + 'this test');
 });
 
 test('every corpus names a patch-independent interpreter', () => {
