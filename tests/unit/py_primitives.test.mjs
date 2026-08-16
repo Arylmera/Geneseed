@@ -68,6 +68,70 @@ test('the indented writer preserves the same spellings', () => {
   assert.match(jsonDumpsIndent(parseJson('{"n": 1}')), /"n": 1(?!\.)/);
 });
 
+// CONTAINER RENDERING — the other half of the same spec, and the successor to
+// `tests/test_opencode_extras_parity.py::test_json_container_rendering_agrees` plus the corpus
+// gate beside it (`test_the_corpus_reaches_the_shapes_the_emitted_files_do_not`). Every answer
+// below was taken from CPython on 2026-08-16.
+//
+// THE FIXTURES ARE BUILT THROUGH `parseJson`, NOT AS OBJECT LITERALS, and that is not style: a
+// bare JS number makes `pyStr` THROW on purpose, because `JSON.parse` has already collapsed
+// int 1 and float 1.0 by the time the literal exists. Measured while writing this — the first
+// draft threw.
+// ⚠ AND `sortKeys` IS AN OPTION, NOT THE DEFAULT — the first draft of this table asserted
+// sorted output from a plain `jsonDumpsCompact` and went red, which is §7's standing trap
+// reached from the fixture side: I had measured `json.dumps(o, sort_keys=True)` and then held
+// the port to a property its own default does not have. Both columns below are CPython's, taken
+// separately: `json.dumps(o)` preserves insertion order and `json.dumps(o, sort_keys=True)` does
+// not, and `js/settings.mjs` has call sites of each.
+const CONTAINERS = [
+  // [source, compact (insertion order), sorted]
+  ['{}', '{}', '{}'],
+  ['[]', '[]', '[]'],
+  ['{"b": 1, "a": 2}', '{"b": 1, "a": 2}', '{"a": 2, "b": 1}'],
+  // sort_keys RECURSES. A sort applied only at the top level passes the row above and fails
+  // this one, and an already-sorted corpus could not tell either from a missing sort.
+  ['{"z": {"y": 1, "x": 2}, "a": [1, {"q": 1, "p": 2}]}',
+    '{"z": {"y": 1, "x": 2}, "a": [1, {"q": 1, "p": 2}]}',
+    '{"a": [1, {"p": 2, "q": 1}], "z": {"x": 2, "y": 1}}'],
+  // ensure_ascii, including a character OUTSIDE the BMP: CPython emits a surrogate PAIR.
+  ['{"s": "a — b", "e": "😀"}',
+    '{"s": "a \\u2014 b", "e": "\\ud83d\\ude00"}',
+    '{"e": "\\ud83d\\ude00", "s": "a \\u2014 b"}'],
+  // Empty and nested containers, which the emitted themes — flat string/int maps — never carry.
+  ['{"n": [[], {}, [{}]]}', '{"n": [[], {}, [{}]]}', '{"n": [[], {}, [{}]]}'],
+];
+
+test('containers render as CPython renders them', () => {
+  for (const [src, compact, sorted] of CONTAINERS) {
+    assert.equal(jsonDumpsCompact(parseJson(src)), compact,
+      `${src} did not render the way json.dumps renders it`);
+    assert.equal(jsonDumpsCompact(parseJson(src), { sortKeys: true }), sorted,
+      `${src} did not render the way json.dumps(sort_keys=True) renders it`);
+  }
+  // The control that says the two columns are not the same function twice.
+  assert.ok(CONTAINERS.some(([, c, s]) => c !== s),
+    'no row where sorting changes the answer, so the sortKeys column asserts nothing');
+});
+
+test('the container corpus reaches the shapes the emitted files do not', () => {
+  // THE GATE ON THE CORPUS, carried over in intent from the reference. The emitted themes are
+  // flat string/int maps; if this corpus decayed to that, the separator and sort questions it
+  // exists to answer would go untested while every row still passed.
+  const parsed = CONTAINERS.map(([src]) => parseJson(src));
+  const isFlat = (o) => o !== null && typeof o === 'object' && !Array.isArray(o)
+    && Object.values(o).every((v) => v === null || typeof v !== 'object');
+  assert.ok(parsed.filter(isFlat).length < parsed.length, 'the corpus is all flat maps');
+  assert.ok(parsed.some((o) => Object.keys(o).length === 0), 'no empty container');
+  assert.ok(parsed.some((o) => Object.values(o).some((v) => v && typeof v === 'object')),
+    'no nested container');
+  assert.ok(CONTAINERS.some(([src]) => [...src].some((c) => c.codePointAt(0) > 126)),
+    'no non-ASCII string');
+  // The two-level out-of-order map, named rather than merely present.
+  assert.ok(CONTAINERS.some(([, , sorted]) => sorted.includes('{"p": 2, "q": 1}')),
+    'no map whose keys are out of order at TWO levels — sort_keys is recursive, and an '
+    + 'already-sorted corpus cannot tell a working sort from a missing one');
+});
+
 test('numbers nested in containers keep their spelling too', () => {
   // The vacuity guard for the two tests above: a wrapper applied only at the top level would
   // pass them both and still corrupt every real settings file, where the numbers live inside

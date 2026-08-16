@@ -673,7 +673,13 @@
       "node": [
         "tests/unit/py_primitives.test.mjs"
       ],
-      "why": "PARTIAL. The tree comparison retires into the emit corpus; test_python_number_rendering_agrees does not. Number rendering is parseJson's int/float round-trip and jsonDumps' separators — the bytes on users' disks, per design 5.1 — and after P4 those functions are not Python compatibility, they ARE the spec. A spec needs an absolute corpus, not a comparison."
+      "why": [
+        "PARTIAL. The tree comparison retires into the emit corpus; `test_python_number_rendering_agrees` does not. Number rendering is parseJson's int/float round-trip and jsonDumps' separators — the bytes on users' disks — and after P4 those functions are not Python compatibility, they ARE the spec. A spec needs an absolute corpus, not a comparison.",
+        "⚠ PART DONE, AND THE REMAINDER IS MEASURED RATHER THAN GUESSED. `test_python_number_rendering_agrees` is ALREADY COVERED by `tests/unit/py_primitives.test.mjs` (`a float renders as CPython renders it`, plus the integral-float and nested-container rows beside it). `test_the_overrides_fixture_exercises_every_frontmatter_branch` is covered by `tests/unit/generate.test.mjs` — `an override emits model and temperature only where one is set` and `agent overrides are absent, parsed, or malformed — never fatal` between them reach the model, variant, temperature, null-temperature and empty-model branches.",
+        "⚠ WHAT IS NOT COVERED, AND THIS IS THE ROW'S REMAINING WORK: `test_the_matrix_covers_every_branch` requires the cells named `colors-invalid-slot` and `colors-no-default`. `tests/unit/emit_gates.test.mjs` asserts the STRONGER positive claim (every colour an emit writes is a named slot, checked repo-wide) but never drives the AGENT_COLORS validation FALLBACK — an agent whose role maps to a slot the theme does not define, and a theme with no default. All 14 shipped themes carry the same valid map, which is exactly why the reference needed a SYNTHETIC cell for it, and why no emit corpus cell can reach it either.",
+        "SO THE ROW STAYS `todo` DELIBERATELY. Flipping it would claim coverage for two branches nothing in Node reaches, and the ledger gate cannot tell the difference — it checks that the named successor files exist, not that they assert anything in particular. The next session writes the two fallback cells (the seam is `js/emit.mjs`'s colour resolution, which takes the theme map, so a synthetic map is the whole fixture) and then flips.",
+        "The other three quarters of the row are done and committed; only the colour-fallback pair is outstanding."
+      ]
     },
     {
       "python": "tests/test_opencode_extras_parity.py",
@@ -683,7 +689,13 @@
       "node": [
         "tests/unit/py_primitives.test.mjs"
       ],
-      "why": "PARTIAL, same split and same successor as the row above: test_json_container_rendering_agrees is about the JSON container primitives, and 'the corpus reaches the shapes the emitted files do not' is exactly the vacuity gate that must travel with them. The extras comparison itself retires into the emit corpus."
+      "why": [
+        "PARTIAL, same split and same successor as the native-layer row: `test_json_container_rendering_agrees` is about the JSON container primitives, and 'the corpus reaches the shapes the emitted files do not' is exactly the vacuity gate that must travel with them. The extras comparison itself retires into the emit corpus.",
+        "⚠ TWO OF THE FOUR ARE DONE. `tests/unit/py_primitives.test.mjs` gained a CONTAINERS table (`containers render as CPython renders them`) and its corpus gate (`the container corpus reaches the shapes the emitted files do not`): empty and nested containers, ensure_ascii including an astral character CPython emits as a surrogate PAIR, and sort_keys asserted RECURSIVELY, since a sort applied only at the top level passes a one-level row and an already-sorted corpus cannot tell either from a missing sort.",
+        "⚠ AND `sortKeys` IS AN OPTION, NOT THE DEFAULT — the first draft of that table asserted sorted output from a plain `jsonDumpsCompact` and went RED. That is §7's standing trap reached from the fixture side: I had measured `json.dumps(o, sort_keys=True)` and then held the port to a property its own default does not have. Both columns are now CPython's, taken separately, because `js/settings.mjs` has call sites of each. The fixtures are built through `parseJson` rather than as object literals, because a bare JS number makes `pyStr` throw on purpose — measured, the first draft threw.",
+        "⚠ WHAT IS NOT COVERED: `test_the_matrix_covers_every_branch` requires cells named `overrides-stale`, `overrides-empty-agents`, `overrides-current-version` and `primary-with-overrides`, plus a `GENESEED_PRIMARY` cell and a `GENESEED_COMMANDS` cell — both layers are OFF by default, so neither is reachable from any default emit or from any recorded cell. `tests/unit/generate.test.mjs` covers the overrides STUB (`the overrides stub is stamped with the current version at creation`, `a re-emit never rewrites an existing overrides file`) but nothing drives the primary-agent or command layers at all.",
+        "SO THE ROW STAYS `todo` DELIBERATELY, for the same reason as its sibling: flipping it would claim coverage the ledger gate cannot check. The next session drives an emit with `GENESEED_PRIMARY` and `GENESEED_COMMANDS` set — `emitProjectInto` takes the target as a parameter, so it is an env var and one call, and `tests/unit/emit_modes.test.mjs` already has the fixture shape to copy."
+      ]
     },
     {
       "python": "tests/test_render_parity.py",
