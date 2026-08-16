@@ -177,6 +177,100 @@ test('the recorded corpus is the shape it claims to be', { skip: primitives ? fa
   for (const c of noted) assert.match(c.note, /docs\/port-ledger\.md/);
 });
 
+// ---------------------------------------------------------------------------------------------
+// THE COVERAGE TIER — `tests/test_pure_function_parity.py`'s
+// `ThePureFunctionsAgreeOnEveryInputNoCellCanBuild`, minus its one comparison.
+//
+// WHAT CROSSES AND WHAT DIES, and the split is the whole point of the class. Its first test is
+// `test_every_case_agrees_in_both_glyph_modes` — an equality between a Python probe and a Node
+// one, which dies with the reference and is already replaced above by the replay against the
+// RECORDED answers. Everything else in it is a claim about the CORPUS: that it reaches an arm,
+// that it produced both answers of a two-valued decision, that a fallback was actually taken.
+// Those are what stop the corpus from silently ceasing to exercise a function it still names,
+// and none of them needs a second implementation to be true.
+//
+// ASSERTED ON THE PORT'S LIVE ANSWERS, not on the recorded column. The recorded column is
+// already gated byte-for-byte by the replay above, so re-reading it here would prove the file
+// has not changed — a fact, but not this one. Running the probe says the code still takes the
+// arm today.
+
+const coverageSkip = primitives ? false
+  : `tests/__snapshots__/primitives/${PLATFORM}.json has not been recorded on this platform`;
+
+/** The port's answers for one function, in corpus order. Loud when a function has no cases. */
+function answersFor(fn, asciiMode = false) {
+  const picked = primitives.cases.filter((c) => c.fn === fn);
+  assert.ok(picked.length > 0, `no ${fn} cases in the corpus at all`);
+  return runProbe(picked.map((c) => ({ fn: c.fn, args: c.args })), asciiMode);
+}
+
+test('the animation corpus reaches the arm no cell can reach', { skip: coverageSkip }, () => {
+  // THE POSITIVE CONTROL FOR THE WHOLE ANIMATION ENTRY, and it has to name the ANIMATED arm
+  // specifically. Off a TTY `playLine` prints a title and a static card — which is all any cell
+  // could ever see, since none of them gets past `setup`'s isatty gate — so a corpus of static
+  // cases would agree perfectly between two implementations while the scrolling half, which is
+  // the entire module, went untested. `\x1b[{n}A` is the cursor move only the animation writes.
+  const out = answersFor('play_line');
+  const animated = out.filter((s) => typeof s === 'string' && s.includes('\x1b['));
+  assert.ok(animated.length >= 3, 'the port never took the animated arm');
+  assert.ok(animated.some((s) => s.includes('A\r')),
+    'no cursor-up move — the frames were not redrawn in place');
+  // BOTH arms, or the corpus is not separating them: a probe stuck on the animated one would
+  // satisfy every assertion above and gate nothing about the static card.
+  assert.ok(out.some((s) => typeof s === 'string' && !s.includes('\x1b[')),
+    'the port never took the STATIC arm either, so the corpus is not separating the two');
+});
+
+test('the animation corpus can see the newline translation', { skip: coverageSkip }, (t) => {
+  // `print()` and `sys.stdout.write` translate `\n` in the TEXT layer, so a capture that is not
+  // a real text stream compares LF against LF and a CRLF split walks straight through it —
+  // P5b's transport hole. This asserts the capture is going through the layer at all; where it
+  // is not, there is nothing to see rather than nothing to check.
+  if (path.sep === '/') {
+    t.diagnostic('no newline translation to see on this platform');
+    return;
+  }
+  const out = answersFor('play_line');
+  assert.ok(out.some((s) => typeof s === 'string' && s.includes('\r\n')),
+    'the capture shows no CRLF — it is not going through the text layer, and this corpus '
+    + 'cannot see a newline bug');
+});
+
+test('the anim-ok corpus produced both answers', { skip: coverageSkip }, () => {
+  // A decision table gated only where it says yes is half a gate.
+  const out = answersFor('anim_ok');
+  assert.ok(out.includes(true), 'no case answers true');
+  assert.ok(out.includes(false), 'no case answers false');
+});
+
+test('the art table falls back without inheriting a function', { skip: coverageSkip }, () => {
+  // `ART.get(theme, ART[DEFAULT])` against `ART[theme]`. `constructor` and `__proto__` are a
+  // miss on the reference and a HIT on the prototype chain in JavaScript, so a port spelled
+  // with `??` hands back a Function here. Every miss must land on the neutral theme — and a
+  // REAL theme must not, or the fallback is all the table does.
+  const out = answersFor('art_for');
+  const neutral = out[7];
+  assert.equal(neutral.title, 'Geneseed');
+  for (const i of [8, 9, 10, 11, 12, 13]) {     // nosuchtheme, "", and the four inherited names
+    assert.deepStrictEqual(out[i], neutral, `art_for case ${i} did not fall back`);
+  }
+  assert.notDeepStrictEqual(out[0], neutral,
+    'every theme resolved to neutral — the table is not being read');
+});
+
+test('the probes produce the panel and not an empty echo', { skip: coverageSkip }, () => {
+  // THE POSITIVE CONTROL FOR THE CORPUS ITSELF. Every replay assertion in this file is an
+  // equality against a recorded value, and a probe that returned nothing on both sides would
+  // satisfy all of them if the recording had been made the same way. So one answer is read for
+  // its CONTENT — the status panel, which carries the counts and the freshness line.
+  const first = runProbe([{ fn: primitives.cases[0].fn, args: primitives.cases[0].args }], false)[0];
+  assert.ok(Array.isArray(first), `the first case answered ${typeof first}, not a panel`);
+  assert.ok(first[0].includes('┌─ ◆ Geneseed — status '), first[0]);
+  assert.ok(first.some((ln) => /\d+ agents · \d+ skills · \d+ laws/.test(ln)),
+    `no counts line in the panel:\n${first.join('\n')}`);
+  assert.ok(first.some((ln) => ln.includes('✓ up to date')), first.join('\n'));
+});
+
 test('every corpus names a patch-independent interpreter', () => {
   // THE TOOLCHAIN IS NOT THE CODE UNDER TEST. `recorded_with` is written by three recorders
   // and read by no gate, so its only comparison is the whole-file `diff` that `record-corpus`
