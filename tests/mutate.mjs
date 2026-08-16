@@ -297,6 +297,55 @@ export const MUTATIONS = [
       + 'acceptance test, which is why the successor asserts it as a partition rather than a '
       + 'containment.',
   },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7, with `tests/unit/authoring_gates.test.mjs`. Doctor's three source-wide authoring
+  // gates had NO test in `tests/` at all — a repo-wide search found the package manifest's row
+  // and nothing else. They were reachable only through `geneseed doctor`, which prints one `ok`
+  // line when all three are silent, so every mutation below previously survived everything.
+  {
+    id: 'M17',
+    name: 'drop the orphan half of the registry gate',
+    file: 'js/doctor.mjs',
+    find: "  problems.push(...[...present].filter((k) => !expected.has(k)).sort()\n"
+      + "    .map((key) => `[authoring] registry.json lists '${key}' but no such entity "
+      + "exists`));\n",
+    replace: '',
+    gate: UNIT,
+    why: 'The gate is two-way on purpose and only one direction is obvious. A row whose spec is '
+      + 'gone is the silent half: the entity shows no lifecycle badge in the TUI and the web '
+      + 'catalog while doctor stays green, because the loud reader and the forgiving reader are '
+      + 'different functions over the same file.',
+  },
+  {
+    id: 'M18',
+    name: 'make the credential sweep echo what it found',
+    file: 'js/doctor.mjs',
+    find: '            problems.push(`[authoring] possible ${label} in ${rel}:${i + 1} — a `\n'
+      + "              + 'credential must never be committed');",
+    replace: '            problems.push(`[authoring] possible ${label} in ${rel}:${i + 1} '
+      + '(${line}) — a `\n'
+      + "              + 'credential must never be committed');",
+    gate: UNIT,
+    why: 'THE ONE MUTATION HERE THAT IS A SECURITY DEFECT RATHER THAN A COVERAGE ONE. The sweep '
+      + 'reports file:line and the KIND only, because doctor runs in CI and echoing the match '
+      + 'would republish the credential into every build log — turning the gate that exists to '
+      + 'stop a leak into the thing that publishes it. A report is still produced, so every '
+      + 'count and every containment assertion stays green; only an explicit "and it does NOT '
+      + 'contain the planted secret" can see it.',
+  },
+  {
+    id: 'M19',
+    name: 'let an empty registry relabel the shipped catalogue as personal',
+    file: 'js/inventory.mjs',
+    find: "    return Object.keys(registry).length ? 'personal' : 'unknown';",
+    replace: "    return 'personal';",
+    gate: UNIT,
+    why: '`loadRegistry` is forgiving by design — a missing or corrupt registry.json yields `{}` '
+      + 'rather than breaking the browser. This mutation makes that forgiveness lie: every '
+      + 'shipped agent and skill would be badged as the user\'s own work in the TUI and the web '
+      + 'catalog, on exactly the machines where the file failed to read. The emptiness check '
+      + 'belongs to the REGISTRY and not to the row, and that is the distinction this kills.',
+  },
 ];
 
 function run(argv) {
