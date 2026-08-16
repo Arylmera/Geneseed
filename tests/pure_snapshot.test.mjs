@@ -27,15 +27,21 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import {
+  chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync,
+} from 'node:fs';
+import { EOL, homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { DWIDTH_UNIDATA } from '../js/tui.mjs';
+import { makeCfg } from '../js/checkout.mjs';
 import { winUserPathScript } from '../js/link.mjs';
 import { pyTextWrap } from '../js/cli.mjs';
+import { pySplitLines } from '../js/lib/pydiff.mjs';
+import { renderAll } from '../js/render.mjs';
+import { modeOptions, postureOptions, themeOptions } from '../js/setup.mjs';
 import { makeSandbox } from './helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -79,12 +85,26 @@ function normalise(value, prefixes) {
   return value;
 }
 
-function runProbe(cases, asciiMode) {
+/**
+ * `extraEnv` drives an axis whose two states are "set" and "NOT PRESENT AT ALL" — a `null`
+ * value REMOVES the variable, which is the only way to reach the second state of
+ * `NoDefaultCurrentDirectoryInExePath`. Removed CASE-INSENSITIVELY: `{ ...process.env }` is a
+ * snapshot of the OS's own spelling, and Windows hands the block back in whatever case it was
+ * set in, so a `delete env.NoDefault…` matching nothing leaves the variable in the child and
+ * the axis silently runs one state twice. (The same trap the reference's `_run` documents.)
+ */
+function runProbe(cases, asciiMode, extraEnv = null) {
   const job = path.join(makeSandbox('pure-snap-').path, 'job.json');
   writeFileSync(job, JSON.stringify({ cases }), 'utf8');
   const env = { ...process.env };
   delete env.GENESEED_TUI_ASCII;
   if (asciiMode) env.GENESEED_TUI_ASCII = '1';
+  for (const [k, v] of Object.entries(extraEnv ?? {})) {
+    for (const existing of Object.keys(env).filter((e) => e.toLowerCase() === k.toLowerCase())) {
+      delete env[existing];
+    }
+    if (v !== null) env[k] = v;
+  }
   const p = spawnSync(process.execPath, [PROBE, job], { cwd: ROOT, env, encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024 });
   assert.equal(p.status, 0, `pure_probe.mjs failed (${p.status}):\n${p.stderr}`);
@@ -177,6 +197,522 @@ test('the recorded corpus is the shape it claims to be', { skip: primitives ? fa
   for (const c of noted) assert.match(c.note, /docs\/port-ledger\.md/);
 });
 
+// ---------------------------------------------------------------------------------------------
+// THE COVERAGE TIER — `tests/test_pure_function_parity.py`'s
+// `ThePureFunctionsAgreeOnEveryInputNoCellCanBuild`, minus its one comparison.
+//
+// WHAT CROSSES AND WHAT DIES, and the split is the whole point of the class. Its first test is
+// `test_every_case_agrees_in_both_glyph_modes` — an equality between a Python probe and a Node
+// one, which dies with the reference and is already replaced above by the replay against the
+// RECORDED answers. Everything else in it is a claim about the CORPUS: that it reaches an arm,
+// that it produced both answers of a two-valued decision, that a fallback was actually taken.
+// Those are what stop the corpus from silently ceasing to exercise a function it still names,
+// and none of them needs a second implementation to be true.
+//
+// ASSERTED ON THE PORT'S LIVE ANSWERS, not on the recorded column. The recorded column is
+// already gated byte-for-byte by the replay above, so re-reading it here would prove the file
+// has not changed — a fact, but not this one. Running the probe says the code still takes the
+// arm today.
+
+const coverageSkip = primitives ? false
+  : `tests/__snapshots__/primitives/${PLATFORM}.json has not been recorded on this platform`;
+
+/** The port's answers for one function, in corpus order. Loud when a function has no cases. */
+function answersFor(fn, asciiMode = false) {
+  const picked = primitives.cases.filter((c) => c.fn === fn);
+  assert.ok(picked.length > 0, `no ${fn} cases in the corpus at all`);
+  return runProbe(picked.map((c) => ({ fn: c.fn, args: c.args })), asciiMode);
+}
+
+test('the animation corpus reaches the arm no cell can reach', { skip: coverageSkip }, () => {
+  // THE POSITIVE CONTROL FOR THE WHOLE ANIMATION ENTRY, and it has to name the ANIMATED arm
+  // specifically. Off a TTY `playLine` prints a title and a static card — which is all any cell
+  // could ever see, since none of them gets past `setup`'s isatty gate — so a corpus of static
+  // cases would agree perfectly between two implementations while the scrolling half, which is
+  // the entire module, went untested. `\x1b[{n}A` is the cursor move only the animation writes.
+  const out = answersFor('play_line');
+  const animated = out.filter((s) => typeof s === 'string' && s.includes('\x1b['));
+  assert.ok(animated.length >= 3, 'the port never took the animated arm');
+  assert.ok(animated.some((s) => s.includes('A\r')),
+    'no cursor-up move — the frames were not redrawn in place');
+  // BOTH arms, or the corpus is not separating them: a probe stuck on the animated one would
+  // satisfy every assertion above and gate nothing about the static card.
+  assert.ok(out.some((s) => typeof s === 'string' && !s.includes('\x1b[')),
+    'the port never took the STATIC arm either, so the corpus is not separating the two');
+});
+
+test('the animation corpus can see the newline translation', { skip: coverageSkip }, (t) => {
+  // `print()` and `sys.stdout.write` translate `\n` in the TEXT layer, so a capture that is not
+  // a real text stream compares LF against LF and a CRLF split walks straight through it —
+  // P5b's transport hole. This asserts the capture is going through the layer at all; where it
+  // is not, there is nothing to see rather than nothing to check.
+  if (path.sep === '/') {
+    t.diagnostic('no newline translation to see on this platform');
+    return;
+  }
+  const out = answersFor('play_line');
+  assert.ok(out.some((s) => typeof s === 'string' && s.includes('\r\n')),
+    'the capture shows no CRLF — it is not going through the text layer, and this corpus '
+    + 'cannot see a newline bug');
+});
+
+test('the anim-ok corpus produced both answers', { skip: coverageSkip }, () => {
+  // A decision table gated only where it says yes is half a gate.
+  const out = answersFor('anim_ok');
+  assert.ok(out.includes(true), 'no case answers true');
+  assert.ok(out.includes(false), 'no case answers false');
+});
+
+test('the art table falls back without inheriting a function', { skip: coverageSkip }, () => {
+  // `ART.get(theme, ART[DEFAULT])` against `ART[theme]`. `constructor` and `__proto__` are a
+  // miss on the reference and a HIT on the prototype chain in JavaScript, so a port spelled
+  // with `??` hands back a Function here. Every miss must land on the neutral theme — and a
+  // REAL theme must not, or the fallback is all the table does.
+  const out = answersFor('art_for');
+  const neutral = out[7];
+  assert.equal(neutral.title, 'Geneseed');
+  for (const i of [8, 9, 10, 11, 12, 13]) {     // nosuchtheme, "", and the four inherited names
+    assert.deepStrictEqual(out[i], neutral, `art_for case ${i} did not fall back`);
+  }
+  assert.notDeepStrictEqual(out[0], neutral,
+    'every theme resolved to neutral — the table is not being read');
+});
+
+test('the probes produce the panel and not an empty echo', { skip: coverageSkip }, () => {
+  // THE POSITIVE CONTROL FOR THE CORPUS ITSELF. Every replay assertion in this file is an
+  // equality against a recorded value, and a probe that returned nothing on both sides would
+  // satisfy all of them if the recording had been made the same way. So one answer is read for
+  // its CONTENT — the status panel, which carries the counts and the freshness line.
+  const first = runProbe([{ fn: primitives.cases[0].fn, args: primitives.cases[0].args }], false)[0];
+  assert.ok(Array.isArray(first), `the first case answered ${typeof first}, not a panel`);
+  assert.ok(first[0].includes('┌─ ◆ Geneseed — status '), first[0]);
+  assert.ok(first.some((ln) => /\d+ agents · \d+ skills · \d+ laws/.test(ln)),
+    `no counts line in the panel:\n${first.join('\n')}`);
+  assert.ok(first.some((ln) => ln.includes('✓ up to date')), first.join('\n'));
+});
+
+// The remaining coverage claims are about the corpus's INPUTS, so they read the case list rather
+// than run anything. Each one names a specific way the corpus could be green while comparing two
+// spellings of the same rule — and each is a shape the LIVE tree cannot produce, which is why
+// these functions have a corpus at all rather than a cell.
+
+/** Every `args` list recorded for `fn`. Loud when a function has no cases. */
+function argsFor(fn) {
+  const picked = primitives.cases.filter((c) => c.fn === fn).map((c) => c.args);
+  assert.ok(picked.length > 0, `no ${fn} cases in the corpus at all`);
+  return picked;
+}
+
+test('the fence corpus actually varies the fence', { skip: coverageSkip }, () => {
+  // The live tree never leaves the floor, so a corpus whose every case also returned four
+  // backticks would be an equality between two constants — green forever, and green on a port
+  // that hardcoded `max(4, …)`'s floor and nothing else.
+  const fences = answersFor('fence_for');
+  assert.ok(fences.includes('`'.repeat(4)), 'no case exercises the max(4, …) floor');
+  assert.ok(fences.some((f) => f.length > 4),
+    'every case returned the floor — this corpus cannot tell fenceFor from a hardcoded four');
+  assert.equal(Math.max(...fences.map((f) => f.length)), 13);   // the 12-run case, + 1
+});
+
+test('the diff corpus reaches past what a cell can seed', { skip: coverageSkip }, () => {
+  // Three things, because a corpus of pairs that all differ trivially is an equality between
+  // two one-hunk diffs — green on any correct implementation AND on one that got `autojunk` or
+  // the tie rule wrong.
+  const cases = primitives.cases.filter((c) => c.fn === 'unified_diff');
+  assert.ok(cases.length > 0, 'no unified_diff cases in the corpus at all');
+  const out = runProbe(cases.map((c) => ({ fn: c.fn, args: c.args })), false);
+  const hunks = out.map((a) => a.filter((ln) => ln.startsWith('@@')).length);
+  assert.ok(hunks.some((h) => h > 1), 'no case produces two hunks — the grouping path is untested');
+  assert.ok(hunks.some((h) => h === 0), "no case produces an EMPTY diff — 'identical' is untested");
+  // The one difference no acceptance cell can see: SequenceMatcher purges popular elements only
+  // at or past 200, so a corpus that never reaches it cannot tell autojunk from its absence.
+  const long = cases.map((c, i) => [c, out[i]]).filter(([c]) => c.args[1].length >= 200);
+  assert.ok(long.length > 0, 'no case reaches the 200-element autojunk threshold');
+  assert.ok(long.some(([, a]) => a.length > 0),
+    'every long case produced an empty diff, so "reaches 200" is a claim about the INPUT only');
+});
+
+test('the splitlines corpus breaks where a newline split does not', { skip: coverageSkip }, () => {
+  // `pySplitLines` exists for the boundaries `split('\n')` does not break on — \v, \f, \x1c,
+  // U+2028 and the rest. A corpus without one is an equality between two `split('\n')`s.
+  const extra = argsFor('py_split_lines')
+    .filter(([s]) => pySplitLines(s).length !== s.split('\n').length);
+  assert.ok(extra.length > 0, "no case breaks on a boundary split('\\n') misses, so the "
+    + 'pySplitLines gate is vacuous');
+});
+
+test('the capitalize corpus has a case where the rest matters', { skip: coverageSkip }, () => {
+  // `str.capitalize()` lowercases the REST; `s[0].toUpperCase() + s.slice(1)` does not. Every
+  // shipped posture and mode name is already lowercase, so the difference is invisible in the
+  // live tree — which is the entire reason this is a corpus and not a cell.
+  const naive = argsFor('py_capitalize')
+    .filter(([s]) => s && `${s[0].toUpperCase()}${s.slice(1).toLowerCase()}`
+      !== `${s[0].toUpperCase()}${s.slice(1)}`);
+  assert.ok(naive.length > 0, 'no case distinguishes str.capitalize() from a naive '
+    + 'uppercase-first, so this corpus proves nothing');
+});
+
+test('the corpus separates code points from UTF-16 units', { skip: coverageSkip }, () => {
+  // `len()` counts code points and `String.length` counts UTF-16 units. Measured rather than
+  // trusted: at least one case must be a string whose two lengths DIFFER.
+  const astral = argsFor('py_len').filter(([s]) => [...s].length !== s.length);
+  assert.ok(astral.length > 0, 'no case distinguishes code points from UTF-16 units, so the '
+    + 'pyLen gate is vacuous');
+});
+
+test('the is-absolute corpus reaches the rootless shape', { skip: coverageSkip }, () => {
+  // `pyIsAbsolute` exists for ONE disagreement: a rootless `/x` or `\x`, which
+  // `path.isAbsolute` calls absolute and `Path.is_absolute` does not. On POSIX the two rules
+  // genuinely coincide, so this asserts the SHAPE is present rather than that the answers
+  // differ on this machine.
+  const cases = argsFor('py_is_absolute').map(([s]) => s);
+  assert.ok(cases.some((s) => '/\\'.includes(s.slice(0, 1)) && !/^([/\\])\1/.test(s)),
+    'no case is a ROOTLESS absolute path, so the pyIsAbsolute gate cannot tell the rules apart');
+  assert.ok(cases.some((s) => /^[A-Za-z]:[^\\/]/.test(s)),
+    "no case is drive-RELATIVE (`C:x`), the shape a naive `parse().root !== ''` rule gets wrong");
+});
+
+test('the agent-entry corpus can see the absolute rule it depends on', { skip: coverageSkip }, () => {
+  // `installAgentEntryOf` SKIPS an absolute entry, so a corpus whose lists hold only relative
+  // ones exercises the first-match walk and never the predicate. At least one case must pair a
+  // rootless-absolute entry with a relative one — the only shape where the two is-absolute
+  // rules pick different ENTRIES.
+  const both = argsFor('install_agent_entry_of')
+    .map(([ls]) => ls)
+    .filter((ls) => Array.isArray(ls)
+      && ls.some((e) => typeof e === 'string' && '/\\'.includes(e.slice(0, 1)))
+      && ls.some((e) => typeof e === 'string' && !'/\\'.includes(e.slice(0, 1))));
+  assert.ok(both.length > 0, 'no case pairs a rootless-absolute entry with a relative one, so '
+    + 'the corpus cannot see which entry the predicate skips');
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE THREE COVERAGE CLAIMS THAT ARE NOT ABOUT THE RECORDED CORPUS AT ALL, and finding that out
+// is the whole story of this block.
+//
+// `tests/__snapshots__/primitives/*.json` holds 1 950 cases over 63 functions — and `build_plan`,
+// `daemon_args`, `restart_args`, `py_which` and `manifest_is_claude` are in NONE of them. The
+// reference's class assembles its inputs as `_cases() + _manifest_cases(tmp) + _which_cases(tmp) +
+// _web_daemon_cases(tmp)`, and only the first is machine-independent enough to be written down;
+// the other three seed a temporary directory and name it in their own arguments, so the recorder
+// skips them. The comparison was therefore the ONLY thing that ever ran those five functions
+// through a probe, and at the cut they lose their exerciser entirely — not just their oracle.
+//
+// So these three own their fixtures. They are NOT gated on `coverageSkip`: nothing here reads the
+// recording, which means they still run on a platform whose corpus has never been recorded.
+
+/** `_which_cases` — a seeded PATH, because `pyWhich` reads the filesystem. */
+function whichCases(tmp) {
+  const a = path.join(tmp, 'whichA');
+  const b = path.join(tmp, 'whichB');
+  for (const d of [a, b]) mkdirSync(d, { recursive: true });
+  // Windows finds `zzhit` through PATHEXT; POSIX needs the name as spelled and the exec bit.
+  for (const [d, names] of [[a, ['zzhit.cmd', 'zzhit']], [b, ['zzhit.cmd', 'zzhit', 'zzonly']]]) {
+    for (const n of names) {
+      writeFileSync(path.join(d, n), '', 'utf8');
+      chmodSync(path.join(d, n), 0o755);
+    }
+  }
+  mkdirSync(path.join(a, 'zzdir'), { recursive: true });   // a DIRECTORY with a command's name
+  writeFileSync(path.join(a, 'zznotexec'), '', 'utf8');
+  chmodSync(path.join(a, 'zznotexec'), 0o644);
+  const sep = path.delimiter;
+  const both = `${a}${sep}${b}`;
+  return [
+    ['zzhit', a],
+    ['zzhit.cmd', a],                       // already spelled: PATHEXT is not appended
+    ['zzonly', both],                       // second entry wins only because the first misses
+    ['zzonly', a],                          // ...and misses entirely when it is absent
+    ['zzdir', a],                           // a directory is never the answer
+    ['zznotexec', a],                       // POSIX: no exec bit. Windows: found.
+    ['zzmissing', both],
+    ['zzhit', ''],                          // an empty PATH is one empty entry, not none
+    ['zzhit', `${sep}${a}`],                // a leading empty entry is searched, as `.`
+    ['zzhit', `${a}${sep}${a}`],            // deduped by normcase
+    ['zzhit', `${a.replaceAll('\\', '/')}${sep}${b}`],
+    [path.join(a, 'zzhit.cmd'), both],      // a path, not a name: checked as given
+    ['nosuch/zzhit', both],
+    // THE CASE THE WHOLE AXIS BELOW EXISTS FOR. `geneseed`/`geneseed.cmd` is a real file at the
+    // repo root and the probe runs with `cwd: ROOT`, so a port that prepends `.` unconditionally
+    // answers with it here. Every other case names a directory the cwd is not.
+    ['geneseed', a],
+    ['node', process.env.PATH ?? ''],       // the one call the verb actually makes
+  ].map(([cmd, p]) => ({ fn: 'py_which', args: [cmd, p] }));
+}
+
+test('the curdir rule is driven in both of its environment states', {
+  skip: process.platform === 'win32' ? false
+    : 'NeedCurrentDirectoryForExePath is a Windows API — on POSIX `shutil.which` has no such axis',
+}, () => {
+  // `NoDefaultCurrentDirectoryInExePath` is an INPUT to `shutil.which`, and until CI ran this
+  // corpus nothing varied it: Git Bash defines it and so does this repo's developer machine, so
+  // every recording measured ONE state, `pyWhich` was written to match that state, and the port
+  // answered null where the reference answered `.\geneseed.CMD` the first time it ran somewhere
+  // the variable was absent.
+  //
+  // WHAT THE REFERENCE ASSERTED AND WHAT SURVIVES. It compared the two implementations under both
+  // states and then guarded against vacuity — "the variable changed nothing, so this ran the same
+  // state twice". The comparison dies; the vacuity guard is the half that was always the point,
+  // and asking the reference (`python -m unittest tests.test_pure_function_parity`, while it is
+  // still here) says exactly which case carries it: of fifteen, ONE answer moves, and it is
+  // `geneseed`. That is stronger than "the two runs differ" — it says `.` went in at the FRONT of
+  // the search and displaced nothing else.
+  const tmp = makeSandbox('pure-which-');
+  try {
+    const cases = whichCases(tmp.path);
+    const defined = runProbe(cases, false, { NoDefaultCurrentDirectoryInExePath: '1' });
+    const absent = runProbe(cases, false, { NoDefaultCurrentDirectoryInExePath: null });
+    assert.equal(defined.length, cases.length);
+
+    const moved = cases
+      .map((c, i) => i)
+      .filter((i) => JSON.stringify(defined[i]) !== JSON.stringify(absent[i]));
+    assert.equal(moved.length, 1, 'the variable moved '
+      + `${moved.length} of ${cases.length} answers (${moved.map((i) => cases[i].args[0])}). `
+      + 'Zero means this ran one state twice and the corpus still cannot see the '
+      + 'current-directory rule; more than one means `.` is displacing entries rather than being '
+      + 'prepended to them.');
+    const [i] = moved;
+    assert.equal(cases[i].args[0], 'geneseed',
+      'the case that moves is not the separator-free name only the cwd can resolve');
+    assert.equal(defined[i], null,
+      'the current directory was searched with NoDefaultCurrentDirectoryInExePath DEFINED');
+    // Derived, not transcribed: the answer must be a `.`-relative path, its extension must have
+    // come from PATHEXT rather than from the disk (`geneseed.cmd` is lower case on disk and the
+    // answer carries PATHEXT's spelling), and it must name a file that is really there.
+    const m = /^\.[\\/]geneseed(\.[^.\\/]+)$/.exec(absent[i] ?? '');
+    assert.ok(m, `with the variable absent the answer was ${JSON.stringify(absent[i])}, not a `
+      + 'cwd-relative geneseed');
+    const pathext = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
+    assert.ok(pathext.some((e) => e === m[1]),
+      `${m[1]} is not one of PATHEXT's spellings (${pathext.join(';')})`);
+    assert.ok(existsSync(path.join(ROOT, absent[i])), `${absent[i]} does not exist under ${ROOT}`);
+  } finally {
+    tmp.cleanup();
+  }
+});
+
+/** `_web_daemon_cases` — P6h's three, each here for a reason no cell can cover. */
+function webDaemonCases(tmp) {
+  const [built, bare, nosrc] = ['web-built', 'web-bare', 'web-nosrc'].map((n) => path.join(tmp, n));
+  for (const d of [built, bare, nosrc]) mkdirSync(path.join(d, 'dist'), { recursive: true });
+  writeFileSync(path.join(built, 'dist', 'index.html'), '<html>', 'utf8');
+  for (const d of [built, bare]) writeFileSync(path.join(d, 'package.json'), '{}', 'utf8');
+  const cases = [];
+  // (dist, webDir, npm, interactive) -> the five answers, in the order `buildPlan` tests them.
+  // `serve` first, because a built dist short-circuits every question below it.
+  for (const [dist, webDir, npm, tty] of [
+    [path.join(built, 'dist'), built, 'npm', true],      // serve
+    [path.join(built, 'dist'), built, null, false],      // serve — dist wins over both
+    [path.join(nosrc, 'dist'), nosrc, 'npm', true],      // no-source
+    [path.join(bare, 'dist'), bare, null, true],         // no-npm
+    [path.join(bare, 'dist'), bare, '', true],           // no-npm — `!npm` is falsy, not null
+    [path.join(bare, 'dist'), bare, 'npm', false],       // no-tty
+    [path.join(bare, 'dist'), bare, 'npm', true],        // ask
+  ]) cases.push({ fn: 'build_plan', args: [dist, webDir, npm, tty] });
+  for (const [port, theme] of [[4747, null], [4747, 'imperial'], [0, null], [65535, 'néutral'],
+    // An EMPTY theme is falsy in both languages, so the flag is DROPPED rather than passed empty
+    // — which would reach the child as `--theme` with the next flag as its value.
+    [4747, '']]) {
+    cases.push({ fn: 'daemon_args', args: [port, theme] });
+    cases.push({ fn: 'restart_args', args: [theme] });
+  }
+  return cases;
+}
+
+test('the web-daemon corpus reaches every answer it claims', () => {
+  // The shape a green mutation keeps asking for: an equality between two functions that both
+  // returned one constant satisfied the reference's whole-corpus comparison forever. `buildPlan`
+  // has five answers and only two are reachable from a cell — the other three need a run that
+  // then blocks forever (`serve`, `ask`) or a machine without npm — so naming all five here is
+  // what makes this the gate for them.
+  const tmp = makeSandbox('pure-daemon-');
+  try {
+    const cases = webDaemonCases(tmp.path);
+    const answers = runProbe(cases, false);
+    const pick = (fn) => cases.map((c, i) => [c, answers[i]]).filter(([c]) => c.fn === fn)
+      .map(([, a]) => a);
+
+    const plans = pick('build_plan');
+    assert.deepEqual([...new Set(plans)].sort(), ['ask', 'no-npm', 'no-source', 'no-tty', 'serve'],
+      `the build-plan corpus answers ${JSON.stringify([...new Set(plans)])}, so it cannot tell `
+      + 'buildPlan from a constant');
+    // The argv the daemon is LAUNCHED with. The binary differs per side by design — each
+    // re-executes itself — but the flags may not, and nothing else can compare them: no cell may
+    // start a daemon, so a twin that dropped `--daemon-internal` would start a server that never
+    // writes a record, and every observation of it would be the same twelve-second timeout the
+    // reference produces when the child genuinely fails.
+    const daemon = pick('daemon_args');
+    const plain = ['--daemon-internal', '--port', '4747', '--no-browser'];
+    assert.ok(daemon.some((a) => JSON.stringify(a) === JSON.stringify(plain)),
+      `no plain daemon argv in ${JSON.stringify(daemon)}`);
+    assert.ok(daemon.some((a) => JSON.stringify(a) === JSON.stringify([...plain, '--theme',
+      'imperial'])), `no themed daemon argv in ${JSON.stringify(daemon)}`);
+    assert.ok(pick('restart_args').some((a) => JSON.stringify(a)
+      === JSON.stringify(['restart', '--no-browser'])), 'no plain restart argv');
+    // The empty theme reaches BOTH builders and is dropped by both — the case that would
+    // otherwise send `--theme` with the next token as its value.
+    assert.equal(daemon.filter((a) => JSON.stringify(a) === JSON.stringify(plain)).length, 2,
+      'the empty theme did not produce the same argv as no theme at all');
+  } finally {
+    tmp.cleanup();
+  }
+});
+
+test('the fence corpus still describes the real tree', () => {
+  // `js/generate.mjs` states that no CELL can vary the fence, and that is a claim about the
+  // CONTENT of `src/` rather than about the code — so it is re-derived here instead of trusted.
+  // The day a source file grows a four-backtick run the claim stops holding, a `prompt` cell
+  // becomes able to cover the branch, and this fails to say so.
+  //
+  // SWEPT WIDER THAN THE REFERENCE, which rendered one theme at the default posture. Posture and
+  // mode STRIP blocks, so a single render leaves source text unscanned, and theme substitutes
+  // vocabulary that lands in the rendered file — three axes, every combination. The axes are READ
+  // from the option tables rather than listed, so a posture added tomorrow is swept without an
+  // edit here; a list would have gone stale silently, which is the failure this whole test is
+  // about. Measured: 140 renders, 13 440 files, ~1.4 s.
+  let longest = 0;
+  let where = null;
+  let scanned = 0;
+  for (const [theme] of themeOptions()) {
+    for (const [posture] of postureOptions()) {
+      for (const [mode] of modeOptions()) {
+        const { items } = renderAll(makeCfg({ posture, mode }), theme);
+        for (const { rel, text } of items) {
+          if (text === null) continue;
+          scanned += 1;
+          for (const m of text.matchAll(/`+/g)) {
+            if (m[0].length > longest) { longest = m[0].length; where = `${rel} @ ${theme}/${posture}/${mode}`; }
+          }
+        }
+      }
+    }
+  }
+  // A vacuous scan agrees with anything: no files, or a regex that never matched, would satisfy
+  // `longest < 4` perfectly.
+  assert.ok(scanned > 1000, `the sweep rendered ${scanned} files`);
+  assert.ok(longest > 0, 'not one backtick in the whole rendered tree — the scan found nothing, '
+    + 'so `longest < 4` is a statement about the regex and not about `src/`');
+  assert.ok(longest < 4, `${where} now holds a run of ${longest} backticks, so fenceFor no longer `
+    + 'always returns the floor and the matrix CAN cover it — write the prompt cell and relax '
+    + 'this test');
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE BYTE-BEARING PRIMITIVES AND THEIR PLATFORM DECLARATION —
+// `TheByteBearingPrimitivesAgree`, `ThePlatformSensitiveAnswersAreDeclared` and
+// `TheTildeUserFormIsADeliberateDivergence`, whose comparisons retire into the replay above and
+// whose absolute halves land here.
+
+test('the linesep corpus records this platform\'s translation', () => {
+  // A comparison alone passes on two implementations that both write LF — the RIGHT answer on
+  // POSIX and the wrong one on Windows, and no equality can tell those apart. So the answer for
+  // `a\nb` is stated against os.linesep absolutely: the day either the writer or the recording
+  // stops translating, this names it. Both are checked, because they can rot separately — the
+  // corpus was recorded on a machine whose linesep is this one's.
+  const want = Buffer.from(`a${EOL}b`, 'utf8').toString('hex');
+  assert.equal(runProbe([{ fn: 'write_text_linesep', args: ['a\nb'] }], false)[0], want,
+    'writeText no longer translates a bare newline to this platform\'s line ending');
+  const recorded = primitives?.cases.find(
+    (c) => c.fn === 'write_text_linesep' && c.args.length === 1 && c.args[0] === 'a\nb');
+  assert.ok(recorded, 'the corpus has no write_text_linesep case for a bare newline');
+  assert.equal(recorded.result, want,
+    `the recording says ${recorded.result} for a\\nb and this platform's line ending is `
+    + `${JSON.stringify(EOL)} — one of the two belongs to another operating system`);
+});
+
+test('both platform halves of str(Path(x)) are recorded and cover the same inputs', () => {
+  // THE HOLE THIS CLOSES, and the mechanism changed shape on the way across. The reference kept a
+  // hand-written PLATFORM_EXPECTED table and checked it in five directions, because a comparison
+  // between two implementations cannot say what the right answer IS — only that both sides give
+  // the same one. The port needs no table: `tests/__snapshots__/primitives/win32.json` and
+  // `posix.json` are BOTH in the tree, each recorded by the reference on that operating system, so
+  // the two halves of the declaration are the two recordings.
+  //
+  // WHAT DID NOT CROSS, stated rather than left implicit. The reference could derive
+  // platform-sensitivity INDEPENDENTLY, by calling `PureWindowsPath` and `PurePosixPath` from one
+  // host — both import anywhere. `pyPathStr` reads `path.sep` with no parameter, and no child
+  // process can change it, so there is nothing here that can re-derive the split from the CODE. A
+  // recording that drifted from the port on the platform this run is not on would be invisible;
+  // what catches it is the other platform's own CI job replaying its own half.
+  const halves = ['win32', 'posix'].map((p) => [p, load(path.join('primitives', `${p}.json`))]);
+  for (const [name, doc] of halves) {
+    assert.ok(doc, `tests/__snapshots__/primitives/${name}.json is missing — one half of the `
+      + 'declaration is gone, and a half that is not there is indistinguishable from a half that '
+      + 'was never true');
+  }
+  const pick = (doc) => new Map(doc.cases.filter((c) => c.fn === 'py_path_str')
+    .map((c) => [JSON.stringify(c.args), c.result]));
+  const [[, win], [, posix]] = halves;
+  const w = pick(win);
+  const p = pick(posix);
+  assert.ok(w.size > 0, 'no py_path_str cases in the win32 half at all');
+  assert.deepEqual([...w.keys()].sort(), [...p.keys()].sort(),
+    'the two halves probe different inputs, so a row can be declared on one platform and not '
+    + 'exercised on the other');
+  const differ = [...w.keys()].filter((k) => JSON.stringify(w.get(k)) !== JSON.stringify(p.get(k)));
+  // The positive control the whole mechanism rests on: if the two recordings agreed everywhere,
+  // the platform axis would be a table with one side and every assertion about it vacuous.
+  assert.ok(differ.length > 0, `all ${w.size} py_path_str inputs answer the same on both `
+    + 'platforms, so this corpus cannot see the operating system at all');
+  assert.ok(differ.length < w.size, 'every input is platform-sensitive, which means the corpus '
+    + 'holds nothing that should agree — the control has no negative side');
+  // Declared, not asserted: a green run says what it did NOT check on this host.
+  const other = PLATFORM === 'win32' ? 'posix' : 'win32';
+  const otherHalf = PLATFORM === 'win32' ? p : w;
+  console.log(`[pure-snapshot] ${differ.length} of ${w.size} str(Path(x)) answers differ by `
+    + `platform; the ${other} half below was DECLARED and not asserted on this ${PLATFORM} run:`);
+  for (const k of differ) console.log(`    ${k} -> ${JSON.stringify(otherHalf.get(k))}`);
+});
+
+test('the tilde-user form is refused rather than guessed', () => {
+  // A byte-bearing case UNTIL the project decided the port should not reproduce `ntpath`'s rule
+  // for it. `ntpath.expanduser('~someuser/x')` swaps the last component of %USERPROFILE% and hands
+  // back a path for an account that may not exist; the port REFUSES the form, because this is the
+  // single primitive every config-dir variable and every --target/--dir/--bundle/--out passes
+  // through, and the old behaviour returned it untouched so that `--target ~someone/x` created a
+  // literal `~someone` directory in the cwd.
+  //
+  // THE REFUSAL IS THE CRASH. Nothing in the probe's dispatch catches it, so an uncaught throw
+  // exits non-zero with a message — which is a normal, catchable CLI error rather than a silent
+  // wrong path.
+  const job = path.join(makeSandbox('pure-tilde-').path, 'job.json');
+  writeFileSync(job, JSON.stringify({ cases: [{ fn: 'expanduser', args: ['~unknownuser/x'] }] }),
+    'utf8');
+  const r = spawnSync(process.execPath, [PROBE, job], { cwd: ROOT, encoding: 'utf8' });
+  assert.notEqual(r.status, 0, `the probe exited 0 for ~unknownuser/x and answered ${r.stdout}`);
+  assert.match(r.stderr, /~unknownuser\/x/, r.stderr.slice(-400));
+  assert.match(r.stderr, /refusing/, r.stderr.slice(-400));
+});
+
+test('the reference\'s own tilde rule is written down for both platforms', () => {
+  // RECAST AS HISTORY. The reference asserted its own behaviour here, on whichever platform was
+  // running, and that arm dies with it. What must not die is the FACT, because the divergence
+  // above is only meaningful against what it diverges FROM — and because this table is where the
+  // project's second wrong belief was caught. The class first claimed POSIX "returns the path
+  // unchanged": true of `posixpath.expanduser`, false of the `Path.expanduser` the reference
+  // actually calls, which raises RuntimeError for a home directory it cannot determine. The first
+  // Linux run reported an ERROR rather than a failure, which is how it surfaced.
+  //
+  // A table with one side is exactly the shape that let the first wrong belief survive, so both
+  // are written and both are checked for content.
+  const REFERENCE_RULE = {
+    win32: 'expands — ntpath swaps the last component of %USERPROFILE%, and pathlib hands that '
+      + 'back happily even for an account that does not exist',
+    posix: 'raises RuntimeError — pathlib refuses a home directory it could not determine, so '
+      + 'the reference and the port already agreed in KIND there and differed only in which '
+      + 'exception said so',
+  };
+  assert.deepEqual(Object.keys(REFERENCE_RULE).sort(), ['posix', 'win32'],
+    'both operating systems\' rules have to be written down');
+  for (const [name, rule] of Object.entries(REFERENCE_RULE)) {
+    assert.ok(rule.trim().length > 40, `the ${name} rule is not written down, only named`);
+  }
+  const other = PLATFORM === 'win32' ? 'posix' : 'win32';
+  console.log(`[pure-snapshot] \`~unknownuser/x\` under the deleted reference on ${other} — `
+    + `declared, never run on this ${PLATFORM} host: ${REFERENCE_RULE[other]}`);
+});
+
 test('every corpus names a patch-independent interpreter', () => {
   // THE TOOLCHAIN IS NOT THE CODE UNDER TEST. `recorded_with` is written by three recorders
   // and read by no gate, so its only comparison is the whole-file `diff` that `record-corpus`
@@ -262,6 +798,55 @@ test('the width sweep still produces the recorded runs', { skip: dwidth ? false
     assert.equal(dwidth.rle.filter(([start]) => start <= cp).at(-1)[1], entry.width,
       `${name}'s sample width disagrees with the runs it is drawn from`);
   }
+});
+
+test('the width tables name a unicode version, in the source and at runtime', () => {
+  // `tests/test_pure_function_parity.py`'s `TheWidthTablesDeclareTheUnicodeTheyEncode`, and it is
+  // asserted on EVERY host — including the ones that skip the sweep, which is the whole point of
+  // it being its own claim. The tables are a snapshot of one Unicode version and have to say
+  // which one, or the corpus above cannot tell "the port is wrong" from "this machine's Unicode
+  // is newer".
+  //
+  // READ OUT OF THE SOURCE BY REGEX as well as imported. A gate on a DECLARATION must not be
+  // satisfiable by the declaration being deleted and the value arriving some other way; the
+  // import proves the value, the regex proves the form, and the two agreeing is what says the
+  // constant a reader finds beside the tables is the one the code uses.
+  const src = readFileSync(path.join(ROOT, 'js', 'tui.mjs'), 'utf8');
+  const m = /export const DWIDTH_UNIDATA = '([^']+)';/.exec(src);
+  assert.ok(m, 'js/tui.mjs no longer declares DWIDTH_UNIDATA in that form — the width tables are '
+    + 'a snapshot of one Unicode version and have to say which one');
+  assert.match(m[1], /^\d+\.\d+\.\d+$/,
+    `DWIDTH_UNIDATA is ${JSON.stringify(m[1])}, which is not a Unicode version`);
+  assert.equal(m[1], DWIDTH_UNIDATA, 'the declaration in the source and the exported value differ');
+});
+
+test('the width sweep is a sweep and not a handful of runs', { skip: dwidth ? false
+  : 'tests/__snapshots__/dwidth.json has not been recorded' }, () => {
+  // The second half of the corpus's positive control, and it is separate because it fails
+  // differently: "all three widths appear" is satisfied by a probe that returned three runs and
+  // stopped. This asserts the SHAPE — the sweep starts where it says it starts, spans the space,
+  // and reaches the two regions a BMP-only table would silently miss.
+  assert.equal(dwidth.rle[0][0], dwidth.range[0], 'the sweep does not start at its own range');
+  assert.ok(dwidth.rle.length > 200, `the sweep collapsed to ${dwidth.rle.length} runs`);
+  assert.ok(dwidth.rle.some(([cp]) => cp >= 0x1f000), 'the sweep never reached the astral emoji '
+    + 'rule, where the port stops consulting a table and answers by range');
+  assert.ok(dwidth.rle.some(([cp, w]) => cp >= 0x10000 && w === 0),
+    'the sweep never reached a combining mark above the BMP, so the port\'s table is untested '
+    + 'there');
+});
+
+test('the display width does not read the display tier', { skip: dwidth ? false
+  : 'tests/__snapshots__/dwidth.json has not been recorded' }, () => {
+  // THE ASSERTION THAT LICENSES SWEEPING ONE GLYPH MODE. `dwidth` reads no tier constant, so the
+  // corpus runs it once — and that is a claim, not a definition. It is the kind of coupling a
+  // later phase adds by accident, because every function beside it in `js/tui.mjs` DOES read the
+  // tier, and the corpus would then be a half-measurement with nothing saying so.
+  const plain = runProbe([{ fn: 'dwidth_rle', args: dwidth.range }], false)[0];
+  const ascii = runProbe([{ fn: 'dwidth_rle', args: dwidth.range }], true)[0];
+  assert.ok(plain.length > 200, `the sweep answered ${plain.length} runs`);
+  assert.deepStrictEqual(ascii, plain,
+    'the display width changed with GENESEED_TUI_ASCII, so the recorded sweep gates one tier and '
+    + 'says nothing about the other');
 });
 
 test('pyTextWrap still answers every recorded wrap', { skip: textwrapCorpus ? false

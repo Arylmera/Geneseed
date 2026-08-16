@@ -38,7 +38,15 @@ export const VERSION_MARKER = '.geneseed-version';
  * shell would". That claim was FALSE, and `921384f`'s widened probe corpus caught it:
  * `ntpath.expanduser('~someuser/x')` swaps the last component of `%USERPROFILE%` and
  * returns `C:\Users\someuser\x` — it happily expands a name that may not even be a real
- * account. POSIX's `expanduser` does the analogous thing via the password database.
+ * account.
+ *
+ * AND THE POSIX HALF OF THAT SENTENCE WAS WRONG IN ITS TURN, corrected here while the
+ * reference is still on the machine to ask. `posixpath.expanduser` does the analogous thing
+ * through the password database and returns the path unchanged when the account is unknown
+ * — but the reference does not call it. It calls `Path.expanduser`, which re-checks the
+ * result and RAISES `RuntimeError: Could not determine home directory.` So the divergence
+ * below is WINDOWS-ONLY: on POSIX the reference and this port already agree in kind — both
+ * refuse — and differ only in which exception says so.
  *
  * This port deliberately does NEITHER. Reproducing `ntpath`'s swap faithfully needs its own
  * corpus, and the Python reference is being deleted, so byte-parity on this one input stops

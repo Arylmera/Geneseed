@@ -156,13 +156,65 @@ test('the ascii tier is pure ascii for icons, marks and the spinner', () => {
 test('the spinner is static when motion is off, and whirls when it is on', () => {
   // The calm tiers must not emit a braille frame: `spin` has to be tick-INDEPENDENT there, or
   // a per-keypress redraw flickers.
-  const plain = inTier(PLAIN, '[m.spin(0), m.spin(7)]');
-  assert.deepEqual(plain, ['·', '·'], 'the plain tier animated');
-  assert.deepEqual(inTier(ASCII, '[m.spin(3), m.spin(6)]'), ['-', '-'],
+  //
+  // FOUR CONSECUTIVE TICKS, not two, and the widening came from `test_pure_function_parity.py`'s
+  // `TheDisplayTiersAreThreeAndTheCorpusReachesTwo` on its way here: two frames prove the emoji
+  // tier is not CONSTANT, four prove it is not a two-frame blink either, and the calm tiers owe
+  // the same run length or "static" is asserted over a shorter window than "moving".
+  assert.deepEqual(inTier(PLAIN, '[0,1,2,3].map(m.spin)'), ['·', '·', '·', '·'],
+    'the plain tier animated');
+  assert.deepEqual(inTier(ASCII, '[0,1,2,3].map(m.spin)'), ['-', '-', '-', '-'],
     'the ascii tier animated');
-  const anim = inTier(EMOJI, '[m.spin(0), m.spin(1)]');
-  assert.notEqual(anim[0], anim[1], 'the emoji tier did NOT animate');
+  const anim = inTier(EMOJI, '[0,1,2,3].map(m.spin)');
+  assert.equal(new Set(anim).size, 4, `the emoji tier repeated a frame in four ticks: ${anim}`);
   for (const f of anim) assert.ok('⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'.includes(f), JSON.stringify(f));
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE TIER IS A PARTITION OF THREE — `tests/test_pure_function_parity.py`'s
+// `TheDisplayTiersAreThreeAndTheCorpusReachesTwo`, which the corpus above it could not carry.
+//
+// WHY IT WAS EVER A SEPARATE CLASS. The probe corpus varies `GENESEED_TUI_ASCII` only, so every
+// glyph function is compared across TWO of its three tiers, and a cross-implementation equality
+// is blind to a fault both sides share: two ports that ignored the tier entirely agree on every
+// row. The reference answered that by stating what each tier must ANSWER, in one extra process
+// per tier rather than by adding a third axis to a corpus of a thousand cases — the middle tier
+// needs proving to be a distinct third answer, not that a hundred unrelated functions still
+// agree in it. Both halves of that argument survive the reference; only the equality does not.
+
+test('each tier answers with its own glyphs', () => {
+  // `mark('ok')` is here and nowhere else in this file: the ascii-purity test above sweeps
+  // pending/edited/added/missing and the three mcp keys, so the one mark the status panel uses
+  // most had no tier assertion at all.
+  assert.deepEqual(inTier(EMOJI, "[m.icon('agent'), m.mark('ok'), m.spin(1)]"),
+    ['🤖', '✅', '⠙']);
+  // `·`, not a braille frame: the animation flag follows the EMOJI tier, so PLAIN is a CALM tier
+  // and not merely a de-emojified one. The reference's first draft of this row asserted `⠙` here
+  // — its own expectation contradicting the tier contract asserted two tests below it.
+  assert.deepEqual(inTier(PLAIN, "[m.icon('agent'), m.mark('ok'), m.spin(1)]"),
+    ['◆', '✓', '·']);
+  assert.deepEqual(inTier(ASCII, "[m.icon('agent'), m.mark('ok'), m.spin(1)]"),
+    ['@', '+', '-']);
+});
+
+test('the three tiers are three and not two', () => {
+  // The control the row above needs: if PLAIN collapsed onto either neighbour the assertions
+  // would still read as three named tiers while the code had two.
+  const answer = (tier) => inTier(tier, "[m.icon('agent'), m.mark('ok'), m.spin(1)]");
+  const [emoji, plain, ascii] = [answer(EMOJI), answer(PLAIN), answer(ASCII)];
+  assert.notDeepEqual(emoji, plain, 'the plain tier collapsed onto the emoji tier');
+  assert.notDeepEqual(plain, ascii, 'the plain tier collapsed onto the ascii tier');
+});
+
+test('the logo changes ink with the tier', () => {
+  // And the axis is narrower than the tier: the logo is drawn in blocks in BOTH non-ascii tiers,
+  // so this is the one place the three-way partition is really a two-way one. Measured rather
+  // than assumed — the reference asserted only the emoji and ascii ends.
+  const row = (tier) => inTier(tier, 'm.logoLines()[0]');
+  assert.ok(row(EMOJI).includes('█'), row(EMOJI));
+  assert.ok(row(PLAIN).includes('█'), 'the plain tier drew the logo in ascii ink');
+  assert.ok(row(ASCII).includes('#'), row(ASCII));
+  assert.ok(!row(ASCII).includes('█'), 'the ascii tier drew the logo in block ink');
 });
 
 test('the progress bar is exactly its width at every fraction', () => {
