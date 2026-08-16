@@ -346,6 +346,36 @@ export const MUTATIONS = [
       + 'catalog, on exactly the machines where the file failed to read. The emptiness check '
       + 'belongs to the REGISTRY and not to the row, and that is the distinction this kills.',
   },
+  // ------------------------------------------------------------------------------------------
+  // P3 T7, with `tests/unit/web_jobs.test.mjs`. MEASURED WHILE ADDING THESE: the `$ <argv>` echo
+  // line in the recorded web corpus normalises the WHOLE argv to `<ARGV>`, not merely its head
+  // — so all 114 cells are blind to every argument the job runner resolves, and the reference's
+  // own docstring understated it. Both rows below are therefore invisible to the entire corpus.
+  {
+    id: 'M20',
+    name: 'drop --yes from the uninstall job argv',
+    file: 'js/web/jobs.mjs',
+    find: "    uninstall: [[NODE(), CLI(), 'uninstall', '--yes']],",
+    replace: "    uninstall: [[NODE(), CLI(), 'uninstall']],",
+    gate: UNIT,
+    why: 'A REAL HAZARD AND NOT A COSMETIC ONE: the web Settings runs uninstall as a background '
+      + 'job with no terminal attached, so without `--yes` the verb blocks on a confirmation '
+      + 'prompt nobody can answer and the job hangs until the daemon is killed. Nothing observes '
+      + 'it: the argv is not serialised to a client, and the one place it appears — the `$` echo '
+      + 'line — is normalised whole in every recorded cell.',
+  },
+  {
+    id: 'M21',
+    name: 'make the deploy resolver ignore the requested host',
+    file: 'js/web/actions.mjs',
+    find: "  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode);",
+    replace: "  const argv = setupBuildArgs(theme || 'neutral', 'files', root, root, fp, pos, mode);",
+    gate: UNIT,
+    why: "`apiDeployCmd`'s `{cmd: [...]}` is handed straight to the job runner and never reaches "
+      + 'the wire, so a resolver that deployed the host-agnostic bundle to every host would '
+      + 'answer every request successfully and write the wrong layer. The one recorded cell that '
+      + 'touches the endpoint covers its two REFUSAL arms, where no command is produced at all.',
+  },
 ];
 
 function run(argv) {
