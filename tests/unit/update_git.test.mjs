@@ -1,5 +1,6 @@
 // `tests/test_update.py` — the half that needs a git repository: `PreflightTests`,
-// `OriginDisplayTests`, `MeasureUpstreamTests`.
+// `OriginDisplayTests`, `MeasureUpstreamTests`, `PullAndValidateTests`,
+// `NoCellCanReachTheNetwork`, `AliasTests` and `FetchStreamingTests`.
 //
 // HOW THE SEAM CROSSED, because it is the whole design of this file. The reference reaches every
 // one of these through `mock.patch.object(_update, "_git", side_effect=seam)`, handing the parser
@@ -424,5 +425,161 @@ test('git missing from PATH also classifies as fetch_failed', async () => {
     const [code, , err] = await U.measureUpstream();
     assert.equal(code, 'fetch_failed');
     assert.match(err, /git is not installed/);
+  } finally { process.env.PATH = saved; }
+});
+
+// ---------------------------------------------------------------------------------------------
+// `FetchStreamingTests` — the streamer itself, with no fake git anywhere.
+//
+// THE REFERENCE SUBSTITUTES A FAKE GIT and could not do otherwise: it patches
+// `subprocess.Popen` module-wide so a `python -c "print(...)"` stands in for the fetch. The PATH
+// equivalent is closed on Windows — Node refuses to spawn a `.cmd` without a shell
+// (CVE-2024-27980) — but it is also unnecessary here, because MEASURED, a real `git fetch
+// --progress` over a plain local origin emits the whole repaint stream: `remote: Enumerating
+// objects`, a hundred-odd `\r`-separated `Counting objects:  N%` frames, `Receiving objects`,
+// `Resolving deltas`. The fake printed ONE line and could never have exercised any of that.
+//
+// SO THIS REACHES `fetchPhases` FOR REAL, which is the part worth having. That function's own
+// docblock says no cell can reach it — "a local-path fetch prints nothing at all" — and that is
+// true of a fetch with nothing to transfer, which is the only kind the recorded cells perform.
+// Give the fixture objects to receive and the filter is live: hundreds of raw repaint lines,
+// a handful of logged ones. The assertion below is on that RATIO, which is the property the
+// filter exists for (an unfiltered 30-second fetch writes a thousand lines into the install log)
+// and is strictly stronger than the reference's `any("Receiving objects" in m)`.
+//
+// THE PIPE-CLOSED CLASS DOES NOT CROSS, and the argument is structural rather than an omission.
+// `_assert_pipe_closed` exists because the reference has three exits — two returns and a return
+// from inside the poll loop — and each has to close the read end itself, which is a descriptor
+// leaked per upgrade in a daemon that stays up for weeks. `fetchStreaming` has ONE exit: it
+// awaits `child.on('close')`, which fires only after both streams have flushed and closed, and
+// the timeout arm goes through that same await after `killTree`. There is no exit that can
+// return with the pipe open, so there is nothing to assert that is not a tautology about Node.
+//
+// AND `test_the_tail_waits_for_the_reader_to_drain_the_pipe` IS A PYTHON-ONLY REGRESSION GATE by
+// its own docstring: `p.poll()` answers about the process while the pipe still holds unread
+// output, so the reference could build the tail before git's own error had been read and print
+// "git fetch hung without any output" over `fatal: transport 'https' not allowed`. Awaiting
+// `close` is exactly the fix that makes the failure unreachable here. The property that MATTERS
+// — git's own words survive into the tail — is asserted where it is load-bearing, in
+// `a fetch that fails is fetch_failed, and the reason is carried out` above and in the
+// transport-ban control.
+
+test('a real fetch streams its phases, collapses the repaints, and returns rc 0', async () => {
+  // Objects to receive, and the count is MEASURED rather than generous: at 60 files git served
+  // the fetch straight out of its object store — `remote: Enumerating objects: 63, done.` and
+  // nothing else, no pack, no repaint, every assertion below vacuously true. At 400 it builds a
+  // real pack and the progress meter runs. A fetch with nothing to transfer prints only its
+  // summary line, which is why every recorded cell's fetch is silent.
+  for (let i = 0; i < 400; i += 1) {
+    fs.writeFileSync(path.join(OTHER2, `streamed-${i}.txt`), `payload ${i}\n`.repeat(200));
+  }
+  git(OTHER2, 'add', '-A');
+  git(OTHER2, 'commit', '-qm', 'a fetch with something in it');
+  git(OTHER2, 'push', '-q');
+
+  // ⚠ MEASURED, AND THE FIXTURE TURNS ON IT: a PLAIN PATH origin takes git's local-object
+  // shortcut, which enumerates and then copies — `remote: Enumerating objects: 63, done.` and
+  // nothing else. No pack is built, so there is no repaint stream and every assertion below
+  // would pass vacuously on a fetch that never exercised the filter. Spelling the same
+  // directory as a `file://` URL disables that shortcut and runs the real pack protocol, which
+  // is also what a fetch from a network remote does.
+  const fileUrl = `file:///${ORIGIN2.replace(/\\/g, '/')}`;
+  const logged = [];
+  git(CO2, 'remote', 'set-url', 'origin', fileUrl);
+  let rc; let tail;
+  try {
+    [rc, tail] = await U2.fetchStreaming((m) => logged.push(m));
+  } finally { git(CO2, 'remote', 'set-url', 'origin', ORIGIN2); }
+  assert.equal(rc, 0, `the fetch failed: ${tail}`);
+  assert.ok(logged.length > 0, 'a fetch that transferred objects logged nothing at all');
+
+  const dump = logged.join('\n');
+
+  // ⚠ WHAT A REAL STREAM LOOKS LIKE, and no fake or recorded transcript shows it. The filter
+  // emits a line when the phase CHANGES, which is one line per contiguous RUN and not one per
+  // phase — and git interleaves the remote's lines into the middle of the client's own progress:
+  //
+  //     remote: Enumerating objects: 403, done.
+  //     Receiving objects:   0% (1/402)          <- ~100 `\r` frames follow
+  //     remote: Total 402 (delta 0), reused 402 ...
+  //     Receiving objects:   9% (37/402)         <- the rest of the frames
+  //     From file:///…/origin2
+  //        016fc29..0b5828f  main -> origin/main
+  //
+  // So `Receiving objects` is logged TWICE for one transfer, legitimately. Asserting "exactly
+  // once per phase" would be asserting something the reference does not do either.
+  const receiving = logged.filter((m) => /Receiving objects/.test(m));
+  assert.ok(receiving.length >= 1,
+    `no transfer phase was logged, so the fixture may have had nothing to fetch:\n${dump}`);
+
+  // THE COLLAPSE, derived rather than asserted as a bare ceiling. git's progress meter emits a
+  // frame per percentage point, so a transfer of more than 100 objects necessarily wrote more
+  // than 100 raw lines onto the pipe. Six survived. Without the filter every one of them would
+  // be a line in the user's install log, which is the whole reason `fetchPhases` exists.
+  const enumerated = /Enumerating objects: (\d+)/.exec(dump);
+  assert.ok(enumerated && Number(enumerated[1]) > 100,
+    `the fixture transferred too little to repaint at all, so the collapse below proves `
+    + `nothing:\n${dump}`);
+  assert.ok(logged.length <= 8,
+    `${logged.length} lines logged for a fetch of ${enumerated[1]} objects — the phase filter `
+    + `is not being applied:\n${dump}`);
+  assert.match(tail, /main/, `the tail lost the fetch's own summary: ${tail}`);
+});
+
+test('a fetch that produces nothing is killed, returns null, and says so', async () => {
+  // THE HANG IS REAL AND SO IS THE KILL. The reference mocks `_fetch_timeout` down to 1 second;
+  // there is no seam here and the floor is deliberate — `fetchTimeout()` is `max(30, …)`, so a
+  // user cannot set a nonsense deadline and neither can a test. MEASURED COST: this test takes
+  // the full 30 seconds and is by a wide margin the slowest in the suite. It is kept at full
+  // price because the property is the most user-visible one in the module: without it a fetch
+  // that never answers hangs `geneseed web`'s daemon forever, which is the bug `_kill_tree` was
+  // written for.
+  //
+  // The hang is git's own, not a stand-in: an `ssh://` origin whose SSH command is a process
+  // that never speaks. git spawns it and blocks (measured: still blocked at 6 s under a plain
+  // spawn, killed only by the harness's own timeout), which is exactly the shape of a fetch
+  // against a black-holed network — and no socket is opened by anything.
+  const savedProtocol = process.env.GIT_ALLOW_PROTOCOL;
+  const savedSsh = process.env.GIT_SSH_COMMAND;
+  const savedTimeout = process.env.GENESEED_NET_TIMEOUT;
+  git(CO2, 'remote', 'set-url', 'origin', 'ssh://fixture.invalid/repo.git');
+  process.env.GIT_ALLOW_PROTOCOL = 'file:ssh';
+  process.env.GIT_SSH_COMMAND = `"${process.execPath}" -e "setInterval(()=>{},1000)"`;
+  process.env.GENESEED_NET_TIMEOUT = '30';
+  const logged = [];
+  try {
+    const started = Date.now();
+    const [rc] = await U2.fetchStreaming((m) => logged.push(m));
+    const elapsed = Date.now() - started;
+    assert.equal(rc, null, 'a timed-out fetch must be null, not a status code');
+    assert.ok(logged.some((m) => /killed it/.test(m)),
+      `the kill was silent:\n${logged.join('\n')}`);
+    // The deadline is the reason it returned, not a fast failure that happened to be null:
+    // an origin git rejected outright would come back in milliseconds with the same rc.
+    assert.ok(elapsed >= 29_000, `it returned after ${elapsed}ms — that was not the deadline`);
+    // The heartbeat, which shares the same 250 ms timer and is the only sign of life a user
+    // gets during a long fetch.
+    assert.ok(logged.some((m) => /still fetching \(\d+s elapsed\)/.test(m)),
+      `no heartbeat during a 30-second fetch:\n${logged.join('\n')}`);
+  } finally {
+    git(CO2, 'remote', 'set-url', 'origin', ORIGIN2);
+    process.env.GIT_ALLOW_PROTOCOL = savedProtocol;
+    if (savedSsh === undefined) delete process.env.GIT_SSH_COMMAND;
+    else process.env.GIT_SSH_COMMAND = savedSsh;
+    if (savedTimeout === undefined) delete process.env.GENESEED_NET_TIMEOUT;
+    else process.env.GENESEED_NET_TIMEOUT = savedTimeout;
+  }
+});
+
+test('with no git on PATH the streamer answers before it spawns anything', async () => {
+  // The reference's `test_no_git_exe`, and distinct from the `measureUpstream` arm above: this
+  // is the streamer's OWN contract — `[null, <a reason a user can act on>]` — where the other
+  // asserts that its caller classifies that pair as `fetch_failed`.
+  const saved = process.env.PATH;
+  process.env.PATH = '';
+  try {
+    const [rc, err] = await U2.fetchStreaming();
+    assert.equal(rc, null);
+    assert.match(err, /git is not installed or not on PATH/);
   } finally { process.env.PATH = saved; }
 });
