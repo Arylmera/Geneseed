@@ -308,5 +308,7 @@
     "mytheme.json": "ewogICJBIjogImhlbGxvIgp9Cg=="
    }
   }
- ]
+ ],
+ "recorded_on": "win32",
+ "platform_note": "RECORDED ON win32, AND THE RAW BYTES CARRY ITS LINE SEPARATOR. writeText translates to os.linesep, so the reference wrote CRLF here and writes LF on a posix runner. The replayer therefore compares CONTENT with newlines folded on every platform, asserts the separator against os.EOL on whichever platform runs, and keeps the RAW-BYTE equality only where recorded_on matches - the strongest form, claimed only where it is true. Recording one platform and asserting bytes everywhere is what reddened validate (ubuntu-latest) on PR #86."
 }

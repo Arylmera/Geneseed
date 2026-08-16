@@ -17,6 +17,20 @@
  * erase the first, and the whole reason `--sync-themes` has a byte corpus is that it rewrites
  * files a maintainer has committed.
  *
+ * ⚠ AND A RECORDING IS OF ONE PLATFORM, WHICH THE FIRST DRAFT FORGOT. `writeText` translates to
+ * `os.linesep`, so the reference wrote CRLF into this corpus on Windows and writes LF on a posix
+ * runner — and asserting the raw bytes everywhere reddened `validate (ubuntu-latest)` on PR #86,
+ * with all twenty rows failing on a port that was behaving correctly. The claim decomposes:
+ *
+ *   * the CONTENT of the report and of every written file is platform-independent, and is
+ *     compared with newlines folded on EVERY platform;
+ *   * the SEPARATOR is the platform's, so it is asserted against `os.EOL` on whichever platform
+ *     is running — which is the same claim `mutate.mjs`'s M1 plants and the emit corpus keeps in
+ *     two halves;
+ *   * the RAW BYTES are compared only where `recorded_on` matches the running platform. That is
+ *     the strongest form and it is claimed only where it is true, rather than dropped everywhere
+ *     because it cannot hold everywhere.
+ *
  * ⚠ THE `--validate-only` HALF IS NOT HERE, and its absence is the row's own finding. That
  * comparison was OBSERVED FLAKY and then DIAGNOSED: it runs both implementations back to back,
  * each runs `validate` → `doctor`, whose `[shim]` check reads the machine-wide hook shim and
@@ -34,6 +48,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+
+import os from 'node:os';
 
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
@@ -62,6 +78,10 @@ function runProbe(row) {
 const byName = Object.fromEntries(CORPUS.rows.map((r) => [r.name, r]));
 const b64 = (s) => Buffer.from(s, 'base64');
 const text = (s) => b64(s).toString('utf8').replaceAll('\r\n', '\n');
+/** Bytes with the line separator folded — the CONTENT, free of the platform. */
+const folded = (buf) => Buffer.from(buf.toString('utf8').replaceAll('\r\n', '\n'), 'utf8');
+/** True only on the platform the corpus was recorded on, where raw bytes are a fair claim. */
+const HOME_PLATFORM = process.platform === CORPUS.recorded_on;
 
 // Run every case ONCE, at module scope: twenty child processes is the whole cost of this file.
 const ANSWERS = Object.fromEntries(CORPUS.rows.map((r) => [r.name, runProbe(r)]));
@@ -69,32 +89,80 @@ const ANSWERS = Object.fromEntries(CORPUS.rows.map((r) => [r.name, runProbe(r)])
 test('the recording is the shape it claims to be', () => {
   assert.equal(CORPUS.rows.length, 20, 'the recorded corpus has changed size');
   assert.match(CORPUS.recorded_with.python, /^\d+\.\d+$/);
+  // ⚠ THE GUARD ON THE RAW-BYTE TIER. `HOME_PLATFORM` compares against `recorded_on`, so a
+  // recording that lost the field would make it permanently FALSE — the byte comparison would
+  // switch itself off on every platform and every row would still pass. An absent claim and an
+  // unwritten one look identical.
+  assert.ok(['win32', 'linux', 'darwin'].includes(CORPUS.recorded_on),
+    `the corpus does not say which platform it was recorded on (${CORPUS.recorded_on}); without `
+    + 'it the raw-byte comparison silently never runs');
   // The corpus must contain BOTH directions, or the comparisons below are about one arm.
   assert.ok(CORPUS.rows.some((r) => r.changed === 1), 'no case that changes a theme');
   assert.ok(CORPUS.rows.some((r) => r.changed === 0), 'no case that changes nothing');
   assert.ok(CORPUS.rows.some((r) => r.exit === 2), 'no case that refuses');
 });
 
-test('the printed report is byte-identical to what the reference printed', () => {
+test('the printed report is what the reference printed', () => {
   for (const row of CORPUS.rows) {
     const got = ANSWERS[row.name];
-    assert.deepEqual(got.out, b64(row.stdout_b64),
-      `${row.name}: \`--sync-themes\` printed different BYTES. The newline translation and the `
-      + `em dash both live in this comparison.\n  want: ${text(row.stdout_b64).slice(0, 300)}\n`
+    assert.deepEqual(folded(got.out), folded(b64(row.stdout_b64)),
+      `${row.name}: \`--sync-themes\` printed different CONTENT — the em dash lives in this `
+      + `comparison too.\n  want: ${text(row.stdout_b64).slice(0, 300)}\n`
       + `  got:  ${got.out.toString('utf8').replaceAll('\r\n', '\n').slice(0, 300)}`);
-    assert.deepEqual(got.err, b64(row.stderr_b64), `${row.name}: stderr differs`);
+    assert.deepEqual(folded(got.err), folded(b64(row.stderr_b64)), `${row.name}: stderr differs`);
+    if (HOME_PLATFORM) {
+      assert.deepEqual(got.out, b64(row.stdout_b64),
+        `${row.name}: the RAW BYTES differ on the platform this corpus was recorded on`);
+      assert.deepEqual(got.err, b64(row.stderr_b64), `${row.name}: raw stderr bytes differ`);
+    }
   }
 });
 
-test('the written files are byte-identical to what the reference wrote', () => {
+test('every written file carries this platform\'s line separator', () => {
+  // THE HALF THE FOLD ABOVE GIVES UP, ASSERTED SEPARATELY RATHER THAN LOST. `writeText`
+  // translates to `os.linesep`, so a multi-line file this tool rewrote must carry the RUNNING
+  // platform's separator — CRLF here, LF on the ubuntu runner. Folding both sides and stopping
+  // there would have quietly retired the newline claim that `mutate.mjs`'s M1 exists for.
+  //
+  // ⚠ ONLY THE FILES THE TOOL REWROTE, and the first draft asserted it of all of them and went
+  // red here. A file `--sync-themes` left ALONE comes back with its INPUT's bytes — LF, because
+  // the corpus is written with `\n` — and that is the no-op guarantee, not a translation
+  // failure. `writeText` only translates what it writes.
+  let checked = 0;
+  for (const row of CORPUS.rows) {
+    for (const [name, enc] of Object.entries(ANSWERS[row.name].res.files)) {
+      const buf = b64(enc);
+      const body = buf.toString('utf8');
+      if (!body.includes('\n')) continue;                 // single-line: nothing to separate
+      if (row.files[name] !== undefined
+          && Buffer.compare(buf, Buffer.from(row.files[name], 'utf8')) === 0) continue;
+      checked += 1;
+      if (os.EOL === '\r\n') {
+        assert.ok(!/(?<!\r)\n/.test(body),
+          `${row.name}/${name} carries a bare LF on a CRLF platform — writeText's os.linesep `
+          + 'translation is not being applied');
+      } else {
+        assert.ok(!body.includes('\r\n'),
+          `${row.name}/${name} carries a CRLF on an LF platform`);
+      }
+    }
+  }
+  assert.ok(checked >= 5, `only ${checked} multi-line files were REWRITTEN, so this is thin`);
+});
+
+test('the written files are what the reference wrote', () => {
   for (const row of CORPUS.rows) {
     const got = ANSWERS[row.name];
     assert.deepEqual(Object.keys(got.res.files).sort(), Object.keys(row.after).sort(),
       `${row.name}: a different set of files came back`);
     for (const name of Object.keys(row.after).sort()) {
-      assert.deepEqual(b64(got.res.files[name]), b64(row.after[name]),
-        `${row.name}/${name} differs BYTE-wise after the sync — a JSON-equal answer is not the `
-        + 'same answer for a tool that edits committed files');
+      assert.deepEqual(folded(b64(got.res.files[name])), folded(b64(row.after[name])),
+        `${row.name}/${name} differs after the sync — a JSON-equal answer is not the same `
+        + 'answer for a tool that edits committed files');
+      if (HOME_PLATFORM) {
+        assert.deepEqual(b64(got.res.files[name]), b64(row.after[name]),
+          `${row.name}/${name} differs BYTE-wise on the platform this corpus was recorded on`);
+      }
     }
   }
 });
