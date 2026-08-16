@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { DWIDTH_UNIDATA } from '../js/tui.mjs';
 import { winUserPathScript } from '../js/link.mjs';
 import { pyTextWrap } from '../js/cli.mjs';
+import { pySplitLines } from '../js/lib/pydiff.mjs';
 import { makeSandbox } from './helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -269,6 +270,101 @@ test('the probes produce the panel and not an empty echo', { skip: coverageSkip 
   assert.ok(first.some((ln) => /\d+ agents · \d+ skills · \d+ laws/.test(ln)),
     `no counts line in the panel:\n${first.join('\n')}`);
   assert.ok(first.some((ln) => ln.includes('✓ up to date')), first.join('\n'));
+});
+
+// The remaining coverage claims are about the corpus's INPUTS, so they read the case list rather
+// than run anything. Each one names a specific way the corpus could be green while comparing two
+// spellings of the same rule — and each is a shape the LIVE tree cannot produce, which is why
+// these functions have a corpus at all rather than a cell.
+
+/** Every `args` list recorded for `fn`. Loud when a function has no cases. */
+function argsFor(fn) {
+  const picked = primitives.cases.filter((c) => c.fn === fn).map((c) => c.args);
+  assert.ok(picked.length > 0, `no ${fn} cases in the corpus at all`);
+  return picked;
+}
+
+test('the fence corpus actually varies the fence', { skip: coverageSkip }, () => {
+  // The live tree never leaves the floor, so a corpus whose every case also returned four
+  // backticks would be an equality between two constants — green forever, and green on a port
+  // that hardcoded `max(4, …)`'s floor and nothing else.
+  const fences = answersFor('fence_for');
+  assert.ok(fences.includes('`'.repeat(4)), 'no case exercises the max(4, …) floor');
+  assert.ok(fences.some((f) => f.length > 4),
+    'every case returned the floor — this corpus cannot tell fenceFor from a hardcoded four');
+  assert.equal(Math.max(...fences.map((f) => f.length)), 13);   // the 12-run case, + 1
+});
+
+test('the diff corpus reaches past what a cell can seed', { skip: coverageSkip }, () => {
+  // Three things, because a corpus of pairs that all differ trivially is an equality between
+  // two one-hunk diffs — green on any correct implementation AND on one that got `autojunk` or
+  // the tie rule wrong.
+  const cases = primitives.cases.filter((c) => c.fn === 'unified_diff');
+  assert.ok(cases.length > 0, 'no unified_diff cases in the corpus at all');
+  const out = runProbe(cases.map((c) => ({ fn: c.fn, args: c.args })), false);
+  const hunks = out.map((a) => a.filter((ln) => ln.startsWith('@@')).length);
+  assert.ok(hunks.some((h) => h > 1), 'no case produces two hunks — the grouping path is untested');
+  assert.ok(hunks.some((h) => h === 0), "no case produces an EMPTY diff — 'identical' is untested");
+  // The one difference no acceptance cell can see: SequenceMatcher purges popular elements only
+  // at or past 200, so a corpus that never reaches it cannot tell autojunk from its absence.
+  const long = cases.map((c, i) => [c, out[i]]).filter(([c]) => c.args[1].length >= 200);
+  assert.ok(long.length > 0, 'no case reaches the 200-element autojunk threshold');
+  assert.ok(long.some(([, a]) => a.length > 0),
+    'every long case produced an empty diff, so "reaches 200" is a claim about the INPUT only');
+});
+
+test('the splitlines corpus breaks where a newline split does not', { skip: coverageSkip }, () => {
+  // `pySplitLines` exists for the boundaries `split('\n')` does not break on — \v, \f, \x1c,
+  // U+2028 and the rest. A corpus without one is an equality between two `split('\n')`s.
+  const extra = argsFor('py_split_lines')
+    .filter(([s]) => pySplitLines(s).length !== s.split('\n').length);
+  assert.ok(extra.length > 0, "no case breaks on a boundary split('\\n') misses, so the "
+    + 'pySplitLines gate is vacuous');
+});
+
+test('the capitalize corpus has a case where the rest matters', { skip: coverageSkip }, () => {
+  // `str.capitalize()` lowercases the REST; `s[0].toUpperCase() + s.slice(1)` does not. Every
+  // shipped posture and mode name is already lowercase, so the difference is invisible in the
+  // live tree — which is the entire reason this is a corpus and not a cell.
+  const naive = argsFor('py_capitalize')
+    .filter(([s]) => s && `${s[0].toUpperCase()}${s.slice(1).toLowerCase()}`
+      !== `${s[0].toUpperCase()}${s.slice(1)}`);
+  assert.ok(naive.length > 0, 'no case distinguishes str.capitalize() from a naive '
+    + 'uppercase-first, so this corpus proves nothing');
+});
+
+test('the corpus separates code points from UTF-16 units', { skip: coverageSkip }, () => {
+  // `len()` counts code points and `String.length` counts UTF-16 units. Measured rather than
+  // trusted: at least one case must be a string whose two lengths DIFFER.
+  const astral = argsFor('py_len').filter(([s]) => [...s].length !== s.length);
+  assert.ok(astral.length > 0, 'no case distinguishes code points from UTF-16 units, so the '
+    + 'pyLen gate is vacuous');
+});
+
+test('the is-absolute corpus reaches the rootless shape', { skip: coverageSkip }, () => {
+  // `pyIsAbsolute` exists for ONE disagreement: a rootless `/x` or `\x`, which
+  // `path.isAbsolute` calls absolute and `Path.is_absolute` does not. On POSIX the two rules
+  // genuinely coincide, so this asserts the SHAPE is present rather than that the answers
+  // differ on this machine.
+  const cases = argsFor('py_is_absolute').map(([s]) => s);
+  assert.ok(cases.some((s) => '/\\'.includes(s.slice(0, 1)) && !/^([/\\])\1/.test(s)),
+    'no case is a ROOTLESS absolute path, so the pyIsAbsolute gate cannot tell the rules apart');
+  assert.ok(cases.some((s) => /^[A-Za-z]:[^\\/]/.test(s)),
+    "no case is drive-RELATIVE (`C:x`), the shape a naive `parse().root !== ''` rule gets wrong");
+});
+
+test('the agent-entry corpus can see the absolute rule it depends on', { skip: coverageSkip }, () => {
+  // `installAgentEntryOf` SKIPS an absolute entry, so a corpus whose lists hold only relative
+  // ones exercises the first-match walk and never the predicate. At least one case must pair a
+  // rootless-absolute entry with a relative one — the only shape where the two is-absolute
+  // rules pick different ENTRIES.
+  const both = argsFor('install_agent_entry_of')
+    .map(([ls]) => ls)
+    .filter((ls) => Array.isArray(ls)
+      && ls.some((e) => typeof e === 'string' && '/\\'.includes(e.slice(0, 1)))
+      && ls.some((e) => typeof e === 'string' && !'/\\'.includes(e.slice(0, 1))));
+  assert.ok(both.length > 0, 'no case pairs a rootless-absolute entry with a relative one, so '
+    + 'the corpus cannot see which entry the predicate skips');
 });
 
 test('every corpus names a patch-independent interpreter', () => {
