@@ -346,6 +346,74 @@ test('a real fetch over https is refused by transport, not by luck', () => {
   } finally { git(CO2, 'remote', 'set-url', 'origin', ORIGIN2); }
 });
 
+// ---------------------------------------------------------------------------------------------
+// `AliasTests` — `update`, `sync-self` and the unknown verb.
+//
+// THE REFERENCE MOCKS `upgrade` AND COUNTS CALLS; there is nothing here to mock, and there does
+// not need to be. `syncSelf` is literally `return upgrade()`, so "it delegates" is structural
+// rather than observable — but what the delegation DROPS is observable, and that is the property
+// worth having. `upgrade(ref)` opens by LOGGING that a ref is ignored, so `sync-self v1.2.3` and
+// `update v1.2.3` differ in their very first line: one warns, one has nothing to warn about
+// because the ref never reached `upgrade` at all. Both then reach the same preflight, which is
+// the delegation itself, observed rather than counted.
+//
+// DRIVEN THROUGH THE PUBLIC ENTRY, out of the copied checkout, so the CLI table's wiring is gated
+// too — `sync-self` pointing at `cmdUpgrade` instead of `cmdSyncSelf` is mutation M21 and would
+// additionally re-read the ref as a THEME. The recorded cell
+// `sync-self/the-ref-positional-is-accepted-and-never-re-read-as-a-theme` owns the theme half;
+// this owns the warning half, from a fixture where the ref is not a theme name.
+//
+// THE TREE IS MADE DIRTY ON PURPOSE. `preflight` reports dirty before anything spawns or fetches,
+// so both runs stop at exit 3 having printed the lines under test — no network, no pull, no
+// rebuild. A clean fixture would run a real upgrade for an assertion about its first line.
+
+/** The public entry, out of the COPY, so its `ROOT` is the copy's. */
+function cli(co, ...argv) {
+  const r = spawnSync(process.execPath, [path.join(co, 'bin', 'geneseed-cli.mjs'), ...argv],
+    { cwd: co, encoding: 'utf8', windowsHide: true });
+  return { rc: r.status, out: `${r.stdout || ''}${r.stderr || ''}` };
+}
+
+test('update warns that its ref is ignored; sync-self drops the ref before upgrade sees it', () => {
+  const f = path.join(CO2, 'README.md');
+  const before = fs.readFileSync(f);
+  fs.writeFileSync(f, 'a local edit, so preflight stops both runs before anything is fetched\n');
+  try {
+    const up = cli(CO2, 'update', 'v1.2.3');
+    assert.equal(up.rc, 3, `update did not stop at the dirty precondition: ${up.out}`);
+    assert.match(up.out, /ref 'v1\.2\.3' is IGNORED/,
+      'update accepted a ref without saying it would be disregarded');
+
+    const ss = cli(CO2, 'sync-self', 'v1.2.3');
+    assert.equal(ss.rc, 3, `sync-self did not stop at the dirty precondition: ${ss.out}`);
+    assert.doesNotMatch(ss.out, /IGNORED/,
+      'sync-self forwarded its ref to upgrade, which then warned about a ref the reference '
+      + 'never lets it see');
+
+    // Both reached `upgrade` — without this the test above is equally satisfied by a `sync-self`
+    // that does nothing at all, which is the whole thing the reference's call count was for.
+    for (const [name, r] of [['update', up], ['sync-self', ss]]) {
+      assert.match(r.out, /update source:/, `${name} never reached upgrade`);
+      assert.match(r.out, /preflight: checking the local checkout/, `${name} never reached preflight`);
+      // WHICH precondition, because every arm of `PRE_MSG` is kind `info` and therefore exits 3.
+      // Without this, a copy that was not a git checkout at all — or had no upstream — would
+      // produce the same 3 and the same first line, and the fixture would be silently vacuous.
+      assert.match(r.out, /You have local changes in the Geneseed folder/,
+        `${name} exited 3 for some precondition other than the dirty tree this test planted`);
+    }
+  } finally { fs.writeFileSync(f, before); }
+});
+
+test('an unknown verb is rejected by the parser with exit code 2', () => {
+  const bad = cli(CO2, 'frobnicate');
+  assert.equal(bad.rc, 2, `an unknown verb exited ${bad.rc}`);
+  assert.match(bad.out, /invalid choice: 'frobnicate'/);
+  // The other half of the partition: 2 has to MEAN "no such verb". A entry point that exited 2
+  // for everything would pass the assertion above and be useless.
+  const good = cli(CO2, 'version');
+  assert.equal(good.rc, 0, `a known verb also failed: ${good.out}`);
+});
+
 test('git missing from PATH also classifies as fetch_failed', async () => {
   // The reference's `rc None` seam. Reached here through the real lookup, and it is a distinct
   // arm: `fetchStreaming` returns before spawning anything, so `measureUpstream` must classify
