@@ -363,11 +363,20 @@
       "python": "tests/test_atomic_config.py",
       "kind": "unit",
       "py_tests": 4,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/atomic_config.test.mjs"
+        "tests/unit/atomic_config.test.mjs",
+        "tests/helpers/deny.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "Atomic write guarantee for user-owned config: opencode.json and settings.json must never be left truncated and must leave no litter. A data-loss property, which is the tier that is never simplified away."
+      "why": [
+        "Atomic write guarantee for user-owned config: opencode.json and settings.json must never be left truncated and must leave no litter. A data-loss property, which is the tier that is never simplified away — these files belong to the USER, Geneseed only merges into them, and a truncated settings.json is their whole Claude configuration gone. AUDITED PER CLASS: 2 classes, 4 methods, all 4 cross. Successor tests/unit/atomic_config.test.mjs.",
+        "THE MONKEYPATCH BECAME A REAL DENIAL, and the substitute is better than the original rather than a workaround: the reference replaced os.replace with a function raising OSError(\"disk full\"); a mock proves the handler catches the exception someone decided to throw, an ACL proves it catches the one the OS raises. That difference has already paid once in this port, when a denied ACL on Windows raised EPERM where the reference asserted the phrase \"Permission denied\".",
+        "⚠ ONE MOCK BECAME TWO FIXTURES, BECAUSE os.replace = boom FAILS AT A POINT NO DENIAL REACHES. Denying write on the PARENT stops atomicWriteJson at the temp write, before the rename — which gates \"the original survives\" and never reaches the rmSync(tmp) litter cleanup, since no temp was created. Reaching that needs the temp write to SUCCEED and the rename to fail, and the denial fixture cannot produce it: MEASURED, a delete-denied target does not stop a rename on Windows (the first draft skipped for exactly that reason), and no POSIX mode bit on a FILE stops one either, because that right belongs to the directory. A non-empty DIRECTORY at the target does, on both platforms.",
+        "THE WARNING THE REFERENCE NAMED IN ITS OWN TITLE AND NEVER ASSERTED is asserted here. `test_failed_write_leaves_original_settings_intact_and_warns` checked the return value and the file and said nothing about the warning — and silence is the worst outcome on that path: the emit reports success, the excludes are missing, and the preamble loads twice in every session with no way for the user to know why. The successor requires WARN, the file name, the errno prefix (the portable form of \"the reason is relayed\") and the entry to add by hand.",
+        "M28 IS THE HALF OF THE GUARANTEE THAT IS NOT ABOUT THE TARGET: no cell fails a rename, so nothing in 690 recorded cells reaches the catch. A leaked settings.json.geneseed-tmp sits in the user own config directory holding a full copy of the config the write was about to make — a disclosure as well as litter.",
+        "`deny()` and `DENY_SKIP` MOVED to tests/helpers/deny.mjs on this, their THIRD caller (after `retry_gap.test.mjs`'s `jam()` and `generate.test.mjs`'s own copy). The knowledge is not about any call site: it is the measured answer to what actually blocks an operation on each platform, and three plausible mechanisms do NOT work on Windows — an open handle, the read-only attribute, and a read-only parent. A fixture with one caller is a fixture the next defect cannot reach."
+      ]
     },
     {
       "python": "tests/test_hook_form.py",

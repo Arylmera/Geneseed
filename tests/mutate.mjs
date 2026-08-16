@@ -478,6 +478,20 @@ export const MUTATIONS = [
       + '`validate` failed on it. Kept as a permanent regression gate, and it fires on either '
       + 'platform because the successor asks the generator for BOTH shim shapes.',
   },
+  {
+    id: 'M28',
+    name: 'leave the scratch file behind when the atomic rename fails',
+    file: 'js/settings.mjs',
+    find: '    rmSync(tmp, { force: true });\n',
+    replace: '',
+    gate: UNIT,
+    why: 'THE HALF OF THE ATOMIC GUARANTEE THAT IS NOT ABOUT THE TARGET. No cell fails a rename, '
+      + 'so nothing in 690 recorded cells reaches this catch. A leaked `settings.json'
+      + '.geneseed-tmp` sits in the user\'s own config directory, where the next emit\'s '
+      + 'directory listing finds it and the user has to work out whose it is — and it holds a '
+      + 'full copy of the config the write was about to make, which is a disclosure as well as '
+      + 'litter.',
+  },
 ];
 
 function run(argv) {

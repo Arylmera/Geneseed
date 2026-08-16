@@ -24,6 +24,7 @@ import { cmdValidate, validateSandboxProblems } from '../../js/doctor.mjs';
 import { syncThemes } from '../../js/themes.mjs';
 import { writeText } from '../../js/lib/pyfs.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
+import { DENY_SKIP, deny } from '../helpers/deny.mjs';
 import {
   writePrimaryAgent, writeCommandLayer, ensureAgentOverridesStub, sourceReleaseVersion,
 } from '../../js/opencode.mjs';
@@ -951,34 +952,11 @@ test('a merge returns the resolved target, not the path it was asked about', () 
 // the front of every fs error. A warning that named the file but not the reason would leave the
 // user knowing something failed and nothing about what to fix.
 
-/**
- * Make a real path refuse a real operation, or return `null` so the caller skips LOUDLY.
- *
- * `retry_gap.test.mjs`'s `jam()` in a second register: (D) denies delete, (R) denies read and
- * (W) denies the create of the temp file `atomicWriteJson` renames into place.
- */
-function deny(p, right, probe) {
-  const user = process.env.USERNAME || process.env.USER || '';
-  let release;
-  if (process.platform === 'win32') {
-    if (spawnSync('icacls', [p, '/deny', `${user}:(${right})`], { encoding: 'utf8' }).status !== 0) {
-      return null;
-    }
-    release = () => { spawnSync('icacls', [p, '/remove:d', user], { encoding: 'utf8' }); };
-  } else {
-    const mode = fs.statSync(p).mode;
-    fs.chmodSync(p, right === 'R' ? 0o000 : 0o555);
-    release = () => { fs.chmodSync(p, mode); };
-  }
-  // PROVE IT TOOK. Running elevated, or on a filesystem that ignores ACLs, the deny is a
-  // no-op and every assertion below silently becomes one about an ordinary successful merge.
-  let blocked = false;
-  try { probe(); } catch { blocked = true; }
-  if (!blocked) { release(); return null; }
-  return release;
-}
-
-const DENY_SKIP = 'this platform cannot make a real path refuse a real operation';
+// `deny` and `DENY_SKIP` MOVED TO `tests/helpers/deny.mjs` in P3 T7, on their third caller
+// (`atomic_config.test.mjs`). The measured knowledge — which mechanism actually blocks an
+// operation on each platform, and that the deny must be PROVED to have taken — belongs to none
+// of the three call sites, and a fixture with one caller is a fixture the next defect cannot
+// reach. See that file's header for the argument.
 
 test('a read failure warns and never overwrites the file it could not read', (t) => {
   withDir((d) => {
