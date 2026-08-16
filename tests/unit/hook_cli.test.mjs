@@ -16,10 +16,14 @@
  * this file would drift alongside whatever it was supposed to catch.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+
+import { parseArgs, resolveCli, selectCells } from '../cli_golden.mjs';
+import { checkExpectations } from '../helpers/cli_golden.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const read = (...p) => readFileSync(path.join(ROOT, ...p), 'utf8');
@@ -227,4 +231,158 @@ test('the verb-coverage gate is satisfied by both halves, not just this one', ()
     assert.deepEqual(sorted(verbs), ['link', 'unlink'],
       `the ${plat} half of the platform table covers ${sorted(verbs)}`);
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// `TheAcceptanceHarnessIsNotVacuous` — the harness is code, its expectations are code, and five
+// consecutive phases of this port ended with the gate's own body as the defect.
+//
+// The subject moves from `tests/harness_golden.py` to `tests/cli_golden.mjs` and its helper: the
+// cells are the exported matrices, the vacuity checker is `checkExpectations`, and the narrowing
+// flags are `parseArgs`/`selectCells`. Every claim below is about the replayer that outlives the
+// reference rather than about the harness that does not.
+
+const EXPECT_KINDS = ['expect', 'expect_absent', 'expect_re', 'expect_silent', 'expect_files',
+  'expect_absent_files'];
+
+test('every cell states what the port must do', () => {
+  // A cell with no absolute assertion is replayed and nothing more — and these verbs are SILENT
+  // on almost every path by design, so a port that stopped working would still match a recorded
+  // snapshot of it doing nothing.
+  for (const plat of ['win32', 'posix']) {
+    const naked = matrix(plat).cells
+      .filter((c) => !EXPECT_KINDS.some((k) => (Array.isArray(c[k]) ? c[k].length : c[k])))
+      .map((c) => c.id);
+    assert.deepEqual(naked, [], `cli.${plat}.json holds cells with no expectation at all: ${naked}`);
+  }
+  // Second instance of this list, so it stops being prose: the checker must READ every kind the
+  // cells are allowed to declare. A kind added to the matrix and forgotten in `checkExpectations`
+  // would be a silently ignored assertion.
+  const helper = read('tests', 'helpers', 'cli_golden.mjs');
+  const checker = block(helper, 'export function checkExpectations', '\n}\n',
+    'tests/helpers/cli_golden.mjs');
+  for (const kind of EXPECT_KINDS) {
+    // `cell.<kind>` with a word boundary, not a bare substring: `expect` is a prefix of four of
+    // the other five, so `includes('expect')` is satisfied by a checker that reads only
+    // `expect_absent` — which is the same class of false green this list exists to prevent.
+    assert.match(checker, new RegExp(`cell\\.${kind}\\b`),
+      `cells may declare ${kind} but the vacuity checker never reads it`);
+  }
+});
+
+test('no cell hardcodes a source fingerprint', () => {
+  // `sourceFingerprint` hashes the whole source tree, so it changes with every commit. A cell may
+  // COMPARE it — both sides compute it from the same tree at the same instant — but a cell that
+  // NAMES one is green until the next commit and then reports a port regression that is nothing
+  // of the kind. The seeded stamps are 12 hex digits by design, so this refuses any other run of
+  // twelve the harness did not itself write.
+  const seeded = new Set(['deadbeef1234', '0123456789ab']);
+  let scanned = 0;
+  for (const plat of ['win32', 'posix']) {
+    for (const c of matrix(plat).cells) {
+      for (const field of ['expect', 'expect_absent', 'expect_re']) {
+        for (const s of c[field] ?? []) {
+          scanned += 1;
+          const bad = [...new Set(s.match(/\b[0-9a-f]{12}\b/g) ?? [])]
+            .filter((h) => !seeded.has(h));
+          assert.deepEqual(bad, [],
+            `${c.id} names ${bad}, which looks like a live source fingerprint`);
+        }
+      }
+    }
+  }
+  assert.ok(scanned > 500, `only ${scanned} expectation strings were scanned`);
+});
+
+test('cell ids are unique within each half', () => {
+  for (const plat of ['win32', 'posix']) {
+    const ids = matrix(plat).cells.map((c) => c.id);
+    assert.equal(ids.length, new Set(ids).size,
+      `two cells in cli.${plat}.json share an id, so one of them is invisible in the report`);
+  }
+});
+
+test('the vacuity check reports each kind of broken expectation', () => {
+  // THE CHECKER IS THE GATE'S GATE and nothing else watches it. Deleting the `expect` loop leaves
+  // the whole matrix green: every cell still replays, every replay still matches, and the one
+  // thing that would have noticed a cell no longer exercising what it names is gone. Declaring an
+  // expectation and RUNNING it are two properties, and the test above only covers the first.
+  const snap = new Map([
+    ['<stdout>', Buffer.from('hello world')], ['<stderr>', Buffer.alloc(0)],
+    ['<exit>', Buffer.from('0')], ['made/it.md', Buffer.alloc(0)],
+    ['<dirs>', Buffer.from('made\nmade/husk')],
+  ]);
+  assert.deepEqual(checkExpectations({
+    expect: ['hello'], expect_absent: ['goodbye'], expect_re: ['hello \\w+'],
+    expect_files: ['made/it.md'], expect_absent_files: ['made/gone.md', 'made/gone'],
+  }, snap), [], 'a cell whose every expectation holds was reported as broken');
+  for (const [kind, cell] of [
+    ['expect', { expect: ['absent phrase'] }],
+    ['expect_absent', { expect_absent: ['hello'] }],
+    ['expect_re', { expect_re: ['hello \\d+ world'] }],
+    ['expect_silent', { expect_silent: true }],
+    ['expect_files', { expect_files: ['never/written.md'] }],
+    // Both halves of the sixth kind: a surviving FILE and a surviving DIRECTORY. The second is
+    // what the `<dirs>` column exists for — reading only the file map, an empty husk is invisible.
+    ['expect_absent_files/file', { expect_absent_files: ['made/it.md'] }],
+    ['expect_absent_files/dir', { expect_absent_files: ['made/husk'] }],
+  ]) {
+    assert.ok(checkExpectations(cell, snap).length > 0,
+      `${kind} was violated and the checker said nothing`);
+  }
+  // And the column the directory half depends on must be REQUIRED. Without this, a fixture that
+  // stopped recording directories leaves every husk assertion passing on an empty set — the cells
+  // stay green and observe half of what they claim.
+  for (const [label, dirs] of [['missing', null], ['empty', ''], ['blank', '   \n']]) {
+    const broken = new Map(snap);
+    broken.delete('<dirs>');
+    if (dirs !== null) broken.set('<dirs>', Buffer.from(dirs));
+    assert.ok(checkExpectations({ expect_absent_files: ['made/husk'] }, broken).length > 0,
+      `a ${label} <dirs> column let a directory assertion pass unexamined`);
+  }
+});
+
+test('both candidate binaries always resolve to a real script', () => {
+  // WHAT REPLACED THE REFERENCE'S REFUSAL, and the failure mode moved with it. There, `--new`
+  // without `--new-cli` sent every non-hook cell to the REFERENCE on both sides, and a cell
+  // compared against itself always passes — an unported verb read as a ported one. The replayer
+  // has no reference to fall back to, so that exact hole cannot exist: both binaries carry
+  // defaults and `resolveCli` turns each into an absolute path.
+  //
+  // The hazard that DID survive is the one `resolveCli`'s docblock records: a candidate command
+  // that resolves to nothing produces no output, every `expect` fails, and the report reads like
+  // the port went silent rather than like the harness pointed at nothing. That cost this replayer
+  // six cells on its first run and twelve more on the second. So both defaults are resolved, and
+  // both the interpreter and the script are required to be real absolute paths.
+  const a = parseArgs(['--against', 'unused']);
+  for (const [flag, cmd] of [['--cli', a.cli], ['--hook', a.hook]]) {
+    const argv = resolveCli(cmd);
+    assert.ok(argv.length >= 2, `${flag} resolved to ${JSON.stringify(argv)}`);
+    assert.equal(argv[0], process.execPath, `${flag}'s interpreter was left bare, so a cell that `
+      + 'replaces PATH cannot start it');
+    const script = argv.find((t) => /\.mjs$/.test(t));
+    assert.ok(script && path.isAbsolute(script) && existsSync(script) && statSync(script).isFile(),
+      `${flag}'s script resolved to ${JSON.stringify(script)}, which is not a file on disk`);
+  }
+});
+
+test('--only narrows the matrix, and an empty selection is refused', () => {
+  // A narrowing flag needs its own WIRING test, separate from any test of what it narrows — the
+  // reference shipped one whose gate was correct and simply not connected.
+  const doc = matrix(HERE);
+  const every = doc.cells.length;
+  const narrowed = selectCells(doc, { only: 'git-gate' });
+  assert.ok(narrowed.length > 0, 'no git-gate cells at all, so this proves nothing');
+  assert.ok(narrowed.length < every, '--only narrowed nothing here, so this proves nothing');
+  assert.ok(narrowed.every((c) => c.id.startsWith('git-gate')), 'a non-matching cell survived');
+  assert.equal(selectCells(doc, { only: 'nosuchverb' }).length, 0);
+  // ...and the WIRING half, in a child, because the refusal is the replayer's own exit path: a
+  // run that selected nothing and reported "0 cells, no differences" reads exactly like a green
+  // one. This exits before any cell is replayed, so it costs a process and nothing else.
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'tests', 'cli_golden.mjs'),
+    '--against', path.join(ROOT, 'tests', '__snapshots__', 'cli'), '--only', 'nosuchverb'],
+  { cwd: ROOT, encoding: 'utf8' });
+  assert.notEqual(r.status, 0, `the replayer accepted an empty selection:\n${r.stdout}`);
+  assert.match(`${r.stdout}${r.stderr}`, /selection is empty/,
+    `it refused for some other reason:\n${r.stderr.slice(-500)}`);
 });
