@@ -326,11 +326,18 @@
       "python": "tests/test_emit_smoke.py",
       "kind": "unit",
       "py_tests": 6,
-      "status": "todo",
+      "status": "done",
       "node": [
         "tests/unit/emit_smoke.test.mjs"
       ],
-      "why": "Every --emit mode in every footprint must build clean. Cheap, broad, and the first thing to redden on a structural break; keeps its shape and changes its runtime."
+      "why": [
+        "Every --emit mode in every footprint must build clean. AUDITED PER CLASS: 1 class, 6 methods, all 6 ported, none retired. This is the one row in the wave that really is only a change of runner — every assertion was already absolute and about the emitted tree.",
+        "EIGHTEEN BUILDS, NOT SEVENTY-TWO. The reference re-emitted inside each of its six methods, four of which want the same (mode, footprint) tree; one memoised build per pair serves all of them. Same coverage, a quarter of the wall clock, and safe only because nothing in the file writes into the tree it reads — which is stated at the memo rather than assumed.",
+        "WHAT THIS FILE ADDS OVER THE 259-CELL CORPUS, WHICH IS LESS THAN IT LOOKS AND IS WORTH WRITING DOWN. The carrier is inside every emit cell's snapshot, so the shape claims — where it lands, the Rules section, the capability tables, the native-layer counts, the Bob stub's size — are all ALSO gated byte for byte by the corpus. The ceiling is not, and cannot be: a corpus proves UNCHANGED, never SMALL ENOUGH, and a change that legitimately regrows the carrier moves the recording along with it. That is the whole reason the file survives the port.",
+        "AND IT IS WHY THIS ROW ADDS NO MUTATION. Every product mutation that would break a shape claim here moves recorded bytes first, so the emit corpus reddens before this file does; inventing a row to have one would measure the corpus. The ceiling, the one claim no corpus can make, is by construction unreachable from a one-string product edit for the same reason. Stated rather than left as a silence, on the matrix's own principle that an ungated mutation is declared rather than omitted.",
+        "TWO ASSERTIONS THE REFERENCE DID NOT HAVE, both partitions left to chance. `natively > 0` — with no host declaring `native_catalog`, every row takes the else branch, the whole strip half is untested and the test stays green. And a FLOOR under the ceiling: a maximum alone is satisfied by an emit that wrote almost nothing, which is exactly what a collapsed render produces, so half the ceiling now says the carrier is still a carrier.",
+        "`cellEnv` REPLACES THE FIVE HAND-WRITTEN HOME VARIABLES and is the superset: it also clears every `*_CONFIG_DIR` relocation knob, which a developer keeping a harness in a git-tracked folder really does export and which would otherwise send the four `-global` modes into their real install. The character count goes through a `readTextPy` — the third site of that one-liner, for the third time for the same reason: `writeText` translates to `os.linesep`, so on Windows the carrier really is CRLF on disk (gated as M1) and a raw byte count would make the ceiling ~3% tighter there for a reason that is not the harness's size."
+      ]
     },
     {
       "python": "tests/test_registry.py",
