@@ -316,11 +316,19 @@
       "python": "tests/test_emit_modes.py",
       "kind": "unit",
       "py_tests": 14,
-      "status": "todo",
+      "status": "done",
       "node": [
-        "tests/unit/emit_modes.test.mjs"
+        "tests/unit/emit_modes.test.mjs",
+        "tests/mutate.mjs"
       ],
-      "why": "Fixture tests for the three emit modes. Re-aims at js/generate.mjs; the mode axis is one of the two the 259-cell matrix sweeps only once, so the fixture is what varies it."
+      "why": [
+        "Fixture tests for the three emit modes. AUDITED PER CLASS: 4 classes (one is the temp-dir base with no methods), 14 methods, all 14 cross. Successor `tests/unit/emit_modes.test.mjs`. Every assertion was already absolute and about the emitted tree, so this is a change of runner.",
+        "THE SEAM WAS ALREADY THERE, which is the standing question answered yes for the third time this wave. `buildInto`, `emitProjectInto` and `emitGlobalInto` all take the target as a PARAMETER — exported for `js/diff.mjs`, `js/doctor.mjs` and `js/web/actions.mjs` — so there is no child process, no copied checkout and no redirected `--out` anywhere in the file. `sandboxProcessHome()` is still required, because the hook-shim writer ignores every one of those parameters and targets the ENVIRONMENT's home.",
+        "WHAT THIS ADDS OVER THE 259-CELL CORPUS IS THE RE-EMIT HISTORY, not the mode axis alone. Every recorded cell emits into a fresh sandbox; every claim here is about a SECOND emit over a tree whose manifest was edited in between — a stale owned entry, a deleted manifest, a user file whose name collides with a shipped spec. A corpus records only states a cell can reach, and no cell can reach any of these.",
+        "ONE ASSERTION CHANGED ITS ORACLE AND IS BETTER FOR IT. The reference matched `_build_core.CAPABILITY_LINK_RE` against the emitted AGENT.md. The port's twin is a module-private default that `cfg.capabilityLinkRe` overrides, so a copy of the pattern here would be a second place to be wrong and would go stale the day the default moves. The successor asks the product's own `stripCapabilityLinks` instead: if the text carries no link, stripping it is a NO-OP — plus a positive control on a text that plainly does carry one, without which the claim passes against a stripper that does nothing at all.",
+        "TWO VACUITY GUARDS ADDED. The AGENT.md table comparison asserts more than ten specs were rendered, because both of its directions hold trivially over an empty set; and the legacy-migration test asserts the bootstrapped manifest claimed SOMETHING, because 'nothing pre-existing was claimed' is equally satisfied by a bootstrap that wrote an empty manifest.",
+        "M29 IS THE ONE DEFECT NO CELL CAN REACH AND NO OTHER GATE HOLDS: claim-on-create skipping a user-authored file SILENTLY. The skip itself is correct — a pre-existing file whose name collides with a shipped spec is the user's, and it is neither overwritten nor claimed — but without the line the user sees a successful emit and a reviewer agent that is still their old one, with nothing anywhere saying which of the two is on disk. Every recorded cell emits into a fresh sandbox, so no file ever collides."
+      ]
     },
     {
       "python": "tests/test_emit_smoke.py",

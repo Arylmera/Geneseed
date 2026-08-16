@@ -492,6 +492,20 @@ export const MUTATIONS = [
       + 'full copy of the config the write was about to make, which is a disclosure as well as '
       + 'litter.',
   },
+  {
+    id: 'M29',
+    name: 'skip a user-authored file silently instead of saying so',
+    file: 'js/native.mjs',
+    find: "    warn(`[geneseed] kept your existing ${rel} — skipped Geneseed's copy to avoid `\n"
+      + "      + 'clobbering it');",
+    replace: '',
+    gate: UNIT,
+    why: 'CLAIM-ON-CREATE IS CORRECT AND SILENT IS NOT. A pre-existing file whose name collides '
+      + "with a shipped spec is the user's, so the emit leaves it and does NOT claim it — but "
+      + 'without the line, the user sees a successful emit and a reviewer agent that is still '
+      + 'their old one, with nothing anywhere saying which of the two is on disk. No cell can '
+      + 'reach it: every recorded cell emits into a fresh sandbox, so no file ever collides.',
+  },
 ];
 
 function run(argv) {
