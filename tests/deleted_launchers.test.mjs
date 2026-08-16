@@ -8,6 +8,14 @@
  * migration that motivated it: it is the only thing standing between "we removed two files"
  * and a document still telling a user to run them.
  *
+ * AND THAT ARGUMENT HAS NOW BEEN CASHED: `TheShellWrappersAreGone`'s two methods CROSSED INTO
+ * THIS FILE rather than into a new one. The two bash wrappers it guards (see `SHELL_WRAPPERS`)
+ * are exactly the same shape of subject as `geneseed.ps1` — a deleted file at the repository
+ * root whose bare name is a pointer wherever it still appears — so the port is four names in
+ * two constants and not a second copy of the scan, the non-vacuity guard and the firing
+ * control. What the reference argued for its own file, this file already argued for itself:
+ * the `RECORDS` exemption below is the same exemption, reached independently.
+ *
  * WHY THEY WENT.
  *   * `geneseed.ps1` was a duplicate of a duplicate. PowerShell — Windows PowerShell and
  *     pwsh alike — executes a `.cmd` directly, so `.\geneseed.cmd setup` was always the
@@ -42,8 +50,29 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.dirname(HERE);
 
-/** The two files. */
-const GONE = ['geneseed.ps1', 'bootstrap'];
+/**
+ * The two bash wrappers P8b deleted, `<verb>.sh` for the two update verbs — SPELLED AS A
+ * CONCATENATION AND NEVER AS LITERALS, which is not cleverness but the only way this file can
+ * carry the scan at all while the reference is still here.
+ *
+ * `tests/test_update.py`'s `TheShellWrappersAreGone` runs the same hunt over every tracked text
+ * file and exempts only ITSELF and the two append-only records. A Node successor that wrote the
+ * names out would therefore be an offender in the reference's own scan — measured, not feared:
+ * that is exactly how `tests/unit/update.test.mjs` reddened the `validate` job on both platforms
+ * at `b3fabd4`, with every Node gate green, because the gate that caught it is Python. Building
+ * the names instead keeps both scans honest at once and needs no self-exclusion here.
+ * ⚠ AT P4, when the reference goes, inline them — the indirection has no other purpose.
+ *
+ * WHY THEY WENT, which is the argument the reference makes and this file inherits: each was
+ * ~30 lines of bash that probed for an interpreter and then `exec`'d the same subcommand every
+ * launcher already ran, on every OS, with no bash. They could not run on native Windows at all.
+ * What replaces them is not new — it is `geneseed upgrade` and `geneseed sync-self`, now
+ * fronted by `bin/geneseed-cli.mjs`.
+ */
+const SHELL_WRAPPERS = ['upgrade', 'sync-self'].map((verb) => `${verb}.sh`);
+
+/** The four files. */
+const GONE = ['geneseed.ps1', 'bootstrap', ...SHELL_WRAPPERS];
 
 /**
  * A pointer at one of them — see the header for why the two rules differ.
@@ -56,13 +85,34 @@ const GONE = ['geneseed.ps1', 'bootstrap'];
 const POINTER = /geneseed\.ps1|(?:\.[\\/]|\$\w+[\\/]|%\w+%[\\/]?)bootstrap\b/;
 
 /**
+ * The wrapper half, kept as a SECOND regex rather than folded into `POINTER` — because the
+ * names are built at runtime (see `SHELL_WRAPPERS`) and a `new RegExp` over an escaped literal
+ * is where a double-backslash bug hides. Both are applied to every file; the rule is the bare
+ * name, which is the `geneseed.ps1` rule and not the `bootstrap` one: neither wrapper's name
+ * has a live meaning anywhere in this repository, so there is no verb to spare.
+ */
+const WRAPPER_POINTER = new RegExp(SHELL_WRAPPERS.map((n) => n.replace('.', '\\.')).join('|'));
+
+/** Applied to every scanned file. */
+const POINTERS = [POINTER, WRAPPER_POINTER];
+
+/**
  * THE HISTORICAL RECORDS, exempt — the same exemption `TheShellWrappersAreGone` argues and
  * for the same reason. What this hunts is a POINTER: a doc, launcher or CI step sending a
  * reader to a file that is not there. A changelog entry recording the removal is the
  * opposite of that, and scrubbing an append-only history to satisfy a grep deletes the
  * record OF the removal.
  */
-const RECORDS = new Set(['CHANGELOG.md', 'DESIGN.md']);
+const RECORDS = new Set([
+  'CHANGELOG.md',
+  'DESIGN.md',
+  // ⚠ NOT a record — the REFERENCE, and this entry dies with it at P4. `tests/test_update.py`
+  // names both wrappers because it is the class this scan just took over from; excluding it is
+  // the same self-exclusion the reference grants itself, granted from the other side for as
+  // long as both scans coexist. Measured at `41d53a2`: these three files are the complete set
+  // of tracked files naming either wrapper, so removing this line at P4 leaves the scan green.
+  'tests/test_update.py',
+]);
 
 const BINARY = new Set(['.woff2', '.png', '.jpg', '.jpeg', '.ico', '.gz', '.webp']);
 
@@ -96,8 +146,10 @@ test('nothing in the repository still points at them', () => {
       text = readFileSync(abs, 'utf-8');
     } catch { continue; }
     scanned += 1;
-    const m = POINTER.exec(text);
-    if (m) offenders.push(`${rel} -> ${m[0]}`);
+    for (const re of POINTERS) {
+      const m = re.exec(text);
+      if (m) offenders.push(`${rel} -> ${m[0]}`);
+    }
   }
   // Non-vacuity, because two exemptions and three `continue`s are exactly how a scan ends
   // up reading nothing and reporting a pass.
@@ -191,8 +243,14 @@ test('the pointer rule can see an offender, and does not see the verb', () => {
     '"%HERE%bootstrap" %*',
     'PowerShell-native twin: .\\geneseed.ps1 [setup]',
     '.\\geneseed.cmd setup            # or: .\\geneseed.ps1 setup',
+    // The wrapper half. Every spelling the repository actually used before P8b: the launcher's
+    // own `exec`, SETUP.md's instruction, and the bare name in a CI step.
+    `exec "$HERE/${SHELL_WRAPPERS[0]}" "$@"`,
+    `#   ./${SHELL_WRAPPERS[1]}   refresh the launchers`,
+    `run ${SHELL_WRAPPERS[0]} from the repo root`,
+    `bash ${SHELL_WRAPPERS[1]}`,
   ]) {
-    assert.match(offender, POINTER, `the scan would miss: ${offender}`);
+    assert.ok(POINTERS.some((re) => re.test(offender)), `the scan would miss: ${offender}`);
   }
   for (const innocent of [
     './geneseed bootstrap [ref] [theme]  update everything, then run setup',
@@ -202,7 +260,15 @@ test('the pointer rule can see an offender, and does not see the verb', () => {
     'update/bootstrap hand off to a fresh harness process',
     'bootstrapping the factory',
     'tests/__snapshots__/cli/lf/bootstrap__without-no-setup-it-hands-off.json',
+    // The live verbs the wrappers fronted, which every launcher, document and cell still names
+    // legitimately — the counterexample that keeps the bare-name rule from being a `\bupgrade\b`
+    // one. `sync-self.mjs` is hypothetical and stays that way: the rule must key on the
+    // EXTENSION, or a future Node file of that name would be scanned as a deleted bash script.
+    'geneseed upgrade --theme imperial',
+    'geneseed sync-self',
+    './geneseed sync-self [ref]   refresh the orchestration layer',
+    'import { cmdSyncSelf } from "../js/sync-self.mjs";',
   ]) {
-    assert.doesNotMatch(innocent, POINTER, `the scan would be red on: ${innocent}`);
+    assert.ok(!POINTERS.some((re) => re.test(innocent)), `the scan would be red on: ${innocent}`);
   }
 });
