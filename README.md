@@ -4,6 +4,7 @@
 
 **A portable, theme-able harness you implant once and use everywhere to grow a disciplined AI coding agent.**
 
+[![npm](https://img.shields.io/npm/v/geneseed?color=cb3837&logo=npm)](https://www.npmjs.com/package/geneseed)
 [![CI](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml/badge.svg)](https://github.com/Arylmera/Geneseed/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node >= 22.3](https://img.shields.io/badge/node-%3E%3D22.3-5fa04e)](package.json)
@@ -50,7 +51,7 @@ geneseed-build --theme imperial  # Warhammer 40k voice, identical structure
 
 ### ⚡ The short way — `npx`
 
-One command, nothing cloned, nothing else to install. The only prerequisite is **Node ≥ 22.3**.
+The harness is published on npm as **[`geneseed`](https://www.npmjs.com/package/geneseed)** — three commands (`geneseed`, `geneseed-hook`, `geneseed-build`), zero dependencies. One command, nothing cloned, nothing else to install. The only prerequisite is **Node ≥ 22.3**.
 
 ```bash
 npx geneseed setup            # the guided wizard
