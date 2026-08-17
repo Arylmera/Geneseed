@@ -831,7 +831,22 @@ function openUrl(url) {
       { windowsVerbatimArguments: true }]
     : (process.platform === 'darwin' ? ['open', [url], {}] : ['xdg-open', [url], {}]);
   try {
-    spawn(file, args, { detached: true, stdio: 'ignore', windowsHide: true, ...extra }).unref();
+    const child = spawn(file, args, {
+      detached: true, stdio: 'ignore', windowsHide: true, ...extra,
+    });
+    // ⚠ ENOENT ARRIVES AS AN EVENT, NOT AS A THROW, AND THE `try` ABOVE CANNOT SEE IT.
+    // This is where the reference's suppression failed to survive translation: Python's
+    // `subprocess` raises `FileNotFoundError` synchronously, so `contextlib.suppress(Exception)`
+    // really did swallow a missing opener. Node's `spawn` reports the same condition on the
+    // child's `error` event, and an 'error' with no listener is re-thrown as an uncaught
+    // exception. So the port's `try/catch` read as equivalent and suppressed nothing.
+    //
+    // MEASURED, in the packaged no-python container: `geneseed web` on a headless Linux box
+    // printed `Error: spawn xdg-open ENOENT`. Found by the acceptance gate rather than by the
+    // 690-cell corpus, and the docblock above says why the corpus never could — every cell
+    // passes `--no-browser`, so no recorded cell has ever executed this line.
+    child.on('error', () => { /* no opener on this machine; the daemon is still serving */ });
+    child.unref();
   } catch { /* the reference suppresses every exception from this call too */ }
 }
 
