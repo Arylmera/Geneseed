@@ -66,6 +66,7 @@ const LAW_META = {
   35: ['verify', 'Cover new or changed behaviour with a test; run the affected tests green.'],
   36: ['security', "Enforce permission at the boundary, never in the agent's own prompt."],
   37: ['process', 'A restart may not reload config; force the re-read, confirm it live.'],
+  38: ['verify', 'Perturb what a gate guards and require it to turn red; never re-bless it green.'],
 }
 
 // Tiny inline formatter: render `code` spans and *emphasis* in plain rule text.

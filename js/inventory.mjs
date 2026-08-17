@@ -45,7 +45,7 @@ export const LAW_CLASS = {
   XXI: 'process', XXII: 'security', XXIII: 'security', XXIV: 'craft', XXV: 'craft',
   XXVI: 'craft', XXVII: 'verify', XXVIII: 'process', XXIX: 'comms', XXX: 'comms',
   XXXI: 'comms', XXXII: 'craft', XXXIII: 'craft', XXXIV: 'verify', XXXV: 'verify',
-  XXXVI: 'security', XXXVII: 'process',
+  XXXVI: 'security', XXXVII: 'process', XXXVIII: 'verify',
 };
 
 /** `_harness_tui.ENTITY_STATUSES` — the lifecycle statuses `registry.json` may carry. */

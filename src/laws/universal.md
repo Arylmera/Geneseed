@@ -385,3 +385,18 @@ layer, this governs what follows: establish which act forces the re-read —
 recreate, down-and-up, reload, or full restart — perform it, then confirm the new
 value in the *running* system, not the file ({{LAW}} III). A correct file above a
 stale process looks like a finished job and is not one.
+
+### {{LAW}} XXXVIII — {{LEX_XXXVIII}}
+Prove the gate: perturb what it guards and require it to turn red, because a check
+that has never failed has never been shown to hold anything. When the perturbation
+does not redden it, suspect the inputs first — an impoverished fixture leaves whole
+branches unreachable, and every assertion beyond them passes vacuously forever while
+reading as coverage. Where two implementations are compared against each other their
+agreement is silent about everything both get wrong alike, so assert the structure of
+each in its own right, and run the gate in a second environment — one that has only
+ever run in a single place has proven only that place. A gate must never hold its own
+copy of what it measures: the copy drifts beside the source and falls quiet in the
+hour it is needed, so read the reference at the moment of checking. Where a rule binds
+in two directions, the gate must be able to fail in both, or it is satisfied by excess.
+Where {{LAW}} XXXV has you write the test, this governs whether the test is worth
+trusting ({{LAW}} XXVII).

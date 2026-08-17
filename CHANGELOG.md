@@ -9,6 +9,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Added
+- **Law XXXVIII — Prove the Gate.** A 38th universal law, in the verification class:
+  perturb what a check guards and require it to turn red, because one that has never
+  failed has never been shown to hold anything. It carries the four ways a green gate
+  lies — an impoverished fixture that leaves branches unreachable, two implementations
+  agreeing on what both get wrong, a gate that has only ever run in one environment,
+  and a gate holding its own drifting copy of what it measures — and the rule that a
+  two-directional constraint needs a gate able to fail in both directions. Sits beside
+  Law XXVII (honest tests) and Law XXXV (cover and verify): those say write the test,
+  this says prove the test is worth trusting.
 - **`npx geneseed setup` is now the way in, and the README says exactly where that stops
   being true.** The install docs assume npm first: one command, no clone, no Python, on
   macOS, Linux and Windows alike. **All 25 commands** run from Node, along with all
