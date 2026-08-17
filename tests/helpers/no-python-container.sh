@@ -54,8 +54,9 @@ OUT=$(docker run --rm \
     export PATH="/consumer/node_modules/.bin:$PATH"
     command -v geneseed geneseed-build geneseed-hook
 
-    # The acceptance commands. Each is a real user path, not a --version smoke test.
-    geneseed --version
+    # The acceptance commands. Each is a real user path, not a smoke test — and `version` is a
+    # VERB here, not a flag; this CLI has no bare top-level flags.
+    geneseed version
     geneseed doctor --all
     geneseed-build --emit claude
     geneseed status

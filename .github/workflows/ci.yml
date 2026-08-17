@@ -199,8 +199,11 @@ jobs:
           command -v geneseed geneseed-build geneseed-hook
           # The daemon is backgrounded by PID rather than by `%1`: job control is off in a
           # non-interactive shell, so `kill %1` is unreliable exactly where it matters.
+          # `version` is a VERB, not a `--version` flag — this CLI has no bare flags at the top
+          # level, and the refusal for one names every verb it does have. Asserted rather than
+          # assumed: the first draft of this gate wrote `--version` and the CLI rejected it.
           {
-            geneseed --version
+            geneseed version
             geneseed doctor --all
             geneseed-build --emit claude
             geneseed status
