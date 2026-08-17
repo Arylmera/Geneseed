@@ -75,26 +75,14 @@ export const MCP_PRESETS = {
     label: 'GitLab',
     desc: 'GitLab repo / MR / issue / CI tools via @zereight/mcp-gitlab (npx, no '
       + 'install). Edit GITLAB_PERSONAL_ACCESS_TOKEN (scopes: api, read_repository) '
-      + 'and GITLAB_API_URL before use. Add a second entry (gitlab-2) for another '
-      + 'instance.',
+      + 'and GITLAB_API_URL before use. For a second instance (a self-hosted server), '
+      + 'copy this block by hand under a new name and point it at the other URL — '
+      + 'SETUP.md has the pattern.',
     block: {
       type: 'local',
       command: ['npx', '-y', '@zereight/mcp-gitlab'],
       environment: { GITLAB_PERSONAL_ACCESS_TOKEN: '',
         GITLAB_API_URL: 'https://gitlab.com/api/v4' },
-      enabled: true,
-    },
-  },
-  'gitlab-2': {
-    label: 'GitLab (2nd instance)',
-    desc: 'A second GitLab instance (e.g. a self-hosted server) via the same '
-      + '@zereight/mcp-gitlab command. Point GITLAB_API_URL at the other instance '
-      + "and give it that instance's own token.",
-    block: {
-      type: 'local',
-      command: ['npx', '-y', '@zereight/mcp-gitlab'],
-      environment: { GITLAB_PERSONAL_ACCESS_TOKEN: '',
-        GITLAB_API_URL: 'https://gitlab.example.com/api/v4' },
       enabled: true,
     },
   },

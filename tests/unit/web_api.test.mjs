@@ -40,7 +40,8 @@ import { installState, themeOfDir, installTargets } from '../../js/installs.mjs'
 import { installDeactivate, installReactivate, installUninstall } from '../../js/uninstall.mjs';
 import { registryRecord, registryRoots } from '../../js/registry.mjs';
 import { parseOrigin, originDisplay } from '../../js/update.mjs';
-import { MCP_PRESETS as _P, mcpConfigFor, mcpState, mcpSetEnabled } from '../../js/mcp.mjs';
+import { MCP_PRESETS as _P, mcpApply, mcpConfigFor, mcpLoad, mcpSave, mcpState, mcpSetEnabled }
+  from '../../js/mcp.mjs';
 import { MCP_PRESETS } from '../../js/mcp.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, pyResolve } from '../../js/hosts.mjs';
 import { normcase } from '../../js/lib/fs.mjs';
@@ -729,6 +730,97 @@ test('an OpenCode target adds a preset and then disables it in place', () => {
     assert.throws(() => apiMcpToggle(st, { path: 'bogus', name: preset, enabled: true }),
       NotFound, 'an unlisted path was accepted — the allowlist is the whole security here');
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE TWO TWINS OF THE RETIRED `mcp/` RECORDINGS.
+//
+// Dropping the `gitlab-2` preset moved the preset LISTING, and the listing is recorded verbatim
+// in five `web/{lf,crlf}/mcp__*` cells. There is no recorder — the Python reference that produced
+// those bytes died in P4 — so a moved listing can only be deleted, and deleting it deletes the
+// coverage. Three of the five already had absolute twins in this file ("the MCP listing carries
+// every active install", "an OpenCode target adds a preset and then disables it in place", "a
+// Claude config keeps its unrelated keys and refuses to be clobbered"). These are the other two,
+// written BEFORE the recordings were removed so the coverage never lapsed.
+//
+// They are STRONGER than what they replace, and deliberately so: a corpus cell asserted that two
+// implementations agreed, which is silent about whether either was right. These state what the
+// endpoint must do, absolutely.
+
+test('the MCP toggle refuses a commented jsonc and does not rewrite a byte', () => {
+  // Twin of `mcp/a-commented-jsonc-is-refused-rather-than-rewritten`.
+  //
+  // The nearest existing test is "deactivate refuses a commented jsonc and moves nothing", and it
+  // is a DIFFERENT code path — `installDeactivate`, not `apiMcpToggle`. Each has its own comment
+  // sniff and its own refusal, so one passing says nothing about the other.
+  inProjectDir('.opencode', (root) => {
+    // THE FILE IS WRITTEN BEFORE THE PATH IS RESOLVED, and the order is the point: the `.jsonc`
+    // preference is a preference for a file that EXISTS, so resolving first would hand back
+    // `opencode.json` and this test would probe a file the endpoint never reads. Caught by the
+    // extension guard below on the first run.
+    const original = '// hand-maintained, keep these notes\n{\n  "mcp": {}\n}\n';
+    fs.writeFileSync(path.join(root, 'opencode.jsonc'), original, 'utf8');
+    const cfgPath = mcpConfigFor('opencode', 'project', root);
+    assert.equal(path.extname(cfgPath), '.jsonc',
+      'the .jsonc preference did not resolve — this test would probe the wrong file');
+
+    const res = apiMcpToggle(neutral(), {
+      path: cfgPath, name: Object.keys(MCP_PRESETS)[0], enabled: true,
+    });
+    assert.equal(res.ok, false, 'a commented config was rewritten — the comments are now gone');
+    assert.match(res.error, /comments/,
+      'the refusal must say WHY, or the UI cannot tell the user to edit by hand');
+
+    // THE REFUSAL IS ONLY HALF THE CLAIM. `ok: false` with the file already clobbered is the
+    // exact failure this guard exists to prevent, so the bytes are the other half.
+    assert.equal(fs.readFileSync(cfgPath, 'utf8'), original,
+      'the config changed despite the refusal');
+  });
+});
+
+test('a user-defined server joins the presets in the listing and keeps its own state', () => {
+  // Twin of `mcp/a-user-defined-server-joins-the-presets-and-keeps-its-state`.
+  //
+  // The listing is a UNION — the shipped presets plus whatever the user already wired by hand —
+  // and the union is the part a preset removal can quietly break. A `gitlab-2` that vanished from
+  // `MCP_PRESETS` must still be LISTED for anyone who already had it in their config, marked
+  // `preset: false` so the screen offers no "Add" button for a block it no longer ships.
+  //
+  // The shared fixture is the active install (see the listing test above), so its own config is
+  // what the endpoint reads. Saved and restored byte-for-byte — a leaked probe server would
+  // follow this process into every later test in the file.
+  const before = apiMcp();
+  assert.ok(before.targets.length > 0, 'no active install was listed — the fixture is not active');
+  const target = before.targets[0];
+  const had = fs.existsSync(target.path);
+  const original = had ? fs.readFileSync(target.path) : null;
+  const PROBE = 'gs-probe-user-defined';
+  try {
+    const cfg = mcpApply(mcpLoad(target.path, target.host), PROBE,
+      { type: 'local', command: ['npx', '-y', 'nothing-real'], enabled: false }, target.host);
+    mcpSave(target.path, cfg);
+
+    const after = apiMcp();
+    const t = after.targets.find((x) => x.path === target.path);
+    assert.ok(t, 'the target disappeared from the listing once it held a user-defined server');
+    const probe = t.servers.find((s) => s.name === PROBE);
+    assert.ok(probe, 'a hand-wired server was dropped from the listing');
+    assert.equal(probe.preset, false,
+      'a server Geneseed does not ship was marked as a preset — the screen would offer to Add it');
+    assert.equal(probe.state, 'disabled', 'the listing did not preserve the state on disk');
+
+    // AND THE PRESETS ARE STILL THERE BESIDE IT, which is what makes this a union rather than a
+    // replacement. Without this half, an endpoint that returned ONLY the config's own servers
+    // would pass every assertion above.
+    for (const name of Object.keys(MCP_PRESETS)) {
+      const s = t.servers.find((x) => x.name === name);
+      assert.ok(s, `preset ${name} vanished from the listing`);
+      assert.equal(s.preset, true, `preset ${name} lost its preset flag`);
+    }
+  } finally {
+    if (original === null) fs.rmSync(target.path, { force: true });
+    else fs.writeFileSync(target.path, original);
+  }
 });
 
 test('a Claude target adds under mcpServers and REMOVES on toggle off', () => {

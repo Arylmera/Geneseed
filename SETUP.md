@@ -604,7 +604,9 @@ command serves gitlab.com and any private instance.
 scopes `api` and `read_repository`. Treat it like a password.
 
 **2. Register one entry per instance** — same command, different `GITLAB_API_URL`
-and token. Two instances (e.g. gitlab.com plus a self-hosted server) → two entries:
+and token. Two instances (e.g. gitlab.com plus a self-hosted server) → two entries.
+The MCP screen ships a one-click row for the **first** entry only; a second instance is a
+hand-added copy of that block, which is all it ever was:
 
 <!--harness:opencode-->
 On OpenCode, under the `mcp` key of `opencode.json`:
@@ -643,6 +645,11 @@ exact block; add one `mcpServers` entry per instance.
 The entry key is just a label — name them `gitlab` / `gitlab-2`, or after each instance
 (`gitlab`, `gitlab-acme`). What separates the two is the `GITLAB_API_URL` + token pair;
 keep the `/api/v4` suffix on the URL.
+
+**Don't know where this file lives?** Run `geneseed web`, open **Harnesses**, and expand an
+active install — each MCP target prints the full path of the config file it writes, right
+above its server rows. That is the file the token and the URL go into. From the terminal,
+`geneseed mcp` prints the same paths without starting anything.
 
 #### Filesystem
 

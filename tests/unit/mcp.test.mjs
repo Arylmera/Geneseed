@@ -184,16 +184,23 @@ test('meta falls back to the bare name for an unknown server', () => {
 });
 
 test('the starter presets are present and well formed', () => {
-  // The four starter MCP servers Geneseed ships, as SETUP.md documents them.
-  for (const name of ['markitdown', 'gitlab', 'gitlab-2', 'filesystem']) {
+  // The three starter MCP servers Geneseed ships, as SETUP.md documents them. `gitlab-2` was
+  // the fourth and is gone: it was a byte-for-byte copy of `gitlab` under a different URL, so
+  // the screen carried two rows to teach one pattern that SETUP.md teaches in prose. Removing
+  // it cost 10 web recordings that cannot be re-recorded — the reason this list is now also
+  // the gate that a fifth preset does not quietly reappear.
+  assert.deepEqual(Object.keys(MCP_PRESETS), ['markitdown', 'gitlab', 'filesystem'],
+    'the preset table changed shape — a listing recording moves with it, and there is no '
+    + 'recorder left to re-bless one');
+  for (const name of ['markitdown', 'gitlab', 'filesystem']) {
     assert.ok(Object.hasOwn(MCP_PRESETS, name), `${name} is no longer a preset`);
     const preset = MCP_PRESETS[name];
     assert.ok(preset.label && preset.desc, `${name} has no label or description`);
     assert.equal(preset.block.type, 'local');
     assert.ok(preset.block.command.length, `${name} has an empty command`);
   }
-  // The two GitLab presets share the zereight command and differ only by API URL / token.
-  for (const name of ['gitlab', 'gitlab-2']) {
+  {
+    const name = 'gitlab';
     assert.deepEqual(MCP_PRESETS[name].block.command, ['npx', '-y', '@zereight/mcp-gitlab']);
     // AND NO TOKEN IN THE SOURCE. This is the one assertion in the file that is about
     // secrets rather than about wiring: a preset that shipped a real token would put it in

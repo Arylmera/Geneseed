@@ -112,6 +112,30 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   implementation and every cell it recorded still live there, and nowhere else.
   `docs/limits.md` carries the full argument, the rows it weakened, and the two pieces of frozen
   residue it freed.
+- **The `gitlab-2` MCP preset is gone; the pattern it taught is not.** It was a
+  byte-for-byte copy of the `gitlab` preset under a different `GITLAB_API_URL`, so the MCP
+  screen carried two rows to teach one thing SETUP.md already teaches in prose: a second
+  GitLab instance is a hand-copied block with its own URL and its own token. The `gitlab`
+  preset's description now says so, and SETUP.md gained the step people actually get stuck
+  on — *where does this file live* — naming both places that already answer it: the config
+  path the web console prints above each target's server rows, and `geneseed mcp`, which
+  prints the same paths from the terminal without starting anything.
+  Anyone who already wired a `gitlab-2` keeps it: the listing is a union of
+  the shipped presets and whatever is in your config, so it still appears, now marked as
+  yours rather than as a preset.
+
+  **What it cost the recordings, and why that no longer needs stating separately.** The
+  preset listing was recorded verbatim in the web corpus, and the reference that produced
+  those bytes was deleted in P4 — no recorder survived, so a moved listing could only be
+  retired: five cells × two platforms, **10 recordings**. That accounting is now subsumed by
+  the entry above, which retires the whole web corpus for the same underlying reason.
+  What matters is what replaced them, and it outlives both: three of the five already had
+  absolute twins in `tests/unit/web_api.test.mjs`, and the other two were **written first**
+  (`the MCP toggle refuses a commented jsonc and does not rewrite a byte`, `a user-defined
+  server joins the presets in the listing and keeps its own state`), each mutation-checked
+  against the guard it covers. The coverage is stronger than what it replaced: a corpus cell
+  proved two implementations agreed, which is silent on whether either was right; these state
+  what the endpoint must do.
 - **`upgrade.sh` and `sync-self.sh` are gone.** Each was a few lines of bash that found a
   Python interpreter and then ran `rituals/harness.py upgrade` (or `sync-self`) — the same
   command every launcher already runs, on every OS, and one that native Windows could never

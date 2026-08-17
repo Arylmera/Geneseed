@@ -26,15 +26,6 @@
       },
       "enabled": false
     },
-    "gitlab-2": {
-      "type": "local",
-      "command": ["npx", "-y", "@zereight/mcp-gitlab"],
-      "environment": {
-        "GITLAB_PERSONAL_ACCESS_TOKEN": "",
-        "GITLAB_API_URL": "https://gitlab.example.com/api/v4"
-      },
-      "enabled": false
-    },
     "filesystem": {
       "type": "local",
       "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"],
