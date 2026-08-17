@@ -89,8 +89,6 @@ cd Geneseed
 
 Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PATH`, and nothing else. Set `GENESEED_NODE` to an absolute path if `node` is not on `PATH` — under a version manager that only patches interactive shells, say. The wizard is plain text prompts on every console, old or new.
 
-**Already installed from a clone?** `geneseed migrate` moves every install you have onto the npm shape in one pass, all-or-nothing, without touching hooks or login items it did not write. Your old clone keeps working for a full release — there is no cliff. See [Migrate an existing install](docs/web/migrate.md).
-
 ### 🟩 One runtime — Node, and nothing else
 
 Node ≥ 22.3 is the entire dependency list. Every subcommand, all four hooks, every web-console endpoint and both generators run from it, and what each of them emits is replayed against frozen recordings on every commit, across every theme × host × footprint. So an install needs no second interpreter — not for the harness, and not for anything it ships.
@@ -294,8 +292,6 @@ geneseed rebuild-all   # re-render every registered install in its own theme + m
 ./geneseed bootstrap   # update everything, then drop into the setup wizard
 ./geneseed upgrade     # just the content refresh (remembers theme + emit mode)
 ```
-
-**Moving from a clone to npm** — `geneseed migrate` re-emits every install you already have onto the npm shape, all-or-nothing, and reports (never rewrites) the hooks and login items it did not write. `--dry-run` prints the plan first. See [Migrate an existing install](docs/web/migrate.md).
 
 **Local edits survive.** The self-improvement loops let the agent refine its deployed agent/skill files in place. Before setup, re-theme, or upgrade overwrites them, any drift is auto-exported to a markdown **improvements file** under `improvements/` *inside the deployed harness dir* (e.g. `~/.config/opencode/improvements/` for the global install) — beside the install it describes, untouched by rebuilds and uninstall. Hand it to an agent in this repo to back-port the changes into `src/`. On demand: `./geneseed diff --out FILE`, or the **Changes** page in the web console.
 
