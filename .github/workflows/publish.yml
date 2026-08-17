@@ -105,11 +105,22 @@ jobs:
       # far below the real count: it separates "the suite ran" from "the suite was never found",
       # and is not a tally anyone has to maintain. `shell: bash` brings `pipefail`, so a red
       # suite still fails at the `node` line rather than at the count.
+      #
+      # ⚠ `--test-reporter=tap` IS THE GATE'S PREMISE, NOT A PREFERENCE. The count is read with
+      # `awk '/^# tests /'`, and `# tests` is TAP's spelling. Node's DEFAULT reporter is not a
+      # constant across majors: 22 emits TAP when stdout is a pipe, 24 emits `spec` — `ℹ tests
+      # 1043` — through the same pipe. Measured on both, and the second was measured the
+      # expensive way: this job pins Node 24 while the CI workflow pins 22, so a suite that was
+      # green everywhere reported `0 tests` to this awk alone and failed the publish at the last
+      # gate before the tarball. Same shape as the `npm pack --json` break one commit earlier —
+      # this job runs a newer toolchain than CI, so it is where a default change lands first.
+      # Pinning the reporter makes the gate read a format this repository chose rather than one
+      # the runtime picks.
       - name: unit tests
         shell: bash
         run: |
           log="$(mktemp)"
-          node --test "tests/**/*.test.mjs" | tee "$log"
+          node --test --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
           n="$(awk '/^# tests /{n=$3} END{print n+0}' "$log")"
           echo "the suite reported $n tests"
           if [ "$n" -lt 500 ]; then

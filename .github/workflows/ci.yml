@@ -43,11 +43,18 @@ jobs:
       # separate "the suite ran" from "the suite was never found", not to be a tally anybody has
       # to maintain. `shell: bash` for the pipeline on both runners, and it brings `pipefail`
       # with it, so a red suite still fails at the `node` line rather than at the count.
+      #
+      # ⚠ `--test-reporter=tap` because `# tests` is TAP's spelling and Node's default reporter
+      # is not a constant across majors (24 emits `ℹ tests N` through a pipe where 22 emits
+      # `# tests N`). This job pins 22 and was never red for it; publish.yml pins 24 and was.
+      # Fixed in both so the gate does not depend on which major a runner happens to bring,
+      # and so the two files do not quietly diverge on the one line that decides whether the
+      # suite is considered to have run at all.
       - name: node test suites (workflow runtime + plugins)
         shell: bash
         run: |
           log="$(mktemp)"
-          node --test "tests/**/*.test.mjs" | tee "$log"
+          node --test --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
           n="$(awk '/^# tests /{n=$3} END{print n+0}' "$log")"
           echo "the suite reported $n tests"
           if [ "$n" -lt 500 ]; then
@@ -73,7 +80,11 @@ jobs:
         run: |
           npm install -g npm@latest
           echo "now running the packaging gate under npm $(npm --version)"
-          node --test tests/unit/package_manifest.test.mjs
+          # This step gates on the EXIT CODE, so the reporter does not decide its verdict — the
+          # flag is here so the rule in this file is "every `node --test` reports TAP" with no
+          # exception to remember. The step that most invites a bare `node --test` is the one
+          # someone later adds a count gate to.
+          node --test --test-reporter=tap tests/unit/package_manifest.test.mjs
 
   # THE CELL HARNESSES — the whole cross-implementation gate, now that there is one
   # implementation. It replays the RECORDED corpus against the port; what it does not do is

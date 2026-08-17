@@ -406,6 +406,44 @@ test('the publish workflow is tab free', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+// THE COUNT GATE READS TAP, SO THE REPORTER MUST BE PINNED TO TAP
+//
+// Both workflows gate on the discovered test COUNT rather than the exit code, and they read it
+// with `awk '/^# tests /'`. `# tests` is TAP's spelling. Node's DEFAULT reporter is not a
+// constant across majors — 22 emits TAP into a pipe, 24 emits `spec` (`ℹ tests N`) into the same
+// pipe — so an unpinned `node --test` makes the gate's premise depend on whichever major the
+// runner brings. It failed exactly that way: a 1043-test suite with `fail 0` reported `0 tests`
+// to publish.yml's awk (Node 24) while ci.yml (Node 24 for actions, 22 for the job) stayed green,
+// and the publish died at the last gate before the tarball.
+//
+// DISCOVERED, NOT NAMED, for the reason `publishWorkflow` is: naming the two files would pass
+// happily on a third that copied the gate without the flag.
+
+test('every workflow that count-gates `node --test` pins the TAP reporter', () => {
+  const dir = path.join(ROOT, '.github', 'workflows');
+  const gated = readdirSync(dir).filter((n) => n.endsWith('.yml'))
+    .map((n) => [n, readFileSync(path.join(dir, n), 'utf8')])
+    .filter(([, text]) => /awk '\/\^# tests \//.test(text));
+  // The control on the loop below: it is equally satisfied by a discovery that found nothing,
+  // and "the gate moved and this test went quiet" is the failure it must not have.
+  assert.ok(gated.length >= 2,
+    `expected the count gate in at least ci.yml and publish.yml, found ${gated.map(([n]) => n)}`);
+  for (const [name, text] of gated) {
+    for (const [i, line] of text.split('\n').entries()) {
+      // COMMENTS ARE SKIPPED, and the skip is why this is a line scan rather than a
+      // whole-file `includes`: both files EXPLAIN the gate in prose that quotes a bare
+      // `node --test`, and a file-wide match would be satisfied by the prose while the
+      // `run:` line went unpinned — the exact inversion of what is being gated.
+      if (/^\s*#/.test(line)) continue;
+      if (!/node --test/.test(line)) continue;
+      assert.match(line, /--test-reporter=tap/,
+        `${name}:${i + 1} runs \`node --test\` without --test-reporter=tap, but the file gates `
+        + 'on `# tests` — the count reads 0 on any Node whose default reporter is not TAP');
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
 // THE ARGV `migrate` TELLS YOU TO PASTE INTO A LOGIN ITEM
 
 // ⚠ ONE SOURCE NOW, NOT TWO. The reference's `test_both_implementations_advise_the_same_argv`
