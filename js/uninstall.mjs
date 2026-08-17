@@ -37,8 +37,8 @@
  *
  * NO SPAWN. `bin/geneseed-cli.mjs`'s `child_process` allow-list names `js/doctor.mjs` and one
  * argv, and this module does not extend it: every operation here is a filesystem call. That
- * matters more than usual for this verb — `run(['python', 'harness.py', 'uninstall'])` would
- * be byte-identical in every cell of the matrix, and the allow-list plus
+ * matters more than usual for this verb — shelling the uninstall out to a Python interpreter
+ * would be byte-identical in every cell of the matrix, and the allow-list plus
  * `test_uninstall_removes_an_install_with_no_python_on_path` are what refute it.
  */
 import {

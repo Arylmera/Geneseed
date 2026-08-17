@@ -46,11 +46,32 @@ const TEST_DEF = /^[ \t]+def test_/gm;
 // And the shape that only looks like one. A module-level `def test_` is collected by pytest and
 // by nothing this repository runs.
 const UNRUN_DEF = /^def test_/gm;
+// EVERY `.py` UNDER `tests/`, AT ANY DEPTH. This read the top level only, and the flip is what
+// made the difference matter: four Python files sit one directory down in a subfolder, so the
+// final assertion in this file could have reported the reference entirely gone while all four
+// sat on disk. A gate whose claim is an absence has to look everywhere the thing could be, and
+// the rows it is compared against are a flat list only by accident of where the reference put
+// its test files.
+//
+// A DIRECTORY WALK, NOT A QUERY TO THE INDEX, and the choice is most of what this gate is worth.
+// Asking version control returns the TRACKED set, which is a strictly weaker claim than the one
+// being made: a file dropped from the index but left in the working tree is still importable,
+// still collectable by a runner, and invisible to that question — and an untracked leftover is
+// exactly what a deletion leaves behind. The walk also needs no repository, which is the sharper
+// half. A copy of this tree without version-control metadata makes the index query return
+// nothing, and for an assertion whose success looks like an empty list, "nothing" and "clean"
+// are the same output — the fail-quiet mode you least want in the one gate that certifies a
+// deletion. Every other check here measures the disk too, so all four ask one instrument.
+//
+// COMPILED CACHES ARE NOT IN SCOPE and the extension test is why. A `__pycache__` is untracked,
+// regenerable build residue that no deletion commit can remove from somebody's working copy;
+// widening this to catch it would make the gate permanently red on any machine that ever ran the
+// reference, which is how a gate gets loosened until it sees nothing.
 const onDisk = () =>
   fs
-    .readdirSync(TESTS)
+    .readdirSync(TESTS, { recursive: true })
     .filter((f) => f.endsWith(".py"))
-    .map((f) => `tests/${f}`)
+    .map((f) => `tests/${f.split(path.sep).join("/")}`)
     .sort();
 
 const rows = LEDGER.rows;
@@ -217,6 +238,27 @@ test("a delivered row's successors are on disk", () => {
 // cut from a claim in a commit message into an assertion: it demands the tree be empty of
 // Python AND the ledger be empty of unfinished work, in the commit that does the deleting.
 // Neither half can be satisfied by editing the other.
+//
+// ⚠ WHAT THE FLIP DOES TO THE REST OF THIS FILE, because "this passed" and "this stopped being
+// asked" print identically in a summary line. It INVERTS exactly one test — this one, whose two
+// assertions take the place of the progress line that ran while the flag was false. It SKIPS two,
+// and a skipped test does not pass, it stops running:
+//
+//   • "the ledger and the tree are the same set" takes three claims down with it: that no Python
+//     file on disk lacks a row, that no row names a file that is not there, and that no row
+//     marked gone is back. Only the first has a successor, and the successor is stronger — the
+//     assertion below demands the tree hold no Python AT ALL, which no row can excuse.
+//   • "each row's Python test count is the file's own" takes down the re-derived `py_tests` and
+//     `py_tests_unrun`. NO SUCCESSOR, and there cannot be one: both counted the contents of a
+//     file, and the file is the thing that stopped existing. Those numbers are from here on a
+//     record of what was measured once, not a claim anything still checks — which is also true
+//     of the two count regexes above, now read by nothing.
+//
+// The four gates that never touched the disk still run: the fate partition, the retirement
+// reasons, the `why` floor, and the uniqueness of `python`. So does the successor check, whose
+// Node files are still there. A row's `python` is therefore still READ after the flip — it is
+// the row's identity, asserted unique one test per file, and it names the subject of every
+// failure message here. What it stops being is a path anything resolves.
 test("the flip means both halves are finished", () => {
   const remaining = rows.filter((r) => r.status === "todo");
   if (!deleted) {

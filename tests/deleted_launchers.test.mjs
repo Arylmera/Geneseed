@@ -1,20 +1,16 @@
 /**
- * The PowerShell launcher and the bootstrap script are gone, and a deletion needs a gate.
+ * The PowerShell launcher, the bootstrap script and the two bash update wrappers are gone, and
+ * a deletion needs a gate.
  *
- * WHY THIS IS A `node --test` FILE and not another class in `tests/test_update.py`, which
- * already carries `TheShellWrappersAreGone` and would have taken five more lines. That file
- * imports `rituals/_update`, so it is deleted with the reference implementation — and a gate
- * that dies with the thing it guards is not a gate. The property here has to outlive the
- * migration that motivated it: it is the only thing standing between "we removed two files"
- * and a document still telling a user to run them.
- *
- * AND THAT ARGUMENT HAS NOW BEEN CASHED: `TheShellWrappersAreGone`'s two methods CROSSED INTO
- * THIS FILE rather than into a new one. The two bash wrappers it guards (see `SHELL_WRAPPERS`)
- * are exactly the same shape of subject as `geneseed.ps1` — a deleted file at the repository
- * root whose bare name is a pointer wherever it still appears — so the port is four names in
- * two constants and not a second copy of the scan, the non-vacuity guard and the firing
- * control. What the reference argued for its own file, this file already argued for itself:
- * the `RECORDS` exemption below is the same exemption, reached independently.
+ * WHY THIS IS A `node --test` FILE. The wrappers' original gate was a class inside the
+ * implementation this one replaced, so it went out with it — and a gate that dies with the
+ * thing it guards is not a gate. The property has to outlive the migration that motivated it:
+ * it is the only thing standing between "we removed four files" and a document still telling a
+ * user to run them. That is also why the wrappers' two checks CROSSED INTO THIS FILE rather
+ * than into a second one. All four names are the same shape of subject — a deleted file at the
+ * repository root whose bare name is a pointer wherever it still appears — so they share one
+ * scan, one non-vacuity guard and one firing control, and differ only in four names across two
+ * constants.
  *
  * WHY THEY WENT.
  *   * `geneseed.ps1` was a duplicate of a duplicate. PowerShell — Windows PowerShell and
@@ -36,9 +32,10 @@
  * be red on a clean tree, and a scan that must be red is deleted within the week. So the
  * `bootstrap` half hunts PATH SHAPES only: `./bootstrap`, `.\bootstrap`, `$HERE/bootstrap`,
  * `%HERE%bootstrap` — every form this repository ever used to invoke the file, and none of
- * the forms it uses to name the verb. `tests/test_harness.py`'s prose "update/bootstrap hand
- * off to a fresh harness process" is the counterexample that killed the loose rule, and
- * `theCanSeeAnOffender` below is what proves the tight one still bites.
+ * the forms it uses to name the verb. The sentence "update/bootstrap hand off to a fresh
+ * harness process" — real prose from this suite, kept below as an innocent — is the
+ * counterexample that killed the loose rule, and the firing control at the end of this file is
+ * what proves the tight one still bites.
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -51,25 +48,22 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.dirname(HERE);
 
 /**
- * The two bash wrappers P8b deleted, `<verb>.sh` for the two update verbs — SPELLED AS A
- * CONCATENATION AND NEVER AS LITERALS, which is not cleverness but the only way this file can
- * carry the scan at all while the reference is still here.
+ * The two bash wrappers P8b deleted, `<verb>.sh` for the two update verbs — LITERALS, and only
+ * since this commit. For as long as the old implementation was here they were built by
+ * concatenation, because its own version of this hunt ran over every tracked text file and
+ * exempted only itself and the two append-only records, so a successor that spelled the names
+ * out was an offender in a scan nobody was running from this side. Measured, not feared: that
+ * is exactly how a Node gate file reddened the `validate` job on both platforms at `b3fabd4`
+ * with every Node gate green, because the gate that caught it belonged to the other
+ * implementation. That scan is gone; the indirection had no other purpose, and this file's only
+ * exclusion is itself.
  *
- * `tests/test_update.py`'s `TheShellWrappersAreGone` runs the same hunt over every tracked text
- * file and exempts only ITSELF and the two append-only records. A Node successor that wrote the
- * names out would therefore be an offender in the reference's own scan — measured, not feared:
- * that is exactly how `tests/unit/update.test.mjs` reddened the `validate` job on both platforms
- * at `b3fabd4`, with every Node gate green, because the gate that caught it is Python. Building
- * the names instead keeps both scans honest at once and needs no self-exclusion here.
- * ⚠ AT P4, when the reference goes, inline them — the indirection has no other purpose.
- *
- * WHY THEY WENT, which is the argument the reference makes and this file inherits: each was
- * ~30 lines of bash that probed for an interpreter and then `exec`'d the same subcommand every
- * launcher already ran, on every OS, with no bash. They could not run on native Windows at all.
- * What replaces them is not new — it is `geneseed upgrade` and `geneseed sync-self`, now
- * fronted by `bin/geneseed-cli.mjs`.
+ * WHY THEY WENT: each was ~30 lines of bash that probed for an interpreter and then `exec`'d
+ * the same subcommand every launcher already ran, on every OS, with no bash. They could not run
+ * on native Windows at all. What replaces them is not new — it is `geneseed upgrade` and
+ * `geneseed sync-self`, now fronted by `bin/geneseed-cli.mjs`.
  */
-const SHELL_WRAPPERS = ['upgrade', 'sync-self'].map((verb) => `${verb}.sh`);
+const SHELL_WRAPPERS = ['upgrade.sh', 'sync-self.sh'];
 
 /** The four files. */
 const GONE = ['geneseed.ps1', 'bootstrap', ...SHELL_WRAPPERS];
@@ -85,9 +79,11 @@ const GONE = ['geneseed.ps1', 'bootstrap', ...SHELL_WRAPPERS];
 const POINTER = /geneseed\.ps1|(?:\.[\\/]|\$\w+[\\/]|%\w+%[\\/]?)bootstrap\b/;
 
 /**
- * The wrapper half, kept as a SECOND regex rather than folded into `POINTER` — because the
- * names are built at runtime (see `SHELL_WRAPPERS`) and a `new RegExp` over an escaped literal
- * is where a double-backslash bug hides. Both are applied to every file; the rule is the bare
+ * The wrapper half, kept as a SECOND regex rather than folded into `POINTER` — because it is
+ * DERIVED from `SHELL_WRAPPERS`, the same constant the on-disk and index checks use, so the two
+ * halves of the property cannot drift apart the way a hand-copied alternation would. It stays a
+ * `new RegExp` over escaped names, which is where a double-backslash bug hides, so the firing
+ * control below asserts it fires. Both are applied to every file; the rule is the bare
  * name, which is the `geneseed.ps1` rule and not the `bootstrap` one: neither wrapper's name
  * has a live meaning anywhere in this repository, so there is no verb to spare.
  */
@@ -97,22 +93,24 @@ const WRAPPER_POINTER = new RegExp(SHELL_WRAPPERS.map((n) => n.replace('.', '\\.
 const POINTERS = [POINTER, WRAPPER_POINTER];
 
 /**
- * THE HISTORICAL RECORDS, exempt — the same exemption `TheShellWrappersAreGone` argues and
- * for the same reason. What this hunts is a POINTER: a doc, launcher or CI step sending a
- * reader to a file that is not there. A changelog entry recording the removal is the
- * opposite of that, and scrubbing an append-only history to satisfy a grep deletes the
- * record OF the removal.
+ * THE HISTORICAL RECORDS, exempt. What this hunts is a POINTER: a doc, launcher or CI step
+ * sending a reader to a file that is not there. A changelog entry recording the removal is the
+ * opposite of that, and scrubbing an append-only history to satisfy a grep deletes the record
+ * OF the removal.
+ *
+ * ⚠ THESE TWO NAMES ARE NOW A SHARED CONVENTION, not a local list. A second gate in this suite
+ * hunts a different deletion over a different scope and exempts exactly the same two files by
+ * exactly the same argument. The two sets move together: adding, removing or renaming an entry
+ * here without doing it there splits one rule into two that merely look alike.
+ *
+ * There was a third entry until this commit — the implementation this suite replaced, which
+ * named both wrappers because it was where their scan used to live, and which excluded itself
+ * for the same reason this file excludes itself. It went out with that implementation. Measured
+ * at `41d53a2` and again on the way out: those three files were the complete set of tracked
+ * files naming either wrapper, so the scan is green once the third is gone and no fourth
+ * exemption is owed.
  */
-const RECORDS = new Set([
-  'CHANGELOG.md',
-  'DESIGN.md',
-  // ⚠ NOT a record — the REFERENCE, and this entry dies with it at P4. `tests/test_update.py`
-  // names both wrappers because it is the class this scan just took over from; excluding it is
-  // the same self-exclusion the reference grants itself, granted from the other side for as
-  // long as both scans coexist. Measured at `41d53a2`: these three files are the complete set
-  // of tracked files naming either wrapper, so removing this line at P4 leaves the scan green.
-  'tests/test_update.py',
-]);
+const RECORDS = new Set(['CHANGELOG.md', 'DESIGN.md']);
 
 const BINARY = new Set(['.woff2', '.png', '.jpg', '.jpeg', '.ico', '.gz', '.webp']);
 
@@ -163,9 +161,20 @@ test('the package manifest does not ship them', () => {
   for (const name of GONE) {
     assert.equal(files.includes(name), false, `package.json still ships ${name}`);
   }
-  // The two that STAYED, so this test is a partition and not half of one. Both are shims
-  // over `bin/geneseed-cli.mjs`; the argument for keeping them is in
-  // `tests/test_package_manifest.py`'s `CARVED_IN` row.
+  // The two that STAYED, so this test is a partition and not half of one. Both are shims over
+  // `bin/geneseed-cli.mjs`, and the argument for keeping them — inlined here because the row
+  // that used to carry it was in the implementation this suite replaced — is two grounds, both
+  // about installs this repository does not control:
+  //   * the three shipped documents. README, QUICKSTART and SETUP all tell the reader to run
+  //     `./geneseed`, and rewriting them to `node bin/geneseed-cli.mjs` is a worse instruction
+  //     and a bigger diff than keeping two small shims;
+  //   * a PRE-P0 install, where `link` wrote `~/.local/bin/geneseed` as a SYMLINK to the
+  //     checkout's `geneseed`. Linking now writes a marker-carrying shim naming an interpreter
+  //     and an entry point instead, so the symlink is legacy — but it is live on every machine
+  //     that linked before that change, and deleting its target breaks it with `No such file or
+  //     directory` and no hint. Resolving that symlink is the only branch either shim has left.
+  // The panel clause that used to be a third ground is gone with the panel itself: `tui` now
+  // reaches nothing the Node entry point does not.
   for (const name of ['geneseed', 'geneseed.cmd']) {
     assert.equal(files.includes(name), true, `package.json stopped shipping ${name}`);
   }

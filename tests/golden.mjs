@@ -1,9 +1,8 @@
 // THE EMIT CORPUS, REPLAYED — with no Python involved.
 //
-// `tests/golden.py --against tests/__snapshots__/emit --new "node bin/geneseed.mjs"` is the
-// step in CI's `cells` job that survives P4 in spirit and dies in fact: it is a Python program.
-// This is the same replay, driven from Node, reading the same recorded bytes and the same
-// exported matrix.
+// CI's `cells` job used to replay this corpus through the reference's own golden runner. That
+// step survives P4 in spirit and dies in fact, because it was a Python program. This is the same
+// replay, driven from Node, reading the same recorded bytes and the same exported matrix.
 //
 // WHAT IT CANNOT DO, deliberately: `--record` (the oracle is gone, and a corpus re-blessed from
 // the port proves determinism rather than regression) and `--ref` (a comparison needs a second
@@ -36,14 +35,19 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MATRIX = path.join(HERE, 'helpers', 'matrix');
 
 function loadMatrix() {
-  // The two halves were MEASURED to be byte-identical (`test_matrix_export.py`), so either
-  // serves. This host's own is read first so that a future divergence shows up as a real
-  // difference in this run rather than as a silent preference.
+  // The two halves were MEASURED to be byte-identical, by a gate that ran while both
+  // implementations were still alive to be compared. This host's own is read first so that a
+  // future divergence shows up as a real difference in this run rather than as a silent
+  // preference.
   for (const plat of [process.platform === 'win32' ? 'win32' : 'posix', 'win32', 'posix']) {
     const f = path.join(MATRIX, `emit.${plat}.json`);
     if (fs.existsSync(f)) return JSON.parse(fs.readFileSync(f, 'utf8'));
   }
-  throw new Error(`no exported emit matrix under ${MATRIX} — run tests/export_matrix.py`);
+  // NOT "regenerate it": the exporter that produced these files was part of the reference and
+  // is gone, so the committed matrices are the only copy there will ever be. If one is missing
+  // it was deleted, not un-built — restore it from version control.
+  throw new Error(`no exported emit matrix under ${MATRIX} — the committed matrices are `
+    + 'frozen and have no producer left; restore them from version control');
 }
 
 function parseArgs(argv) {
@@ -228,7 +232,7 @@ function diffMaps(a, b, aName, bName) {
 }
 
 // Kept exported so `tests/unit/golden_flags.test.mjs` can drive the argument layer without
-// spawning 259 emits — the same split `test_golden_sandbox.py`'s FlagWiringTests relies on.
+// spawning 259 emits — the same split the reference's own flag-wiring tests relied on.
 export { parseArgs, selectCells, narrowingReason, loadMatrix, VERBATIM_CELLS };
 
 if (import.meta.url === `file://${process.argv[1].split(path.sep).join('/')}`

@@ -76,8 +76,8 @@ Subdir names are **plural** canonically (`agents/`, `skills/`, `commands/`,
   `description`) — model-invoked via the `skill` tool, progressive disclosure.
 - `.opencode/commands/<name>.md` → a **slash command** (user-invoked `/name`).
 
-Geneseed generates subagents and native skills from `src/` via `build.py --emit
-opencode` (or globally with `--emit opencode-global`) — zero drift. It maps skills
+Geneseed generates subagents and native skills from `src/` via `geneseed build
+--emit opencode` (or globally with `--emit opencode-global`) — zero drift. It maps skills
 to native **skills**, not slash commands (same `SKILL.md` shape as Claude Code).
 
 ## 5. How Geneseed maps onto OpenCode

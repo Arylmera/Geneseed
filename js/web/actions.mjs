@@ -24,8 +24,8 @@
  * ---------------------------------------------------------------------------------------
  * THE ARGV-IN-A-RESPONSE-BODY TRAP, SETTLED — AND ITS PREMISE IS FALSE.
  *
- * The plan says `api_install_cmd` and `api_deploy_cmd` "return `[sys.executable,
- * str(ROOT/"build.py"), …]` — a Python argv, as DATA, in a response body", and offers two
+ * The plan says `api_install_cmd` and `api_deploy_cmd` "return the interpreter and the
+ * generator's path — a Python argv, as DATA, in a response body", and offers two
  * options: (a) the Node twin returns its own argv head and the harness normalises it, or
  * (b) the endpoint returns the ACTION and its arguments and the job runner resolves the
  * command — "the better design", at the cost of changing the reference and rebuilding the
@@ -52,7 +52,7 @@
  *     observable difference — the definition of work this port refuses.
  *   * Option (a) is what remains, minus the harness change: the Node twin returns
  *     `[process.execPath, bin/geneseed-cli.mjs, …]`, which is the honest command for the
- *     runtime it will run on, and naming `python build.py` there would put Python back into
+ *     runtime it will run on, and naming a Python interpreter there would put Python back into
  *     a "no Python needed" install for the one operation the console exists to run.
  *
  * `web/dist` therefore does NOT need rebuilding, and it was not rebuilt.

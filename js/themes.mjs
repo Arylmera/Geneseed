@@ -1,5 +1,5 @@
 /**
- * `_build_render.sync_themes` / `_insert_theme_keys` — `build.py --sync-themes`, the
+ * `_build_render.sync_themes` / `_insert_theme_keys` — the generator's `--sync-themes`, the
  * maintainer tool that fills every shipped theme with the keys `_TEMPLATE.json` defines.
  *
  * IT IS A BYTE-EXACT TEXTUAL EDIT OF COMMITTED FILES, which is what makes it the most

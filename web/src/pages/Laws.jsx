@@ -23,8 +23,8 @@ const LAW_CAT_ORDER = ['security', 'verify', 'process', 'craft', 'context', 'com
 // server that returns no `klass`) and the one-line principle shown in the
 // table's "Principle" column — display copy that lives nowhere else, so a law
 // missing here renders with a blank description. Doctor enforces one entry per
-// law, a known class, and agreement with LAW_CLASS (_count_table_problems in
-// rituals/_harness_build.py); keep it in step when a law lands in universal.md.
+// law, a known class, and agreement with LAW_CLASS; keep it in step when a law
+// lands in universal.md.
 const LAW_META = {
   1: ['security', 'Secrets never touch tracked files; only .env or a manager.'],
   2: ['process', 'One purpose per change; no silent scope creep.'],

@@ -37,11 +37,11 @@ The lineage is also why an **imperial** theme ships alongside the neutral one: i
 
 ### How it works
 
-One canonical source in `src/` renders, via a tiny dependency-free generator (`build.py`, stdlib only), into a ready-to-use bundle. **A theme controls only *voice*** — how the AI responds and how the prose inside the docs reads (tagline, greeting, descriptions). **Structure is theme-independent**: section names (Rules, Agents, Skills, Memory…) and folder names (`laws/`, `agents/`, `skills/`, `memory/`, `notebook/`) are always plain English, so the scaffolding stays tool-friendly while the flavour lives in the words.
+One canonical source in `src/` renders, via a tiny zero-dependency generator (`geneseed-build`), into a ready-to-use bundle. **A theme controls only *voice*** — how the AI responds and how the prose inside the docs reads (tagline, greeting, descriptions). **Structure is theme-independent**: section names (Rules, Agents, Skills, Memory…) and folder names (`laws/`, `agents/`, `skills/`, `memory/`, `notebook/`) are always plain English, so the scaffolding stays tool-friendly while the flavour lives in the words.
 
 ```bash
-python build.py                  # default theme (neutral)
-python build.py --theme imperial # Warhammer 40k voice, identical structure
+geneseed-build                   # default theme (neutral)
+geneseed-build --theme imperial  # Warhammer 40k voice, identical structure
 ```
 
 ---
@@ -50,7 +50,7 @@ python build.py --theme imperial # Warhammer 40k voice, identical structure
 
 ### ⚡ The short way — `npx`
 
-One command, nothing cloned, no Python on the install path. The only prerequisite is **Node ≥ 22.3**. (Three things still involve Python and none of them is this command — [named below](#-what-still-needs-python--said-plainly).)
+One command, nothing cloned, nothing else to install. The only prerequisite is **Node ≥ 22.3**.
 
 ```bash
 npx geneseed setup            # the guided wizard
@@ -69,7 +69,7 @@ npm install -g geneseed@latest   # …and that is also the update
 
 ### 🧬 The long way — a git checkout
 
-Cloning still works and is what you want if you intend to *change* the harness rather than use it. It needs **git** and **Python 3** (stdlib-only, nothing to `pip install`) and gives you the full-screen TUI as well.
+Cloning still works and is what you want if you intend to *change* the harness rather than use it. It needs **git** and the same **Node ≥ 22.3** as everything else — there is nothing extra to install.
 
 ```bash
 git clone https://github.com/Arylmera/Geneseed.git
@@ -86,19 +86,19 @@ cd Geneseed
 # PowerShell runs a .cmd directly, so this is the PowerShell spelling too
 ```
 
-Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PATH`, and nothing else. Set `GENESEED_NODE` to an absolute path if `node` is not on `PATH` — under a version manager that only patches interactive shells, say. The full-screen TUI needs a VT-capable console — **Windows Terminal**, or Windows 10 1809+ `conhost` — via a stdlib-only ANSI backend; an older console degrades gracefully to the same wizard as plain text prompts.
+Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PATH`, and nothing else. Set `GENESEED_NODE` to an absolute path if `node` is not on `PATH` — under a version manager that only patches interactive shells, say. The wizard is plain text prompts on every console, old or new.
 
 **Already installed from a clone?** `geneseed migrate` moves every install you have onto the npm shape in one pass, all-or-nothing, without touching hooks or login items it did not write. Your old clone keeps working for a full release — there is no cliff. See [Migrate an existing install](docs/web/migrate.md).
 
-### 🐍 What still needs Python — said plainly
+### 🐍 What still needs Python — nothing, said plainly
 
-25 of the 25 subcommands run from Node, along with all four hooks, every web-console endpoint and both generators — producing byte-identical output, gated on every commit across every theme × host × footprint. So an npx install is Python-free **for the harness itself**, and since the token-report script crossed, for everything it ships as well. One exception remains, and it is a screen rather than a command.
+25 of the 25 subcommands run from Node, along with all four hooks, every web-console endpoint and both generators. Each was gated byte for byte against the Python reference it replaced, across every theme × host × footprint, and those recordings are replayed on every commit now that the reference itself is gone. So an install is Python-free **for the harness itself**, and since the token-report script crossed, for everything it ships as well. The one exception that used to survive here was a screen rather than a command, and it no longer exists either.
 
-- **0 commands have no Node twin**: 25 of the 25 subcommands, and all four hook verbs, answer from the Node entry points. What is still Python is a SCREEN, not a command: the full-screen browse panel that `geneseed tui` and `geneseed menu` open on a terminal. From Node both refuse the panel by name and print the command list instead — the panel itself is `python rituals/harness.py tui` (or `menu`), from a checkout. Off a terminal, which is how scripts and CI run them, the two runtimes print the same bytes and exit the same way.
+- **0 commands have no Node twin**: 25 of the 25 subcommands, and all four hook verbs, answer from the Node entry points. The full-screen browse panel that `geneseed tui` and `geneseed menu` used to open on a terminal was the last hold-out, and it was a SCREEN rather than a command. It is not here and it is not anywhere: both verbs cross, both refuse the panel by name and print the command list instead. Off a terminal, which is how scripts and CI run them, the bytes and the exit code are the recorded ones.
 - **Nothing you install needs an interpreter any more.** The `token-report` skill is a script rather than prose, and it is now `scripts/token_report.mjs`, run with `node`; `daydream` and `herdr`, which used to hand inline code to `python3` without shipping a file of their own, call `node -e` instead. So **every bundle carries** nothing that needs one: no Python file, and no skill that shells out to an interpreter, on any host, theme or footprint. Three tests freeze that — one scans every tracked file for inline code handed to an interpreter, one globs the bundle source, and one drives the ported script against its frozen predecessor over seeded transcripts for all four hosts and compares the bytes.
 - **`upgrade` / `update` / `sync-self` / `bootstrap` are for a git checkout.** They `git pull` the install's own origin. From an npm install they stop before touching anything and name `npm install -g geneseed@latest` as the update instead.
 
-One more honest edge, in the web console rather than the CLI: the **"browse…" folder picker** opens an OS-native dialog, which only the Python server can do. On the Node server the button reports that it is unavailable and the field beside it stays editable — type or paste the path.
+One more honest edge, in the web console rather than the CLI: the **"browse…" folder picker** would open an OS-native dialog on the machine running the daemon, and this server declines to. The button reports that it is unavailable and the field beside it stays editable — type or paste the path.
 
 ### ✅ After installing
 
@@ -141,9 +141,9 @@ It binds to `127.0.0.1` only and runs entirely offline — no npm needed at runt
 
 Full reference — every view, the launch/daemon/PWA surface, the security model: **[docs/web-ui.md](docs/web-ui.md)**.
 
-### ⌨️ TUI — `geneseed`
+### ⌨️ Terminal — `geneseed`
 
-Same actions, no browser. Bare `geneseed` opens the **main menu** — browse, review local edits, refresh/set up, update, rebuild, memory, status, and Settings (MCP servers, run-from-anywhere, uninstall — global **or** per-repo). `geneseed setup` jumps straight to the install wizard; `geneseed tui` opens the browse panel directly. The whole thing is a stdlib-only, dependency-free full-screen UI that also degrades to plain text prompts on older consoles — see [Setup](#-2--setup) above for the wizard walkthrough.
+No browser? Every action the console offers is also a verb: `build`, `doctor`, `diff`, `rebuild-all`, `status`, `memory`, `catalog`, `exclude`, `mcp`, `link`/`unlink`, `uninstall` (global **or** per-repo). `geneseed setup` runs the install wizard — plain text prompts, every console, every OS; see [Setup](#-2--setup) above for the walkthrough. `geneseed --help` lists the rest. There is no full-screen panel: `tui` and `menu` are verbs that say so and print the command list.
 
 ---
 
@@ -178,7 +178,7 @@ Fourteen themes ship — each a single JSON file in `themes/` carrying voice tok
 | 🏟️ **sports** | play-by-play commentary |
 | 🏍 **biker** · 🎤 **commentator** · 🃏 **joker** · 🤖 **marvin** · 😤 **mean** · 🏎 **verstappen** | community-added voices for fun |
 
-Pick with `--theme NAME` or via the TUI wizard. The theme is remembered in a `.geneseed-theme` marker, so later upgrades preserve it. `doctor` checks every theme defines the same keys, so flavour drift is impossible. Adding a new voice token to `themes/_TEMPLATE.json`? Run `python build.py --sync-themes` to fill it into every theme (template's placeholder value, reported for restyling) before `doctor` is expected to pass again.
+Pick with `--theme NAME` or via the setup wizard. The theme is remembered in a `.geneseed-theme` marker, so later upgrades preserve it. `doctor` checks every theme defines the same keys, so flavour drift is impossible. Adding a new voice token to `themes/_TEMPLATE.json`? Run `geneseed-build --sync-themes` to fill it into every theme (template's placeholder value, reported for restyling) before `doctor` is expected to pass again.
 
 ### 🪶 Footprint (lean vs full)
 
@@ -189,11 +189,11 @@ A second per-install dial, **footprint**, sets how much of the Rules `AGENT.md` 
 | **lean** *(default)* | each Rule's heading + the rule line, then a pointer to the full law file | ~40% smaller; rationale is one on-demand read away |
 | **full** | every Rule's complete text **and** rationale, inlined | maximum guidance density; largest per-turn token cost |
 
-Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Lean is the default: the rationale is one read away and the context it frees is paid back on every turn. Switch to **full** when token cost is a non-issue or you run a smaller model, which leans harder on always-present rationale. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob, Copilot).
+Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points the agent there before acting on secrets, deletion, git history, scope, or untrusted content — so it's a context/token optimization, **not** a rules cut. Lean is the default: the rationale is one read away and the context it frees is paid back on every turn. Switch to **full** when token cost is a non-issue or you run a smaller model, which leans harder on always-present rationale. Set it with `--footprint lean|full`, the Settings toggle, the per-harness dropdown in the Harnesses tab, or the setup wizard. It's remembered in a `.geneseed-footprint` marker and preserved across rebuilds, on every host (OpenCode, Claude Code, Bob, Copilot).
 
 Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates each Rule's *reasoning* to on-demand (and adds the standalone laws file to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer — which is why it stays the default.
 
-Want to check a build before it touches anything real? `python build.py --validate-only --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build---validate-only).
+Want to check a build before it touches anything real? `geneseed-build --validate-only --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build---validate-only).
 
 ---
 
@@ -247,7 +247,6 @@ Geneseed/
 │                         (the four hook verbs), geneseed.mjs (the generator driver)
 ├── js/                   the Node harness — generator, hooks, web server, doctor, installs
 │                         (js/cli-table.json is the CLI as data; both runtimes read it)
-├── build.py              generator (stdlib only)
 ├── geneseed              launcher (bash): a shim over bin/geneseed-cli.mjs — bare `./geneseed`
 │                         = interactive main menu; + every subcommand the CLI carries
 │                         (`./geneseed link` puts it on PATH so `geneseed` runs from anywhere)
@@ -261,13 +260,8 @@ Geneseed/
 │   ├── memory/           memory convention + index
 │   └── notebook/         the agent's own freeform space — convention + index
 ├── themes/               voice token maps (14 themes shipped)
-├── rituals/harness.py    the Python CLI: build · doctor · diff · rebuild-all · status · version ·
-│                         theme · prompt · exclude · setup · web · migrate · link/unlink ·
-│                         uninstall · upgrade/update · sync-self · bootstrap · context · learn ·
-│                         git-gate · rule-gate · home · tui · menu
-├── rituals/web.py        local web UI server (stdlib HTTP) behind `geneseed web`
 ├── web/                  Vite + React UI source; the committed web/dist/ build is what ships
-├── tests/                stdlib unit tests, three cell harnesses, Node test suites
+├── tests/                Node test suites + the frozen corpora they replay (tests/__snapshots__/)
 ├── docs/                 guides (web-ui, wiki, …) + docs/web/ (the console's Docs pages);
 │                         specs/, reviews/, superpowers/ are local working docs — git-ignored
 ├── adapters/             per-host glue (opencode/, claude-code/, bob/, copilot/)
@@ -277,13 +271,11 @@ Geneseed/
 ## 🧪 Validate & test
 
 ```bash
-python rituals/harness.py doctor                      # every theme + parity + authoring + drift
-node bin/geneseed-cli.mjs doctor                      # …and the same checks from the Node side
-python -m unittest discover -s tests -p "test_*.py"   # generator + CLI unit tests (no deps)
-node --test "tests/**/*.test.mjs"                     # Node suites (node expands the glob)
+node bin/geneseed-cli.mjs doctor      # every theme + parity + authoring + drift
+node --test "tests/**/*.test.mjs"     # the test suites (node expands the glob)
 ```
 
-`doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs all four on every push and PR, on both Linux and Windows. Publishing is a separate, manually-triggered workflow (`.github/workflows/publish.yml`) — see [Contributing](#-contributing).
+`doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs both on every push and PR, on both Linux and Windows. Publishing is a separate, manually-triggered workflow (`.github/workflows/publish.yml`) — see [Contributing](#-contributing).
 
 ## 🔄 Keeping it current
 
@@ -331,11 +323,11 @@ Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 
 ## 🤝 Contributing
 
-Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Arylmera/Geneseed). The CI is dependency-free and runs on every push — keep `doctor` green on **both** binaries and the test suites passing. Adding a new theme is one JSON file in `themes/` with the same voice-token keys; `doctor` will tell you if any are missing.
+Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Arylmera/Geneseed). The CI is dependency-free and runs on every push — keep `doctor` green and the test suites passing. Adding a new theme is one JSON file in `themes/` with the same voice-token keys; `doctor` will tell you if any are missing.
 
 Three things that bite when you don't know them:
 
-- **`js/cli-table.json` IS the CLI.** The argument parser is data, and that file is the owned document — not a generated one. `bin/geneseed-cli.mjs` cannot parse a single verb without it, `bin/geneseed-hook.mjs` renders `--help` from it, and the console's `cli` docs page is a filtered view of it. While `rituals/harness.py` still exists, `tests/test_cli_reference.py` asserts that its argparse tree and this table describe the same CLI field for field — so edit the parser and the table together, or that test names the command that disagrees.
+- **`js/cli-table.json` IS the CLI.** The argument parser is data, and that file is the owned document — not a generated one. `bin/geneseed-cli.mjs` cannot parse a single verb without it, `bin/geneseed-hook.mjs` renders `--help` from it, and the console's `cli` docs page is a filtered view of it. It was checked field for field against the reference's own argument parser while that parser existed; what holds it now is `tests/unit/cli_table.test.mjs` and the recorded help texts under `tests/__snapshots__/help/`, which every verb's `--help` is rendered against — so change a flag here and the fixture for that verb is what tells you.
 - **The version has one owner: `harness.config.json`.** `package.json` mirrors it and a test fails the fork. Never `npm version` — it edits one of the two.
 - **Publishing is deliberate and manual.** `.github/workflows/publish.yml` uses npm trusted publishing (OIDC); there is no `NPM_TOKEN` in this repository and there must not be one. It runs only from Actions → publish → Run workflow, and the npm-side trusted publisher is keyed on that workflow's **filename** — renaming the file breaks publishing with no local symptom, which is why the file names itself in its own header and a test asserts the two agree.
 

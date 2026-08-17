@@ -15,7 +15,7 @@ Exclusion is all-or-nothing per folder — it doesn't trim which Rules apply or 
 
 - **Claude Code** — native suppression via `claudeMdExcludes` in the repo's `.claude/settings.local.json`.
 - **Bob** — a shadow `rules/geneseed.md` stub that shadows the global one (never overwrites a hand-written stub already there).
-- **OpenCode** — the `sovereign_bypass()` guard (Python) and its JS twin in the plugins short-circuit at session start.
+- **OpenCode** — the hook entry's sovereign-bypass guard and its twin in the plugins short-circuit at session start.
 - **Copilot — documented limitation.** GitHub Copilot has no native per-repo suppression hook: the global `copilot-instructions.md` still loads even inside an excluded folder.
 
 ### Manage it

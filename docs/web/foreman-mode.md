@@ -26,7 +26,7 @@ Set-and-forget, stored beside the install and preserved across rebuilds and re-t
 
 - **Harnesses tab** — the per-install **Mode** dropdown (beside Voice, Footprint, and Posture), then **Apply**.
 - **Setup / re-theme wizard** — asks for mode alongside voice, posture, and footprint.
-- **CLI** — `build.py --mode foreman`; switch back with `--mode direct`.
+- **CLI** — `geneseed-build --mode foreman`; switch back with `--mode direct`.
 
 ---
 

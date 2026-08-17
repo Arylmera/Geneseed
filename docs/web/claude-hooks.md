@@ -4,14 +4,14 @@ order: 0
 title: "How Geneseed binds to Claude Code"
 kind: "concept"
 ---
-Claude Code has no `instructions` array and no JS plugin dir — the harness reaches it through **`settings.json` hooks** instead: the same capabilities the OpenCode plugins provide, each driven by a `harness.py` subcommand. `CLAUDE.md` itself auto-loads by location, so it needs no hook at all.
+Claude Code has no `instructions` array and no JS plugin dir — the harness reaches it through **`settings.json` hooks** instead: the same capabilities the OpenCode plugins provide, each driven by a `geneseed-hook` subcommand. `CLAUDE.md` itself auto-loads by location, so it needs no hook at all.
 
 ### The four hooks
 
-- **Context injection** — `SessionStart` (startup, clear, resume) runs `harness.py context`: auto-discovers the repo's docs by convention and injects them before your first turn, plus your machine wiki. It honours the same `GENESEED_CONTEXT` manifest as the OpenCode context plugin.
-- **Git gate** — `PreToolUse` on Bash runs `harness.py git-gate`: enforces the safety Laws at the tool boundary, before a shell command executes.
-- **Rule gate** — `PreToolUse` on the write tools runs `harness.py rule-gate`: a write to `user-rules.md` or to a memory file asks first, because whether something you want kept is a standing rule or a durable fact is *your* call, settled through the [rule skill](#/docs/skills) (**Law VI**). Ordinary edits are untouched.
-- **Learn** — `Stop` and `SubagentStop` run `harness.py learn`: distils durable memories into the install's `memory/` store at session end; a subagent's stop routes to the per-agent lesson path (`memory/agents/<name>.md`).
+- **Context injection** — `SessionStart` (startup, clear, resume) runs `geneseed-hook context`: auto-discovers the repo's docs by convention and injects them before your first turn, plus your machine wiki. It honours the same `GENESEED_CONTEXT` manifest as the OpenCode context plugin.
+- **Git gate** — `PreToolUse` on Bash runs `geneseed-hook git-gate`: enforces the safety Laws at the tool boundary, before a shell command executes.
+- **Rule gate** — `PreToolUse` on the write tools runs `geneseed-hook rule-gate`: a write to `user-rules.md` or to a memory file asks first, because whether something you want kept is a standing rule or a durable fact is *your* call, settled through the [rule skill](#/docs/skills) (**Law VI**). Ordinary edits are untouched.
+- **Learn** — `Stop` and `SubagentStop` run `geneseed-hook learn`: distils durable memories into the install's `memory/` store at session end; a subagent's stop routes to the per-agent lesson path (`memory/agents/<name>.md`).
 
 ### Where they live
 

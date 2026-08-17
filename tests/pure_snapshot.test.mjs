@@ -750,10 +750,15 @@ test('every corpus names a patch-independent interpreter', () => {
 
 test('the width sweep still produces the recorded runs', { skip: dwidth ? false
   : 'tests/__snapshots__/dwidth.json has not been recorded' }, () => {
-  // THE PIN, CHECKED WITHOUT AN INTERPRETER. While the reference exists, the sweep runs live
-  // against `unicodedata` and ci.yml's `python-version: "3.13"` is what stops a floating pin
-  // from switching that gate off. This is the replacement: the version the runs were measured
-  // at is DECLARED in the document, and the port's own constant is checked against it.
+  // THE PIN, CHECKED WITHOUT AN INTERPRETER, and the hazard it answers is real. A width table is
+  // a snapshot of ONE Unicode version, so a sweep that asks a LIVE Unicode database for the right
+  // answer is only ever as stable as that database: while the answers were measured at run time,
+  // the one thing holding them still was a version pinned in CI, and a floating pin does not
+  // redden such a gate — it moves the oracle underneath it. Nothing here consults a live Unicode
+  // database any more. The runs are RECORDED, the version they were measured at is DECLARED in
+  // the document, and the port's own constant is checked against that declaration, so what
+  // follows compares a frozen answer against a table obliged to name the Unicode it encodes —
+  // and neither side can move without saying so.
   assert.equal(dwidth.unidata_version, DWIDTH_UNIDATA,
     `the sweep was recorded against unidata ${dwidth.unidata_version} and js/tui.mjs's `
     + `WIDE/COMBINING tables declare ${DWIDTH_UNIDATA}. Regenerating the tables means moving `

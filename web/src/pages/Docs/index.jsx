@@ -18,7 +18,7 @@ function defaultPageId(menu) {
 }
 
 // One docs page rendered, dispatched by `kind`. Keeping the dispatch here
-// keeps each sub-component focused on one shape — the same split harness.py
+// keeps each sub-component focused on one shape — the same split the CLI
 // uses to keep its topic submodules small.
 function PageView({ pageId, harness, overview, onAction }) {
   const { data, error, loading } = useAsync(

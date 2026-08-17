@@ -152,8 +152,8 @@ export function selectCells(doc, a) {
 }
 
 /**
- * THE PLATFORM UNION, asserted from either host — the property `test_hook_cli_parity.py`'s
- * `ThePlatformDeclaredCellsAreDeclared` owns, moved here so it travels with the matrix.
+ * THE PLATFORM UNION, asserted from either host — the property the reference's own
+ * `ThePlatformDeclaredCellsAreDeclared` owned, moved here so it travels with the matrix.
  *
  * Every id declared for THIS platform must be built, every id declared for the other must be
  * absent, and neither half may be empty. A group that quietly returned nothing is what the Unix

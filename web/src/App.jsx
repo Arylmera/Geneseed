@@ -41,7 +41,7 @@ const About = lazy(() => import('./pages/About.jsx'))
 // App is a thin shell: it wires the hooks (overview, jobs, color mode) to the
 // chrome (rail, topbar, console) and dispatches the active route to a page. All
 // stateful logic lives in hooks/ and all chrome in components/ — this file just
-// composes them, the way harness.py composes its submodules.
+// composes them, the way the CLI entry point composes its submodules.
 export default function App() {
   const route = useRoute()
   const [query, setQuery] = useState('')

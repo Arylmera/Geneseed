@@ -15,9 +15,9 @@
  * table, and it refuses a mode that crosses without a cell in `tests/test_emit_boundary.py`
  * — so the sentence above cannot come back without the observation behind it.
  *
- * THE HANDOFF. Python drives, one spawn per emit:
+ * THE HANDOFF THIS MODULE WAS SHAPED BY. Python drove, one spawn per emit:
  *
- *     python build.py --emit claude
+ *     the Python driver, one emit
  *       +- spawn  node js/emit.mjs <job.json>
  *       |     RENDER  Node writes every file Geneseed owns wholesale
  *       |     WIRE    Node merges the CLAUDE.md managed block, settings(.local).json

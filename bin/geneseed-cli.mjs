@@ -335,7 +335,7 @@ async function main(argv) {
     return die(2, `the following arguments are required: cmd (one of ${
       Object.keys(VERBS).join(', ')})`);
   }
-  // `validate` — `build.py --validate-only`, and the one verb this entry answers that is NOT
+  // `validate` — the generator's `--validate-only`, and the one verb this entry answers that is NOT
   // in the table above. It is dispatched here, before the lookup, for a reason that is a
   // property of the gates rather than a preference:
   //
@@ -359,10 +359,11 @@ async function main(argv) {
   }
   const spec = VERBS[verb];
   if (!spec) {
-    // "and every other harness subcommand is still Python — run `python rituals/harness.py
-    // <verb>`" is GONE, and its removal is not cosmetic: with the four hook verbs named, the
-    // two entry points now cover every subcommand there is, so the clause was not just about
-    // to become false — it was already claiming a third place for verbs that do not exist.
+    // "and every other harness subcommand is still Python — run the interpreter against the
+    // old harness script" is GONE, and its removal is not cosmetic: with the four hook verbs
+    // named, the two entry points now cover every subcommand there is, so the clause was not
+    // just about to become false — it was already claiming a third place for verbs that do
+    // not exist.
     return die(2, `invalid choice: '${verb}'. This entry point carries only `
       + `${Object.keys(VERBS).join(', ')}; the four hook verbs live in `
       + 'bin/geneseed-hook.mjs.');

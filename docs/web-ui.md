@@ -124,7 +124,7 @@ streams the output of background jobs and keeps their history across reloads.
 - **Settings** (`#/settings`) — a **Console direction** picker (the visual flavour of the
   console) with a **Dashboard layout** control (Auto follows each theme's designed Status
   lens; Cultivar / Greenhouse / Operator force one regardless of skin), the install snapshot
-  (deployed/target/theme/version/memory store/Python), a Maintenance card (PATH link/unlink,
+  (deployed/target/theme/version/memory store), a Maintenance card (PATH link/unlink,
   uninstall), an offline package download, and server controls (Stop). Build, update, and MCP
   wiring live in the Harnesses tab.
 

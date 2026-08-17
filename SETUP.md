@@ -24,25 +24,24 @@ that matches your tool, then configure and verify. For the conceptual overview s
   **zero dependencies**; `npx geneseed` needs nothing else.
 - **Your agent tool** — OpenCode (recommended), Claude Code, Bob, Copilot, or anything
   that reads a root instructions file.
-- *Only for a git checkout:* **git**, and **Python 3** (stdlib only, nothing to
-  `pip install`) — the checkout route runs `build.py` / `harness.py` and is what gives
-  you the full-screen TUI.
+- *Only for a git checkout:* **git**. Nothing else — a checkout runs the same Node
+  entry points the npm package installs.
 - *Optional, for the `ingest` skill:* a document converter — **MarkItDown**, Pandoc,
   or Docling — if you want the agent to read PDFs/Office files (see
   [Reading non-markdown docs](#reading-non-markdown-docs)).
 
-### 🐍 Where Python is still required — the exact list
+### 🐍 Where Python is still required — nowhere, and the exact list of what changed
 
-An npx install runs the harness itself without Python. Three exceptions exist and are
-named here rather than found later:
+Nothing in this guide needs an interpreter. The list is kept because two of its three
+entries are still live constraints, and the third is where the panel went:
 
-- **0 commands have no Node twin**: every command in this guide runs from either runtime.
-  What is still Python is a SCREEN, not a command — the full-screen browse panel that
-  `geneseed tui` and `geneseed menu` open on a terminal. From Node both refuse the panel by
-  name and print the `python rituals/harness.py <command>` line to run from a checkout;
-  off a terminal, which is how scripts and CI run them, the two runtimes print the same
-  bytes. `home` opens the web console from either. Every other command in this guide runs from either
-  runtime.
+- **0 commands have no Node twin**: every command in this guide answers from the Node
+  entry points. The last hold-out was a SCREEN rather than a command — the full-screen
+  browse panel `geneseed tui` and `geneseed menu` used to open on a terminal. It is gone,
+  not moved: both verbs still exist, both say the panel is not here and print the command
+  list instead, and off a terminal (which is how scripts and CI run them) the bytes and
+  the exit code are unchanged. `home` opens the web console, which is the visual front end
+  now.
 - **Nothing you install needs an interpreter.** The `token-report` skill is a script
   rather than prose, and it ships as `scripts/token_report.mjs`, run with `node`;
   `daydream` and `herdr`, which used to hand inline code to `python3` without shipping
@@ -55,22 +54,20 @@ named here rather than found later:
   and `bootstrap` `git pull` the install's own origin. From an npm install they stop
   before touching anything and name `npm install -g geneseed@latest` instead.
 
-One more, in the web console rather than the CLI: the **"browse…" folder picker** opens
-an OS-native dialog, which only the Python server can do. On the Node server the button
-reports itself unavailable and the path field beside it stays editable.
+One more, in the web console rather than the CLI: the **"browse…" folder picker** would
+open an OS-native dialog on the machine running the daemon, and the server declines to.
+The button reports itself unavailable and the path field beside it stays editable.
 
 ## 🛣️ Choose your path
 
-**Easiest:** `npx geneseed setup` — no clone, no Python, nothing installed permanently.
+**Easiest:** `npx geneseed setup` — no clone, nothing installed permanently.
 It runs the same guided wizard as a checkout does: it asks for a theme and an install
 mode, runs the right build, and offers a health check. To keep the command around, put
 it on PATH with `npm install -g geneseed`.
 
-**From a clone:** `./geneseed setup` on macOS/Linux, `.\geneseed.cmd setup` on Windows
-(or `python rituals/harness.py setup` anywhere). The checkout wizard is dependency-free
-and adds a colored full-screen form on any VT-capable terminal (Unix, or Windows
-Terminal / Windows 10 1809+ `conhost`), with plain text prompts on older consoles or off
-a TTY. The npx wizard is the plain-text one.
+**From a clone:** `./geneseed setup` on macOS/Linux, `.\geneseed.cmd setup` on Windows.
+It is the same dependency-free wizard the npx route runs — plain text prompts, every
+console, every OS.
 
 **Already installed from a clone, and moving to npm?** `geneseed migrate` re-emits every
 install you already have onto the npm shape in a single all-or-nothing pass, keeping each
@@ -86,14 +83,13 @@ you pick, it speaks in that theme's accent through confirm and build, and the
 install ends on the theme's own **banner and benediction**.
 
 **Already installed?** Bare **`./geneseed`** (Windows: `.\geneseed.cmd`) opens the
-interactive **main menu**: *Browse*, *Review local edits*, *Refresh / set up*,
-*Update only*, *Update & set up*, *Rebuild bundle*, *Memory*, *Status*, and
-*Settings* — a submenu for MCP servers (toggle the MarkItDown, GitLab, and
-Filesystem presets into your OpenCode config), the PATH install, and uninstall (global
-or per-repo — `harness uninstall --target <repo>` from the CLI, or bare `--target` runs
-against whichever project install the cwd sits in).
-**`./geneseed bootstrap`** jumps straight to update-then-setup; **`./geneseed setup`**
-straight to the wizard. Prefer to do it by hand? Pick a path below.
+**web console**, which is where browsing, local edits, rebuilds, memory, status, MCP
+servers and uninstall all live — see [The web console](docs/web-ui.md). `GENESEED_NO_WEB=1`
+suppresses that and prints the command list instead. Uninstall from the CLI is
+`geneseed uninstall --target <repo>` (bare `--target` runs against whichever project
+install the cwd sits in). **`./geneseed bootstrap`** jumps straight to
+update-then-setup; **`./geneseed setup`** straight to the wizard. Prefer to do it by
+hand? Pick a path below.
 
 | Path | Use when |
 | --- | --- |
@@ -102,14 +98,14 @@ straight to the wizard. Prefer to do it by hand? Pick a path below.
 | [C — Claude Code](#path-c--claude-code) | You drive Claude Code and want the lifecycle hooks. |
 | [C′ — GitHub Copilot](#path-c--github-copilot) | You drive the Copilot CLI, coding agent, or VS Code agent mode. |
 | [D — Any `AGENT.md` tool](#path-d--any-agentmd-tool) | Cursor, Aider, or any tool that reads a root instructions file. |
-| [E — No runtime on the target at all](#path-e--no-runtime-on-the-target-at-all) | The machine that *uses* the harness can run neither Node nor Python. |
+| [E — No runtime on the target at all](#path-e--no-runtime-on-the-target-at-all) | The machine that *uses* the harness cannot run Node. |
 
-> **Every `python build.py …` below has a Node twin with the same flags.** The npm
-> package installs it as **`geneseed-build`**, so `python build.py --emit opencode-global`
-> is `geneseed-build --emit opencode-global` after `npm install -g geneseed`, or
-> `npx -p geneseed geneseed-build --emit opencode-global` without installing anything.
-> Output is byte-identical — that equivalence is the whole subject of this port and it is
-> gated across every theme × host × footprint combination on every commit.
+> **Every `geneseed-build …` below is the generator.** `npm install -g geneseed` puts it
+> on your `PATH`; without installing anything, `npx -p geneseed geneseed-build --emit
+> opencode-global` is the same command. From a checkout it is
+> `node bin/geneseed.mjs` with the same flags. Its output was gated byte for byte against
+> the Python generator it replaced, across every theme × host × footprint combination, and
+> those recordings are replayed on every commit.
 
 ---
 
@@ -119,17 +115,17 @@ Installs the whole harness into OpenCode's config dir; every repo you open inher
 
 ```
 # from inside the Geneseed folder
-python build.py --emit opencode-global            # add --theme imperial for the 40k voice
+geneseed-build --emit opencode-global            # add --theme imperial for the 40k voice
 # GENESEED_HARNESS is optional — the learn plugin auto-locates the in-config memory
 # store. Set it only to pin the location explicitly (and persist it to your rc):
 export GENESEED_HARNESS="$HOME/.config/opencode"
 echo 'export GENESEED_HARNESS="$HOME/.config/opencode"' >> ~/.zshrc
 ```
 
-**Windows (PowerShell)** — identical, no bash/WSL needed (`build.py` is pure Python):
+**Windows (PowerShell)** — identical, no bash/WSL needed:
 ```powershell
 # from inside the Geneseed folder
-python build.py --emit opencode-global            # add --theme imperial for the 40k voice
+geneseed-build --emit opencode-global            # add --theme imperial for the 40k voice
 setx GENESEED_HARNESS "$env:USERPROFILE\.config\opencode"   # optional; pins the memory store
 ```
 On Windows the config dir is the same homedir-relative path,
@@ -149,7 +145,7 @@ are never touched. Full design + checklist:
 ### Path B — OpenCode, per-repo
 
 ```
-python build.py --emit opencode --target /path/to/your-repo
+geneseed-build --emit opencode --target /path/to/your-repo
 ```
 
 Writes the full bundle (`AGENT.md`, `agents/`, `skills/`, `memory/`, `notebook/`)
@@ -158,7 +154,7 @@ into the target dir. Commit them or not. **Want the bundle in a subfolder?** add
 so instruction paths resolve from the project root:
 
 ```
-python build.py --emit opencode --out /path/to/repo/Harness --root /path/to/repo
+geneseed-build --emit opencode --out /path/to/repo/Harness --root /path/to/repo
 ```
 
 Depth, native mapping, and the manual fallback: [adapters/opencode/](adapters/opencode/README.md).
@@ -183,7 +179,7 @@ It wires:
 
 All four hooks are emitted as one stable path — the **hook shim** at
 `~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows) — instead of writing
-this machine's Python interpreter and this checkout into your `settings.json`. The shim
+this machine's runtime and this checkout into your `settings.json`. The shim
 carries those two volatile paths itself, so moving or replacing the clone no longer
 breaks the hooks in every install at once: one `geneseed build` rewrites the shim and
 every install is live again. It is refreshed on every emit, and `geneseed doctor`
@@ -218,8 +214,8 @@ global install emitted later starts with an empty list — re-run
 ### Path C′ — GitHub Copilot
 
 ```
-python build.py --emit copilot-global          # personal: render into ~/.copilot
-python build.py --emit copilot --out . --root . # per-repo: AGENTS.md + .github/, committed
+geneseed-build --emit copilot-global           # personal: render into ~/.copilot
+geneseed-build --emit copilot --out . --root .  # per-repo: AGENTS.md + .github/, committed
 ```
 
 Copilot is Claude-shaped where it counts: skills are the same `SKILL.md` folders
@@ -246,7 +242,7 @@ the global emit warns when that's about to happen.
 ### Path D — Any `AGENT.md` tool
 
 ```
-python build.py                       # renders the plain bundle to ./Harness
+geneseed-build                        # renders the plain bundle to ./Harness
 ```
 
 Point your tool's instructions/rules setting at `Harness/AGENT.md`. If the tool only
@@ -256,11 +252,10 @@ OpenCode convenience.
 
 ### Path E — No runtime on the target at all
 
-A maintainer runs it once, on a machine that has either runtime:
+A maintainer runs it once, on a machine that can run Node:
 
 ```
 npx geneseed prompt --theme neutral > install-geneseed.md
-python rituals/harness.py prompt --theme neutral > install-geneseed.md   # the same output
 ```
 
 That emits a self-contained prompt that recreates the entire file tree verbatim.
@@ -282,7 +277,7 @@ Choose any of the 14 themes in `themes/` — `neutral` (plain), `imperial` (Warh
 of voice tokens; `doctor` checks every theme defines the same keys.
 
 Adding a new voice token to `themes/_TEMPLATE.json` means all 14 theme files need it
-too, or the parity check fails. `python build.py --sync-themes` does the mechanical
+too, or the parity check fails. `geneseed-build --sync-themes` does the mechanical
 part: it copies any key the template has but a theme is missing into that theme
 (filled with the template's placeholder text), in template order, and prints exactly
 which keys were added so you can restyle them in that theme's voice. It never deletes
@@ -322,7 +317,7 @@ full, with the rationale always in front of the model, applies a rule's nuance m
 reliably on subtle edge cases or with a weaker model, and is one flag away.
 
 Set it with `--footprint lean|full` (alongside any `--emit`), the **Footprint** toggle in
-the web Settings, the per-harness dropdown in the Harnesses tab, or the TUI wizard. It is
+the web Settings, the per-harness dropdown in the Harnesses tab, or the setup wizard. It is
 remembered in a `.geneseed-footprint` marker and preserved across every rebuild, on every
 host (OpenCode, Claude Code, Bob, Copilot).
 
@@ -333,7 +328,7 @@ geneseed validate --theme imperial --emit opencode --out /path/to/repo/Harness
 ```
 
 (It is a verb on the CLI rather than a flag on the generator because it runs `doctor`, and
-the generator is deliberately unable to start a process. `python build.py --validate-only
+the generator is deliberately unable to start a process. `geneseed-build --validate-only
 …` is the same tool with the same flags.)
 
 Renders and emits the requested `--theme`/`--emit`/`--out`/`--root`/`--footprint`
@@ -787,9 +782,9 @@ not connected, walk these in order:
 | `GENESEED_NOTIFY_MIN_SECONDS` | notify plugin | minimum turn length, in seconds, before notifying (default 30; `0` = every turn) |
 | `GENESEED_NOTIFY_TITLE` | notify plugin | override the notification title (default `Geneseed`) |
 | `GENESEED_PONYTAIL` | ponytail plugin | default minimal-code level for new installs: `lite` \| `full` \| `ultra` \| `off` (default `off`; switch live with `/ponytail <level>`) |
-| `GENESEED_PRIMARY` | `build.py` | `1` also emits the primary orchestrator agent |
-| `GENESEED_COMMANDS` | `build.py` | `1` also emits the `/slash` command layer |
-| `GENESEED_TUI_ASCII` / `GENESEED_TUI_PLAIN` | TUI / harness | force pure-ASCII / drop emoji + animation in the TUI |
+| `GENESEED_PRIMARY` | `geneseed-build` | `1` also emits the primary orchestrator agent |
+| `GENESEED_COMMANDS` | `geneseed-build` | `1` also emits the `/slash` command layer |
+| `GENESEED_TUI_ASCII` / `GENESEED_TUI_PLAIN` | terminal output | force pure-ASCII / drop emoji + animation in what the CLI prints |
 | `GENESEED_NO_ANIM` | install animation | disable the themed install animation |
 | `GENESEED_LOG` | `geneseed upgrade` | override the install/upgrade log path |
 | `GENESEED_NET_TIMEOUT` | `upgrade` | seconds before download attempts give up (default 20, floor 5) |
@@ -811,15 +806,11 @@ not connected, walk these in order:
    silence means it didn't load — re-check the filename, `.js` extension, and that it
    sits in the plugins dir.
 4. **Harness health** — `geneseed doctor` should print `ok` (`npx geneseed doctor` without
-   installing). From a checkout, `python rituals/harness.py doctor` and
-   `node bin/geneseed-cli.mjs doctor` run the same checks and must both be clean.
-   To run the full suite the way CI does:
-   `python -m unittest discover -s tests -p "test_*.py"` and `node --test "tests/**/*.test.mjs"`.
+   installing). From a checkout, `node bin/geneseed-cli.mjs doctor` runs the same checks.
+   To run the full suite the way CI does: `node --test "tests/**/*.test.mjs"`.
 
-On any VT-capable terminal (Unix, or Windows Terminal / Windows 10 1809+ `conhost`),
-`./geneseed tui` opens a two-pane, colorized panel — agents, skills, and laws listed on
-the left, the selected item's full spec on the right (PgUp/PgDn to scroll it) — and runs
-build/doctor/diff (and `u` to update) with a keystroke.
+Browsing agents, skills and laws, and running build/doctor/diff without retyping a
+command, is what the web console is for — bare `./geneseed` opens it.
 
 ## 🚀 Run `geneseed` from anywhere
 
@@ -836,13 +827,13 @@ like any other command — plain `geneseed` from any directory — put it on you
 ./geneseed link /usr/local/bin     # e.g. a system-wide bin dir (may prompt for sudo)
 ```
 
-(Or, in the TUI: `./geneseed` → **Settings** → **Run from anywhere** / **Remove from PATH**.)
+(Or, in the web console: **Settings** → the Maintenance card's PATH link / unlink.)
 
 `link` writes a small `#!/bin/sh` shim that runs this checkout by absolute path, and
 tells you whether the target dir is on your `PATH` (and, if not, the one line to add
-it). The shim names `rituals/harness.py` outright, so it finds the harness and the
-sibling scripts no matter where it lives — the same shape the Windows arm has always
-used. Once it's on `PATH`, drop the `./`:
+it). The shim names this checkout's CLI entry point by absolute path, so it finds the
+harness no matter where the shim itself lives — the same shape the Windows arm has
+always used. Once it's on `PATH`, drop the `./`:
 
 ```
 geneseed            # the interactive main menu, from any directory

@@ -26,7 +26,7 @@
     "must name a .py that is on disk; once it is true no tests/*.py may exist at all and no row",
     "may still be `todo`. That turns the cut from a claim in a commit message into an assertion."
   ],
-  "reference_deleted": false,
+  "reference_deleted": true,
   "rows": [
     {
       "python": "tests/golden.py",

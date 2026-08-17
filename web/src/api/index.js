@@ -1,6 +1,6 @@
 // The API facade. Each domain module owns its endpoints; this file composes them
-// into the single `api` object the UI imports — the thin-facade pattern from
-// harness.py, which wires the topic submodules into one namespace. Adding an
+// into the single `api` object the UI imports — the same thin-facade pattern the
+// CLI uses to wire its topic submodules into one namespace. Adding an
 // endpoint means editing one focused domain file, not this aggregate.
 import * as status from './status.js'
 import * as catalog from './catalog.js'

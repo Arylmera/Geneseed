@@ -1,8 +1,8 @@
 import React from 'react'
 
 // Lifecycle status for an agent or skill, from registry.json at the repo root and
-// shipped by the catalog API as `status` (see _registry_problems in
-// _harness_build.py, which gates the file against src/).
+// shipped by the catalog API as `status` (doctor's registry check gates the
+// file against src/).
 //
 // `approved` renders NOTHING on purpose: it is the state of nearly every entity, so
 // sixty-odd identical pills would be noise — the deviations are the whole signal.

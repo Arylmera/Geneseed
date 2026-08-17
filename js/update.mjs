@@ -3,7 +3,7 @@
  *
  * The verb this whole port exists for. Every other subcommand can be Python for one more
  * release; `upgrade` is the one operation a "no Python needed" install cannot delegate,
- * because a Node install that shelled `python rituals/harness.py upgrade` to update itself
+ * because a Node install that shelled out to the Python harness to update itself
  * would have Python as a hard dependency of the only command a user MUST be able to run.
  *
  * WHY THIS MODULE SPAWNS, AND WHY THE ARGUMENT IS NOT THE JOB RUNNER'S. `js/web/jobs.mjs`

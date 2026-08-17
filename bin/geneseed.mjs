@@ -171,9 +171,9 @@ function choicesFor() {
 }
 
 /**
- * `-h/--help` — the flag argparse hands `build.py` for free and this hand-rolled parser did
- * not, so the two entry points disagreed: `python build.py --help` printed usage and exited
- * 0 while `geneseed-build --help` died with `unrecognized arguments: --help` and exit 2.
+ * `-h/--help` — the flag argparse handed the reference for free and this hand-rolled parser
+ * did not, so the two entry points disagreed: the reference printed usage and exited 0 while
+ * `geneseed-build --help` died with `unrecognized arguments: --help` and exit 2.
  *
  * NO CELL COULD SEE IT. `golden.py`'s `_argv` builds every cell out of the render flags and
  * never emits `--help`, so the byte comparison only ever ran inputs both implementations
@@ -325,7 +325,7 @@ function die(code, msg) {
  * and every install's hooks execute it. While both drivers baked Python that was invisible,
  * because last-writer-wins wrote the same thing. It is observable now — a machine whose last
  * emit ran through this file has EVERY install's hooks running under Node, including
- * installs `python build.py` wrote, and the reverse.
+ * installs the Python driver wrote, and the reverse.
  *
  * That is correct exactly while the two entry points answer the same verbs the same way, so
  * the gate that used to be a formality is now load-bearing:
@@ -987,7 +987,7 @@ function run(argv) {
   // a tenth emit added to `EMITS` and not to `PORTED` refuses loudly here instead of falling
   // through the dispatch's `else` and silently building a plain bundle.
   if (!PORTED.has(args.emit)) {
-    // The `Run: python build.py --emit <e>` tail is gone. It named the fallback for an emit
+    // The `Run: …` tail naming the Python driver is gone. It named the fallback for an emit
     // this driver could not do, and there is no longer a second driver to fall back TO — the
     // partition is now "known" vs "not a thing", and only the refusal is left to say so.
     die(3, `--emit ${args.emit} is not one this driver builds (only `

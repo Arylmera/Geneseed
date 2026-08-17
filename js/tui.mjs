@@ -436,7 +436,7 @@ export function cmdTui() {
     pyPrint('[tui] not an interactive terminal. Use `harness setup`, `doctor`, or `build`.\n');
     return 1;
   }
-  // The pointer to `python rituals/harness.py tui` is gone for `js/menu.mjs`'s reason: the
+  // The pointer to the Python panel is gone for `js/menu.mjs`'s reason: the
   // panel it named is the Python being deleted. What is left is true and stays true.
   pyPrint('[tui] full-screen panel unavailable (this entry carries the TUI\'s layout '
     + 'half, not its screens). Use `harness setup`, `doctor`, or `build`.\n');

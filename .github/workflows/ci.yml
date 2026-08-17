@@ -2,26 +2,16 @@ name: ci
 
 # Validate the harness on every push and PR: doctor (unresolved tokens, dead/
 # non-hermetic links, theme-key parity, author-time spec/plugin gates, rendered-
-# bundle sync) plus the stdlib unit suite and the Node test suites. Dependency-free —
-# no install step. Runs on Linux AND Windows so native-Windows support stays green.
+# bundle sync) plus the Node test suites and the recorded corpus replays.
+# Dependency-free — no install step. Runs on Linux AND Windows so native-Windows
+# support stays green.
 on:
   push:
   pull_request:
   # Kept for manual re-runs. It used to exist for one dispatch-guarded job, `record-corpus`,
-  # which recorded the corpora from the Python reference; that job is gone and no job is
+  # which recorded the corpora from the reference implementation; that job is gone and no job is
   # guarded to this trigger any more, so a dispatch now runs exactly what a push runs.
   workflow_dispatch:
-
-# THE PYTHON IS PINNED, not floating. `3.x` resolves to whatever the runner ships newest,
-# and one gate in this suite is a comparison against a specific Unicode database:
-# `tests/test_pure_function_parity.py`'s width sweep runs only when the interpreter's
-# `unicodedata.unidata_version` matches the tables in `js/tui.mjs`. A floating version is
-# therefore a way to switch that gate off without editing a line of it — CPython 3.14 carries
-# unidata 16.0.0 and the tables are 15.1.0. `test_ci_pins_an_interpreter_whose_unicode_matches
-# _the_tables` reads THIS FILE and fails if the pin and the tables drift apart, so the two
-# move together or not at all. Spelled out at each `setup-python` rather than hoisted into an
-# `env:` — that test reads the literal, and a workflow-level variable it would have to resolve
-# is a level of indirection between the gate and the thing it gates.
 
 jobs:
   validate:
@@ -32,111 +22,52 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # ON BOTH OPERATING SYSTEMS, which is stronger than the gate this replaces: the same
+      # sweep used to run here from the reference and, bare, from a Linux-only cell job.
+      # The one Node test that drives `doctor --all` out of the checkout root is skipped when
+      # `npm` is not on PATH, so it is not a gate this job can lean on — a conditional skip is
+      # exactly the shape that turns a red gate green without a diff.
       - name: doctor (every theme + parity + authoring gates)
-        run: python rituals/harness.py doctor --all
-      - name: unit tests
-        run: python -m unittest discover -s tests -p "test_*.py"
+        run: node bin/geneseed-cli.mjs doctor --all
       # Auto-discover every tests/*.test.mjs (workflow runtime + plugins) — node
-      # expands the glob itself, so it's shell-agnostic (bash + pwsh) and a new test
-      # file is picked up without editing this workflow. Needs Node >= 21.
+      # expands the glob itself, so a new test file is picked up without editing this
+      # workflow. Needs Node >= 21.
+      #
+      # ⚠ GATED ON THE COUNT, NOT ON THE EXIT CODE. `node --test` over a glob that matches
+      # NOTHING prints `# tests 0` and exits 0 — measured. An exit-code-only step would
+      # therefore go green and silent the day a file move stops the glob matching, which is a
+      # gate that fails OPEN. The floor is deliberately far below the real count: its job is to
+      # separate "the suite ran" from "the suite was never found", not to be a tally anybody has
+      # to maintain. `shell: bash` for the pipeline on both runners, and it brings `pipefail`
+      # with it, so a red suite still fails at the `node` line rather than at the count.
       - name: node test suites (workflow runtime + plugins)
-        run: node --test "tests/**/*.test.mjs"
+        shell: bash
+        run: |
+          log="$(mktemp)"
+          node --test "tests/**/*.test.mjs" | tee "$log"
+          n="$(awk '/^# tests /{n=$3} END{print n+0}' "$log")"
+          echo "the suite reported $n tests"
+          if [ "$n" -lt 500 ]; then
+            echo "only $n tests were discovered — the glob has stopped matching the suite"
+            exit 1
+          fi
 
-  # The three CELL HARNESSES, which until now had only ever run on one developer's Windows
-  # laptop. They are the gate the Python -> Node port is measured against: `golden.py` over
-  # the 259-cell emit matrix, `harness_golden.py` over the CLI verbs, `web_golden.py` over the
-  # web console — each running both implementations and comparing every byte either one wrote,
-  # both streams and the exit code.
+  # THE CELL HARNESSES — the whole cross-implementation gate, now that there is one
+  # implementation. It replays the RECORDED corpus against the port; what it does not do is
+  # compare two implementations, which needs two, and its predecessor did exactly that until
+  # the second party was deleted. A live comparison and a corpus replay are different gates and
+  # only the second one survives a deletion, which is why both ran side by side for a while.
   #
-  # LINUX ONLY, and that is a budget decision rather than a claim. Each harness defaults
-  # `--jobs` to `min(8, cpu_count())`, so a 4-core runner parallelises without a flag here;
-  # the whole set is a few minutes of wall clock on ubuntu-latest, and the same set on
-  # windows-latest is roughly four times that, which is more than this repo's runner budget
-  # can spend on every push. The `validate` job above still runs doctor, the unit suite (which
-  # carries every cross-implementation gate that is not a cell) and the Node suites on BOTH
-  # operating systems, and `docs/port-ledger.md` records what each platform's run does and
-  # does not reach. The first Linux run of these three found five defects, one of them a
-  # user-visible `doctor` bug on every non-Windows install — which is the argument for the job
-  # existing at all.
-  cells:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      # `--new` is what makes this a REGRESSION gate rather than a determinism self-check:
-      # with no candidate binary each harness runs the reference against itself and passes by
-      # construction. Both drivers are exercised because they are different programs —
-      # `bin/geneseed.mjs` is the generator's entry and `bin/geneseed-cli.mjs web` is the
-      # CLI's, and P4a's finding was that a second driver does not inherit the first's proof.
-      - name: golden — the emit matrix (Node generator vs build.py)
-        run: python tests/golden.py --new "node bin/geneseed.mjs"
-      # The RECORDED corpus, replayed against the port. The step above compares two live
-      # implementations and dies with the reference; this one compares the port against bytes
-      # the reference wrote down, and is what survives the deletion. Both run while both exist,
-      # because a corpus that is committed but never replayed is inert — it would first be
-      # exercised on the day the reference is gone and re-recording is impossible. `--against`
-      # picks `emit/lf` or `emit/crlf` from `os.linesep`; this runner is Linux, so it reads the
-      # LF half, which was recorded on this same image by a job that no longer exists — see the
-      # tombstone below `node-cells`. That day has now arrived: re-recording IS impossible.
-      - name: golden — the recorded corpus, replayed
-        run: >
-          python tests/golden.py --against tests/__snapshots__/emit
-          --new "node bin/geneseed.mjs"
-      - name: golden — the prune, from both drivers
-        run: |
-          python tests/golden.py --ref "node bin/geneseed.mjs" --deletion
-          python tests/golden.py --deletion
-      - name: golden — idempotence
-        run: python tests/golden.py --idempotent
-      - name: harness_golden — every CLI verb
-        run: >
-          python tests/harness_golden.py --new "node bin/geneseed-hook.mjs"
-          --new-cli "node bin/geneseed-cli.mjs"
-      # The CLI corpus, replayed — the same argument as the emit corpus two steps up, and the
-      # same pairing: the live comparison above dies with `rituals/harness.py`, this one is
-      # what survives it, and both run while both exist because a corpus nothing replays is
-      # inert. It reads `cli/lf`, recorded on this same image by a job that is now deleted.
-      - name: harness_golden — the recorded corpus, replayed
-        run: >
-          python tests/harness_golden.py --against tests/__snapshots__/cli
-          --new "node bin/geneseed-hook.mjs" --new-cli "node bin/geneseed-cli.mjs"
-      - name: web_golden — the console, from both entries
-        run: |
-          python tests/web_golden.py --new "node js/web/server.mjs"
-          python tests/web_golden.py --new "node bin/geneseed-cli.mjs web"
-      # Both entries again, because P4a's finding was that a second driver does not inherit
-      # the first's proof — and a corpus replay is where that matters most, since it is the
-      # only one of the two that will still exist after the reference is deleted.
-      - name: web_golden — the recorded corpus, replayed from both entries
-        run: |
-          python tests/web_golden.py --against tests/__snapshots__/web --new "node js/web/server.mjs"
-          python tests/web_golden.py --against tests/__snapshots__/web --new "node bin/geneseed-cli.mjs web"
-      # The Node CLI's own doctor, on the platform the reference's was just proved on.
-      - name: doctor, from the port
-        run: node bin/geneseed-cli.mjs doctor
-
-  # THE CELL HARNESSES, FROM NODE — the successor to the `cells` job above, running beside it
-  # for as long as both implementations exist. It replays the SAME recorded corpus against the
-  # SAME port; what it does not do is compare two implementations, which needs two.
-  #
-  # UBUNTU **AND** WINDOWS, which the Python `cells` job is not. That job is Linux-only as a
-  # budget decision, and the budget argument does not carry over: this replay is a spawn per
-  # cell with no second implementation to run, so the whole emit matrix is ~70 seconds rather
-  # than minutes. Every Windows defect this project has shipped — CRLF/LF, 8.3 short paths,
-  # console flashes, cp1252 — was invisible to a Linux-only job, and the `crlf` half of the
-  # corpus has no other replayer at all. Landing this BEFORE P4 deletes the Python jobs is the
-  # point: a platform that has never run the gate is a platform the gate says nothing about.
+  # UBUNTU **AND** WINDOWS, which the comparison job never was: that one was Linux-only on a
+  # runner budget, because it ran two implementations per cell. The budget argument does not
+  # carry over — this replay is a single spawn per cell, so the whole emit matrix is ~70 seconds
+  # rather than minutes. Every Windows defect this project has shipped — CRLF/LF, 8.3 short
+  # paths, console flashes, cp1252 — was invisible to a Linux-only job, and the `crlf` half of
+  # the corpus has no other replayer at all: a platform that has never run the gate is a
+  # platform the gate says nothing about.
   node-cells:
     strategy:
       fail-fast: false
@@ -185,25 +116,93 @@ jobs:
 
   # THE LINUX CORPUS RECORDER LIVED HERE, AND IT IS GONE ON PURPOSE.
   #
-  # This job was `workflow_dispatch`-only. It ran the Python reference with `--record` to
-  # produce the `lf` halves of the emit, cli and web corpora, the posix half of the primitives
-  # corpus, and the posix cell matrices. It recorded AND replayed in the same run, which is
-  # what made a green dispatch mean the artifact was worth committing.
+  # This job was `workflow_dispatch`-only. It ran the reference implementation with `--record`
+  # to produce the `lf` halves of the emit, cli and web corpora, the posix half of the
+  # primitives corpus, and the posix cell matrices. It recorded AND replayed in the same run,
+  # which is what made a green dispatch mean the artifact was worth committing.
   #
   # It was dispatched for the last time on 2026-08-17, against the commit immediately before
-  # this one, and its artifact IS the `lf` half committed here. It is deleted in that same
-  # commit so it cannot outlive the reference it drives: the next phase removes
-  # `tests/golden.py`, `tests/harness_golden.py`, `tests/web_golden.py`,
-  # `tests/test_pure_function_parity.py`, `tests/record_help.py` and `tests/export_matrix.py`.
-  # A dispatch button that silently produces nothing is worse than no button at all.
+  # its own deletion, and its artifact IS the `lf` half committed alongside it. It was deleted
+  # first so it could not outlive the reference that drives it — every recorder and every
+  # comparison harness went in the same cut. A dispatch button that silently produces nothing
+  # is worse than no button at all.
   #
-  # THE CORPUS IS NOW REPLAY-ONLY, ON BOTH PLATFORMS. The three Node replayers reject
-  # `--record` by design and nothing else has ever written a cell. A change that moves a
-  # recorded byte is a FINDING, NOT A STEP: revert it, or argue in writing that the recording
-  # was wrong -- and nothing can settle that argument any more. See docs/port-ledger.md.
+  # THE CORPUS IS NOW REPLAY-ONLY, ON BOTH PLATFORMS. The Node replayers reject `--record` by
+  # design and nothing else has ever written a cell. A change that moves a recorded byte is a
+  # FINDING, NOT A STEP: revert it, or argue in writing that the recording was wrong -- and
+  # nothing can settle that argument any more. The port's own limits doc records what each
+  # platform's run does and does not reach.
   #
   # To see what an oracle would have said, check out the tag `python-reference-v1.0.0`. Its
   # message carries the exact re-record commands and which platform each half comes from.
+
+  # THE PACKAGED TARBALL, ON A MACHINE THAT HAS NO INTERPRETER AT ALL.
+  #
+  # Every other job here runs the CHECKOUT on a runner that happens to ship Python. This one
+  # runs the ARTEFACT on a filesystem where there is no python, python3 or py to find — which is
+  # the only way to prove the claim the deletion actually makes. A stripped PATH cannot: it shows
+  # the CLI does not shell out to an interpreter it NAMES, and says nothing about one reached by
+  # a shebang, an import, or a probe of a well-known install directory.
+  #
+  # It is also the only job that installs the tarball rather than reading the repo, so it is the
+  # one that would notice a file `files[]` forgets to ship.
+  #
+  # `container:` rather than a `docker run` inside the job: the steps then execute IN the image,
+  # so the absence is a property of the machine running the commands and not of a nested
+  # sandbox. The probe runs TWICE — before and after apt installs git — because an interpreter
+  # arriving as somebody's transitive dependency is exactly the kind of thing this gate exists
+  # to notice, and it would otherwise be invisible.
+  #
+  # FAILURE IS WIDER THAN A NON-ZERO EXIT, deliberately: any ENOENT (what spawning a missing
+  # interpreter looks like), or the string `python` anywhere in the output, because a message
+  # naming an interpreter this machine does not have is a lie whether the command succeeded or
+  # not. tests/helpers/no-python-container.sh is the same gate for a laptop with a docker daemon.
+  package-no-python:
+    runs-on: ubuntu-latest
+    container: node:22-slim
+    steps:
+      - name: the image really has no interpreter
+        run: |
+          for p in python python3 py; do
+            if command -v $p; then echo "REFUSING: the image ships $p, so this gate proves nothing"; exit 2; fi
+          done
+          echo "no python, python3 or py on PATH — the gate is meaningful here"
+      - run: apt-get update -qq && apt-get install -y -qq --no-install-recommends git ca-certificates
+      - name: still no interpreter, after apt
+        run: |
+          for p in python python3 py; do
+            if command -v $p; then echo "FAIL: installing git dragged in $p"; exit 1; fi
+          done
+      - uses: actions/checkout@v4
+      - name: pack, install into a throwaway consumer, and exercise it
+        run: |
+          set -o pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          TARBALL=$(npm pack --silent | tail -1)
+          echo "packed: $TARBALL"
+          mkdir -p /consumer && cd /consumer && npm init -y >/dev/null
+          npm install --no-audit --no-fund "$GITHUB_WORKSPACE/$TARBALL"
+          mkdir -p /work && cd /work && git init -q
+          {
+            npx geneseed --version
+            npx geneseed doctor --all
+            npx geneseed-build --emit claude
+            npx geneseed status
+            npx geneseed catalog
+            npx geneseed web --daemon-internal --port 0 & sleep 3; kill %1 2>/dev/null || true
+          } 2>&1 | tee /tmp/acceptance.log
+          echo "--acceptance-done--" >> /tmp/acceptance.log
+      - name: no ENOENT, and the word never appears
+        run: |
+          if grep -qi 'ENOENT' /tmp/acceptance.log; then
+            echo "FAIL: an ENOENT — something spawned a program this machine does not have"
+            grep -i 'ENOENT' /tmp/acceptance.log | head; exit 1
+          fi
+          if grep -qi 'python' /tmp/acceptance.log; then
+            echo "FAIL: 'python' appeared in the output of a machine with no interpreter"
+            grep -i 'python' /tmp/acceptance.log | head; exit 1
+          fi
+          echo "PASS: builds, wires, doctors and serves with no interpreter present"
 
   # The web UI (web/) is a Vite/React app with its own toolchain, so it gets a
   # dedicated job: lint, format check, unit tests, and a production build. Linux

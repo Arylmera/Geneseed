@@ -7,7 +7,7 @@ layer, an `AGENTS.md` instructions file, `SKILL.md` skills, subagents, and a
 `settings.json` that also carries `mcpServers`. So the Bob emit **reuses the
 Claude engine** verbatim — only the marker dir (`.bob`) and the instructions
 filename (`AGENTS.md`) change. There is nothing to install by hand: `geneseed
-setup` (or `build.py --emit bob` / `--emit bob-global`) writes everything.
+setup` (or `geneseed build --emit bob` / `--emit bob-global`) writes everything.
 
 This page documents the two verified **Bob-isms** the engine handles, and one
 limitation to be aware of on a shared repo.

@@ -107,7 +107,7 @@ function main(argv) {
     // `test_the_two_entry_points_carry_disjoint_verb_sets` exists to keep from happening.
     // The COMMAND is not a table: `geneseed` is this package's `bin` entry for the CLI
     // (package.json), it answers every non-hook verb, and it survives the deletion of the
-    // `python rituals/harness.py <verb>` this line used to print.
+    // interpreter-plus-script invocation this line used to print.
     return die(2, `invalid choice: '${verb}'. This entry point carries only the four HOOK `
       + `verbs (${Object.keys(VERBS).join(', ')}); every other harness subcommand lives `
       + 'elsewhere — run `geneseed ' + verb + '`.');

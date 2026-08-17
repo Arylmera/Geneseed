@@ -1,16 +1,18 @@
-// THE EMIT REPLAYER — the surviving half of `tests/golden.py`.
+// THE EMIT REPLAYER — the surviving half of the reference's golden runner.
 //
-// WHAT CROSSED AND WHAT DID NOT. `golden.py` does two things: it compares two live
-// implementations (`--ref` against `--new`), and it replays a recorded corpus against one
+// WHAT CROSSED AND WHAT DID NOT. That runner did two things: it compared two live
+// implementations (`--ref` against `--new`), and it replayed a recorded corpus against one
 // (`--against`), plus the two self-comparisons `--idempotent` and `--deletion`. The first dies
 // with the reference — it needs a second implementation and there will be one. The rest is
 // here, and it is what the corpus is worth after P4: 259 cells of recorded bytes that nothing
 // can re-record.
 //
-// THE MATRIX IS DATA AND IS NOT IN THIS FILE. `tests/helpers/matrix/emit.<platform>.json` is
-// the export of `golden.cells()` / `golden.deletion_cells()`, taken while the reference still
-// declared them and gated by `tests/test_matrix_export.py` until P4 deletes it. The two halves
-// were measured to be byte-identical, so this reads either one.
+// THE MATRIX IS DATA AND IS NOT IN THIS FILE. `tests/helpers/matrix/emit.<platform>.json` holds
+// the cell declarations, exported from the reference while it was still the thing that declared
+// them and gated against it until the day it was deleted. ⚠ THE EXPORTER WENT WITH IT: these
+// committed files are the only copy of the matrix that will ever exist, un-regenerable by
+// design, and the same is true of every `matrix/*.json` beside them. Edit them by hand or not
+// at all. The two platform halves were measured to be byte-identical, so this reads either one.
 //
 // EVERY NORMALISER HERE IS LOAD-BEARING AND EVERY ONE OF THEM CAN LIE. A normaliser that is
 // too aggressive silently blanks a real difference and the gate stays green while it has
@@ -366,9 +368,10 @@ export const CORPUS_STAMPS = [
   //   1. THE FILE `.geneseed-version`: `destamp` has already run and tagged the label `<REL>`
   //      — it owns that file whole, so a release bump does not redden 259 emit cells for a
   //      value the live gate compares in full.
-  //   2. AN HTTP BODY: the web harness's own `WEB_STAMPS` (`tests/helpers/web_golden.mjs`,
-  //      twin `_WEB_STAMPS` in `tests/web_golden.py`) rewrites the label to `[release <REL>]`,
-  //      and that arm is deliberately NOT here. Two web cells quote this line through a `diff`
+  //   2. AN HTTP BODY: the web harness's own `WEB_STAMPS` (`tests/helpers/web_golden.mjs`, twin
+  //      of the `_WEB_STAMPS` the reference's web replayer carried) rewrites the label to
+  //      `[release <REL>]`, and that arm is deliberately NOT here. Two web cells quote this
+  //      line through a `diff`
   //      hunk — four recorded files, one per platform — and the reference that recorded them
   //      is about to be deleted: after that, the next version bump reddens them permanently
   //      with no recorder left alive to re-bless them, so the web corpus had to stop depending

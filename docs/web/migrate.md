@@ -4,7 +4,7 @@ order: 8
 title: "Migrate an existing install to npx"
 kind: "concept"
 ---
-If you installed Geneseed by cloning the repository, your hooks currently run through a small machine-wide shim at `~/.geneseed/bin/geneseed-hook` that hands every call to *your checkout's* Python. Installing from npm changes where that code lives. **`geneseed migrate` moves every install you already have onto the new shape, in one pass, without touching your own settings.**
+If you installed Geneseed by cloning the repository, your hooks currently run through a small machine-wide shim at `~/.geneseed/bin/geneseed-hook` that hands every call to *your checkout*. Installing from npm changes where that code lives. **`geneseed migrate` moves every install you already have onto the new shape, in one pass, without touching your own settings.**
 
 ### What it does
 
