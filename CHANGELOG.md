@@ -25,6 +25,43 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   a short reference code (`D` decisions, `O` options, `F` findings, `R` risks, `Q`
   questions, `A` actions) and forbids renumbering one once issued: the user will cite it
   back, and a moved code makes their reply mean something they did not say.
+- **An `Open folder` button beside every MCP config path, because a preset hands you a blank
+  token field and no idea which file it goes in.** The Harnesses screen already printed the
+  path above each target's server rows; it could not take you there. The button asks the
+  machine running the daemon to open the containing folder — `explorer` / `open` /
+  `xdg-open`, reusing the same opener `geneseed web` uses for the browser, so it is not a new
+  process the harness learns to start.
+
+  It opens the **folder, not the file**: handing a `.json` to the OS opens whatever claims
+  that extension, which on a stock Windows box is a browser — a read-only view of the exact
+  file you are trying to edit. The filename is already on screen beside the button.
+  The note names the directory rather than claiming a window appeared, because a headless
+  host has no opener and the server swallows that failure by design.
+
+  **The allowlist is the whole security of the endpoint**, and it is now literally the same
+  function the toggle uses (`mcpTargetPaths()`) rather than a second copy — a path the server
+  did not itself list is a 404 before anything opens. On Windows the opener interpolates into
+  a `cmd` command line, so the exact-match lookup is also what bounds the strings that can
+  reach a shell to the ones the machine's own install registry produced.
+
+  `/api/reveal` is **the first route that never existed on the Python reference**, which the
+  route-partition test asserted set-equality against. `REF_POST` is a *record* of what the
+  reference answered, so widening it would have forged the record; instead the partition
+  gained a sixth part, `POST_BEYOND_REF`, plus a gate that no reference route may hide inside
+  it. Both claims stay checkable: the reference's surface is still pinned exactly, and
+  everything past it has to be enumerated rather than merely appear.
+
+  `web/dist` **is** rebuilt here, so the button is live. It was held back while the corpus
+  still recorded `index.html` verbatim, Vite's content-hashed asset names included: a rebuild
+  would have retired the four `static/` cells (8 recordings) with no recorder left to re-bless
+  them. The branch this one waited on retired that corpus outright, so the cost it was saving
+  no longer exists and the rebuild is free.
+  What did *not* wait: `static/a-path-climbing-out-of-dist-falls-back-to-index` was the only
+  one of those four with no unit twin, and it is the only one that is a security claim rather
+  than a caching claim, so it now has one — stronger than the cell, which asked for
+  `/../../build.py` and asserted the body held no `argparse`, a file P4 deleted, making both
+  absences free. The twin probes a file that is really there, five traversal spellings deep,
+  and says so before trusting the absence.
 - **`npx geneseed setup` is now the way in, and the README says exactly where that stops
   being true.** The install docs assume npm first: one command, no clone, no Python, on
   macOS, Linux and Windows alike. **All 25 commands** run from Node, along with all

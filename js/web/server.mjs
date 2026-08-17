@@ -45,7 +45,7 @@ import {
   existsSync, readFileSync, statSync, unlinkSync, chmodSync, mkdirSync, openSync,
 } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
-import { join, resolve as pathResolve, extname, basename, sep } from 'node:path';
+import { join, resolve as pathResolve, dirname, extname, basename, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
@@ -64,7 +64,7 @@ import { NotFound, PREFIX_ROUTES, STATE_ROUTES, webState } from './api.mjs';
 import {
   apiDeployCmd, apiExcludesMutate, apiInstallCmd, apiInstallToggle, apiMcpToggle,
   apiMemoryDelete, apiProfileSave,
-  apiRestore, apiRulesMutate, apiRulesPromote, apiSelectView, buildOverride,
+  apiRestore, apiRulesMutate, apiRulesPromote, apiSelectView, buildOverride, mcpTargetPaths,
 } from './actions.mjs';
 import { apiActivityToggle } from './activity.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
@@ -248,6 +248,29 @@ export const PORTED_INLINE = ['/api/ping', '/api/docs', '/api/docs/page/',
 export const PORTED_POST_INLINE = ['/api/shutdown', '/api/restart', '/api/jobs/',
   '/api/actions/'];
 
+/**
+ * POST routes THAT NEVER EXISTED ON THE REFERENCE — the first of them, and the reason this set
+ * has to exist at all.
+ *
+ * `test_every_post_route_is_either_ported_or_declared_unported` asserts SET EQUALITY against
+ * `REF_POST`, a frozen literal of the paths the Python daemon answered. That was exactly right
+ * while the port was in flight: a route on one side and not the other was a defect either way.
+ * The port is finished and the reference is deleted, so the assertion now says something else —
+ * "this daemon may never grow a route" — which is a rule nobody chose.
+ *
+ * SO THE PARTITION GAINS A FOURTH PART RATHER THAN LOSING ITS EQUALITY. Widening `REF_POST` would
+ * have been the cheap edit and it would have been a lie: that list is a RECORD of what the
+ * reference answered, and a route added in 2026 was never in it. Keeping the record honest and
+ * declaring the additions beside it keeps both claims checkable — the reference's surface is
+ * still pinned, and everything past it is enumerated here instead of merely appearing.
+ *
+ * A route belongs here only once it is dispatched below; the dispatcher probe is what keeps this
+ * from becoming a declaration nobody honours.
+ */
+export const POST_BEYOND_REF = new Set([
+  '/api/reveal',
+]);
+
 function notPorted(path) {
   return NOT_PORTED.has(path) || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));
 }
@@ -418,6 +441,34 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       // beats a silently missing probe.
       requestRestart(state.theme);
       return sendJson(res, { restarting: true }, 200, ae);
+    }
+    if (path === '/api/reveal') {
+      // "It asks for a token and a URL and I don't know where to put them." The screen already
+      // PRINTS the config path above each target's rows; what it could not do is take you there.
+      //
+      // THE ALLOWLIST IS THE WHOLE SECURITY OF THIS ENDPOINT, same as the toggle beside it, and
+      // it is the same allowlist — `mcpTargetPaths()`, one function with two callers rather than
+      // two copies that drift. An unlisted path is a 404 before anything is opened. Without it
+      // this is "ask the desktop to open any path on the machine", behind a CSRF token and
+      // nothing else, and on Windows `openUrl` interpolates into a `cmd` command line with
+      // `windowsVerbatimArguments` — so the exact-match lookup is also what bounds the strings
+      // that can ever reach a shell to the ones the machine's own install registry produced.
+      //
+      // THE FOLDER, NOT THE FILE. `open`/`start`/`xdg-open` on a `.json` hands it to whatever
+      // claims that extension — which on a stock Windows box is a browser, i.e. a read-only view
+      // of the exact file the user is trying to EDIT. The containing folder lands in Explorer /
+      // Finder / the file manager every time, and the filename is already on screen beside the
+      // button.
+      const want = String(readJsonBody(body).path ?? '');
+      if (!mcpTargetPaths().has(want)) {
+        return sendJson(res, { error: `not found: ${want || '(none)'}` }, 404, ae);
+      }
+      const dir = dirname(want);
+      // `openUrl` SWALLOWS EVERY FAILURE BY DESIGN (a headless box has no opener), so `ok` here
+      // means "the path was allowed and the request was made", never "a window appeared". The
+      // response says which directory, so the UI can print it as the fallback instruction.
+      openUrl(dir);
+      return sendJson(res, { ok: true, dir }, 200, ae);
     }
     const route = POST_ROUTES.get(path);
     if (route !== undefined) {

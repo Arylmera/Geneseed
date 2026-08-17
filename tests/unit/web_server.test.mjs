@@ -39,7 +39,8 @@ import { NOT_PORTED_KINDS, PORTED_KINDS } from '../../js/web/docs.mjs';
 import { JobManager } from '../../js/web/jobs.mjs';
 import {
   DECLINED_POST, NOT_PORTED, NOT_PORTED_POST, NOT_PORTED_POST_PREFIXES, NOT_PORTED_PREFIXES,
-  PORTED_INLINE, PORTED_POST, PORTED_POST_INLINE, POST_ROUTES_CONVENTION, makeHandler,
+  PORTED_INLINE, PORTED_POST, PORTED_POST_INLINE, POST_BEYOND_REF, POST_ROUTES_CONVENTION,
+  makeHandler,
 } from '../../js/web/server.mjs';
 import { webFixture, webFixtureTeardown } from '../helpers/web_fixture.mjs';
 
@@ -196,6 +197,42 @@ test('hashed assets are cached forever and index.html never', async () => {
   assert.ok(body.includes(TOKEN), 'index.html was served without this session\'s token');
 });
 
+test('a path climbing out of dist serves index.html and leaks no file', async () => {
+  // TWIN OF `static/a-path-climbing-out-of-dist-falls-back-to-index`, written because that cell
+  // dies with the next `web/dist` rebuild — the corpus records `index.html` VERBATIM, including
+  // Vite's content-hashed asset names, and there is no recorder left to re-bless it. Of the four
+  // `static/` cells this is the only one with no unit twin, and it is the only one that is a
+  // SECURITY claim rather than a caching or fallback claim.
+  //
+  // AND IT IS STRICTLY STRONGER THAN THE CELL. The recording asked for `/../../build.py` and
+  // asserted the body held neither `def main(` nor `argparse` — a file P4 DELETED, so both
+  // absences are now guaranteed by the file not existing, and the cell proves nothing about
+  // traversal. This probes a file that is really there, and says so before trusting the absence.
+  const marker = '"name": "geneseed"';
+  const pkg = readFileSync(path.join(ROOT, 'package.json'), 'utf8');
+  assert.ok(pkg.includes(marker),
+    'package.json no longer holds the marker — the leak assertions below would be vacuous');
+
+  // Several spellings, because they are refused by different code: `..` segments the server
+  // resolves, a backslash Windows treats as a separator where POSIX does not, and a percent
+  // escape that only becomes `..` AFTER decoding — the shape a normaliser applied in the wrong
+  // order lets through.
+  for (const p of [
+    '/../package.json',
+    '/../../package.json',
+    '/assets/../../package.json',
+    '/..%2F..%2Fpackage.json',
+    '/..\\..\\package.json',
+  ]) {
+    const r = await request('GET', p);
+    assert.equal(r.status, 200, `${p} did not fall back to the SPA`);
+    assert.match(r.headers['content-type'] || '', /text\/html/,
+      `${p} was served as something other than the SPA shell`);
+    assert.ok(!r.body.toString('utf8').includes(marker),
+      `${p} SERVED A FILE FROM OUTSIDE web/dist — this is a file-read primitive`);
+  }
+});
+
 test('a rejected POST does not poison the next request on the same connection', async () => {
   // The guards answer 403 BEFORE any route reads the request body. Under keep-alive an undrained
   // body would be parsed as the next request line, so the drain is what keeps the socket usable.
@@ -274,14 +311,28 @@ test('every POST route is either ported or declared unported', () => {
   // routes dispatch outside `POST_ROUTES` because that table's second column is the 409
   // convention and none of them answers on `ok` — the shell's own `/api/shutdown` and
   // `/api/restart`, and the job prefixes, which answer 202/409/404/501/400/200.
+  // The SIXTH is `POST_BEYOND_REF` — routes that never existed on the reference. `REF_POST` is a
+  // RECORD of what the Python daemon answered, so it is not the thing to widen when this daemon
+  // grows a route; widening it would forge the record. The equality below therefore compares the
+  // covered set against the reference's surface PLUS the declared additions, which keeps both
+  // halves checkable: the reference's routes stay pinned exactly, and anything past them has to
+  // be enumerated rather than merely appear.
   const covered = new Set([...PORTED_POST_INLINE, ...PORTED_POST, ...DECLINED_POST,
-    ...nodeUnportedPost()]);
-  assert.deepEqual(sorted(covered), sorted(REF_POST),
-    'the POST partition has drifted from the routes the reference answered');
+    ...POST_BEYOND_REF, ...nodeUnportedPost()]);
+  assert.deepEqual(sorted(covered), sorted([...REF_POST, ...POST_BEYOND_REF]),
+    'the POST partition has drifted from the routes the reference answered plus the declared '
+    + 'post-port additions');
+  // AND NO ADDITION MAY HIDE A REFERENCE ROUTE. Without this, moving a path the reference really
+  // did answer into `POST_BEYOND_REF` would keep the equality above green while quietly deleting
+  // the claim that the path is ported — the set is for routes with NO reference, only.
+  assert.deepEqual(sorted([...POST_BEYOND_REF].filter((p) => REF_POST.includes(p))), [],
+    'a route the reference answered was declared as a post-port addition');
   const inter = (a, b) => sorted([...a].filter((p) => [...b].includes(p)));
   assert.deepEqual(inter(PORTED_POST, nodeUnportedPost()), []);
   assert.deepEqual(inter(PORTED_POST, DECLINED_POST), []);
   assert.deepEqual(inter(nodeUnportedPost(), DECLINED_POST), []);
+  assert.deepEqual(inter(POST_BEYOND_REF, DECLINED_POST), []);
+  assert.deepEqual(inter(POST_BEYOND_REF, nodeUnportedPost()), []);
 });
 
 test('the declared partition is the one the dispatcher uses', async () => {
@@ -335,6 +386,20 @@ test('the declared partition is the one the dispatcher uses', async () => {
     assert.notEqual(await hit('GET', '/api/pick-folder'), 501,
       'GET /api/pick-folder must fall through to the SPA: the POST sets must not be consulted on '
       + 'a GET, which is exactly what collapsing them back into NOT_PORTED would do');
+    // THE `POST_BEYOND_REF` PAIR. `/api/reveal` is the first route with no reference at all, so
+    // there is no recorded body to hold it to and this dispatch probe is the only gate on it.
+    //
+    // ONLY THE REFUSAL ARM IS PROBED, for `/api/restart`'s reason one door over: the success arm
+    // calls `openUrl`, which asks the DESKTOP to open a folder, and a suite that took it would
+    // pop a file-manager window on the developer's machine (and on a CI runner, spawn an opener
+    // that is not there). An empty body names no path, so it misses the allowlist and must 404 —
+    // which is the interesting half anyway: 501 means the route is declared but not dispatched,
+    // and 200 would mean the allowlist is not consulted before something is opened.
+    assert.equal(await hit('POST', '/api/reveal', 'tok'), 404,
+      'POST /api/reveal must reach its allowlist and refuse — 501 means POST_BEYOND_REF is '
+      + 'declared but not dispatched, 200 means nothing checks the path before opening it');
+    assert.notEqual(await hit('GET', '/api/reveal'), 501,
+      'GET /api/reveal must fall through to the SPA, like every other POST-only declaration');
     // A REAL action and an INVENTED one. With `NOT_PORTED_ACTIONS` empty, "no real action gets
     // the 404 a typo gets" is a statement about the whole table, and
     // `tests/unit/web_jobs.test.mjs` is what proves it for every row at once.

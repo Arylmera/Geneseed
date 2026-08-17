@@ -361,6 +361,23 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
     }
   }
 
+  // A preset lands with its token and API URL deliberately blank, and until now the screen showed
+  // you the file but had no way to take you to it. This opens the containing FOLDER (a `.json`
+  // handed to the OS opens in whatever claims the extension — often a browser, i.e. a read-only
+  // view of the file you are trying to edit) on the machine running the daemon.
+  const revealMcp = async (target) => {
+    setNote('')
+    try {
+      const r = await api.mcpReveal(target.path)
+      // `ok` means the path was allowed and the request went out, NOT that a window appeared —
+      // a headless host has no opener and the server swallows that. So the note names the folder
+      // rather than claiming success: if nothing opened, the user still has the path to paste.
+      setNote(`Opening ${r.dir} — if no window appeared, open that folder by hand.`)
+    } catch (e) {
+      setNote(e.message)
+    }
+  }
+
   const toggleMcp = async (target, s) => {
     const key = target.path + s.name
     setMcpBusy(key)
@@ -792,6 +809,13 @@ export default function Harnesses({ onAction, themes = [], currentTheme, dataRev
                 <div className="mcp-target" key={t.path}>
                   <div className="mt-head">
                     {t.label} · <code>{t.path}</code>
+                    <button
+                      className="btn ghost sm"
+                      onClick={() => revealMcp(t)}
+                      title={`Open the folder holding ${t.path} — tokens and URLs go in this file`}
+                    >
+                      Open folder
+                    </button>
                     {t.commented && ' (has comments; edit by hand)'}
                   </div>
                   {t.servers.map((s) => {

@@ -50,6 +50,7 @@ vi.mock('../api/index.js', () => ({
       }),
     ),
     mcpToggle: vi.fn(() => Promise.resolve({ ok: true })),
+    mcpReveal: vi.fn(() => Promise.resolve({ ok: true, dir: 'C:/cfg' })),
     excludes: vi.fn(() =>
       Promise.resolve({ excludes: [], installs: [{ host: 'claude', cfg: '/x' }] }),
     ),
@@ -199,6 +200,33 @@ describe('Harnesses', () => {
     // Absent preset → Add button; absent non-preset → nothing. One Add in total.
     await waitFor(() => expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy())
     expect(screen.getAllByRole('button', { name: 'Add' }).length).toBe(1)
+  })
+
+  it('the Open folder button reveals the config the tokens actually go into', async () => {
+    // The gap this closes: a preset lands with GITLAB_PERSONAL_ACCESS_TOKEN and GITLAB_API_URL
+    // blank, and the screen named the file but could not take you to it.
+    vi.mocked(api.installs).mockResolvedValueOnce({
+      installs: [
+        {
+          id: 'opencode:global',
+          host: 'opencode',
+          scope: 'global',
+          path: 'C:/cfg',
+          state: 'active',
+          theme: 'neutral',
+        },
+      ],
+    })
+    render(<Harnesses onAction={() => {}} themes={[{ name: 'neutral' }]} />)
+    const btn = await waitFor(() => screen.getByRole('button', { name: 'Open folder' }))
+    fireEvent.click(btn)
+    // THE TARGET'S CONFIG PATH, not the install root. The server's allowlist is keyed on the
+    // config path it listed, so sending the root (`C:/cfg`) would 404 every time — and the two
+    // differ here precisely so this cannot pass by coincidence.
+    await waitFor(() => expect(api.mcpReveal).toHaveBeenCalledWith('C:/cfg/opencode.json'))
+    // The note NAMES THE FOLDER instead of claiming a window opened: a headless host has no
+    // opener and the server swallows that, so the path is the part the user can still act on.
+    await waitFor(() => expect(screen.getByText(/Opening C:\/cfg/)).toBeTruthy())
   })
 
   it('nests MCP under an active CLAUDE install, joined by (host, root) not dirname', async () => {

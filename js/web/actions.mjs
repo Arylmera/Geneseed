@@ -534,14 +534,30 @@ export function apiMcp() {
  * `,]`. A file that will not parse is refused rather than clobbered: it may be
  * `~/.claude.json`, which holds projects and history far beyond MCP wiring.
  */
-export function apiMcpToggle(state, body) {
-  const name = strOr(bget(body, 'name'));
-  const want = pyTruthy(bget(body, 'enabled'));
-  const pathArg = strOr(bget(body, 'path'));
+/**
+ * The MCP config paths a request body is allowed to name, as `path -> [path, host]`.
+ *
+ * LIFTED OUT OF `apiMcpToggle` BECAUSE IT NOW HAS A SECOND CALLER, not for tidiness. `/api/reveal`
+ * hands a path to the desktop's file manager, and the allowlist is the whole security of that
+ * endpoint exactly as it is of the toggle: an unlisted path must 404 before anything is opened.
+ * Two copies of a security check drift, and the copy that drifts is the one nobody re-read.
+ *
+ * It is rebuilt per call rather than cached: installs come and go while the daemon runs, and a
+ * stale allowlist is wrong in both directions — refusing a real target, or naming a dead one.
+ */
+export function mcpTargetPaths() {
   const known = new Map();
   for (const [, cfgPath, host] of mcpInstallTargets()) {
     known.set(String(cfgPath), [cfgPath, host]);
   }
+  return known;
+}
+
+export function apiMcpToggle(state, body) {
+  const name = strOr(bget(body, 'name'));
+  const want = pyTruthy(bget(body, 'enabled'));
+  const pathArg = strOr(bget(body, 'path'));
+  const known = mcpTargetPaths();
   const hit = known.get(pathArg);
   if (hit === undefined || !name) {
     throw new NotFound(`mcp target ${pathArg || '(none)'}`);
