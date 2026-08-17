@@ -16,7 +16,7 @@
 //
 // Eager docs are injected in full (budget-capped, oversized ones demoted to lazy);
 // lazy docs are only listed (path + first heading) to be read on demand. Output
-// mirrors `rituals/harness.py context`. Every error is swallowed — it never blocks
+// mirrors the harness's own `context` verb. Every error is swallowed — it never blocks
 // a session. See adapters/opencode/GLOBAL-HARNESS-SPEC.md.
 //
 // The block also carries two best-effort self-orientation lines:
@@ -60,13 +60,13 @@ import { homedir } from "node:os"
 const MARKER = "<!-- geneseed-context:v2 -->"
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
-// Sovereign-repo bypass — twin of sovereign_bypass() in rituals/_harness_context.py.
+// Sovereign-repo bypass — twin of the harness's own `sovereignBypass()`.
 // <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
 // this GLOBAL install goes dormant. Any error degrades to "not excluded".
 const norm = (p) => {
-  // Expand a leading "~" / "~/…" to the home dir, mirroring Python's
-  // Path.expanduser() — a hand-edited excludes.json entry like "~/vault" must
-  // resolve the same way here as it does for the Claude/Bob (Python) guard.
+  // Expand a leading "~" / "~/…" to the home dir — a hand-edited excludes.json entry
+  // like "~/vault" must resolve the same way here as it does for the Claude/Bob
+  // hook guard.
   let raw = String(p)
   if (raw === "~" || raw.startsWith("~/") || raw.startsWith("~\\")) {
     raw = raw === "~" ? homedir() : path.join(homedir(), raw.slice(2))

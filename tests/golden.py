@@ -672,15 +672,29 @@ PLATFORM_CORPUS = "crlf" if os.linesep == "\r\n" else "lf"
 CORPUS_STAMPS = (
     # `_build_render.write_version`: `<fp> (built <date>) [release <rel>]`. The release LABEL
     # is left verbatim HERE — it moves only when a human bumps it, which is a real output
-    # change a corpus SHOULD redden on. Un-anchored, because this line is also quoted inside a
-    # `diff` response body (`"-c81317fdc842 (built 2026-08-11) [release 1.0.0]"`), where it is
-    # not at the start of a line at all.
+    # change a corpus SHOULD redden on, not one of the clock/checkout/machine drifts this
+    # table exists for. Un-anchored, because this line is also quoted inside a `diff` response
+    # body (`"-c81317fdc842 (built 2026-08-11) [release 1.0.0]"`), where it is not at the start
+    # of a line at all.
     #
-    # SCOPE, because these two overlap and the earlier prose glossed it: inside the FILE
-    # `.geneseed-version`, `_destamp` has already run and tagged the label `<REL>` — it owns
-    # that file whole, so a release bump does not redden 259 emit cells for a value the live
-    # gate compares in full. The sentence above is about every OTHER carrier of the same line,
-    # where the label is unblanked and compared.
+    # SCOPE, because THREE carriers of the same line now treat this label differently, each on
+    # purpose. The sentence above is true of THIS table and of carrier 3 only:
+    #
+    #   1. THE FILE `.geneseed-version`: `_destamp` has already run and tagged the label
+    #      `<REL>` — it owns that file whole, so a release bump does not redden 259 emit cells
+    #      for a value the live gate compares in full.
+    #   2. AN HTTP BODY: the web harness's own `_WEB_STAMPS` (`tests/web_golden.py`, twin
+    #      `WEB_STAMPS` in `tests/helpers/web_golden.mjs`) rewrites the label to
+    #      `[release <REL>]`, and that arm is deliberately NOT here. Two web cells quote this
+    #      line through a `diff` hunk — four recorded files, one per platform — and the
+    #      reference that recorded them is about to be deleted: after that, the next version
+    #      bump reddens them permanently with no recorder left alive to re-bless them, so the
+    #      web corpus had to stop depending on the version at all. Putting the arm in THIS
+    #      shared table instead would have moved the emit and cli corpora too — neither of
+    #      which carries a release label today (measured: their only "release" hits are prose
+    #      about the release skill).
+    #   3. EVERY OTHER CARRIER keeps the label unblanked and compared, which is the claim the
+    #      first paragraph makes.
     (re.compile(rb"[0-9a-f]{6,64} \(built \d{4}-\d{2}-\d{2}\)"), b"<FP> (built <DATE>)"),
     # `cmd_version`'s first line — `_harness_status.py:40`, `js/status.mjs:100`.
     (re.compile(rb"(\[version\] source: +)[0-9a-f]{6,64}"), rb"\1<FP>"),

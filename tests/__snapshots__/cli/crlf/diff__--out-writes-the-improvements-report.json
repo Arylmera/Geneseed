@@ -8,7 +8,7 @@
     "home/.config/opencode/.geneseed-theme": "07c21153b0d65281df8d296392a5eb9ce3f39a35d9c7f43e84c998989f15cc2a",
     "home/.config/opencode/AGENT.md": "17d0b389871efa832bb4d8ff9779a2b86ff204ac146e0dd91a27c6b8e99d5b68",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "repo/rep.md": "8ff803aa2716c9e62a28cd7424110ca03d752a6648c32facfa6874afdea2c404"
+    "repo/rep.md": "a8028ec9f5a7a50f5a31f149254adbad5040e27b2695f1e09596472d320b94ac"
   },
   "sizes": {
     "<dirs>": 48,
@@ -19,7 +19,7 @@
     "home/.config/opencode/.geneseed-theme": 9,
     "home/.config/opencode/AGENT.md": 72,
     "repo/.keep": 0,
-    "repo/rep.md": 59464
+    "repo/rep.md": 59521
   },
   "verbatim": {
     "<dirs>": "cfg\nhome\nhome/.config\nhome/.config/opencode\nrepo",

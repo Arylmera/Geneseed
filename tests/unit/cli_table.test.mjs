@@ -58,8 +58,16 @@ test('the table is the document the entry reads, and the page is derived from it
   // test is about. The reference stated it by comparing two paths across implementations; with
   // one implementation left, what says it is that the live reader's answer tracks the FILE.
   const onDisk = JSON.parse(readFileSync(TABLE, 'utf8'));
-  assert.equal(onDisk.commands.length, 26,
-    'the table is no longer the 26-row document — 25 subparsers plus argparse\'s `update` alias');
+  // 29 = the 26 names argparse answered to (25 subparsers plus the `update` alias) plus the
+  // three verbs that never had a subparser: `catalog`, `mcp` and `memory`, each a terminal
+  // face on a capability that had reached the product only through the web console. The split
+  // is owned by `tests/cli_help.test.mjs`, which names both populations and fails a verb that
+  // falls into neither; this line is the count that says the table did not quietly grow past
+  // it.
+  assert.equal(onDisk.commands.length, 29,
+    'the table is no longer the 29-row document — 26 recorded names plus three Node-native '
+    + 'verbs. A new row needs a population in tests/cli_help.test.mjs before it needs a number '
+    + 'here');
   assert.equal(cliReference().commands.length, onDisk.commands.length,
     'cliReference() and js/cli-table.json disagree on how many commands exist, so the reader is '
     + 'not reading this file');

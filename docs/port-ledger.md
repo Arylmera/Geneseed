@@ -20,6 +20,40 @@ the paragraph that admits the gap, or deleting the paragraph is a way to pass it
 *Verified at P11 against the tree, not against the previous note. P11 is the phase that first
 ran the three harnesses on a second operating system; the rows below are what that changed.*
 
+## ⚠ The corpus is frozen — recorded 2026-08-17, replay-only from here
+
+**The recordings under `tests/__snapshots__/` can never be taken again.** They are produced by
+the Python reference and by nothing else: `tests/golden.py`, `tests/harness_golden.py`,
+`tests/web_golden.py`, `tests/test_pure_function_parity.py` and `tests/record_help.py` are the
+only programs that have ever written a cell, the three Node replayers reject `--record` by
+design, and the phase after this one deletes every one of those programs. The `record-corpus`
+job that produced the `lf` halves on ubuntu is deleted in the same commit as this paragraph, so
+the workflow cannot outlive the reference it drives.
+
+The last recording was taken deliberately, immediately after the edits that had to be made while
+an oracle still existed — the emitted prose that named files the deletion removes, the removal of
+the web API's interpreter field, the three verbs the reference never had, and the release-label
+destamp that stops a version bump from reddening a corpus nobody can re-bless. Everything after
+this point may only be checked against those bytes.
+
+**Two consequences, both ASSERTED by the replayers themselves:**
+
+- A change that moves a recorded byte is now a **finding, not a step**. There is no re-bless. If
+  a replay goes red the choice is to revert the change or to argue, in writing, that the recording
+  was wrong — and nothing can settle that argument any more.
+- The corpus proves **unchanged**, never **correct**. It was recorded from an implementation that
+  agreed with the port at the time; where both were wrong together, it now freezes the agreement.
+  That blindness is the whole subject of this file and it no longer has a second party to correct it.
+
+**What the last recording fixed, and what a reader should know it cost.** The two halves had drifted
+apart for a reason that had nothing to do with either implementation: the `crlf` half had captured a
+stale `Harness/` — this repository's own dogfooded install, which is **gitignored build output** —
+so `doctor` reported seven stale renders on the machine that recorded it and none on CI, and the two
+platforms disagreed permanently. The final recording was taken with that directory absent, which is
+the state a fresh clone has. **A stale local build tree moves recorded bytes; an absent or freshly
+built one does not.** Anyone comparing the halves should know they now agree because that input was
+removed, not because it was ever normalised.
+
 ## What DOES cross
 
 All 25 subcommands, 29 of 29 web paths, 5 of 5 docs kinds. Every `NOT_PORTED*` table in

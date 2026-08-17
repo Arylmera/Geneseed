@@ -204,23 +204,57 @@ def record_textwrap(dest: Path) -> Path:
     return out
 
 
+#: Verbs the TABLE declares and this parser has never had, because they were written for the
+#: runtime that replaces it and no argparse original exists to record. That is a fact about
+#: which implementation came second, not a disagreement, so it cannot be spelt as one.
+#:
+#: A recorded help text answers "does the port reproduce argparse's formatting for this string".
+#: For a name argparse never carried there is no such question and nothing honest to record;
+#: manufacturing a subparser here so the recorder had something to render would be authoring the
+#: expected value in this file and reading it back. Those verbs are gated natively instead —
+#: `tests/cli_help.test.mjs` names the two populations and fails on a verb in neither.
+NATIVE_ONLY = frozenset({"catalog", "mcp", "memory"})
+
+
 def record(dest: Path) -> "list[Path]":
     parser = harness.build_argparser()
     subs = _subparsers(parser)
 
     # THE ORDER IS THE TABLE'S, not the parser's, and that is deliberate: the table is the
     # document both implementations read, so a recording keyed by anything else would be a
-    # recording of a third thing. The `^` below is what keeps that from being a free choice —
-    # a name in one and not the other stops the recording rather than silently narrowing it.
+    # recording of a third thing.
     table = json.loads(harness.CLI_JSON.read_text(encoding="utf-8"))
     named = [c["name"] for c in table["commands"]]
-    missing = sorted(set(named) ^ set(subs))
-    if missing:
-        raise SystemExit("js/cli-table.json and the parser disagree on which names exist: "
-                         f"{missing}")
 
-    helps = help_texts(subs, named)
-    progs = {name: subs[name].prog for name in named}
+    # TWO CHECKS WHERE THERE USED TO BE ONE, and the split is not a relaxation. The symmetric
+    # difference this replaces could not survive the table growing a name this parser will never
+    # have; it refused, wrote nothing, and — because the recording job uploads its artifact only
+    # on success — would have taken the whole final recording down with it.
+    #
+    # Both directions still stop the recording. They just mean different things:
+    #   * a subparser missing from the table is a real disagreement about what exists, and the
+    #     table is the document both implementations read, so a name only argparse knows is a
+    #     recording of a third thing;
+    #   * a table name this parser lacks is either a native verb, DECLARED above, or a mistake.
+    #     Undeclared, it refuses exactly as before — which is what keeps `NATIVE_ONLY` a
+    #     statement someone had to write down rather than a hole anything can fall through.
+    orphaned = sorted(set(subs) - set(named))
+    if orphaned:
+        raise SystemExit("the parser carries names js/cli-table.json does not declare: "
+                         f"{orphaned}")
+    undeclared = sorted(set(named) - set(subs) - NATIVE_ONLY)
+    if undeclared:
+        raise SystemExit("js/cli-table.json declares names this parser does not have, and they "
+                         f"are not declared native in tests/record_help.py: {undeclared}")
+
+    # The recorded roster is the argparse population, in the table's order. `wrap_cases` below
+    # deliberately does NOT narrow the same way: it reads every help string in the table, so the
+    # native verbs' strings still get their CPython wrapping frozen — that oracle is about
+    # `textwrap.wrap`, which has an answer for any string, and this is the last chance to ask it.
+    recorded = [name for name in named if name in subs]
+
+    helps = help_texts(subs, recorded)
+    progs = {name: subs[name].prog for name in recorded}
 
     # The guard's own shape: a document of strings, walked and probed before anything is
     # written. `help` and `prog` are ANSWERS — the formatter produced them — so a machine path
@@ -231,7 +265,7 @@ def record(dest: Path) -> "list[Path]":
     help_dir = dest / "help"
     help_dir.mkdir(parents=True, exist_ok=True)
     written = []
-    for name in named:
+    for name in recorded:
         f = help_dir / f"{name}.txt"
         f.write_text(helps[name], encoding="utf-8", newline="\n")
         written.append(f)
@@ -245,7 +279,10 @@ def record(dest: Path) -> "list[Path]":
         # canonical parser and therefore its prog, and the replay needs the same string to
         # reproduce the usage line's continuation indent.
         "progs": progs,
-        "verbs": named,
+        # THE RECORDED ROSTER, which is the argparse population and not the table's. It is the
+        # only surviving record of which names were ever subparsers, and a reader after the cut
+        # has no other way to tell a verb that was compared from one that never could be.
+        "verbs": recorded,
         "recorded_with": guard._recorded_with(),
     }, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
     written.append(meta)

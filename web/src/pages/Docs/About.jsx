@@ -11,7 +11,6 @@ export default function About({ page }) {
     ['Deployed', page.deployed ? 'yes' : 'no'],
     ['Target', <code key="t">{page.target}</code>],
     ['Source root', <code key="r">{page.root}</code>],
-    ['Python', page.python],
     ['Installed build', <code key="i">{v.installed_fp || '(none)'}</code>],
     ['Source build', <code key="s">{v.source_fp || '—'}</code>],
     ['Match?', v.verdict || '—'],

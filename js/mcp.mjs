@@ -33,8 +33,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { bobConfigDir, copilotConfigDir, pyResolve } from './hosts.mjs';
-import { installTargets } from './installs.mjs';
-import { jsonDumpsIndent, parseJson, readText, writeText } from './lib/pyfs.mjs';
+import { installState, installTargets } from './installs.mjs';
+import { jsonDumpsIndent, parseJson, pyLjust, pyPrint, pyPrintErr, readText, writeText }
+  from './lib/pyfs.mjs';
 import { opencodeTarget, readJsonc } from './settings.mjs';
 
 /**
@@ -291,3 +292,44 @@ export function mcpMeta(name) {
 }
 
 export { isDict };
+
+// ---- the verb ----------------------------------------------------------------------------
+
+/**
+ * `geneseed mcp` — the CLI FACE this library never had.
+ *
+ * Everything above crossed with the web console rather than with a subcommand: the reference
+ * kept it as a preset/state library whose only command was the uninstall path, and the one
+ * way to see which servers an install had wired was to start a server and look. That is the
+ * gap this verb closes, and it closes it by CALLING the library — the same `mcpInstallTargets`
+ * / `mcpLoad` / `mcpKnownNames` / `mcpState` / `mcpMeta` sequence the console's read endpoint
+ * runs, rendered as text instead of as JSON.
+ *
+ * ponytail: READ-ONLY, on purpose, and this is the ceiling. Wiring a server from here needs
+ * the console's toggle orchestration, whose load-bearing part is not the toggle at all — it
+ * is the refusal to rewrite a config it could not parse strictly, because for a global
+ * Claude install that file holds projects and history and a rewrite from an empty object
+ * would erase them. A second copy of that guard is a second place for it to be wrong. When a
+ * terminal toggle is wanted, move the console's non-HTTP core down into this module and have
+ * both faces call it; do not grow a parallel one here.
+ */
+export function cmdMcp() {
+  const targets = mcpInstallTargets()
+    .filter(([, , host, scope, root]) => installState(root, host, scope) === 'active');
+  if (!targets.length) {
+    pyPrintErr('[mcp] no active Geneseed install found. Run `geneseed setup` first.\n');
+    return 1;
+  }
+  for (const [label, p, host] of targets) {
+    const cfg = mcpLoad(p, host);
+    pyPrint(`[mcp] ${host} ${label}: ${p}${existsSync(p) ? '' : ' (not written yet)'}\n`);
+    if (mcpCommented(p)) {
+      pyPrint('  this config carries comments — edit it by hand so they survive.\n');
+    }
+    for (const name of mcpKnownNames(cfg, host)) {
+      const [lbl] = mcpMeta(name);
+      pyPrint(`  ${pyLjust(mcpState(cfg, name, host), 8)}  ${pyLjust(name, 12)}  ${lbl}\n`);
+    }
+  }
+  return 0;
+}

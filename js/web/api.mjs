@@ -38,13 +38,12 @@
  * doctor imports them back. Only `parse_laws`, `load_registry` and `entity_status` were
  * genuinely new.
  *
- * `python` IS THE ONE FIELD WITH NO HONEST TWIN. `api_setup` reports
- * `sys.version.split()[0]` — the interpreter running the daemon. A Node daemon has none,
- * and answering with Node's version under a key named `python` would be a lie the UI
- * would print. It answers `null`, which is exactly true and is the whole point of the
- * port. `tests/web_golden.py` normalises the field on both sides and
- * `tests/test_web_server.py` carries the absolute assertion about what the reference
- * puts there — the debt a tolerant comparison owes.
+ * THE SNAPSHOT REPORTS NO INTERPRETER VERSION, and the absence is deliberate. The server
+ * this one replaced ran on an interpreter and published its version under a key named for
+ * it; nothing here answers that question, and answering it with this runtime's version
+ * under that name would have been a lie the UI printed. So the field is gone rather than
+ * present-and-empty. The recorded web corpus was taken from the old server and still
+ * carries the key, which is why its replay harness erases it before comparing.
  *
  * P6c's ROUTES ARE THE FIRST THAT PARSE A PATH, which brings three things no earlier
  * endpoint could reach: `pyUnquote` (NOT `decodeURIComponent`, which throws where the
@@ -690,9 +689,6 @@ export function apiSetup(state) {
     root: ROOT,
     target: state.target,
     deployed: deployed(state),
-    // See this module's header: the reference reports the interpreter running the daemon
-    // and there is not one. Not Node's version under a Python key.
-    python: null,
   };
 }
 

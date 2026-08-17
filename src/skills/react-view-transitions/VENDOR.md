@@ -2,8 +2,8 @@
 
 This folder is a third-party skill vendored **verbatim** into Geneseed, not a
 Geneseed-authored skill. It rides along in the rendered bundle and is exempt from
-Geneseed's authoring gates (token, dead-link, hermeticity, skill counts) — see
-`VENDORED_SKILL_DIRS` in `_build_core.py`.
+Geneseed's authoring gates (token, dead-link, hermeticity, skill counts) — it is
+listed in the generator's `VENDORED_SKILL_DIRS`.
 
 - **Upstream:** https://github.com/vercel-labs/agent-skills/tree/main/skills/react-view-transitions
 - **Commit:** f8a72b9603728bb92a217a879b7e62e43ad76c81

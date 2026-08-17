@@ -25,20 +25,19 @@
  * ---------------------------------------------------------------------------------------
  * WHY THIS FILE CARRIES ITS OWN PYTHON PRIMITIVES
  *
- * It is the port of `token_report.py`, and it is the one piece of the port that ships
+ * It is the port of a Python script, and it is the one piece of that port which ships
  * INSIDE a user's bundle: a rendered install contains
  * `<skills>/token-report/scripts/token_report.mjs` and no `js/` directory whatsoever
  * (measured — an emit snapshot's path list has 102 entries and not one begins `js/`). So
- * it cannot import `js/lib/pyfs.mjs`, where this repository settles Python-vs-JS
- * disagreements once. The primitives below are therefore deliberate COPIES, each naming
- * its origin, and `tests/token_report_primitives.test.mjs` imports both this file and
- * `pyfs.mjs` and asserts they agree over a corpus — so the duplication cannot drift
- * silently, which is the only real objection to it.
+ * it cannot import the generator's shared primitives module, where this repository
+ * settles Python-vs-JS disagreements once. The primitives below are therefore deliberate
+ * COPIES, each naming its origin.
  *
- * Behaviour is gated by `tests/test_token_report_parity.py`, which drives this file and
- * `token_report.py` over seeded transcripts for all four hosts and compares raw stdout
- * bytes. That corpus was written BEFORE this file existed and is the only behavioural
- * coverage the script has ever had.
+ * They are pinned by a RECORDED CORPUS: the repository's suite drives every primitive
+ * exported at the foot of this file over a corpus of hand-picked values whose answers
+ * were taken from the Python reference while it still existed, and asserts the corpus
+ * reaches every export. Once the reference is gone that recording IS the specification
+ * for these semantics — there is nothing left to ask.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -70,9 +69,10 @@ function sysExit(msg) {
  *
  * Every character count in this file feeds an estimate, and a transcript full of emoji
  * or astral CJK would inflate every one of them by the number of surrogate pairs. The
- * loop is written out rather than `[...s].length` (which is what `pyfs.pyLen` uses)
- * because the strings here are whole tool results and can be megabytes: the spread
- * allocates an array of one string per character, and this does not allocate at all.
+ * loop is written out rather than `[...s].length` (which is what the generator's own
+ * `pyLen` uses) because the strings here are whole tool results and can be megabytes:
+ * the spread allocates an array of one string per character, and this does not
+ * allocate at all.
  */
 function pyLen(s) {
   let n = s.length;
@@ -89,7 +89,7 @@ function pyLen(s) {
 /**
  * `round()` — Python rounds HALF TO EVEN and `Math.round` rounds half UP.
  *
- * Copy of `js/tui.mjs`'s `pyRound`. This is not an exotic corner here: `est_tokens` is
+ * Copy of the generator's `pyRound`. This is not an exotic corner here: `est_tokens` is
  * `round(chars / 4.0)`, so EVERY character count congruent to 2 mod 4 lands exactly on
  * `.5` — a quarter of all possible inputs. `Math.round` would move a quarter of the rows
  * in every report.
@@ -113,8 +113,8 @@ function pyRound(x) {
  * TIE COULD EXIST: a tie needs a double exactly equal to (2k+1)/20, and 20 is not a
  * power of two. The proof is WRONG — the fraction reduces whenever (2k+1) is a multiple
  * of five, so every odd multiple of 0.25 is an exact tie and every one of them is
- * dyadic. `tests/test_token_report_parity.py` produced 6.25 from a four-character row in
- * a sixty-four-character total on the first run that reached it. The argument was
+ * dyadic. The parity suite against the reference produced 6.25 from a four-character row
+ * in a sixty-four-character total on the first run that reached it. The argument was
  * confident, self-consistent and false; the corpus was neither.
  *
  * AND THE SECOND DRAFT WAS WRONG TOO, in the other direction: it scaled by `10 **
@@ -171,7 +171,7 @@ function escapeNonAscii(text) {
     (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 }
 
-/** `repr(float)` — copy of `pyfs.pyFloat`, for the one branch `jsonDumps` can reach. */
+/** `repr(float)` — the generator's `pyFloat`, for the one branch `jsonDumps` can reach. */
 function pyFloat(n) {
   if (Number.isNaN(n)) return 'NaN';
   if (!Number.isFinite(n)) return n > 0 ? 'Infinity' : '-Infinity';
@@ -187,7 +187,7 @@ function pyFloat(n) {
 /**
  * `json.dumps(obj)` — the COMPACT form, which is the only one this script uses.
  *
- * Copy of `pyfs.jsonDumpsCompact`'s walk, narrowed to values that came out of
+ * Copy of the generator's `jsonDumpsCompact` walk, narrowed to values that came out of
  * `JSON.parse`. `JSON.stringify` cannot stand in: without an indent Python's separators
  * are `(', ', ': ')`, so `{"a": 1, "b": [1, 2]}` where `JSON.stringify` writes
  * `{"a":1,"b":[1,2]}` — SIX characters fewer on that tiny object, and every use of this
@@ -200,9 +200,9 @@ function pyFloat(n) {
  * 1.0}` is therefore counted 2 characters shorter here than by the reference. Closing it
  * needs a JSON parser that preserves the int/float distinction — a parser inside a
  * shipped skill script, to move a character count that then gets divided by four. It is
- * measured instead: `tests/test_token_report_parity.py` has a cell that asserts the two
- * implementations DIFFER on exactly this input, so the residual cannot be forgotten and
- * cannot be closed without the cell noticing.
+ * measured instead: the recorded primitive corpus keeps this class of input among its
+ * declared KNOWN LIMITS and asserts the two implementations still differ there, so the
+ * residual cannot be forgotten and cannot be closed without the check noticing.
  */
 function jsonDumps(value) {
   return escapeNonAscii(dumpsImpl(value));
@@ -222,7 +222,7 @@ function dumpsImpl(v) {
   return 'null';
 }
 
-/** `repr(value)` for a value out of `json.loads` — copy of `pyfs.pyReprImpl(v, false)`. */
+/** `repr(value)` for a `json.loads` value — the generator's `pyReprImpl(v, false)`. */
 function pyRepr(v) {
   if (typeof v === 'string') {
     let body = '';
@@ -253,7 +253,7 @@ function pyRepr(v) {
 /** `str(value)` — `repr` for everything except a string, which is itself. */
 const pyStrOfJson = (v) => (typeof v === 'string' ? v : pyRepr(v));
 
-/** `int(s)` — copy of `pyfs.pyInt`; accepts a sign, `_` between digits, any Nd digit. */
+/** `int(s)` — the generator's `pyInt`; accepts a sign, `_` between digits, any Nd digit. */
 function pyInt(s) {
   if (typeof s !== 'string') return null;
   const trimmed = s.trim();
@@ -297,7 +297,7 @@ function pyStrCmp(a, b) {
   return A.length - B.length;
 }
 
-/** `sorted()` on Path objects — copy of `pyfs.comparePaths`: COMPONENTS, not the string. */
+/** `sorted()` on Path objects — the generator's `comparePaths`: COMPONENTS, not text. */
 function comparePaths(a, b) {
   const norm = (s) => (process.platform === 'win32' ? s.toLowerCase() : s);
   const A = norm(a).split(/[\\/]/);
@@ -997,7 +997,7 @@ function copilotParse(target) {
 }
 
 /**
- * `str.splitlines()` — copy of the rule `pyfs` settles for the generator: Python splits
+ * `str.splitlines()` — copy of the rule the generator settles once: Python splits
  * on a dozen characters JS's `\n` split does not, and drops a trailing empty field.
  */
 function pySplitLines(s) {
@@ -1202,10 +1202,10 @@ const OPTIONS = [
  * `argparse`'s usage block, wrapped the way argparse wraps it at 80 columns.
  *
  * The continuation indent is `len("usage: ") + len(prog) + 1`, so it is one space wider
- * here than for `token_report.py` — the only difference between the two implementations'
- * help text, and the reason `tests/test_token_report_parity.py` normalises leading
- * whitespace on exactly the three argparse cells. The WRAP POINTS are identical for both
- * names (measured: every line has at least a character of slack at both widths).
+ * here than it was under the reference's shorter program name — the only difference the
+ * two implementations' help text ever had, and the reason the parity cells over `--help`
+ * normalised leading whitespace. The WRAP POINTS are identical for both names (measured:
+ * every line has at least a character of slack at both widths).
  */
 function usage() {
   const head = `usage: ${PROG} `;
@@ -1283,15 +1283,15 @@ async function main() {
 }
 
 /**
- * The primitives above are exported for `tests/fixtures/token_report_probe.mjs`, which
- * drives each one against Python over a corpus of hand-picked values. Two `pyFixed`
- * defects reached a passing behavioural suite before that corpus existed, because a
- * transcript only produces the numbers it happens to produce.
+ * The primitives above are exported so the suite's probe can IMPORT this file and drive
+ * each one over a corpus of hand-picked values. Two `pyFixed` defects reached a passing
+ * behavioural suite before that corpus existed, because a transcript only produces the
+ * numbers it happens to produce.
  *
  * `main()` therefore runs only when this file IS the entry point — a plain `node
  * <skill-dir>/scripts/token_report.mjs`, which is how SKILL.md tells the agent to run
- * it. If this guard were ever wrong the script would print nothing at all, and all 49
- * cells of the parity corpus would say so on the next run.
+ * it. If this guard were ever wrong, importing the file for its exports would run the
+ * whole report as a side effect and the probe's stdout would stop parsing on the next run.
  */
 export { pyLen, pyRound, pyFixed, fmt, jsonDumps, pyRepr, pyStrOfJson, pyInt, pyStrCmp,
   comparePaths, pct, bar, estTokens, textLen, escapeNonAscii, pySplitLines };

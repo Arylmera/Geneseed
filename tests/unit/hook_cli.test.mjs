@@ -14,6 +14,10 @@
  * for what it wires, the two `VERBS` tables for what they carry, `js/cli-table.json` for what the
  * driver dispatches, and the exported matrices for what is recorded. A copy of any of them in
  * this file would drift alongside whatever it was supposed to catch.
+ *
+ * THE ONE EXCEPTION IS `NATIVE`, and it is exactly the thing that cannot be derived: the verbs
+ * that never had a CPython original and so can never have a recorded cell. See its docblock — it
+ * is listed on purpose, and cross-checked against the sibling copy in `tests/cli_help.test.mjs`.
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -141,6 +145,24 @@ function matrix(plat) {
 const HERE = process.platform === 'win32' ? 'win32' : 'posix';
 const OTHER = HERE === 'win32' ? 'posix' : 'win32';
 
+/**
+ * ⚠ THE VERBS NO CELL CAN EVER COVER — the second instance of the hazard `tests/cli_help.test.mjs`
+ * names first, under the same name and for the same reason.
+ *
+ * A cell is a COMPARISON of two implementations. `catalog`, `mcp` and `memory` reached the product
+ * through the web console and never had a subcommand, so `rituals/harness.py` has nothing to be
+ * compared against and never will: the recorder is being deleted, and adding a subparser so a
+ * corpus could be recorded would author the expected value in Python and record it back — a copy
+ * of a value under test wearing a corpus's clothes.
+ *
+ * So the equality below becomes TWO NAMED POPULATIONS rather than a weakened one. Listing the
+ * native three by name is what keeps this a gate: a FOURTH verb with no cells falls into neither
+ * population and fails loudly, where a `covered ⊆ carried` containment would have let it through
+ * ungated. What the three are held to instead lives in `tests/cli_help.test.mjs` (help layout) and
+ * in the absolute gates of their own units — nothing here claims to gate their behaviour.
+ */
+const NATIVE = ['catalog', 'mcp', 'memory'];
+
 test('the matrix covers every verb each entry claims', () => {
   // PER BINARY, and that is the shape P5c forced. A cell declares which entry answers it, so the
   // partition has two sides and each is checked against the table it belongs to. Collapsing them
@@ -151,8 +173,34 @@ test('the matrix covers every verb each entry claims', () => {
   assert.deepEqual(sorted(covered.hook), sorted(verbsOf(HOOK)),
     'the recorded hook cells and the hook entry point\'s verbs have diverged: an uncovered verb '
     + 'is an unported one nothing would report');
-  assert.deepEqual(sorted(covered.cli), sorted(verbsOf(CLI)),
-    'the recorded cli cells and bin/geneseed-cli.mjs\'s verbs have diverged');
+  // THE RECORDED HALF, still an equality with no slack: every CLI verb that is not named native
+  // must have cells, and every recorded verb must still be carried. A new verb that nobody adds
+  // to `NATIVE` lands on the left of this and fails — which is the whole point of naming them.
+  const cli = verbsOf(CLI);
+  assert.deepEqual(sorted(covered.cli), sorted([...cli].filter((v) => !NATIVE.includes(v))),
+    'the recorded cli cells and bin/geneseed-cli.mjs\'s verbs have diverged. If the verb is NEW '
+    + 'and Node-native there is no reference to record a cell against — name it in NATIVE and '
+    + 'gate it absolutely. Do NOT delete cells to make this pass: the corpus can never be re-made');
+  // …and the other direction, so the list cannot rot into prose: a name in `NATIVE` that no entry
+  // point carries is an exemption for a verb that no longer exists, silently excusing whatever
+  // takes its place.
+  assert.deepEqual(NATIVE.filter((v) => !cli.has(v)), [],
+    'NATIVE names a verb bin/geneseed-cli.mjs does not carry — an exemption with nothing behind it');
+});
+
+test('the two copies of the native-verb list agree', () => {
+  // THE COST OF LISTING IT TWICE, paid rather than deferred. `tests/cli_help.test.mjs` names the
+  // same three for the same reason, and two hand-written copies of one decision drift in exactly
+  // the way this file's header says a listed table drifts — one file exempts a verb the other
+  // still demands a corpus for, and the second failure reads like a missing recording.
+  //
+  // A SHARED HOME UNDER tests/helpers/ IS THE REAL FIX; this is the gate that makes its absence
+  // safe until then, and it is read from the sibling's source so neither copy is the authority.
+  const other = read('tests', 'cli_help.test.mjs');
+  const listed = [...block(other, 'const NATIVE = [', '];', 'tests/cli_help.test.mjs')
+    .matchAll(/'([a-z][a-z-]*)'/g)].map((m) => m[1]);
+  assert.deepEqual(sorted(listed), sorted(NATIVE),
+    'tests/cli_help.test.mjs and this file disagree about which verbs are Node-native');
 });
 
 test('every cell declares a binary that exists', () => {

@@ -20,6 +20,25 @@
  * already prints does. `prog` is therefore a parameter of `formatHelp`, the fixtures are
  * replayed with the reference's own prog — so the layout is gated byte for byte — and the
  * shipped spelling is asserted separately, below.
+ *
+ * ⚠ THERE ARE NOW TWO POPULATIONS OF VERB, AND THIS FILE NAMES BOTH.
+ *
+ * The corpus can only ever hold verbs that HAD a CPython original: its recorder renders help
+ * from the live argparse object and refuses outright when the parser and the table disagree
+ * about which commands exist. `catalog`, `mcp` and `memory` never had a subparser — the
+ * information behind them lived only behind web endpoints — so there is nothing to record for
+ * them and nothing that could ever be recorded. Declaring them to argparse so the recorder
+ * would emit a text is the move this project has rejected before under its own name: it would
+ * be authoring the expected value in Python and then recording it back, which is a copy of a
+ * value under test wearing a corpus's clothes.
+ *
+ * So they get an ABSOLUTE gate instead of a comparison. `RECORDED` is the corpus's own verb
+ * list; `NATIVE` is the table minus it, asserted to be exactly the three by name, so a fourth
+ * verb cannot arrive in either population unnoticed — the native list fails, loudly, rather
+ * than the new verb slipping through ungated. What the native three are then held to is the
+ * set of layout properties `layoutClaims` states, every one of which is CHECKED AGAINST ALL 26
+ * RECORDED TEXTS in the same run: they are argparse's own output, so a property that holds
+ * across all of them is argparse's rule and not this file's opinion.
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -38,13 +57,57 @@ const read = (f) => readFileSync(f, 'utf-8');
 
 const meta = JSON.parse(read(path.join(HELP, '_recorded_with.json')));
 
+/** The verbs argparse rendered — the only ones a recorded text can ever exist for. */
+const RECORDED = [...meta.verbs].sort();
+
+/**
+ * The verbs the table declares that the recorder never saw, named rather than derived-and-
+ * trusted: this list is what turns "a new verb" into a failure instead of an exemption.
+ *
+ * Each one is a face on a capability that reached the product through the web console and had
+ * no subcommand: the catalog endpoint, the MCP read endpoint, the memory-delete endpoint.
+ */
+const NATIVE = ['catalog', 'mcp', 'memory'];
+
+/** Every command name the shipped table declares. */
+const tableNames = () => JSON.parse(read(TABLE)).commands.map((c) => c.name).sort();
+
+/**
+ * The layout properties every one of argparse's own 26 texts has.
+ *
+ * MEASURED, NOT ASSUMED. `the recorded corpus obeys its own layout claims` runs this over all
+ * 26 recorded fixtures, so each line below is a statement about what argparse DID and not
+ * about what a reader thinks a help text should look like. That is what makes applying the
+ * same function to the three native verbs a real gate: they are being held to the reference's
+ * layout, by a rule the reference is checked against in the same run.
+ *
+ * Returns a list of failures so one call can report every violation rather than the first.
+ */
+function layoutClaims(text, width, verb) {
+  const bad = [];
+  const say = (ok, why) => { if (!ok) bad.push(`${verb}: ${why}`); };
+  say(text.length > 0, 'renders nothing at all');
+  say(text.startsWith('usage: '), 'does not open with a usage line');
+  say(text.endsWith('\n') && !text.endsWith('\n\n'), 'does not end in exactly one newline');
+  say(text.includes('\noptions:\n'), 'has no options section');
+  say(/\n {2}-h, --help/.test(text), 'does not list -h/--help first in its options');
+  say(!/\n\n\n/.test(text), 'carries a run of blank lines argparse would have collapsed');
+  say(!/[ \t]\n/.test(text), 'leaves trailing whitespace on a line');
+  for (const line of text.split('\n')) {
+    say(line.length <= width, `wraps past the ${width}-column width at ${line.length}`);
+  }
+  return bad;
+}
+
 test('the recording is the shape it claims to be', () => {
   // The positive controls first. Every assertion below is vacuous against an empty corpus, and
   // "the fixtures did not load" and "the port agrees with all of them" are the same green.
   assert.equal(meta.verbs.length, 26,
-    '25 subparsers plus argparse\'s `update` alias — the count `test_cli_reference.py` pins');
+    '25 subparsers plus argparse\'s `update` alias — the count `test_cli_reference.py` pinned. '
+    + 'This is the size of the RECORDED population and it can never grow again: the recorder '
+    + 'needs the parser, and the parser is being deleted');
   const files = readdirSync(HELP).filter((f) => f.endsWith('.txt')).sort();
-  assert.deepEqual(files, [...meta.verbs].sort().map((v) => `${v}.txt`),
+  assert.deepEqual(files, RECORDED.map((v) => `${v}.txt`),
     'the recorded texts and the recorded verb list disagree');
   // The wrap column is an INPUT to every line in every fixture, so a recording that did not
   // write it down could only be believed, never replayed. See `tests/record_help.py`.
@@ -65,18 +128,75 @@ test('every recorded help text is what the port renders', () => {
   }
 });
 
-test('the table is the shipped document the recording was taken beside', () => {
-  // The positive control for every table assertion below, and the one thing that says the
-  // document is on a PRODUCT path: `package.json`'s `files[]` ships `js/`, so this file needs
-  // no row of its own and nothing imports out of `tests/` to parse a verb.
+test('every verb belongs to exactly one population, and neither is a leftover', () => {
+  // ⚠ THE GATE THAT MAKES THE SPLIT A SPLIT. Without it "this verb has no recorded text" is
+  // indistinguishable from "this verb is ungated", and the second one arrives silently — a new
+  // subcommand is added, the corpus cannot hold it, and every assertion in this file stays
+  // green while nothing at all checks it.
+  //
+  // The two claims are opposite in direction on purpose. A recorded verb the table has lost is
+  // a text replayed against nothing; a table verb in neither list is a command with no gate.
+  const names = tableNames();
+  const missing = RECORDED.filter((v) => !names.includes(v));
+  assert.deepEqual(missing, [],
+    `the table no longer declares ${missing.join(', ')}, which the corpus has a recorded help `
+    + 'text for — the recorded population may shrink only by deleting its fixture, and the '
+    + 'fixture can never be re-made');
+  assert.deepEqual(names.filter((v) => !RECORDED.includes(v)), NATIVE,
+    'a command in js/cli-table.json is in neither population. If it is new, it is Node-native '
+    + 'and there is no oracle for it — name it in NATIVE and give it an absolute unit gate. Do '
+    + 'NOT declare it to argparse so the recorder emits a text: that records a value authored '
+    + 'in Python and compares it to itself');
+  // The positive control for every table assertion in this file, and the one thing that says
+  // the document is on a PRODUCT path: `package.json`'s `files[]` ships `js/`, so this file
+  // needs no row of its own and nothing imports out of `tests/` to parse a verb.
   const live = JSON.parse(read(TABLE));
-  assert.equal(live.commands.length, meta.verbs.length,
-    'the table and the recorded verb list disagree on how many commands exist');
-  assert.deepEqual(live.commands.map((c) => c.name).sort(), [...meta.verbs].sort());
+  assert.equal(live.commands.length, RECORDED.length + NATIVE.length,
+    'the table holds a command that is neither recorded nor named as native');
   // `source_sha256` was a hash of `rituals/harness.py`'s bytes — a claim about a file this
   // migration deletes. It went with the move, and nothing may put it back.
   assert.ok(!('source_sha256' in live),
     'the table carries a digest of a file being deleted');
+});
+
+test('the recorded corpus obeys its own layout claims', () => {
+  // THE POSITIVE CONTROL FOR THE TEST BELOW, and it is the whole reason that one is evidence.
+  // `layoutClaims` is applied to the three verbs nothing can compare; here it is applied to 26
+  // texts CPython's argparse actually wrote. A claim that failed here would be this file's
+  // opinion about layout rather than argparse's rule, and would be worthless imposed on the
+  // native three.
+  const bad = RECORDED.flatMap((v) => layoutClaims(read(path.join(HELP, `${v}.txt`)),
+    meta.width, v));
+  assert.deepEqual(bad, [], `a recorded text violates a claim this file makes about layout, so `
+    + `the claim is wrong:\n  ${bad.join('\n  ')}`);
+});
+
+test('the Node-native verbs render help, and it obeys the same layout rules', () => {
+  // WHAT THIS CAN AND CANNOT SAY. It cannot say "argparse would have printed this", because
+  // argparse was never asked — there was no subparser. What it says instead is absolute: each
+  // one is described by the table, renders a non-empty help text, that text is about the verb
+  // the caller asked for, and it obeys every layout property the 26 recorded texts obey.
+  for (const verb of NATIVE) {
+    const cmd = cliCommand(verb);
+    assert.notEqual(cmd, null, `js/cli-table.json describes no subcommand '${verb}'`);
+    assert.ok((cmd.help ?? '').length > 20,
+      `${verb} carries no summary — it is the only line the docs page and the verb list show`);
+    const text = formatHelp(cmd, `geneseed ${verb}`, meta.width);
+    assert.deepEqual(layoutClaims(text, meta.width, verb), []);
+    assert.ok(text.startsWith(`usage: geneseed ${verb} [-h]`),
+      `${verb}'s usage line does not name the verb and its help action first`);
+    // …and that the rendering is a function of THIS row rather than of a shared preamble: the
+    // command's own summary reaches nothing here, so every argument it declares must.
+    for (const a of [...cmd.positionals, ...cmd.options].filter((x) => !x.hidden)) {
+      // A positional is spelled by argparse's `_metavar_formatter`: an explicit metavar, else
+      // the choices in braces, else the dest — so `action` appears as `{list,rm}` and looking
+      // for the dest would ask for a string the reference would never have printed.
+      const token = a.names.length ? a.names[0]
+        : (a.metavar ?? (a.choices ? `{${a.choices.join(',')}}` : a.dest));
+      assert.ok(text.includes(token),
+        `${verb} declares ${token} and its help text never mentions it`);
+    }
+  }
 });
 
 test('the table carries the surface argparse hides', () => {
@@ -175,8 +295,14 @@ test('both entry points actually print it', () => {
   // THE WIRING. Every assertion above calls `formatHelp` directly, and a renderer nothing
   // reaches is exactly as green as one that is wired — the failure this branch shipped once
   // already, when a narrowing flag's gate was correct and simply not connected.
-  const cases = [['bin/geneseed-cli.mjs', 'geneseed', ['theme', 'web', 'update', 'exclude']],
-    ['bin/geneseed-hook.mjs', 'geneseed-hook', ['context', 'git-gate', 'rule-gate', 'learn']]];
+  //
+  // ONE VERB FROM EACH POPULATION AT MINIMUM. `catalog` is here because the wiring is exactly
+  // what a Node-native verb has no corpus to prove: the recorded four above reach `printHelp`
+  // through a dispatch that predates them, and a new row that was declared in the table but
+  // never added to the entry would print help and refuse to run — or the reverse.
+  const cases = [['bin/geneseed-cli.mjs', 'geneseed',
+    ['theme', 'web', 'update', 'exclude', 'catalog', 'memory']],
+  ['bin/geneseed-hook.mjs', 'geneseed-hook', ['context', 'git-gate', 'rule-gate', 'learn']]];
   for (const [entry, prog, verbs] of cases) {
     for (const verb of verbs) {
       const raw = execFileSync(process.execPath, [path.join(ROOT, entry), verb, '--help'],

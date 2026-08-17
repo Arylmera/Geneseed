@@ -61,15 +61,18 @@ pair therefore runs over a payload carrying no per-run value. `/api/themes` is t
 side of the same pair for the same reason — it is the one body over `_GZIP_MIN` that
 carries no path, no clock and no token.
 
-THREE MORE VALUES ARE PER-RUN, AND THEY LIVE IN A BODY RATHER THAN IN THE RECORD.
+TWO MORE VALUES ARE PER-RUN, AND THEY LIVE IN A BODY RATHER THAN IN THE RECORD.
 `checked_at` and `build_time` are both `%Y-%m-%d %H:%M` sampled while the cell runs, and
 the two sides run seconds apart — a cell straddling a minute boundary would fail at
-random. `python` is `sys.version.split()[0]`, which a Node daemon has no honest answer for
-(see `js/web/api.mjs`; it answers `null`). All three are normalised by `_WEB_STAMPS`, and
-each pattern matches only a WELL-FORMED value, so a side that stopped emitting the field
-leaves the tag absent and the cell's `expect` fails instead of quietly agreeing. The value
-`python` is tolerant of has its absolute assertion in
-`tests/test_web_server.py::test_the_reference_reports_its_own_interpreter_version`.
+random. Both are normalised by `_WEB_STAMPS`, and each pattern matches only a WELL-FORMED
+value, so a side that stopped emitting the field leaves the tag absent and the cell's
+`expect` fails instead of quietly agreeing.
+
+AND TWO VALUES ARE NOT PER-RUN AT ALL — they move between two RECORDINGS, which is a
+threat `--record` created. The release label moves when a human bumps the configured
+version, and the interpreter version is a field the runtime that replaces this daemon does
+not have. `_WEB_STAMPS`' last two entries are those; the second DELETES its key rather
+than tagging it, because a tag needs a value on both sides and one side has none.
 
 SAFETY. Every cell runs under `golden.cell_env`, so the server resolves its target inside
 a throwaway HOME. And every server this file starts is stopped in a `finally`: `web/` has
@@ -127,6 +130,29 @@ _WEB_STAMPS = (
     # spelling and have them compared literally — which is what gates the ordering and the
     # running-job drop in `_load_history`.
     (re.compile(r'"(job_id|id)": "[0-9a-f]{16}"'), r'"\1": "<JOBID>"'),
+    # ---- THE RELEASE LABEL out of the version stamp, wherever a body quotes the line ------
+    #
+    # Two cells record it inside a `diff` hunk. It moves only when a human bumps the
+    # configured version, which is not a change in anything the web console does, and a
+    # corpus that recorded it raw reddens on the next bump for a reason that is not the
+    # server. `golden._destamp` already blanks it inside the stamp FILE for the emit corpus;
+    # this is the same value seen through an HTTP body, where that function never runs.
+    #
+    # ONLY WHERE THE LABEL IS. A stamp line without one produces no tag, exactly as the emit
+    # side does it, so "stamped with a release" and "stamped without one" stay
+    # distinguishable rather than collapsing onto each other.
+    (re.compile(r'\[release [^\]]+\]'), '[release <REL>]'),
+    # ---- THE INTERPRETER VERSION, REMOVED RATHER THAN TAGGED -----------------------------
+    #
+    # This is the one arm here that DELETES instead of replacing, and it is above the line
+    # rather than below it for the reason the deletion creates. The daemon this file drives
+    # runs on an interpreter and reports its version; the runtime that replaces it has no
+    # such field at all, so there is no value on that side to hang a tag on and a tag would
+    # simply never appear there. Erasing the key wherever it occurs leaves the two bodies
+    # IDENTICAL rather than merely comparable — and because the recorded `Content-Length` is
+    # recomputed from the NORMALISED body (see `golden._recompute_declared_lengths`), the
+    # header is then a real number on both sides and stays compared, not tagged `<CLEN>`.
+    (re.compile(r', "python": (?:"[^"]*"|null)'), ''),
 )
 
 # The same idea for values whose WIDTH differs too, which is a second question and not a
@@ -136,9 +162,8 @@ _WEB_STAMPS = (
 # on the two sides moves the header as well — and comparing the header would then
 # re-introduce, through the back door, the comparison this file has already decided it cannot
 # make. `checked_at` and `build_time` are exactly 16 characters on both sides forever, so
-# their cells still gate the header exactly. These four are not:
+# their cells still gate the header exactly. These three are not:
 #
-#   * `python` — `"3.13.5"` against `null`, the P6b field with no honest twin.
 #   * `started` / `duration` — a job's wall clock and its measured runtime. `time.time()`
 #     yields seven decimals and `Date.now() / 1000` yields three, and BOTH are spelt without
 #     a decimal point when they land on a whole second (`json.dumps(1754.0)` is `1754.0`,
@@ -147,11 +172,6 @@ _WEB_STAMPS = (
 #     `null` is deliberately NOT matched: that is the RUNNING state, and it must stay visible.
 #   * the `$ <argv>` echo — see below.
 _WEB_STAMPS_WIDTH = (
-    # The one field in P6b with no honest twin: the reference reports the interpreter
-    # running the daemon and a Node daemon has none. Both spellings are accepted so the
-    # tag appears on both sides; the reference's actual value is asserted absolutely in
-    # `tests/test_web_server.py`, which is the debt a tolerant comparison owes.
-    (re.compile(r'"python": (?:"\d+\.\d+\.\d+[^"]*"|null)'), '"python": "<RUNTIME>"'),
     (re.compile(r'"started": \d+(?:\.\d+)?'), '"started": <T>'),
     (re.compile(r'"duration": \d+(?:\.\d+)?'), '"duration": <SECS>'),
     # THE `$ <argv>` ECHO, and it is the one normalisation this phase had to argue for.
@@ -1793,14 +1813,15 @@ def _docs_cells(cell) -> list[dict]:
              # nothing else would report — the About page would simply render fewer links.
              # Found exactly that way before the cell existed.
              #
-             # `python` is the P6b field with no honest twin (`"3.13.5"` against `null`);
-             # `_WEB_STAMPS_WIDTH` tags both spellings and
-             # `test_web_server.py::test_the_reference_reports_its_own_interpreter_version`
-             # is the absolute half. Naming the tag here is what says the field is PRESENT.
+             # THE INTERPRETER FIELD IS NOT NAMED HERE, and its absence from this list is
+             # the point rather than an omission: `_WEB_STAMPS` deletes the key on whichever
+             # side carries it, so no tag exists to assert PRESENT. `expect_absent` below
+             # carries the direction that is still checkable.
              expect=['"kind": "about"', '"version": {}', '"license": "MIT"',
                      '"repo": "https://github.com/', '"repo_is_github": true',
-                     '"python": "<RUNTIME>"', '"deployed": true', '"theme": "imperial"'],
-             expect_absent=['not ported yet', '"repo_is_github": false', '"repo": null']),
+                     '"deployed": true', '"theme": "imperial"'],
+             expect_absent=['not ported yet', '"repo_is_github": false', '"repo": null',
+                            '"python"']),
         cell("docs/the-cli-page-is-the-parser-minus-what-argparse-hides",
              [_req(path="/api/docs/page/cli")], world=_full(),
              # P6d'S DEFERRAL, PAID IN P10c — and the cell has to earn more than "200 now",
@@ -2138,12 +2159,13 @@ def _read_cells(cell) -> list[dict]:
              [_req(path="/api/setup")], world=_installed(),
              expect=['"theme": "imperial", "accent": "yellow", "emit": "opencode-global"',
                      '"installed_fp": "0000000000000000"',
-                     '"agent_md_present": true', '"deployed": true',
-                     # The tolerant field, asserted PRESENT here and asserted absolutely in
-                     # tests/test_web_server.py — see `_WEB_STAMPS`. `<CLEN>` is the tag
-                     # its four-byte width difference forces onto the header, stated at
-                     # the cell rather than left to be discovered in `_drive`.
-                     '"python": "<RUNTIME>"', 'Content-Length: <CLEN>']),
+                     '"agent_md_present": true', '"deployed": true'],
+             # THE INTERPRETER FIELD, GATED BY ITS ABSENCE. `_WEB_STAMPS` deletes the key on
+             # whichever side carries it, so there is no tag to assert PRESENT and the
+             # header is no longer forced to `<CLEN>` by a width this snapshot no longer
+             # has — `Content-Length` is a compared number here again. What is left to
+             # check is that the deletion actually happened, on whichever side ran.
+             expect_absent=['"python"']),
         cell("setup/an-undeployed-target-says-so",
              [_req(path="/api/setup")], world={"repo/.keep": ""},
              # THE FOUR FIELDS THAT COULD NOT BE NAMED BEFORE THE BUNDLE WALK WAS PINNED.

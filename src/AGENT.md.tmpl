@@ -378,11 +378,12 @@ comment carries its schema and setup notes.
 
 *{{EPI_SCRIPTS}}*
 
-{{INTRO_SCRIPTS}} The `rituals/` directory ships a dependency-free CLI (`harness
-build|doctor|context|learn|prompt|diff|setup|tui`) that can be wired to git hooks
-or CI — notably `harness context`, which injects the project context at session
-start so {{LAW}} XVIII is enforced by the hook rather than left to you. All of it
-is opt-in; the harness works without any of it.
+{{INTRO_SCRIPTS}} The harness ships a dependency-free CLI (`geneseed
+build|doctor|diff|status|setup|web`, plus `geneseed-hook` for the verbs a host
+fires on its own) that can be wired into your host's hooks or into CI — notably
+`geneseed-hook context`, which injects the project context at session start so
+{{LAW}} XVIII is enforced by the hook rather than left to you. All of it is
+opt-in; the harness works without any of it.
 
 ---
 

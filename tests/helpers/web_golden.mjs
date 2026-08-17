@@ -43,12 +43,29 @@ const WEB_STAMPS = [
   [/"checked_at": "\d{4}-\d{2}-\d{2} \d{2}:\d{2}"/g, '"checked_at": "<WHEN>"'],
   [/"build_time": "\d{4}-\d{2}-\d{2} \d{2}:\d{2}"/g, '"build_time": "<WHEN>"'],
   [/"(job_id|id)": "[0-9a-f]{16}"/g, '"$1": "<JOBID>"'],
+  // THE RELEASE LABEL out of the version stamp, wherever a body quotes the line — two cells
+  // record it inside a `diff` hunk. It moves only when a human bumps the configured version,
+  // which is not a change in anything the web console does, and a corpus that recorded it raw
+  // reddens on the next bump for a reason that is not the server. The emit harness already
+  // blanks it inside the stamp FILE; this is the same value seen through an HTTP body.
+  //
+  // ONLY WHERE THE LABEL IS. A stamp line without one produces no tag, exactly as the emit
+  // side does it, so "stamped with a release" and "stamped without one" stay distinguishable.
+  [/\[release [^\]]+\]/g, '[release <REL>]'],
+  // THE INTERPRETER VERSION, REMOVED RATHER THAN TAGGED, and that is the one arm here that
+  // deletes instead of replacing. The recorded corpus was taken from a server that ran on an
+  // interpreter and published its version; this one has no such field at all, so there is no
+  // value on this side to hang a tag on and a tag would simply never appear here. Erasing the
+  // key wherever it occurs leaves the two bodies IDENTICAL rather than merely comparable —
+  // which is also why it belongs above the line and not below it: the recorded
+  // `Content-Length` is recomputed from the normalised body, so once the key is gone from both
+  // the header is a real number again on both sides and stays compared.
+  [/, "python": (?:"[^"]*"|null)/g, ''],
 ];
 
 // The same, for values whose LENGTH differs between two runs — which is the question
 // `Content-Length` asks, and why these are a separate table.
 const WEB_STAMPS_WIDTH = [
-  [/"python": (?:"\d+\.\d+\.\d+[^"]*"|null)/g, '"python": "<RUNTIME>"'],
   [/"started": \d+(?:\.\d+)?/g, '"started": <T>'],
   [/"duration": \d+(?:\.\d+)?/g, '"duration": <SECS>'],
   // THE REPLACEMENT IS `'$$ <ARGV>\\n'` AND NOT `'$$ <ARGV>\\\\n'`, and that is a genuine
