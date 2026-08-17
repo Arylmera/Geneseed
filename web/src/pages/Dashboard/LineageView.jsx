@@ -17,7 +17,7 @@ export default function LineageView({ overview, sigil, setup, jobs, graph }) {
 
   const steps = [
     ['Source', 'src/, the canonical genetic material', setup?.source_fp || '—', true],
-    ['Render', `build.py → ${overview.emit}`, overview.theme + ' voice', true],
+    ['Render', `geneseed build → ${overview.emit}`, overview.theme + ' voice', true],
     ['Deployed', overview.target, 'inherited by every repo', false],
   ]
 

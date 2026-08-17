@@ -43,7 +43,7 @@ import { parseOrigin, originDisplay } from '../../js/update.mjs';
 import { MCP_PRESETS as _P, mcpConfigFor, mcpState, mcpSetEnabled } from '../../js/mcp.mjs';
 import { MCP_PRESETS } from '../../js/mcp.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, pyResolve } from '../../js/hosts.mjs';
-import { normcase } from '../../js/lib/pyfs.mjs';
+import { normcase } from '../../js/lib/fs.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/diff.mjs';
 import { makeSandbox, TMP_ROOT, RELOCATION_VARS } from '../helpers/sandbox.mjs';
@@ -1298,20 +1298,22 @@ test('graph edges survive a themed law noun', () => {
 test('the setup endpoint reports the install snapshot', () => {
   const s = apiSetup(neutral());
   for (const key of ['theme', 'accent', 'emit', 'source_fp', 'installed_fp', 'version_verdict',
-    'root', 'target', 'deployed', 'python', 'memory_dir', 'facts']) {
+    'root', 'target', 'deployed', 'memory_dir', 'facts']) {
     assert.ok(key in s, `no ${key} in the setup snapshot`);
   }
   assert.ok(s.root);
   assert.equal(typeof s.deployed, 'boolean');
 
-  // THE ONE ASSERTION THAT INVERTS. The reference asserted `python` matches `^\d+\.\d+` — it
-  // reported the interpreter running the daemon. There is no interpreter here, and the port
-  // deliberately answers `null` rather than putting Node's version under a Python key. Asserted
-  // rather than skipped, because the field is one of the two live `python: null` API fields
-  // P4's residual sweep must remove, and a test that says nothing about it would let the field
-  // survive the cut by silence.
-  assert.equal(s.python, null,
-    'the setup snapshot reports a Python version — there is no interpreter to report');
+  // THE ONE ASSERTION THAT INVERTS, AND IT IS ABOUT A KEY THAT MUST NOT EXIST. The server this
+  // one replaced reported the version of the interpreter hosting it, under a key named for that
+  // interpreter. There is nothing here that answers the same question, and answering it with
+  // this runtime's version under that name would be a lie the About page prints — so the field
+  // is gone rather than present-and-null. Asserted rather than dropped: a deleted field that
+  // silently grows back is exactly what this gate exists to catch, and `in` is the strong form —
+  // `s.python === undefined` would also pass for a key explicitly set to `undefined`.
+  assert.ok(!('python' in s),
+    'the setup snapshot has grown an interpreter-version key back — there is no interpreter '
+    + 'to report and nothing can honestly fill it');
 });
 
 // ---------------------------------------------------------------------------------------------

@@ -2,9 +2,9 @@
 //
 // Surfaces what the harness is DOING (not just what it is) to the web console's
 // Activity view. Writes one small JSON file per session into the OpenCode config
-// dir's `activity/` folder; the Python web server (rituals/_web_activity.py) globs
-// and renders them. Fully decoupled: the writer never talks to the reader, only the
-// filesystem — language-agnostic, crash-isolated, no RPC. Mirrors the file-IPC seam
+// dir's `activity/` folder; the web console's activity reader globs and renders them.
+// Fully decoupled: the writer never talks to the reader, only the filesystem —
+// language-agnostic, crash-isolated, no RPC. Mirrors the file-IPC seam
 // the other plugins already use (geneseed-ponytail's state file, geneseed-workflow's
 // per-run trace shards).
 //
@@ -37,11 +37,11 @@ const DEBUG = !!process.env.GENESEED_DEBUG
 const PID = process.pid
 function log(msg) { if (DEBUG) console.error(`[geneseed-activity] ${msg}`) }
 
-// The OpenCode config dir, resolved to EXACTLY match the Python reader's
-// build._opencode_config_dir() precedence ($OPENCODE_CONFIG_DIR > $XDG_CONFIG_HOME/
-// opencode > ~/.config/opencode). Copying geneseed-ponytail's statePath() verbatim
-// would check XDG only and diverge from the reader whenever $OPENCODE_CONFIG_DIR is
-// set — the one path-divergence bug this seam exists to avoid.
+// The OpenCode config dir, resolved to EXACTLY match the reader's own config-dir
+// precedence ($OPENCODE_CONFIG_DIR > $XDG_CONFIG_HOME/opencode > ~/.config/opencode).
+// Copying geneseed-ponytail's statePath() verbatim would check XDG only and diverge
+// from the reader whenever $OPENCODE_CONFIG_DIR is set — the one path-divergence bug
+// this seam exists to avoid.
 function configBase() {
   return (
     process.env.OPENCODE_CONFIG_DIR ||

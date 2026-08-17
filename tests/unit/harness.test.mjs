@@ -312,9 +312,12 @@ test('the gate flags an unknown LAW_CLASS value', () => {
 });
 
 test('the prose mirror gate catches every drift class the badge regex is blind to', () => {
-  // Pure over its inputs, so the drift can be crafted without touching the tree — a wrong
-  // prose count, a dropped skill name, a stale web law count, and a self-inconsistent
-  // 'N repeatable workflows' subset.
+  // WHAT THIS ROW GATES AND WHAT IT DOES NOT, stated because the gap between the two once hid
+  // a dead check for a whole phase. `proseMirrorProblems` is pure, so every drift class below
+  // is crafted here without touching the tree — that is the DECISION. It says nothing about
+  // the WIRING, and a call site handing the web arms a string with no prose in it keeps all
+  // six assertions green while the product gates nothing. That is exactly what had happened,
+  // and `the count gate really reads the onboarding pages` below is the row that now watches it.
   const counts = { laws: 35, agents: 16, skills: 3 };
   const stems = new Set(['alpha', 'beta', 'gamma']);
   const readme = '| **🛡️ Rules** (`laws/`) | 35 universal laws the agent obeys — … |\n'
@@ -348,6 +351,24 @@ test('the prose mirror gate catches every drift class the badge regex is blind t
   // web "N repeatable workflows" no longer matches its own wikilink list.
   assert.ok(drift(readme, web.replace('3 repeatable workflows', '9 repeatable workflows'), '')
     .some((x) => x.includes('repeatable workflows')));
+});
+
+test('the count gate really reads the onboarding pages the prose arms are about', () => {
+  // THE WIRING HALF, and the defect it was written for is worth naming: the web arms were fed
+  // a file the console's onboarding prose had MOVED OUT OF. The read still succeeded, all
+  // three arms scored zero on every run, and nothing was red — a check can die without ever
+  // failing. The copy now lives in `docs/web/`, where the counts are rendered from
+  // `{N_LAWS}` / `{N_AGENTS}` / `{N_SKILLS}` tokens and therefore cannot drift; what is left
+  // to catch is a page that spells a count as a LITERAL, so that is the fault planted here.
+  //
+  // ABSOLUTE ABOUT THE COUNT, deliberately vague about the rest of the sentence: the message's
+  // wording is frozen by the recorded primitive corpus and names a module that no longer
+  // exists, so asserting on it would gate a stale word rather than the property.
+  const problems = withFault({
+    'docs/web/zzz-fixture-probe.md': '9 capability specialists — alpha, beta.\n',
+  }, (root) => gate(root, 'm.countTableProblems()'));
+  assert.ok(problems.some((p) => p.includes("'9 capability specialists'")),
+    `the count gate is not reading docs/web: ${JSON.stringify(problems)}`);
 });
 
 // ---------------------------------------------------------------------------------------------

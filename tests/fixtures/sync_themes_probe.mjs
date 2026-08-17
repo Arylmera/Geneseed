@@ -17,7 +17,7 @@ import {
 import path from 'node:path';
 
 import { syncThemes } from '../../js/themes.mjs';
-import { withPyNewlines } from '../../js/lib/pyfs.mjs';
+import { withPyNewlines } from '../../js/lib/fs.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 const job = JSON.parse(readFileSync(process.argv[2], 'utf8'));

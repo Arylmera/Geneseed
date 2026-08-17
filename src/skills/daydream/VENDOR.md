@@ -2,8 +2,8 @@
 
 This folder is a third-party skill vendored into Geneseed, not a Geneseed-authored
 skill. It rides along in the rendered bundle and is exempt from Geneseed's authoring
-gates (token, dead-link, hermeticity, skill counts) — see `VENDORED_SKILL_DIRS` in
-`_build_core.py`.
+gates (token, dead-link, hermeticity, skill counts) — it is listed in the
+generator's `VENDORED_SKILL_DIRS`.
 
 - **Upstream:** https://github.com/glebis/claude-skills/tree/main/daydream
 - **Commit:** f47170dee300dd3d5da2a1c3c708986faeea3d5a

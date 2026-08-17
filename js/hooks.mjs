@@ -35,8 +35,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readText, writeText, jsonDumpsCompact, normcase, comparePaths, pyPathStr, pyPrint,
-  pyPrintErr, withDiscardableStderr } from './lib/pyfs.mjs';
-import { NO_WINDOW } from './lib/pyproc.mjs';
+  pyPrintErr, withDiscardableStderr } from './lib/fs.mjs';
+import { NO_WINDOW } from './lib/proc.mjs';
 // `harness status` reports the memory store, and `bin/geneseed-cli.mjs` cannot import THIS
 // module to find it: the CLI is under a hard transitive `child_process` ban and `learn`
 // spawns. So the resolver has one owner in `js/hosts.mjs` rather than a second copy — and
@@ -51,7 +51,7 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // THE RULE, CORRECTED IN P5d. It used to read "duplicating four helpers is cheaper than
 // coupling a hook to the emitter", with `readText`/`writeText`/`normcase` as the stated
 // exceptions. That is the wrong line, and `pyStrPath` is what proved it: it was a second
-// implementation of `str(Path(p))` under a different NAME from `js/lib/pyfs.mjs`'s
+// implementation of `str(Path(p))` under a different NAME from `js/lib/fs.mjs`'s
 // `pyPathStr`, and the two disagreed. P5c found that `path.normalize` collapses `a/../b`
 // where `PurePath` keeps it, fixed `pyPathStr`, and gated it with a 25-path corpus — and
 // none of that reached this file, because a corpus finds what it is pointed at and nothing
@@ -61,7 +61,7 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // the cell.
 //
 // So the line is not "duplicate rather than couple" — it is "one owner for anything that
-// reproduces a language primitive, wherever it is used". `pyfs.mjs` carries no
+// reproduces a language primitive, wherever it is used". `fs.mjs` carries no
 // `child_process` and costs nothing at hook latency. What stays local is what is genuinely
 // only the hook's (`fnmatch`, the transcript readers, `pyOsError`'s errno table).
 //
@@ -207,7 +207,7 @@ function readStdin() {
 }
 
 // The two output funnels, with Python's newline translation reproduced. They moved to
-// `js/lib/pyfs.mjs` in P5c — beside `writeText`, which is the same rule for FILES — when
+// `js/lib/fs.mjs` in P5c — beside `writeText`, which is the same rule for FILES — when
 // `js/excludes.mjs` became the second caller; see that docblock for why the translation
 // exists and which gate can see it.
 const out = pyPrint;

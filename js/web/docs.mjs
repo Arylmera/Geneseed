@@ -44,7 +44,7 @@ import { ROOT, THEMES } from '../checkout.mjs';
 import { cliReference } from '../cli.mjs';
 import { readJsonMaybe, readMaybe } from '../installs.mjs';
 import { pyResolve } from '../hosts.mjs';
-import { PY_SPACE, normcase, parseJson, pyStripSpace } from '../lib/pyfs.mjs';
+import { PY_SPACE, normcase, parseJson, pyStripSpace } from '../lib/fs.mjs';
 import { statusData } from '../status.mjs';
 import { originDisplay } from '../update.mjs';
 import { NotFound, deployed, resolveLinks } from './api.mjs';
@@ -399,21 +399,17 @@ function glossary(state) {
  * is the one thing P6d could not have: it shells `git remote get-url`, and P8a is the phase
  * that argued for the `git` row in `_ALLOWED_SPAWNS`.
  *
- * TWO FIELDS ARE NOT WHAT THEY LOOK LIKE, and both are the reference's own shape rather than
- * a shortcut here:
+ * `version` IS NOT WHAT IT LOOKS LIKE, and it is the shape this page has always had rather than
+ * a shortcut here. It reads a `version` key off the status snapshot and THERE IS NO SUCH KEY —
+ * the snapshot spells the fingerprints `source_fp` / `installed_fp` / `version_verdict`. So the
+ * field is `{}`, always, and `sd.version || {}` reproduces the EXPRESSION rather than the
+ * constant: if the key ever appears, the page gains it without another edit.
  *
- *   * `version` reads `sd.get("version")`, and `_status_data()` HAS NO SUCH KEY — it spells the
- *     fingerprints `source_fp` / `installed_fp` / `version_verdict`. So the field is `{}` in
- *     the reference, always, and `sd.version || {}` reproduces the expression rather than the
- *     constant: if the key ever appears, both sides gain it together.
- *   * `python` is `sys.version.split()[0]`, and a Node daemon has no honest answer. `null`,
- *     the P6b precedent, spelled the same way `apiSetup` spells it — not Node's own version
- *     under a Python key. `tests/web_golden.py` tolerates the pair and
- *     `tests/test_web_server.py` asserts each side absolutely.
+ * THERE IS NO INTERPRETER FIELD, and the absence is deliberate — see `apiSetup`, which spells
+ * the same absence for the same reason.
  *
- * `statusData()` is called for one dead field, and deliberately: the reference pays the same
- * cost on the same page, and a twin that skipped it would answer faster in a way no gate
- * measures and no user asked for.
+ * `statusData()` is called for one dead field, and deliberately: this page has always paid that
+ * cost, and skipping it would answer faster in a way no gate measures and no user asked for.
  */
 function about(state) {
   const sd = statusData();
@@ -425,7 +421,6 @@ function about(state) {
     deployed: deployed(state),
     target: String(state.target),
     root: String(ROOT),
-    python: null,
     repo: od.url,
     // `githubSlug`, not `github_slug`. `OriginDisplay`'s JS twin keeps the Python field in
     // camelCase the way every other ported record does, and the RESPONSE key is snake_case

@@ -138,7 +138,7 @@ are skipped and any error is swallowed, so it never blocks or disturbs a session
 All seven plugins (activity, context, guard, learn, notify, ponytail, workflow) install together in
 one step — the shared recipe lives in
 **[Plugin setup](../../docs/opencode-plugin-setup.md)** (global `cp …/plugins/*.js`
-+ `GENESEED_HARNESS`, or `build.py --emit opencode` / `opencode-global`).
++ `GENESEED_HARNESS`, or `geneseed-build --emit opencode` / `opencode-global`).
 
 **Verify it loaded:** start a session, do a little work, end it. On `session.idle`
 the learn plugin logs to stderr — either `[geneseed-learn] wrote N memory file(s): …`
@@ -213,7 +213,7 @@ the harness live entirely in the global config dir with zero per-repo files.
   behaviour: [SETUP.md → Wiki](../../SETUP.md#wiki--your-own-knowledge-base-optional).
 
 It needs no model, writes nothing, skips the learn plugin's throwaway sessions, and
-swallows every error. Output mirrors `rituals/harness.py context`.
+swallows every error. Output mirrors `geneseed-hook context`.
 
 - **Quiet by default:** it logs nothing (OpenCode renders a plugin's stderr as red
   text in the UI). `GENESEED_DEBUG=1` re-enables discovery/inject logs.

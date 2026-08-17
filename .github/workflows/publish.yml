@@ -14,8 +14,13 @@ name: publish
 # the package. Nothing in this repository can do it, and no local run can prove it was
 # done: the first `npm publish` here either finds a configured trusted publisher or
 # fails with an authentication error. Every other step in this file was exercised by a
-# local `npm pack` + `npm install` (tests/test_package_manifest.py); this one was not,
-# and cannot be.
+# local `npm pack` + `npm install` (`tests/unit/package_manifest.test.mjs`); this one was
+# not, and cannot be.
+#
+# ⚠ AND A DRY RUN DOES NOT REHEARSE IT EITHER. `npm publish --dry-run` packs the tarball and
+# prints what it would upload; it never asks the registry for the publish grant, so it is green
+# whether or not a trusted publisher exists. A green dry run proves the TARBALL — the file list,
+# the version, the gates below — and says nothing at all about this paragraph.
 #
 # Do it once, signed in to npmjs.com as the account that owns `geneseed`:
 #
@@ -38,18 +43,32 @@ name: publish
 #
 # ⚠ RENAMING THIS FILE BREAKS PUBLISHING, SILENTLY. The trusted publisher is keyed on
 # the workflow FILENAME. A renamed workflow still runs and still mints a token; npm just
-# refuses it. `tests/test_docs_claims.ThePublishWorkflowIsDeliberate` fails when the
-# filename named above stops matching the file it is written in — which is the only
-# local symptom that exists.
+# refuses it. `tests/unit/docs.test.mjs` — "the publish workflow references its own
+# filename", one of the seven claims it makes about this file — fails when the filename
+# named above stops matching the file it is written in, which is the only local symptom
+# that exists.
 #
 # The trigger is MANUAL, deliberately: Actions → publish → Run workflow. There is no
-# `push:` trigger, and the gate above forbids adding one. Bump the version in
+# automatic trigger of any kind, and the gate above forbids adding one. Bump the version in
 # `harness.config.json` first (`package.json` mirrors it and a fork fails
-# `test_version_mirrors_harness_config`) — never with `npm version`, which edits only
-# one of the two.
+# `tests/unit/package_manifest.test.mjs`'s "version mirrors harness.config.json") —
+# never with `npm version`, which edits only one of the two.
+#
+# ⚠ THE DEFAULT IS A DRY RUN, and that is the whole point of the switch: the dangerous path is
+# the one you have to ask for. Leaving `dry_run` ticked runs every gate below and then
+# `npm publish --dry-run`, which uploads nothing. Untick it — deliberately, once, having read
+# the version you are about to burn — to publish for real. There is no way back after 72 hours.
+#
+#   gh workflow run publish.yml -f dry_run=true      # rehearse (the default)
+#   gh workflow run publish.yml -f dry_run=false     # ⚠ THE REAL ONE
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Rehearse: run every gate, then pack and report instead of uploading."
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -60,9 +79,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
       - uses: actions/setup-node@v4
         with:
           # Trusted publishing needs Node >= 22.14.0. `engines` in package.json says
@@ -79,9 +95,35 @@ jobs:
       # published version cannot be taken back after 72 hours. Re-run the two gates that
       # read the tree the tarball is cut from, on the runner, before anything leaves it.
       - name: doctor (every theme + parity + authoring gates)
-        run: python rituals/harness.py doctor --all
+        run: node bin/geneseed-cli.mjs doctor --all
+      # ⚠ GATED ON THE COUNT, NOT ON THE EXIT CODE, and here that matters more than anywhere
+      # else in the repository: this is the last gate a tarball passes through and a published
+      # version cannot be taken back after 72 hours. `node --test` over a glob that matches
+      # NOTHING prints `# tests 0` and exits 0 — measured — so a file move could turn the only
+      # test gate on the publish path into a green no-op with no diff to notice. The predecessor
+      # here failed SAFE on an empty tree; this one has to be made to. The floor is deliberately
+      # far below the real count: it separates "the suite ran" from "the suite was never found",
+      # and is not a tally anyone has to maintain. `shell: bash` brings `pipefail`, so a red
+      # suite still fails at the `node` line rather than at the count.
       - name: unit tests
-        run: python -m unittest discover -s tests -p "test_*.py"
+        shell: bash
+        run: |
+          log="$(mktemp)"
+          node --test "tests/**/*.test.mjs" | tee "$log"
+          n="$(awk '/^# tests /{n=$3} END{print n+0}' "$log")"
+          echo "the suite reported $n tests"
+          if [ "$n" -lt 500 ]; then
+            echo "only $n tests were discovered — the glob has stopped matching the suite"
+            exit 1
+          fi
 
+      # ⚠ ONE `run:` LINE WHOSE ARGUMENTS VARY — deliberately NOT a second, dry-run step.
+      # `tests/unit/docs.test.mjs` ("the publish workflow publishes once") asserts that EXACTLY
+      # one line in this file matches `run:.*npm publish`, so that a second publish path cannot
+      # appear beside the guarded one. A rehearsal is therefore a FLAG on this line.
+      #
+      # `inputs.dry_run`, NOT `github.event.inputs.dry_run`: the latter is a STRING, so the
+      # non-empty `'false'` is truthy and the guard would silently invert into a real publish on
+      # the very run that asked to rehearse. The typed `inputs` context gives a real boolean.
       - name: publish
-        run: npm publish
+        run: npm publish ${{ inputs.dry_run && '--dry-run' || '' }}

@@ -44,8 +44,8 @@ import path from 'node:path';
 
 import { THEMES } from './checkout.mjs';
 import { readJsonMaybe } from './installs.mjs';
-import { pySplitLines } from './lib/pydiff.mjs';
-import { pyPrint } from './lib/pyfs.mjs';
+import { pySplitLines } from './lib/udiff.mjs';
+import { pyPrint } from './lib/fs.mjs';
 
 // ---- display tiers -------------------------------------------------------------------
 //
@@ -373,7 +373,7 @@ export function themeFlair(theme) {
     accent: data.ACCENT ?? 'cyan',
     tagline: data.TAGLINE ?? '',
     sigil: data.LOADED_SIGIL ?? '',
-    // `str.splitlines()` — `js/lib/pydiff.mjs`' twin, already gated. It answers `[]` for
+    // `str.splitlines()` — `js/lib/udiff.mjs`' twin, already gated. It answers `[]` for
     // the empty string where `''.split('\n')` answers `['']`, which would put a blank row
     // in the banner of every theme that omits one; and its boundary set is Python's rather
     // than `\s`, which P6d measured apart.
@@ -436,7 +436,7 @@ export function cmdTui() {
     pyPrint('[tui] not an interactive terminal. Use `harness setup`, `doctor`, or `build`.\n');
     return 1;
   }
-  // The pointer to `python rituals/harness.py tui` is gone for `js/menu.mjs`'s reason: the
+  // The pointer to the Python panel is gone for `js/menu.mjs`'s reason: the
   // panel it named is the Python being deleted. What is left is true and stays true.
   pyPrint('[tui] full-screen panel unavailable (this entry carries the TUI\'s layout '
     + 'half, not its screens). Use `harness setup`, `doctor`, or `build`.\n');

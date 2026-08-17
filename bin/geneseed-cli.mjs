@@ -34,17 +34,19 @@
  * beside `--new` — and it would have been paid identically by the `bin/geneseed.mjs` option,
  * so it is not a discriminator between the two.
  *
- * THE VERB SET IS SMALL AND REFUSES THE REST BY NAME, exactly as the hook entry does.
- * `harness.py` has 25 subparsers (26 invocable names — `update` aliases `upgrade`); this
- * file carries twenty of those names, which is nineteen subparsers plus that alias.
- * `test_the_two_entry_points_carry_disjoint_verb_sets` keeps the two tables from ever
- * answering the same verb twice, since the shim bakes only one of them.
+ * THE VERB SET REFUSES THE REST BY NAME, exactly as the hook entry does. It carries 22 of the
+ * 26 names the reference's parser answered to (25 subparsers, plus the alias) — the other
+ * four are the hook verbs — and, since the three rows at the end of the table below, three
+ * that the reference never had at all. `test_the_two_entry_points_carry_disjoint_verb_sets`
+ * keeps the two tables from ever answering the same verb twice, since the shim bakes only one
+ * of them.
  *
  * P6h MADE THE DISPATCH ASYNCHRONOUS and put `js/web/` on this entry's import graph. Both
  * are noted where they happen (`main`'s `await`, and the `web` row below); the consequence
  * for the file as a whole is that its transitive imports now reach two modules that spawn,
  * which `_ALLOWED_SPAWNS` in `tests/test_hook_cli_parity.py` declares argv by argv.
  */
+import { cmdCatalog } from '../js/catalog.mjs';
 import { cliSpec, printHelp } from '../js/cli.mjs';
 import { cmdDiff } from '../js/diff.mjs';
 import { cmdDoctor, cmdValidate } from '../js/doctor.mjs';
@@ -52,8 +54,10 @@ import { parseDriverArgs } from './geneseed.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
 import { cmdMigrate } from '../js/migrate.mjs';
-import { pyInt } from '../js/lib/pyfs.mjs';
+import { pyInt } from '../js/lib/fs.mjs';
 import { cmdLink, cmdUnlink } from '../js/link.mjs';
+import { cmdMcp } from '../js/mcp.mjs';
+import { cmdMemory } from '../js/memory.mjs';
 import { cmdHome, cmdMenu } from '../js/menu.mjs';
 import { cmdTui } from '../js/tui.mjs';
 import { cmdSetup } from '../js/setup.mjs';
@@ -170,6 +174,29 @@ const VERBS = {
   // here rather than merely untested.
   tui: {
     fn: cmdTui,
+  },
+  // THE THREE THAT NEVER HAD A PYTHON ORIGINAL, and they are last for that reason rather
+  // than by alphabet: every row above is the twin of a subparser, and these three are not.
+  // The information behind them existed only behind the web console — the catalog endpoint,
+  // the MCP read endpoint, the memory-delete endpoint — so the one way to reach any of it
+  // from a shell was to start a server. Each verb calls the module the console already calls;
+  // none of the three re-derives anything.
+  //
+  // ⚠ THEY CANNOT BE COMPARED AGAINST ANYTHING, and that is the whole reason they landed in
+  // this change rather than after it. The recorded help corpus was rendered from a live
+  // argparse object, and there was no subparser to render these from; the acceptance matrix
+  // is a comparison of two implementations, and there is only one. So their gates are
+  // ABSOLUTE — `tests/snapshot/cli_help.test.mjs` splits the two populations by name and refuses a
+  // verb that falls into neither, and each has its own unit gate stating what it does rather
+  // than that it agrees.
+  catalog: {
+    fn: cmdCatalog,
+  },
+  mcp: {
+    fn: cmdMcp,
+  },
+  memory: {
+    fn: cmdMemory,
   },
 };
 
@@ -308,7 +335,7 @@ async function main(argv) {
     return die(2, `the following arguments are required: cmd (one of ${
       Object.keys(VERBS).join(', ')})`);
   }
-  // `validate` — `build.py --validate-only`, and the one verb this entry answers that is NOT
+  // `validate` — the generator's `--validate-only`, and the one verb this entry answers that is NOT
   // in the table above. It is dispatched here, before the lookup, for a reason that is a
   // property of the gates rather than a preference:
   //
@@ -332,10 +359,11 @@ async function main(argv) {
   }
   const spec = VERBS[verb];
   if (!spec) {
-    // "and every other harness subcommand is still Python — run `python rituals/harness.py
-    // <verb>`" is GONE, and its removal is not cosmetic: with the four hook verbs named, the
-    // two entry points now cover every subcommand there is, so the clause was not just about
-    // to become false — it was already claiming a third place for verbs that do not exist.
+    // "and every other harness subcommand is still Python — run the interpreter against the
+    // old harness script" is GONE, and its removal is not cosmetic: with the four hook verbs
+    // named, the two entry points now cover every subcommand there is, so the clause was not
+    // just about to become false — it was already claiming a third place for verbs that do
+    // not exist.
     return die(2, `invalid choice: '${verb}'. This entry point carries only `
       + `${Object.keys(VERBS).join(', ')}; the four hook verbs live in `
       + 'bin/geneseed-hook.mjs.');

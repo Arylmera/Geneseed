@@ -1,6 +1,6 @@
 // Docs surface: the menu (groups + pages) and one page at a time. The page
 // payload's `kind` decides how the frontend renders it (markdown, cli, specs,
-// glossary, about, concept) — see rituals/web.py:api_docs_page.
+// glossary, about, concept) — the server's docs-page endpoint sets it.
 import { get } from './http.js'
 
 // `harness` ('opencode' | 'claude') filters the menu and strips the other

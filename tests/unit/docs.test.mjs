@@ -56,7 +56,7 @@ function verbsOf(rel) {
   return new Set([...m[1].matchAll(/^ {2}'?([a-z][a-z-]*)'?:\s*\{/gm)].map((x) => x[1]));
 }
 
-/** Subparsers in the CLI table that neither Node entry point answers. */
+/** Commands in the CLI table that neither Node entry point answers. */
 function pythonOnlyVerbs() {
   const names = new Set(readJson('js', 'cli-table.json').commands.map((c) => c.name));
   const node = new Set([...verbsOf('bin/geneseed-cli.mjs'), ...verbsOf('bin/geneseed-hook.mjs')]);
@@ -151,15 +151,45 @@ test('every theme count in prose is the real one', () => {
   assert.ok(seen > 0, 'no theme count in any of the three docs');
 });
 
-/** `[crossed, total]`, both DERIVED — the denominator moves too. */
+/**
+ * The verbs the reference's argparse answered to, read out of the frozen help corpus.
+ *
+ * ⚠ THIS IS THE ONLY SURVIVING RECORD OF WHICH VERBS WERE SUBPARSERS, and after the deletion it
+ * is the only one there can be. `tests/record_help.py` rendered one text per subparser from the
+ * live parser and refused to record at all when the parser and the CLI table disagreed about
+ * the names — so its verb list is argparse's own roster, frozen, and not a transcription of it.
+ */
+function argparseVerbs() {
+  return new Set(readJson('tests', '__snapshots__', 'help', '_recorded_with.json').verbs);
+}
+
+/**
+ * `[crossed, total]`, both DERIVED — the denominator moves too.
+ *
+ * ⚠ SCOPED TO THE SUBPARSERS, WHICH IS NARROWER THAN THE TABLE AND DELIBERATELY SO. The docs'
+ * sentence is "N of the M subcommands run from Node": a claim about how much of the REFERENCE's
+ * CLI the port reproduces. `catalog`, `mcp` and `memory` were never subcommands of it — they
+ * are Node-native faces on capabilities that had only ever been web endpoints — so counting
+ * them would inflate both halves of a migration figure with work that was not migration, and
+ * would make the sentence say something no reader could check. The corpus is what draws the
+ * line, so the line cannot be drawn wrong by hand.
+ */
 function subcommandFigures() {
-  const names = new Set(readJson('js', 'cli-table.json').commands.map((c) => c.name));
+  const declared = new Set(readJson('js', 'cli-table.json').commands.map((c) => c.name));
+  const names = new Set([...argparseVerbs()].filter((n) => declared.has(n)));
   names.delete('update');                              // argparse's alias, not a second command
   return [names.size - pythonOnlyVerbs().length, names.size];
 }
 
 test('the subcommand figures are derivable and sane', () => {
   const [crossed, total] = subcommandFigures();
+  // The native verbs must be OUTSIDE this figure, and that is asserted rather than assumed —
+  // a derivation that silently started counting them would move both halves together and stay
+  // internally consistent while every doc sentence went wrong by three.
+  const declared = readJson('js', 'cli-table.json').commands.map((c) => c.name);
+  assert.ok(declared.length > total,
+    'the table declares no verb outside the recorded subparser roster, so either the three '
+    + 'Node-native verbs were deleted or this derivation stopped narrowing');
   assert.equal(total, 25, 'the subparser count moved — every doc that states it needs a look');
   // `<=`, not `<`: the two halves are EQUAL now. The floor that matters is the other one — a
   // numerator of 0, or one above the denominator, means the derivation broke rather than that

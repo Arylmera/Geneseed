@@ -29,7 +29,7 @@ import { wireClaudeExcludes, unwireClaudeExcludes } from './settings.mjs';
 import { GLOBAL_MANIFEST, HOSTS, pyResolve } from './hosts.mjs';
 import {
   readText, writeText, parseJson, jsonDumpsIndent, normcase, pyPathStr, pyPrint, pyPrintErr,
-} from './lib/pyfs.mjs';
+} from './lib/fs.mjs';
 
 const get = (o, k) => (o && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
 const isDict = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);

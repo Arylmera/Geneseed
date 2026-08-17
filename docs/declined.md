@@ -1,11 +1,12 @@
 # Declined divergences
 
-Places where the Node port deliberately does **not** reproduce `rituals/harness.py`, with the
-reason written down. A divergence that is not on this page is a bug; one that is, is a decision.
+Places where this CLI deliberately does **not** reproduce the Python reference it was ported
+from, with the reason written down. A divergence that is not on this page is a bug; one that is,
+is a decision.
 
-The reference is being deleted, so "the reference does X" stops being an argument on its own the
-day it goes. What is recorded in `tests/__snapshots__/` is the reference's answer; what is listed
-here is where the port answers differently on purpose.
+The reference has been deleted, so "the reference does X" is no longer an argument anyone can
+re-run. What is recorded in `tests/__snapshots__/` is the reference's answer, frozen; what is
+listed here is where this implementation answers differently on purpose.
 
 ---
 
@@ -13,29 +14,29 @@ here is where the port answers differently on purpose.
 
 **Status:** declined (the port's wording is kept), narrow and gated.
 
-**What differs.** `python rituals/harness.py status --help` opens `usage: harness status`; the
-port opens `usage: geneseed status`. The same substitution applies to `bin/geneseed-hook.mjs`,
-which spells itself `geneseed-hook`.
+**What differs.** The reference opened `usage: harness status` for `status --help`; this CLI
+opens `usage: geneseed status`. The same substitution applies to `bin/geneseed-hook.mjs`, which
+spells itself `geneseed-hook`.
 
-**Why.** `harness` names the Python file this migration deletes. It is not a command anyone can
-type, and after the deletion it names nothing at all. The port already spells itself `geneseed`
-in every error it prints (`geneseed: error: …`, `bin/geneseed-cli.mjs`'s `die`), so reproducing
-`harness` here would make the help text the only surface still pointing at the old name.
+**Why.** `harness` named the Python file this migration deleted. It was not a command anyone
+could type, and now it names nothing at all. This CLI already spells itself `geneseed` in every
+error it prints (`geneseed: error: …`, `bin/geneseed-cli.mjs`'s `die`), so reproducing `harness`
+here would make the help text the only surface still pointing at the old name.
 
 **How it stays honest.** `prog` is an ARGUMENT of `js/cli.mjs`'s `formatHelp`, not a constant.
-`tests/cli_help.test.mjs` replays all 26 recorded fixtures through it with the reference's own
-prog and requires them byte for byte, and `tests/test_cli_reference.py`'s
-`test_the_whole_formatter_agrees_at_every_width` drives all 26 verbs against
-`subs[name].format_help()` at every `COLUMNS` from 20 to 200 — so argparse's entire layout —
-usage assembly, the wrapped continuation indent, the two-column help position, the wrap column —
-is gated against the reference. The rename is the only thing that moves, and a separate
+`tests/snapshot/cli_help.test.mjs` replays all 26 recorded fixtures through it with the reference's own
+prog and requires them byte for byte. The rename is the only thing that moves, and a separate
 assertion pins the shipped spelling so a renderer that ignored `prog` could not pass both.
 
-The width sweep is what makes that sentence true. The 26 fixtures are recorded at ONE width
-(`COLUMNS=80`), and at that width two real divergences were invisible: a mutually exclusive group
-emitted as one unsplittable usage part, and `_max_help_position` baked as a constant where
-argparse derives it from the width. Both were found by the sweep and fixed; a claim about "the
-entire layout" that rests on a corpus at one width is a claim about one width.
+That the formatter agrees at every WIDTH — argparse's whole layout: usage assembly, the wrapped
+continuation indent, the two-column help position, the wrap column — was established by a live
+sweep over all 26 verbs at every `COLUMNS` from 20 to 200 while the reference still ran. It
+retired with the reference, and it is the reason the fixtures can be trusted: the 26 are recorded
+at ONE width (`COLUMNS=80`), and at that width two real divergences were invisible — a mutually
+exclusive group emitted as one unsplittable usage part, and `_max_help_position` baked as a
+constant where argparse derives it from the width. Both were found by the sweep and fixed. A
+claim about "the entire layout" that rests on a corpus at one width is a claim about one width,
+so a change to the wrapping arithmetic now needs its own argument rather than a green corpus.
 
 Note that the divergence could not have been applied to a recorded text after the fact: the
 continuation indent of a wrapped usage line is `len('usage: ') + len(prog) + 1`, so four of the
@@ -47,8 +48,8 @@ continuation indent of a wrapped usage line is `len('usage: ') + len(prog) + 1`,
 
 **Status:** reference behaviour, deliberately not reproduced.
 
-**What differs.** `harness.py update --help` prints `usage: harness upgrade [-h] [theme]` — the
-canonical verb, for a command the user spelled `update`. The port prints `usage: geneseed
+**What differs.** The reference printed `usage: harness upgrade [-h] [theme]` for `update --help`
+— the canonical verb, for a command the user spelled `update`. This CLI prints `usage: geneseed
 update`.
 
 **Why.** argparse implements an alias by registering a second key in `_SubParsersAction.choices`
@@ -68,28 +69,28 @@ because this is the page that exists for "what did we decide to live with".
 
 **What changed.** `./geneseed link` used to symlink `ROOT/geneseed` into `~/.local/bin`; the
 launcher then resolved the symlink at RUN TIME and found its own interpreter. It now writes a
-`#!/bin/sh` shim carrying a `# GENESEED_LINK_SHIM` marker that `exec`s an interpreter named by
-absolute path — `sys.executable` in the reference, `process.execPath` in the port — mirroring
-what the Windows arm has always done. The reason it moved is in `.superpowers/sdd/progress.md`
-Task 2b: the two implementations disagreed on four cells, and this repo has no
-deliberate-divergence mechanism, so the reference moved to the port's shape rather than the
-corpus recording a split.
+`#!/bin/sh` shim carrying a `# GENESEED_LINK_SHIM` marker that `exec`s the runtime named by
+absolute path (`process.execPath`), mirroring what the Windows arm has always done. The reason it
+moved is in `.superpowers/sdd/progress.md` Task 2b: the two implementations disagreed on four
+cells, and this repo has no deliberate-divergence mechanism, so the reference moved to the port's
+shape rather than the corpus recording a split.
 
 **Consequence 1 — durability.** The baked path can go away. A shim written under `nvm` names
-`~/.nvm/versions/node/v22.x/bin/node`, and one written inside a virtualenv names that venv's
-`python`; switch or clean up, and `geneseed` on `PATH` points at an interpreter that no longer
-exists. The old symlink survived that, because it deferred the interpreter choice to the
+`~/.nvm/versions/node/v22.x/bin/node`; switch or clean up, and `geneseed` on `PATH` points at a
+runtime that no longer exists. The old symlink survived that, because it deferred the choice to the
 launcher. Accepted: the fix is one `./geneseed link` re-run, the failure is loud and immediate
 (`no such file or directory`), and the Windows arm has carried the same property since it
 shipped. Prefer the old behaviour? A shell function in your rc does exactly that, and SETUP.md
 offers it beside `link`.
 
-**Consequence 2 — which CLI is on `PATH`.** The shim names the implementation that WROTE it. A
-`link` run from the Node CLI points `PATH` at `bin/geneseed-cli.mjs`, so `geneseed tui` and
-`geneseed menu` print the Node refusal (`python rituals/harness.py tui`) instead of opening the
-full-screen panel — on Linux and macOS, where the panel actually works. Accepted: the panel is
-declared unported in `docs/port-ledger.md` row 1 and is dropped at P4 regardless, the refusal
-names the command that still opens it, and `./geneseed tui` from the checkout is unaffected.
+**Consequence 2 — which CLI is on `PATH`.** The shim names the implementation that WROTE it, and
+while two implementations existed that decided whether `geneseed tui` and `geneseed menu` opened
+the full-screen panel or refused it. This is now settled rather than a consequence: there is one
+implementation, and the panel it does not carry no longer exists anywhere to be reached. Both
+verbs cross and both refuse the panel by name, stating what this entry does carry (the TUI's
+layout half, not its screens) and offering `setup`, `doctor` and `build` instead. The refusal
+names no file, deliberately — an earlier one pointed at the panel's source, and a pointer to
+something a migration is deleting is worse than a plain statement that the screen is not there.
 
 ---
 
@@ -98,10 +99,10 @@ names the command that still opens it, and `./geneseed tui` from the checkout is
 **Status:** declined, pre-existing (P5a, P10c), restated here because it is the neighbour of the
 entry above and readers keep finding it separately.
 
-argparse prints a usage block around every parse failure and prefixes it `harness: error:`; both
-Node entries state the fault on one line prefixed `geneseed: error:` /
-`geneseed-hook: error:`. See `bin/geneseed-cli.mjs`'s `parse` docblock. What IS compared is
-every error a command's own body raises — `tests/harness_golden.py` holds those.
+argparse printed a usage block around every parse failure and prefixed it `harness: error:`; both
+entries state the fault on one line prefixed `geneseed: error:` / `geneseed-hook: error:`. See
+`bin/geneseed-cli.mjs`'s `parse` docblock. What IS gated is every error a command's own body
+raises — those are in the recorded CLI corpus, replayed by `tests/cli_golden.mjs`.
 
 ---
 
@@ -111,8 +112,8 @@ every error a command's own body raises — `tests/harness_golden.py` holds thos
 
 `geneseed --help` with no verb prints
 `geneseed: error: the following arguments are required: cmd (one of …)` on stderr and exits 2,
-where `python rituals/harness.py --help` prints the whole parser's help with a subcommand table.
-Task 10's surface was the 26 per-verb help texts and only those are recorded.
+where the reference printed the whole parser's help with a subcommand table. Task 10's surface
+was the 26 per-verb help texts and only those are recorded.
 
 Rendering the top-level help needs argparse's `_iter_indented_subactions` path — the subcommand
 choices as a metavar in the usage line, and a nested, differently-indented action list whose
@@ -141,7 +142,7 @@ right, and that order is the piece of the parser this port deliberately does not
 argparse's ERROR wording above). Printing help for a line that contains `--help` is the answer a
 user is more likely to have wanted, and it is the same answer for every shape of malformed line.
 
-**How it stays honest.** `tests/cli_help.test.mjs`'s `a --help anywhere in the line wins` used to
+**How it stays honest.** `tests/snapshot/cli_help.test.mjs`'s `a --help anywhere in the line wins` used to
 docblock this as "argparse's own rule". It is not — that generalised from `diff --nope --help`,
 which works only because an UNKNOWN option is deferred to the end of `parse_known_args`. Two of
 that test's four cases are cases where the reference errors instead, so the test pins a

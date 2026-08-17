@@ -1,16 +1,18 @@
-// THE EMIT REPLAYER — the surviving half of `tests/golden.py`.
+// THE EMIT REPLAYER — the surviving half of the reference's golden runner.
 //
-// WHAT CROSSED AND WHAT DID NOT. `golden.py` does two things: it compares two live
-// implementations (`--ref` against `--new`), and it replays a recorded corpus against one
+// WHAT CROSSED AND WHAT DID NOT. That runner did two things: it compared two live
+// implementations (`--ref` against `--new`), and it replayed a recorded corpus against one
 // (`--against`), plus the two self-comparisons `--idempotent` and `--deletion`. The first dies
 // with the reference — it needs a second implementation and there will be one. The rest is
 // here, and it is what the corpus is worth after P4: 259 cells of recorded bytes that nothing
 // can re-record.
 //
-// THE MATRIX IS DATA AND IS NOT IN THIS FILE. `tests/helpers/matrix/emit.<platform>.json` is
-// the export of `golden.cells()` / `golden.deletion_cells()`, taken while the reference still
-// declared them and gated by `tests/test_matrix_export.py` until P4 deletes it. The two halves
-// were measured to be byte-identical, so this reads either one.
+// THE MATRIX IS DATA AND IS NOT IN THIS FILE. `tests/helpers/matrix/emit.<platform>.json` holds
+// the cell declarations, exported from the reference while it was still the thing that declared
+// them and gated against it until the day it was deleted. ⚠ THE EXPORTER WENT WITH IT: these
+// committed files are the only copy of the matrix that will ever exist, un-regenerable by
+// design, and the same is true of every `matrix/*.json` beside them. Edit them by hand or not
+// at all. The two platform halves were measured to be byte-identical, so this reads either one.
 //
 // EVERY NORMALISER HERE IS LOAD-BEARING AND EVERY ONE OF THEM CAN LIE. A normaliser that is
 // too aggressive silently blanks a real difference and the gate stays green while it has
@@ -145,6 +147,47 @@ const ROTS = [
  * THROWS, naming the file, the token and the whole line — rather than letting a moving field
  * into a corpus that is about to be compared against.
  */
+// THE ONE FILE NO REPLAY COMPARES ANY MORE, and the only coverage this corpus has ever lost.
+//
+// `agent-overrides.json` carries `"_version": "<the configured release>"`, stamped into every
+// emitted bundle by `ensureAgentOverridesStub` (js/opencode.mjs). The corpus stores a sha256 of
+// that file's CONTENT, taken while the label read 1.0.0 — so EVERY bump of the version, forever,
+// reddens 224 of 259 emit cells and at least one cli cell, and no program that could take a new
+// hash still exists.
+//
+// A DESTAMP CANNOT SOLVE IT, which is worth writing down because a destamp is the obvious answer
+// and it was tried first. Normalisation runs BEFORE hashing, at record time. Blanking the version
+// on the live side yields a hash of `<REL>` to compare against a recorded hash of `1.0.0`, and a
+// hash cannot be re-normalised afterwards. A stamp table only works when BOTH sides pass through
+// it — an arrangement you can only make while a recorder exists.
+//
+// So the file is dropped from both sides. Symmetric, therefore not a way of excusing a difference:
+// nothing about this file can fail in either direction. Everything else stays asserted byte for
+// byte.
+//
+// ⚠ IT LIVES HERE, NOT IN A REPLAYER, because it is needed by two of them — the emit harness and
+// the cli harness both carry this file in their cells, and the first fix put it in only one and
+// left the cli corpus red on `migrate/a-node-baked-shim-reads-as-current`. A second copy is a
+// second place to forget.
+//
+// The coverage is paid back, and made stronger, in tests/unit/agent_overrides.test.mjs: it asserts
+// the emitted `_version` is SOURCED from harness.config.json rather than a literal — a
+// relationship a frozen hash never checked. A hash only ever said "these bytes, once", and would
+// have been just as green had it recorded the wrong version.
+export const UNCOMPARED = 'agent-overrides.json';
+
+/** Drop `UNCOMPARED` from a recorded snapshot and its live counterpart, symmetrically. */
+export function dropUncompared(recorded, live) {
+  for (const k of [...live.keys()]) if (k.endsWith(UNCOMPARED)) live.delete(k);
+  for (const side of ['paths', 'sizes', 'verbatim']) {
+    if (!recorded || !recorded[side]) continue;
+    for (const k of Object.keys(recorded[side])) {
+      if (k.endsWith(UNCOMPARED)) delete recorded[side][k];
+    }
+  }
+  return live;
+}
+
 export function destamp(name, body) {
   if (!name.endsWith('.geneseed-version')) return body;
   const out = [];
@@ -357,7 +400,27 @@ function decodeStream(buf) {
 // claim about every caller, and only a corpus can check it.
 export const CORPUS_STAMPS = [
   // `write_version`'s line, wherever it is quoted. The release LABEL stays verbatim here — it
-  // moves only when a human bumps it, which is a real output change a corpus SHOULD redden on.
+  // moves only when a human bumps it, which is a real output change a corpus SHOULD redden on,
+  // not one of the clock/checkout/machine drifts this table exists for.
+  //
+  // SCOPE, because THREE carriers of the same line now treat this label differently, each on
+  // purpose. The sentence above is true of THIS table and of carrier 3 only:
+  //
+  //   1. THE FILE `.geneseed-version`: `destamp` has already run and tagged the label `<REL>`
+  //      — it owns that file whole, so a release bump does not redden 259 emit cells for a
+  //      value the live gate compares in full.
+  //   2. AN HTTP BODY: the web harness's own `WEB_STAMPS` (`tests/helpers/web_golden.mjs`, twin
+  //      of the `_WEB_STAMPS` the reference's web replayer carried) rewrites the label to
+  //      `[release <REL>]`, and that arm is deliberately NOT here. Two web cells quote this
+  //      line through a `diff`
+  //      hunk — four recorded files, one per platform — and the reference that recorded them
+  //      is about to be deleted: after that, the next version bump reddens them permanently
+  //      with no recorder left alive to re-bless them, so the web corpus had to stop depending
+  //      on the version at all. Putting the arm in THIS shared table instead would have moved
+  //      the emit and cli corpora too — neither of which carries a release label today
+  //      (measured: their only `release` hits are prose about the release skill).
+  //   3. EVERY OTHER CARRIER keeps the label unblanked and compared, which is the claim the
+  //      first paragraph makes.
   [/[0-9a-f]{6,64} \(built \d{4}-\d{2}-\d{2}\)/g, '<FP> (built <DATE>)'],
   // `version`'s first line.
   [/(\[version\] source: +)[0-9a-f]{6,64}/g, '$1<FP>'],

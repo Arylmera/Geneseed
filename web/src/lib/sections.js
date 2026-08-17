@@ -3,8 +3,8 @@
 //
 // This used to live in three places (Dashboard's SECTION_META/ORDER, Section's
 // TYPE/SEC_KEYS/SEC_LABEL, and App's singular->plural item map), which drifted
-// independently. Centralising it here mirrors how the Python harness keeps shared
-// taxonomy in _harness_core: define once, import everywhere.
+// independently. Centralising it here mirrors how the CLI keeps shared
+// taxonomy in one core module: define once, import everywhere.
 
 // Plural section key -> its display metadata. `type` is the singular form the
 // server uses for items and hash routes (#/item/<type>/<name>).

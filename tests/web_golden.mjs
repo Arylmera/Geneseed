@@ -26,9 +26,9 @@ const MATRIX = path.join(HERE, 'helpers', 'matrix');
 
 export function loadMatrix() {
   // PER-PLATFORM: `_MEM_CASE_FOLDED` orders the catalog by the host's case-folding rule, so two
-  // cells carry a different `expect_re` on each. Measured and declared in
-  // `tests/test_matrix_export.py`, which is why reading the wrong half would be a silent pass
-  // rather than a loud one.
+  // cells carry a different `expect_re` on each — which is why reading the wrong half would be
+  // a silent pass rather than a loud one. Measured and declared against the reference while it
+  // was alive; ⚠ these committed matrices have no producer left and cannot be re-exported.
   const plat = process.platform === 'win32' ? 'win32' : 'posix';
   const f = path.join(MATRIX, `web.${plat}.json`);
   if (!fs.existsSync(f)) throw new Error(`no exported web matrix at ${f}`);
@@ -70,7 +70,7 @@ export function parseArgs(argv) {
 // directory that either exists or does not, so the guard is the state itself rather than a proxy
 // for it.
 //
-// `docs/port-ledger.md` already carries the general form of this — "the fingerprint of the
+// `docs/limits.md` already carries the general form of this — "the fingerprint of the
 // operator's own build … which no sandbox can fence off (there is no env hook for ROOT)". These
 // two are that hazard reaching a web body instead of a status panel.
 const BUNDLE_CELLS = new Set([

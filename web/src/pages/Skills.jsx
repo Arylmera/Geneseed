@@ -8,7 +8,7 @@ import Markdown from '../components/Markdown.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 
 // Six-class taxonomy mirroring the Laws view. The class itself comes from the
-// server (SKILL_CLASS in _harness_tui.py, shipped as `klass`); this map only
+// server (SKILL_CLASS, shipped as `klass`); this map only
 // holds the chip label and dot colour. Same OKLCH hues as LAW_CATS so the two
 // ledgers read as one family. Order is the chip-bar order.
 //

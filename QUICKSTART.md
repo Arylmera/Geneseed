@@ -2,9 +2,7 @@
 
 The fastest path: one command, installing **OpenCode global** — one install, every
 repo inherits it, nothing committed into your projects. The only prerequisite is
-**Node ≥ 22.3**. No clone, no Python on the install path, nothing left behind.
-(Three things still involve Python; none is on this page. The Setup guide
-[names all three](SETUP.md#-where-python-is-still-required--the-exact-list).)
+**Node ≥ 22.3**. No clone, nothing else to install, nothing left behind.
 
 ## 1 · Run the wizard
 
@@ -30,9 +28,8 @@ should print `ok`.
 ## 3 · Optional niceties
 
 - **Browse it:** `npx geneseed web` opens the local web console.
-- **Full-screen TUI:** the `tui` and `menu` front-ends are the one part that still
-  needs a git checkout and Python 3 — see [the Setup guide](SETUP.md#-prerequisites)
-  for the exact list of what does.
+- **No full-screen TUI:** `tui` and `menu` are verbs that say the panel is not here and
+  print the command list instead. The web console is the visual front end.
 
 ## Coming from a clone?
 

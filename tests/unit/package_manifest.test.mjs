@@ -18,8 +18,9 @@
 // list, so it simply does not ship, and no test says so. Here every tracked path must match
 // exactly one row of `SHIPS` or `WITHHELD`, each row carries its reason, and a row that
 // matches nothing is itself a failure. Adding `tools/` to the repo fails this file until a
-// human writes down which side it is on. It is also what makes P4 self-enforcing: deleting
-// `build.py` kills its SHIPS row, and a dead row is a failure until someone removes it.
+// human writes down which side it is on. It is also what MADE the deletion phase self-enforcing:
+// removing the reference killed the eight SHIPS rows that carried it, and a dead row is a failure
+// until someone removes it — so the partition had to be edited in the same commit as the cut.
 //
 // WHY THE PACK LIST HAD TO BE MEASURED RATHER THAN REASONED ABOUT. npm's ignore semantics
 // under a `files` whitelist are not derivable from reading the docs, and the first honest
@@ -71,7 +72,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
-import { pyWhich } from '../../js/lib/pyfs.mjs';
+import { pyWhich } from '../../js/lib/fs.mjs';
 import { TMP_ROOT } from '../helpers/sandbox.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -268,46 +269,32 @@ const SHIPS = [
   ['docs/token-footprint.md', 'docs/*.md'],
   ['docs/web-ui.md', 'docs/*.md'],
   ['docs/wiki.md', 'docs/*.md'],
-  // Ships for the reason the others do not: it is the standing statement of what the Node
-  // port does NOT prove, and a package carrying two implementations owes its reader that
-  // list. `docs/specs/` is gitignored, so a ledger kept only in a phase note is a per-machine
-  // file — this is the tracked home for it.
-  ['docs/port-ledger.md', 'docs/*.md — what the Node port does not prove'],
+  // Ships for the reason the others do not: it is the standing statement of what this tool
+  // does NOT prove about itself, and a package whose only oracle is a frozen recording owes
+  // its reader that list. `docs/specs/` is gitignored, so a ledger kept only in a phase note
+  // is a per-machine file — this is the tracked home for it.
+  ['docs/limits.md', 'docs/*.md — what this tool does not prove about itself'],
   // Its neighbour above says why it belongs in the package rather than in a phase note:
-  // `port-ledger.md` lists what the port does not PROVE, this lists where the port
-  // deliberately does not AGREE. Both are statements a reader holding two implementations is
-  // owed, and both would otherwise live in gitignored `docs/specs/`.
+  // `limits.md` lists what is not PROVEN, this lists where the tool deliberately does not
+  // AGREE with what came before it. Both are statements a reader is owed, and both would
+  // otherwise live in gitignored `docs/specs/`.
   ['docs/declined.md', 'docs/*.md — where the port deliberately diverges, and why'],
   ['web/dist/', 'TRACKED and load-bearing: js/web/server.mjs serves it, and npmBuild is a '
     + 'first-run-from-a-partial-checkout path no cell reaches'],
   ['web/src/pages/Laws.jsx', "doctor's lawMetaProblems reads this ONE file out of web/src; "
     + 'shipping the other 99 to satisfy it would be 700 kB of React sources nothing else in '
     + 'the package opens'],
-  // THIS ROW HAS BEEN RE-ARGUED THREE TIMES AND IS DOWN TO ITS LAST CLAUSE, which is worth
-  // knowing before touching it. P10c's clause was "`rituals/harness.py` is the file BOTH
-  // doctors hash for the `cli` check" — dead, because the CLI table stopped being generated
-  // and became the owned document at `js/cli-table.json`. P7b's was "`tui` is a Python-only
-  // subcommand" — dead, `tui` was the last one. P2 Task 4 killed the POINTER as well: the
-  // refusals in `js/tui.mjs` and `js/menu.mjs` name no file, because a fallback to a file the
-  // deletion phase removes is worse than an honest "no screen here". What is left is the
-  // PANEL itself, which is real and Python for exactly as long as `rituals/` ships — and P4
-  // deletes `rituals/`, at which point this row goes with it and `no row is dead` is what
-  // says so.
-  ['rituals/', 'no subcommand is Python-only since P7b, but the full-screen PANEL still is — '
-    + 'it is `rituals/_harness_tui*.py` + `rituals/_winterm.py`, and a package without '
-    + '`rituals/` cannot open it at all'],
+  // THE REFERENCE'S ROWS STOOD HERE — the `rituals/` tree and the seven root modules of the
+  // generator facade — and they are gone because the files are. That row had been re-argued
+  // three times and was down to its last clause, the full-screen PANEL, which was Python for
+  // exactly as long as `rituals/` shipped. `no row is dead` is what forced their removal in
+  // the same commit as the deletion rather than leaving a partition describing a tree that no
+  // longer exists.
   // `cli.json` HAD A ROW HERE and no longer needs one: the CLI table moved to
   // `js/cli-table.json`, which the `js/` row above already ships. That is the whole reason the
   // product path was chosen over `tests/__snapshots__/` — a table imported out of `tests/`
   // would have forced a tests/ path into `files[]`, contradicting this partition's own
   // argument that npm ships the tool and not its test rig.
-  ['build.py', 'rituals/harness.py imports the `build` facade'],
-  ['_build_core.py', "the facade's modules"],
-  ['_build_emit.py', "the facade's modules"],
-  ['_build_global.py', "the facade's modules"],
-  ['_build_render.py', "the facade's modules"],
-  ['_build_settings.py', "the facade's modules"],
-  ['_install_registry.py', "the facade's modules"],
   ['harness.config.json', 'js/checkout.mjs CONFIG — every render reads it'],
   ['registry.json', "js/inventory.mjs and doctor's registryProblems read it"],
   // RE-ARGUED THREE TIMES TOO, and cut from four files to two. `link` crossed and the Node
@@ -324,7 +311,7 @@ const SHIPS = [
   //     machine that linked before that change, and deleting the target breaks it with `No
   //     such file or directory` and no hint.
   // The PowerShell twin and the bootstrap script did NOT survive that cut — see
-  // `tests/deleted_launchers.test.mjs`, the gate on their absence.
+  // `tests/unit/deleted_launchers.test.mjs`, the gate on their absence.
   ['geneseed', 'the bash front door; the shipped README/QUICKSTART/SETUP name it, and a '
     + 'pre-P0 install still has ~/.local/bin/geneseed symlinked to it. NOT the updater under '
     + 'npm (`npm i -g geneseed@latest` is), and NOT what `link` puts on PATH any more'],
@@ -617,7 +604,7 @@ const API_FLOOR = [
   // `ExperimentalWarning` on stderr — the stream this port compares byte-for-byte in 294
   // harness cells. So the floor is where it stops warning, not where it starts existing.
   ['fs.cpSync (stable)', '22.3.0', /\bcpSync\b/],
-  // js/lib/pyfs.mjs — pyStr's toJSON writes verbatim text. Its own comment says "Node >= 21".
+  // js/lib/fs.mjs — pyStr's toJSON writes verbatim text. Its own comment says "Node >= 21".
   ['JSON.rawJSON', '21.0.0', /\bJSON\.rawJSON\b/],
   ['Object.hasOwn', '16.9.0', /\bObject\.hasOwn\b/],
   ['String.prototype.replaceAll', '15.0.0', /\.replaceAll\(/],
@@ -747,18 +734,28 @@ const PYTHON_IN_THE_PRODUCT = new Set();
 //
 // BOTH lists stay here rather than being deleted with their contents: they are what the tests
 // below assert AGAINST, so emptying them is the claim, and a future row has to be added
-// deliberately. P4's `no_python.test.mjs` asserts the same emptiness from the repo-wide side.
+// deliberately.
+//
+// THREE GATES, THREE SUBJECTS, and reading any two of them as duplicates is how one of them gets
+// deleted. `tests/unit/no_python.test.mjs` scans the SHIPPING SOURCE TREE for an INVOCATION or a
+// path a reader could follow — a property of prose and of code, not of file extensions, so it
+// does not go green merely because the `.py` files went. `tests/snapshot/no_python_in_corpus.test.mjs`
+// asks that same question of the RECORDED CORPUS, whose rows can never be re-measured. Neither
+// of them opens the package. THIS file owns the packaged tarball, the tree npm extracts from it,
+// and the output of the verbs driven out of that tree — and it is the only one of the three that
+// asserts the flat count of tracked `.py` files, which is what `the product carries no Python
+// file at all` does with the list above.
 const PYTHON_IN_THE_PRODUCT_FILES = [];
 
-// Python tracked in this repository but never riding inside a rendered bundle: the reference
-// implementation this port is replacing (`rituals/`, the root `_build_*.py` facade, `build.py`,
-// `_install_registry.py`), and `tests/`. `.claude/` is watched file-by-file rather than
-// excluded by prefix, so a NEW Python file appearing there is caught rather than permitted.
-const NOT_THE_PRODUCT_PREFIXES = ['tests/', 'rituals/'];
-const NOT_THE_PRODUCT_FILES = new Set([
-  'build.py', '_install_registry.py', '_build_core.py', '_build_emit.py', '_build_global.py',
-  '_build_render.py', '_build_settings.py',
-]);
+// THERE IS NO SUBTRACTION LIST ANY MORE, AND ITS ABSENCE IS THE STRONGER CLAIM. Two lists used
+// to stand here — a prefix list for `tests/` and `rituals/`, and a file list for the seven root
+// modules of the generator facade — because the reference implementation was tracked Python that
+// never rode inside a rendered bundle, and the scan below had to see past it to find a real one.
+// The reference is gone, so both lists would now subtract nothing, and a list that subtracts
+// nothing is not a gate: it is a hole waiting for the next `.py` somebody adds under a prefix it
+// still names. Deleting them turns `the product carries no Python file at all` from "no Python
+// outside the reference" into the flat claim the migration actually makes — this repository
+// tracks no `.py` file, anywhere, for any reason.
 
 // THE SHELL-OUT CLASS, scanned over the WHOLE tree rather than over `src` and `adapters`. This
 // is the gate that did not exist when `src/skills/daydream` and `src/skills/herdr` started
@@ -852,13 +849,11 @@ test('the product carries no Python file at all', () => {
   // only ever scans `src` and `adapters`, so it could not see
   // `.claude/skills/token-report/scripts/token_report.py` — THIS repository's own deployed
   // harness, which carried a second tracked copy of the same script until it was replaced with
-  // `.mjs`. Scan every tracked file instead, then subtract what is never part of a rendered
-  // bundle.
-  const found = tracked().filter((p) => p.endsWith('.py')
-    && !NOT_THE_PRODUCT_PREFIXES.some((pre) => p.startsWith(pre))
-    && !NOT_THE_PRODUCT_FILES.has(p)).sort();
+  // `.mjs`. Scan every tracked file instead, with nothing subtracted: see the note above
+  // `SHELLS_OUT` for why the two exclusion lists that used to stand there are gone.
+  const found = tracked().filter((p) => p.endsWith('.py')).sort();
   assert.deepEqual(found, [...PYTHON_IN_THE_PRODUCT_FILES].sort(),
-    `tracked .py files outside the reference implementation: ${JSON.stringify(found)}`);
+    `tracked .py files: ${JSON.stringify(found)}`);
 });
 
 // =============================================================================================

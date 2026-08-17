@@ -1,6 +1,19 @@
 // Unit tests for the workflow runtime core — orchestration logic only, against a mock
 // SDK client (no live OpenCode). Run from the Geneseed root:
 //   node --test tests/workflow_runtime.test.mjs
+//
+// ⚠ THIS FILE STAYS AT tests/ TOP LEVEL, ALONE AMONG THE PLUGIN SUITES, AND THE REASON IS A
+// CONSTRAINT RATHER THAN AN OVERSIGHT. Its subject, adapters/opencode/workflows/_runtime.js,
+// names this path in a comment — and that file is EMITTED into every bundle, so its bytes are
+// hashed into the recorded emit corpus. The 2.0 re-layout moved this suite to tests/plugins/
+// and updated the pointer to match; the emit corpus went red on a +8-byte change (`plugins/`),
+// and the corpus is frozen — every program that could re-record it is deleted. So the pointer
+// cannot follow the file, and a stale path inside something we SHIP is worse than one suite
+// sitting outside a directory shape. The file came back instead.
+//
+// If a future change ever legitimately re-records the emit corpus, this suite can move to
+// tests/plugins/ and the pointer can move with it. Until then, moving it breaks a shipped
+// comment silently — nothing fails, the comment just stops being true. See docs/limits.md.
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import {

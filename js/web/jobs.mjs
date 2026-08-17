@@ -51,7 +51,7 @@
  *
  * `doctor`, `build`, `build-all`, `export`, `uninstall` and — since P8c — `update` all name a
  * verb that has crossed. `link`/`unlink` run `harness.py link|unlink` (P10b). A Node runner
- * that spawned `python harness.py link` for those would put Python back into a "no Python
+ * that spawned the Python harness for those would put Python back into a "no Python
  * needed" install, so they are DECLARED in `NOT_PORTED_ACTIONS` and answered 501 by the
  * dispatcher, and P10b ends by deleting both rows. `tests/test_web_jobs.py` cross-checks the
  * two sets against `action_commands`' own keys with `ast`, so a NINTH row added to the
@@ -110,7 +110,7 @@ import path from 'node:path';
 import { ROOT } from '../checkout.mjs';
 import { setupBuildArgs } from '../generate.mjs';
 import { isDict } from '../mcp.mjs';
-import { jsonDumpsCompact, parseJson, pyTruthy, readText, writeText } from '../lib/pyfs.mjs';
+import { jsonDumpsCompact, parseJson, pyTruthy, readText, writeText } from '../lib/fs.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 

@@ -24,13 +24,13 @@ import { homedir } from "node:os"
 
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
-// Sovereign-repo bypass — twin of sovereign_bypass() in rituals/_harness_context.py.
+// Sovereign-repo bypass — twin of the harness's own `sovereignBypass()`.
 // <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
 // this GLOBAL install goes dormant. Any error degrades to "not excluded".
 const norm = (p) => {
-  // Expand a leading "~" / "~/…" to the home dir, mirroring Python's
-  // Path.expanduser() — a hand-edited excludes.json entry like "~/vault" must
-  // resolve the same way here as it does for the Claude/Bob (Python) guard.
+  // Expand a leading "~" / "~/…" to the home dir — a hand-edited excludes.json entry
+  // like "~/vault" must resolve the same way here as it does for the Claude/Bob
+  // hook guard.
   let raw = String(p)
   if (raw === "~" || raw.startsWith("~/") || raw.startsWith("~\\")) {
     raw = raw === "~" ? homedir() : path.join(homedir(), raw.slice(2))
@@ -210,7 +210,7 @@ async function protectedPrefixes() {
 // ---- the rule / memory stores (Law VI) -----------------------------------------
 // Whether something the user wants kept is a standing rule or a durable fact is THEIR
 // call, settled through the rule skill. `tool.execute.before` can only allow or throw —
-// it has no "ask the user" tier like the Claude/Bob Python gate (harness.py rule-gate) —
+// it has no "ask the user" tier like the Claude/Bob rule-gate hook —
 // so this is a SPEED BUMP, not a wall: the first write to a given path is refused with
 // the Law and the skill named, and a re-issued write goes through. One beat of
 // reconsideration, and a legitimate write is never trapped.

@@ -28,7 +28,7 @@
  */
 import { readdirSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { readText, parseJson, normcase, comparePaths } from './lib/pyfs.mjs';
+import { readText, parseJson, normcase, comparePaths } from './lib/fs.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
 export const STRUCTURE = {

@@ -88,7 +88,7 @@ test('no capturing spawn is missing windowsHide', () => {
   }
   assert.deepEqual(missing, [],
     'these capturing spawns will pop a console window each when the windowless daemon reaches '
-    + 'them — spread `...NO_WINDOW` from js/lib/pyproc.mjs into the options object');
+    + 'them — spread `...NO_WINDOW` from js/lib/proc.mjs into the options object');
 });
 
 // ONE OWNER. A second private `const NO_WINDOW` is how two sites lost the flag: the rule stops
@@ -96,13 +96,13 @@ test('no capturing spawn is missing windowsHide', () => {
 test('the flag comes from the shared module', () => {
   const owners = [];
   for (const p of sources()) {
-    if (path.basename(p) === 'pyproc.mjs') continue;
+    if (path.basename(p) === 'proc.mjs') continue;
     if (/^\s*(?:const|let|var)\s+NO_WINDOW\s*=/m.test(fs.readFileSync(p, 'utf8'))) {
       owners.push(path.relative(ROOT, p).split(path.sep).join('/'));
     }
   }
   assert.deepEqual(owners, [],
-    'these define their own NO_WINDOW; import it from js/lib/pyproc.mjs so the next spawn site '
+    'these define their own NO_WINDOW; import it from js/lib/proc.mjs so the next spawn site '
     + 'inherits the rule instead of re-deciding it');
 });
 
@@ -117,7 +117,7 @@ test('the flag comes from the shared module', () => {
 // behavioural, and neither substitutes for the other: the scans catch a new call site that
 // forgot the flag, this catches the flag itself going hollow.
 test('the shared flag is actually set on Windows', async () => {
-  const { NO_WINDOW } = await import('../../js/lib/pyproc.mjs');
+  const { NO_WINDOW } = await import('../../js/lib/proc.mjs');
   assert.equal(NO_WINDOW.windowsHide, process.platform === 'win32',
     'NO_WINDOW does not hide the console on this platform — every capturing spawn still names '
     + 'it, every scan above is still green, and the daemon pops a window per child');

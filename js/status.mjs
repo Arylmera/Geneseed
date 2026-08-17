@@ -71,7 +71,7 @@ import {
 import {
   defaultTheme, installedDefaults, manifestIsClaude, readJsonMaybe, readMaybe,
 } from './installs.mjs';
-import { pyLen, pyLjust, pyPrint } from './lib/pyfs.mjs';
+import { pyLen, pyLjust, pyPrint } from './lib/fs.mjs';
 
 export { defaultTheme, manifestIsClaude };
 

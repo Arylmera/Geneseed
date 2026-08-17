@@ -19,7 +19,7 @@
  * help-flag scrape hit, and the same answer. THE FROZEN SETS BELOW WERE READ OUT OF THE REFERENCE
  * ON 2026-08-16 with its own `ast` readers, and the test is the second party now.
  *
- * ⚠ PORT-LEDGER ROW 3 LIVES IN THIS FILE, in `the declared partition is the one the dispatcher
+ * ⚠ LIMITS ROW 3 LIVES IN THIS FILE, in `the declared partition is the one the dispatcher
  * uses`. `/api/pick-folder` is DECLINED, never ported — it opens an OS-native folder dialog on
  * the daemon host — and the claim is PROBED rather than declared: POST must answer 501 and GET
  * must NOT, because a GET has to fall through to the SPA. That pair is what refuses the
@@ -285,7 +285,7 @@ test('every POST route is either ported or declared unported', () => {
 });
 
 test('the declared partition is the one the dispatcher uses', async () => {
-  // ⚠ PORT-LEDGER ROW 3. THE ASSERTION THE TWO TESTS ABOVE CANNOT MAKE, and a mutation is why it
+  // ⚠ LIMITS ROW 3. THE ASSERTION THE TWO TESTS ABOVE CANNOT MAKE, and a mutation is why it
   // exists. Both of them read the exported SETS. Collapsing `NOT_PORTED_POST` back into
   // `NOT_PORTED` — one line, and the whole reason two lists exist — leaves every set exactly as
   // declared and both tests green, while a GET to a POST-only declaration starts answering 501
@@ -398,20 +398,18 @@ test('a ported route is never also declared unported', () => {
     'a POST declaration has leaked into the ported GET table');
 });
 
-test('the setup snapshot\'s python field is gated where the whole snapshot is', () => {
-  // RETIREMENT AND DELEGATION, MADE CHECKABLE. `api_setup`'s `python` had no honest twin: the
-  // reference reported the interpreter running the daemon and the port answers `null`, because
-  // there is not one and putting Node's version under a key named `python` would be a lie the
-  // About page prints. The reference's half of that pair is a statement about an interpreter P4
-  // removes and retires with it.
+test('the setup snapshot\'s missing interpreter field is gated where the snapshot is', () => {
+  // RETIREMENT AND DELEGATION, MADE CHECKABLE. The server this one replaced reported the version
+  // of the interpreter hosting it. There is no interpreter here, and putting this runtime's
+  // version under a key named for that one would be a lie the About page prints — so the field
+  // was first answered `null` and is now GONE, which is the only fully honest shape.
   //
-  // The port's half was ALREADY GATED before this row — `tests/unit/web_api.test.mjs` asserts it
-  // inside the full snapshot test, which is the stronger site because it also requires the key to
-  // EXIST. Re-asserting it here would be a second owner of one claim; pointing at it is only
-  // worth anything if the pointer is checked.
+  // The claim is owned by `tests/unit/web_api.test.mjs`, inside the full snapshot test, which is
+  // the stronger site because it runs against a real snapshot rather than against source text.
+  // Re-asserting it here would be a second owner of one claim; pointing at it is only worth
+  // anything if the pointer is CHECKED, which is all this row does.
   const owner = readFileSync(path.join(ROOT, 'tests', 'unit', 'web_api.test.mjs'), 'utf8');
-  assert.ok(owner.includes('assert.equal(s.python, null,'),
-    'tests/unit/web_api.test.mjs no longer asserts the setup snapshot reports no interpreter — '
-    + 'the field is one of the two live `python: null` API fields P4\'s residual sweep must '
-    + 'remove, and it would now survive the cut by silence');
+  assert.ok(owner.includes('assert.ok(!(\'python\' in s),'),
+    'tests/unit/web_api.test.mjs no longer asserts the setup snapshot has NO interpreter-version '
+    + 'key — a field with nothing honest to put in it would now be free to grow back by silence');
 });

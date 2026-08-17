@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "geneseed-web",
-      "runtimeExecutable": "C:\\Python313\\python.exe",
-      "runtimeArgs": ["-c", "import sys; sys.path.insert(0, 'rituals'); import web; web.serve(open_browser=False, port=4753)"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["bin/geneseed-cli.mjs", "web", "--daemon-internal", "--port", "4753", "--no-browser"],
       "port": 4753
     }
   ]

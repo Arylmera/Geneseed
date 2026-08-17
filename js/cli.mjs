@@ -24,8 +24,8 @@
  *     subparsers by name only, so `VERBS` is now `{ fn }` per row and everything
  *     argparse-shaped is derived here. KEEPS the hidden arguments, `--port`'s int type and
  *     `theme`'s mutex group, none of which the page may show;
- *   * `cliCommand()`/`printHelp()` — `--help` on BOTH entry points, so the table is a 26-row
- *     obligation rather than a 22-row one.
+ *   * `cliCommand()`/`printHelp()` — `--help` on BOTH entry points, so the table owes a row to
+ *     every verb `bin/geneseed-hook.mjs` dispatches as well, not only to the CLI entry's.
  *
  * THE STORED SHAPE IS THE UNION AND MUST STAY ONE. Neither reader's shape can be the file's:
  * a file filtered for the page breaks the CLI, and a file in `cliSpec`'s shape cannot render
@@ -34,8 +34,10 @@
  * WHAT USED TO GUARD IT, AND WHAT DOES NOW. While the parser existed, `cliReferenceProblems()`
  * hashed `rituals/harness.py` and doctor reported drift on both binaries. That digest was over
  * a file this migration deletes, so it is gone; `tests/test_cli_reference.py` holds the
- * argparse-vs-table EQUALITY for as long as the parser is here, and after that the table is
- * simply the source of truth and is edited directly.
+ * argparse-vs-table comparison, and it can only ever cover the rows argparse HAS: `catalog`,
+ * `mcp` and `memory` never had a subparser and are outside it by construction. The successor
+ * that checks the WHOLE table, and outlives the parser, is `tests/unit/cli_table.test.mjs`;
+ * after that the table is simply the source of truth and is edited directly.
  *
  * THE COST, NAMED: this entry cannot parse anything without this file. `js/checkout.mjs`
  * already reads `harness.config.json` at import for every render, so a tracked data document
@@ -46,7 +48,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { ROOT } from './checkout.mjs';
-import { pyInt, pyStripSpace } from './lib/pyfs.mjs';
+import { pyInt, pyStripSpace } from './lib/fs.mjs';
 
 const CLI_JSON = path.join(ROOT, 'js', 'cli-table.json');
 
@@ -61,7 +63,7 @@ const PAGE_ARG_KEYS = ['names', 'dest', 'metavar', 'help', 'choices', 'default',
  * NOT MEMOISED, and the first draft was. `harness.load_cli_reference` re-reads the file on
  * every call, so a cache here would make an edited table visible to the reference's running
  * daemon and invisible to this one until it restarted — a divergence no cell can reach and no
- * reviewer would look for. 24 kB per request is not a cost worth buying that with.
+ * reviewer would look for. One re-read of a file this size is not a cost worth buying that with.
  */
 function load() {
   try {
@@ -103,8 +105,8 @@ export function cliReference() {
  * argparse adds it at parser construction, before any `add_argument` the walk can see, so it
  * is absent from every command in the file and present in every help text the reference
  * prints. Reproduced here as a row rather than special-cased in the renderer, because it is
- * first in the options section and first in the usage line for all 26 verbs — a position it
- * only gets by being an action like the others.
+ * first in the options section and first in the usage line for every verb the table carries —
+ * a position it only gets by being an action like the others.
  */
 const HELP_ACTION = {
   names: ['-h', '--help'],
@@ -152,8 +154,8 @@ function actionInvocation(a, positional) {
 //
 // A GREEDY SPACE-ONLY WRAP WAS THE FIRST DRAFT AND THE GATE REFUSED IT. `textwrap` splits a
 // hyphenated word into two chunks, so it can break a line inside `back-compat` where a
-// space-only wrap cannot. Measured before deciding: all 38 help strings in the table disagree
-// with a greedy wrap at some width, the widest being 175 — so "the branch is dead" was simply
+// space-only wrap cannot. Measured before deciding: every help string then in the table disagreed
+// with a greedy wrap at some width, the widest at 175 — so "the branch is dead" was simply
 // false, and `test_the_ports_line_breaker_is_textwrap_at_every_width` said so on the run that
 // first asserted it. The rules are transcribed instead.
 //
@@ -317,8 +319,14 @@ function formatAction(a, positional, helpPosition, width) {
  * `harness`, after the Python file this migration deletes; a user who typed `geneseed status
  * --help` is shown `usage: geneseed status`, which is also how every error this entry prints
  * already spells itself (`die`). `tests/__snapshots__/help/` freezes the reference's answers
- * and `tests/cli_help.test.mjs` replays them through here with `prog` set to the reference's
+ * and `tests/snapshot/cli_help.test.mjs` replays them through here with `prog` set to the reference's
  * own — so the layout is gated byte for byte and the rename is the only thing that moves.
+ *
+ * NOT EVERY VERB HAS A RECORDED ANSWER, AND THREE NEVER CAN. `catalog`, `mcp` and `memory` had
+ * no subparser for the recorder to render from, so the corpus covers the verbs argparse
+ * answered to and those three are held ABSOLUTELY instead — `tests/snapshot/cli_help.test.mjs` names
+ * both populations (`RECORDED`, `NATIVE`) and fails a verb that falls into neither, which is
+ * what keeps "no recorded text" from meaning "no gate".
  *
  * The alias rides on the same argument: argparse gives `update` the parser object it built for
  * `upgrade`, so `harness.py update --help` prints `usage: harness upgrade`. The recorded prog
@@ -425,8 +433,8 @@ export function cliCommand(verb) {
  * `<verb> --help` for whichever binary asked, or `null` for a verb the table does not
  * describe — the caller already owns that refusal and its message.
  *
- * ONE OWNER FOR TWO ENTRIES. `bin/geneseed-cli.mjs` carries 22 verbs and
- * `bin/geneseed-hook.mjs` the four hook verbs, and
+ * ONE OWNER FOR TWO ENTRIES. `bin/geneseed-hook.mjs` carries the four hook verbs and
+ * `bin/geneseed-cli.mjs` the rest of the table, and
  * `test_the_two_entry_points_carry_disjoint_verb_sets` keeps them from learning each other's
  * tables — so the help each prints has to come from here rather than from a copy in each.
  *

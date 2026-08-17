@@ -8,7 +8,7 @@
  * which the walk counts as zero because `difflib` is not in `rituals/`. P5e learned that a
  * walk cannot see through a `subprocess`; this is the same blind spot pointed the other way —
  * it cannot see through the STANDARD LIBRARY either, and a stdlib call with no JS equivalent
- * is a port, not a call. `js/lib/pydiff.mjs` is where that went, and it is 273 lines against
+ * is a port, not a call. `js/lib/udiff.mjs` is where that went, and it is 273 lines against
  * this file's 312 — the module the walk described as the whole verb is not half of it.
  *
  * THE SECOND thing the walk shows only as one name: `_diff_collect` runs a whole GLOBAL EMIT
@@ -43,8 +43,8 @@ import { GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir } from '
 import {
   EMIT_HOST_SCOPE, defaultTheme, footprintOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from './installs.mjs';
-import { unifiedDiff, pySplitLines } from './lib/pydiff.mjs';
-import { pyPathStr, pyPrint, pyPrintErr, readText, writeText } from './lib/pyfs.mjs';
+import { unifiedDiff, pySplitLines } from './lib/udiff.mjs';
+import { pyPathStr, pyPrint, pyPrintErr, readText, writeText } from './lib/fs.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 

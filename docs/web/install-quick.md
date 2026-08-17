@@ -28,7 +28,7 @@ cd Geneseed
 ./geneseed setup            # Windows: .\geneseed.cmd setup
 ```
 
-A checkout needs **git** and **Python 3** (stdlib-only, nothing to `pip install`) and is what you want if you intend to change the harness rather than use it — it also carries the full-screen TUI. Already installed this way? [Migrate to npx](#/docs/migrate) moves every install across in one pass.
+A checkout needs **git** and the same **Node ≥ 22.3** as everything else — there is nothing extra to install — and is what you want if you intend to change the harness rather than use it. Already installed this way? [Migrate to npx](#/docs/migrate) moves every install across in one pass.
 
 ---
 

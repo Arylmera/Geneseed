@@ -54,8 +54,8 @@ import { GLOBAL_MANIFEST, opencodeConfigDir } from './hosts.mjs';
 import {
   defaultMode, defaultPosture, defaultTheme, installedDefaults, themeFiles,
 } from './installs.mjs';
-import { pyInt, pyPrint, pyPrintErr, pyWhich } from './lib/pyfs.mjs';
-import { NO_WINDOW } from './lib/pyproc.mjs';
+import { pyInt, pyPrint, pyPrintErr, pyWhich } from './lib/fs.mjs';
+import { NO_WINDOW } from './lib/proc.mjs';
 
 // --------------------------------------------------------------------------------------
 // the three readers
@@ -418,7 +418,7 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
  * so a refusal returns a code instead of killing the wizard.
  *
  * ONE THING THE REFERENCE DOES THAT THIS DOES NOT, stated in the module header's terms. The
- * printed plan used to say `python build.py <args>` on both sides — the reference's own
+ * printed plan used to name the Python driver and its args on both sides — the reference's own
  * wording, kept verbatim because the corpus compares it byte-for-byte. P2 rewrote it to
  * `geneseed build <args>` in BOTH implementations at once, for the reason the whole task
  * exists: the deletion phase may not move a recorded byte, so a string frozen in the corpus

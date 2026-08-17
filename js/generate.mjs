@@ -24,7 +24,7 @@
  * run in any source text is 3, so `max(4, longest + 1)` picks 4 for all 96 files, and a port
  * that hardcoded four backticks is byte-identical in every prompt cell. Reaching the other
  * arm needs a file in `src/`, and `src/` is the tree no fixture can redirect (P5d). It is
- * therefore gated as a pure function over a corpus in `tests/pure_snapshot.test.mjs`, with the
+ * therefore gated as a pure function over a corpus in `tests/snapshot/pure_snapshot.test.mjs`, with the
  * unreachability measured in BOTH directions rather than asserted: one test proves the corpus
  * leaves the floor, and one re-renders every theme × posture × mode of the live tree and proves
  * `src/` still does not. The 96 above is one render — the sweep is 13 440 files.
@@ -43,7 +43,7 @@ import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from './opencode.mjs';
 import { renderAll } from './render.mjs';
 import {
   jsonDumpsIndent, parseJson, pyPrint, pyPrintErr, pyRepr, readText, writeText,
-} from './lib/pyfs.mjs';
+} from './lib/fs.mjs';
 
 /** `_harness_build._HEX_RE`. Anchored at BOTH ends — `#123` and `#1122334` both fail. */
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;

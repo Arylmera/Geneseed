@@ -25,7 +25,7 @@ import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import {
   writeText, readText, copyFile, jsonDumps, jsonDumpsIndent, parseJson, comparePaths,
-} from './lib/pyfs.mjs';
+} from './lib/fs.mjs';
 import { descOf, stripSkillBodyLinks, pushOverrideLines } from './native.mjs';
 
 /** ANSI colour-name -> integer (0-7). Mirrors `_build_emit._ANSI`. */

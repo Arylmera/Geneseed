@@ -34,7 +34,7 @@ path instead of `../Harness`.
 ### Or let the build place them
 
 ```
-python build.py --emit opencode-global              # add --theme imperial if wanted
+geneseed-build --emit opencode-global               # add --theme imperial if wanted
 ```
 
 The global emit writes only into the config dir and copies the plugins (and the
@@ -46,10 +46,10 @@ needed, because the bundle lives in the config dir the plugins already resolve.
 To scope the plugins to a single repo instead of globally:
 
 ```
-python build.py --emit opencode --target /path/to/your-repo
+geneseed-build --emit opencode --target /path/to/your-repo
 ```
 
-This creates `.opencode/plugins/` in the repo and drops the six `*.js` files
+This creates `.opencode/plugins/` in the repo and drops the seven `*.js` files
 (plus `.opencode/workflows/`) in for you.
 
 ## Verify they loaded

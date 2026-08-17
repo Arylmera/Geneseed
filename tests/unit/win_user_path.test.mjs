@@ -1,7 +1,7 @@
 /**
  * The PATH verbs' quoting hazard, gated WITHOUT touching the real user PATH.
  *
- * SUCCESSOR TO `tests/test_win_user_path.py`'s absolute half, plus PORT-LEDGER ROW 4's stated
+ * SUCCESSOR TO `tests/test_win_user_path.py`'s absolute half, plus LIMITS ROW 4's stated
  * half, which until now lived in that file's docstring and nowhere else.
  *
  * `link` and `unlink` edit the persistent USER Path — `HKCU\\Environment`, read and written
@@ -21,7 +21,7 @@
  * when BOTH are wrong, and the apostrophe bug is exactly the kind two implementations share when
  * one is copied from the other — which is why the reference asserted each property against its
  * own output as well. Those absolute assertions are what survive; the recorded corpus half is
- * already replayed by `tests/pure_snapshot.test.mjs` against `win_user_path.json`.
+ * already replayed by `tests/snapshot/pure_snapshot.test.mjs` against `win_user_path.json`.
  *
  * ⚠ WHAT IS STILL NOT COVERED, STATED RATHER THAN IMPLIED — and this is row 4. Nothing here
  * proves PowerShell ACCEPTS the script, and nothing proves the registry write works: the SUCCESS
@@ -118,7 +118,7 @@ test('the corpus contains what it is named for', () => {
 });
 
 test('the spawn carries no logic, which is what leaves its success arm safely ungated', () => {
-  // ⚠ PORT-LEDGER ROW 4, ASSERTED RATHER THAN DESCRIBED. The success arm of this spawn cannot be
+  // ⚠ LIMITS ROW 4, ASSERTED RATHER THAN DESCRIBED. The success arm of this spawn cannot be
   // gated by anything short of editing this machine's registry, and the argument for accepting
   // that is precisely that the spawn does nothing a test would want to check: it hands the pure
   // builder's output to PowerShell and maps the outcome. If logic ever drifts INTO it, the

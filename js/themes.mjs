@@ -1,5 +1,5 @@
 /**
- * `_build_render.sync_themes` / `_insert_theme_keys` — `build.py --sync-themes`, the
+ * `_build_render.sync_themes` / `_insert_theme_keys` — the generator's `--sync-themes`, the
  * maintainer tool that fills every shipped theme with the keys `_TEMPLATE.json` defines.
  *
  * IT IS A BYTE-EXACT TEXTUAL EDIT OF COMMITTED FILES, which is what makes it the most
@@ -33,11 +33,11 @@ import path from 'node:path';
 
 import { THEMES } from './checkout.mjs';
 import { themeFiles } from './installs.mjs';
-import { pySplitLines } from './lib/pydiff.mjs';
+import { pySplitLines } from './lib/udiff.mjs';
 import {
   jsonDumpsCompact, jsonDumpsIndent, parseJson, pyEq, pyLStripSpace, pyRStripSpace,
   pyStripSpace, readText, writeText,
-} from './lib/pyfs.mjs';
+} from './lib/fs.mjs';
 
 /**
  * `_build_render._insert_theme_keys` — insert ONLY the missing keys into the theme's existing

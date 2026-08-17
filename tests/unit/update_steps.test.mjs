@@ -1,4 +1,4 @@
-// `tests/test_harness.py`'s update-step block — and the place PORT-LEDGER ROW 8 is settled.
+// `tests/test_harness.py`'s update-step block — and the place LIMITS ROW 8 is settled.
 //
 // Ten Python tests across four classes reach this ground: WindowsProgressUi (2), Reexec (2),
 // UpdateStepDiagnosis (3), UpdateStepSelfHeal (3). ONE property survives with a live subject,
@@ -80,7 +80,7 @@ function withLog(fn) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// PORT-LEDGER ROW 8's LIVE HALF: a failed step must leave a durable, legible trace.
+// LIMITS ROW 8's LIVE HALF: a failed step must leave a durable, legible trace.
 //
 // The persistence is the point rather than a nicety, and the reference's field report is the
 // argument: "refresh ok, then update factory step 2/2 failed". The curses log pane is ephemeral

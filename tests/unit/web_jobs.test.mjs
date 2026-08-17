@@ -21,11 +21,11 @@
  * are different implementations, and after the cut that reduces to "the runner is Node", which
  * is asserted here positively and negatively.
  *
- * ⚠ PORT-LEDGER ROW 9 LIVES IN THIS FILE and its weakness must stay visible. `NOT_PORTED_ACTIONS`
+ * ⚠ LIMITS ROW 9 LIVES IN THIS FILE and its weakness must stay visible. `NOT_PORTED_ACTIONS`
  * is empty, so the dispatcher's 501 arm has no target and none can be borrowed — every remaining
  * action either starts a job in the developer's checkout or edits the real user PATH. The claim
  * rests on READING THE SET out of the module, which is a gate on a declaration and weaker than a
- * probe. It is declared as such here and in `docs/port-ledger.md`, and must not be quietly
+ * probe. It is declared as such here and in `docs/limits.md`, and must not be quietly
  * upgraded in prose.
  */
 import assert from 'node:assert/strict';
@@ -104,7 +104,7 @@ test('every action is either ported or declared unported', () => {
   const ported = new Set(PORTED_ACTIONS);
   assert.deepEqual([...ported].filter((a) => NOT_PORTED_ACTIONS.has(a)), [],
     'an action is both ported and declared unported');
-  // ⚠ PORT-LEDGER ROW 9, AND ITS WEAKNESS STATED RATHER THAN PAPERED OVER. `NOT_PORTED_ACTIONS`
+  // ⚠ LIMITS ROW 9, AND ITS WEAKNESS STATED RATHER THAN PAPERED OVER. `NOT_PORTED_ACTIONS`
   // emptied at P10b, so the dispatcher's 501 arm is unreachable BY CONSTRUCTION and no probe can
   // reach it — every remaining action either starts a job in the developer's checkout or writes
   // a shim and edits the real user PATH. This is a gate on a DECLARATION, which is weaker than a

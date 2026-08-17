@@ -5,7 +5,7 @@
 // its claims are not about Python at all. Their subject is shipping JavaScript:
 //
 //   * `js/setup.mjs` and `js/update.mjs` contain nothing that could paint a screen
-//     (`docs/port-ledger.md` row 6 — its ONLY gate was that retired Python test)
+//     (`docs/limits.md` row 6 — its ONLY gate was that retired Python test)
 //   * `js/tui.mjs` contains nothing that could paint a screen, and
 //   * `js/tui.mjs` REFUSES on a TTY with a refusal that still offers what does work
 //     (row 1, whose stated form is already stale: P2 removed the `rituals/harness.py tui`
@@ -13,7 +13,7 @@
 //     worse than one that simply says the screen does not exist)
 //
 // Nothing about any of them needed Python. Letting them retire with the file would demote a live
-// property of shipping code from ASSERTED to prose, which is the exact failure the port ledger
+// property of shipping code from ASSERTED to prose, which is the exact failure the limits document
 // exists to prevent.
 //
 // THE MARKS ARE ESCAPE SEQUENCES AND NOT THE WORD "curses". This footnote is carried over from
@@ -63,7 +63,7 @@ for (const rel of QUIET) {
       assert.ok(!src.includes(seq),
         `${rel} contains ${JSON.stringify(seq)} — it has grown a panel, and this file still `
         + 'declares that it has none. If that is deliberate, the declaration is what changes '
-        + 'first: delete the claim here and in docs/port-ledger.md, do not delete the assertion');
+        + 'first: delete the claim here and in docs/limits.md, do not delete the assertion');
     }
   });
 }

@@ -2,9 +2,9 @@
 //
 // The runtime-agnostic counterpart of the Claude Code `Stop` hook: on
 // `session.idle` it distils durable memories from the conversation and writes them
-// into the bundle's memory/ dir, maintaining MEMORY.md — exactly what
-// `rituals/harness.py learn` does, but self-contained in JS so no Python and no
-// model CLI are required. It distils with the SAME model the session already used
+// into the bundle's memory/ dir, maintaining MEMORY.md — exactly what the harness's
+// own `learn` verb does, but self-contained in this plugin so no separate process and
+// no model CLI are required. It distils with the SAME model the session already used
 // (read from the transcript), so it inherits your OpenCode provider config: no API
 // key, nothing to set for the model.
 //
@@ -42,13 +42,13 @@ import { homedir } from "node:os"
 // relative to this file — no manual `export GENESEED_HARNESS` needed.
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
-// Sovereign-repo bypass — twin of sovereign_bypass() in rituals/_harness_context.py.
+// Sovereign-repo bypass — twin of the harness's own `sovereignBypass()`.
 // <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
 // this GLOBAL install goes dormant. Any error degrades to "not excluded".
 const norm = (p) => {
-  // Expand a leading "~" / "~/…" to the home dir, mirroring Python's
-  // Path.expanduser() — a hand-edited excludes.json entry like "~/vault" must
-  // resolve the same way here as it does for the Claude/Bob (Python) guard.
+  // Expand a leading "~" / "~/…" to the home dir — a hand-edited excludes.json entry
+  // like "~/vault" must resolve the same way here as it does for the Claude/Bob
+  // hook guard.
   let raw = String(p)
   if (raw === "~" || raw.startsWith("~/") || raw.startsWith("~\\")) {
     raw = raw === "~" ? homedir() : path.join(homedir(), raw.slice(2))
@@ -80,7 +80,7 @@ const MEMORY_DIR_NAMES = ["memory", "anamnesis"]   // neutral + imperial
 const _debounceRaw = Number(process.env.GENESEED_LEARN_DEBOUNCE_MS || 60000)
 const DEBOUNCE_MS = Number.isFinite(_debounceRaw) && _debounceRaw >= 0 ? _debounceRaw : 60000
 
-// SINGLE SOURCE of the distil instructions: rituals/harness.py extracts this exact
+// SINGLE SOURCE of the distil instructions: the harness extracts this exact
 // LEARN_PROMPT_HEAD template literal at runtime, so there is nothing to keep in sync.
 const LEARN_PROMPT_HEAD = `You are distilling durable memories from the notes below. Output zero or more
 Markdown memory files in this exact format, separated by a line containing only
@@ -149,12 +149,12 @@ function partsText(parts) {
 // Child subagent sessions are task fragments — never mined into the main store —
 // but a lesson about how the *agent* should operate next time is durable. Kept
 // deliberately conservative, like the rest of this plugin: an unresolvable agent
-// name skips entirely. The Python twin (rituals/harness.py) is behaviour-identical
+// name skips entirely. The harness's own twin is behaviour-identical
 // so claude/bob get the same loop via their Stop/SubagentStop hooks.
 const AGENT_NAME_RE = /^[a-z][a-z0-9-]{1,40}$/
 const MAX_AGENT_BULLETS = 100 // hard cap, oldest dropped; no pruning heuristics
 
-// SINGLE SOURCE — harness.py extracts this exact literal (see LEARN_PROMPT_HEAD).
+// SINGLE SOURCE — the harness extracts this exact literal (see LEARN_PROMPT_HEAD).
 export const AGENT_LESSON_PROMPT = `The notes below are one subagent dispatch ("agent run").
 Output AT MOST ONE line: a durable lesson about how this agent should operate on a
 FUTURE, unrelated dispatch (a boundary that proved wrong, an input it always needs,

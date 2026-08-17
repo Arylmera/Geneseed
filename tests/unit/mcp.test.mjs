@@ -6,9 +6,17 @@
 // answer is: the LOGIC did not, only the screen's target picker did.
 //
 // `js/mcp.mjs` crossed with the WEB console rather than with a CLI verb (`js/web/actions.mjs`
-// is its caller), which is why `mcp` is still absent from `js/cli-table.json`'s 26 verbs and is
-// listed as new work for the deletion phase. That is a missing FACE, not missing logic: apply,
-// state, set-enabled, load, save and the comment sniff are all here and all exported.
+// is its caller), so what was missing was a FACE, not logic: apply, state, set-enabled, load,
+// save and the comment sniff were all here and all exported. `mcp` is now a verb in the CLI
+// table and `cmdMcp` is that face — READ-ONLY, and the last test in this file is what says so,
+// because a terminal toggle would need a second copy of the console's refusal to rewrite a
+// config it could not parse strictly, and that guard is the only thing standing between a
+// toggle and a rewritten `~/.claude.json`.
+//
+// ⚠ THE VERB HAS NO ORACLE AND NEVER WILL. `rituals/_harness_mcp.py` is a library whose only
+// command was the uninstall path; there was no `mcp` subparser, so there is no recorded help
+// text and no acceptance cell, and there is no way to make one. Every claim about `cmdMcp`
+// below is absolute — what it prints, and what it does not do — rather than a comparison.
 //
 // WHAT DID NOT SURVIVE, and it is two tests, both about `_mcp_default_target`:
 // "when exactly one config exists, open there" and "otherwise follow the install mode". Those
@@ -23,14 +31,18 @@
 // actually decides it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   MCP_PRESETS, mcpPresetBlock, mcpApply, mcpState, mcpSetEnabled, mcpLoad, mcpSave,
-  mcpCommented, mcpConfigFor, mcpKnownNames, mcpMeta,
+  mcpCommented, mcpConfigFor, mcpKnownNames, mcpMeta, cmdMcp,
 } from '../../js/mcp.mjs';
-import { makeSandbox } from '../helpers/sandbox.mjs';
+import { makeSandbox, cellEnv } from '../helpers/sandbox.mjs';
+
+const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
 function withDir(fn) {
   const sb = makeSandbox('gs-mcp-');
@@ -202,4 +214,60 @@ test('every preset carries a block the applier can use', () => {
     assert.equal(mcpState(out, name), 'enabled', `${name} did not apply as enabled`);
   }
   assert.ok(Object.keys(MCP_PRESETS).length > 0, 'the preset table is empty');
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE CLI FACE — absolute claims, because there is nothing to compare against
+
+test('the entry dispatches `mcp` at this module', () => {
+  // THE WIRING, and it is the failure this branch has already shipped once in another form: a
+  // handler that is correct and simply not reachable is exactly as green as one that is wired.
+  const src = fs.readFileSync(path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'utf8');
+  assert.match(src, /\n {2}mcp: \{\n {4}fn: cmdMcp,/,
+    "bin/geneseed-cli.mjs's VERBS table no longer routes `mcp` to cmdMcp");
+  assert.match(src, /import \{ cmdMcp \} from '\.\.\/js\/mcp\.mjs';/,
+    'the entry does not import cmdMcp from this module');
+  assert.equal(typeof cmdMcp, 'function');
+});
+
+test('with no install detected the verb refuses and names the fix', () => {
+  // The one arm reachable without a real install, and it is reachable BECAUSE the home is
+  // sandboxed: `mcpInstallTargets` enumerates the registry, and an empty home has none. A run
+  // on the developer's own machine would find their install and take the other arm, which is
+  // why this spawns rather than calling in-process.
+  const sb = makeSandbox('gs-mcp-cli-');
+  try {
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'mcp'],
+      { cwd: sb.path, encoding: 'utf8', windowsHide: true, env: cellEnv(sb.path) });
+    assert.equal(r.status, 1, `expected a refusal, got ${r.status}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /no active Geneseed install/);
+    assert.match(r.stderr, /geneseed setup/,
+      'the refusal does not tell the operator what to do about it');
+    assert.equal(r.stdout, '', 'the refusal also printed a listing');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('the verb is read-only, and that is asserted rather than described', () => {
+  // ⚠ THE CLAIM THE MODULE HEADER MAKES, gated. `cmdMcp` renders what is wired; it must never
+  // reach the writers. The hazard is specific and is why the console guards it: for a global
+  // Claude install the config is `~/.claude.json`, which holds projects and history, and a save
+  // built on a config that failed to parse would write `{}` over all of it. That guard lives in
+  // one place and this face must not grow a second copy of it by growing a write path first.
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'mcp.mjs'), 'utf8');
+  const at = src.indexOf('export function cmdMcp(');
+  assert.notEqual(at, -1, 'js/mcp.mjs no longer exports cmdMcp — the scrape has gone stale');
+  const body = src.slice(at, at + src.slice(at).indexOf('\n}\n'));
+  assert.ok(body.length > 200, `the cmdMcp scrape found ${body.length} chars, which is too few`);
+  for (const writer of ['mcpSave', 'mcpApply', 'mcpSetEnabled', 'writeFileSync', 'writeText']) {
+    assert.ok(!body.includes(writer),
+      `cmdMcp calls ${writer}. If a terminal toggle is wanted, move the console's non-HTTP `
+      + 'core down into js/mcp.mjs and have both faces call it — do not grow a second one here');
+  }
+  // …and the positive control: the writers are still in the module, so the scan above is a
+  // statement about `cmdMcp` and not about a file that has nothing left to find.
+  for (const writer of ['mcpSave', 'mcpApply', 'mcpSetEnabled']) {
+    assert.ok(src.includes(`export function ${writer}(`), `js/mcp.mjs no longer has ${writer}`);
+  }
 });

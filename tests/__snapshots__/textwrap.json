@@ -3,6 +3,9 @@
     "show this help message and exit",
     "accepted for back-compat; ignored (git follows the current branch)",
     "update only; skip the setup wizard",
+    "limit the listing to one section (default: all three)",
+    "render the roster in a named theme (default: the install's)",
+    "show each entry's source file instead of its one-line purpose",
     "the install's own dir (set by the emitted hook). A GLOBAL install's hook stands down when a Geneseed project install of the same host is at/above cwd (project-bypasses-global); GENESEED_STACK_GLOBAL=1 disables.",
     "deployed config dir (default: $OPENCODE_CONFIG_DIR / ~/.config/opencode)",
     "theme the deployment used (default: auto-detected from the deployed marker/sigil)",
@@ -17,6 +20,8 @@
     "bundle memory dir to dedup against and index into (default: $GENESEED_MEMORY, else ./memory or ./Harness/memory)",
     "rebuild MEMORY.md from the fact files on disk: re-index orphans, prune dead lines, report duplicate descriptions",
     "bin dir to install into (Unix; default ~/.local/bin)",
+    "the fact to remove, spelled as its filename without the .md",
+    "the memory store to act on (default: the detected one)",
     "survey and print the plan; write nothing",
     "write to FILE (default: stdout)",
     "the install's own dir (set by the emitted hook); scopes the memory/ match and enables the sovereign-repo bypass",
@@ -1897,6 +1902,1955 @@
       ],
       [
         "update only; skip the setup wizard"
+      ]
+    ],
+    [
+      [
+        "limit the",
+        "listing to",
+        "one section",
+        "(default:",
+        "all three)"
+      ],
+      [
+        "limit the",
+        "listing to",
+        "one section",
+        "(default:",
+        "all three)"
+      ],
+      [
+        "limit the",
+        "listing to",
+        "one section",
+        "(default: all",
+        "three)"
+      ],
+      [
+        "limit the",
+        "listing to one",
+        "section",
+        "(default: all",
+        "three)"
+      ],
+      [
+        "limit the",
+        "listing to one",
+        "section",
+        "(default: all",
+        "three)"
+      ],
+      [
+        "limit the",
+        "listing to one",
+        "section",
+        "(default: all",
+        "three)"
+      ],
+      [
+        "limit the listing",
+        "to one section",
+        "(default: all",
+        "three)"
+      ],
+      [
+        "limit the listing",
+        "to one section",
+        "(default: all",
+        "three)"
+      ],
+      [
+        "limit the listing",
+        "to one section",
+        "(default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to",
+        "one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to",
+        "one section (default:",
+        "all three)"
+      ],
+      [
+        "limit the listing to",
+        "one section (default:",
+        "all three)"
+      ],
+      [
+        "limit the listing to",
+        "one section (default:",
+        "all three)"
+      ],
+      [
+        "limit the listing to one",
+        "section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one",
+        "section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one",
+        "section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one",
+        "section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one",
+        "section (default: all three)"
+      ],
+      [
+        "limit the listing to one",
+        "section (default: all three)"
+      ],
+      [
+        "limit the listing to one",
+        "section (default: all three)"
+      ],
+      [
+        "limit the listing to one",
+        "section (default: all three)"
+      ],
+      [
+        "limit the listing to one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to one section",
+        "(default: all three)"
+      ],
+      [
+        "limit the listing to one section (default:",
+        "all three)"
+      ],
+      [
+        "limit the listing to one section (default:",
+        "all three)"
+      ],
+      [
+        "limit the listing to one section (default:",
+        "all three)"
+      ],
+      [
+        "limit the listing to one section (default:",
+        "all three)"
+      ],
+      [
+        "limit the listing to one section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one section (default: all",
+        "three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ],
+      [
+        "limit the listing to one section (default: all three)"
+      ]
+    ],
+    [
+      [
+        "render the",
+        "roster in a",
+        "named theme",
+        "(default:",
+        "the",
+        "install's)"
+      ],
+      [
+        "render the",
+        "roster in a",
+        "named theme",
+        "(default:",
+        "the",
+        "install's)"
+      ],
+      [
+        "render the",
+        "roster in a",
+        "named theme",
+        "(default: the",
+        "install's)"
+      ],
+      [
+        "render the",
+        "roster in a",
+        "named theme",
+        "(default: the",
+        "install's)"
+      ],
+      [
+        "render the",
+        "roster in a",
+        "named theme",
+        "(default: the",
+        "install's)"
+      ],
+      [
+        "render the",
+        "roster in a",
+        "named theme",
+        "(default: the",
+        "install's)"
+      ],
+      [
+        "render the roster",
+        "in a named theme",
+        "(default: the",
+        "install's)"
+      ],
+      [
+        "render the roster",
+        "in a named theme",
+        "(default: the",
+        "install's)"
+      ],
+      [
+        "render the roster",
+        "in a named theme",
+        "(default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in",
+        "a named theme",
+        "(default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in",
+        "a named theme",
+        "(default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a",
+        "named theme (default:",
+        "the install's)"
+      ],
+      [
+        "render the roster in a",
+        "named theme (default:",
+        "the install's)"
+      ],
+      [
+        "render the roster in a",
+        "named theme (default:",
+        "the install's)"
+      ],
+      [
+        "render the roster in a",
+        "named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a",
+        "named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a",
+        "named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named",
+        "theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named",
+        "theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named",
+        "theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named",
+        "theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named",
+        "theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named",
+        "theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme",
+        "(default: the install's)"
+      ],
+      [
+        "render the roster in a named theme",
+        "(default: the install's)"
+      ],
+      [
+        "render the roster in a named theme",
+        "(default: the install's)"
+      ],
+      [
+        "render the roster in a named theme",
+        "(default: the install's)"
+      ],
+      [
+        "render the roster in a named theme",
+        "(default: the install's)"
+      ],
+      [
+        "render the roster in a named theme",
+        "(default: the install's)"
+      ],
+      [
+        "render the roster in a named theme",
+        "(default: the install's)"
+      ],
+      [
+        "render the roster in a named theme",
+        "(default: the install's)"
+      ],
+      [
+        "render the roster in a named theme",
+        "(default: the install's)"
+      ],
+      [
+        "render the roster in a named theme",
+        "(default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default:",
+        "the install's)"
+      ],
+      [
+        "render the roster in a named theme (default:",
+        "the install's)"
+      ],
+      [
+        "render the roster in a named theme (default:",
+        "the install's)"
+      ],
+      [
+        "render the roster in a named theme (default:",
+        "the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the",
+        "install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ],
+      [
+        "render the roster in a named theme (default: the install's)"
+      ]
+    ],
+    [
+      [
+        "show each",
+        "entry's",
+        "source file",
+        "instead of",
+        "its one-",
+        "line",
+        "purpose"
+      ],
+      [
+        "show each",
+        "entry's",
+        "source file",
+        "instead of",
+        "its one-line",
+        "purpose"
+      ],
+      [
+        "show each",
+        "entry's",
+        "source file",
+        "instead of",
+        "its one-line",
+        "purpose"
+      ],
+      [
+        "show each",
+        "entry's source",
+        "file instead",
+        "of its one-",
+        "line purpose"
+      ],
+      [
+        "show each",
+        "entry's source",
+        "file instead of",
+        "its one-line",
+        "purpose"
+      ],
+      [
+        "show each",
+        "entry's source",
+        "file instead of",
+        "its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's",
+        "source file",
+        "instead of its",
+        "one-line purpose"
+      ],
+      [
+        "show each entry's",
+        "source file",
+        "instead of its",
+        "one-line purpose"
+      ],
+      [
+        "show each entry's",
+        "source file instead",
+        "of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's",
+        "source file instead",
+        "of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's",
+        "source file instead",
+        "of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's",
+        "source file instead of",
+        "its one-line purpose"
+      ],
+      [
+        "show each entry's",
+        "source file instead of",
+        "its one-line purpose"
+      ],
+      [
+        "show each entry's source",
+        "file instead of its one-",
+        "line purpose"
+      ],
+      [
+        "show each entry's source",
+        "file instead of its one-",
+        "line purpose"
+      ],
+      [
+        "show each entry's source",
+        "file instead of its one-",
+        "line purpose"
+      ],
+      [
+        "show each entry's source",
+        "file instead of its one-",
+        "line purpose"
+      ],
+      [
+        "show each entry's source",
+        "file instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file",
+        "instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file",
+        "instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file",
+        "instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file",
+        "instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file",
+        "instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file",
+        "instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file",
+        "instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file",
+        "instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead",
+        "of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead",
+        "of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead",
+        "of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of",
+        "its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of",
+        "its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of",
+        "its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of",
+        "its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its",
+        "one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its",
+        "one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its",
+        "one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its",
+        "one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its",
+        "one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-",
+        "line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-",
+        "line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-",
+        "line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-",
+        "line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line",
+        "purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
+      ],
+      [
+        "show each entry's source file instead of its one-line purpose"
       ]
     ],
     [
@@ -12680,6 +14634,1299 @@
       ],
       [
         "bin dir to install into (Unix; default ~/.local/bin)"
+      ]
+    ],
+    [
+      [
+        "the fact to",
+        "remove,",
+        "spelled as",
+        "its",
+        "filename",
+        "without the",
+        ".md"
+      ],
+      [
+        "the fact to",
+        "remove,",
+        "spelled as",
+        "its filename",
+        "without the",
+        ".md"
+      ],
+      [
+        "the fact to",
+        "remove,",
+        "spelled as",
+        "its filename",
+        "without the",
+        ".md"
+      ],
+      [
+        "the fact to",
+        "remove,",
+        "spelled as its",
+        "filename",
+        "without the",
+        ".md"
+      ],
+      [
+        "the fact to",
+        "remove, spelled",
+        "as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to",
+        "remove, spelled",
+        "as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to",
+        "remove, spelled",
+        "as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to",
+        "remove, spelled as",
+        "its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove,",
+        "spelled as its",
+        "filename without",
+        "the .md"
+      ],
+      [
+        "the fact to remove,",
+        "spelled as its",
+        "filename without the",
+        ".md"
+      ],
+      [
+        "the fact to remove,",
+        "spelled as its",
+        "filename without the",
+        ".md"
+      ],
+      [
+        "the fact to remove,",
+        "spelled as its",
+        "filename without the",
+        ".md"
+      ],
+      [
+        "the fact to remove,",
+        "spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove,",
+        "spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove,",
+        "spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove,",
+        "spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove, spelled",
+        "as its filename without the",
+        ".md"
+      ],
+      [
+        "the fact to remove, spelled",
+        "as its filename without the",
+        ".md"
+      ],
+      [
+        "the fact to remove, spelled",
+        "as its filename without the",
+        ".md"
+      ],
+      [
+        "the fact to remove, spelled as",
+        "its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as",
+        "its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as",
+        "its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as",
+        "its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its",
+        "filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its",
+        "filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its",
+        "filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its",
+        "filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its",
+        "filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its",
+        "filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its",
+        "filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its",
+        "filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its",
+        "filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename",
+        "without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without",
+        "the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without",
+        "the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without",
+        "the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without",
+        "the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the",
+        ".md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the",
+        ".md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the",
+        ".md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the",
+        ".md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ],
+      [
+        "the fact to remove, spelled as its filename without the .md"
+      ]
+    ],
+    [
+      [
+        "the memory",
+        "store to",
+        "act on",
+        "(default:",
+        "the",
+        "detected",
+        "one)"
+      ],
+      [
+        "the memory",
+        "store to act",
+        "on (default:",
+        "the detected",
+        "one)"
+      ],
+      [
+        "the memory",
+        "store to act",
+        "on (default:",
+        "the detected",
+        "one)"
+      ],
+      [
+        "the memory",
+        "store to act",
+        "on (default:",
+        "the detected",
+        "one)"
+      ],
+      [
+        "the memory",
+        "store to act on",
+        "(default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store",
+        "to act on",
+        "(default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store",
+        "to act on",
+        "(default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store",
+        "to act on",
+        "(default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to",
+        "act on (default:",
+        "the detected one)"
+      ],
+      [
+        "the memory store to",
+        "act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to",
+        "act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to",
+        "act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act",
+        "on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act",
+        "on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act",
+        "on (default: the detected",
+        "one)"
+      ],
+      [
+        "the memory store to act on",
+        "(default: the detected",
+        "one)"
+      ],
+      [
+        "the memory store to act on",
+        "(default: the detected one)"
+      ],
+      [
+        "the memory store to act on",
+        "(default: the detected one)"
+      ],
+      [
+        "the memory store to act on",
+        "(default: the detected one)"
+      ],
+      [
+        "the memory store to act on",
+        "(default: the detected one)"
+      ],
+      [
+        "the memory store to act on",
+        "(default: the detected one)"
+      ],
+      [
+        "the memory store to act on",
+        "(default: the detected one)"
+      ],
+      [
+        "the memory store to act on",
+        "(default: the detected one)"
+      ],
+      [
+        "the memory store to act on",
+        "(default: the detected one)"
+      ],
+      [
+        "the memory store to act on",
+        "(default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default:",
+        "the detected one)"
+      ],
+      [
+        "the memory store to act on (default:",
+        "the detected one)"
+      ],
+      [
+        "the memory store to act on (default:",
+        "the detected one)"
+      ],
+      [
+        "the memory store to act on (default:",
+        "the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act on (default: the",
+        "detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected",
+        "one)"
+      ],
+      [
+        "the memory store to act on (default: the detected",
+        "one)"
+      ],
+      [
+        "the memory store to act on (default: the detected",
+        "one)"
+      ],
+      [
+        "the memory store to act on (default: the detected",
+        "one)"
+      ],
+      [
+        "the memory store to act on (default: the detected",
+        "one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
+      ],
+      [
+        "the memory store to act on (default: the detected one)"
       ]
     ],
     [
@@ -26835,7 +30082,7 @@
     "implementation": "CPython",
     "python": "3.13"
   },
-  "rows": 7144,
+  "rows": 8084,
   "sample": {
     "0@11": [
       "show this",
@@ -26851,49 +30098,38 @@
     "0@60": [
       "show this help message and exit"
     ],
-    "19@11": [
+    "21@11": [
+      "the memory",
+      "store to",
+      "act on",
+      "(default:",
       "the",
-      "install's",
-      "own dir",
-      "(set by the",
-      "emitted",
-      "hook);",
-      "scopes the",
-      "memory/",
-      "match and",
-      "enables the",
-      "sovereign-",
-      "repo bypass"
+      "detected",
+      "one)"
     ],
-    "19@15": [
-      "the install's",
-      "own dir (set by",
-      "the emitted",
-      "hook); scopes",
-      "the memory/",
-      "match and",
-      "enables the",
-      "sovereign-repo",
-      "bypass"
+    "21@15": [
+      "the memory",
+      "store to act on",
+      "(default: the",
+      "detected one)"
     ],
-    "19@60": [
-      "the install's own dir (set by the emitted hook); scopes the",
-      "memory/ match and enables the sovereign-repo bypass"
+    "21@60": [
+      "the memory store to act on (default: the detected one)"
     ],
-    "37@11": [
+    "42@11": [
       "don't auto-",
       "open the",
       "browser"
     ],
-    "37@15": [
+    "42@15": [
       "don't auto-open",
       "the browser"
     ],
-    "37@60": [
+    "42@60": [
       "don't auto-open the browser"
     ]
   },
-  "sha256": "b4040738613e977f454244c6115a2c2eb882870844506bebd1fa40c88ab9ae23",
+  "sha256": "2c5ba9bcc0b0e913fcbd8792a68b7b5c2ebbc4aee95e209995b78d8037ca6eb1",
   "widths": [
     11,
     199

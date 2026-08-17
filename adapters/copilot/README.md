@@ -7,7 +7,7 @@ host**, and a closer fit than Bob: skills are the same `SKILL.md` dirs (Copilot
 Agent Skills), custom agents are markdown-with-frontmatter, and the repo-root
 `AGENTS.md` is auto-loaded. So the Copilot emit **reuses the Claude engine** with
 a `host="copilot"` flag. Nothing to install by hand: `geneseed setup` (or
-`build.py --emit copilot` / `--emit copilot-global`) writes everything.
+`geneseed build --emit copilot` / `--emit copilot-global`) writes everything.
 
 Copilot is a **deliberately reduced host** — it has no hook mechanism — so this
 page is mostly about *what it does not automate* and why the harness still holds.

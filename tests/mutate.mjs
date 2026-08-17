@@ -56,7 +56,7 @@ export const MUTATIONS = [
   {
     id: 'M1',
     name: "drop writeText's os.linesep translation",
-    file: 'js/lib/pyfs.mjs',
+    file: 'js/lib/fs.mjs',
     find: "writeFileSync(path, EOL === '\\n' ? text : text.replaceAll('\\n', EOL), 'utf8');",
     replace: "writeFileSync(path, text, 'utf8');",
     gate: EMIT,
@@ -67,7 +67,7 @@ export const MUTATIONS = [
   {
     id: 'M2',
     name: "drop ensure_ascii from jsonDumpsIndent",
-    file: 'js/lib/pyfs.mjs',
+    file: 'js/lib/fs.mjs',
     find: 'export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {\n'
       + '  const text = JSON.stringify(value, null, 2);\n'
       + '  return ensureAscii ? escapeNonAscii(text) : text;',
@@ -82,7 +82,7 @@ export const MUTATIONS = [
   {
     id: 'M3',
     name: "reverse comparePaths' collation",
-    file: 'js/lib/pyfs.mjs',
+    file: 'js/lib/fs.mjs',
     find: "    if (A[i] !== B[i]) return A[i] < B[i] ? -1 : 1;",
     replace: "    if (A[i] !== B[i]) return A[i] < B[i] ? 1 : -1;",
     gate: WEB_CATALOG,
@@ -163,7 +163,7 @@ export const MUTATIONS = [
   {
     id: 'M6',
     name: 'make parseJson collapse an integral float',
-    file: 'js/lib/pyfs.mjs',
+    file: 'js/lib/fs.mjs',
     find: '      ? new PyNumber(value, context.source)',
     replace: '      ? (Number.isInteger(value) ? value : new PyNumber(value, context.source))',
     gate: UNIT,
@@ -214,7 +214,7 @@ export const MUTATIONS = [
   {
     id: 'M9',
     name: 'drop windowsHide from a capturing spawn',
-    file: 'js/lib/pyproc.mjs',
+    file: 'js/lib/proc.mjs',
     // THE SHARED OWNER, and the anchor took two tries: the flag is not spelled
     // `windowsHide: true` anywhere, it is `process.platform === 'win32'` in ONE place, which is
     // the whole point of the module. A mutation whose anchor is absent is reported as
@@ -413,7 +413,7 @@ export const MUTATIONS = [
     replace: '  return NOT_PORTED.has(path) || DECLINED_POST.has(path)\n'
       + '    || NOT_PORTED_PREFIXES.some((p) => path.startsWith(p));',
     gate: UNIT,
-    why: 'PORT-LEDGER ROW 3, AS A DEFECT. This is the one-line collapse the split into separate '
+    why: 'LIMITS ROW 3, AS A DEFECT. This is the one-line collapse the split into separate '
       + 'GET and POST declarations exists to prevent: every exported set stays exactly as '
       + 'written, so every partition test that READS them stays green, while a GET to '
       + '`/api/pick-folder` answers 501 instead of falling through to the SPA that owns the path. '
@@ -448,7 +448,7 @@ export const MUTATIONS = [
     why: '`npm run build` before `npm install` fails on a fresh checkout with a missing vite, '
       + 'which is the exact situation this path exists for. It is unreachable from every cell BY '
       + 'CONSTRUCTION — `web/dist/index.html` is tracked, so `buildPlan` answers `serve` in any '
-      + 'checkout a cell can build (port-ledger row 7) — so the order is asserted as source and '
+      + 'checkout a cell can build (limits row 7) — so the order is asserted as source and '
       + 'this row is what says the assertion is load-bearing.',
   },
   // ------------------------------------------------------------------------------------------

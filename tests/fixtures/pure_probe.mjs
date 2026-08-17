@@ -21,8 +21,8 @@ import { pyCapitalize } from '../../js/installs.mjs';
 import {
   comparePaths, jsonDumpsCompact, normcase, parseJson, pyInt, pyIsAbsolute, pyLen, pyLjust,
   pyPathStr, pyStripSpace, pyUnquote, pyWhich, writeText,
-} from '../../js/lib/pyfs.mjs';
-// `expanduser` and `pyResolve` are NOT in `pyfs.mjs` — they are host-config resolvers and
+} from '../../js/lib/fs.mjs';
+// `expanduser` and `pyResolve` are NOT in `fs.mjs` — they are host-config resolvers and
 // live beside the config-dir lookups that need them. Verified rather than assumed; the
 // private copies in `js/hooks.mjs` are a second pair and not these.
 import { expanduser, pyResolve } from '../../js/hosts.mjs';
@@ -32,7 +32,7 @@ import {
   ask, askChoice, collectSetupLines, confirm, javaMajorOk, modeOptions, postureOptions,
   promptLine, setupSummaryLines, themeOptions,
 } from '../../js/setup.mjs';
-import { unifiedDiff, pySplitLines } from '../../js/lib/pydiff.mjs';
+import { unifiedDiff, pySplitLines } from '../../js/lib/udiff.mjs';
 import { stampMinute } from '../../js/web/api.mjs';
 import { buildPlan, daemonArgs, restartArgs } from '../../js/web/server.mjs';
 import { fetchPhases, parseOrigin, pyCount, redactUrlCreds } from '../../js/update.mjs';

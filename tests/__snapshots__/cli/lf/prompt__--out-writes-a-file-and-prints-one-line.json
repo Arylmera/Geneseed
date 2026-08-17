@@ -5,7 +5,7 @@
     "<stderr>": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "<stdout>": "614c240985e46d65f1733cee9fcff3f8c9450e848edbb499f8d0b21b2cb91f7a",
     "repo/.keep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "repo/p.md": "927e864c63590ac674b1b000d84517e638671320f729f71b0a68b06dc0b614c2"
+    "repo/p.md": "5f7e3122a96cc2eba233bf38d734d836441a89fd6ebfb9737c3730d4cb0a47f3"
   },
   "sizes": {
     "<dirs>": 13,
@@ -13,7 +13,7 @@
     "<stderr>": 0,
     "<stdout>": 30,
     "repo/.keep": 0,
-    "repo/p.md": 385457
+    "repo/p.md": 385523
   },
   "verbatim": {
     "<dirs>": "cfg\nhome\nrepo",

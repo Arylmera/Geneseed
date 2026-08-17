@@ -77,6 +77,63 @@
       "mutex": []
     },
     {
+      "name": "catalog",
+      "help": "list what this harness ships: every agent, skill and law, with its one-line purpose and lifecycle status",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "section",
+          "metavar": null,
+          "help": "limit the listing to one section (default: all three)",
+          "choices": [
+            "agents",
+            "skills",
+            "laws"
+          ],
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme",
+          "metavar": null,
+          "help": "render the roster in a named theme (default: the install's)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--source"
+          ],
+          "dest": "source",
+          "metavar": null,
+          "help": "show each entry's source file instead of its one-line purpose",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
       "name": "context",
       "help": "print context.json eager entries for a SessionStart hook (Rule XVIII)",
       "description": "",
@@ -382,6 +439,68 @@
         }
       ],
       "options": [],
+      "mutex": []
+    },
+    {
+      "name": "mcp",
+      "help": "list the MCP servers wired into each active install, and the presets available to add",
+      "description": "",
+      "positionals": [],
+      "options": [],
+      "mutex": []
+    },
+    {
+      "name": "memory",
+      "help": "manage the memory store: list the facts the agent reads, or remove one by name",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "action",
+          "metavar": null,
+          "help": "",
+          "choices": [
+            "list",
+            "rm"
+          ],
+          "default": null,
+          "required": true,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [],
+          "dest": "name",
+          "metavar": null,
+          "help": "the fact to remove, spelled as its filename without the .md",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": "?",
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [
+        {
+          "names": [
+            "--memory"
+          ],
+          "dest": "memory",
+          "metavar": null,
+          "help": "the memory store to act on (default: the detected one)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
       "mutex": []
     },
     {

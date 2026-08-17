@@ -19,7 +19,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { PLATFORM_CORPUS, ROOT, corpusNormalise, orphanCheck } from './helpers/golden.mjs';
+import {
+  PLATFORM_CORPUS, ROOT, corpusNormalise, dropUncompared, orphanCheck,
+} from './helpers/golden.mjs';
 import { checkExpectations, gitTemplate, runCell } from './helpers/cli_golden.mjs';
 import * as snapshotIo from './helpers/snapshot_io.mjs';
 
@@ -74,7 +76,7 @@ export function parseArgs(argv) {
 // can never be re-recorded. So there is no widening of the normaliser that makes these nine
 // pass — only a declaration of where they hold.
 //
-// `docs/port-ledger.md` predicted exactly this ("a different Windows username reddens it, and
+// `docs/limits.md` predicted exactly this ("a different Windows username reddens it, and
 // after the reference is deleted a red padding run is unanswerable"). What is new is that a
 // Windows CI job now exists to make it concrete: the Python `cells` job is Linux-only, so the
 // `crlf` half had never been replayed anywhere but the machine that recorded it.
@@ -152,8 +154,8 @@ export function selectCells(doc, a) {
 }
 
 /**
- * THE PLATFORM UNION, asserted from either host — the property `test_hook_cli_parity.py`'s
- * `ThePlatformDeclaredCellsAreDeclared` owns, moved here so it travels with the matrix.
+ * THE PLATFORM UNION, asserted from either host — the property the reference's own
+ * `ThePlatformDeclaredCellsAreDeclared` owned, moved here so it travels with the matrix.
  *
  * Every id declared for THIS platform must be built, every id declared for the other must be
  * absent, and neither half may be empty. A group that quietly returned nothing is what the Unix
@@ -228,7 +230,12 @@ function main(argv) {
           failures.push(`  ${cell.id}\n    NO RECORDED SNAPSHOT in ${against} — a cell that ran `
             + 'with nothing to compare against is a hole, not a pass');
         } else {
-          const problems = snapshotIo.compare(recorded, corpusNormalise(snap));
+          // The version-carrying stub, dropped from both sides — see `dropUncompared`. This
+          // harness carries it too: leaving it out here left `migrate/a-node-baked-shim-reads-as-
+          // current` red while the emit corpus was already green.
+          const problems = snapshotIo.compare(
+            recorded, dropUncompared(recorded, corpusNormalise(snap)),
+          );
           if (problems.length) failures.push(`  ${cell.id}\n${problems.join('\n')}`);
         }
       }

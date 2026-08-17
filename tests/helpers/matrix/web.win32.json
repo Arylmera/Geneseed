@@ -321,7 +321,7 @@
           "from_body": null,
           "headers": {},
           "method": "GET",
-          "path": "/assets/About-B_M95iyn.js",
+          "path": "/assets/About-DX1-VTBP.js",
           "poll": false,
           "reconnect": false,
           "token": false
@@ -450,9 +450,10 @@
         "\"theme\": \"imperial\", \"accent\": \"yellow\", \"emit\": \"opencode-global\"",
         "\"installed_fp\": \"0000000000000000\"",
         "\"agent_md_present\": true",
-        "\"deployed\": true",
-        "\"python\": \"<RUNTIME>\"",
-        "Content-Length: <CLEN>"
+        "\"deployed\": true"
+      ],
+      "expect_absent": [
+        "\"python\""
       ],
       "id": "setup/reports-the-deployed-install-snapshot",
       "requests": [
@@ -2080,14 +2081,14 @@
         "\"license\": \"MIT\"",
         "\"repo\": \"https://github.com/",
         "\"repo_is_github\": true",
-        "\"python\": \"<RUNTIME>\"",
         "\"deployed\": true",
         "\"theme\": \"imperial\""
       ],
       "expect_absent": [
         "not ported yet",
         "\"repo_is_github\": false",
-        "\"repo\": null"
+        "\"repo\": null",
+        "\"python\""
       ],
       "id": "docs/the-about-page-reads-the-installs-own-git-origin",
       "requests": [

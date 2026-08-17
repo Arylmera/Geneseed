@@ -80,7 +80,7 @@ import os from 'node:os';
 
 import { ROOT } from './checkout.mjs';
 import { readMaybe } from './installs.mjs';
-import { pyPathStr, pyPrint, pyPrintErr, writeText } from './lib/pyfs.mjs';
+import { pyPathStr, pyPrint, pyPrintErr, writeText } from './lib/fs.mjs';
 
 const IS_WIN = process.platform === 'win32';
 

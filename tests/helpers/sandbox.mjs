@@ -91,7 +91,7 @@ export const TMP_ROOT = fs.realpathSync.native(os.tmpdir());
  * (13 characters) made every `status` cell replay two columns wider than the corpus, in the box
  * borders that carry no path tag and are therefore compared in full.
  *
- * `docs/port-ledger.md` already names this class — "a LENGTH, not a value" — and states that a
+ * `docs/limits.md` already names this class — "a LENGTH, not a value" — and states that a
  * different Windows username reddens it and that after the reference is deleted a red padding
  * run is unanswerable. This is the same hazard reached from the other side: the corpus cannot
  * be re-recorded, so the replayer reproduces the recorder's conditions, exactly as it already
@@ -226,7 +226,7 @@ export function cellEnv(home) {
  * bare `python` never reached the trap and the gate passed a mutation built to break it. An absent
  * interpreter is absent to every spawn mechanism.
  *
- * Returning `dropped` is the vacuity guard — see `strippedEnv`.
+ * Returning `dropped` is what lets `strippedEnv` say which experiment it just ran.
  */
 export function pathWithoutPython() {
   const names = process.platform === 'win32'
@@ -241,26 +241,46 @@ export function pathWithoutPython() {
 }
 
 /**
- * A sandbox home plus the stripped PATH, with the vacuity guard already applied.
- *
- * On a machine whose PATH never held a python, "it ran without one" is true and meaningless, so
- * the guard is not optional and therefore is not left to the caller — the reference left it to
- * the caller and every caller had to repeat it.
+ * A sandbox home plus the stripped PATH.
  *
  * `$PYTHON` is dropped too. It was the documented discovery override and `cellEnv` does not clear
  * it; nothing reads it any more, and clearing it here is what says so. Without that, a green run
  * could be measuring the developer's exported shell rather than the port.
  *
  * `t` is a `node:test` context, used only for the diagnostic line — a run that removed four PATH
- * entries and one that removed one are different experiments and the log should say which.
+ * entries and one that removed none are different experiments and the log has to say which.
+ *
+ * ⚠ AN EMPTY PATH IS NOW A VALID STATE, AND IT USED TO THROW. The old guard raised "PATH held no
+ * python at all, so this run proves nothing … the gate needs a python to remove", which was
+ * exactly right while Python was a real dependency of this repository and is exactly wrong now,
+ * for two independent reasons:
+ *
+ *   * the package's own acceptance gate is "install it in a container with NO PYTHON AT ALL and
+ *     run it". In that container every one of this function's nine call sites raised, and the
+ *     suite failed with a message about the gate instead of a verdict about the product — the
+ *     gate refusing to run in the one environment it was written to certify;
+ *   * the reference's removal takes `actions/setup-python` out of CI with it, so the same throw
+ *     silently became a dependency on what the runner image happens to ship.
+ *
+ * WHAT THE GUARD WAS PROTECTING IS KEPT, and it is not "there must be a python". It is that a
+ * caller must never BELIEVE it removed one when it did not: on a machine that has an
+ * interpreter, "it ran without python" is strong evidence, and on a machine that never had one
+ * the same green is true and says nothing at all. Those are two different experiments wearing
+ * one result, and conflating them is the failure. So the removal-of-nothing case passes — and
+ * announces itself, in the same channel the removal case already used. A skip nobody can see in
+ * the log is the thing actually worth refusing.
  */
 export function strippedEnv(t, home) {
   const { stripped, dropped } = pathWithoutPython();
   if (dropped.length === 0) {
-    throw new Error('PATH held no python at all, so this run proves nothing about whether the '
-      + 'entry point would have found one — the gate needs a python to remove');
+    t.diagnostic('NO PYTHON WAS REMOVED — this PATH held none to begin with. The run below is '
+      + 'VACUOUS rather than failing: its result is true and is not evidence that the entry '
+      + 'point would have declined to find an interpreter, because there was none to find. '
+      + 'This is the EXPECTED state in a no-python install container and on a runner that no '
+      + 'longer sets an interpreter up.');
+  } else {
+    t.diagnostic(`${dropped.length} PATH entries held an interpreter and were removed`);
   }
-  t.diagnostic(`${dropped.length} PATH entries held an interpreter and were removed`);
   const env = { ...cellEnv(home), PATH: stripped };
   delete env.PYTHON;
   return env;

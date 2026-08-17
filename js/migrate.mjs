@@ -42,7 +42,7 @@ import { DEFAULT_EMIT, setupBuildArgs } from './generate.mjs';
 import {
   autostartPaths, autostartStale, hookShimPath, migrateShape, readJsonc, shimHome,
 } from './settings.mjs';
-import { writeText, pyPrint, pyPrintErr } from './lib/pyfs.mjs';
+import { writeText, pyPrint, pyPrintErr } from './lib/fs.mjs';
 
 /** Every emit name the generator answers to — the set an unrecognised marker is NOT in. */
 const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());

@@ -49,12 +49,12 @@ import {
 import { PALETTE_ROLES, colorThemeFiles } from './opencode.mjs';
 import { STRUCTURE, renderAll } from './render.mjs';
 import { SHIM_ARGV, hookShimPath } from './settings.mjs';
-import { pySplitLines } from './lib/pydiff.mjs';
-import { NO_WINDOW } from './lib/pyproc.mjs';
+import { pySplitLines } from './lib/udiff.mjs';
+import { NO_WINDOW } from './lib/proc.mjs';
 import {
   comparePaths, normcase, parseJson, pyPrint, pyPrintErr, pyRepr, pyStr, pyStripSpace, pyWhich,
   readText, withDiscardableStderr,
-} from './lib/pyfs.mjs';
+} from './lib/fs.mjs';
 
 // --------------------------------------------------------------------------------------
 // _harness_core's scanning primitives
@@ -115,7 +115,7 @@ function rglob(dir) {
 
 // `withDiscardableStderr` was defined here while `renderedProblems` was its only caller.
 // `js/hooks.mjs` became the second and third when the hook started CATCHING `expanduser`'s
-// refusal, so it moved beside `pyPrintErr` in `js/lib/pyfs.mjs` — the writes it intercepts —
+// refusal, so it moved beside `pyPrintErr` in `js/lib/fs.mjs` — the writes it intercepts —
 // and its docblock carries the "not for silencing noise" warning with it.
 
 /** `Path.stem` — the basename with its last suffix removed. */
@@ -828,8 +828,21 @@ export function countTableProblems() {
     }
   }
 
-  let web;
-  try { web = readText(path.join(ROOT, 'rituals', '_web_core.py')); } catch { web = ''; }
+  // WHERE THE ONBOARDING COPY LIVES, AND WHY THIS READ MOVED. It used to open the one module
+  // that held the web console's onboarding prose. That prose has since moved into
+  // `docs/web/*.md`, and the counts in it render from `{N_LAWS}` / `{N_AGENTS}` / `{N_SKILLS}`
+  // — so the read was still succeeding against a file the sentences had left, all three arms
+  // below scored zero, and the check looked healthy while gating nothing. A templated count
+  // cannot drift; what these arms still catch is a maintainer typing the NUMBER into a page
+  // instead of the token, which is the drift that reaches a reader.
+  //
+  // MEASURED BEFORE AND AFTER: zero problems either way on the shipped tree, so no recorded
+  // byte moves. `web` stays fail-soft — a missing docs tree is not an authoring fault.
+  let web = '';
+  try {
+    web = globSorted(path.join(ROOT, 'docs', 'web'), (n) => n.endsWith('.md'))
+      .map(readText).join('\n');
+  } catch { web = ''; }
   let shipped;
   try { shipped = readText(path.join(ROOT, 'SHIPPED.md')); } catch { shipped = ''; }
   problems.push(...proseMirrorProblems(readme, web, counts, skillFiles, shipped));
@@ -1152,9 +1165,9 @@ export function cmdDoctor(args) {
     if (problems.some((p) => p.startsWith('[themes]') && p.includes('missing key'))) {
       // `./geneseed build --sync-themes`, and the spelling is a one-shot decision frozen in
       // two fixtures, so it is argued here. The FRONT DOOR, not an interpreter and a file:
-      // `build` forwards its extra arguments to the generator on both sides, so the tip names
-      // a command that works today AND after the Python is deleted — which the old
-      // `python build.py --sync-themes` would not. The `./` prefix matches the sibling tip
+      // `build` forwards its extra arguments to the generator, so the tip names a command that
+      // works today AND after the Python is deleted — which naming the interpreter and the
+      // generator's file, as the old tip did, would not. The `./` prefix matches the sibling tip
       // five lines up (`./geneseed update`) and is honest about the audience: this problem is
       // only reachable while authoring themes in a checkout, which is where `./geneseed` is.
       pyPrint('  tip: a theme is missing a key another theme defines — run '
@@ -1172,7 +1185,7 @@ export function cmdDoctor(args) {
 }
 
 // --------------------------------------------------------------------------------------
-// validate  —  `build.py --validate-only`, on this binary because it runs the doctor
+// validate  —  the generator's `--validate-only`, on this binary because it runs the doctor
 // --------------------------------------------------------------------------------------
 
 /**

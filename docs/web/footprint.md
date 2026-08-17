@@ -23,8 +23,8 @@ It's set-and-forget — stored in the `.geneseed-footprint` marker, preserved ac
 
 - **Settings** — the **Footprint** toggle flips the current install (full ⇄ lean) and rebuilds it in place.
 - **Harnesses tab** — a per-harness dropdown sets it for any one install independently, then **Apply**.
-- **Setup / re-theme wizard** (TUI) — asks for footprint alongside voice and mode.
-- **CLI** — `build.py --footprint lean` (with any `--emit`).
+- **Setup / re-theme wizard** — asks for footprint alongside voice and mode.
+- **CLI** — `geneseed-build --footprint lean` (with any `--emit`).
 
 ---
 
