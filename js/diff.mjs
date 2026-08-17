@@ -41,7 +41,8 @@ import path from 'node:path';
 import { emitGlobalInto } from '../bin/geneseed.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir } from './hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, defaultTheme, footprintOfDir, readJsonMaybe, readMaybe, themeOfDir,
+  EMIT_HOST_SCOPE, defaultTheme, footprintOfDir, modeOfDir, postureOfDir, readJsonMaybe,
+  readMaybe, themeOfDir,
 } from './installs.mjs';
 import { unifiedDiff, pySplitLines } from './lib/udiff.mjs';
 import { pyPathStr, pyPrint, pyPrintErr, readText, writeText } from './lib/fs.mjs';
@@ -119,12 +120,20 @@ export function withStdoutSwallowed(fn) {
  * `_harness_diff._diff_collect` — returns `{target, theme, files}`, with `files === null` for
  * "nothing to compare here".
  *
- * THREE VALUES ARE READ OFF THE DEPLOYMENT rather than defaulted, and each has a scar behind
+ * FIVE VALUES ARE READ OFF THE DEPLOYMENT rather than defaulted, and each has a scar behind
  * it. The theme, so themed wording is not reported as a local edit. The EMIT, so a Claude
  * install is not diffed against an OpenCode-dialect tree — which would flag every agent and
  * AGENT.md as drift. The FOOTPRINT, because rendering 'expected' at the wrong one reports
  * AGENT.md and laws/universal.md as edited on every lean install, so a freshly rebuilt
  * harness looked drifted the moment it finished building and no rebuild could clear it.
+ *
+ * The POSTURE and the MODE joined them late, and the reference is where the hole came from:
+ * `_build_core`'s defaults are `peer`/`direct` and `rituals/harness.py` never overrode them,
+ * so every verb that rendered rendered at the defaults. An install that chose any other
+ * register reported its own `## Posture` and `## Mode` sections as a local edit for as long
+ * as it lived — and `apiRestore` would have written the default register back over the user's
+ * choice, which is the same defect with teeth. `rebuild-all` never had it: it reads
+ * `postureOfDir`/`modeOfDir` per install root, and this now asks the same two questions.
  */
 export function diffCollect({ target = null, theme = null, emit = null, footprint = null } = {}) {
   // `Path(target).expanduser()` — expanded and NOT resolved, which is the opposite of
@@ -157,6 +166,7 @@ export function diffCollect({ target = null, theme = null, emit = null, footprin
     const expected = path.join(tmp, 'expected');
     withStdoutSwallowed(() => emitGlobalInto(host, {
       theme: themeName, out: path.join(tmp, 'bundle'), cfgDir: expected, footprint: fp,
+      posture: postureOfDir(dir), mode: modeOfDir(dir),
     }));
     const rels = [...new Set([...ownedSet(dir), ...ownedSet(expected)])].sort();
     for (const rel of rels) {

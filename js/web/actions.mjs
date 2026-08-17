@@ -660,6 +660,13 @@ export function globalEmitHostFor(emit) {
  * agents with the wrong frontmatter, and a full-footprint `expected` on a lean install
  * rewrites AGENT.md with the inlined laws and DELETES `laws/universal.md`, which only the lean
  * emit writes.
+ *
+ * THE POSTURE AND THE MODE cost the most of the four, because this verb WRITES. Rendering
+ * `expected` at `peer`/`direct` made restoring AGENT.md silently revert the user's chosen
+ * register — and `diffCollect`'s matching hole is what put the file in the restore list in the
+ * first place, so the panel offered the revert and then performed it. Both sides read the
+ * deployment now; `state` already carries the two values (`installs.mjs` detects them from
+ * the rendered `## Posture` / `## Mode` lead).
  */
 export function apiRestore(state, files) {
   if (!deployed(state)) {
@@ -677,6 +684,8 @@ export function apiRestore(state, files) {
       out: path.join(tmp, 'bundle'),
       cfgDir: expected,
       footprint: state.footprint,
+      posture: state.posture,
+      mode: state.mode,
     }));
     for (const raw of (pyTruthy(files) ? files : [])) {
       const rel = pyStripSpace(pyStr(raw).replace(/\\/g, '/')).replace(/^\/+/, '');
