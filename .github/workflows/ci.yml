@@ -55,6 +55,26 @@ jobs:
             exit 1
           fi
 
+      # ⚠ THE PACKAGING SUITE AGAIN, UNDER THE npm THE RELEASE ACTUALLY USES. Everything above
+      # runs the npm bundled with Node 22 (npm 10). `publish.yml` deliberately installs
+      # `npm@latest` first, because trusted publishing needs a recent one — so the single workflow
+      # that gates a release runs an npm no CI job had ever exercised.
+      #
+      # That is not hypothetical. `npm pack --json` changed container between majors — npm 10
+      # returns `[ {...} ]` and npm 12 returns `{ "<name>": {...} }` — and the helper read `[0]`.
+      # Fourteen tarball tests passed on every CI run and then failed on the release run, which is
+      # the most expensive possible moment to find out.
+      #
+      # LAST IN THE JOB, deliberately: it replaces the runner's global npm, so nothing after it
+      # would be testing the pinned version any more.
+      - name: the packaging suite under npm@latest (the release's npm)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          npm install -g npm@latest
+          echo "now running the packaging gate under npm $(npm --version)"
+          node --test tests/unit/package_manifest.test.mjs
+
   # THE CELL HARNESSES — the whole cross-implementation gate, now that there is one
   # implementation. It replays the RECORDED corpus against the port; what it does not do is
   # compare two implementations, which needs two, and its predecessor did exactly that until

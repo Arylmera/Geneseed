@@ -193,7 +193,27 @@ let PACK = null;
 function packageUnderTest() {
   if (PACK) return PACK;
   const staging = tempDir('gs-pack-');
-  const report = JSON.parse(npm(['pack', '--json', '--pack-destination', staging], ROOT))[0];
+  // ⚠ `npm pack --json` CHANGED CONTAINER BETWEEN MAJORS, and this helper read only the old one.
+  //   npm 10: [ { id, filename, files, … } ]            — an ARRAY, so `[0]` is the report
+  //   npm 12: { "<name>": { id, filename, files, … } }  — an OBJECT KEYED BY PACKAGE NAME
+  // The fields inside are identical; only the wrapper moved. Reading `[0]` off the object yields
+  // `undefined` and every tarball test dies with `Cannot read properties of undefined`.
+  //
+  // MEASURED, not guessed: npm 10.9.2 and npm 12.0.2 both run against this package, and the two
+  // shapes above are their literal output.
+  //
+  // IT MATTERS HERE MORE THAN IN CI, and that asymmetry is the whole lesson. `ci.yml` pins Node 22
+  // and uses its bundled npm 10, so this suite was green there. `publish.yml` deliberately runs
+  // `npm install -g npm@latest` because trusted publishing needs a recent npm — so the ONE
+  // workflow that gates a release ran a version the tests had never seen, and 14 of them failed on
+  // the release run rather than on any of the hundreds of CI runs before it.
+  const packed = JSON.parse(npm(['pack', '--json', '--pack-destination', staging], ROOT));
+  const report = Array.isArray(packed) ? packed[0] : Object.values(packed)[0];
+  assert.ok(report && report.filename && Array.isArray(report.files),
+    `npm pack --json returned a shape this helper does not understand (npm `
+    + `${npm(['--version'], ROOT).trim()}): ${JSON.stringify(packed).slice(0, 200)}. Both known `
+    + 'containers are handled above; a third means npm changed again and every tarball test below '
+    + 'is about to fail for a reason that has nothing to do with this package.');
   const tgz = path.join(staging, report.filename);
   const inside = new Set(
     tarFiles(tgz)

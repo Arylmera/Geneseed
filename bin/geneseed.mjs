@@ -916,7 +916,9 @@ export function buildInto({ theme, out, footprint = 'lean' }) {
   );
 }
 
-export function emitGlobalInto(host, { theme, out, cfgDir, footprint }) {
+export function emitGlobalInto(host, {
+  theme, out, cfgDir, footprint, posture = null, mode = null,
+}) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
   const emit = GLOBAL_EMITS[host] ?? GLOBAL_EMITS.opencode;
@@ -925,8 +927,17 @@ export function emitGlobalInto(host, { theme, out, cfgDir, footprint }) {
   // emit's STDOUT and lets its stderr through (the Python's `redirect_stdout` does exactly
   // that), so an untranslated WARN from `warnBobGlobalOverProject` would reach the user's
   // terminal with the wrong bytes on the one stream the caller deliberately does not hide.
+  // POSTURE AND MODE TRAVEL WITH THE RENDER, and the `|| default` is load-bearing:
+  // `postureOfDir` returns null for "no install / undetectable", which `makeCfg`'s parameter
+  // default would NOT catch. Callers that pass nothing keep the reference's behaviour of
+  // rendering at `peer`/`direct`; the drift readers pass what the deployment actually says,
+  // because rendering `expected` at the defaults reports AGENT.md as edited on every install
+  // that chose a register — the same scar the footprint left in `diffCollect`, one axis over.
   return withPyNewlines(
-    () => emit(makeCfg(), { theme, footprint, root: null, cfgDir }, out),
+    () => emit(
+      makeCfg({ posture: posture || 'peer', mode: mode || 'direct' }),
+      { theme, footprint, root: null, cfgDir }, out,
+    ),
   );
 }
 
