@@ -11,7 +11,14 @@ const TOKEN = typeof window !== 'undefined' ? window.__GENESEED_TOKEN__ : ''
 // on it (e.g. 409 "already running").
 async function fail(r) {
   const body = await r.json().catch(() => ({}))
-  const err = new Error(body.error || body.message || r.statusText)
+  // The CSRF token is read once at page load and is minted fresh by every daemon
+  // start, so a tab left open across a `web restart` 403s on every mutation with a
+  // bare "forbidden" — which reads as "the save silently did nothing". Say what it is.
+  const msg =
+    r.status === 403 && (body.error || '').startsWith('forbidden')
+      ? 'the web server restarted since this page loaded — reload the page, then re-apply your edit'
+      : body.error || body.message || r.statusText
+  const err = new Error(msg)
   err.status = r.status
   err.body = body
   return err

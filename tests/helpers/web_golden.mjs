@@ -11,6 +11,7 @@
 // `<STALE>` tags computed from it.
 //
 // WHAT DID NOT CROSS: the `--ref`/`--new` comparison and `--record`.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -39,6 +40,20 @@ const POLL_EVERY = 250;
 // The per-run values that live in a RESPONSE BODY rather than in the daemon record, so the
 // record-derived stamps cannot reach them. Targeted twice over: each pattern names the FIELD as
 // well as the shape of its value.
+// Named rather than inlined below, because the RECORDED side has to be put through this exact
+// pattern too and picking it back out of the table by index is a footgun the first draft stepped
+// in. See `webAssetNormalise`.
+// THE TAG IS EXACTLY EIGHT CHARACTERS, the width of the hash it covers, and that is load-bearing
+// rather than a flourish: a shorter tag shortens every body it appears in, and `Content-Length`
+// is recomputed from the normalised body on the live side while the recorded header keeps the
+// number the recorder measured. An equal-width tag leaves every length — the header, the `sizes`
+// column, the gzip cell's compressed byte count — byte-compared and exactly as recorded, so the
+// destamp costs the corpus nothing but those eight volatile characters. It went the other way
+// first: `<HASH>` reddened six cells on `Content-Length` alone.
+const ASSET_HASH = [
+  /(?<=\/)([A-Za-z][A-Za-z0-9_.]*)-[A-Za-z0-9_-]{8}\.(js|css)/g, '$1-<HASHED>.$2',
+];
+
 const WEB_STAMPS = [
   [/"checked_at": "\d{4}-\d{2}-\d{2} \d{2}:\d{2}"/g, '"checked_at": "<WHEN>"'],
   [/"build_time": "\d{4}-\d{2}-\d{2} \d{2}:\d{2}"/g, '"build_time": "<WHEN>"'],
@@ -52,6 +67,18 @@ const WEB_STAMPS = [
   // ONLY WHERE THE LABEL IS. A stamp line without one produces no tag, exactly as the emit
   // side does it, so "stamped with a release" and "stamped without one" stay distinguishable.
   [/\[release [^\]]+\]/g, '[release <REL>]'],
+  // THE VITE CONTENT HASH in a built asset's filename, for the same reason the release label
+  // above is tagged: it moves when a human rebuilds `web/src/`, which is not a change in
+  // anything the SERVER does, and a corpus that recorded it raw reddens on the next rebuild for
+  // a reason no static-file handler owns. It cost four cells the first time a UI fix shipped
+  // after P6 — three that serve `index.html` and one that asks an asset for its cache header.
+  //
+  // SCOPED TO A PATH SEGMENT AFTER A SLASH, so it reaches `/assets/index-Dq8VhKeA.js` in the
+  // served HTML and `./index-Dq8VhKeA.js` in a chunk's own import specifier, and reaches nothing
+  // that merely happens to end in eight characters and `.js`. `.js`/`.css` ONLY: the fonts under
+  // `/assets/` carry a hash too, and theirs is a function of a file no build step rewrites, so
+  // they stay byte-compared and one asset in the corpus still proves the hash is real.
+  ASSET_HASH,
   // THE INTERPRETER VERSION, REMOVED RATHER THAN TAGGED, and that is the one arm here that
   // deletes instead of replacing. The recorded corpus was taken from a server that ran on an
   // interpreter and published its version; this one has no such field at all, so there is no
@@ -85,6 +112,71 @@ function webDestamp(data) {
   try { text = new TextDecoder('utf-8', { fatal: true }).decode(data); } catch { return data; }
   for (const [pat, repl] of [...WEB_STAMPS, ...WEB_STAMPS_WIDTH]) text = text.replace(pat, repl);
   return Buffer.from(text, 'utf8');
+}
+
+// The asset-hash arm of `WEB_STAMPS`, named so the recorded side can be put through the SAME
+// pattern. Every other entry in that table was applied by the recorder before it hashed, so the
+// committed bodies already carry its tags; this one was added after the recorder died, which
+// leaves the recorded bytes un-tagged and makes a live-only destamp a guaranteed mismatch. A
+// symmetric drop is the one move still available once a corpus is frozen (`docs/limits.md`), and
+// it is only honest because `verbatim` holds the recorded TEXT: the hash and the size are
+// RE-DERIVED from bytes the corpus already committed, never invented.
+/**
+ * Put a recorded document through the asset-hash destamp, symmetrically with the live side.
+ *
+ * A column with no `verbatim` entry cannot be reached — there is no recorded text to re-tag and
+ * a hash cannot be re-normalised. That is a loud CHANGED rather than a silent pass, which is the
+ * correct failure: it says the corpus recorded an asset name somewhere this cannot see.
+ */
+export function webAssetNormalise(recorded) {
+  const verb = recorded.verbatim || {};
+  const out = { ...recorded, paths: { ...recorded.paths }, sizes: { ...recorded.sizes },
+    verbatim: { ...verb } };
+  for (const [k, text] of Object.entries(verb)) {
+    const tagged = text.replace(new RegExp(ASSET_HASH[0].source, 'g'), ASSET_HASH[1]);
+    if (tagged === text) continue;
+    const buf = Buffer.from(tagged, 'utf8');
+    out.verbatim[k] = tagged;
+    out.paths[k] = crypto.createHash('sha256').update(buf).digest('hex');
+    out.sizes[k] = buf.length;
+  }
+  return out;
+}
+
+/**
+ * The claim the destamp above would otherwise erase: that a hashed name in the served HTML is a
+ * file that EXISTS. Pinning the hash proved it as a side effect; tagging it does not, and an
+ * `index.html` pointing at an asset the build did not emit is precisely the bug a console user
+ * meets as a blank page. Checked once per run against the real `web/dist`, absolutely, on the
+ * live side only — there is nothing to ask the corpus here.
+ */
+export function assetRefsResolve() {
+  const dist = path.join(ROOT, 'web', 'dist');
+  const index = path.join(dist, 'index.html');
+  if (!fs.existsSync(index)) return [];
+  const html = fs.readFileSync(index, 'utf8');
+  const missing = [];
+  for (const m of html.matchAll(/["'](\/assets\/[A-Za-z0-9_.\-]+)["']/g)) {
+    if (!fs.existsSync(path.join(dist, m[1].slice(1)))) missing.push(m[1]);
+  }
+  return missing;
+}
+
+/**
+ * A cell asks for one built asset BY NAME, and the name carries a hash the next rebuild moves.
+ * Resolve it to whatever the live build emitted for that chunk — same base name, same extension
+ * — so the request keeps landing on the thing the cell is about instead of 404ing into a
+ * vacuity report. The frozen matrix stays frozen; the resolution happens here.
+ */
+function resolveAssetPath(reqPath) {
+  const m = /^\/assets\/([A-Za-z][A-Za-z0-9_.]*)-[A-Za-z0-9_-]{8}\.(js|css)$/.exec(reqPath);
+  if (!m) return reqPath;
+  const dir = path.join(ROOT, 'web', 'dist', 'assets');
+  if (!fs.existsSync(dir)) return reqPath;
+  const hit = fs.readdirSync(dir)
+    .filter((f) => new RegExp(`^${m[1]}-[A-Za-z0-9_-]{8}\\.${m[2]}$`).test(f))
+    .sort();
+  return hit.length === 1 ? `/assets/${hit[0]}` : reqPath;
 }
 
 /** Does this body carry a normalised value whose LENGTH differs between two runs? */
@@ -248,7 +340,7 @@ async function drive(port, token, requests) {
       const headers = { ...r.headers };
       if (r.token) headers['X-Geneseed-Token'] = token;
       let body = r.body === null || r.body === undefined ? null : Buffer.from(r.body);
-      let reqPath = r.path;
+      let reqPath = resolveAssetPath(r.path);
 
       if (r.from_body !== null && r.from_body !== undefined && reqPath.includes('{FROM_BODY}')) {
         const val = last[r.from_body];
