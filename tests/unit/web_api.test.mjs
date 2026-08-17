@@ -43,7 +43,7 @@ import { parseOrigin, originDisplay } from '../../js/update.mjs';
 import { MCP_PRESETS as _P, mcpConfigFor, mcpState, mcpSetEnabled } from '../../js/mcp.mjs';
 import { MCP_PRESETS } from '../../js/mcp.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER, pyResolve } from '../../js/hosts.mjs';
-import { normcase } from '../../js/lib/pyfs.mjs';
+import { normcase } from '../../js/lib/fs.mjs';
 import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { diffCollect } from '../../js/diff.mjs';
 import { makeSandbox, TMP_ROOT, RELOCATION_VARS } from '../helpers/sandbox.mjs';

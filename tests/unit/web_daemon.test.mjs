@@ -13,7 +13,7 @@
  * the REFERENCE's own source, and each was the control for a twin that survives it — named at
  * each surviving test rather than listed, because a retirement whose gate is not named is prose.
  *
- * ⚠ PORT-LEDGER ROW 7 LIVES HERE, in `the committed dist is what makes the ask arm
+ * ⚠ LIMITS ROW 7 LIVES HERE, in `the committed dist is what makes the ask arm
  * unreachable`. `js/web/server.mjs` declares that no test reaches `npmBuild` because
  * `web/dist/index.html` is TRACKED, so `buildPlan` answers `serve` in every checkout a cell can
  * build. That is a claim about the REPOSITORY rather than about the code, and a docblock's claim
@@ -233,7 +233,7 @@ test('web status answers with no python on PATH', (t) => {
 });
 
 test('the committed dist is what makes the ask arm unreachable', () => {
-  // ⚠ PORT-LEDGER ROW 7, re-derived rather than trusted. See the header.
+  // ⚠ LIMITS ROW 7, re-derived rather than trusted. See the header.
   const r = spawnSync('git', ['ls-files', '--', 'web/dist/index.html'],
     { cwd: ROOT, encoding: 'utf8', windowsHide: true });
   assert.equal(r.status, 0, r.stderr);

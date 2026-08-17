@@ -73,7 +73,7 @@ import { EMIT_OPTIONS, themeOptions } from '../setup.mjs';
 import { accentFor, statusData } from '../status.mjs';
 import {
   comparePaths, normcase, pyStripSpace, pyUnquote, readText, withDiscardableStderr, within,
-} from '../lib/pyfs.mjs';
+} from '../lib/fs.mjs';
 import { readJsonc } from '../settings.mjs';
 import { apiActivity, apiActivityDetail } from './activity.mjs';
 import { apiMcp, apiRules } from './actions.mjs';
@@ -523,7 +523,7 @@ export function apiWikiItem(state, name) {
 }
 
 /**
- * `harness._within` — re-exported from `js/lib/pyfs.mjs`, where P6i moved it.
+ * `harness._within` — re-exported from `js/lib/fs.mjs`, where P6i moved it.
  *
  * It lived here from P6b (the restore's containment check) until `_install_move_list` needed
  * the same predicate from `js/uninstall.mjs`, which must not import the web tree. The

@@ -44,8 +44,8 @@ import path from 'node:path';
 
 import { THEMES } from './checkout.mjs';
 import { readJsonMaybe } from './installs.mjs';
-import { pySplitLines } from './lib/pydiff.mjs';
-import { pyPrint } from './lib/pyfs.mjs';
+import { pySplitLines } from './lib/udiff.mjs';
+import { pyPrint } from './lib/fs.mjs';
 
 // ---- display tiers -------------------------------------------------------------------
 //
@@ -373,7 +373,7 @@ export function themeFlair(theme) {
     accent: data.ACCENT ?? 'cyan',
     tagline: data.TAGLINE ?? '',
     sigil: data.LOADED_SIGIL ?? '',
-    // `str.splitlines()` — `js/lib/pydiff.mjs`' twin, already gated. It answers `[]` for
+    // `str.splitlines()` — `js/lib/udiff.mjs`' twin, already gated. It answers `[]` for
     // the empty string where `''.split('\n')` answers `['']`, which would put a blank row
     // in the banner of every theme that omits one; and its boundary set is Python's rather
     // than `\s`, which P6d measured apart.

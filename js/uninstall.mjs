@@ -65,7 +65,7 @@ import {
 import {
   comparePaths, indexOfEq, jsonDumps, jsonDumpsIndent, pyEq, pyIsAbsolute, pyPrint,
   pyPrintErr, readText, within, writeText,
-} from './lib/pyfs.mjs';
+} from './lib/fs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };

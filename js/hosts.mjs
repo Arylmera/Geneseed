@@ -16,7 +16,7 @@
 import { realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { pyPathStr, pyPrintErr, withDiscardableStderr } from './lib/pyfs.mjs';
+import { pyPathStr, pyPrintErr, withDiscardableStderr } from './lib/fs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 

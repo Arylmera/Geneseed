@@ -108,7 +108,7 @@ const COLLATION_ROW = 'theme-files-are-visited-in-the-references-order';
 const lines = (buf) => buf.toString('utf8').split('\n').filter((ln) => ln !== '');
 
 /**
- * Python's key for `sorted(Path)`, written out rather than imported from `js/lib/pyfs.mjs`.
+ * Python's key for `sorted(Path)`, written out rather than imported from `js/lib/fs.mjs`.
  * Deriving the expectation from the code under test would make this agree with any drift in it.
  */
 const pyPathKey = (n) => (process.platform === 'win32' ? n.toLowerCase() : n);

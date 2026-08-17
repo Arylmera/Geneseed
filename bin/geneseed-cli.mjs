@@ -54,7 +54,7 @@ import { parseDriverArgs } from './geneseed.mjs';
 import { cmdExclude } from '../js/excludes.mjs';
 import { cmdBuild, cmdPrompt, cmdRebuildAll, cmdTheme } from '../js/generate.mjs';
 import { cmdMigrate } from '../js/migrate.mjs';
-import { pyInt } from '../js/lib/pyfs.mjs';
+import { pyInt } from '../js/lib/fs.mjs';
 import { cmdLink, cmdUnlink } from '../js/link.mjs';
 import { cmdMcp } from '../js/mcp.mjs';
 import { cmdMemory } from '../js/memory.mjs';

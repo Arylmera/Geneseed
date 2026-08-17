@@ -70,7 +70,7 @@ export function parseArgs(argv) {
 // directory that either exists or does not, so the guard is the state itself rather than a proxy
 // for it.
 //
-// `docs/port-ledger.md` already carries the general form of this — "the fingerprint of the
+// `docs/limits.md` already carries the general form of this — "the fingerprint of the
 // operator's own build … which no sandbox can fence off (there is no env hook for ROOT)". These
 // two are that hazard reaching a web body instead of a status panel.
 const BUNDLE_CELLS = new Set([

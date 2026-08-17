@@ -219,7 +219,7 @@ test('every cell declares a binary that exists', () => {
 //
 // The `link` group returned nothing at all on any non-Windows host, and from Windows — the only
 // machine that ever ran the harnesses — an empty group is indistinguishable from a group that was
-// written and passes. Nothing failed; `docs/port-ledger.md` row 5 said so in prose, and prose is
+// written and passes. Nothing failed; `docs/limits.md` row 5 said so in prose, and prose is
 // not a gate. A gate that fires on the OTHER platform is not a gate the developer ever sees.
 //
 // THREE OF THE FIVE ARE ALREADY HOME. `tests/cli_golden.mjs`'s `platformDeclarationProblems`

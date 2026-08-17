@@ -52,7 +52,7 @@ import { gzipSync } from 'node:zlib';
 import { GLOBAL_MANIFEST, pyResolve } from '../hosts.mjs';
 import {
   jsonDumpsCompact, parseJson, pyInt, pyPrint, pyStr, pyTruthy, pyUnquote, pyWhich, writeText,
-} from '../lib/pyfs.mjs';
+} from '../lib/fs.mjs';
 import { promptLine } from '../setup.mjs';
 // P8c. The reference imports `_update` LAZILY inside the handler, to keep `build` and its
 // `sys.path` side effect out of web-import time; ESM has no such side effect and the import is

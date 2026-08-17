@@ -15,7 +15,7 @@
 [![Plugins](https://img.shields.io/badge/plugins-7-teal)](adapters/opencode/plugins/)
 [![OpenCode · Claude Code · Bob · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
 
-[**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & TUI**](#-3--web--tui) · [**What you get**](#-4--what-you-get)
+[**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & terminal**](#-3--web--terminal) · [**What you get**](#-4--what-you-get)
 
 </div>
 
@@ -23,7 +23,7 @@
 
 Geneseed distils an agent operating system into a generic harness built around a single `AGENT.md`. Point your tool at it and the agent inherits a set of operating **rules**, a roster of capability **agents**, native **skills**, a **memory** convention, and — on OpenCode — 7 **plugins** that auto-load your project's docs, capture durable memory, enforce the safety laws, run saved workflows, ping you when a long run finishes, hold a minimal-code mode when you ask for one, and stream what each session is doing to the web console. One source builds it; it follows you into every repo.
 
-This page is the overview. Four parts: **why** it exists, how to **set it up**, the two ways to **drive it** (web & TUI), and **what you get**. For every install path, configuration knob, and troubleshooting step, read the full [Setup guide](SETUP.md).
+This page is the overview. Four parts: **why** it exists, how to **set it up**, the two ways to **drive it** (web console & command line), and **what you get**. For every install path, configuration knob, and troubleshooting step, read the full [Setup guide](SETUP.md).
 
 ---
 
@@ -90,12 +90,12 @@ Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PA
 
 **Already installed from a clone?** `geneseed migrate` moves every install you have onto the npm shape in one pass, all-or-nothing, without touching hooks or login items it did not write. Your old clone keeps working for a full release — there is no cliff. See [Migrate an existing install](docs/web/migrate.md).
 
-### 🐍 What still needs Python — nothing, said plainly
+### 🟩 One runtime — Node, and nothing else
 
-25 of the 25 subcommands run from Node, along with all four hooks, every web-console endpoint and both generators. Each was gated byte for byte against the Python reference it replaced, across every theme × host × footprint, and those recordings are replayed on every commit now that the reference itself is gone. So an install is Python-free **for the harness itself**, and since the token-report script crossed, for everything it ships as well. The one exception that used to survive here was a screen rather than a command, and it no longer exists either.
+Node ≥ 22.3 is the entire dependency list. Every subcommand, all four hooks, every web-console endpoint and both generators run from it, and what each of them emits is replayed against frozen recordings on every commit, across every theme × host × footprint. So an install needs no second interpreter — not for the harness, and not for anything it ships.
 
-- **0 commands have no Node twin**: 25 of the 25 subcommands, and all four hook verbs, answer from the Node entry points. The full-screen browse panel that `geneseed tui` and `geneseed menu` used to open on a terminal was the last hold-out, and it was a SCREEN rather than a command. It is not here and it is not anywhere: both verbs cross, both refuse the panel by name and print the command list instead. Off a terminal, which is how scripts and CI run them, the bytes and the exit code are the recorded ones.
-- **Nothing you install needs an interpreter any more.** The `token-report` skill is a script rather than prose, and it is now `scripts/token_report.mjs`, run with `node`; `daydream` and `herdr`, which used to hand inline code to `python3` without shipping a file of their own, call `node -e` instead. So **every bundle carries** nothing that needs one: no Python file, and no skill that shells out to an interpreter, on any host, theme or footprint. Three tests freeze that — one scans every tracked file for inline code handed to an interpreter, one globs the bundle source, and one drives the ported script against its frozen predecessor over seeded transcripts for all four hosts and compares the bytes.
+- **0 commands have no Node twin**: 25 of the 25 subcommands, and all four hook verbs, answer from the Node entry points. `catalog`, `mcp` and `memory` are Node-native faces the CLI table declares on top of that roster. There is no full-screen browse panel — `geneseed tui` and `geneseed menu` are verbs that refuse it by name and print the command list instead. Off a terminal, which is how scripts and CI run them, the bytes and the exit code are the recorded ones.
+- **Nothing you install needs an interpreter.** The `token-report` skill is a script rather than prose, and it ships as `scripts/token_report.mjs`, run with `node`; `daydream` and `herdr` hand their inline code to `node -e`. So **every bundle carries** nothing that needs one: no Python file, and no skill that shells out to an interpreter, on any host, theme or footprint. Three tests freeze that — one scans every tracked file for inline code handed to an interpreter, one globs the bundle source, and one replays the report script over seeded transcripts for all four hosts and compares the bytes.
 - **`upgrade` / `update` / `sync-self` / `bootstrap` are for a git checkout.** They `git pull` the install's own origin. From an npm install they stop before touching anything and name `npm install -g geneseed@latest` as the update instead.
 
 One more honest edge, in the web console rather than the CLI: the **"browse…" folder picker** would open an OS-native dialog on the machine running the daemon, and this server declines to. The button reports that it is unavailable and the field beside it stays editable — type or paste the path.
@@ -108,9 +108,9 @@ One more honest edge, in the web console rather than the CLI: the **"browse…" 
 
 ---
 
-## 🖥 3 · Web & TUI
+## 🖥 3 · Web & terminal
 
-Two front-ends over the same deployed harness — the same actions either way. Reach for the **web console** when you want to read and browse; reach for the **TUI** when you live in the terminal.
+Two front-ends over the same deployed harness — the same actions either way. Reach for the **web console** when you want to read and browse; reach for the **command line** when you live in the terminal. There is no full-screen panel between them.
 
 ### 🌐 Web console — `geneseed web`
 
@@ -193,7 +193,7 @@ Lean still ships the complete `laws/universal.md` beside `AGENT.md` and points t
 
 Either way the harness is otherwise identical — same files, Rules, capabilities, and guards; lean only relocates each Rule's *reasoning* to on-demand (and adds the standalone laws file to global/Claude/Bob installs). The one behavioural edge: with the rationale always in context, **full** applies a rule's nuance more reliably on subtle edge cases — or with a weaker model that may not reach for the pointer — which is why it stays the default.
 
-Want to check a build before it touches anything real? `geneseed-build --validate-only --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build---validate-only).
+Want to check a build before it touches anything real? `geneseed-build --validate-only --theme NAME --emit MODE --out TARGET` renders and validates into a throwaway sandbox — nothing under `--out`/`--root` is written — and exits non-zero on any problem. Details: [SETUP.md](SETUP.md#dry-run-a-build-validate).
 
 ---
 
@@ -296,7 +296,7 @@ geneseed rebuild-all   # re-render every registered install in its own theme + m
 
 **Moving from a clone to npm** — `geneseed migrate` re-emits every install you already have onto the npm shape, all-or-nothing, and reports (never rewrites) the hooks and login items it did not write. `--dry-run` prints the plan first. See [Migrate an existing install](docs/web/migrate.md).
 
-**Local edits survive.** The self-improvement loops let the agent refine its deployed agent/skill files in place. Before setup, re-theme, or upgrade overwrites them, any drift is auto-exported to a markdown **improvements file** under `improvements/` *inside the deployed harness dir* (e.g. `~/.config/opencode/improvements/` for the global install) — beside the install it describes, untouched by rebuilds and uninstall. Hand it to an agent in this repo to back-port the changes into `src/`. On demand: `./geneseed diff --out FILE`, or `e` in the TUI's *Review local edits* view.
+**Local edits survive.** The self-improvement loops let the agent refine its deployed agent/skill files in place. Before setup, re-theme, or upgrade overwrites them, any drift is auto-exported to a markdown **improvements file** under `improvements/` *inside the deployed harness dir* (e.g. `~/.config/opencode/improvements/` for the global install) — beside the install it describes, untouched by rebuilds and uninstall. Hand it to an agent in this repo to back-port the changes into `src/`. On demand: `./geneseed diff --out FILE`, or the **Changes** page in the web console.
 
 Details and precedence rules: [SETUP.md → Upgrade](SETUP.md#upgrade).
 
@@ -327,7 +327,7 @@ Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Aryl
 
 Three things that bite when you don't know them:
 
-- **`js/cli-table.json` IS the CLI.** The argument parser is data, and that file is the owned document — not a generated one. `bin/geneseed-cli.mjs` cannot parse a single verb without it, `bin/geneseed-hook.mjs` renders `--help` from it, and the console's `cli` docs page is a filtered view of it. It was checked field for field against the reference's own argument parser while that parser existed; what holds it now is `tests/unit/cli_table.test.mjs` and the recorded help texts under `tests/__snapshots__/help/`, which every verb's `--help` is rendered against — so change a flag here and the fixture for that verb is what tells you.
+- **`js/cli-table.json` IS the CLI.** The argument parser is data, and that file is the owned document — not a generated one. `bin/geneseed-cli.mjs` cannot parse a single verb without it, `bin/geneseed-hook.mjs` renders `--help` from it, and the console's `cli` docs page is a filtered view of it. What holds it honest is `tests/unit/cli_table.test.mjs` plus the recorded help texts under `tests/__snapshots__/help/`, which every verb's `--help` is rendered against — so change a flag here and the fixture for that verb is what tells you. Those recordings are frozen and cannot be re-taken; a red one is a finding, not a re-bless.
 - **The version has one owner: `harness.config.json`.** `package.json` mirrors it and a test fails the fork. Never `npm version` — it edits one of the two.
 - **Publishing is deliberate and manual.** `.github/workflows/publish.yml` uses npm trusted publishing (OIDC); there is no `NPM_TOKEN` in this repository and there must not be one. It runs only from Actions → publish → Run workflow, and the npm-side trusted publisher is keyed on that workflow's **filename** — renaming the file breaks publishing with no local symptom, which is why the file names itself in its own header and a test asserts the two agree.
 

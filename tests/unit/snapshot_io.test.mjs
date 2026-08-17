@@ -23,7 +23,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { compare, read, safeName, write } from '../helpers/snapshot_io.mjs';
-import { jsonDumpsIndent } from '../../js/lib/pyfs.mjs';
+import { jsonDumpsIndent } from '../../js/lib/fs.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SNAPS = path.join(ROOT, 'tests', '__snapshots__');

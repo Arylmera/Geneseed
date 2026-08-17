@@ -72,7 +72,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
-import { pyWhich } from '../../js/lib/pyfs.mjs';
+import { pyWhich } from '../../js/lib/fs.mjs';
 import { TMP_ROOT } from '../helpers/sandbox.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -269,15 +269,15 @@ const SHIPS = [
   ['docs/token-footprint.md', 'docs/*.md'],
   ['docs/web-ui.md', 'docs/*.md'],
   ['docs/wiki.md', 'docs/*.md'],
-  // Ships for the reason the others do not: it is the standing statement of what the Node
-  // port does NOT prove, and a package carrying two implementations owes its reader that
-  // list. `docs/specs/` is gitignored, so a ledger kept only in a phase note is a per-machine
-  // file — this is the tracked home for it.
-  ['docs/port-ledger.md', 'docs/*.md — what the Node port does not prove'],
+  // Ships for the reason the others do not: it is the standing statement of what this tool
+  // does NOT prove about itself, and a package whose only oracle is a frozen recording owes
+  // its reader that list. `docs/specs/` is gitignored, so a ledger kept only in a phase note
+  // is a per-machine file — this is the tracked home for it.
+  ['docs/limits.md', 'docs/*.md — what this tool does not prove about itself'],
   // Its neighbour above says why it belongs in the package rather than in a phase note:
-  // `port-ledger.md` lists what the port does not PROVE, this lists where the port
-  // deliberately does not AGREE. Both are statements a reader holding two implementations is
-  // owed, and both would otherwise live in gitignored `docs/specs/`.
+  // `limits.md` lists what is not PROVEN, this lists where the tool deliberately does not
+  // AGREE with what came before it. Both are statements a reader is owed, and both would
+  // otherwise live in gitignored `docs/specs/`.
   ['docs/declined.md', 'docs/*.md — where the port deliberately diverges, and why'],
   ['web/dist/', 'TRACKED and load-bearing: js/web/server.mjs serves it, and npmBuild is a '
     + 'first-run-from-a-partial-checkout path no cell reaches'],
@@ -604,7 +604,7 @@ const API_FLOOR = [
   // `ExperimentalWarning` on stderr — the stream this port compares byte-for-byte in 294
   // harness cells. So the floor is where it stops warning, not where it starts existing.
   ['fs.cpSync (stable)', '22.3.0', /\bcpSync\b/],
-  // js/lib/pyfs.mjs — pyStr's toJSON writes verbatim text. Its own comment says "Node >= 21".
+  // js/lib/fs.mjs — pyStr's toJSON writes verbatim text. Its own comment says "Node >= 21".
   ['JSON.rawJSON', '21.0.0', /\bJSON\.rawJSON\b/],
   ['Object.hasOwn', '16.9.0', /\bObject\.hasOwn\b/],
   ['String.prototype.replaceAll', '15.0.0', /\.replaceAll\(/],

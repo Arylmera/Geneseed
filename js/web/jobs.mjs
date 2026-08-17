@@ -110,7 +110,7 @@ import path from 'node:path';
 import { ROOT } from '../checkout.mjs';
 import { setupBuildArgs } from '../generate.mjs';
 import { isDict } from '../mcp.mjs';
-import { jsonDumpsCompact, parseJson, pyTruthy, readText, writeText } from '../lib/pyfs.mjs';
+import { jsonDumpsCompact, parseJson, pyTruthy, readText, writeText } from '../lib/fs.mjs';
 
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 

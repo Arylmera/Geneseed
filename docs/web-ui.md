@@ -11,7 +11,7 @@
 ---
 
 The web console is a local, offline browser UI over your deployed harness — the same
-actions as the TUI in a dashboard-first layout with rendered markdown and clickable
+actions the CLI offers, in a dashboard-first layout with rendered markdown and clickable
 cross-links. It binds to `127.0.0.1` only, ships its build in `web/dist/`, and needs no
 npm at runtime.
 
@@ -25,8 +25,8 @@ geneseed web start|stop|status   # run/inspect the background daemon
 ```
 
 A bare `geneseed` opens the console when the environment can show it (interactive TTY +
-GUI browser, not SSH), and otherwise falls back to the TUI menu. Set `GENESEED_NO_WEB=1`
-to always prefer the menu.
+GUI browser, not SSH), and otherwise prints the command list. Set `GENESEED_NO_WEB=1` to
+always get the command list.
 
 - **Daemon.** `start` runs the server detached and returns your shell; it's a singleton
   (already running ⇒ just reopens the browser). `stop` and the in-page **Stop** button

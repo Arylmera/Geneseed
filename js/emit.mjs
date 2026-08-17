@@ -84,7 +84,7 @@ import {
 import { VERSION_MARKER } from './hosts.mjs';
 import {
   writeText, readText, copyFile, jsonDumpsIndent, parseJson, pyAscii, pyTruthy,
-} from './lib/pyfs.mjs';
+} from './lib/fs.mjs';
 /** `_build_render.SRC_DIRS_MARKER`. */
 const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
 /** `_build_render.OWNED_SRC_DIRS` — wiped and regenerated each run. */

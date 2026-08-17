@@ -74,7 +74,7 @@ export function parseArgs(argv) {
 // can never be re-recorded. So there is no widening of the normaliser that makes these nine
 // pass — only a declaration of where they hold.
 //
-// `docs/port-ledger.md` predicted exactly this ("a different Windows username reddens it, and
+// `docs/limits.md` predicted exactly this ("a different Windows username reddens it, and
 // after the reference is deleted a red padding run is unanswerable"). What is new is that a
 // Windows CI job now exists to make it concrete: the Python `cells` job is Linux-only, so the
 // `crlf` half had never been replayed anywhere but the machine that recorded it.

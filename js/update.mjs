@@ -48,8 +48,8 @@ import { opencodeConfigDir } from './hosts.mjs';
 import {
   PY_SPACE, appendText, copyFile, pyInt, pyPathStr, pyPrint, pyPrintErr, pyStripSpace, pyWhich,
   readText, writeText,
-} from './lib/pyfs.mjs';
-import { NO_WINDOW } from './lib/pyproc.mjs';
+} from './lib/fs.mjs';
+import { NO_WINDOW } from './lib/proc.mjs';
 import { restartDaemon } from './web/server.mjs';
 
 /**
@@ -58,7 +58,7 @@ import { restartDaemon } from './web/server.mjs';
  *
  * `PY_SPACE` rather than `\s`: the class is NEGATED, so the two definitions disagree about
  * whether a `\uFEFF` or a `\u001c` ends the userinfo. Unreachable through a git remote and
- * spelled correctly anyway, for the reason `js/lib/pyfs.mjs` gives — an approximated
+ * spelled correctly anyway, for the reason `js/lib/fs.mjs` gives — an approximated
  * primitive is the one that is wrong the day something reaches it.
  */
 const CREDS_RE = new RegExp(`(://)[^/@${PY_SPACE}]+@`, 'g');
@@ -68,7 +68,7 @@ export function redactUrlCreds(text) {
 }
 
 // `_NO_WINDOW` was defined here and PRIVATE to this module, which is how `js/doctor.mjs`
-// and `js/hooks.mjs` came to spawn without it — see `js/lib/pyproc.mjs` for the flag, the
+// and `js/hooks.mjs` came to spawn without it — see `js/lib/proc.mjs` for the flag, the
 // capturing-only rule behind it, and why a miss here is invisible to every byte gate.
 
 /** `subprocess.run(..., capture_output=True, encoding="utf-8")` reads in UNIVERSAL NEWLINES. */
@@ -535,7 +535,7 @@ export function migrateStrayBundle(here, out, log) {
     if (existsSync(src) && statSync(src).isDirectory() && !existsSync(path.join(outStr, mem))) {
       // `shutil.copytree`, which copies with `copy2` semantics — `preserveTimestamps` is
       // the half that matters (the permission bits are the deliberate deviation
-      // `js/lib/pyfs.mjs`'s `copyFile` already documents for the same reason).
+      // `js/lib/fs.mjs`'s `copyFile` already documents for the same reason).
       cpSync(src, path.join(outStr, mem), { recursive: true, preserveTimestamps: true });
       log(`[geneseed] rescued ${mem}/ from ${stray} -> ${outStr}`);
     }

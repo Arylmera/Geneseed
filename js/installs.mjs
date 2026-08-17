@@ -38,7 +38,7 @@ import path from 'node:path';
 import { CONFIG, THEMES, discoverNames } from './checkout.mjs';
 import { GLOBAL_MANIFEST, HOSTS, pyResolve } from './hosts.mjs';
 import { registryRoots } from './registry.mjs';
-import { comparePaths, pyPrintErr, pyRepr, readText } from './lib/pyfs.mjs';
+import { comparePaths, pyPrintErr, pyRepr, readText } from './lib/fs.mjs';
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };

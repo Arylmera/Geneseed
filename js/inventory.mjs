@@ -25,7 +25,7 @@ import { ROOT, SRC, makeCfg } from './checkout.mjs';
 import { firstBlockquote } from './native.mjs';
 import { renderAll } from './render.mjs';
 import { pyResolve } from './hosts.mjs';
-import { parseJson, readText } from './lib/pyfs.mjs';
+import { parseJson, readText } from './lib/fs.mjs';
 
 /**
  * `_harness_tui.LAW_HEADING_RE` — a heading in the RENDERED laws file, e.g.

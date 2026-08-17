@@ -17,7 +17,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseJson, jsonDumpsIndent, jsonDumpsCompact } from '../../js/lib/pyfs.mjs';
+import { parseJson, jsonDumpsIndent, jsonDumpsCompact } from '../../js/lib/fs.mjs';
 
 // A read-modify-write is what every settings merge does: parse the user's file, change one key,
 // write it back. Every OTHER key must come back as the reference would have written it.

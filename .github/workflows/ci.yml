@@ -174,7 +174,12 @@ jobs:
             if command -v $p; then echo "FAIL: installing git dragged in $p"; exit 1; fi
           done
       - uses: actions/checkout@v4
+      # ⚠ `shell: bash` on every step that needs more than POSIX sh. A `container:` job defaults to
+      # `sh -e`, where `set -o pipefail` is an ILLEGAL OPTION and the step dies before it reaches
+      # anything worth testing — which is exactly how this gate first failed. Debian slim ships
+      # bash; naming it is cheaper than writing to the sh subset.
       - name: pack, install into a throwaway consumer, and exercise it
+        shell: bash
         run: |
           set -o pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -183,16 +188,23 @@ jobs:
           mkdir -p /consumer && cd /consumer && npm init -y >/dev/null
           npm install --no-audit --no-fund "$GITHUB_WORKSPACE/$TARBALL"
           mkdir -p /work && cd /work && git init -q
+          # The daemon is backgrounded by PID rather than by `%1`: job control is off in a
+          # non-interactive shell, so `kill %1` is unreliable exactly where it matters.
           {
             npx geneseed --version
             npx geneseed doctor --all
             npx geneseed-build --emit claude
             npx geneseed status
             npx geneseed catalog
-            npx geneseed web --daemon-internal --port 0 & sleep 3; kill %1 2>/dev/null || true
+            npx geneseed web --daemon-internal --port 0 &
+            web_pid=$!
+            sleep 3
+            kill "$web_pid" 2>/dev/null || true
+            wait "$web_pid" 2>/dev/null || true
           } 2>&1 | tee /tmp/acceptance.log
           echo "--acceptance-done--" >> /tmp/acceptance.log
       - name: no ENOENT, and the word never appears
+        shell: bash
         run: |
           if grep -qi 'ENOENT' /tmp/acceptance.log; then
             echo "FAIL: an ENOENT — something spawned a program this machine does not have"

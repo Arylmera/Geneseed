@@ -22,7 +22,7 @@ import {
 } from '../../js/native.mjs';
 import { cmdValidate, validateSandboxProblems } from '../../js/doctor.mjs';
 import { syncThemes } from '../../js/themes.mjs';
-import { writeText } from '../../js/lib/pyfs.mjs';
+import { writeText } from '../../js/lib/fs.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { DENY_SKIP, deny } from '../helpers/deny.mjs';
 import {

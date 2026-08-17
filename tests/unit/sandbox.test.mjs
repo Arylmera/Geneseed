@@ -167,7 +167,7 @@ test('every relocation variable is cleared even when set', () => {
 // transcribed. A fourth host added with its own `*_CONFIG_DIR` and not listed here would render
 // into the developer's real install, silently, in every global cell.
 //
-// A READ, NOT THE NAME — and the first draft got this wrong in the way `docs/port-ledger.md`
+// A READ, NOT THE NAME — and the first draft got this wrong in the way `docs/limits.md`
 // row 6 already records. Scanning for the word reported `CLAUDE_CONFIG_DIR` as a missing entry,
 // because `js/hosts.mjs:131` carries a docblock saying that setting it must NOT move the
 // target: an INVERSE row, deliberately unread. A structural gate that matches prose is a gate

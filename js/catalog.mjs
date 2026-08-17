@@ -26,7 +26,7 @@
 import { helpWidth } from './cli.mjs';
 import { tuiInventory } from './inventory.mjs';
 import { defaultTheme, installedDefaults } from './installs.mjs';
-import { pyPrint } from './lib/pyfs.mjs';
+import { pyPrint } from './lib/fs.mjs';
 import { dwidth, fit, icon, truncd, tuiEntries } from './tui.mjs';
 
 /** The listing's section names, and the row kind each one selects. */

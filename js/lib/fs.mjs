@@ -1,12 +1,22 @@
 /**
- * Python-compatible primitives — the filesystem and JSON behaviour the port must match.
+ * The primitives — how this tool reads, writes, quotes, compares and prints.
  *
- * The Node port has to produce bytes identical to the Python generator's, and the two
- * runtimes disagree by default in ways that are invisible in a diff viewer. This module
- * is where those disagreements are settled, once, so no caller has to remember them.
+ * These are the definitions, not an adaptation of somebody else's. Every rule below was
+ * originally MEASURED against CPython, because the generator these functions serve had to
+ * emit bytes indistinguishable from a Python one; that second party is gone and the rules
+ * are not. What holds them now is the recorded corpora under `tests/__snapshots__/`, which
+ * compare this module's output byte for byte and can never be re-recorded — so a rule here
+ * is a frozen fact about what this tool emits, and changing one is a product change.
  *
- * Everything here is stdlib-only, ESM, and deliberately tiny — it is imported by hook
- * paths eventually, where load time is a per-tool-call cost.
+ * The `py`-prefixed export names are kept on purpose. Each marks a function whose contract
+ * is a language primitive's exact behaviour rather than a convenience wrapper, and that mark
+ * is what stops a later reader "simplifying" one back to the Node default it deliberately is
+ * not. For the same reason the per-function comments still name what was measured: that
+ * provenance is the only surviving record of WHY a rule is the shape it is, and it is the
+ * first thing to read before touching one.
+ *
+ * Everything here is stdlib-only, ESM, and deliberately tiny — it is imported on hook paths,
+ * where load time is a per-tool-call cost.
  */
 import {
   accessSync, appendFileSync, constants, writeFileSync, readFileSync, copyFileSync, statSync,

@@ -19,7 +19,7 @@
  * help-flag scrape hit, and the same answer. THE FROZEN SETS BELOW WERE READ OUT OF THE REFERENCE
  * ON 2026-08-16 with its own `ast` readers, and the test is the second party now.
  *
- * ⚠ PORT-LEDGER ROW 3 LIVES IN THIS FILE, in `the declared partition is the one the dispatcher
+ * ⚠ LIMITS ROW 3 LIVES IN THIS FILE, in `the declared partition is the one the dispatcher
  * uses`. `/api/pick-folder` is DECLINED, never ported — it opens an OS-native folder dialog on
  * the daemon host — and the claim is PROBED rather than declared: POST must answer 501 and GET
  * must NOT, because a GET has to fall through to the SPA. That pair is what refuses the
@@ -285,7 +285,7 @@ test('every POST route is either ported or declared unported', () => {
 });
 
 test('the declared partition is the one the dispatcher uses', async () => {
-  // ⚠ PORT-LEDGER ROW 3. THE ASSERTION THE TWO TESTS ABOVE CANNOT MAKE, and a mutation is why it
+  // ⚠ LIMITS ROW 3. THE ASSERTION THE TWO TESTS ABOVE CANNOT MAKE, and a mutation is why it
   // exists. Both of them read the exported SETS. Collapsing `NOT_PORTED_POST` back into
   // `NOT_PORTED` — one line, and the whole reason two lists exist — leaves every set exactly as
   // declared and both tests green, while a GET to a POST-only declaration starts answering 501

@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { hookRunnerEntry } from '../../bin/geneseed.mjs';
 import { GENESEED_HOOK_SNIFF, mergeClaudeSettings, readJsonc } from '../../js/settings.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
-import { jsonDumpsCompact } from '../../js/lib/pyfs.mjs';
+import { jsonDumpsCompact } from '../../js/lib/fs.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const CORPUS = JSON.parse(readFileSync(path.join(ROOT, 'tests', '__snapshots__', 'jsonc.json'),

@@ -22,7 +22,7 @@ import { spawnSync } from 'node:child_process';
 
 import { cellEnv, makeSandbox } from './sandbox.mjs';
 import { ROOT, normalise, snapshot } from './golden.mjs';
-import { writeText } from '../../js/lib/pyfs.mjs';
+import { writeText } from '../../js/lib/fs.mjs';
 
 // The Node twin of the fake model CLI. See its own docblock for why the replayer substitutes
 // the bare name `node` and not `process.execPath`.
@@ -108,7 +108,7 @@ export function subst(value, repl) {
  * two-line README recorded at 26 bytes replayed at 23. Not a port bug and not a normalisation
  * gap — the FIXTURE was writing different bytes than the fixture that recorded the corpus.
  *
- * `js/lib/pyfs.mjs` already owns the translation, so the harness borrows the product's own
+ * `js/lib/fs.mjs` already owns the translation, so the harness borrows the product's own
  * function rather than keeping a second copy of the rule.
  */
 export function seed(sandbox, world, repl) {
@@ -557,7 +557,7 @@ export function checkExpectations(cell, snap, side = 'the port') {
  *
  * The difference that reaches this corpus is the space class: Python's `\s` is
  * `[ \t\n\r\f\v\x1c-\x1f\x85\xa0\u1680\u2000-\u200a…]` and JavaScript's is that set minus
- * `\x1c-\x1f` and `\x85`, plus `\ufeff`. `js/lib/pyfs.mjs` already owns the exact class as
+ * `\x1c-\x1f` and `\x85`, plus `\ufeff`. `js/lib/fs.mjs` already owns the exact class as
  * `PY_SPACE` for the same reason. Substituted here rather than left to chance, because a
  * pattern that silently matches differently turns an absolute assertion into a coin flip.
  */

@@ -49,12 +49,12 @@ import {
 import { PALETTE_ROLES, colorThemeFiles } from './opencode.mjs';
 import { STRUCTURE, renderAll } from './render.mjs';
 import { SHIM_ARGV, hookShimPath } from './settings.mjs';
-import { pySplitLines } from './lib/pydiff.mjs';
-import { NO_WINDOW } from './lib/pyproc.mjs';
+import { pySplitLines } from './lib/udiff.mjs';
+import { NO_WINDOW } from './lib/proc.mjs';
 import {
   comparePaths, normcase, parseJson, pyPrint, pyPrintErr, pyRepr, pyStr, pyStripSpace, pyWhich,
   readText, withDiscardableStderr,
-} from './lib/pyfs.mjs';
+} from './lib/fs.mjs';
 
 // --------------------------------------------------------------------------------------
 // _harness_core's scanning primitives
@@ -115,7 +115,7 @@ function rglob(dir) {
 
 // `withDiscardableStderr` was defined here while `renderedProblems` was its only caller.
 // `js/hooks.mjs` became the second and third when the hook started CATCHING `expanduser`'s
-// refusal, so it moved beside `pyPrintErr` in `js/lib/pyfs.mjs` — the writes it intercepts —
+// refusal, so it moved beside `pyPrintErr` in `js/lib/fs.mjs` — the writes it intercepts —
 // and its docblock carries the "not for silencing noise" warning with it.
 
 /** `Path.stem` — the basename with its last suffix removed. */

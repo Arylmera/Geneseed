@@ -54,8 +54,8 @@ import { GLOBAL_MANIFEST, opencodeConfigDir } from './hosts.mjs';
 import {
   defaultMode, defaultPosture, defaultTheme, installedDefaults, themeFiles,
 } from './installs.mjs';
-import { pyInt, pyPrint, pyPrintErr, pyWhich } from './lib/pyfs.mjs';
-import { NO_WINDOW } from './lib/pyproc.mjs';
+import { pyInt, pyPrint, pyPrintErr, pyWhich } from './lib/fs.mjs';
+import { NO_WINDOW } from './lib/proc.mjs';
 
 // --------------------------------------------------------------------------------------
 // the three readers

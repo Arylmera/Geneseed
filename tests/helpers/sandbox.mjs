@@ -91,7 +91,7 @@ export const TMP_ROOT = fs.realpathSync.native(os.tmpdir());
  * (13 characters) made every `status` cell replay two columns wider than the corpus, in the box
  * borders that carry no path tag and are therefore compared in full.
  *
- * `docs/port-ledger.md` already names this class — "a LENGTH, not a value" — and states that a
+ * `docs/limits.md` already names this class — "a LENGTH, not a value" — and states that a
  * different Windows username reddens it and that after the reference is deleted a red padding
  * run is unanswerable. This is the same hazard reached from the other side: the corpus cannot
  * be re-recorded, so the replayer reproduces the recorder's conditions, exactly as it already

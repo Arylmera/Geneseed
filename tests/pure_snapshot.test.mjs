@@ -39,7 +39,7 @@ import { DWIDTH_UNIDATA } from '../js/tui.mjs';
 import { makeCfg } from '../js/checkout.mjs';
 import { winUserPathScript } from '../js/link.mjs';
 import { pyTextWrap } from '../js/cli.mjs';
-import { pySplitLines } from '../js/lib/pydiff.mjs';
+import { pySplitLines } from '../js/lib/udiff.mjs';
 import { renderAll } from '../js/render.mjs';
 import { modeOptions, postureOptions, themeOptions } from '../js/setup.mjs';
 import { makeSandbox } from './helpers/sandbox.mjs';
@@ -194,7 +194,7 @@ test('the recorded corpus is the shape it claims to be', { skip: primitives ? fa
   // an unremarked-on fact.
   const noted = primitives.cases.filter((c) => 'note' in c);
   assert.ok(noted.length > 0, 'no case carries a reference-bug note');
-  for (const c of noted) assert.match(c.note, /docs\/port-ledger\.md/);
+  for (const c of noted) assert.match(c.note, /docs\/limits\.md/);
 });
 
 // ---------------------------------------------------------------------------------------------

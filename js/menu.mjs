@@ -37,7 +37,7 @@
  * one input no cell can vary. See that file's P7a section for what it reaches and what it
  * declares.
  */
-import { pyPrint, pyPrintErr, pyWhich } from './lib/pyfs.mjs';
+import { pyPrint, pyPrintErr, pyWhich } from './lib/fs.mjs';
 import { startDaemon } from './web/server.mjs';
 
 /** `_menu_help` — the off-TTY arm, and the fallback both TTY arms end in. */

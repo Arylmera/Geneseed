@@ -55129,7 +55129,7 @@
     null
    ],
    "result": null,
-   "note": "REFERENCE BUG, deliberately not fixed — see `js/tui.mjs`'s `detailLines` docblock, `docs/port-ledger.md` row 1, and the P7b handoff section 5.4. `_detail_lines` answers None for a header row and for a row whose data is absent, and `rituals/_harness_tui.py:614` hands that straight to `_wrap_lines`, which iterates it: an inventory with no agents, no skills and no laws puts the selection on row 0 (always the AGENTS header) and crashes the panel on its first frame with TypeError instead of drawing an empty state. The None IS this primitive's contract and both implementations agree on it; the defect is in the CALLER, `_tui_loop`, which `docs/port-ledger.md` declares unported and this migration deletes. Recorded rather than fixed because there is nothing in THIS function to fix."
+   "note": "REFERENCE BUG, deliberately not fixed — see `js/tui.mjs`'s `detailLines` docblock, `docs/limits.md` row 1, and the P7b handoff section 5.4. `_detail_lines` answers None for a header row and for a row whose data is absent, and `rituals/_harness_tui.py:614` hands that straight to `_wrap_lines`, which iterates it: an inventory with no agents, no skills and no laws puts the selection on row 0 (always the AGENTS header) and crashes the panel on its first frame with TypeError instead of drawing an empty state. The None IS this primitive's contract and both implementations agree on it; the defect is in the CALLER, `_tui_loop`, which `docs/limits.md` declares unported and this migration deletes. Recorded rather than fixed because there is nothing in THIS function to fix."
   },
   {
    "fn": "detail_lines",
@@ -55139,7 +55139,7 @@
     null
    ],
    "result": null,
-   "note": "REFERENCE BUG, deliberately not fixed — see `js/tui.mjs`'s `detailLines` docblock, `docs/port-ledger.md` row 1, and the P7b handoff section 5.4. `_detail_lines` answers None for a header row and for a row whose data is absent, and `rituals/_harness_tui.py:614` hands that straight to `_wrap_lines`, which iterates it: an inventory with no agents, no skills and no laws puts the selection on row 0 (always the AGENTS header) and crashes the panel on its first frame with TypeError instead of drawing an empty state. The None IS this primitive's contract and both implementations agree on it; the defect is in the CALLER, `_tui_loop`, which `docs/port-ledger.md` declares unported and this migration deletes. Recorded rather than fixed because there is nothing in THIS function to fix."
+   "note": "REFERENCE BUG, deliberately not fixed — see `js/tui.mjs`'s `detailLines` docblock, `docs/limits.md` row 1, and the P7b handoff section 5.4. `_detail_lines` answers None for a header row and for a row whose data is absent, and `rituals/_harness_tui.py:614` hands that straight to `_wrap_lines`, which iterates it: an inventory with no agents, no skills and no laws puts the selection on row 0 (always the AGENTS header) and crashes the panel on its first frame with TypeError instead of drawing an empty state. The None IS this primitive's contract and both implementations agree on it; the defect is in the CALLER, `_tui_loop`, which `docs/limits.md` declares unported and this migration deletes. Recorded rather than fixed because there is nothing in THIS function to fix."
   },
   {
    "fn": "detail_lines",
@@ -55153,7 +55153,7 @@
     }
    ],
    "result": null,
-   "note": "REFERENCE BUG, deliberately not fixed — see `js/tui.mjs`'s `detailLines` docblock, `docs/port-ledger.md` row 1, and the P7b handoff section 5.4. `_detail_lines` answers None for a header row and for a row whose data is absent, and `rituals/_harness_tui.py:614` hands that straight to `_wrap_lines`, which iterates it: an inventory with no agents, no skills and no laws puts the selection on row 0 (always the AGENTS header) and crashes the panel on its first frame with TypeError instead of drawing an empty state. The None IS this primitive's contract and both implementations agree on it; the defect is in the CALLER, `_tui_loop`, which `docs/port-ledger.md` declares unported and this migration deletes. Recorded rather than fixed because there is nothing in THIS function to fix."
+   "note": "REFERENCE BUG, deliberately not fixed — see `js/tui.mjs`'s `detailLines` docblock, `docs/limits.md` row 1, and the P7b handoff section 5.4. `_detail_lines` answers None for a header row and for a row whose data is absent, and `rituals/_harness_tui.py:614` hands that straight to `_wrap_lines`, which iterates it: an inventory with no agents, no skills and no laws puts the selection on row 0 (always the AGENTS header) and crashes the panel on its first frame with TypeError instead of drawing an empty state. The None IS this primitive's contract and both implementations agree on it; the defect is in the CALLER, `_tui_loop`, which `docs/limits.md` declares unported and this migration deletes. Recorded rather than fixed because there is nothing in THIS function to fix."
   },
   {
    "fn": "art_for",

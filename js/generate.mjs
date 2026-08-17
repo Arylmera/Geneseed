@@ -43,7 +43,7 @@ import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from './opencode.mjs';
 import { renderAll } from './render.mjs';
 import {
   jsonDumpsIndent, parseJson, pyPrint, pyPrintErr, pyRepr, readText, writeText,
-} from './lib/pyfs.mjs';
+} from './lib/fs.mjs';
 
 /** `_harness_build._HEX_RE`. Anchored at BOTH ends — `#123` and `#1122334` both fail. */
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;

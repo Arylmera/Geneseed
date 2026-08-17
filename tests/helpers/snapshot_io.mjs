@@ -10,7 +10,7 @@
 //
 // WHY `write` SURVIVES THE PORT even though `--record` dies with the reference: the round trip
 // is the cheapest honest test of `read` (a reader gated only against files someone else wrote
-// passes on a format it has misread in the same direction), and `docs/port-ledger.md`'s handed
+// passes on a format it has misread in the same direction), and `docs/limits.md`'s handed
 // item 2 leaves re-blessing from the port on the table as a deliberate future choice. What
 // `write` must never be used for is re-recording a cell to make a red build green — that is the
 // downgrade from evidence to assertion the whole migration is trying not to pay for.
@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-import { jsonDumpsIndent } from '../../js/lib/pyfs.mjs';
+import { jsonDumpsIndent } from '../../js/lib/fs.mjs';
 
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 

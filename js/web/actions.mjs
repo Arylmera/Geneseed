@@ -123,9 +123,9 @@ import {
 } from '../mcp.mjs';
 import {
   PY_SPACE, parseJson, pyLen, pyRepr, pyStr, pyStripSpace, pyTruthy, readText, writeText,
-} from '../lib/pyfs.mjs';
+} from '../lib/fs.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../uninstall.mjs';
-import { pySplitLines } from '../lib/pydiff.mjs';
+import { pySplitLines } from '../lib/udiff.mjs';
 import {
   NotFound, deployed, emitChoices, fingerprint, themeChoices, viewCfg, within,
 } from './api.mjs';

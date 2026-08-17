@@ -42,7 +42,7 @@ import path from 'node:path';
 
 import {
   normcase, parseJson, pyInt, pyStripSpace, pyTruthy, readText, writeText,
-} from '../lib/pyfs.mjs';
+} from '../lib/fs.mjs';
 import { NotFound } from './api.mjs';
 
 /**

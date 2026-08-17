@@ -42,7 +42,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 // rather than as pathspec arguments. A `*.md` pathspec is a wildmatch in git and reaches
 // `tests/**/*.md` too, which would drag the reference's own documents into a scan that exists to
 // be clean of them; a predicate says what is meant and survives the phase that renames
-// `docs/port-ledger.md`.
+// `docs/limits.md`.
 const SCOPE_DIRS = ['js/', 'bin/', 'adapters/', 'web/src/', 'web/dist/', 'src/', 'themes/',
   'docs/', '.claude/', '.github/'];
 
@@ -312,7 +312,7 @@ test('FIRING CONTROL: the widened rules do not fire on what must stay', () => {
     ['js/render.mjs', ' * `_build_render.py`, whose phase order this reproduces.'],
     ['web/src/App.jsx', '// harness.py composes the same three panes'],
     ['js/migrate.mjs', ' * the shape harness.py by then had already written'],
-    ['docs/port-ledger.md', 'row 6 — its only gate was test_tui_boundary.py'],
+    ['docs/limits.md', 'row 6 — its only gate was test_tui_boundary.py'],
     // The port's own successors, which must never read as the thing they replaced.
     ['.claude/skills/token-report/scripts/token_report.mjs', "spawnSync('node', ['token_report.mjs'])"],
     ['js/x.mjs', "spawnSync(process.execPath, ['-e', 'x'])"],

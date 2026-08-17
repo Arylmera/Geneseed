@@ -30,26 +30,23 @@ that matches your tool, then configure and verify. For the conceptual overview s
   or Docling — if you want the agent to read PDFs/Office files (see
   [Reading non-markdown docs](#reading-non-markdown-docs)).
 
-### 🐍 Where Python is still required — nowhere, and the exact list of what changed
+### 🟩 One runtime — Node, and nothing else
 
-Nothing in this guide needs an interpreter. The list is kept because two of its three
-entries are still live constraints, and the third is where the panel went:
+Nothing in this guide needs a second interpreter. Three things are worth stating plainly,
+because each is a live constraint rather than a footnote:
 
 - **0 commands have no Node twin**: every command in this guide answers from the Node
-  entry points. The last hold-out was a SCREEN rather than a command — the full-screen
-  browse panel `geneseed tui` and `geneseed menu` used to open on a terminal. It is gone,
-  not moved: both verbs still exist, both say the panel is not here and print the command
-  list instead, and off a terminal (which is how scripts and CI run them) the bytes and
-  the exit code are unchanged. `home` opens the web console, which is the visual front end
-  now.
+  entry points. There is no full-screen browse panel: `geneseed tui` and `geneseed menu`
+  are verbs that say the panel is not here and print the command list instead, and off a
+  terminal (which is how scripts and CI run them) the bytes and the exit code are the
+  recorded ones. `home` opens the web console, which is the visual front end.
 - **Nothing you install needs an interpreter.** The `token-report` skill is a script
   rather than prose, and it ships as `scripts/token_report.mjs`, run with `node`;
-  `daydream` and `herdr`, which used to hand inline code to `python3` without shipping
-  a file of their own, call `node -e` instead.
+  `daydream` and `herdr` hand their inline code to `node -e`.
   So **every bundle carries** nothing that needs one: no Python file, and no skill that
   shells out to an interpreter — on any host, any theme, either footprint. Three tests
-  freeze that, down to a byte-for-byte comparison of the ported script against the one
-  it replaced.
+  freeze that, down to a byte-for-byte replay of the report script over seeded
+  transcripts for all four hosts.
 - **The self-update commands are for a git checkout.** `upgrade`, `update`, `sync-self`
   and `bootstrap` `git pull` the install's own origin. From an npm install they stop
   before touching anything and name `npm install -g geneseed@latest` instead.
@@ -103,9 +100,9 @@ hand? Pick a path below.
 > **Every `geneseed-build …` below is the generator.** `npm install -g geneseed` puts it
 > on your `PATH`; without installing anything, `npx -p geneseed geneseed-build --emit
 > opencode-global` is the same command. From a checkout it is
-> `node bin/geneseed.mjs` with the same flags. Its output was gated byte for byte against
-> the Python generator it replaced, across every theme × host × footprint combination, and
-> those recordings are replayed on every commit.
+> `node bin/geneseed.mjs` with the same flags. Its output is replayed byte for byte
+> against frozen recordings on every commit, across every theme × host × footprint
+> combination.
 
 ---
 
@@ -1012,7 +1009,7 @@ destroys what the agent learned. The auto-export lands in `improvements/` **insi
 the deployed harness dir** (e.g. `~/.config/opencode/improvements/`) — beside the
 install it describes; it is not in the manifest, so re-emits never clobber it, diff
 never reports it, and uninstall leaves it in place (the same contract as memory).
-The TUI's *Review local edits* view exports the same file with the `e` key.
+The web console's **Changes** page exports the same file.
 
 ## 🩺 Troubleshooting
 

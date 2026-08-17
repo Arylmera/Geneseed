@@ -1,34 +1,36 @@
 /**
- * `difflib.SequenceMatcher` and `difflib.unified_diff`, reproduced.
+ * The unified diff — this tool's sequence matcher, and the hunks it produces.
  *
- * WHY THIS EXISTS, AND WHY THE CLOSURE WALK DID NOT PREDICT IT. An `ast` walk over
- * `rituals/` puts `harness diff` at 252 LOC across 10 functions, and every one of them is a
- * few lines of file reading. The verb's ENTIRE user-visible payload — the unified diffs in
- * `--full` and in the exported improvements file — comes from one stdlib call the walk counts
- * as zero, because `difflib` is not in `rituals/`. That is a fifth blind spot beside the four
- * the P5f brief named, and it is the same shape as P5e's `subprocess`: a walk over the
- * project's own names cannot see the work that leaves the project.
+ * WHY A HAND-WRITTEN MATCHER RATHER THAN A LIBRARY. The diff is the ENTIRE user-visible
+ * payload of `geneseed diff`: the hunks in `--full` and in the exported improvements file
+ * are this file's output and nothing else's. A generic JS diff would produce a CORRECT diff
+ * and a DIFFERENT one, and `tests/__snapshots__/primitives/` compares the hunks character
+ * for character, so "also a valid diff" fails every cell. The alignment below IS the
+ * specification of what this tool prints, and three of its choices are choices no other
+ * algorithm makes:
  *
- * There is no lazier answer available. A generic JS diff would produce a CORRECT diff and a
- * DIFFERENT one — `tests/harness_golden.py` compares the two implementations' stdout and the
- * exported file byte-for-byte, so "also a valid diff" fails every cell. What has to match is
- * `difflib`'s specific choices, and three of them are choices no other algorithm makes:
- *
- *   * It is NOT Myers. `find_longest_match` takes the longest common block, recurses left and
+ *   * It is NOT Myers. `findLongestMatch` takes the longest common block, recurses left and
  *     right, and therefore prefers a different alignment than an edit-script minimiser
  *     wherever the two disagree.
  *   * Ties resolve to the EARLIEST match, in `a` first and then in `b`, because `bestsize` is
  *     only replaced on a strict `>`.
  *   * **`autojunk`.** For a `b` of 200 elements or more, any line occurring more than
- *     `len(b) // 100 + 1` times is deleted from the index and stops matching entirely. On the
- *     harness's own files — hundreds of lines, many of them blank — that fires constantly and
- *     changes the hunks. It is off by construction for anything shorter, so a small fixture
- *     cannot see it at all. `tests/test_pure_function_parity.py` carries the corpus that can.
+ *     `floor(len(b) / 100) + 1` times is deleted from the index and stops matching entirely.
+ *     On this tool's own files — hundreds of lines, many of them blank — that fires
+ *     constantly and changes the hunks. It is off by construction for anything shorter, so a
+ *     small fixture cannot see it at all; the recorded corpus is what carries inputs long
+ *     enough to trip it.
  *
- * `isjunk` is not reproduced: every call site in this port is `SequenceMatcher(None, a, b)`,
- * so `bjunk` is empty and `isbjunk` is constant False. That deletes two of the four extension
- * loops in `find_longest_match` — noted here rather than left as an unexplained absence,
- * because their omission is a consequence of the call sites and not of the algorithm.
+ * PROVENANCE, not a contract with a live second party. Every rule above was measured from
+ * CPython's `difflib`, which is why the odd ones are odd — `autojunk` in particular is a
+ * heuristic no one would invent from scratch. That history explains the shape; it does not
+ * govern it any more. The recording does, and the recording cannot be re-blessed.
+ *
+ * No junk predicate is implemented: every call site is `opcodes(a, b)` with no `isjunk`, so
+ * the junk set is empty and its test is constant false. That deletes two of the four
+ * extension loops in `findLongestMatch` — noted here rather than left as an unexplained
+ * absence, because their omission is a consequence of the call sites and not of the
+ * algorithm.
  */
 
 /**

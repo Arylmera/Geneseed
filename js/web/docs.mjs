@@ -44,7 +44,7 @@ import { ROOT, THEMES } from '../checkout.mjs';
 import { cliReference } from '../cli.mjs';
 import { readJsonMaybe, readMaybe } from '../installs.mjs';
 import { pyResolve } from '../hosts.mjs';
-import { PY_SPACE, normcase, parseJson, pyStripSpace } from '../lib/pyfs.mjs';
+import { PY_SPACE, normcase, parseJson, pyStripSpace } from '../lib/fs.mjs';
 import { statusData } from '../status.mjs';
 import { originDisplay } from '../update.mjs';
 import { NotFound, deployed, resolveLinks } from './api.mjs';

@@ -40,7 +40,7 @@ import {
   build, emitOpencodeRender, emitOpencodeGlobalRender, emitClaudeRender, phaseLog,
 } from '../js/emit.mjs';
 import { settingsIntegrityCheck } from '../js/settings.mjs';
-import { writeText, parseJson, jsonDumpsIndent, withPyNewlines } from '../js/lib/pyfs.mjs';
+import { writeText, parseJson, jsonDumpsIndent, withPyNewlines } from '../js/lib/fs.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
 // find a global install, and a resolver that decides WHERE a driver writes is the last thing
 // that should exist twice. golden.py's 259 cells are what made the move safe to attempt.
