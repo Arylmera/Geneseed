@@ -17,7 +17,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { PLATFORM_CORPUS, ROOT, corpusNormalise, orphanCheck } from './helpers/golden.mjs';
-import { checkExpectations, runCell, webCorpusNormalise } from './helpers/web_golden.mjs';
+import {
+  assetRefsResolve, checkExpectations, runCell, webAssetNormalise, webCorpusNormalise,
+} from './helpers/web_golden.mjs';
 import { resolveCli } from './cli_golden.mjs';
 import * as snapshotIo from './helpers/snapshot_io.mjs';
 
@@ -116,6 +118,12 @@ async function main(argv) {
       + [...BUNDLE_CELLS].map((c) => `    ${c}`).join('\n'));
   }
   const failures = [];
+  const unresolved = assetRefsResolve();
+  if (unresolved.length) {
+    failures.push('  web/dist/index.html — ASSET REFS THAT DO NOT EXIST\n'
+      + unresolved.map((a) => `    ${a}`).join('\n')
+      + '\n    the served page would load none of these; rebuild web/dist');
+  }
   let done = 0;
   for (const cell of cells) {
     if (!bundleHolds && BUNDLE_CELLS.has(cell.id)) { done += 1; continue; }
@@ -146,7 +154,9 @@ async function main(argv) {
           // and it matters: the rules fingerprint is scoped on the RAW provenance line rather
           // than on the `<DATE>` tag it becomes.
           const normalised = corpusNormalise(webCorpusNormalise(snap, now, process.pid));
-          const problems = snapshotIo.compare(recorded, normalised);
+          // The asset-hash destamp is the one arm the dead recorder never applied, so it runs on
+          // BOTH sides here rather than inside the live-only `clean` chain.
+          const problems = snapshotIo.compare(webAssetNormalise(recorded), normalised);
           if (problems.length) failures.push(`  ${cell.id}\n${problems.join('\n')}`);
         }
       }
