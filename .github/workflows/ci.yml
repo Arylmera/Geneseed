@@ -188,15 +188,24 @@ jobs:
           mkdir -p /consumer && cd /consumer && npm init -y >/dev/null
           npm install --no-audit --no-fund "$GITHUB_WORKSPACE/$TARBALL"
           mkdir -p /work && cd /work && git init -q
+          # ⚠ THE INSTALLED BINARIES, ON PATH — NOT `npx`. `npx <name>` run from a directory with
+          # no node_modules FETCHES FROM THE REGISTRY. That is how this gate first failed here
+          # (E404, because nothing is published yet) — but the failure mode that matters is the
+          # opposite one: once `geneseed` IS published, npx would have quietly downloaded the
+          # REGISTRY's copy and this job would have gone green while testing an artifact that is
+          # not the tarball we just built. A gate that can silently test the wrong thing is worse
+          # than no gate. The consumer's .bin directory can only contain what we installed.
+          export PATH="/consumer/node_modules/.bin:$PATH"
+          command -v geneseed geneseed-build geneseed-hook
           # The daemon is backgrounded by PID rather than by `%1`: job control is off in a
           # non-interactive shell, so `kill %1` is unreliable exactly where it matters.
           {
-            npx geneseed --version
-            npx geneseed doctor --all
-            npx geneseed-build --emit claude
-            npx geneseed status
-            npx geneseed catalog
-            npx geneseed web --daemon-internal --port 0 &
+            geneseed --version
+            geneseed doctor --all
+            geneseed-build --emit claude
+            geneseed status
+            geneseed catalog
+            geneseed web --daemon-internal --port 0 &
             web_pid=$!
             sleep 3
             kill "$web_pid" 2>/dev/null || true

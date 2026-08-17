@@ -47,14 +47,22 @@ OUT=$(docker run --rm \
     npm install --no-audit --no-fund /tmp/pkg.tgz 2>&1 | tail -5
     mkdir -p /work && cd /work && git init -q 2>/dev/null || true
 
+    # ⚠ THE INSTALLED BINARIES, NOT `npx` — see the CI twin (.github/workflows/ci.yml,
+    # package-no-python). `npx <name>` from a directory with no node_modules fetches from the
+    # REGISTRY, so once this package is published npx would test the registry copy rather than
+    # the tarball just built, and go green having proved nothing about it.
+    export PATH="/consumer/node_modules/.bin:$PATH"
+    command -v geneseed geneseed-build geneseed-hook
+
     # The acceptance commands. Each is a real user path, not a --version smoke test.
-    npx geneseed --version
-    npx geneseed doctor --all
-    npx geneseed-build --emit claude
-    npx geneseed status
-    npx geneseed catalog
-    npx geneseed web --daemon-internal --port 0 &
-    sleep 3; kill %1 2>/dev/null || true
+    geneseed --version
+    geneseed doctor --all
+    geneseed-build --emit claude
+    geneseed status
+    geneseed catalog
+    geneseed web --daemon-internal --port 0 &
+    web_pid=$!
+    sleep 3; kill "$web_pid" 2>/dev/null || true; wait "$web_pid" 2>/dev/null || true
     echo "--acceptance-done--"
   ' 2>&1)
 STATUS=$?
