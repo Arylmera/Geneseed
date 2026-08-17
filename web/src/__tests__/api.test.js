@@ -58,6 +58,11 @@ describe('http get/post', () => {
     await expect(api.doctor()).rejects.toThrow('boom')
   })
 
+  it('explains a stale CSRF token instead of relaying "forbidden"', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(errResp(403, { error: 'forbidden' })))
+    await expect(api.rulesMutate({ op: 'add' })).rejects.toThrow(/reload the page/)
+  })
+
   it('posts with the token header and a JSON body', async () => {
     global.fetch = vi.fn(() => Promise.resolve(okResp({ ok: true })))
     await api.mcpToggle('/cfg', 'srv', true)
