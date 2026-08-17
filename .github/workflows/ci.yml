@@ -7,7 +7,9 @@ name: ci
 on:
   push:
   pull_request:
-  # For `record-corpus` below, which is guarded to this trigger and never runs on a push.
+  # Kept for manual re-runs. It used to exist for one dispatch-guarded job, `record-corpus`,
+  # which recorded the corpora from the Python reference; that job is gone and no job is
+  # guarded to this trigger any more, so a dispatch now runs exactly what a push runs.
   workflow_dispatch:
 
 # THE PYTHON IS PINNED, not floating. `3.x` resolves to whatever the runner ships newest,
@@ -85,7 +87,8 @@ jobs:
       # because a corpus that is committed but never replayed is inert — it would first be
       # exercised on the day the reference is gone and re-recording is impossible. `--against`
       # picks `emit/lf` or `emit/crlf` from `os.linesep`; this runner is Linux, so it reads the
-      # LF half, recorded by the `record-corpus` job on this same image.
+      # LF half, which was recorded on this same image by a job that no longer exists — see the
+      # tombstone below `node-cells`. That day has now arrived: re-recording IS impossible.
       - name: golden — the recorded corpus, replayed
         run: >
           python tests/golden.py --against tests/__snapshots__/emit
@@ -103,7 +106,7 @@ jobs:
       # The CLI corpus, replayed — the same argument as the emit corpus two steps up, and the
       # same pairing: the live comparison above dies with `rituals/harness.py`, this one is
       # what survives it, and both run while both exist because a corpus nothing replays is
-      # inert. It reads `cli/lf`, recorded by `record-corpus` on this same image.
+      # inert. It reads `cli/lf`, recorded on this same image by a job that is now deleted.
       - name: harness_golden — the recorded corpus, replayed
         run: >
           python tests/harness_golden.py --against tests/__snapshots__/cli
@@ -180,142 +183,27 @@ jobs:
           node tests/web_golden.mjs --against tests/__snapshots__/web --cli "node js/web/server.mjs"
           node tests/web_golden.mjs --against tests/__snapshots__/web --cli "node bin/geneseed-cli.mjs web"
 
-  # RECORD THE LINUX CORPUS — all three matrices. Manual dispatch only: `if:` keeps it off
-  # every push, because it gates nothing and re-runs 691 cells.
+  # THE LINUX CORPUS RECORDER LIVED HERE, AND IT IS GONE ON PURPOSE.
   #
-  # `--record` writes the reference's answer down so the port keeps a regression gate after
-  # `build.py` and `rituals/harness.py` are deleted. Those corpora are PER-PLATFORM:
-  # `pyfs.writeText` emits `os.linesep`, so the cells committed under `*/crlf/` were recorded
-  # on Windows and every one of them fails when replayed on Linux. (`harness_golden` has a
-  # second reason — `PLATFORM_ONLY` gives Windows and POSIX different `link`/`unlink` cells,
-  # so the two corpora do not even hold the same cell IDS.) Only a Linux machine can record
-  # the `lf/` halves, and after the reference is gone there will not be another chance —
-  # hence a job rather than a note.
+  # This job was `workflow_dispatch`-only. It ran the Python reference with `--record` to
+  # produce the `lf` halves of the emit, cli and web corpora, the posix half of the primitives
+  # corpus, and the posix cell matrices. It recorded AND replayed in the same run, which is
+  # what made a green dispatch mean the artifact was worth committing.
   #
-  # TO USE: dispatch this workflow, download the `snapshots-lf` artifact, and commit its
-  # `emit/lf/`, `cli/lf/` and `web/lf/` directories. The `--idempotent` and `--deletion`
-  # matrices have no corpus and are separately scheduled.
+  # It was dispatched for the last time on 2026-08-17, against the commit immediately before
+  # this one, and its artifact IS the `lf` half committed here. It is deleted in that same
+  # commit so it cannot outlive the reference it drives: the next phase removes
+  # `tests/golden.py`, `tests/harness_golden.py`, `tests/web_golden.py`,
+  # `tests/test_pure_function_parity.py`, `tests/record_help.py` and `tests/export_matrix.py`.
+  # A dispatch button that silently produces nothing is worse than no button at all.
   #
-  # UNTIL `cli/lf/` AND `web/lf/` ARE COMMITTED the two new replay steps in `cells` above
-  # fail every cell with "NO RECORDED SNAPSHOT" — loudly, which is the intended failure mode
-  # for a corpus that is not there, and the reason this job's first dispatch is a prerequisite
-  # rather than a follow-up.
-  record-corpus:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: record the emit matrix from the reference
-        run: python tests/golden.py --record tests/__snapshots__/emit
-      # A corpus that was never replayed is the defect this job exists to fix, one step over:
-      # committed, plausible, and unusable. Recording and replaying in the same run is what
-      # makes a green dispatch mean the artifact is worth committing.
-      - name: replay the emit corpus against the port
-        run: >
-          python tests/golden.py --against tests/__snapshots__/emit
-          --new "node bin/geneseed.mjs"
-      - name: record the CLI matrix from the reference
-        run: python tests/harness_golden.py --record tests/__snapshots__/cli
-      - name: replay the CLI corpus against the port
-        run: >
-          python tests/harness_golden.py --against tests/__snapshots__/cli
-          --new "node bin/geneseed-hook.mjs" --new-cli "node bin/geneseed-cli.mjs"
-      - name: record the web matrix from the reference
-        run: python tests/web_golden.py --record tests/__snapshots__/web
-      - name: replay the web corpus against the port, from both entries
-        run: |
-          python tests/web_golden.py --against tests/__snapshots__/web --new "node js/web/server.mjs"
-          python tests/web_golden.py --against tests/__snapshots__/web --new "node bin/geneseed-cli.mjs web"
-      # The three corpora whose oracle is CPYTHON ITSELF, and which no cell reaches.
-      #
-      # `primitives/` is per-PLATFORM for a reason the cell corpora only half share: it is
-      # mostly `ntpath` vs `posixpath` (seven of twelve `py_path_str` answers, all of
-      # `normcase`/`compare_paths`, `py_is_absolute`), of which `os.linesep` is one instance
-      # among many — so the halves are keyed `win32`/`posix` like `PLATFORM_ONLY` rather than
-      # `crlf`/`lf`. The win32 half is recorded by hand on the developer's machine; this is
-      # the only place the posix half can come from.
-      - name: record the primitive corpus from the reference (the posix half)
-        run: >
-          python tests/test_pure_function_parity.py
-          --record tests/__snapshots__/primitives
-      # `dwidth.json` and `win_user_path.json` are DECLARED platform-independent —
-      # `unicodedata` is a compiled-in database, and `_win_user_path_script` is a
-      # `str.replace` and two f-strings. Recorded here into a scratch directory and DIFFED
-      # against the committed Windows recording, which turns both declarations into a
-      # measurement on the second operating system instead of a reading of the source. This
-      # is Task 8c's method — the residual diff between two machines IS the machine-state
-      # detector — aimed at a claim rather than at a corpus.
-      #
-      # BOTH DIFFS RUN, AND THAT IS NOT TIDINESS. The step is `bash -e`: run 31554447437
-      # aborted on the first `diff` (a `python: 3.13.5` against `3.13.15` that nothing reads)
-      # and never reached the second, where `win_user_path.json`'s `recorded_on: win32` was a
-      # leak of the same class waiting behind it. A gate that reports one finding per run
-      # takes one run per finding.
-      #
-      # THE HELP CORPUS IS THE THIRD SUCH CLAIM (Task 10). `tests/record_help.py` calls
-      # `parser.format_help()` in process rather than capturing 26 subprocesses, so no newline
-      # translation reaches it, and it pins `COLUMNS` so argparse's wrap column cannot come
-      # from the recorder's terminal. Both of those are DECLARATIONS until a second operating
-      # system records the same bytes, which is what the `diff -r` below makes them.
-      - name: the platform-independent corpora are platform-independent
-        run: |
-          mkdir -p /tmp/xplat
-          python tests/test_pure_function_parity.py --record-dwidth /tmp/xplat/dwidth.json
-          python tests/test_win_user_path.py --record /tmp/xplat/win_user_path.json
-          python tests/record_help.py /tmp/xplat/help
-          rc=0
-          diff /tmp/xplat/dwidth.json tests/__snapshots__/dwidth.json || rc=1
-          diff /tmp/xplat/win_user_path.json tests/__snapshots__/win_user_path.json || rc=1
-          diff -r /tmp/xplat/help/help tests/__snapshots__/help || rc=1
-          # THE FOURTH CLAIM, and the sharpest one this file makes about an oracle. The
-          # committed `textwrap.json` was recorded on a PRE-gh-139065 interpreter with the
-          # upstream one-liner applied by `record_help.Gh139065`; this runner's `python-version:
-          # "3.13"` resolves post-fix and needs no correction. Byte-identical output is the
-          # measurement that the correction reproduces the fix rather than approximating it —
-          # the two machines are running genuinely different `textwrap` code.
-          diff /tmp/xplat/help/textwrap.json tests/__snapshots__/textwrap.json || rc=1
-          exit $rc
-      # RECORD TWICE, DIFF — the rot detector Task 8 added and 8c found the limit of. Two
-      # recordings minutes apart on one image agree unless the corpus embeds a clock or a
-      # per-run temp name; the step above is the one that catches a machine.
-      - name: recording the help corpus twice gives the same bytes
-        run: |
-          python tests/record_help.py /tmp/xplat/help2
-          diff -r /tmp/xplat/help2 /tmp/xplat/help
-      # Recorded and replayed in the same run, for the reason the emit corpus gives above: a
-      # corpus that was never replayed is committed, plausible and unusable.
-      - name: replay the four CPython-oracle corpora against the port
-        run: node --test tests/pure_snapshot.test.mjs
-      # THE CELL MATRICES, exported as JSON so the Node replayers can read them after
-      # `build.py` and `rituals/harness.py` are gone. Same deadline as everything else in this
-      # job and a sharper one: the matrices are the harnesses' DATA, ~6,700 of their ~9,600
-      # lines, and after P4 the functions that declare them do not exist.
-      #
-      # PER-PLATFORM, AND ONLY THIS RUNNER CAN WRITE THE POSIX HALF. Three sites bake the host
-      # into cell data — `_link_cells`' win32/posix arms, `exclude/remove-a-case-differing-
-      # entry`'s expected sentence, and `web_golden._MEM_CASE_FOLDED` — plus `_np()`, which is
-      # `str(Path(rel))` and so carries the platform's separator. `pathlib` takes its flavour
-      # from `os.name`, which no assignment to `sys.platform` changes, so the other half cannot
-      # be faked from Windows any more than the `lf` corpus can.
-      #
-      # `tests/test_matrix_export.py` then DIFFS the two committed halves and requires the
-      # residual to be exactly the declared set — Task 8c's method (the difference between two
-      # machines IS the detector) aimed at a matrix instead of at a corpus. Until this half is
-      # committed those three checks SKIP, loudly, and the union is unchecked.
-      - name: export the cell matrices from the reference (the posix half)
-        run: python tests/export_matrix.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: snapshots-lf
-          path: |
-            tests/__snapshots__/
-            tests/helpers/matrix/
+  # THE CORPUS IS NOW REPLAY-ONLY, ON BOTH PLATFORMS. The three Node replayers reject
+  # `--record` by design and nothing else has ever written a cell. A change that moves a
+  # recorded byte is a FINDING, NOT A STEP: revert it, or argue in writing that the recording
+  # was wrong -- and nothing can settle that argument any more. See docs/port-ledger.md.
+  #
+  # To see what an oracle would have said, check out the tag `python-reference-v1.0.0`. Its
+  # message carries the exact re-record commands and which platform each half comes from.
 
   # The web UI (web/) is a Vite/React app with its own toolchain, so it gets a
   # dedicated job: lint, format check, unit tests, and a production build. Linux

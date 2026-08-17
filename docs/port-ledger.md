@@ -27,8 +27,8 @@ the Python reference and by nothing else: `tests/golden.py`, `tests/harness_gold
 `tests/web_golden.py`, `tests/test_pure_function_parity.py` and `tests/record_help.py` are the
 only programs that have ever written a cell, the three Node replayers reject `--record` by
 design, and the phase after this one deletes every one of those programs. The `record-corpus`
-job that produced the `lf` halves on ubuntu is deleted in the same commit as this paragraph, so
-the workflow cannot outlive the reference it drives.
+job that produced the `lf` halves on ubuntu is deleted in the commit that lands those halves,
+so the workflow cannot outlive the reference it drives.
 
 The last recording was taken deliberately, immediately after the edits that had to be made while
 an oracle still existed — the emitted prose that named files the deletion removes, the removal of
