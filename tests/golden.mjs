@@ -27,7 +27,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import {
-  PLATFORM_CORPUS, ROOT, VERBATIM_CELLS, cellId, corpusNormalise, orphanCheck, runCell,
+  PLATFORM_CORPUS, ROOT, VERBATIM_CELLS, cellId, corpusNormalise, dropUncompared, orphanCheck,
+  runCell,
 } from './helpers/golden.mjs';
 import * as snapshotIo from './helpers/snapshot_io.mjs';
 
@@ -159,7 +160,8 @@ function replay(gen, cell, cid, against) {
     return [`    NO RECORDED SNAPSHOT in ${against} — a cell that ran with nothing to compare `
       + 'against is a hole, not a pass'];
   }
-  return snapshotIo.compare(recorded, corpusNormalise(snap));
+  // The version-carrying stub, dropped from both sides — see `dropUncompared`'s docblock.
+  return snapshotIo.compare(recorded, dropUncompared(recorded, corpusNormalise(snap)));
 }
 
 // THE STREAMS ARE ONLY COMPARABLE WHEN BOTH SIDES RAN THE SAME NUMBER OF TIMES. Emit two

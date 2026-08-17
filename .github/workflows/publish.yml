@@ -17,6 +17,11 @@ name: publish
 # local `npm pack` + `npm install` (`tests/unit/package_manifest.test.mjs`); this one was
 # not, and cannot be.
 #
+# ⚠ AND A DRY RUN DOES NOT REHEARSE IT EITHER. `npm publish --dry-run` packs the tarball and
+# prints what it would upload; it never asks the registry for the publish grant, so it is green
+# whether or not a trusted publisher exists. A green dry run proves the TARBALL — the file list,
+# the version, the gates below — and says nothing at all about this paragraph.
+#
 # Do it once, signed in to npmjs.com as the account that owns `geneseed`:
 #
 #   npmjs.com → the package → Settings → Trusted publisher → GitHub Actions
@@ -44,13 +49,26 @@ name: publish
 # that exists.
 #
 # The trigger is MANUAL, deliberately: Actions → publish → Run workflow. There is no
-# `push:` trigger, and the gate above forbids adding one. Bump the version in
+# automatic trigger of any kind, and the gate above forbids adding one. Bump the version in
 # `harness.config.json` first (`package.json` mirrors it and a fork fails
 # `tests/unit/package_manifest.test.mjs`'s "version mirrors harness.config.json") —
 # never with `npm version`, which edits only one of the two.
+#
+# ⚠ THE DEFAULT IS A DRY RUN, and that is the whole point of the switch: the dangerous path is
+# the one you have to ask for. Leaving `dry_run` ticked runs every gate below and then
+# `npm publish --dry-run`, which uploads nothing. Untick it — deliberately, once, having read
+# the version you are about to burn — to publish for real. There is no way back after 72 hours.
+#
+#   gh workflow run publish.yml -f dry_run=true      # rehearse (the default)
+#   gh workflow run publish.yml -f dry_run=false     # ⚠ THE REAL ONE
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Rehearse: run every gate, then pack and report instead of uploading."
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -99,5 +117,13 @@ jobs:
             exit 1
           fi
 
+      # ⚠ ONE `run:` LINE WHOSE ARGUMENTS VARY — deliberately NOT a second, dry-run step.
+      # `tests/unit/docs.test.mjs` ("the publish workflow publishes once") asserts that EXACTLY
+      # one line in this file matches `run:.*npm publish`, so that a second publish path cannot
+      # appear beside the guarded one. A rehearsal is therefore a FLAG on this line.
+      #
+      # `inputs.dry_run`, NOT `github.event.inputs.dry_run`: the latter is a STRING, so the
+      # non-empty `'false'` is truthy and the guard would silently invert into a real publish on
+      # the very run that asked to rehearse. The typed `inputs` context gives a real boolean.
       - name: publish
-        run: npm publish
+        run: npm publish ${{ inputs.dry_run && '--dry-run' || '' }}

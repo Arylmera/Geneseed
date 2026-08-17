@@ -792,6 +792,102 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   These join `learning-path`, `gap-detector`, and `feynman`, bringing the
   skill count to 33.
 
+## [2.0.0] — not yet published
+
+*Nothing described here has been published to any registry: there is no tag, no release and no
+install URL. `harness.config.json` and `package.json` both read `2.0.0`, which is the version this
+build stamps into every bundle it emits — it is not evidence that anything was shipped.*
+
+*⚠ The bump itself was the last thing this release found. Moving the label reddened 224 of 259
+recorded emit cells, because the configured version is stamped into two places and only one of them
+was ever blanked before comparison: `.geneseed-version`'s `[release …]`, and — undestamped until
+now — `"_version"` inside the `agent-overrides.json` stub in every bundle. It hid because the sweep
+that added the first arm hunted the bracketed spelling, and because `1.0.0` and `2.0.0` are the same
+length, so the file size never moved. Left unfixed, the frozen corpus would have pinned this project
+at `1.0.0` forever — every bump, not just this one. The comparison now blanks both sites; no recorded
+byte was edited. See `docs/limits.md`.*
+
+### ⚠ Breaking — RE-INSTALL, do not upgrade
+
+**If you installed Geneseed by cloning this repository, install the npm package fresh instead
+of pulling this release into your checkout.** The reason is specific, and it is about your
+hooks rather than about the code:
+
+- A machine whose last emit ran through the old Python driver has a machine-wide hook shim at
+  `~/.geneseed/bin/geneseed-hook` whose body names your checkout's `rituals/harness.py`.
+  This release deletes that file. Pull 2.0 into that checkout and the shim points at nothing.
+- **A dead gate does not shout.** `git-gate` (Law XX — approval before a commit or a push) and
+  `rule-gate` (Law VI — writes into your memory store) return 0 on *every* path and deliver
+  their verdict as a JSON document on **stdout**. No JSON, no verdict: the tool call proceeds
+  with nothing asked. A gate that cannot launch does not fail closed, it simply stops being
+  consulted — which is the failure you would rather find in release notes than in a diff you
+  did not approve. (The two gate commands are emitted without a `|| exit 0` tail, unlike the
+  `context` and `learn` hooks, so the launch failure itself is not swallowed. The missing
+  verdict still is.)
+- **`geneseed doctor` catches the dead pointer.** Its shim check reads every quoted path back
+  out of the shim body and reports any that does not exist — `[shim] … pointed at …, which
+  does not exist — every hook in every install was dead`. That is the state a pulled checkout
+  leaves. It is *not* a check for "you are still on the old shape": a clone you leave untouched
+  keeps a shim whose two baked paths both still exist, so doctor is quiet about it and the
+  classification lives in `migrate` instead.
+- **`geneseed migrate` is the repair**, and it is the supported path if you would rather move
+  an existing machine than start clean. It surveys every active install first and writes
+  nothing until the survey passes; it re-emits each one in *its own* theme, emit, footprint,
+  posture and mode; it refuses the whole run rather than guess at an install whose marker it
+  does not recognise; it copies every settings file it will touch and rolls all of them back if
+  any install fails, so you are never half-migrated; and it reports — never rewrites — hooks it
+  did not write and login-autostart entries you created by hand. `--dry-run` prints the plan.
+  A second run is a no-op. See *Migrate an existing install to npx* in the docs.
+
+Either way, run `geneseed doctor` afterwards and confirm it reports no `[shim]` row.
+
+### What this release actually guarantees
+
+**Less than the previous one, and this is the honest place to say so.** Until now there were
+two implementations of this harness side by side, and three harnesses ran both on every cell
+and compared every emitted byte, both streams and the exit code. That second implementation is
+deleted. What replaced it is a **recording** of the answers it gave, frozen under
+`tests/__snapshots__/` and replayed against the code that ships.
+
+A green replay says *this code still answers what it answered when the recording was taken.*
+It does not say the answer was ever right: where the two implementations agreed and were both
+wrong, the recording froze the agreement, and there is no longer a second party who could
+disagree. The recordings also cannot be re-taken — every program that could write one is gone,
+and the replayers refuse to record — so a change that moves a recorded byte is a finding rather
+than a step. `docs/limits.md` is the standing list of what that costs, row by row, including
+four strings that are known to be wrong and are now permanently unfixable.
+
+### Removed
+
+- **The second implementation.** 85 Python files, and with them the full-screen curses panel
+  (`tui` and `menu` are now verbs that refuse it by name and print the command list), the
+  Python launchers, and every `.py` in the tree — there are zero left.
+- **The last Python inside a bundle.** The `token-report` skill shipped one script; it is now
+  `scripts/token_report.mjs` and runs under `node`. Nothing a bundle installs needs an
+  interpreter on any host, theme or footprint.
+- **Python as a dependency of anything.** Including the one command you must always be able to
+  run: `geneseed upgrade` no longer shells out to an interpreter to update itself.
+
+### Added
+
+- **Three verbs that were never subcommands of the old CLI**, because they are new faces on
+  capabilities that had only ever been web endpoints:
+  - `geneseed catalog agents|skills|laws` — everything this harness ships, each with its
+    one-line purpose and lifecycle status.
+  - `geneseed mcp` — the MCP servers wired into each active install, and the presets on offer.
+  - `geneseed memory list|rm` — the facts the agent reads, and removal by name.
+- **A package with zero runtime dependencies.** No `dependencies`, `peerDependencies` or
+  `optionalDependencies`, and a test that fails if any appear. Node 22.3.0 or newer, three
+  commands (`geneseed`, `geneseed-hook`, `geneseed-build`), and the standard library.
+
+### Changed
+
+- **All 25 subcommands and all four hook verbs answer from Node**, along with every web-console
+  endpoint and both generators. Nothing is left behind an interpreter.
+- **`docs/port-ledger.md` is now `docs/limits.md`.** The file stopped being a ledger of a
+  migration in progress and became the standing answer to *what does this tool not prove about
+  itself?* — which outlives the port that started it. Read it before trusting a green suite.
+
 ## [1.0.0] — 2026-06-13
 
 First stable release. The harness, its tooling, and the local web console are

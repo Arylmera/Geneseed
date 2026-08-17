@@ -89,6 +89,28 @@ edit was verified to move only `note` lines.
 **This is an exception, not a precedent.** The next person who wants to hand-edit a recording
 should assume the answer is no and re-derive the whole argument above for their own field.
 
+### The second thing the comparison was taught to ignore, and why that is not the same as a hand-edit
+
+**2026-08-17 — `destamp()` in `tests/helpers/golden.mjs` now blanks `"_version"` inside
+`agent-overrides.json`, as it already blanked `[release <REL>]` inside `.geneseed-version`.**
+
+The configured release version is stamped into emitted bundles in **two** places, and only the first
+had ever been blanked before comparison. The second was found by attempting the 2.0.0 bump: **224 of
+259 emit cells went red**, every one of them the same file, `CHANGED (558 -> 558 bytes)`. It had
+stayed invisible for two reasons worth remembering — the sweep that added the first arm hunted the
+**bracketed** spelling, which this site does not use; and `1.0.0` and `2.0.0` are the same length, so
+the size never moved and only the hash could see it.
+
+**Left unfixed, the frozen corpus would have pinned this project's version at `1.0.0` permanently** —
+not merely 2.0.0 but every possible bump, in 448 recorded files, with no recorder left to re-bless
+one. That is not a limit anyone chose, and it is the reason this is a fix rather than a concession.
+
+**The distinction that matters:** this narrows what the replay COMPARES; it does not touch a recorded
+byte. The other ~553 bytes of that stub, and every other file in all 259 cells, stay asserted exactly
+as before. **But it is still a real loss of coverage** — nothing now checks that the emitted
+`_version` matches the configured one, and nothing can, because verifying it would need the oracle
+that recorded these bytes. If that mapping ever breaks, this corpus will be silent about it.
+
 ## Frozen residue — true statements that are now permanently unfixable
 
 Four things in this repository are wrong, known to be wrong, and **cannot be corrected**, because

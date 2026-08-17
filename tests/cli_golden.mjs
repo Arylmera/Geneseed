@@ -19,7 +19,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { PLATFORM_CORPUS, ROOT, corpusNormalise, orphanCheck } from './helpers/golden.mjs';
+import {
+  PLATFORM_CORPUS, ROOT, corpusNormalise, dropUncompared, orphanCheck,
+} from './helpers/golden.mjs';
 import { checkExpectations, gitTemplate, runCell } from './helpers/cli_golden.mjs';
 import * as snapshotIo from './helpers/snapshot_io.mjs';
 
@@ -228,7 +230,12 @@ function main(argv) {
           failures.push(`  ${cell.id}\n    NO RECORDED SNAPSHOT in ${against} — a cell that ran `
             + 'with nothing to compare against is a hole, not a pass');
         } else {
-          const problems = snapshotIo.compare(recorded, corpusNormalise(snap));
+          // The version-carrying stub, dropped from both sides — see `dropUncompared`. This
+          // harness carries it too: leaving it out here left `migrate/a-node-baked-shim-reads-as-
+          // current` red while the emit corpus was already green.
+          const problems = snapshotIo.compare(
+            recorded, dropUncompared(recorded, corpusNormalise(snap)),
+          );
           if (problems.length) failures.push(`  ${cell.id}\n${problems.join('\n')}`);
         }
       }

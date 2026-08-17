@@ -147,6 +147,47 @@ const ROTS = [
  * THROWS, naming the file, the token and the whole line — rather than letting a moving field
  * into a corpus that is about to be compared against.
  */
+// THE ONE FILE NO REPLAY COMPARES ANY MORE, and the only coverage this corpus has ever lost.
+//
+// `agent-overrides.json` carries `"_version": "<the configured release>"`, stamped into every
+// emitted bundle by `ensureAgentOverridesStub` (js/opencode.mjs). The corpus stores a sha256 of
+// that file's CONTENT, taken while the label read 1.0.0 — so EVERY bump of the version, forever,
+// reddens 224 of 259 emit cells and at least one cli cell, and no program that could take a new
+// hash still exists.
+//
+// A DESTAMP CANNOT SOLVE IT, which is worth writing down because a destamp is the obvious answer
+// and it was tried first. Normalisation runs BEFORE hashing, at record time. Blanking the version
+// on the live side yields a hash of `<REL>` to compare against a recorded hash of `1.0.0`, and a
+// hash cannot be re-normalised afterwards. A stamp table only works when BOTH sides pass through
+// it — an arrangement you can only make while a recorder exists.
+//
+// So the file is dropped from both sides. Symmetric, therefore not a way of excusing a difference:
+// nothing about this file can fail in either direction. Everything else stays asserted byte for
+// byte.
+//
+// ⚠ IT LIVES HERE, NOT IN A REPLAYER, because it is needed by two of them — the emit harness and
+// the cli harness both carry this file in their cells, and the first fix put it in only one and
+// left the cli corpus red on `migrate/a-node-baked-shim-reads-as-current`. A second copy is a
+// second place to forget.
+//
+// The coverage is paid back, and made stronger, in tests/unit/agent_overrides.test.mjs: it asserts
+// the emitted `_version` is SOURCED from harness.config.json rather than a literal — a
+// relationship a frozen hash never checked. A hash only ever said "these bytes, once", and would
+// have been just as green had it recorded the wrong version.
+export const UNCOMPARED = 'agent-overrides.json';
+
+/** Drop `UNCOMPARED` from a recorded snapshot and its live counterpart, symmetrically. */
+export function dropUncompared(recorded, live) {
+  for (const k of [...live.keys()]) if (k.endsWith(UNCOMPARED)) live.delete(k);
+  for (const side of ['paths', 'sizes', 'verbatim']) {
+    if (!recorded || !recorded[side]) continue;
+    for (const k of Object.keys(recorded[side])) {
+      if (k.endsWith(UNCOMPARED)) delete recorded[side][k];
+    }
+  }
+  return live;
+}
+
 export function destamp(name, body) {
   if (!name.endsWith('.geneseed-version')) return body;
   const out = [];
