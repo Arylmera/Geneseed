@@ -311,7 +311,7 @@ const SHIPS = [
   //     machine that linked before that change, and deleting the target breaks it with `No
   //     such file or directory` and no hint.
   // The PowerShell twin and the bootstrap script did NOT survive that cut — see
-  // `tests/deleted_launchers.test.mjs`, the gate on their absence.
+  // `tests/unit/deleted_launchers.test.mjs`, the gate on their absence.
   ['geneseed', 'the bash front door; the shipped README/QUICKSTART/SETUP name it, and a '
     + 'pre-P0 install still has ~/.local/bin/geneseed symlinked to it. NOT the updater under '
     + 'npm (`npm i -g geneseed@latest` is), and NOT what `link` puts on PATH any more'],
@@ -739,7 +739,7 @@ const PYTHON_IN_THE_PRODUCT = new Set();
 // THREE GATES, THREE SUBJECTS, and reading any two of them as duplicates is how one of them gets
 // deleted. `tests/unit/no_python.test.mjs` scans the SHIPPING SOURCE TREE for an INVOCATION or a
 // path a reader could follow — a property of prose and of code, not of file extensions, so it
-// does not go green merely because the `.py` files went. `tests/no_python_in_corpus.test.mjs`
+// does not go green merely because the `.py` files went. `tests/snapshot/no_python_in_corpus.test.mjs`
 // asks that same question of the RECORDED CORPUS, whose rows can never be re-measured. Neither
 // of them opens the package. THIS file owns the packaged tarball, the tree npm extracts from it,
 // and the output of the verbs driven out of that tree — and it is the only one of the three that

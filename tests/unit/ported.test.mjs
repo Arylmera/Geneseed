@@ -8,7 +8,7 @@
 // artifact that can, and it only reports while something checks it against the tree — a JSON
 // file nobody reads is a list of intentions.
 //
-// NODE, NOT PYTHON, for the reason `no_python_in_corpus.test.mjs` gives one file over: a gate
+// NODE, NOT PYTHON, for the reason `tests/snapshot/no_python_in_corpus.test.mjs` gives: a gate
 // that dies in the same commit as the thing it gates has never gated anything. This one has to
 // outlive the deletion because its last job happens DURING the deletion — see `reference_deleted`.
 //
@@ -36,7 +36,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const TESTS = path.join(ROOT, "tests");
 const LEDGER = JSON.parse(fs.readFileSync(path.join(TESTS, "ported.json"), "utf8"));
 

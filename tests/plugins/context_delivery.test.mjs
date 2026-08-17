@@ -4,15 +4,15 @@
 // delivery on builds that lack the experimental transform hook. The mode flags are
 // module-level consts read at import time, so each case gets a fresh module instance
 // via a query-string import. Run from the Geneseed root:
-//   node --test tests/context_delivery.test.mjs
+//   node --test tests/plugins/context_delivery.test.mjs
 import { test, before, after } from "node:test"
 import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import os from "node:os"
 import * as path from "node:path"
-import { makeSandbox } from "./helpers/sandbox.mjs";
+import { makeSandbox } from "../helpers/sandbox.mjs";
 
-const PLUGIN = new URL("../adapters/opencode/plugins/geneseed-context.js", import.meta.url).href
+const PLUGIN = new URL("../../adapters/opencode/plugins/geneseed-context.js", import.meta.url).href
 
 let tmp, repo
 

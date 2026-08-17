@@ -21,7 +21,7 @@
  * when BOTH are wrong, and the apostrophe bug is exactly the kind two implementations share when
  * one is copied from the other — which is why the reference asserted each property against its
  * own output as well. Those absolute assertions are what survive; the recorded corpus half is
- * already replayed by `tests/pure_snapshot.test.mjs` against `win_user_path.json`.
+ * already replayed by `tests/snapshot/pure_snapshot.test.mjs` against `win_user_path.json`.
  *
  * ⚠ WHAT IS STILL NOT COVERED, STATED RATHER THAN IMPLIED — and this is row 4. Nothing here
  * proves PowerShell ACCEPTS the script, and nothing proves the registry write works: the SUCCESS

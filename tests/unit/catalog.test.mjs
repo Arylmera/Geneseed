@@ -5,7 +5,7 @@
  * subcommand: the roster reached a user only through the web console's catalog endpoint or
  * through the full-screen panel, so there is no recorded help text, no acceptance cell, and no
  * way to make either. Every claim here therefore states what the verb DOES rather than that it
- * agrees with something — the discipline `tests/cli_help.test.mjs` names for this population.
+ * agrees with something — the discipline `tests/snapshot/cli_help.test.mjs` names for this population.
  *
  * THE RENDERING IS PINNED AS LITERAL LINES, over a fixture inventory this file builds. That is
  * the only form of "absolute" available for a layout: an assertion that the output "contains

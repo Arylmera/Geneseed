@@ -45,7 +45,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.dirname(HERE);
+const ROOT = path.dirname(path.dirname(HERE));
 
 /**
  * The two bash wrappers P8b deleted, `<verb>.sh` for the two update verbs — LITERALS, and only

@@ -17,7 +17,7 @@
  *
  * THE ONE EXCEPTION IS `NATIVE`, and it is exactly the thing that cannot be derived: the verbs
  * that never had a CPython original and so can never have a recorded cell. See its docblock — it
- * is listed on purpose, and cross-checked against the sibling copy in `tests/cli_help.test.mjs`.
+ * is listed on purpose, and cross-checked against the sibling copy in `tests/snapshot/cli_help.test.mjs`.
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -146,7 +146,7 @@ const HERE = process.platform === 'win32' ? 'win32' : 'posix';
 const OTHER = HERE === 'win32' ? 'posix' : 'win32';
 
 /**
- * ⚠ THE VERBS NO CELL CAN EVER COVER — the second instance of the hazard `tests/cli_help.test.mjs`
+ * ⚠ THE VERBS NO CELL CAN EVER COVER — the second instance of the hazard `tests/snapshot/cli_help.test.mjs`
  * names first, under the same name and for the same reason.
  *
  * A cell is a COMPARISON of two implementations. `catalog`, `mcp` and `memory` reached the product
@@ -158,7 +158,7 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
  * So the equality below becomes TWO NAMED POPULATIONS rather than a weakened one. Listing the
  * native three by name is what keeps this a gate: a FOURTH verb with no cells falls into neither
  * population and fails loudly, where a `covered ⊆ carried` containment would have let it through
- * ungated. What the three are held to instead lives in `tests/cli_help.test.mjs` (help layout) and
+ * ungated. What the three are held to instead lives in `tests/snapshot/cli_help.test.mjs` (help layout) and
  * in the absolute gates of their own units — nothing here claims to gate their behaviour.
  */
 const NATIVE = ['catalog', 'mcp', 'memory'];
@@ -189,18 +189,18 @@ test('the matrix covers every verb each entry claims', () => {
 });
 
 test('the two copies of the native-verb list agree', () => {
-  // THE COST OF LISTING IT TWICE, paid rather than deferred. `tests/cli_help.test.mjs` names the
+  // THE COST OF LISTING IT TWICE, paid rather than deferred. `tests/snapshot/cli_help.test.mjs` names the
   // same three for the same reason, and two hand-written copies of one decision drift in exactly
   // the way this file's header says a listed table drifts — one file exempts a verb the other
   // still demands a corpus for, and the second failure reads like a missing recording.
   //
   // A SHARED HOME UNDER tests/helpers/ IS THE REAL FIX; this is the gate that makes its absence
   // safe until then, and it is read from the sibling's source so neither copy is the authority.
-  const other = read('tests', 'cli_help.test.mjs');
-  const listed = [...block(other, 'const NATIVE = [', '];', 'tests/cli_help.test.mjs')
+  const other = read('tests', 'snapshot', 'cli_help.test.mjs');
+  const listed = [...block(other, 'const NATIVE = [', '];', 'tests/snapshot/cli_help.test.mjs')
     .matchAll(/'([a-z][a-z-]*)'/g)].map((m) => m[1]);
   assert.deepEqual(sorted(listed), sorted(NATIVE),
-    'tests/cli_help.test.mjs and this file disagree about which verbs are Node-native');
+    'tests/snapshot/cli_help.test.mjs and this file disagree about which verbs are Node-native');
 });
 
 test('every cell declares a binary that exists', () => {
@@ -1032,7 +1032,7 @@ test('the improvements filename is stamped the declared way', () => {
 
 test('the link shim names this runtime\'s own entry point', {
   skip: process.platform === 'win32' ? false
-    : 'the .cmd shim is the Windows arm of `link`; the POSIX arm is tests/link_shim.test.mjs',
+    : 'the .cmd shim is the Windows arm of `link`; the POSIX arm is tests/unit/link_shim.test.mjs',
 }, () => {
   // THE DEBT THE SHIM'S STAMP OWES. `link` writes a `.cmd` whose one real line is
   // `"<runner>" "<entry>" %*`, and the harness normalises it — a normalisation with no absolute

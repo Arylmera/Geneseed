@@ -2,13 +2,13 @@
 // entries, file-over-folder override, exclude pruning, dot-folder skipping, and
 // lazy-listing truncation. Driven through the compaction hook (same render path as
 // session.created), no live OpenCode. Run from the Geneseed root:
-//   node --test tests/context_wiki.test.mjs
+//   node --test tests/plugins/context_wiki.test.mjs
 import { test, before, after } from "node:test"
 import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import os from "node:os"
 import * as path from "node:path"
-import { makeSandbox } from "./helpers/sandbox.mjs";
+import { makeSandbox } from "../helpers/sandbox.mjs";
 
 // Module-level config in the plugin — must be set BEFORE the import below.
 process.env.GENESEED_WIKI_LAZY_LIMIT = "2"
@@ -51,7 +51,7 @@ before(async () => {
 
   const repo = path.join(tmp, "repo")
   await fs.mkdir(repo)
-  const mod = await import("../adapters/opencode/plugins/geneseed-context.js")
+  const mod = await import("../../adapters/opencode/plugins/geneseed-context.js")
   const plugin = await mod.default({ directory: repo, client: {} })
   const output = { context: [] }
   await plugin["experimental.session.compacting"]({}, output)

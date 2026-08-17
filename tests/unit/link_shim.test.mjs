@@ -4,8 +4,8 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync, symlinkSync, lsta
 import os from 'node:os';
 import path from 'node:path';
 
-import { cmdLink, cmdUnlink } from '../js/link.mjs';
-import { makeSandbox } from './helpers/sandbox.mjs';
+import { cmdLink, cmdUnlink } from '../../js/link.mjs';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 
 const unix = process.platform !== 'win32';
 

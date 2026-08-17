@@ -5,7 +5,7 @@
  * That file's strongest gate walks `build_argparser()` and asserts the committed table equals it
  * field for field — 25 subparsers, 46 `add_argument` calls. It dies with argparse and NOTHING
  * replaces it: P4 is where the table stops having an oracle, and the honest record of that is
- * `tests/cli_help.test.mjs`'s recorded corpus (frozen while the parser existed) plus this file,
+ * `tests/snapshot/cli_help.test.mjs`'s recorded corpus (frozen while the parser existed) plus this file,
  * which checks every claim the table makes about the program that reads it.
  *
  * ⚠ THE ONE STATE WHERE THE TWO IMPLEMENTATIONS ANSWER DIFFERENTLY ON PURPOSE. The reference
@@ -61,12 +61,12 @@ test('the table is the document the entry reads, and the page is derived from it
   // 29 = the 26 names argparse answered to (25 subparsers plus the `update` alias) plus the
   // three verbs that never had a subparser: `catalog`, `mcp` and `memory`, each a terminal
   // face on a capability that had reached the product only through the web console. The split
-  // is owned by `tests/cli_help.test.mjs`, which names both populations and fails a verb that
+  // is owned by `tests/snapshot/cli_help.test.mjs`, which names both populations and fails a verb that
   // falls into neither; this line is the count that says the table did not quietly grow past
   // it.
   assert.equal(onDisk.commands.length, 29,
     'the table is no longer the 29-row document — 26 recorded names plus three Node-native '
-    + 'verbs. A new row needs a population in tests/cli_help.test.mjs before it needs a number '
+    + 'verbs. A new row needs a population in tests/snapshot/cli_help.test.mjs before it needs a number '
     + 'here');
   assert.equal(cliReference().commands.length, onDisk.commands.length,
     'cliReference() and js/cli-table.json disagree on how many commands exist, so the reader is '
@@ -98,7 +98,7 @@ test('the help width is the terminal width less two, and COLUMNS wins', () => {
   // `helpWidth()` against `shutil.get_terminal_size().columns - 2`. THE THIRD CALLER `pyInt`'s
   // docblock did not have: `$COLUMNS` arrives however the shell set it, so this one strips
   // first — and the port had reached for `parseInt` in a tree that already owned `pyInt` for
-  // exactly this. Every help assertion in `tests/cli_help.test.mjs` runs at `COLUMNS=80`, so
+  // exactly this. Every help assertion in `tests/snapshot/cli_help.test.mjs` runs at `COLUMNS=80`, so
   // both the env-parse branch and the fallback were exercised at one value each.
   const saved = process.env.COLUMNS;
   try {
@@ -173,11 +173,11 @@ test('the same copy with the table present runs', () => {
 
 test('the hidden arguments are still the five the recording froze', () => {
   // The claim `test_the_file_carries_the_arguments_argparse_hides` made against the live parser.
-  // `tests/cli_help.test.mjs` already asserts the same equality against the recorded corpus; the
+  // `tests/snapshot/cli_help.test.mjs` already asserts the same equality against the recorded corpus; the
   // pointer is checked rather than duplicated, because two owners of one claim drift apart.
-  const owner = readFileSync(path.join(ROOT, 'tests', 'cli_help.test.mjs'), 'utf8');
+  const owner = readFileSync(path.join(ROOT, 'tests', 'snapshot', 'cli_help.test.mjs'), 'utf8');
   assert.ok(owner.includes("test('the table carries the surface argparse hides'"),
-    'tests/cli_help.test.mjs no longer owns the hidden-argument equality — every SUPPRESS-ed '
+    'tests/snapshot/cli_help.test.mjs no longer owns the hidden-argument equality — every SUPPRESS-ed '
     + 'argument binds a real value, and without it `geneseed upgrade v1 imperial` mis-parses');
   // …and the one thing that pointer cannot carry: the table must still HAVE hidden rows, or the
   // owner is asserting an equality between two empty sets.

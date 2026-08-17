@@ -2,11 +2,11 @@
 // and the per-level instruction builder. The two OpenCode hooks are thin wrappers over
 // these helpers (read mode → push text); the flag-file IO is a side effect and is not
 // unit-tested. Run from the Geneseed root:
-//   node --test tests/ponytail.test.mjs
+//   node --test tests/plugins/ponytail.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import GeneseedPonytail from "../adapters/opencode/plugins/geneseed-ponytail.js"
+import GeneseedPonytail from "../../adapters/opencode/plugins/geneseed-ponytail.js"
 const { normalizeMode, defaultMode, ponytailInstructions } = GeneseedPonytail
 
 test("normalizeMode: known levels pass through, case/space-insensitive", () => {

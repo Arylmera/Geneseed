@@ -35,16 +35,16 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { DWIDTH_UNIDATA } from '../js/tui.mjs';
-import { makeCfg } from '../js/checkout.mjs';
-import { winUserPathScript } from '../js/link.mjs';
-import { pyTextWrap } from '../js/cli.mjs';
-import { pySplitLines } from '../js/lib/udiff.mjs';
-import { renderAll } from '../js/render.mjs';
-import { modeOptions, postureOptions, themeOptions } from '../js/setup.mjs';
-import { makeSandbox } from './helpers/sandbox.mjs';
+import { DWIDTH_UNIDATA } from '../../js/tui.mjs';
+import { makeCfg } from '../../js/checkout.mjs';
+import { winUserPathScript } from '../../js/link.mjs';
+import { pyTextWrap } from '../../js/cli.mjs';
+import { pySplitLines } from '../../js/lib/udiff.mjs';
+import { renderAll } from '../../js/render.mjs';
+import { modeOptions, postureOptions, themeOptions } from '../../js/setup.mjs';
+import { makeSandbox } from '../helpers/sandbox.mjs';
 
-const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const PROBE = path.join(ROOT, 'tests', 'fixtures', 'pure_probe.mjs');
 const SNAPSHOTS = path.join(ROOT, 'tests', '__snapshots__');
 // The same key vocabulary as `harness_golden.PLATFORM_ONLY` and `PLATFORM_EXPECTED`. Three

@@ -47,9 +47,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { cliCommand, formatHelp } from '../js/cli.mjs';
+import { cliCommand, formatHelp } from '../../js/cli.mjs';
 
-const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const SNAP = path.join(ROOT, 'tests', '__snapshots__');
 const HELP = path.join(SNAP, 'help');
 const TABLE = path.join(ROOT, 'js', 'cli-table.json');

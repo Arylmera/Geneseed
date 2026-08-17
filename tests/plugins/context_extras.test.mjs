@@ -1,15 +1,15 @@
 // Tests for the context plugin's two self-orientation extras: command discovery
 // (Makefile / package.json / justfile / Taskfile targets) and the best-effort model
 // line (read from the transcript, else $GENESEED_MODEL). Run from the Geneseed root:
-//   node --test tests/context_extras.test.mjs
+//   node --test tests/plugins/context_extras.test.mjs
 import { test, before, after } from "node:test"
 import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import os from "node:os"
 import * as path from "node:path"
-import { makeSandbox } from "./helpers/sandbox.mjs";
+import { makeSandbox } from "../helpers/sandbox.mjs";
 
-const PLUGIN = new URL("../adapters/opencode/plugins/geneseed-context.js", import.meta.url).href
+const PLUGIN = new URL("../../adapters/opencode/plugins/geneseed-context.js", import.meta.url).href
 
 let tmp, repo
 

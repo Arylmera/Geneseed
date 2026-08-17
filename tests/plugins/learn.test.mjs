@@ -1,13 +1,13 @@
 // Unit tests for the learn plugin's per-agent memory helpers — pure functions only,
 // no live OpenCode. Run from the Geneseed root:
-//   node --test tests/learn.test.mjs
+//   node --test tests/plugins/learn.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
-import { resolveAgentName, appendAgentLesson } from "../adapters/opencode/plugins/geneseed-learn.js"
-import { makeSandbox } from "./helpers/sandbox.mjs";
+import { resolveAgentName, appendAgentLesson } from "../../adapters/opencode/plugins/geneseed-learn.js"
+import { makeSandbox } from "../helpers/sandbox.mjs";
 
 test("resolveAgentName: reads agent from session meta, rejects garbage", () => {
   assert.equal(resolveAgentName({ agent: "reviewer" }), "reviewer")

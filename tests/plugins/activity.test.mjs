@@ -3,15 +3,15 @@
 // thin wrapper that extracts fields and persists; the filesystem IO (atomic write,
 // prune) is a side effect, covered on the reader side (tests/test_web.py). Run from
 // the Geneseed root:
-//   node --test tests/activity.test.mjs
+//   node --test tests/plugins/activity.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import GeneseedActivity from "../adapters/opencode/plugins/geneseed-activity.js"
-import { makeSandbox } from "./helpers/sandbox.mjs";
+import GeneseedActivity from "../../adapters/opencode/plugins/geneseed-activity.js"
+import { makeSandbox } from "../helpers/sandbox.mjs";
 const { sidOf, nextStatus, applyEvent, safeName, enabledFromFlag, acctTotals, errStr } = GeneseedActivity
 
 test("acctTotals: same id overwrites (streaming), new id adds (next turn)", () => {

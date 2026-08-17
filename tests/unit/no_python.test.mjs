@@ -1,11 +1,11 @@
 // THE DELETION IS PERMANENT, AND THIS IS WHAT SAYS SO.
 //
 // P4 removes every `.py` file in this repository. A deletion needs a gate for the reason
-// `tests/deleted_launchers.test.mjs` already states about two files: without one, "we removed
+// `tests/unit/deleted_launchers.test.mjs` already states about two files: without one, "we removed
 // the reference" and "a shipped document still tells a user to run it" are the same tree. This
 // file is that gate for the whole implementation rather than for two launchers.
 //
-// HOW THIS DIFFERS FROM `tests/no_python_in_corpus.test.mjs`, which is the easiest confusion to
+// HOW THIS DIFFERS FROM `tests/snapshot/no_python_in_corpus.test.mjs`, which is the easiest confusion to
 // make and the most expensive: that file asks the RECORDED CORPUS — the frozen bytes under
 // `tests/__snapshots__/` — what Python it still holds, and its rows can never be re-measured
 // because the oracle that produced them is gone. This file asks the SOURCE TREE the same
@@ -49,7 +49,7 @@ const SCOPE_DIRS = ['js/', 'bin/', 'adapters/', 'web/src/', 'web/dist/', 'src/',
 const inScope = (rel) => SCOPE_DIRS.some((d) => rel.startsWith(d)) || /^[^/]+\.md$/.test(rel);
 
 /**
- * THE HISTORICAL RECORDS, exempt — the same exemption `tests/deleted_launchers.test.mjs`
+ * THE HISTORICAL RECORDS, exempt — the same exemption `tests/unit/deleted_launchers.test.mjs`
  * spells and for the same reason, reached here independently for a second subject. What this
  * hunts is a POINTER: a document or a line of code sending a reader or a process at something
  * that is not there. A changelog entry recording the removal is the opposite of that, and
@@ -62,7 +62,7 @@ const RECORDS = new Set(['CHANGELOG.md', 'DESIGN.md']);
 // ---------------------------------------------------------------------------------------------
 
 // BORROWED VERBATIM from `tests/unit/package_manifest.test.mjs`, which asks it of `src/` and
-// `adapters/` only, and from `tests/no_python_in_corpus.test.mjs`, which asks it of the
+// `adapters/` only, and from `tests/snapshot/no_python_in_corpus.test.mjs`, which asks it of the
 // recording. A second SPELLING of the same property is a second chance to disagree with it, so
 // all three copies stay literal.
 const INVOCATION =
@@ -181,7 +181,7 @@ function scanned() {
 /**
  * Every rule hit over `records`, as `{rel, rule, text, count}` — the scan itself, taken as a
  * function over records rather than over the tree so the firing control can hand it a planted
- * one. `tests/no_python_in_corpus.test.mjs` uses the same shape for the same reason: a control
+ * one. `tests/snapshot/no_python_in_corpus.test.mjs` uses the same shape for the same reason: a control
  * that has to write into the working tree is a control that can leave the repository dirty.
  */
 function hits(records) {

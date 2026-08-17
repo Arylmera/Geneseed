@@ -24,7 +24,7 @@ error it prints (`geneseed: error: …`, `bin/geneseed-cli.mjs`'s `die`), so rep
 here would make the help text the only surface still pointing at the old name.
 
 **How it stays honest.** `prog` is an ARGUMENT of `js/cli.mjs`'s `formatHelp`, not a constant.
-`tests/cli_help.test.mjs` replays all 26 recorded fixtures through it with the reference's own
+`tests/snapshot/cli_help.test.mjs` replays all 26 recorded fixtures through it with the reference's own
 prog and requires them byte for byte. The rename is the only thing that moves, and a separate
 assertion pins the shipped spelling so a renderer that ignored `prog` could not pass both.
 
@@ -142,7 +142,7 @@ right, and that order is the piece of the parser this port deliberately does not
 argparse's ERROR wording above). Printing help for a line that contains `--help` is the answer a
 user is more likely to have wanted, and it is the same answer for every shape of malformed line.
 
-**How it stays honest.** `tests/cli_help.test.mjs`'s `a --help anywhere in the line wins` used to
+**How it stays honest.** `tests/snapshot/cli_help.test.mjs`'s `a --help anywhere in the line wins` used to
 docblock this as "argparse's own rule". It is not — that generalised from `diff --nope --help`,
 which works only because an UNKNOWN option is deferred to the end of `parse_known_args`. Two of
 that test's four cases are cases where the reference errors instead, so the test pins a

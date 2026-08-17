@@ -4,7 +4,7 @@
 // level `def test_...` taking `tmp_path`/`monkeypatch`/`capsys`. This repository's only Python
 // runner is `python -m unittest discover`, which collects `TestCase` METHODS and nothing else,
 // and pytest appears in no workflow and no config file here. 199 of that file's tests run; 212
-// are written. `tests/ported.test.mjs` re-derives both counts and records the split, which is
+// are written. `tests/unit/ported.test.mjs` re-derives both counts and records the split, which is
 // how the gap was found at all.
 //
 // SO THESE ARE NOT COVERAGE BEING TRANSLATED. They are UNPROVEN CLAIMS. The port's job is to

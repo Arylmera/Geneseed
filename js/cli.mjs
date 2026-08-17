@@ -319,12 +319,12 @@ function formatAction(a, positional, helpPosition, width) {
  * `harness`, after the Python file this migration deletes; a user who typed `geneseed status
  * --help` is shown `usage: geneseed status`, which is also how every error this entry prints
  * already spells itself (`die`). `tests/__snapshots__/help/` freezes the reference's answers
- * and `tests/cli_help.test.mjs` replays them through here with `prog` set to the reference's
+ * and `tests/snapshot/cli_help.test.mjs` replays them through here with `prog` set to the reference's
  * own — so the layout is gated byte for byte and the rename is the only thing that moves.
  *
  * NOT EVERY VERB HAS A RECORDED ANSWER, AND THREE NEVER CAN. `catalog`, `mcp` and `memory` had
  * no subparser for the recorder to render from, so the corpus covers the verbs argparse
- * answered to and those three are held ABSOLUTELY instead — `tests/cli_help.test.mjs` names
+ * answered to and those three are held ABSOLUTELY instead — `tests/snapshot/cli_help.test.mjs` names
  * both populations (`RECORDED`, `NATIVE`) and fails a verb that falls into neither, which is
  * what keeps "no recorded text" from meaning "no gate".
  *

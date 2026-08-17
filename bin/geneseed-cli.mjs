@@ -186,7 +186,7 @@ const VERBS = {
   // this change rather than after it. The recorded help corpus was rendered from a live
   // argparse object, and there was no subparser to render these from; the acceptance matrix
   // is a comparison of two implementations, and there is only one. So their gates are
-  // ABSOLUTE — `tests/cli_help.test.mjs` splits the two populations by name and refuses a
+  // ABSOLUTE — `tests/snapshot/cli_help.test.mjs` splits the two populations by name and refuses a
   // verb that falls into neither, and each has its own unit gate stating what it does rather
   // than that it agrees.
   catalog: {

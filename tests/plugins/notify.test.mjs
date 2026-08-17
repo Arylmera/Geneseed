@@ -2,11 +2,11 @@
 // `lastUserMs` transcript reader. The actual OS notification (spawn) is a side effect
 // and is not unit-tested; all the meaningful logic lives in these two helpers. Run
 // from the Geneseed root:
-//   node --test tests/notify.test.mjs
+//   node --test tests/plugins/notify.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import GeneseedNotify from "../adapters/opencode/plugins/geneseed-notify.js"
+import GeneseedNotify from "../../adapters/opencode/plugins/geneseed-notify.js"
 const { shouldNotify, lastUserMs } = GeneseedNotify
 
 const MIN = 30_000

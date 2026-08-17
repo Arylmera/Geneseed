@@ -7,8 +7,8 @@ import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import os from "node:os"
 import * as path from "node:path"
-import { GeneseedGuard } from "../adapters/opencode/plugins/geneseed-guard.js"
-import { makeSandbox } from "./helpers/sandbox.mjs";
+import { GeneseedGuard } from "../../adapters/opencode/plugins/geneseed-guard.js"
+import { makeSandbox } from "../helpers/sandbox.mjs";
 
 // The wiki manifest must be in place before the FIRST hook call — the guard caches
 // the protected prefixes on a TTL, so a hook call without $GENESEED_WIKI set would
