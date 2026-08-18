@@ -117,7 +117,11 @@ test('every action is either ported or declared unported', () => {
     + '501 arm is reachable again and this row must become a probe');
 });
 
-test('the actions dispatched outside the table are declared too, and each is probed', () => {
+// NAMED FOR WHAT IT NOW PROVES. It used to end by checking each inline action named a real
+// recorded web cell — "and each is probed". The web corpus was retired with the emit and cli
+// recordings (see docs/limits.md), so that half is gone and the name no longer claims it. What
+// survives is the declaration gate, which is the half that catches a NEW inline action.
+test('the actions dispatched outside the table are declared too', () => {
   // The table's keys are blind to these three, so a fourth inline action added to the dispatcher
   // and to neither set would fall through to the table and answer `unknown action` on a real
   // endpoint — a plausible response, on a real action, that nothing would fail on.
@@ -125,14 +129,6 @@ test('the actions dispatched outside the table are declared too, and each is pro
     'js/web/jobs.mjs declares a different set of inline actions than this file freezes');
   assert.deepEqual(INLINE_ACTIONS.filter((a) => PORTED_ACTIONS.includes(a)), [],
     'an inline action is also a table row, so which path answers it is ambiguous');
-  for (const [action, cell] of Object.entries(INLINE_PROBES)) {
-    for (const half of ['crlf', 'lf']) {
-      assert.ok(existsSync(path.join(ROOT, 'tests', '__snapshots__', 'web', half, cell)),
-        `${action} names the recorded cell ${cell}, which is not in the ${half} corpus — a `
-        + 'pointer at a cell that does not exist asserts nothing, and this declaration would be '
-        + 'the only thing standing behind an inline action again');
-    }
-  }
 });
 
 test('the argv head is node and an mjs entry, and never python', () => {

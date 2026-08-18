@@ -31,20 +31,16 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// A narrow slice of the emit corpus: enough cells to carry a manifest, a settings.json, a
-// memory store and a non-ASCII theme, and few enough to run in seconds.
-const EMIT = ['tests/golden.mjs', '--against', 'tests/__snapshots__/emit', '--limit', '6'];
-const EMIT_IMPERIAL = ['tests/golden.mjs', '--against', 'tests/__snapshots__/emit',
-  '--only', 'imperial/claude', '--limit', '3'];
-const CLI_CONTEXT = ['tests/cli_golden.mjs', '--against', 'tests/__snapshots__/cli',
-  '--only', 'context/'];
-// The catalog listing, which is the only place in 691 cells where a COLLATION is observable.
-const WEB_CATALOG = ['tests/web_golden.mjs', '--against', 'tests/__snapshots__/web',
-  '--only', 'catalog/'];
-// A hook-WIRING emit. The first six cells of the matrix are files/opencode/opencode-global and
-// none of them writes a settings.json hook, which is why M4 survived an `--limit 6` gate.
-const EMIT_CLAUDE = ['tests/golden.mjs', '--against', 'tests/__snapshots__/emit',
-  '--only', 'neutral/claude'];
+// THE FIVE ROWS THAT OUTLIVED THEIR GATE. M1..M4 and M8 were aimed at narrow slices of the
+// recorded emit, cli and web corpora, and those corpora were retired with the implementation they
+// recorded. A declared gate that can no longer run guards nothing, and a matrix naming one is
+// worse than a matrix that says nothing, because it is trusted. Each is re-aimed at the ONE unit
+// file that kills it — MEASURED, not assumed — and stays narrow for the reason the retired slices
+// were narrow: the cheapest gate that must catch it, and a red that can only mean this mutation.
+const UNIT_MAINTAINER = ['--test', 'tests/unit/maintainer_tools.test.mjs'];
+const UNIT_DRIVER = ['--test', 'tests/unit/node_driver.test.mjs'];
+const UNIT_HOOK_FORM = ['--test', 'tests/unit/hook_form.test.mjs'];
+const UNIT_HOOK_CLI = ['--test', 'tests/unit/hook_cli.test.mjs'];
 const IDEMPOTENT = ['tests/golden.mjs', '--idempotent', '--only', 'neutral/claude'];
 // A GLOB, not a directory. `node --test tests/unit/` resolves the path as a MODULE and fails to
 // load it — `# pass 0, # fail 1` with no test having run, which as a mutation control reads
@@ -59,10 +55,15 @@ export const MUTATIONS = [
     file: 'js/lib/fs.mjs',
     find: "writeFileSync(path, EOL === '\\n' ? text : text.replaceAll('\\n', EOL), 'utf8');",
     replace: "writeFileSync(path, text, 'utf8');",
-    gate: EMIT,
+    gate: UNIT_MAINTAINER,
     why: 'Every emitted file on Windows would carry LF where the reference wrote CRLF. This is '
-      + 'the single most platform-specific behaviour in the product and the corpus is split by '
-      + 'platform precisely so it stays observable.',
+      + 'the single most platform-specific behaviour in the product, and THE MUTATION IS A NO-OP '
+      + "ON POSIX — `EOL === '\\n'` there, so the branch it deletes is already the identity. That "
+      + 'is why the retired corpus was split by platform, and the successor keeps the split '
+      + 'inside one assertion: `tests/unit/maintainer_tools.test.mjs` requires every multi-line '
+      + "file `--sync-themes` REWROTE to carry the running platform's separator — no bare LF "
+      + 'here, no CRLF on the ubuntu runner — and it says in its own comment that it exists so '
+      + 'this row keeps a gate.',
   },
   {
     id: 'M2',
@@ -74,10 +75,14 @@ export const MUTATIONS = [
     replace: 'export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {\n'
       + '  const text = JSON.stringify(value, null, 2);\n'
       + '  return text;',
-    gate: EMIT_IMPERIAL,
+    gate: UNIT_DRIVER,
     why: "Python's json encoder escapes every non-ASCII character by default and JSON.stringify "
       + 'does not. A theme whose strings carry accents writes different bytes into every '
-      + 'manifest and settings file — invisible in a terminal, and a real difference on disk.',
+      + 'manifest and settings file — invisible in a terminal, and a real difference on disk. '
+      + 'The retired imperial cells saw it through a theme; `tests/unit/node_driver.test.mjs` '
+      + 'sees it through the PATH instead — it emits into `dépôt-café` and requires the registry '
+      + 'that records it to carry no byte above 0x7F anywhere, which is the general claim and one '
+      + 'no recorded cell ever made, because every cell path was ASCII.',
   },
   {
     id: 'M3',
@@ -85,14 +90,18 @@ export const MUTATIONS = [
     file: 'js/lib/fs.mjs',
     find: "    if (A[i] !== B[i]) return A[i] < B[i] ? -1 : 1;",
     replace: "    if (A[i] !== B[i]) return A[i] < B[i] ? 1 : -1;",
-    gate: WEB_CATALOG,
-    why: 'It orders the catalog listing the console serves. THIS ROW TOOK THREE AIMS AND THE '
-      + 'FIRST TWO ARE THE INTERESTING PART. An emit gate could not see it: comparePaths has '
-      + 'five callers and all five are in js/doctor.mjs. Then all THIRTY doctor cells could not '
-      + 'see it either - doctor sorts its scans internally and reports problems, so the order '
-      + 'never reaches an output anyone compares. The web catalog cells catch it at once, and '
-      + 'the diff is the reason a corpus hashes rather than measures: 553 bytes against 553, '
-      + 'same length, reversed order. A gate comparing sizes would be blind to it.',
+    gate: UNIT_MAINTAINER,
+    why: 'It orders every listing the product sorts by path. THIS ROW HAS TAKEN FOUR AIMS AND THE '
+      + 'FIRST TWO ARE STILL THE INTERESTING PART. An emit gate could not see it: back then '
+      + 'comparePaths had five callers and all five were in js/doctor.mjs. Then all THIRTY doctor '
+      + 'cells could not see it either - doctor sorts its scans internally and reports problems, '
+      + 'so the order never reaches an output anyone compares. The third aim, the web catalog '
+      + 'cells, caught it at once and went with the corpora. The fourth is stronger than any of '
+      + "them: `tests/unit/maintainer_tools.test.mjs` RE-DERIVES Python's `sorted(Path)` order "
+      + 'for the running platform rather than replaying a recording, so it holds on both '
+      + 'platforms and cannot agree with a drift. The diff is still the reason a corpus hashes '
+      + 'rather than measures: 553 bytes against 553, same length, reversed order. A gate '
+      + 'comparing sizes would be blind to it.',
   },
   {
     id: 'M4',
@@ -100,10 +109,13 @@ export const MUTATIONS = [
     file: 'js/settings.mjs',
     find: 'const context = `${run} context --root "${cfg}" || exit 0`;',
     replace: 'const context = `${run} context --root "${cfg}"`;',
-    gate: EMIT_CLAUDE,
+    gate: UNIT_HOOK_FORM,
     why: 'A hook that fails to LAUNCH — a moved checkout, a dead interpreter — must not break '
       + "the user's tool call. The partition is the assertion: `|| exit 0` on every non-gate "
-      + 'hook and on NO gate, because a crashing gate must fail closed.',
+      + 'hook and on NO gate, because a crashing gate must fail closed. The retired cells could '
+      + 'only see it as a byte difference in one emitted settings.json; '
+      + '`tests/unit/hook_form.test.mjs` asserts BOTH halves of that partition over the hooks the '
+      + 'generator produces, and names the hook that could block the host session.',
   },
   {
     id: 'M5',
@@ -116,7 +128,7 @@ export const MUTATIONS = [
       + "CARRIED AS UNGATED FOR A WHILE, and the reason is the design doc's own: the claim "
       + 'guard only fires when a file EXISTS at the destination and was never owned, and a '
       + 'fresh-sandbox emit never reaches that state by construction. All 691 recorded cells '
-      + 'are blind to it. tests/unit/user_files.test.mjs is what closes it, by driving '
+      + 'were blind to it. tests/unit/user_files.test.mjs is what closes it, by driving '
       + 'writeNativeLayer in process over a seeded pre-existing file - which is the whole '
       + 'argument for a unit tier: a corpus can only record states a cell can reach, and the '
       + 'states worth fearing most are the ones a clean fixture cannot produce.',
@@ -155,10 +167,10 @@ export const MUTATIONS = [
       + 'both into a no-op that leaves the thing on disk. rmSync(recursive, force) deletes all '
       + 'three without complaint, so the port destroyed what the reference preserved. It is '
       + 'REACHABLE: installDeactivate rolls back by calling this on root/.geneseed-disabled, so '
-      + 'a user with a plain FILE of that name at their install root lost it. NO CELL CAN SEE '
-      + 'IT - all 690 replay green with the defect in place, because nothing plants a file where '
-      + 'a stash directory belongs. The same shape as M5: the states worth fearing are the ones '
-      + 'a clean fixture cannot reach.',
+      + 'a user with a plain FILE of that name at their install root lost it. NO CELL COULD SEE '
+      + 'IT - all 690 replayed green with the defect in place, because nothing planted a file '
+      + 'where a stash directory belongs. The same shape as M5: the states worth fearing are '
+      + 'the ones a clean fixture cannot reach.',
   },
   {
     id: 'M6',
@@ -204,12 +216,15 @@ export const MUTATIONS = [
     file: 'bin/geneseed-hook.mjs',
     find: "  context: { fn: cmdContext, flags: { '--root': 'root' } },\n",
     replace: '',
-    gate: CLI_CONTEXT,
+    gate: UNIT_HOOK_CLI,
     why: 'The hook table is what an emitted settings.json invokes. A verb missing from it is a '
       + 'hook that cannot launch, on every install, silently. THE FIRST DRAFT ADDED A KEY '
       + 'INSTEAD OF REMOVING ONE and survived: an additive edit to a dispatch table changes '
       + 'nothing any caller can see, which is a mutation that names a defect and plants a '
-      + 'no-op.',
+      + 'no-op. `tests/unit/hook_cli.test.mjs` replaces the retired cli cells and is broader '
+      + 'than they were: it requires the verbs the entry carries and the verbs the emitter WIRES '
+      + 'to be the same set, and then runs each one, so a removal reddens the partition and the '
+      + 'probe together rather than one recorded stream.',
   },
   {
     id: 'M9',
@@ -222,7 +237,7 @@ export const MUTATIONS = [
     find: "export const NO_WINDOW = { windowsHide: process.platform === 'win32' };",
     replace: 'export const NO_WINDOW = {};',
     gate: UNIT,
-    why: 'A console window flashing on every hook invocation is not a byte, so no corpus can '
+    why: 'A console window flashing on every hook invocation is not a byte, so no corpus could '
       + 'see it — every one of 691 cells was byte-identical through the defect and a HUMAN '
       + 'using the product found it. The gate has to read the SOURCE, which is what '
       + 'tests/unit/spawn_hygiene.test.mjs does: brace-matched call bodies, capturing spawns '
@@ -259,10 +274,10 @@ export const MUTATIONS = [
       + 'a row that measures nothing, and the only thing that can tell you is running it.',
   },
   // ------------------------------------------------------------------------------------------
-  // P3 T7. Three defects the ACCEPTANCE MATRIX IS STRUCTURALLY BLIND TO, added with
-  // `tests/unit/node_driver.test.mjs` — the file whose whole subject is the axes no cell varies.
-  // Each one would be byte-identical across all 259 emit cells, which is the argument for the
-  // gate existing and therefore the argument for the row.
+  // P3 T7. Three defects the ACCEPTANCE MATRIX WAS STRUCTURALLY BLIND TO, added with
+  // `tests/unit/node_driver.test.mjs` — the file whose whole subject is the axes no cell varied.
+  // Each one would have been byte-identical across all 259 emit cells, which is the argument for
+  // the gate existing and therefore the argument for the row.
   {
     id: 'M14',
     name: 'drop the registry prune-on-read write',
@@ -272,9 +287,9 @@ export const MUTATIONS = [
     replace: '  if (false) {\n    registrySave(kept);',
     gate: UNIT,
     why: 'The prune is a WRITE performed by a READ, and it is the part of that path most likely '
-      + 'to be wrong. Every golden cell emits into a fresh sandbox whose registry is empty, so '
-      + '`kept` equals `original` in all 259 of them and deleting the write is invisible to the '
-      + 'entire matrix. The gate seeds a row pointing at a directory that no longer exists and '
+      + 'to be wrong. Every golden cell emitted into a fresh sandbox whose registry was empty, so '
+      + '`kept` equalled `original` in all 259 of them and deleting the write was invisible to '
+      + 'the entire matrix. The gate seeds a row pointing at a directory that no longer exists and '
       + 'requires the file to come back without it.',
   },
   {
@@ -284,12 +299,12 @@ export const MUTATIONS = [
     find: '  const env = process.env.COPILOT_CONFIG_DIR;',
     replace: '  const env = null;',
     gate: UNIT,
-    why: 'UNREACHABLE BY CONSTRUCTION FROM THE MATRIX, and for a safety reason: `cellEnv` CLEARS '
-      + 'every relocation variable, because leaving one set renders ~126 global cells into the '
-      + "developer's real install. So a resolver that ignored its variable is byte-identical in "
-      + "all 259 cells while writing into the user's real config dir on every machine that "
-      + 'exports it. This is the M30 shape the per-host table was built for: the hazard had been '
-      + 'generalised to Copilot in prose and not in the gate.',
+    why: 'WAS UNREACHABLE BY CONSTRUCTION FROM THE MATRIX, and for a safety reason: `cellEnv` '
+      + 'CLEARED every relocation variable, because leaving one set rendered ~126 global cells '
+      + "into the developer's real install. So a resolver that ignored its variable was "
+      + "byte-identical in all 259 cells while writing into the user's real config dir on every "
+      + 'machine that exports it. This is the M30 shape the per-host table was built for: the '
+      + 'hazard had been generalised to Copilot in prose and not in the gate.',
   },
   {
     id: 'M16',
@@ -298,11 +313,11 @@ export const MUTATIONS = [
     find: "  const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';",
     replace: "  const agentPath = 'AGENT.md';",
     gate: UNIT,
-    why: '`argvFor` builds every cell out of `--theme/--emit/--footprint/--out` plus an optional '
-      + '`--posture`/`--mode`, so `out === root` in all 259 cells, `relUnder` returns the empty '
+    why: '`argvFor` built every cell out of `--theme/--emit/--footprint/--out` plus an optional '
+      + '`--posture`/`--mode`, so `out === root` in all 259 cells, `relUnder` returned the empty '
       + 'string every time and the prefix this mutation deletes was never once non-empty in the '
       + 'acceptance test. The instruction path `opencode.json` records — the whole reason '
-      + '`--root` exists — is INDISTINGUISHABLE to the gate that is otherwise this port\'s '
+      + '`--root` exists — was INDISTINGUISHABLE to the gate that was otherwise this port\'s '
       + 'acceptance test, which is why the successor asserts it as a partition rather than a '
       + 'containment.',
   },
@@ -357,9 +372,9 @@ export const MUTATIONS = [
   },
   // ------------------------------------------------------------------------------------------
   // P3 T7, with `tests/unit/web_jobs.test.mjs`. MEASURED WHILE ADDING THESE: the `$ <argv>` echo
-  // line in the recorded web corpus normalises the WHOLE argv to `<ARGV>`, not merely its head
-  // — so all 114 cells are blind to every argument the job runner resolves, and the reference's
-  // own docstring understated it. Both rows below are therefore invisible to the entire corpus.
+  // line in the recorded web corpus normalised the WHOLE argv to `<ARGV>`, not merely its head
+  // — so all 114 cells were blind to every argument the job runner resolves, and the reference's
+  // own docstring understated it. Both rows below were therefore invisible to the entire corpus.
   {
     id: 'M20',
     name: 'drop --yes from the uninstall job argv',
@@ -369,9 +384,9 @@ export const MUTATIONS = [
     gate: UNIT,
     why: 'A REAL HAZARD AND NOT A COSMETIC ONE: the web Settings runs uninstall as a background '
       + 'job with no terminal attached, so without `--yes` the verb blocks on a confirmation '
-      + 'prompt nobody can answer and the job hangs until the daemon is killed. Nothing observes '
+      + 'prompt nobody can answer and the job hangs until the daemon is killed. Nothing observed '
       + 'it: the argv is not serialised to a client, and the one place it appears — the `$` echo '
-      + 'line — is normalised whole in every recorded cell.',
+      + 'line — was normalised whole in every recorded cell.',
   },
   {
     id: 'M21',
@@ -383,7 +398,7 @@ export const MUTATIONS = [
     why: "`apiDeployCmd`'s `{cmd: [...]}` is handed straight to the job runner and never reaches "
       + 'the wire, so a resolver that deployed the host-agnostic bundle to every host would '
       + 'answer every request successfully and write the wrong layer. The one recorded cell that '
-      + 'touches the endpoint covers its two REFUSAL arms, where no command is produced at all.',
+      + 'touched the endpoint covered its two REFUSAL arms, where no command is produced at all.',
   },
   // ------------------------------------------------------------------------------------------
   // P3 T7, with `tests/unit/web_server.test.mjs`.
@@ -399,9 +414,9 @@ export const MUTATIONS = [
     replace: "  ['/api/activity', [apiActivityToggle, true]],",
     gate: UNIT,
     why: 'THE REVERSE MUTATION, and it is the invisible direction. A port that gave every POST '
-      + 'the 409 rule is caught by four recorded cells; giving `/api/activity` alone that rule is '
-      + 'caught by none, because every toggle a cell can perform SUCCEEDS and the failing arm '
-      + 'needs the flag write to raise — which the two runtimes worded differently and no byte '
+      + 'the 409 rule was caught by four recorded cells; giving `/api/activity` alone that rule '
+      + 'was caught by none, because every toggle a cell could perform SUCCEEDED and the failing '
+      + 'arm needs the flag write to raise — which the two runtimes worded differently and no byte '
       + 'comparison could hold. The convention column is the table `doPost` looks up, so the gate '
       + 'is on the dispatch and not on a declaration.',
   },
@@ -452,10 +467,11 @@ export const MUTATIONS = [
       + 'this row is what says the assertion is load-bearing.',
   },
   // ------------------------------------------------------------------------------------------
-  // P3 T7, with `tests/unit/hook_form.test.mjs`. THE SHIM IS EXCLUDED FROM THE EMIT CORPUS BY
-  // NAME — its body bakes the runner and checkout of whoever wrote it, so it would differ in
-  // every cell and drown every real finding. `shimHealth` replaces the comparison and checks
-  // only that the quoted paths EXIST. Both rows below live in that gap.
+  // P3 T7, with `tests/unit/hook_form.test.mjs`. THE SHIM WAS EXCLUDED FROM THE RETIRED EMIT
+  // CORPUS BY NAME — its body bakes the runner and checkout of whoever wrote it, so it would
+  // have differed in every cell and drowned every real finding. `shimHealth` stood in for the
+  // comparison then and is still what the shim has: it checks only that the quoted paths EXIST.
+  // Both rows below live in that gap, which the corpus's retirement did not close.
   {
     id: 'M26',
     name: 'emit the shim path even when the shim could not be written',
@@ -494,8 +510,8 @@ export const MUTATIONS = [
     find: '    rmSync(tmp, { force: true });\n',
     replace: '',
     gate: UNIT,
-    why: 'THE HALF OF THE ATOMIC GUARANTEE THAT IS NOT ABOUT THE TARGET. No cell fails a rename, '
-      + 'so nothing in 690 recorded cells reaches this catch. A leaked `settings.json'
+    why: 'THE HALF OF THE ATOMIC GUARANTEE THAT IS NOT ABOUT THE TARGET. No cell failed a rename, '
+      + 'so nothing in 690 recorded cells reached this catch. A leaked `settings.json'
       + '.geneseed-tmp` sits in the user\'s own config directory, where the next emit\'s '
       + 'directory listing finds it and the user has to work out whose it is — and it holds a '
       + 'full copy of the config the write was about to make, which is a disclosure as well as '
@@ -512,8 +528,8 @@ export const MUTATIONS = [
     why: 'CLAIM-ON-CREATE IS CORRECT AND SILENT IS NOT. A pre-existing file whose name collides '
       + "with a shipped spec is the user's, so the emit leaves it and does NOT claim it — but "
       + 'without the line, the user sees a successful emit and a reviewer agent that is still '
-      + 'their old one, with nothing anywhere saying which of the two is on disk. No cell can '
-      + 'reach it: every recorded cell emits into a fresh sandbox, so no file ever collides.',
+      + 'their old one, with nothing anywhere saying which of the two is on disk. No cell could '
+      + 'reach it: every recorded cell emitted into a fresh sandbox, so no file ever collided.',
   },
   // ------------------------------------------------------------------------------------------
   // T8, with `tests/unit/emit_phase_order.test.mjs`. The phase markers ARE product code — they
@@ -541,8 +557,8 @@ export const MUTATIONS = [
     gate: UNIT,
     why: 'STDOUT IS THE DECISION CHANNEL. Every Geneseed hook returns 0 on every path and '
       + 'signals its verdict as JSON on stdout, so one stray byte there turns a blocking gate '
-      + 'into a silently permissive one that still reports success. The emit corpus cannot see '
-      + 'this either way, because it never sets the variable; what catches it is that the phase '
+      + 'into a silently permissive one that still reports success. The emit corpus could not see '
+      + 'this either way, because it never set the variable; what catches it is that the phase '
       + 'gate reads the stream the marker is SUPPOSED to be on.',
   },
 ];

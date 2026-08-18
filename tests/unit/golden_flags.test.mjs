@@ -88,33 +88,15 @@ test('--deletion selects the deletion matrix and nothing else', () => {
   assert.equal(selectCells(DOC, parseArgs(['--deletion'])).length, 9);
 });
 
-// THE ANCHOR CELLS, and the reason they are checked against the CORPUS rather than against the
-// matrix. Six cells keep their carrier file verbatim — everything else is hashes, and a corpus
-// that can only say "a path moved" makes every regeneration a blind blessing. The reference's
-// first draft named the ids reversed and the carriers as bare filenames, so a bare name never
-// intersected the snapshot's sandbox-relative keys and the verbatim text silently recorded
-// EMPTY for all six. Nothing failed. This is the check that would have caught it: the committed
-// corpus must actually hold verbatim text at each declared path.
-test('every anchor cell really carries verbatim text in the recorded corpus', () => {
-  const dir = path.join(ROOT, 'tests', '__snapshots__', 'emit', PLATFORM_CORPUS);
+// TWO CORPUS TESTS STOOD HERE — one asserting every anchor cell really held verbatim text in
+// the recording (the check that would have caught the reference's silently-empty first draft),
+// one asserting the recording and the matrix had not drifted apart. Both asked a question about
+// a committed recording, and the recordings were retired (docs/limits.md). The matrix itself is
+// still gated above: `VERBATIM_CELLS` ids are still matrix ids, and `selectCells` still has to
+// select them.
+test('every anchor cell names a cell the matrix actually has', () => {
   const ids = new Set(DOC.cells.map(cellId));
-  for (const [cid, carriers] of Object.entries(VERBATIM_CELLS)) {
-    assert.ok(ids.has(cid), `${cid} is not a cell in the matrix`);
-    const rec = snapshotIo.read(dir, cid);
-    assert.ok(rec, `${cid} has no recorded snapshot`);
-    for (const carrier of carriers) {
-      assert.ok(carrier in rec.paths, `${cid}: ${carrier} is not a path this cell produced`);
-      assert.ok(rec.verbatim && carrier in rec.verbatim,
-        `${cid}: ${carrier} is declared an anchor and was recorded as a hash only`);
-      assert.ok(rec.verbatim[carrier].length > 0, `${cid}: ${carrier} recorded empty`);
-    }
+  for (const cid of Object.keys(VERBATIM_CELLS)) {
+    assert.ok(ids.has(cid), `${cid} is declared an anchor but is not a cell in the matrix`);
   }
-});
-
-test('the corpus this platform replays exists and is the whole matrix', () => {
-  const dir = path.join(ROOT, 'tests', '__snapshots__', 'emit', PLATFORM_CORPUS);
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
-  assert.equal(files.length, DOC.cells.length,
-    `${files.length} recorded snapshots against ${DOC.cells.length} cells — the corpus and the `
-    + 'matrix have drifted apart, which is exactly what the orphan check exists to report');
 });

@@ -281,10 +281,14 @@ export const normcase = process.platform === 'win32'
  *     flat cmp  : the reverse again
  *
  * Nothing in the emitted tree could see it: `js/render.mjs` sorts a list whose members share
- * a directory depth, and `golden.py` compares CONTENT rather than order. It became visible
+ * a directory depth, and `golden.py` compared CONTENT rather than order. It became visible
  * the first time a full path list was PRINTED \u2014 `geneseed validate -v` \u2014 against a real
  * skills tree that happens to contain both `skills/geneseed/` and `skills/geneseed-code-review/`.
- * `tests/test_maintainer_tools_parity.py` is the gate that found it and the one that holds it.
+ * `tests/test_maintainer_tools_parity.py` found it and died with the reference it compared
+ * against. What HOLDS it now is `tests/unit/maintainer_tools.test.mjs`, and specifically its
+ * `theme files are visited in THIS platform's Path collation order` test: it re-derives Python's
+ * `sorted(Path)` order for the running platform instead of replaying a recording, so it cannot
+ * agree with a drift \u2014 and it is the measured killer of this function's mutation (M3).
  */
 export function comparePaths(a, b) {
   const A = normcase(a).split(/[\\/]/);

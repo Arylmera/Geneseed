@@ -26,10 +26,14 @@
  * ⚠ WHAT IS STILL NOT COVERED, STATED RATHER THAN IMPLIED — and this is row 4. Nothing here
  * proves PowerShell ACCEPTS the script, and nothing proves the registry write works: the SUCCESS
  * arm of the spawn is ungated, deliberately, because the only way to gate it is to edit this
- * machine. The reachable arm is the failure one, and the recorded `unlink` cells reach it
- * honestly by handing the verb a PATH with no `powershell` on it. What the last test below adds
- * is the other half of that argument: the spawn is only safe to leave ungated if it carries no
- * logic, and that is now asserted instead of described.
+ * machine. THE FAILURE ARM IS UNGATED NOW TOO, which it was not when this file was written: the
+ * recorded `unlink` cells reached it honestly by handing the verb a PATH with no `powershell` on
+ * it, and they were retired with the CLI corpus. Nothing inherited them — every surviving
+ * `cmdUnlink` test is unix-only, so the Windows branch that calls this spawn is entered by no test
+ * at all. WHAT HOLDS IT NOW IS SOURCE-LEVEL, and it is the whole argument rather than half of it:
+ * the last test below asserts the spawn carries NO LOGIC, so what is ungated is nothing a test
+ * would want to check, and `ALLOWED_SPAWNS` in `tests/unit/hook_cli.test.mjs` pins it to one call
+ * and to the exact `powershell -NoProfile -Command <script>` shape.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

@@ -3,9 +3,10 @@
 // `tests/test_harness.py:1997-2194` carries thirteen tests written in the pytest style: module
 // level `def test_...` taking `tmp_path`/`monkeypatch`/`capsys`. This repository's only Python
 // runner is `python -m unittest discover`, which collects `TestCase` METHODS and nothing else,
-// and pytest appears in no workflow and no config file here. 199 of that file's tests run; 212
-// are written. `tests/unit/ported.test.mjs` re-derives both counts and records the split, which is
-// how the gap was found at all.
+// and pytest appears in no workflow and no config file here. 199 of that file's tests ran; 212
+// were written. `tests/unit/ported.test.mjs` re-derived both counts from the file itself, which
+// is how the gap was found at all; the split it recorded survives in `tests/ported.json` as a
+// measurement, the re-derivation having gone with the reference it counted.
 //
 // SO THESE ARE NOT COVERAGE BEING TRANSLATED. They are UNPROVEN CLAIMS. The port's job is to
 // write the gate first and then find out whether the behaviour is actually there — which is the

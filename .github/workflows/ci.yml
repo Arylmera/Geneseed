@@ -86,19 +86,20 @@ jobs:
           # someone later adds a count gate to.
           node --test --test-reporter=tap tests/unit/package_manifest.test.mjs
 
-  # THE CELL HARNESSES — the whole cross-implementation gate, now that there is one
-  # implementation. It replays the RECORDED corpus against the port; what it does not do is
-  # compare two implementations, which needs two, and its predecessor did exactly that until
-  # the second party was deleted. A live comparison and a corpus replay are different gates and
-  # only the second one survives a deletion, which is why both ran side by side for a while.
+  # THE SELF-COMPARISONS — what is left of the cell harnesses once the recorded corpora are
+  # gone. The emit, cli and web recordings were retired in the same change that added Law
+  # XXXVIII: they were produced by an implementation that no longer exists, could never be
+  # re-recorded, and so reddened on every deliberate content change while saying nothing about
+  # a defect that happened to be stable. `docs/limits.md` carries the retirement and the
+  # measurement that licensed it — all five mutations whose only declared gate was a corpus
+  # replay are killed by `tests/unit/` alone.
   #
-  # UBUNTU **AND** WINDOWS, which the comparison job never was: that one was Linux-only on a
-  # runner budget, because it ran two implementations per cell. The budget argument does not
-  # carry over — this replay is a single spawn per cell, so the whole emit matrix is ~70 seconds
-  # rather than minutes. Every Windows defect this project has shipped — CRLF/LF, 8.3 short
-  # paths, console flashes, cp1252 — was invisible to a Linux-only job, and the `crlf` half of
-  # the corpus has no other replayer at all: a platform that has never run the gate is a
-  # platform the gate says nothing about.
+  # WHAT SURVIVES NEEDS NO CORPUS: both modes below compare a run against another run of the
+  # same implementation, so they keep working however the content changes.
+  #
+  # UBUNTU **AND** WINDOWS. Every Windows defect this project has shipped — CRLF/LF, 8.3 short
+  # paths, console flashes, cp1252 — was invisible to a Linux-only job, and a platform that has
+  # never run the gate is a platform the gate says nothing about.
   node-cells:
     strategy:
       fail-fast: false
@@ -110,10 +111,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      # The recorded corpus, replayed. `--against` resolves to `emit/crlf` or `emit/lf` from
-      # this runner's line separator, so each half is replayed by the platform that recorded it.
-      - name: golden — the recorded emit corpus, replayed
-        run: node tests/golden.mjs --against tests/__snapshots__/emit
       # The two self-comparisons, which have no corpus and need none: they compare a run against
       # another run of the same implementation. `--idempotent` is the re-emit path real users
       # are on from their second build onwards; `--deletion` is the only thing that makes the
@@ -122,28 +119,6 @@ jobs:
         run: node tests/golden.mjs --idempotent
       - name: golden — the prune
         run: node tests/golden.mjs --deletion
-      # The CLI verb corpus — 317 cells over 25 verbs, and the ~800 absolute `expect_*`
-      # assertions they carry inline. The absolute tier runs FIRST against the candidate, so a
-      # cell that has stopped exercising what it names is reported VACUOUS rather than compared:
-      # a corpus recorded from an implementation that had gone silent would otherwise say
-      # nothing, green, forever.
-      #
-      # This job also asserts the PLATFORM UNION from either host — every id declared for this
-      # platform is built, every id declared for the other is absent, neither half empty — and
-      # PRINTS the half it did not run, so a run says out loud what it skipped.
-      - name: cli_golden — the recorded CLI corpus, replayed
-        run: node tests/cli_golden.mjs --against tests/__snapshots__/cli
-      # The web console corpus — 114 cells, each a request script over one reused connection
-      # against a daemon started with `--daemon-internal --port 0`.
-      #
-      # BOTH ENTRIES, because a second driver does not inherit the first's proof: `js/web/
-      # server.mjs` is the daemon's own entry and `bin/geneseed-cli.mjs web` is the CLI's. That
-      # was P4a's finding and it matters most here, since a corpus replay is the only one of the
-      # two gates that survives the reference.
-      - name: web_golden — the recorded web corpus, replayed from both entries
-        run: |
-          node tests/web_golden.mjs --against tests/__snapshots__/web --cli "node js/web/server.mjs"
-          node tests/web_golden.mjs --against tests/__snapshots__/web --cli "node bin/geneseed-cli.mjs web"
 
   # THE LINUX CORPUS RECORDER LIVED HERE, AND IT IS GONE ON PURPOSE.
   #

@@ -12,7 +12,7 @@
 [![Themes](https://img.shields.io/badge/themes-14-9cf)](themes/)
 [![Skills](https://img.shields.io/badge/skills-47-blueviolet)](src/skills/)
 [![Agents](https://img.shields.io/badge/agents-17-orange)](src/agents/)
-[![Laws](https://img.shields.io/badge/laws-38-critical)](src/laws/universal.md)
+[![Laws](https://img.shields.io/badge/laws-40-critical)](src/laws/universal.md)
 [![Plugins](https://img.shields.io/badge/plugins-7-teal)](adapters/opencode/plugins/)
 [![OpenCode · Claude Code · Bob · Copilot · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20Copilot%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
 
@@ -91,9 +91,9 @@ Both launchers are thin shims over the Node CLI: they need `node` (22.3+) on `PA
 
 ### 🟩 One runtime — Node, and nothing else
 
-Node ≥ 22.3 is the entire dependency list. Every subcommand, all four hooks, every web-console endpoint and both generators run from it, and what each of them emits is replayed against frozen recordings on every commit, across every theme × host × footprint. So an install needs no second interpreter — not for the harness, and not for anything it ships.
+Node ≥ 22.3 is the entire dependency list. Every subcommand, all four hooks, every web-console endpoint and both generators run from it, and every commit runs the whole unit suite plus `doctor --all` across every theme × host × footprint, on Linux and Windows both. So an install needs no second interpreter — not for the harness, and not for anything it ships. (Until 2026-08-17 the generator's output was also replayed byte for byte against recordings taken from the Python implementation. Those were retired — see [`docs/limits.md`](docs/limits.md) for the measurement that licensed it and the coverage it cost.)
 
-- **0 commands have no Node twin**: 25 of the 25 subcommands, and all four hook verbs, answer from the Node entry points. `catalog`, `mcp` and `memory` are Node-native faces the CLI table declares on top of that roster. There is no full-screen browse panel — `geneseed tui` and `geneseed menu` are verbs that refuse it by name and print the command list instead. Off a terminal, which is how scripts and CI run them, the bytes and the exit code are the recorded ones.
+- **0 commands have no Node twin**: 25 of the 25 subcommands, and all four hook verbs, answer from the Node entry points. `catalog`, `mcp` and `memory` are Node-native faces the CLI table declares on top of that roster. There is no full-screen browse panel — `geneseed tui` and `geneseed menu` are verbs that refuse it by name and print the command list instead, off a terminal as well as on one.
 - **Nothing you install needs an interpreter.** The `token-report` skill is a script rather than prose, and it ships as `scripts/token_report.mjs`, run with `node`; `daydream` and `herdr` hand their inline code to `node -e`. So **every bundle carries** nothing that needs one: no Python file, and no skill that shells out to an interpreter, on any host, theme or footprint. Three tests freeze that — one scans every tracked file for inline code handed to an interpreter, one globs the bundle source, and one replays the report script over seeded transcripts for all four hosts and compares the bytes.
 - **`upgrade` / `update` / `sync-self` / `bootstrap` are for a git checkout.** They `git pull` the install's own origin. From an npm install they stop before touching anything and name `npm install -g geneseed@latest` as the update instead.
 
@@ -152,7 +152,7 @@ The harness ships as a small set of layers, mirrored one-for-one in the web cons
 
 | Layer | What it is |
 | --- | --- |
-| **🛡️ Rules** (`laws/`) | 38 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery, non-interactive-shell, untrusted-content, least-privilege, external-gate, root-cause, idempotency, calibrated-honesty, source-over-surface, restart-is-not-reload, total-teardown, cover-and-verify, prove-the-gate… |
+| **🛡️ Rules** (`laws/`) | 40 universal laws the agent obeys — secrets, scope, verify-before-assert, surface-failures, context economy, load-the-docs, tool-discovery, non-interactive-shell, untrusted-content, least-privilege, external-gate, root-cause, idempotency, calibrated-honesty, source-over-surface, restart-is-not-reload, total-teardown, cover-and-verify, prove-the-gate, answer-shape, stable-reference-codes… |
 | **🤖 Agents** (17) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `explorer`, `developer` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
 | **🛠 Skills** (47) | repeatable workflows: brainstorm · **clarify** · plan · **codebase-design** · **domain-modeling** · **wayfinder** · **tickets** · tdd · **develop** · debug · **prototype** · refactor · **ponytail** · **forge-mcp** · geneseed-code-review · **fresh-eyes** · **review-response** · commit · **ship** · **release** · **migrate** · **git-archaeology** · **git-rescue** · repo-map · document-project · **frontend-design** · **prose** · **ingest** · **research** · **learning-path** · **gap-detector** · **feynman** · **crash-course** · **drill** · **decode** · handoff · roast-me · **council** · parallel-agents · **workflow** · **wiki** · **geneseed** · **rule** · **profile** · **opencode-theme** · **herdr** · **pipeline** |
 | **🔌 Plugins** (OpenCode) | `geneseed-context` injects project docs *and your machine wiki* every session (and across compaction); `geneseed-learn` distils memory at session end; `geneseed-guard` enforces the safety Laws and protected wiki folders at the tool boundary; `geneseed-workflow` registers the `workflow` tool that runs saved orchestration scripts; `geneseed-notify` sends a native OS notification when a long run finishes; `geneseed-ponytail` holds a minimal-code mode (`/ponytail lite\|full\|ultra\|off`), opt-in, injecting the laziest-that-works ruleset every turn so it doesn't drift; `geneseed-activity` streams what each session is doing to the web console's Activity view |
@@ -260,7 +260,8 @@ Geneseed/
 │   └── notebook/         the agent's own freeform space — convention + index
 ├── themes/               voice token maps (14 themes shipped)
 ├── web/                  Vite + React UI source; the committed web/dist/ build is what ships
-├── tests/                Node test suites + the frozen corpora they replay (tests/__snapshots__/)
+├── tests/                Node test suites + the pure-function/help recordings they replay
+│                         (tests/__snapshots__/ — the emit/cli/web corpora retired 2026-08-17)
 ├── docs/                 guides (web-ui, wiki, …) + docs/web/ (the console's Docs pages);
 │                         specs/, reviews/, superpowers/ are local working docs — git-ignored
 ├── adapters/             per-host glue (opencode/, claude-code/, bob/, copilot/)

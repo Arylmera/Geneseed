@@ -287,10 +287,13 @@ test('the gate flags a law missing from LAW_CLASS', () => {
   // The gate that would have caught the Law XXXV 'craft' fallback: a numeral parsed out of
   // universal.md but absent from LAW_CLASS.
   const laws = fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8');
-  const problems = withFault({ 'src/laws/universal.md': `${laws}\n### {{LAW}} XL — z\n` },
+  // The numeral has to be one PAST the corpus — `XL` was free until laws XXXIX and XL landed,
+  // at which point the fixture stopped introducing anything unclassified and the gate went
+  // quiet while the test still read as coverage.
+  const problems = withFault({ 'src/laws/universal.md': `${laws}\n### {{LAW}} XLI — z\n` },
     (root) => gate(root, 'm.countTableProblems()'));
-  assert.ok(problems.some((p) => p.includes('XL') && p.includes('LAW_CLASS')),
-    `no XL/LAW_CLASS problem in ${JSON.stringify(problems)}`);
+  assert.ok(problems.some((p) => p.includes('XLI') && p.includes('LAW_CLASS')),
+    `no XLI/LAW_CLASS problem in ${JSON.stringify(problems)}`);
 });
 
 test('the gate flags an unknown LAW_CLASS value', () => {

@@ -111,6 +111,8 @@
   "LEX_XXXVI": "<themed title for Law XXXVI (External Gate)>",
   "LEX_XXXVII": "<themed title for Law XXXVII (Restart Is Not Reload)>",
   "LEX_XXXVIII": "<themed title for Law XXXVIII (Prove the Gate)>",
+  "LEX_XXXIX": "<themed title for Law XXXIX (Shape the Answer)>",
+  "LEX_XL": "<themed title for Law XL (Codes That Persist)>",
   "INTRO_DOC": "<themed intro: this file is the entry point an AI agent reads in this repo>",
   "INTRO_AGENTS": "<themed intro to the Agents section — delegate focused work to a specialist>",
   "INTRO_SKILLS": "<themed intro to the Skills section — run the written procedure before improvising>",

@@ -54,30 +54,9 @@ test('the configured release is a plain semver, and package.json mirrors it', ()
     'package.json and harness.config.json disagree on the version');
 });
 
-test('the replay really does exclude the file, and only that file', () => {
-  // A POSITIVE CONTROL ON THE EXCLUSION ITSELF. Without this, "the corpus is green" would be
-  // satisfied just as well by an exclusion that had quietly widened to cover something real.
-  const helper = fs.readFileSync(path.join(ROOT, 'tests', 'helpers', 'golden.mjs'), 'utf8');
-  const m = helper.match(/export const UNCOMPARED = '([^']+)'/);
-  assert.ok(m, 'tests/helpers/golden.mjs no longer declares UNCOMPARED — if the exclusion was '
-    + 'removed because the corpus can be recorded again, delete this file too');
-  assert.equal(m[1], 'agent-overrides.json',
-    `the exclusion has changed to ${JSON.stringify(m[1])}. Exactly one file may be excluded, and `
-    + 'widening it is how a corpus stops being evidence — every other file in all 259 emit cells '
-    + 'and all 317 cli cells is asserted byte for byte and must stay that way');
-
-  // It must be applied to BOTH sides. A one-sided drop would report every cell as MISSING or
-  // EXTRA rather than passing, so this guards against a future "simplification".
-  assert.match(helper, /live\.delete\(k\)/, 'the exclusion no longer drops the live side');
-  assert.match(helper, /delete recorded\[side\]\[k\]/,
-    'the exclusion no longer drops the recorded side — a one-sided drop is not an exclusion');
-
-  // AND BOTH REPLAYERS MUST USE IT. The first fix wired only the emit harness and left the cli
-  // corpus red on one cell; a shared helper that one caller forgets to call is no better than
-  // two copies.
-  for (const f of ['golden.mjs', 'cli_golden.mjs']) {
-    assert.match(fs.readFileSync(path.join(ROOT, 'tests', f), 'utf8'), /dropUncompared\(/,
-      `tests/${f} no longer applies the exclusion — this file is in its cells too, so it will go `
-      + 'red on the next version bump with no recorder left to fix it');
-  }
-});
+// THE THIRD TEST STOOD HERE — a positive control on `UNCOMPARED`, the one file the corpus
+// replay excluded from its byte comparison. It guarded against the exclusion quietly widening
+// until "the corpus is green" meant nothing. The recorded corpora were retired (docs/limits.md),
+// so there is no comparison left to exclude anything from, and its own failure message said to
+// delete it when that day came. The two tests above still hold: they are about what the emit
+// WRITES, not about what a recording holds.

@@ -18,6 +18,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   two-directional constraint needs a gate able to fail in both directions. Sits beside
   Law XXVII (honest tests) and Law XXXV (cover and verify): those say write the test,
   this says prove the test is worth trusting.
+- **Laws XXXIX and XL — Shape the Answer, Codes That Persist.** Two communication laws,
+  taking the count to 40. XXXIX governs order, repetition and scale: close on the
+  conclusion, state each fact once, and match the reply's length to the size of the task
+  — where Law VIII strips filler, this orders what is left. XL gives every tracked item
+  a short reference code (`D` decisions, `O` options, `F` findings, `R` risks, `Q`
+  questions, `A` actions) and forbids renumbering one once issued: the user will cite it
+  back, and a moved code makes their reply mean something they did not say.
 - **`npx geneseed setup` is now the way in, and the README says exactly where that stops
   being true.** The install docs assume npm first: one command, no clone, no Python, on
   macOS, Linux and Windows alike. **All 25 commands** run from Node, along with all
@@ -84,6 +91,27 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   you the wizard, this is why.
 
 ### Removed
+- **The recorded emit, cli and web corpora are retired — 1381 cells, and the two replayers that
+  existed only to drive them.** They were produced by the Python implementation this project
+  deleted, and by nothing else: no program that could write a cell survives, so a red cell could
+  never be re-blessed and never be re-recorded. The effect was a gate that turned red on every
+  deliberate content change — an emitted sentence, a reworded refusal, a version bump — while
+  saying nothing at all about a defect that happened to be stable on the day the recording was
+  taken. The 2.0 bump had already shown it: one label moving reddened 224 of 259 emit cells and
+  not one of them was a defect.
+  **The deletion was licensed by a measurement, not by the redness.** `tests/mutate.mjs` names,
+  per row, the gate that must kill each of its 31 planted mutations. Five declared a corpus replay
+  and nothing else; all five are killed by `tests/unit/` alone, the control included. For every
+  defect the matrix knows how to plant, the corpus was redundant.
+  **What it cost, stated rather than glossed:** byte-level regression detection on emit, cli and
+  web output. Nothing now notices a rendered bundle, a verb's stdout/stderr/exit code, or an HTTP
+  response body moving by one byte for a reason nobody intended. **What still runs on every
+  commit, on Linux and Windows both:** `golden.mjs --idempotent` and `--deletion` (a run against
+  another run of the same generator — determinism, not regression), `doctor --all`, and the unit
+  suite. The tag **`python-reference-v1.0.0`** is kept as the historical pointer: the second
+  implementation and every cell it recorded still live there, and nowhere else.
+  `docs/limits.md` carries the full argument, the rows it weakened, and the two pieces of frozen
+  residue it freed.
 - **`upgrade.sh` and `sync-self.sh` are gone.** Each was a few lines of bash that found a
   Python interpreter and then ran `rituals/harness.py upgrade` (or `sync-self`) — the same
   command every launcher already runs, on every OS, and one that native Windows could never
@@ -865,6 +893,11 @@ disagree. The recordings also cannot be re-taken — every program that could wr
 and the replayers refuse to record — so a change that moves a recorded byte is a finding rather
 than a step. `docs/limits.md` is the standing list of what that costs, row by row, including
 four strings that are known to be wrong and are now permanently unfixable.
+
+*⚠ Superseded before publication. The emit, cli and web corpora were retired on 2026-08-17 for
+exactly the reason this section admits — see Unreleased → Removed. The paragraph above stands as
+the record of what was believed at the time; what this release guarantees is the shorter list
+there.*
 
 ### Removed
 

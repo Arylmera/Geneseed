@@ -111,6 +111,8 @@
   "LEX_XXXVI": "External Gate",
   "LEX_XXXVII": "Restart Is Not Reload",
   "LEX_XXXVIII": "Prove the Gate",
+  "LEX_XXXIX": "Shape the Answer",
+  "LEX_XL": "Codes That Persist",
   "INTRO_DOC": "This file is the entry point an AI coding agent reads when working in this repository.",
   "INTRO_AGENTS": "Delegate focused work to a specialist rather than doing everything in one context. Each specialist has a single clear purpose and a defined output contract.",
   "INTRO_SKILLS": "A Skill is a written procedure for a recurring task. Run the matching Skill before improvising.",

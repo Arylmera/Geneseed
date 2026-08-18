@@ -111,6 +111,8 @@
   "LEX_XXXVI": "Authority Rests Above the Trigger · External Gate",
   "LEX_XXXVII": "Re-Arming Is Not Re-Briefing · Restart Is Not Reload",
   "LEX_XXXVIII": "An Untested Sentry Is Already Asleep · Prove the Gate",
+  "LEX_XXXIX": "The Order Closes the Brief · Shape the Answer",
+  "LEX_XL": "Every Objective Keeps Its Designation · Codes That Persist",
   "INTRO_DOC": "This file is the operating manual an AI coding agent reads on entering this repository.",
   "INTRO_AGENTS": "Task focused work to the specialist whose job it is rather than running the whole op in one context; each has one objective and reports exactly what it did.",
   "INTRO_SKILLS": "A Skill is a standard operating procedure for a recurring task. Run the matching SOP before improvising.",

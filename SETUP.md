@@ -100,9 +100,11 @@ hand? Pick a path below.
 > **Every `geneseed-build …` below is the generator.** `npm install -g geneseed` puts it
 > on your `PATH`; without installing anything, `npx -p geneseed geneseed-build --emit
 > opencode-global` is the same command. From a checkout it is
-> `node bin/geneseed.mjs` with the same flags. Its output is replayed byte for byte
-> against frozen recordings on every commit, across every theme × host × footprint
-> combination.
+> `node bin/geneseed.mjs` with the same flags. Every commit re-emits with it across every
+> theme × host × footprint combination and checks the result with `doctor --all`, on Linux
+> and Windows both. Until 2026-08-17 that output was also compared byte for byte against
+> recordings taken from the Python implementation; those were retired, and `docs/limits.md`
+> says why and what it cost.
 
 ---
 

@@ -111,6 +111,8 @@
   "LEX_XXXVI": "The Lock Sits Outside the Deck · External Gate",
   "LEX_XXXVII": "Rebooting Won't Flush the Old Config · Restart Is Not Reload",
   "LEX_XXXVIII": "An Alarm That Never Tripped Guards Nothing · Prove the Gate",
+  "LEX_XXXIX": "Land the Payload Last · Shape the Answer",
+  "LEX_XL": "Every Node Keeps Its Handle · Codes That Persist",
   "INTRO_DOC": "This file is the boot sequence a coding daemon reads when it jacks into this repository.",
   "INTRO_AGENTS": "Spin the right daemon for focused work instead of running the whole job on one thread; each has one function and returns a clean log of what it changed.",
   "INTRO_SKILLS": "A Skill is a proven routine for a recurring task. Run the matching routine before you freestyle.",

@@ -8,6 +8,16 @@ The reference has been deleted, so "the reference does X" is no longer an argume
 re-run. What is recorded in `tests/__snapshots__/` is the reference's answer, frozen; what is
 listed here is where this implementation answers differently on purpose.
 
+**The recording is smaller than it was.** On **2026-08-17** the emit, cli and web corpora were
+retired — 1381 cells, produced by an implementation that no longer exists and re-recordable by
+nothing, so they reddened on every deliberate content change while saying nothing about a defect
+that happened to be stable. What licensed it was a measurement: all five mutations whose only
+declared gate was a corpus replay are killed by `tests/unit/` alone. `docs/limits.md` carries the
+full argument and what it cost. **The consequence for this page is narrow and worth stating: an
+entry whose "how it stays honest" half named one of those three corpora now names a weaker gate, or
+none.** The help fixtures under `tests/__snapshots__/help/`, which most of this page rests on, are
+untouched.
+
 ---
 
 ## `--help`: the prog is `geneseed`, not `harness`
@@ -101,8 +111,14 @@ entry above and readers keep finding it separately.
 
 argparse printed a usage block around every parse failure and prefixed it `harness: error:`; both
 entries state the fault on one line prefixed `geneseed: error:` / `geneseed-hook: error:`. See
-`bin/geneseed-cli.mjs`'s `parse` docblock. What IS gated is every error a command's own body
-raises — those are in the recorded CLI corpus, replayed by `tests/cli_golden.mjs`.
+`bin/geneseed-cli.mjs`'s `parse` docblock.
+
+**What used to be gated beside it no longer is.** Every error a command's own body raises was in
+the recorded CLI corpus, replayed cell by cell; that corpus was retired on 2026-08-17 and the
+per-verb error texts are now covered only where `tests/unit/` happens to drive the verb. The
+divergence declared here is unchanged — the port has never reproduced argparse's wording and does
+not start now — but the *neighbouring* claim, that the rest of the error surface is pinned byte for
+byte, has expired.
 
 ---
 

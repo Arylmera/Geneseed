@@ -403,24 +403,24 @@ export const CORPUS_STAMPS = [
   // moves only when a human bumps it, which is a real output change a corpus SHOULD redden on,
   // not one of the clock/checkout/machine drifts this table exists for.
   //
-  // SCOPE, because THREE carriers of the same line now treat this label differently, each on
-  // purpose. The sentence above is true of THIS table and of carrier 3 only:
+  // SCOPE, because TWO carriers of the same line treat this label differently, each on purpose.
+  // The sentence above is true of THIS table and of carrier 2 only:
   //
   //   1. THE FILE `.geneseed-version`: `destamp` has already run and tagged the label `<REL>`
   //      — it owns that file whole, so a release bump does not redden 259 emit cells for a
   //      value the live gate compares in full.
-  //   2. AN HTTP BODY: the web harness's own `WEB_STAMPS` (`tests/helpers/web_golden.mjs`, twin
-  //      of the `_WEB_STAMPS` the reference's web replayer carried) rewrites the label to
-  //      `[release <REL>]`, and that arm is deliberately NOT here. Two web cells quote this
-  //      line through a `diff`
-  //      hunk — four recorded files, one per platform — and the reference that recorded them
-  //      is about to be deleted: after that, the next version bump reddens them permanently
-  //      with no recorder left alive to re-bless them, so the web corpus had to stop depending
-  //      on the version at all. Putting the arm in THIS shared table instead would have moved
-  //      the emit and cli corpora too — neither of which carries a release label today
-  //      (measured: their only `release` hits are prose about the release skill).
-  //   3. EVERY OTHER CARRIER keeps the label unblanked and compared, which is the claim the
+  //   2. EVERY OTHER CARRIER keeps the label unblanked and compared, which is the claim the
   //      first paragraph makes.
+  //
+  // A THIRD CARRIER IS GONE. The web harness kept its own `WEB_STAMPS` table, which rewrote the
+  // label to `[release <REL>]` in an HTTP body so that two web cells quoting this line through a
+  // `diff` hunk would survive a version bump the recorder was no longer alive to re-bless. That
+  // arm was deliberately kept OUT of this shared table, since moving it here would have moved the
+  // emit and cli corpora too — neither of which carries a release label (measured: their only
+  // `release` hits are prose about the release skill). The web corpus, its replayer and that
+  // table have all since been retired, so the exception has nothing left to apply to; the
+  // argument for keeping it out of here is recorded because it is the argument for any future
+  // per-carrier arm.
   [/[0-9a-f]{6,64} \(built \d{4}-\d{2}-\d{2}\)/g, '<FP> (built <DATE>)'],
   // `version`'s first line.
   [/(\[version\] source: +)[0-9a-f]{6,64}/g, '$1<FP>'],

@@ -1,35 +1,37 @@
 // THE GATE ON THE LEDGER — `tests/ported.json`, the two-sided partition over every Python test
-// file this repository has ever had.
+// file this repository ever had.
 //
-// WHAT MAKES THIS NECESSARY. P3 replaces ~36,600 lines of Python test code with a Node suite an
+// WHAT MAKES THIS NECESSARY. P3 replaced ~36,600 lines of Python test code with a Node suite an
 // order of magnitude smaller. "Smaller because it was redundant" and "smaller because coverage
 // was quietly dropped" produce the same line count, the same green build and the same commit
 // message. Nothing in a test suite reports a test that is not there. The ledger is the only
-// artifact that can, and it only reports while something checks it against the tree — a JSON
-// file nobody reads is a list of intentions.
+// artifact that can, and it only reports while something checks it — a JSON file nobody reads is
+// a list of intentions.
 //
-// NODE, NOT PYTHON, for the reason `tests/snapshot/no_python_in_corpus.test.mjs` gives: a gate
-// that dies in the same commit as the thing it gates has never gated anything. This one has to
-// outlive the deletion because its last job happens DURING the deletion — see `reference_deleted`.
+// THE REFERENCE IS GONE, and that is what decided the shape of this file. P4 (`b1d72dc`) deleted
+// the Python tree and set `reference_deleted`, which can never revert — the subject is
+// `tests/*.py` and they are not coming back. Two tests here read the CONTENTS or the PATHS of a
+// `.py` file and were retired with it, not for being red but for having no subject left:
+//   • the ledger/tree set comparison. Of its three claims, two are subsumed by something
+//     STRICTLY STRONGER that still runs — the flip below demands the tree hold no Python AT ALL,
+//     which no row can excuse and which needs no row to be true. The third, "no row names a file
+//     that is not there", inverted: after the cut every row names a file that is not there.
+//   • the re-derivation of `py_tests` from the file. NO SUCCESSOR IS POSSIBLE. It counted
+//     `def test_` inside a `.py`, and the `.py` is the thing that stopped existing. Those
+//     numbers are from here on a record of what was measured once, not a claim anything checks.
 //
-// FOUR FAILURE MODES, and they are different holes:
-//   1. a `tests/*.py` with no row            — the under-port nobody wrote down
-//   2. a row naming a `.py` that is not there — a dead row; the fate was decided and then the
-//                                               file moved, so the reason now describes nothing
-//   3. a `done` row naming a Node file that does not exist — a fate claimed and not delivered
-//   4. a row whose `py_tests` no longer matches the file — a Python test added AFTER the ledger
-//                                               was written, hiding inside a row that already
-//                                               looks accounted for
+// WHAT IS STILL GATED, and none of it is the ledger agreeing with itself:
+//   1. the fate partition — a row names a Node successor XOR a written retirement, and `status`
+//      agrees with which one it named
+//   2. a retirement reason long enough to have named a vanished subject or a surviving gate
+//   3. a `why` on every non-retired row, past a floor and not a placeholder
+//   4. `python` unique across rows — the row's identity, and the subject of every failure
+//      message here. What it stopped being is a path anything resolves.
+//   5. a `done` row's Node successors exist ON DISK — a fate claimed and not delivered
+//   6. THE FLIP — no row still `todo`, and no `tests/*.py` anywhere on disk
 //
-// (4) IS THE ONE A HAND-MAINTAINED LEDGER LOSES FIRST, and it is why the count is re-derived
-// here rather than trusted. Every other check compares the ledger against paths; this one
-// compares it against contents. It found a defect on its first run: `tests/test_harness.py`
-// declares 212 tests and CI runs 199, because thirteen of them are PYTEST-style module-level
-// functions taking `tmp_path`/`monkeypatch`/`capsys`, and `python -m unittest discover`
-// collects `TestCase` methods only. pytest is in no workflow and no config file in this repo.
-// Those thirteen — the global-excludes guard, `sovereign_bypass`, the `exclude` round-trips —
-// have never executed. The counts below are therefore SPLIT, and the split is the assertion:
-// `py_tests` is what runs, `py_tests_unrun` is what only looks like it does.
+// (5) AND (6) ARE THE TWO THAT TOUCH THE FILESYSTEM, and they are the two that cannot be
+// satisfied by editing the ledger. (6) is the one that certifies the deletion.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -40,18 +42,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const TESTS = path.join(ROOT, "tests");
 const LEDGER = JSON.parse(fs.readFileSync(path.join(TESTS, "ported.json"), "utf8"));
 
-// The same shape `python -m unittest` discovers — an INDENTED `def test_`, i.e. a method on a
-// TestCase — so "a Python test" means here exactly what it means to the job that runs them.
-const TEST_DEF = /^[ \t]+def test_/gm;
-// And the shape that only looks like one. A module-level `def test_` is collected by pytest and
-// by nothing this repository runs.
-const UNRUN_DEF = /^def test_/gm;
 // EVERY `.py` UNDER `tests/`, AT ANY DEPTH. This read the top level only, and the flip is what
-// made the difference matter: four Python files sit one directory down in a subfolder, so the
+// made the difference matter: four Python files sat one directory down in a subfolder, so the
 // final assertion in this file could have reported the reference entirely gone while all four
-// sat on disk. A gate whose claim is an absence has to look everywhere the thing could be, and
-// the rows it is compared against are a flat list only by accident of where the reference put
-// its test files.
+// were still there. A gate whose claim is an absence has to look everywhere the thing could be.
 //
 // A DIRECTORY WALK, NOT A QUERY TO THE INDEX, and the choice is most of what this gate is worth.
 // Asking version control returns the TRACKED set, which is a strictly weaker claim than the one
@@ -61,7 +55,8 @@ const UNRUN_DEF = /^def test_/gm;
 // half. A copy of this tree without version-control metadata makes the index query return
 // nothing, and for an assertion whose success looks like an empty list, "nothing" and "clean"
 // are the same output — the fail-quiet mode you least want in the one gate that certifies a
-// deletion. Every other check here measures the disk too, so all four ask one instrument.
+// deletion. It is now the only walk in this file: the successor check resolves named paths one
+// at a time, so this is the single instrument behind the claim that the reference is gone.
 //
 // COMPILED CACHES ARE NOT IN SCOPE and the extension test is why. A `__pycache__` is untracked,
 // regenerable build residue that no deletion commit can remove from somebody's working copy;
@@ -76,7 +71,6 @@ const onDisk = () =>
 
 const rows = LEDGER.rows;
 const deleted = LEDGER.reference_deleted === true;
-const live = rows.filter((r) => r.gone !== true);
 
 test("every row declares exactly one fate", () => {
   for (const r of rows) {
@@ -163,65 +157,6 @@ test("no file is claimed twice", () => {
   }
 });
 
-test("the ledger and the tree are the same set", { skip: deleted ? "reference deleted" : false }, () => {
-  const disk = new Set(onDisk());
-  const ledger = new Set(live.map((r) => r.python));
-
-  const unaccounted = [...disk].filter((f) => !ledger.has(f)).sort();
-  assert.deepEqual(
-    unaccounted,
-    [],
-    `Python test files with no row in tests/ported.json. Every one of them either names a ` +
-      `Node successor or carries a written reason it is retired — deciding neither is how ` +
-      `coverage disappears without a red build.`,
-  );
-
-  const dead = [...ledger].filter((f) => !disk.has(f)).sort();
-  assert.deepEqual(
-    dead,
-    [],
-    `rows naming a file that is not on disk. If the file was deleted, mark the row "gone": ` +
-      `true so the ledger keeps the history; if it moved, the row's reason now describes ` +
-      `nothing.`,
-  );
-
-  // The other direction of the same claim: a `gone` row that is back on disk is a row whose
-  // history is wrong, which is worth exactly as much as a missing one.
-  for (const r of rows.filter((r) => r.gone === true)) {
-    assert.ok(
-      !disk.has(r.python),
-      `${r.python}: marked gone but present on disk — the row's history is false`,
-    );
-  }
-});
-
-test("each row's Python test count is the file's own", { skip: deleted ? "reference deleted" : false }, () => {
-  for (const r of live) {
-    const body = fs.readFileSync(path.join(ROOT, r.python), "utf8");
-    const n = (body.match(TEST_DEF) || []).length;
-    assert.equal(
-      n,
-      r.py_tests,
-      `${r.python}: the file declares ${n} tests, the ledger records ${r.py_tests}. A test ` +
-        `added since this row was written is not covered by the fate the row names — re-read ` +
-        `the file, extend the successor, then update the count.`,
-    );
-
-    // A NEW module-level `def test_` is a test somebody wrote, committed, and never ran, in a
-    // repository whose only Python runner is `unittest discover`. The default of 0 makes that
-    // the reportable state everywhere except the one file where it is already true.
-    const unrun = (body.match(UNRUN_DEF) || []).length;
-    assert.equal(
-      unrun,
-      r.py_tests_unrun || 0,
-      `${r.python}: ${unrun} module-level \`def test_\` (pytest shape), ledger records ` +
-        `${r.py_tests_unrun || 0}. \`python -m unittest discover\` collects TestCase methods ` +
-        `only and pytest is in no workflow here, so these do not run. Indent them into a ` +
-        `TestCase, or record the count and say in the row that they are dead.`,
-    );
-  }
-});
-
 test("a delivered row's successors are on disk", () => {
   for (const r of rows.filter((r) => r.status === "done")) {
     for (const f of r.node) {
@@ -233,32 +168,19 @@ test("a delivered row's successors are on disk", () => {
   }
 });
 
-// THE FLIP, and the reason this file outlives the reference. P4 sets `reference_deleted` to
-// true in the same commit that removes the Python tree. That single boolean is what turns the
-// cut from a claim in a commit message into an assertion: it demands the tree be empty of
-// Python AND the ledger be empty of unfinished work, in the commit that does the deleting.
-// Neither half can be satisfied by editing the other.
+// THE FLIP, and the reason this file outlived the reference. P4 set `reference_deleted` to true
+// in the same commit that removed the Python tree. That single boolean is what turned the cut
+// from a claim in a commit message into an assertion: it demands the tree be empty of Python AND
+// the ledger be empty of unfinished work, in the commit that does the deleting. Neither half can
+// be satisfied by editing the other.
 //
-// ⚠ WHAT THE FLIP DOES TO THE REST OF THIS FILE, because "this passed" and "this stopped being
-// asked" print identically in a summary line. It INVERTS exactly one test — this one, whose two
-// assertions take the place of the progress line that ran while the flag was false. It SKIPS two,
-// and a skipped test does not pass, it stops running:
-//
-//   • "the ledger and the tree are the same set" takes three claims down with it: that no Python
-//     file on disk lacks a row, that no row names a file that is not there, and that no row
-//     marked gone is back. Only the first has a successor, and the successor is stronger — the
-//     assertion below demands the tree hold no Python AT ALL, which no row can excuse.
-//   • "each row's Python test count is the file's own" takes down the re-derived `py_tests` and
-//     `py_tests_unrun`. NO SUCCESSOR, and there cannot be one: both counted the contents of a
-//     file, and the file is the thing that stopped existing. Those numbers are from here on a
-//     record of what was measured once, not a claim anything still checks — which is also true
-//     of the two count regexes above, now read by nothing.
-//
-// The four gates that never touched the disk still run: the fate partition, the retirement
-// reasons, the `why` floor, and the uniqueness of `python`. So does the successor check, whose
-// Node files are still there. A row's `python` is therefore still READ after the flip — it is
-// the row's identity, asserted unique one test per file, and it names the subject of every
-// failure message here. What it stops being is a path anything resolves.
+// ⚠ THIS IS THE ONLY TEST LEFT THAT CAN SEE A STRAY `.py`, and that is why the two tests the flip
+// used to SKIP were deleted rather than left standing. A permanently skipped test reads like a
+// gate in a summary line and holds nothing — "this passed" and "this stopped being asked" print
+// the same, and a check that can no longer fail has never been shown to hold anything. Their
+// subject was the reference and the reference is gone for good; what survives them is the
+// `onDisk()` assertion here, which outranks what it replaced because it needs no row to be true
+// and no row can excuse a file it finds.
 test("the flip means both halves are finished", () => {
   const remaining = rows.filter((r) => r.status === "todo");
   if (!deleted) {

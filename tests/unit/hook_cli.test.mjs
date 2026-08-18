@@ -4,10 +4,11 @@
  * WHY THERE ARE TWO ENTRIES. `bin/geneseed-hook.mjs` carries the four verbs an emitted
  * `settings.json` invokes and is kept minimal because the machine-wide shim execs it on every
  * tool call; `bin/geneseed-cli.mjs` carries the harness subcommands a hook never invokes. The
- * recorded CLI matrix proves the two BEHAVE as recorded across its cells. It cannot prove that
- * the four verbs it exercises are the four an emitted settings.json actually invokes — a fifth
- * hook wired in `js/settings.mjs` would simply never be replayed, and an absent row reads exactly
- * like a forgotten one. That is load-bearing rather than tidy: the shim is machine-wide
+ * CLI matrix DECLARES which verb each cell exercised. It never could prove that those verbs are
+ * the four an emitted settings.json actually invokes — a fifth hook wired in `js/settings.mjs`
+ * would simply have no row, and an absent row reads exactly like a forgotten one; since the
+ * corpus was retired nothing replays the cells at all, so the declaration is the only thing the
+ * matrix still says. That is load-bearing rather than tidy: the shim is machine-wide
  * (`~/.geneseed/bin/geneseed-hook[.cmd]`, no per-install component) and last-writer-wins.
  *
  * EVERY TABLE HERE IS READ FROM ITS SOURCE OF TRUTH, never listed. `js/settings.mjs` is parsed
@@ -28,7 +29,6 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { parseArgs, resolveCli, selectCells } from '../cli_golden.mjs';
 import { checkExpectations, cloneCheckout, repoint } from '../helpers/cli_golden.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
@@ -204,9 +204,10 @@ test('the two copies of the native-verb list agree', () => {
 });
 
 test('every cell declares a binary that exists', () => {
-  // A typo'd `bin` used to send a cell to the REFERENCE on both sides, which always passes. The
-  // replayer has no reference to fall back to, so the same typo now sends it to an undefined
-  // command — but the claim is the same one and it is cheaper to keep than to re-derive.
+  // A typo'd `bin` used to send a cell to the REFERENCE on both sides, which always passes. With
+  // the replayer gone nothing dispatches on this column any more, but it is the column the verb
+  // partition below reads the cells through, and a cell filed under a binary that does not exist
+  // is one neither side of that partition can account for.
   for (const plat of ['win32', 'posix']) {
     const bad = sorted(new Set(matrix(plat).cells
       .filter((c) => !['hook', 'cli'].includes(c.bin ?? 'hook')).map((c) => c.id)));
@@ -222,11 +223,18 @@ test('every cell declares a binary that exists', () => {
 // written and passes. Nothing failed; `docs/limits.md` row 5 said so in prose, and prose is
 // not a gate. A gate that fires on the OTHER platform is not a gate the developer ever sees.
 //
-// THREE OF THE FIVE ARE ALREADY HOME. `tests/cli_golden.mjs`'s `platformDeclarationProblems`
-// travels with the matrix and asserts: every id declared for this platform is built, every id
-// declared for the other is absent, and neither half is empty. It runs on every replay, on both
-// operating systems in CI. What it cannot do is read the OTHER half — it deliberately loads one
-// file — so the two directions that need both are here.
+// THREE OF THE FIVE USED TO LIVE IN THE REPLAYER. `tests/cli_golden.mjs`'s
+// `platformDeclarationProblems` asserted, on every replay and on both operating systems in CI,
+// that every id declared for this platform is built, every id declared for the other is absent,
+// and neither half is empty — but it deliberately loaded ONE file, so the two directions that
+// need both halves were written here. The replayer went with the corpus, and those three claims
+// did not have to move: they are the one-file shadow of what the two tests below already assert
+// over BOTH exported halves at once. `the declaration is exactly the union of the two recorded
+// halves` derives the platform-only set from the symmetric difference and demands equality with
+// the declared table, which subsumes present-here and absent-there in both directions at the same
+// time; `the declaration is not empty in either direction` is the emptiness half verbatim. What
+// is genuinely gone is that they ran per-replay against the cells a host actually built, which is
+// a claim about a replay and there is no replay.
 
 test('the declaration is exactly the union of the two recorded halves', () => {
   // THE DIRECTION THAT ACTUALLY STOPS DRIFT, and the only one checkable from a single host.
@@ -288,10 +296,12 @@ test('the verb-coverage gate is satisfied by both halves, not just this one', ()
 // `TheAcceptanceHarnessIsNotVacuous` — the harness is code, its expectations are code, and five
 // consecutive phases of this port ended with the gate's own body as the defect.
 //
-// The subject moves from `tests/harness_golden.py` to `tests/cli_golden.mjs` and its helper: the
-// cells are the exported matrices, the vacuity checker is `checkExpectations`, and the narrowing
-// flags are `parseArgs`/`selectCells`. Every claim below is about the replayer that outlives the
-// reference rather than about the harness that does not.
+// The subject moved from `tests/harness_golden.py` to the replayer and its helper: the cells are
+// the exported matrices, the vacuity checker is `checkExpectations`. The replayer has since been
+// retired with the corpus, taking the two narrowing-flag claims with it (see the note above the
+// allow-list). What is left is what never depended on a replay at all — the matrices are read as
+// DATA and the checker is called directly — so every claim below is about a file and a function
+// that are both still in the tree.
 
 const EXPECT_KINDS = ['expect', 'expect_absent', 'expect_re', 'expect_silent', 'expect_files',
   'expect_absent_files'];
@@ -393,50 +403,17 @@ test('the vacuity check reports each kind of broken expectation', () => {
   }
 });
 
-test('both candidate binaries always resolve to a real script', () => {
-  // WHAT REPLACED THE REFERENCE'S REFUSAL, and the failure mode moved with it. There, `--new`
-  // without `--new-cli` sent every non-hook cell to the REFERENCE on both sides, and a cell
-  // compared against itself always passes — an unported verb read as a ported one. The replayer
-  // has no reference to fall back to, so that exact hole cannot exist: both binaries carry
-  // defaults and `resolveCli` turns each into an absolute path.
-  //
-  // The hazard that DID survive is the one `resolveCli`'s docblock records: a candidate command
-  // that resolves to nothing produces no output, every `expect` fails, and the report reads like
-  // the port went silent rather than like the harness pointed at nothing. That cost this replayer
-  // six cells on its first run and twelve more on the second. So both defaults are resolved, and
-  // both the interpreter and the script are required to be real absolute paths.
-  const a = parseArgs(['--against', 'unused']);
-  for (const [flag, cmd] of [['--cli', a.cli], ['--hook', a.hook]]) {
-    const argv = resolveCli(cmd);
-    assert.ok(argv.length >= 2, `${flag} resolved to ${JSON.stringify(argv)}`);
-    assert.equal(argv[0], process.execPath, `${flag}'s interpreter was left bare, so a cell that `
-      + 'replaces PATH cannot start it');
-    const script = argv.find((t) => /\.mjs$/.test(t));
-    assert.ok(script && path.isAbsolute(script) && existsSync(script) && statSync(script).isFile(),
-      `${flag}'s script resolved to ${JSON.stringify(script)}, which is not a file on disk`);
-  }
-});
-
-test('--only narrows the matrix, and an empty selection is refused', () => {
-  // A narrowing flag needs its own WIRING test, separate from any test of what it narrows — the
-  // reference shipped one whose gate was correct and simply not connected.
-  const doc = matrix(HERE);
-  const every = doc.cells.length;
-  const narrowed = selectCells(doc, { only: 'git-gate' });
-  assert.ok(narrowed.length > 0, 'no git-gate cells at all, so this proves nothing');
-  assert.ok(narrowed.length < every, '--only narrowed nothing here, so this proves nothing');
-  assert.ok(narrowed.every((c) => c.id.startsWith('git-gate')), 'a non-matching cell survived');
-  assert.equal(selectCells(doc, { only: 'nosuchverb' }).length, 0);
-  // ...and the WIRING half, in a child, because the refusal is the replayer's own exit path: a
-  // run that selected nothing and reported "0 cells, no differences" reads exactly like a green
-  // one. This exits before any cell is replayed, so it costs a process and nothing else.
-  const r = spawnSync(process.execPath, [path.join(ROOT, 'tests', 'cli_golden.mjs'),
-    '--against', path.join(ROOT, 'tests', '__snapshots__', 'cli'), '--only', 'nosuchverb'],
-  { cwd: ROOT, encoding: 'utf8' });
-  assert.notEqual(r.status, 0, `the replayer accepted an empty selection:\n${r.stdout}`);
-  assert.match(`${r.stdout}${r.stderr}`, /selection is empty/,
-    `it refused for some other reason:\n${r.stderr.slice(-500)}`);
-});
+// TWO TESTS RETIRED HERE WITH THE REPLAYER THEY WERE ABOUT, and the criterion was the SUBJECT,
+// never redness. `both candidate binaries always resolve to a real script` asserted `parseArgs` +
+// `resolveCli`, and `--only narrows the matrix, and an empty selection is refused` asserted
+// `selectCells` plus the replayer's own empty-selection exit path. All three symbols were exported
+// by `tests/cli_golden.mjs`; there is no replayer left to resolve a binary or refuse a selection,
+// and neither claim has a subject to be made about anything that still runs. The one incidental
+// property the first of them also happened to observe — that both `bin/*.mjs` entry points are
+// real files — outlives it in `tests/unit/package_manifest.test.mjs`'s `each bin target exists and
+// is a node script`, which reads the same two paths out of package.json's `bin` map and demands
+// the shebang as well, and in every dynamic run below, each of which spawns one of them by
+// absolute path and asserts an exit code a missing script could not produce.
 
 // ---------------------------------------------------------------------------------------------
 // THE PASSTHROUGH REFUTATIONS — `TheHookEntryIsNotAPassthrough` (3) and

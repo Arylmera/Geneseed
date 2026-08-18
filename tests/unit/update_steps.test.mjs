@@ -34,13 +34,14 @@
 // same on both and Node has its own way to break it: `process.exit()` truncates pending async
 // writes to a pipe exactly as `execv` discarded buffered ones.
 //
-// IT RETIRES INTO A GATE THAT IS ALREADY STRONGER, and the last test in this file is what stops
-// that retirement from being a promise. The recorded cell
-// `bootstrap__without-no-setup-it-hands-off-to-a-FRESH-setup-process` runs the real handoff with
-// stdout on a PIPE — which is the exact condition under which the bug fires, and the reason the
-// reference had to spell its own test as a subprocess — and compares the whole stream as bytes,
-// on both platform halves. Where the reference makes two `assertIn`s, the cell pins 299 bytes of
-// parent output, the successor's own stderr, and the exit code the successor handed back.
+// SO IT LANDS HERE, AS A LIVE RUN. It retired first into the recorded cell
+// `bootstrap__without-no-setup-it-hands-off-to-a-FRESH-setup-process`, and the last test in this
+// file read that recording back to prove the retirement was not a promise. The corpus is gone —
+// it was recorded from an implementation that no longer exists and can never be re-recorded — so
+// the reading is now a gate on a file rather than on the harness, and the property would have no
+// owner at all. The last test runs the verb instead, in a sandbox, with both streams on a PIPE:
+// which is the exact condition under which the bug fires, and the reason the reference had to
+// spell its own test as a subprocess too.
 //
 // ONE THING IS OWED ELSEWHERE, and it is written down rather than assumed covered: the
 // reference's step command names an interpreter and a `.py`, and the port's names
@@ -51,9 +52,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { diagnoseFailedStep } from '../../js/update.mjs';
+import { runCell } from '../helpers/cli_golden.mjs';
+import { ROOT } from '../helpers/golden.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 /**
@@ -160,45 +162,88 @@ test('a step that cannot write its log still returns its lines', () => {
 });
 
 /**
- * THE GATE ON THE RETIREMENT, not a second copy of it.
+ * `TheHandoffKeepsWhatWasAlreadyPrinted`, RUN rather than read back.
  *
- * `TheHandoffKeepsWhatWasAlreadyPrinted` retires into a recorded cell (see the header), and a
- * retirement whose named gate can be deleted or re-blessed into vacuity is prose. This asserts
- * the cell still SAYS what the retirement claims it says: the parent's pre-handoff lines are in
- * `<stdout>`, the successor really ran and left its own words in `<stderr>`, and the successor's
- * status came back as the process exit code. On BOTH halves, because the failure the reference
- * documents is a POSIX one and the `lf` half is the only recording made on POSIX.
+ * THE SUBJECT IS `cmdBootstrap`'s HANDOFF, and the shape of the test is dictated by the bug: a
+ * process that hands off can lose what it already wrote. In the reference `os.execv` replaced the
+ * process image and took Python's stdio buffers with it, so `geneseed bootstrap > log.txt` lost
+ * `[geneseed] ✓ update complete.` on every Unix run for as long as the verb existed. The port
+ * cannot reproduce that mechanism — Node has no `execv` — but it has its own way to break the
+ * same contract, and both need the streams to be PIPES to show it: on a terminal the parent's
+ * writes are unbuffered and the bug is invisible. That is why this spawns rather than calling
+ * `cmdBootstrap` in-process, and it is the reason the reference spelled its own test as a
+ * subprocess too.
  *
- * It reads the snapshot rather than re-running the verb: re-running is `tests/cli_golden.mjs`'s
- * job and doing it again here would be a slower copy of a gate that already exists. What is
- * missing without this is the link between the two — nothing else in the tree records that this
- * particular cell is load-bearing for a property that has no other owner.
+ * THE FIXTURE IS `runCell`'s, and every part of it is load-bearing:
+ *
+ *   * `checkout: {}` gives the run its OWN ROOT — a copy of the tracked working tree, outside the
+ *     snapshotted sandbox — and `runCell` repoints the argv at it. `ROOT` is where `upgrade`
+ *     aims `git`, so without the copy the update step would run against the developer's real
+ *     checkout: on a clean one it would FETCH, and on a dirty one the result would depend on
+ *     whatever the developer had uncommitted.
+ *   * The copy has no `.git` in it (`copyCheckout` copies files, not history), so `preflight`
+ *     answers `not_git`. Every precondition in `PRE_MSG` is `info`, so the step returns 3, which
+ *     `_bootstrap_plain`'s `rc not in (0, 3)` rule counts as a success — the step prints its
+ *     banner and its `✓ update complete.` and nothing is pulled, rebuilt or written. Belt and
+ *     braces on top: `runCell` sets `GIT_ALLOW_PROTOCOL=file`, so git in this child refuses an
+ *     `https` transport outright, and `GIT_CEILING_DIRECTORIES`, so a `.git`-less copy cannot
+ *     discover a repository above its temp directory.
+ *   * `cellEnv` moves HOME/XDG/APPDATA into the sandbox, which is what keeps the install log and
+ *     any install this touched off the developer's machine. It is ASSERTED below rather than
+ *     assumed, because a relocation that silently stopped working would leave this test green
+ *     while it wrote to a real home.
+ *   * `spawnSync` is given `input`, so the child's stdin is a PIPE. `cmdSetup` gates on
+ *     `process.stdin.isTTY`, the grandchild inherits that pipe through `reexec`'s
+ *     `stdio: 'inherit'`, and its refusal on stderr is the proof the wizard never started — the
+ *     wizard being the one thing under `setup` that would write a harness anywhere.
+ *
+ * ONE PLATFORM, HONESTLY. The retired cell asserted both halves of a two-platform recording; a
+ * live run can only speak for the platform it ran on. What the recording bought there is not
+ * recoverable and is not claimed here.
  */
-test('the recorded handoff cell still carries both sides of the handoff', () => {
-  const CELL = 'bootstrap__without-no-setup-it-hands-off-to-a-FRESH-setup-process.json';
-  const here = path.dirname(fileURLToPath(import.meta.url));       // tests/unit
-  const root = path.join(path.dirname(here), '__snapshots__', 'cli');
-  for (const half of ['crlf', 'lf']) {
-    const file = path.join(root, half, CELL);
-    assert.ok(fs.existsSync(file),
-      `${half}/${CELL} is gone — TheHandoffKeepsWhatWasAlreadyPrinted retired into it`);
-    const cell = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const out = cell.verbatim?.['<stdout>'] ?? '';
-    const err = cell.verbatim?.['<stderr>'] ?? '';
+test('bootstrap keeps what it already printed, then hands off to a FRESH setup', () => {
+  const snap = runCell([process.execPath, path.join(ROOT, 'bin', 'geneseed-cli.mjs')],
+    { checkout: {}, steps: [{ argv: ['bootstrap'], cwd: 'repo' }] });
+  assert.ok(snap instanceof Map, `the bootstrap run never started: ${snap}`);
+  const out = snap.get('<stdout>').toString('utf8');
+  const err = snap.get('<stderr>').toString('utf8');
 
-    // Printed BEFORE the handoff, by the process that is about to be replaced. The first is the
-    // step banner and the last is the line the reference names as the one Unix actually lost.
-    assert.match(out, /step 1\/1: Update & rebuild/,
-      `${half}: the cell no longer records anything printed before the handoff`);
-    assert.match(out, /update complete/,
-      `${half}: the cell lost the last line printed before the handoff — which is exactly the `
-      + 'line os.execv discarded, and the property this cell is retained for');
-    // Printed AFTER it, by the successor — without which the cell is equally satisfied by a
-    // `reexec` that quietly did nothing at all.
-    assert.match(err, /\[setup\] needs an interactive terminal/,
-      `${half}: the cell no longer shows the successor process running`);
-    // And the successor's status, which `reexec` returns rather than swallowing.
-    assert.equal(cell.verbatim?.['<exit>'], '1',
-      `${half}: the successor's exit code is no longer propagated through the handoff`);
-  }
+  // 1. PRINTED BEFORE THE HANDOFF, by the process that is about to hand off. The banner is the
+  // first line the verb writes and `✓ update complete.` is the last one before `reexec`, which
+  // is precisely the line the reference lost.
+  assert.match(out, /\[geneseed\] step 1\/1: Update & rebuild \.\.\./,
+    `nothing printed before the handoff survived it:\n${out}`);
+  assert.match(out, /\[geneseed\] ✓ update complete\./,
+    'the last line printed before the handoff did not survive it — that is the whole property '
+    + `this test exists for:\n${out}`);
+  assert.ok(out.indexOf('step 1/1') < out.indexOf('✓ update complete.'),
+    `the parent's lines came back out of order:\n${out}`);
+  // The fixture is only the fixture it claims to be while the step SUCCEEDS: a failed step
+  // prints a diagnosis instead of `update complete`, and would take the assertion above with it
+  // for a reason that has nothing to do with the handoff.
+  assert.doesNotMatch(out, /✗ step/,
+    `the update step failed, so this ran a different scenario than it names:\n${out}`);
+  // AND WHICH PRECONDITION STOPPED IT, named rather than inferred. Every arm of `PRE_MSG` is
+  // `info`, so `update complete` alone is equally satisfied by a copy that reached `ready` —
+  // which is the one arm that FETCHES. Pinning the message is what keeps this run offline.
+  assert.match(out, /This Geneseed install isn't a git checkout/,
+    'the update step got past preflight, so this run was free to reach the network — the '
+    + `checkout copy is no longer the .git-less one this test relies on:\n${out}`);
+
+  // 2. PRINTED AFTER IT, by the successor. Without this the run is equally satisfied by a
+  // `reexec` that quietly did nothing at all.
+  assert.match(err, /\[setup\] needs an interactive terminal/,
+    `the successor process left no trace, so nothing was handed off to:\n${err}`);
+
+  // 3. AND THE SUCCESSOR'S STATUS, which `reexec` returns rather than swallowing. `cmdBootstrap`
+  // answers 0 on this fixture when the handoff is skipped, so 1 can only have come through it.
+  assert.equal(snap.get('<exit>').toString('utf8'), '1',
+    "the successor's exit code was not propagated by the parent");
+
+  // THE SANDBOX CLAIM, MEASURED. `Log` writes to `~/.geneseed-install.log`; finding it in the
+  // snapshot — which walks the sandbox and nothing else — is the positive evidence that the home
+  // this run wrote to was the sandbox's. Assert the relocation, never observe the leak.
+  assert.ok(snap.has('home/.geneseed-install.log'),
+    `the run's install log is not under the sandbox home — it went to a real one:\n${
+      [...snap.keys()].join('\n')}`);
 });
