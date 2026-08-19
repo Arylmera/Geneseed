@@ -52,7 +52,7 @@ import {
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
 // same cfg. golden.py's 259 cells all build one, which is what made the move safe.
-import { ROOT, CONFIG, THEMES, discoverNames, makeCfg } from '../js/checkout.mjs';
+import { ROOT, CONFIG, THEMES, discoverNames, makeCfg, PACK_ORDER } from '../js/checkout.mjs';
 
 // P5f moved these, for the same arithmetic a third time: `harness rebuild-all` reads the
 // registry to find every install it must re-emit, and a CLI verb may not reach into a driver
@@ -122,7 +122,9 @@ export function resolveOut(raw) {
  * byte-for-byte by `tests/golden.py` (:316).
  */
 function configDefaults() {
-  const d = { theme: 'neutral', posture: 'peer', mode: 'direct' };
+  const d = {
+    theme: 'neutral', posture: 'peer', mode: 'direct', doctrines: [...PACK_ORDER],
+  };
   if (!existsSync(CONFIG)) return d;
   try {
     const data = JSON.parse(readFileSync(CONFIG, 'utf8'));
@@ -130,6 +132,20 @@ function configDefaults() {
       if (data.theme !== undefined) d.theme = data.theme;
       if (data.posture !== undefined) d.posture = data.posture;
       if (data.mode !== undefined) d.mode = data.mode;
+      // `doctrines` is the only config key that is a LIST, so it is the only one that can be
+      // the right type and still nonsense. A bad value warns and falls back to all packs
+      // rather than dying: this file is hand-editable, and a typo here must not brick every
+      // rebuild of an install whose AGENT.md is otherwise fine. `[]` is a legitimate value
+      // (no packs) and must survive the check — hence an explicit Array test, not truthiness.
+      if (data.doctrines !== undefined) {
+        const known = discoverNames('doctrines', PACK_ORDER[0]);
+        if (Array.isArray(data.doctrines) && data.doctrines.every((x) => known.includes(x))) {
+          d.doctrines = PACK_ORDER.filter((p) => data.doctrines.includes(p));
+        } else {
+          process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "doctrines" is not a `
+            + 'list of known pack names — using all packs.\n');
+        }
+      }
     }
   } catch {
     process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} is unreadable — `
@@ -146,6 +162,7 @@ function configDefaults() {
  */
 const VALUED = {
   '--theme': 'theme', '--posture': 'posture', '--mode': 'mode',
+  '--doctrines': 'doctrines',
   '--out': 'out', '--target': 'out', '--emit': 'emit',
   '--footprint': 'footprint', '--root': 'root',
 };
@@ -160,6 +177,13 @@ const FLAGS = {
  * A function and not a constant because two of the four read the checkout: `discoverNames`
  * scans `postures/` and `modes/`, so the answer depends on the source tree this driver is
  * standing in and cannot be frozen at import.
+ *
+ * `--doctrines` is DELIBERATELY not a fifth row. Every consumer of this table treats an
+ * entry as one value drawn from a closed list — `choice` refuses anything else, and
+ * `usage`'s metavar prints the list as the whole legal surface. `--doctrines` takes a comma
+ * LIST plus the sentinel `none`, so a row here would have refused `craft,rigor` outright and
+ * advertised a metavar that lies. It is validated by `parseDoctrines` instead and prints the
+ * plain `DOCTRINES` metavar, exactly as `--theme` (also open-ended) already does.
  */
 function choicesFor() {
   return {
@@ -168,6 +192,33 @@ function choicesFor() {
     '--posture': discoverNames('postures', 'peer'),
     '--mode': discoverNames('modes', 'direct'),
   };
+}
+
+/**
+ * `--doctrines craft,rigor` / `--doctrines none` -> the cfg's pack array.
+ *
+ * Normalised into `PACK_ORDER` rather than kept in the order typed, which also dedupes: the
+ * rendered `Active packs:` line is a MARKER a later reader parses back out of a deployed
+ * carrier, and a marker whose contents depend on argument order is one that compares unequal
+ * to itself. Validation is against DISCOVERY, not `PACK_ORDER`, so the refusal names the
+ * packs the checkout actually has; a discovered pack missing from `PACK_ORDER` is a
+ * different fault and `js/render.mjs` refuses the whole build for it.
+ */
+function parseDoctrines(value) {
+  const s = value.trim();
+  const known = discoverNames('doctrines', PACK_ORDER[0]);
+  if (s === 'none') return [];
+  const names = s.split(',').map((x) => x.trim()).filter(Boolean);
+  if (!names.length) {
+    die(2, "argument --doctrines: expected a comma-separated list of packs, or 'none'");
+  }
+  for (const n of names) {
+    if (!known.includes(n)) {
+      die(2, `argument --doctrines: invalid choice: '${n}' (choose from `
+        + `${known.map((c) => `'${c}'`).join(', ')}, or 'none')`);
+    }
+  }
+  return PACK_ORDER.filter((p) => names.includes(p));
 }
 
 /**
@@ -212,6 +263,7 @@ function usage() {
 function parseArgs(argv, defaults) {
   const args = {
     theme: defaults.theme, posture: defaults.posture, mode: defaults.mode,
+    doctrines: defaults.doctrines,
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
     syncThemes: false, validateOnly: false, verbose: false,
   };
@@ -241,6 +293,9 @@ function parseArgs(argv, defaults) {
   }
   const choices = choicesFor();
   for (const flag of Object.keys(choices)) choice(flag, args[VALUED[flag]], choices[flag]);
+  // Only when the flag was actually PASSED is this a string; left at its default it is
+  // already the array `configDefaults` built, and re-parsing an array would stringify it.
+  if (typeof args.doctrines === 'string') args.doctrines = parseDoctrines(args.doctrines);
   return args;
 }
 

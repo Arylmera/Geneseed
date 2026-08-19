@@ -72,6 +72,10 @@ const VALUED_FLAGS = [
   ['--theme', 'theme', 'neutral'],
   ['--posture', 'posture', 'peer'],
   ['--mode', 'mode', 'direct'],
+  // The one row whose dest is not the string that was typed: `--doctrines` takes a comma LIST
+  // and binds the parsed pack array, so the row carries both forms. A two-pack value, not one:
+  // a single name would parse to a one-element array and leave the comma split untested.
+  ['--doctrines', 'doctrines', 'craft,rigor', ['craft', 'rigor']],
   ['--out', 'out', 'Elsewhere'],
   // The alias, and the one row a set-equality alone could not state: `--target` binds `out`.
   ['--target', 'out', 'Elsewhere'],
@@ -670,13 +674,13 @@ test('--help names every flag the parser takes', () => {
     'bin/geneseed.mjs\'s FLAGS table and this file\'s frozen list disagree');
 
   const said = help('--help').stdout;
-  for (const [flag, dest, value] of VALUED_FLAGS) {
+  for (const [flag, dest, value, parsed = value] of VALUED_FLAGS) {
     // ACCEPTED, not merely listed: a help text naming a flag the parser refuses is the same drift
     // read from the other end, and it binds the dest this table names — which is the only way
     // `--target`'s aliasing to `out` gets stated at all.
-    assert.equal(parseDriverArgs([flag, value])[dest], value,
+    assert.deepStrictEqual(parseDriverArgs([flag, value])[dest], parsed,
       `${flag} does not bind ${dest} to the value given`);
-    assert.equal(parseDriverArgs([`${flag}=${value}`])[dest], value,
+    assert.deepStrictEqual(parseDriverArgs([`${flag}=${value}`])[dest], parsed,
       `${flag}=VALUE is not accepted; argparse takes both spellings`);
     assert.ok(said.includes(flag), `\`--help\` does not name ${flag}, which the parser accepts`);
   }

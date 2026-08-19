@@ -1338,3 +1338,122 @@ test('the notebook .gitignore is re-asserted', () => {
     assert.equal(fs.readFileSync(gi, 'utf8'), original);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// The doctrines axis — the third register, and the first that is a SET
+//
+// Basic axis coverage: that the section renders, that narrowing it really removes rule text from
+// AGENT.md while leaving the catalogue on disk, and that both loud failures are loud. The
+// exhaustive per-pack, both-directions proof belongs to its own suite.
+//
+// Every claim below reads AGENT.md, never `cfg` — the whole point of the axis is what the agent
+// is handed, and a cfg round-trip would agree with itself.
+
+/** A sentence that exists only in `src/ontology/universal.md`, and carries no theme token. */
+const ONTOLOGY_MARK = 'Evidence is graded, and so is every claim resting on it';
+/**
+ * One token-free sentence per pack, each from that pack's own rule bodies — and each chosen to
+ * sit inside ONE source line, because the source is hard-wrapped and a mark that straddles a
+ * wrap would be asserting the wrap rather than the rule.
+ */
+const PACK_MARK = {
+  craft: 'perform by hand what the machine can perform a thousand times.',
+  rigor: 'Make actions safe to run twice.',
+  ops: 'The tools available to you are not fixed, and they are not only the obvious ones.',
+  process: 'Recording and sharing code is consented, never unilateral.',
+};
+
+/**
+ * The emitted carrier with its newlines folded — `writeText` mirrors Python's text-mode
+ * translation, so on Windows every line below would otherwise end in a stray `\r` and a
+ * whole-line comparison would be asserting the platform.
+ */
+const agentText = (out) => read(out, 'AGENT.md').replace(/\r\n/g, '\n');
+
+test('a default build carries the ontology, every pack, and the active-packs marker', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out);
+    const agent = agentText(out);
+
+    assert.ok(agent.includes(ONTOLOGY_MARK),
+      'AGENT.md does not carry the ontology — the INCLUDE did not resolve');
+    for (const [pack, mark] of Object.entries(PACK_MARK)) {
+      assert.ok(agent.includes(mark), `AGENT.md does not carry ${pack}'s rule text`);
+    }
+    // The exact line, anchored at both ends: a later reader parses the active set back out of a
+    // deployed carrier by this prefix, so a marker that merely CONTAINS the names is not enough.
+    assert.ok(agent.split('\n').includes('Active packs: craft, rigor, ops, process'),
+      'the Active packs: marker line is missing or does not read in PACK_ORDER');
+    // Not a token in sight: `DOCTRINES_BODY`/`DOCTRINES_LIST` are render-injected rather than
+    // theme keys, so a template that spends them without an injector fails HERE first.
+    assert.ok(!/\{\{DOCTRINES_(BODY|LIST)\}\}/.test(agent));
+  });
+});
+
+test('narrowing the packs removes their rules from AGENT.md but not from the bundle', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out, { doctrines: ['craft'] });
+    const agent = agentText(out);
+
+    assert.ok(agent.includes(PACK_MARK.craft), 'the one selected pack is not in AGENT.md');
+    for (const pack of ['rigor', 'ops', 'process']) {
+      assert.ok(!agent.includes(PACK_MARK[pack]),
+        `AGENT.md still carries ${pack}'s rule text with only craft active`);
+    }
+    assert.ok(agent.split('\n').includes('Active packs: craft'));
+
+    // THE OTHER HALF, and the reason `src/doctrines/README.md` licenses cross-pack citations:
+    // the full catalogue ships whether or not a pack is built into AGENT.md, so a rule that
+    // names an inactive pack's rule is still resolvable from the install.
+    for (const pack of ['craft', 'rigor', 'ops', 'process']) {
+      assert.ok(isFile(out, 'doctrines', `${pack}.md`),
+        `${pack}.md is missing from the bundle — an inactive pack must still ship`);
+    }
+    // The tiers above are untouched by the axis: narrowing practice never narrows principle.
+    assert.ok(agent.includes(ONTOLOGY_MARK), 'the ontology went with the packs');
+    assert.ok(agent.includes('## 1. Rules (always in force)'), 'the invariants went with the packs');
+  });
+});
+
+test('an empty pack set renders the section with no rules and marks it none', () => {
+  withDir((d) => {
+    const out = path.join(d, 'bundle');
+    buildInto(out, { doctrines: [] });
+    const agent = agentText(out);
+    assert.ok(agent.split('\n').includes('Active packs: none'),
+      'an empty set must say `none`, not leave the marker blank');
+    for (const pack of Object.keys(PACK_MARK)) assert.ok(!agent.includes(PACK_MARK[pack]));
+    // The section itself stays — it is the place the marker lives, and the marker is what a
+    // later reader greps for. A section deleted when empty would be a marker that vanishes.
+    assert.ok(agent.includes('## 2. Doctrines (active packs)'));
+    assert.ok(agent.includes(ONTOLOGY_MARK));
+  });
+});
+
+test('a selected pack with no file refuses the build', () => {
+  // SILENCE IS THE FAILURE MODE THIS FORBIDS: without it the pack is skipped, the build exits 0,
+  // and the `Active packs:` line attests to a pack whose rules are nowhere in the file.
+  withDir((d) => {
+    assert.throws(
+      () => captured(() => build({ ...makeCfg(), doctrines: ['craft', 'nope'] }, 'neutral',
+        path.join(d, 'bundle'))),
+      /doctrine pack 'nope' is selected but src\/doctrines\/nope\.md does not exist/);
+  });
+});
+
+test('a pack file on disk that PACK_ORDER does not name refuses the build', () => {
+  // Discovery sorts and PACK_ORDER does not, so the two can never be the same list and the
+  // render order cannot be derived from the directory. That leaves exactly one way for a fifth
+  // pack to be added and reach nobody — dropped by the order it is missing from — so the
+  // discovery it cannot be built from is spent here instead, as a gate.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    fs.cpSync(path.join(makeCfg().src), src, { recursive: true });
+    writeText(path.join(src, 'doctrines', 'extra.md'), '**Extra** — a fifth pack.\n');
+    assert.throws(
+      () => captured(() => build({ ...makeCfg(), src }, 'neutral', path.join(d, 'bundle'))),
+      /doctrine pack file\(s\) extra .*missing from PACK_ORDER/s);
+  });
+});
