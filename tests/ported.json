@@ -1,5 +1,27 @@
 {
   "doc": [
+    "⚠ THIS LEDGER NO LONGER EXECUTES. RETIRED 2026-08-19 — `tests/unit/ported.test.mjs` is",
+    "deleted and nothing reads this file any more. It is kept, unchanged, as the record of a",
+    "finished migration: 47 rows, 37 delivered and 10 retired, against 1003 Python tests that no",
+    "longer exist. Read it to find out WHY a Node test is shaped the way it is, or what a deleted",
+    "Python test used to prove; do not expect it to be checked, because it is not.",
+    "",
+    "WHY IT STOPPED EXECUTING, since a ledger that quietly rots is worse than one openly frozen.",
+    "Four of the six tests it backed only ever checked that the ledger agreed with ITSELF — a fate",
+    "partition, two prose-length floors, and a uniqueness check — none of which any product change",
+    "could break. Of the two that reached outside it, `a delivered row's successors are on disk`",
+    "pinned 52 test FILENAMES, so renaming one reddened the suite and the fix was a hand edit",
+    "inside a 231 kB JSON that is 92% prose; deletions of those files are already covered by the",
+    "500-test discovery floor in `.github/workflows/ci.yml`, over all 71 files rather than 52. The",
+    "other, the recursive walk for a stray `tests/**/*.py`, OUTRANKED its own ledger — it needs no",
+    "row to be true and no repository to run — and was salvaged verbatim into",
+    "`tests/unit/package_manifest.test.mjs`'s `the product carries no Python file at all`, beside",
+    "the tracked-file count it strictly strengthens.",
+    "",
+    "WHAT WAS KNOWINGLY LOST: rename-detection on those 52 filenames. Recorded in",
+    "`docs/limits.md` under the ungated column, in that file's own voice, because a retirement",
+    "nobody wrote down is indistinguishable from an oversight.",
+    "",
     "THE TWO-SIDED PARTITION. Every tests/*.py that has ever existed in this repository names",
     "either its Node successor or a written reason it is retired. Never both, never neither.",
     "",
@@ -69,13 +91,12 @@
       "status": "done",
       "node": [
         "tests/unit/web_server.test.mjs",
-        "tests/unit/web_api.test.mjs",
-        "tests/helpers/matrix/web.win32.json",
-        "tests/helpers/matrix/web.posix.json"
+        "tests/unit/web_api.test.mjs"
       ],
       "why": [
         "The web console matrix: 114 cells, each a request script over ONE reused connection against a daemon started with --daemon-internal --port 0. That shape is the point — keep-alive, caching and compression are properties of a CONNECTION, and a harness that opened a socket per request could not see any of them; Node reaches it with a keepAlive agent capped at one socket. 114/114 replay green from Node, orphan check clean, from both entries. Four things had to be reproduced rather than translated: rawHeaders (the recorded header column is a transcript of the order and spelling the server sent, which Node's parsed headers object loses); no Accept-Encoding unless the cell sends one, because the gzip branch is chosen by the header's presence; the gzip body compared INFLATED, since the two runtimes' zlib builds emit different DEFLATE streams at identical settings and a port cannot fix or be blamed for that; and clockRepl subtracting the timezone offset, because date.fromtimestamp is local where toISOString is UTC. The one cell that disagreed was a THIRD regex-layer divergence: Python's re.sub replacement is a template where `\\` means one literal backslash, and JavaScript's String.replace gives `\\` no meaning at all — so the same spelling emitted one backslash too many inside a JSON string. It surfaced as VACUOUS rather than as a byte diff, because the cell's own expect names the tag the substitution produces: the absolute tier doing exactly the job it was ported for.",
-        "RECONCILED 2026-08-18 — `tests/web_golden.mjs` WAS RETIRED WITH THE 114 RECORDED CELLS IT REPLAYED and this row no longer names it; the corpus was recorded from an implementation that no longer exists and could never be re-recorded. WHERE THE SHELL IS PROVED NOW: `tests/unit/web_server.test.mjs` drives `makeHandler` over a REAL node:http listener and holds exactly the properties that only exist at the socket level — connection reuse asserted by SOCKET IDENTITY, which is stronger than the recorded cells' second-request-also-answered-200; the leftover request body that keep-alive makes load-bearing; compression; caching; and the frozen route partition. `tests/unit/web_api.test.mjs` holds the apiX functions IN PROCESS, which every cell reached only through a transport that serialised the answer and threw the objects away — its own header says the cells were designed not to replace it. `tests/helpers/web_golden.mjs`, THE REPLAYER LIBRARY, WENT WITH THE ENTRY and is no longer named above: its only importer was the deleted `tests/web_golden.mjs`, so once that went the library was reachable from nothing — unlike the CLI half, where the library survived into ten unit files. ⚠ ONE ORPHAN IS LEFT BEHIND AND IS RECORDED HERE RATHER THAN SILENTLY RETIRED: `tests/helpers/matrix/web.win32.json` / `web.posix.json`, which the deleted entry was the only reader of. They are still on disk, still named above, and are now exercised by nothing — unlike the CLI half again, whose two matrices kept a reader in `tests/unit/hook_cli.test.mjs`, nothing inherited these. They stay named so the next session decides their fate on the ledger's own criterion instead of finding them unaccounted for. WHAT WAS KNOWINGLY LOST: the byte-for-byte replay of 114 request scripts over one reused connection, with it the rawHeaders transcript of the order and spelling the server sent, and the inflated-gzip comparison."
+        "RECONCILED 2026-08-18 — `tests/web_golden.mjs` WAS RETIRED WITH THE 114 RECORDED CELLS IT REPLAYED and this row no longer names it; the corpus was recorded from an implementation that no longer exists and could never be re-recorded. WHERE THE SHELL IS PROVED NOW: `tests/unit/web_server.test.mjs` drives `makeHandler` over a REAL node:http listener and holds exactly the properties that only exist at the socket level — connection reuse asserted by SOCKET IDENTITY, which is stronger than the recorded cells' second-request-also-answered-200; the leftover request body that keep-alive makes load-bearing; compression; caching; and the frozen route partition. `tests/unit/web_api.test.mjs` holds the apiX functions IN PROCESS, which every cell reached only through a transport that serialised the answer and threw the objects away — its own header says the cells were designed not to replace it. `tests/helpers/web_golden.mjs`, THE REPLAYER LIBRARY, WENT WITH THE ENTRY and is no longer named above: its only importer was the deleted `tests/web_golden.mjs`, so once that went the library was reachable from nothing — unlike the CLI half, where the library survived into ten unit files. ⚠ ONE ORPHAN IS LEFT BEHIND AND IS RECORDED HERE RATHER THAN SILENTLY RETIRED: `tests/helpers/matrix/web.win32.json` / `web.posix.json`, which the deleted entry was the only reader of. They are still on disk, still named above, and are now exercised by nothing — unlike the CLI half again, whose two matrices kept a reader in `tests/unit/hook_cli.test.mjs`, nothing inherited these. They stay named so the next session decides their fate on the ledger's own criterion instead of finding them unaccounted for. WHAT WAS KNOWINGLY LOST: the byte-for-byte replay of 114 request scripts over one reused connection, with it the rawHeaders transcript of the order and spelling the server sent, and the inflated-gzip comparison.",
+        "RECONCILED 2026-08-19 — THE ORPHAN WAS DECIDED, ON THE CRITERION THE PARAGRAPH ABOVE SET. `tests/helpers/matrix/web.win32.json` and `web.posix.json` are DELETED and no longer named above: 418,556 bytes that a whole-tree grep found referenced by nothing but this row and one line of `docs/limits.md`. The criterion was `nothing exercises them`, and it was met the day their only reader was deleted with the corpus — the previous session declined to act only because finding an artifact unaccounted for is worse than finding it condemned in writing. NO COVERAGE IS LOST, BECAUSE NONE WAS BEING TAKEN: a recording nothing replays proves nothing beyond `git`'s own claim that the bytes have not changed. What the two files WOULD have proved is already recorded, unchanged, in the paragraph above — that is what a ledger is for, and it is why the deletion costs no argument beyond this sentence. ⚠ THE CLI PAIR IS NOT IN THE SAME POSITION AND WAS NOT TOUCHED: `tests/helpers/matrix/cli.{win32,posix}.json` still has a reader in `tests/unit/hook_cli.test.mjs`, and retiring it would demote a live row of `docs/limits.md` from ASSERTED to ungated — a separate decision, owed its own commit and its own paragraph."
       ]
     },
     {

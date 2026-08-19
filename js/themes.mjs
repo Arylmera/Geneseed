@@ -59,7 +59,7 @@ import {
  *   - the three `strip` spellings are Python's whitespace set, not `String.prototype.trim`'s;
  *   - `jsonDumpsCompact(v, {ensureAscii: false})` is `json.dumps(v, ensure_ascii=False)`,
  *     including the `', '`/`': '` separators — which matter for exactly ONE key,
- *     `AGENT_COLORS`, the only non-string among `_TEMPLATE.json`'s 137 values. `ensureAscii`
+ *     `AGENT_COLORS`, the only non-string among `_TEMPLATE.json`'s 140 values. `ensureAscii`
  *     is false because the reference passes `ensure_ascii=False`, and 33 template values
  *     carry non-ASCII text that would otherwise be escaped into the committed file;
  *   - `pyEq`, because the safety net compares two `json.loads` results and `===` is identity

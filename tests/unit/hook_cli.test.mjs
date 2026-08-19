@@ -160,6 +160,19 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
  * population and fails loudly, where a `covered ⊆ carried` containment would have let it through
  * ungated. What the three are held to instead lives in `tests/snapshot/cli_help.test.mjs` (help layout) and
  * in the absolute gates of their own units — nothing here claims to gate their behaviour.
+ *
+ * ⚠ THE EXEMPTION APPLIES TO BOTH ENTRY POINTS, AND IT DID NOT USED TO. The hook half of the
+ * equality below was a bare `covered.hook === verbsOf(HOOK)` with no exemption at all, which was
+ * right while the recorder existed and became a DEAD END on 2026-08-17 when it did not: a fifth
+ * hook verb would fail here with no green path, because the corpus cannot be re-made and the
+ * failure message correctly forbids deleting cells to pass. The reason the three named above have
+ * no cell — *the reference had nothing to compare against* — is exactly the reason a verb that
+ * POSTDATES the reference has none, so it is the same exemption and not a second one. Widening
+ * it is what keeps this file a gate rather than a wall; `docs/declined.md` carries the argument.
+ *
+ * The list may only grow. It stays a NAMED list with a two-way equality — the reverse check
+ * below refuses an exemption for a verb neither entry point carries — so the next new verb still
+ * has to be written down deliberately rather than slipping through a containment.
  */
 const NATIVE = ['catalog', 'mcp', 'memory'];
 
@@ -170,9 +183,11 @@ test('the matrix covers every verb each entry claims', () => {
   // and still pass.
   const covered = { hook: new Set(), cli: new Set() };
   for (const c of matrix(HERE).cells) covered[c.bin ?? 'hook'].add(c.id.split('/')[0]);
-  assert.deepEqual(sorted(covered.hook), sorted(verbsOf(HOOK)),
-    'the recorded hook cells and the hook entry point\'s verbs have diverged: an uncovered verb '
-    + 'is an unported one nothing would report');
+  const hook = verbsOf(HOOK);
+  assert.deepEqual(sorted(covered.hook), sorted([...hook].filter((v) => !NATIVE.includes(v))),
+    'the recorded hook cells and the hook entry point\'s verbs have diverged. If the verb is NEW '
+    + 'there is no reference to record a cell against and never will be — name it in NATIVE and '
+    + 'gate it absolutely. Do NOT delete cells to make this pass: the corpus can never be re-made');
   // THE RECORDED HALF, still an equality with no slack: every CLI verb that is not named native
   // must have cells, and every recorded verb must still be carried. A new verb that nobody adds
   // to `NATIVE` lands on the left of this and fails — which is the whole point of naming them.
@@ -184,8 +199,8 @@ test('the matrix covers every verb each entry claims', () => {
   // …and the other direction, so the list cannot rot into prose: a name in `NATIVE` that no entry
   // point carries is an exemption for a verb that no longer exists, silently excusing whatever
   // takes its place.
-  assert.deepEqual(NATIVE.filter((v) => !cli.has(v)), [],
-    'NATIVE names a verb bin/geneseed-cli.mjs does not carry — an exemption with nothing behind it');
+  assert.deepEqual(NATIVE.filter((v) => !hook.has(v) && !cli.has(v)), [],
+    'NATIVE names a verb NEITHER Node entry point carries — an exemption with nothing behind it');
 });
 
 test('the two copies of the native-verb list agree', () => {

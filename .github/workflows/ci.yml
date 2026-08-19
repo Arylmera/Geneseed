@@ -62,6 +62,17 @@ jobs:
             exit 1
           fi
 
+      # THE MUTATION MATRIX'S ANCHORS, AND ONLY ITS ANCHORS. `tests/mutate.mjs` is not run here
+      # and should not be — it applies 31 one-string edits to the product tree and runs a gate per
+      # edit, which is minutes of wall clock and, if interrupted, leaves the tree mutated. But its
+      # rows are anchored to exact strings in 17 product files, and a refactor near an anchor makes
+      # the row unappliable. `withMutation` correctly counts that as a SURVIVOR — for whoever runs
+      # the matrix by hand. Nothing did, so the one failure mode the file cannot see in itself was
+      # also the one nothing else reported. `--verify` answers only "does every anchor still
+      # resolve", writes nothing, runs no gate, and takes about 50 ms.
+      - name: the mutation matrix still describes this code
+        run: node tests/mutate.mjs --verify
+
       # ⚠ THE PACKAGING SUITE AGAIN, UNDER THE npm THE RELEASE ACTUALLY USES. Everything above
       # runs the npm bundled with Node 22 (npm 10). `publish.yml` deliberately installs
       # `npm@latest` first, because trusted publishing needs a recent one — so the single workflow

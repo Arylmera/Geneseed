@@ -892,9 +892,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [2.0.0] — not yet published
 
-*Nothing described here has been published to any registry: there is no tag, no release and no
-install URL. `harness.config.json` and `package.json` both read `2.0.0`, which is the version this
-build stamps into every bundle it emits — it is not evidence that anything was shipped.*
+*Published to npm as `geneseed@2.0.0` on 2026-08-17, by hand — npm's trusted-publisher screen
+needs a package that already exists, so the first release could not come from the workflow that
+gates every one after it. `harness.config.json` and `package.json` both read `2.0.0`, which is
+also the version this build stamps into every bundle it emits.*
 
 *⚠ The bump itself was the last thing this release found. Moving the label reddened 224 of 259
 recorded emit cells, because the configured version is stamped into two places and only one of them

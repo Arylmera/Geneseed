@@ -5,14 +5,14 @@
 // the reference" and "a shipped document still tells a user to run it" are the same tree. This
 // file is that gate for the whole implementation rather than for two launchers.
 //
-// HOW THIS DIFFERS FROM `tests/snapshot/no_python_in_corpus.test.mjs`, which is the easiest confusion to
-// make and the most expensive: that file asks the RECORDED CORPUS — the frozen bytes under
-// `tests/__snapshots__/` — what Python it still holds, and its rows can never be re-measured
-// because the oracle that produced them is gone. This file asks the SOURCE TREE the same
-// question. They share the `INVOCATION` pattern verbatim and nothing else: the corpus gate is
-// evidence about a recording, this is a gate on what ships. Neither can replace the other — a
-// document can invoke an interpreter without any cell recording it, and a cell can hold a
-// spelling no source file contains (its fixtures seed `a.py`).
+// ⚠ THERE USED TO BE A SECOND GATE HERE, `tests/snapshot/no_python_in_corpus.test.mjs`, AND IT
+// WENT WITH THE EMIT/CLI/WEB CORPORA ON 2026-08-17. It asked the RECORDED CORPUS — the frozen
+// bytes under `tests/__snapshots__/` — what Python it still held; when the recordings it read
+// were retired there was nothing left for it to ask. The distinction it existed to draw is
+// still worth carrying, because it is why THIS file is not redundant with the packaging sweep:
+// a corpus gate is evidence about a recording, this is a gate on what ships, and a document can
+// invoke an interpreter without any cell ever recording it. What survives of the pair is here
+// and in `tests/unit/package_manifest.test.mjs`.
 //
 // ⚠ THIS GATE DOES NOT GO GREEN WHEN THE `.py` FILES ARE DELETED, and that surprised the
 // measurement it came out of. Every `.py` file in this repository lives under `tests/`,
@@ -54,17 +54,28 @@ const inScope = (rel) => SCOPE_DIRS.some((d) => rel.startsWith(d)) || /^[^/]+\.m
  * hunts is a POINTER: a document or a line of code sending a reader or a process at something
  * that is not there. A changelog entry recording the removal is the opposite of that, and
  * scrubbing an append-only history to satisfy a grep deletes the record OF the removal.
+ *
+ * ⚠ `DESIGN.md` USED TO BE ON THIS LIST AND WAS THE ONE PLACE THE EXEMPTION DID THE OPPOSITE OF
+ * ITS JOB. Its own header reads "the spec behind the harness — read this before changing
+ * structure", and under that header sat a live checklist telling a contributor to run
+ * `python build.py --sync-themes` against a machine with no Python. It was exempt because the
+ * file was 1:8 spec-to-ledger and the ledger half is legitimate history. The fix was to split
+ * rather than to exempt: `DESIGN.md` is now 190 lines of standing contract and IS scanned, and
+ * the 1,290-line port narrative moved to `docs/design-history.md`, which is exempt on the
+ * merits — it is dated, append-only, and says in its own opening that every `.py` path in it is
+ * a record and not a pointer. Its dead LINKS were repaired in the same pass, because a link is
+ * a pointer whatever the prose around it claims.
  */
-const RECORDS = new Set(['CHANGELOG.md', 'DESIGN.md']);
+const RECORDS = new Set(['CHANGELOG.md', 'docs/design-history.md']);
 
 // ---------------------------------------------------------------------------------------------
 // The rules. Each is a name, a pattern, and the files it applies to.
 // ---------------------------------------------------------------------------------------------
 
 // BORROWED VERBATIM from `tests/unit/package_manifest.test.mjs`, which asks it of `src/` and
-// `adapters/` only, and from `tests/snapshot/no_python_in_corpus.test.mjs`, which asks it of the
-// recording. A second SPELLING of the same property is a second chance to disagree with it, so
-// all three copies stay literal.
+// `adapters/` only. (A third copy asked it of the recording until that gate was retired with the
+// corpora.) A second SPELLING of the same property is a second chance to disagree with it, so
+// both surviving copies stay literal.
 const INVOCATION =
   /python3?(?:\.exe)?\s+-c\b|python3?(?:\.exe)?\s+[^\s`"']*\.py\b|#!.*python|\buv run\b/;
 
@@ -114,7 +125,7 @@ const RULES = [
 // a file, the rule, the exact matched text, HOW MANY TIMES it occurs, and why it is allowed to.
 // The count is not decoration: both live sites in `js/settings.mjs` match the same six
 // characters, so a row without one would cover a third site nobody argued for. That is
-// `no_python_in_corpus.test.mjs`'s rule — "a new SITE for an already-declared spelling adds no
+// the retired corpus gate's rule — "a new SITE for an already-declared spelling adds no
 // row and would otherwise arrive in silence" — applied to source instead of to a recording.
 // ---------------------------------------------------------------------------------------------
 
@@ -181,7 +192,7 @@ function scanned() {
 /**
  * Every rule hit over `records`, as `{rel, rule, text, count}` — the scan itself, taken as a
  * function over records rather than over the tree so the firing control can hand it a planted
- * one. `tests/snapshot/no_python_in_corpus.test.mjs` uses the same shape for the same reason: a control
+ * one. The retired corpus gate used the same shape for the same reason: a control
  * that has to write into the working tree is a control that can leave the repository dirty.
  */
 function hits(records) {

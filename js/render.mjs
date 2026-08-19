@@ -89,9 +89,11 @@ export function loadTheme(cfg, name) {
       .map((f) => f.slice(0, -5)).sort().join(', ');
     // `sys.exit(<str>)` — the message on stderr, exit 1 — spelled the way
     // `assertSourceComplete` spells it: written at the raise site, and the throw carries
-    // only the marker. It reads as an unreachable nicety under `bin/geneseed.mjs`, whose
-    // `--theme` is validated against `choices` before anything renders. It is NOT
-    // unreachable under `harness status`, which takes its theme from a `.geneseed-theme`
+    // only the marker. ⚠ It was once described as an unreachable nicety under
+    // `bin/geneseed.mjs`, on the grounds that `--theme` is validated against `choices` before
+    // anything renders — it is not: `--theme` takes a value and has no `choices` entry, so THIS
+    // is the refusal, on every path. It is also reachable from `geneseed status`, which takes
+    // its theme from a `.geneseed-theme`
     // marker — an unvalidated file in a user's install. A bare `throw` there printed a Node
     // stack trace where Python printed one line, and the acceptance matrix is what said so.
     process.stderr.write(`[geneseed] unknown theme '${name}'. available: ${available}\n`);
@@ -113,7 +115,7 @@ export function substitute(text, theme) {
     const v = theme[key];
     // Python renders `str(theme[key])`, which agrees with JS only for strings —
     // `str(True)`/`String(true)` and `str({...})`/`String({...})` do not. Every one of
-    // the 145 tokens the source tree actually uses resolves to a string today
+    // the 148 tokens the source tree actually uses resolves to a string today
     // (AGENT_COLORS is a dict but is never a token), so a non-string here means the
     // source or a theme grew a case nobody has decided the semantics for. Fail loudly
     // rather than emit `[object Object]` into somebody's AGENT.md.

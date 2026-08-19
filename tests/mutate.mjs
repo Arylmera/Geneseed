@@ -600,6 +600,30 @@ function main(argv) {
     }
     return 0;
   }
+  // ⚠ `--verify` EXISTS BECAUSE THIS FILE'S ONLY FAILURE MODE IS SILENT, AND CI RUNS NOTHING
+  // ELSE HERE. Every row is anchored to an exact string in a product file; a refactor near an
+  // anchor makes the mutation unappliable, and `withMutation` correctly calls that a SURVIVOR
+  // rather than a skip — but only for whoever runs the matrix by hand, which no workflow does.
+  // So a row can rot for months and the tree stays green. This asks the one question that needs
+  // no mutation to answer: does every anchor still resolve? It WRITES NOTHING and runs no gate,
+  // which is what makes it cheap enough to put in CI beside the suites.
+  //
+  // It is deliberately not a substitute for `--all`. A resolvable anchor is not a killed mutant;
+  // this only refuses the state where the matrix has quietly stopped describing the code.
+  if (argv.includes('--verify')) {
+    const stale = MUTATIONS.filter((m) => {
+      try { return !fs.readFileSync(path.join(ROOT, m.file), 'utf8').includes(m.find); }
+      catch { return true; }
+    });
+    for (const m of stale) console.error(`[mutate] ${m.id}: anchor gone from ${m.file}`);
+    console.log(`[mutate] ${MUTATIONS.length - stale.length}/${MUTATIONS.length} anchors resolve`);
+    if (stale.length) {
+      console.error('[mutate] a row whose anchor is gone proves nothing and reports as a '
+        + 'survivor. Re-aim it against what the code says now, or retire it in writing.');
+      return 1;
+    }
+    return 0;
+  }
   const chosen = MUTATIONS.filter((m) => (!only || m.id === only));
   const gated = chosen.filter((m) => m.gate);
   const ungated = chosen.filter((m) => !m.gate);

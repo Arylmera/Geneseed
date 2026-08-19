@@ -124,8 +124,23 @@ test('js/tui.mjs refuses on a TTY, and the refusal is not a dead end', () => {
 
   // Dropping this clause would leave a bare "unavailable" — the dead end the original test was
   // written to forbid. What is asserted is that the refusal still OFFERS something.
-  assert.match(stdout, /Use `harness setup`, `doctor`, or `build`\./,
+  //
+  // ⚠ THIS USED TO PIN THE SENTENCE VERBATIM — `Use \`harness setup\`, \`doctor\`, or \`build\`.`
+  // — and that is how it came to gate a WRONG STRING. `harness` is the reference's program name;
+  // the binary has been `geneseed` since P0, so the fallback this test called "what DOES work"
+  // named a command that does not exist, and the frozen literal is precisely what stopped anyone
+  // noticing. A refusal is only a fallback if what it offers is runnable, so that is what is
+  // asserted now: every backticked command the refusal names must be a verb `js/cli-table.json`
+  // actually declares. Strictly stronger than the literal, and it fires on the next rename too.
+  const offered = [...stdout.matchAll(/`geneseed ([a-z][a-z-]*)`/g)].map((m) => m[1]);
+  assert.ok(offered.length > 0,
     'the refusal must still offer what DOES work, or it is a dead end rather than a fallback');
+  const declared = new Set(JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'js', 'cli-table.json'), 'utf8'),
+  ).commands.map((c) => c.name));
+  assert.deepEqual(offered.filter((v) => !declared.has(v)), [],
+    'the refusal offers a command js/cli-table.json does not declare — a dead end wearing a '
+    + 'fallback\'s clothes, which is the exact defect the verbatim assertion used to hide');
 });
 
 test('js/tui.mjs leaves none of a panel behind, and the refusal is all it writes', () => {

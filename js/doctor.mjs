@@ -1,14 +1,14 @@
 /**
  * `_harness_build.cmd_doctor` — validate the build.
  *
- * Sixteen `_*_problems` checks over one theme (or every theme) — the newest is P10c's `cli`
- * — and `[doctor] ok — …` when all sixteen find nothing. That last sentence is why this
- * module's gate looks the way it does, and it is worth stating here rather than only in the
- * spec: **delete any single check
- * and a clean run is byte-identical**, so a cross-implementation comparison cannot tell this
- * file from a stub that prints the OK line. `tests/harness_golden.py` therefore plants ONE
- * FAULT PER CHECK, in a private copy of the checkout — see `_copy_checkout` there for why a
- * verb that reads `ROOT` needed a fixture kind that did not exist until this phase.
+ * Fifteen `*Problems` checks over one theme (or every theme) — and `[doctor] ok — …` when all
+ * fifteen find nothing. That last sentence is why this module's gate looks the way it does, and
+ * it is worth stating here rather than only in the spec: **delete any single check
+ * and a clean run is byte-identical**, so a comparison of two runs cannot tell this
+ * file from a stub that prints the OK line. `tests/unit/harness.test.mjs` and
+ * `tests/unit/authoring_gates.test.mjs` therefore plant ONE FAULT PER CHECK, in a private copy
+ * of the checkout — see `copyCheckout` in `tests/helpers/cli_golden.mjs` for why a verb that
+ * reads `ROOT` needed a fixture kind that did not exist until the port.
  *
  * WHY THIS IS THE VERB THAT SPAWNS. `bin/geneseed-cli.mjs` was under a blanket transitive
  * `child_process` ban, and its own docblock predicted the day a verb that genuinely spawns
@@ -736,6 +736,14 @@ export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '
     }
   }
 
+  // ⚠ THE ABSENCE OF THIS TRIPLE IS CHECKED BY THE CALLER, NOT HERE, AND THAT IS FORCED RATHER
+  // THAN CHOSEN. This arm is satisfiable by DELETING THE SENTENCE — no match, no problem, green
+  // — which is a gate failing open. The obvious fix is an `else` right here, and it cannot go
+  // here: `prose_mirror_problems` is one of the pure functions recorded in
+  // `tests/__snapshots__/primitives/`, the recording holds a case that passes an EMPTY `shipped`
+  // and expects `[]`, and there is no recorder left to re-bless it. So the presence check lives
+  // in `countTableProblems`, which is not recorded — beside the read that already knows whether
+  // the file could be opened at all, which is where it reads better anyway.
   const s = /(\d+) laws, (\d+) agents, (\d+) skills/.exec(shipped);
   if (s) {
     for (const [got, want, label] of [[s[1], laws, 'laws'], [s[2], agents, 'agents'],
@@ -821,9 +829,19 @@ export function countTableProblems() {
   };
   let readme;
   try { readme = readText(path.join(ROOT, 'README.md')); } catch { return problems; }
+  // ⚠ PRESENCE FIRST, THEN THE VALUE — the same absence arm the SHIPPED triple needed, for the
+  // same reason: `if (m && …)` is green when there is no badge, so deleting a badge silences its
+  // own gate. The `continue` keeps the loop's MESSAGE ORDER intact, which is load-bearing (see
+  // the `plugins`-is-last comment above): a missing badge reports in its own slot rather than
+  // reordering the ones after it.
   for (const [key, n] of Object.entries(counts)) {
     const m = new RegExp(`badge/${key}-(\\d+)`).exec(readme);
-    if (m && Number(m[1]) !== n) {
+    if (!m) {
+      problems.push(`[authoring] README has no ${key} badge — deleting one is how this gate `
+        + 'goes green while the reader is told nothing');
+      continue;
+    }
+    if (Number(m[1]) !== n) {
       problems.push(`[authoring] README ${key} badge says ${m[1]} but src has ${n}`);
     }
   }
@@ -843,8 +861,34 @@ export function countTableProblems() {
     web = globSorted(path.join(ROOT, 'docs', 'web'), (n) => n.endsWith('.md'))
       .map(readText).join('\n');
   } catch { web = ''; }
+  // ⚠ NOT FAIL-SOFT, UNLIKE `web` ABOVE, AND THE ASYMMETRY IS THE POINT. A missing `docs/web`
+  // tree is not an authoring fault — a checkout can legitimately lack it. SHIPPED.md is a
+  // tracked, shipped file that this function asserts the CONTENT of, so an unreadable one is
+  // indistinguishable from a deleted claim: swallowing it into `''` used to hand the triple arm
+  // an empty string and turn a hard read failure into a silent pass.
+  // ⚠ NOT FAIL-SOFT, UNLIKE `web` ABOVE, AND THE ASYMMETRY IS THE POINT. A missing `docs/web`
+  // tree is not an authoring fault — a checkout can legitimately lack it. SHIPPED.md is a
+  // tracked, shipped file whose CONTENT this function asserts, so an unreadable one was
+  // indistinguishable from a deleted claim: swallowing it into `''` handed the triple arm an
+  // empty string and turned a hard read failure into a silent pass.
+  //
+  // AND THE PRESENCE OF THE TRIPLE IS CHECKED HERE rather than inside `proseMirrorProblems`,
+  // which is where it belongs by subject and cannot go by construction — that function is
+  // recorded in `tests/__snapshots__/primitives/` with a case that passes an empty `shipped` and
+  // expects `[]`, and nothing can re-bless a recording whose recorder is deleted. This is the
+  // caller, it is not recorded, and it already owns the question "could the file be read".
   let shipped;
-  try { shipped = readText(path.join(ROOT, 'SHIPPED.md')); } catch { shipped = ''; }
+  try {
+    shipped = readText(path.join(ROOT, 'SHIPPED.md'));
+  } catch (e) {
+    problems.push(`[authoring] SHIPPED.md is unreadable (${e.message}) — the counts it carries `
+      + 'cannot be checked, and a gate that cannot read its subject must say so');
+    shipped = '';
+  }
+  if (shipped && !/(\d+) laws, (\d+) agents, (\d+) skills/.test(shipped)) {
+    problems.push('[authoring] SHIPPED.md carries no \'N laws, N agents, N skills\' line — '
+      + 'deleting it is how that gate goes green while the count drifts');
+  }
   problems.push(...proseMirrorProblems(readme, web, counts, skillFiles, shipped));
   return problems;
 }
@@ -1163,15 +1207,16 @@ export function cmdDoctor(args) {
         + '`./geneseed update` (or re-sync src/), then re-check.\n');
     }
     if (problems.some((p) => p.startsWith('[themes]') && p.includes('missing key'))) {
-      // `./geneseed build --sync-themes`, and the spelling is a one-shot decision frozen in
-      // two fixtures, so it is argued here. The FRONT DOOR, not an interpreter and a file:
-      // `build` forwards its extra arguments to the generator, so the tip names a command that
-      // works today AND after the Python is deleted — which naming the interpreter and the
-      // generator's file, as the old tip did, would not. The `./` prefix matches the sibling tip
-      // five lines up (`./geneseed update`) and is honest about the audience: this problem is
-      // only reachable while authoring themes in a checkout, which is where `./geneseed` is.
+      // ⚠ THE TIP USED TO NAME `./geneseed build --sync-themes`, AND THAT COMMAND ERRORS.
+      // It was argued here on the premise that "`build` forwards its extra arguments to the
+      // generator" — which was true of the reference and is not true of `cmdBuild`
+      // (`js/generate.mjs`), which forwards `--theme` and nothing else. So the front door
+      // answered `unrecognized arguments: --sync-themes` to anyone who followed doctor's own
+      // advice, for as long as the premise went unchecked. The flag belongs to the GENERATOR,
+      // whose binary is `geneseed-build` — which is what `README.md` and `SETUP.md` have said
+      // all along. A hint is a command; if it is not runnable it is decoration.
       pyPrint('  tip: a theme is missing a key another theme defines — run '
-        + '`./geneseed build --sync-themes` to fill it from _TEMPLATE.json, '
+        + '`geneseed-build --sync-themes` to fill it from _TEMPLATE.json, '
         + 'then restyle the added key(s) and re-check.\n');
     }
     if (note) pyPrint(`${note}\n`);

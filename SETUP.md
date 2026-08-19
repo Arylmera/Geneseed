@@ -990,9 +990,8 @@ anything, naming the `npm install -g` line above instead.
 **Installed from a clone:**
 
 ```
-./geneseed upgrade                 # track main; keep the remembered theme + emit mode
-./geneseed upgrade v1.0.0          # pin to a tag
-./geneseed upgrade main imperial   # force a theme
+./geneseed upgrade                 # track the checkout's current branch; keep theme + emit mode
+./geneseed upgrade imperial        # force a theme
 ```
 
 It git-pulls the install's own origin (fast-forward only), validates it (a blocking

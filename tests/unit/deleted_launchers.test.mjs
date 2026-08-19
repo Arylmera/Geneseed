@@ -110,7 +110,13 @@ const POINTERS = [POINTER, WRAPPER_POINTER];
  * files naming either wrapper, so the scan is green once the third is gone and no fourth
  * exemption is owed.
  */
-const RECORDS = new Set(['CHANGELOG.md', 'DESIGN.md']);
+// ⚠ THE SET MOVED, AND THE COUPLING THIS DOCBLOCK CLAIMS IS STILL UNENFORCED. `DESIGN.md` was
+// split on 2026-08-19: the 190-line standing spec keeps the name and is now SCANNED, and the
+// port narrative — which legitimately records `upgrade.sh`, `sync-self.sh` and `./bootstrap` as
+// things that existed — moved to `docs/design-history.md` and carries the exemption. The sibling
+// set in `tests/unit/no_python.test.mjs` was edited in the same pass, by hand, because nothing
+// checks that the two agree. That they must agree is still only prose.
+const RECORDS = new Set(['CHANGELOG.md', 'docs/design-history.md']);
 
 const BINARY = new Set(['.woff2', '.png', '.jpg', '.jpeg', '.ico', '.gz', '.webp']);
 
@@ -161,79 +167,13 @@ test('the package manifest does not ship them', () => {
   for (const name of GONE) {
     assert.equal(files.includes(name), false, `package.json still ships ${name}`);
   }
-  // The two that STAYED, so this test is a partition and not half of one. Both are shims over
-  // `bin/geneseed-cli.mjs`, and the argument for keeping them — inlined here because the row
-  // that used to carry it was in the implementation this suite replaced — is two grounds, both
-  // about installs this repository does not control:
-  //   * the three shipped documents. README, QUICKSTART and SETUP all tell the reader to run
-  //     `./geneseed`, and rewriting them to `node bin/geneseed-cli.mjs` is a worse instruction
-  //     and a bigger diff than keeping two small shims;
-  //   * a PRE-P0 install, where `link` wrote `~/.local/bin/geneseed` as a SYMLINK to the
-  //     checkout's `geneseed`. Linking now writes a marker-carrying shim naming an interpreter
-  //     and an entry point instead, so the symlink is legacy — but it is live on every machine
-  //     that linked before that change, and deleting its target breaks it with `No such file or
-  //     directory` and no hint. Resolving that symlink is the only branch either shim has left.
-  // The panel clause that used to be a third ground is gone with the panel itself: `tui` now
-  // reaches nothing the Node entry point does not.
-  for (const name of ['geneseed', 'geneseed.cmd']) {
-    assert.equal(files.includes(name), true, `package.json stopped shipping ${name}`);
-  }
+  // ⚠ THE OTHER HALF OF THIS PARTITION MOVED, AND IT IS STILL A PARTITION. That the two
+  // SURVIVING launchers are present in `files[]` — with the argument for keeping them — is now
+  // `tests/unit/launchers.test.mjs`'s first test, along with the three other live product gates
+  // this file used to carry under a name that describes none of them. Nothing was weakened in
+  // the move; both directions still run, in the same suite, on every platform.
 });
 
-test('the shims name node and no interpreter of any other kind', () => {
-  for (const name of ['geneseed', 'geneseed.cmd']) {
-    const body = readFileSync(path.join(ROOT, name), 'utf-8');
-    assert.match(body, /bin[\\/]geneseed-cli\.mjs/, `${name} does not run the CLI entry`);
-    assert.match(body, /GENESEED_NODE/, `${name} lost the interpreter override`);
-    assert.doesNotMatch(body, /rituals|harness\.py|build\.py|\bpy\b/,
-      `${name} names Python again`);
-  }
-});
-
-/**
- * MEASURED, NOT ASSUMED, and it cost a broken launcher to learn. `geneseed.cmd` was
- * rewritten with LF endings and `cmd.exe` fell apart on it — not with a clean error but by
- * splitting mid-token: `'seed' is not recognized`, `'gument' is not recognized`. Every other
- * gate in the repository was green while the Windows front door did not run at all, because
- * nothing reads a launcher as BYTES. `.gitattributes` marks `*.cmd eol=crlf`, so a fresh
- * checkout is correct on every platform and this assertion holds off Windows too; what it
- * catches is a working tree (or a `.gitattributes` edit) where it is not.
- */
-test('geneseed.cmd is CRLF, because cmd.exe mis-parses an LF batch file', () => {
-  const raw = readFileSync(path.join(ROOT, 'geneseed.cmd'));
-  const lf = raw.filter((b) => b === 0x0a).length;
-  const crlf = raw.filter((b, i) => b === 0x0a && raw[i - 1] === 0x0d).length;
-  assert.ok(lf > 5, 'geneseed.cmd looks empty');
-  assert.equal(crlf, lf, `${lf - crlf} bare LF line ending(s) in geneseed.cmd`);
-});
-
-/**
- * The `$GENESEED_NODE` / `%GENESEED_NODE%` knob, refuted rather than read. A source match
- * cannot tell a wired variable from a typo'd one, so this points it at a binary that does
- * not exist: if the shim ignored it, `version` would run on the real `node` and exit 0.
- *
- * THE LAUNCHER IS NAMED BY ABSOLUTE PATH, and that is not tidiness. The first draft passed
- * cmd.exe the bare name `geneseed.cmd` with `cwd: ROOT`, and it resolved to the launcher of
- * a GLOBAL npm install sitting on PATH — the test was green about a different repository's
- * file. A launcher test that does not say WHICH launcher is not a test of this one.
- */
-test('the platform launcher honours GENESEED_NODE', () => {
-  const win = process.platform === 'win32';
-  const argv = win
-    ? ['/c', path.join(ROOT, 'geneseed.cmd'), 'version']
-    : [path.join(ROOT, 'geneseed'), 'version'];
-  const exe = win ? 'cmd' : 'bash';
-  let status;
-  try {
-    execFileSync(exe, argv, {
-      cwd: ROOT,
-      stdio: 'ignore',
-      env: { ...process.env, GENESEED_NODE: path.join(ROOT, 'no-such-node-binary') },
-    });
-    status = 0;
-  } catch (e) { status = e.status ?? 1; }
-  assert.notEqual(status, 0, 'the launcher ran anyway — GENESEED_NODE is not wired');
-});
 
 /**
  * THE FIRING CONTROL, and the reason it is a unit test over `POINTER` rather than a planted

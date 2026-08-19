@@ -764,7 +764,7 @@
     },
     {
       "name": "tui",
-      "help": "full-screen curses control panel (Unix)",
+      "help": "print the harness at a glance (interactive terminals only)",
       "description": "",
       "positionals": [],
       "options": [
