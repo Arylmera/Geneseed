@@ -107,13 +107,26 @@ function wizardJobs() {
       // ...and the same menu answered `1`, which inverts the pair. Two cases that swap under the
       // mutation and cannot both be right by accident.
       ['ask_choice', ['Pick', NUMERIC_OPTS, '1']]], '2\n1\n'],
-    // ---- and the wizard itself, four ways through it.
-    ['wizard-defaults', [['collect_setup_lines', []]], '\n\n\n\n\n\n'],
-    ['wizard-declined', [['collect_setup_lines', []]], '\n\n\n\n\nn\n'],
-    // A PROJECT emit, the arm that asks a sixth question — `out` and `root` both from one answer.
-    ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n3\n1\n/tmp/somerepo\ny\n'],
-    // `files`, the other arm: one answer, `out` only, `root` left null.
-    ['wizard-files', [['collect_setup_lines', []]], 'neutral\nexpert\nforeman\n9\nfull\n\ny\n'],
+    // ---- and the wizard itself, six ways through it.
+    // Every sequence below carries a FOURTH answer, between mode and the install mode: the
+    // Doctrine-packs gate. It is the one question with two levels, so the count of answers a
+    // run consumes is no longer fixed — `all` costs one line and `choose` costs five.
+    ['wizard-defaults', [['collect_setup_lines', []]], '\n\n\n\n\n\n\n'],
+    ['wizard-declined', [['collect_setup_lines', []]], '\n\n\n\n\n\nn\n'],
+    // A PROJECT emit, the arm that asks a seventh question — `out` and `root` both from one
+    // answer. `1` at the packs gate is `all`, the same answer an empty line gives.
+    ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n1\n3\n1\n/tmp/somerepo\ny\n'],
+    // `files`, the other arm: one answer, `out` only, `root` left null. This is also the
+    // per-pack arm — `choose`, then four y/n — and the subset it keeps is NON-CONTIGUOUS
+    // (rigor and process, skipping craft and ops), so a port that dropped the filter and kept
+    // a prefix, a suffix or the whole list answers differently from one that reads each y/n.
+    ['wizard-files', [['collect_setup_lines', []]],
+      'neutral\nexpert\nforeman\nchoose\nno\nyes\nno\nyes\n9\nfull\n\ny\n'],
+    // Every pack declined. A real configuration (invariants and ontology only), and the only
+    // input that reaches `--doctrines none` — the spelling an empty list has to take, because
+    // an empty `--doctrines ` is a usage error at the driver.
+    ['wizard-no-packs', [['collect_setup_lines', []]],
+      '\n\n\nchoose\nno\nno\nno\nno\n\n\n\n'],
     // EOF before the first question. Every reader returns its default, which is the PRE-SELECTED
     // one — so this is the case that fails if `installedDefaults` stopped answering posture, mode
     // or footprint.
@@ -268,10 +281,35 @@ test('the wizard job really walks the wizard', () => {
     'foreman — triages tasks, spawns pipelines for substantial work   (default)',
     'claude-global — Claude Code global config dir',
     "full — Full — every law's complete text inlined",
+    // The packs gate. It has no pre-selected deployed value to carry — nothing reads a
+    // deployment's `Active packs:` line yet — so `all` is the default for everyone, and an
+    // installer who holds Enter through the wizard keeps every pack, exactly as before packs
+    // were a choice. `--doctrines` is therefore ABSENT from the plan line below.
+    'all — craft + rigor + ops + process (default)   (default)',
+    '2) choose — pick packs',
     'About to run:  geneseed build --theme pirate --emit claude-global --footprint full '
       + '--posture artisan --mode foreman',
-    '{"theme":"pirate","posture":"artisan","mode":"foreman","emit":"claude-global"',
+    '{"theme":"pirate","posture":"artisan","mode":"foreman","doctrines":["craft","rigor","ops",'
+      + '"process"],"emit":"claude-global"',
   ]) assert.ok(out.includes(line), `the wizard did not print:\n  ${line}`);
+  // The gate is a GATE: taking `all` must not print the four per-pack questions.
+  assert.ok(!out.includes('Include craft'),
+    'the packs gate asked the per-pack questions anyway, so `all` is not a shortcut');
+});
+
+test('the packs gate offers every pack, in narrative order, with what dropping one costs', () => {
+  // The blurbs are the only description of a pack an installer ever sees, so their presence is
+  // asserted rather than assumed — and `process`' one names the consent gate, because turning
+  // that pack off is what removes the commit/push ask. A blurb that quietly stopped saying so
+  // would still render a legal menu.
+  const out = runs()['wizard-no-packs'].text;
+  const at = ['craft', 'rigor', 'ops', 'process'].map((p) => out.indexOf(`Include ${p} —`));
+  assert.ok(at.every((i) => i >= 0), `a pack was missing from the per-pack questions:\n${out}`);
+  assert.deepEqual(at, [...at].sort((a, b) => a - b),
+    'the per-pack questions are not in PACK_ORDER — discovery sorts alphabetically, PACK_ORDER '
+    + 'does not, and the menu must match the marker the build writes');
+  assert.ok(out.includes('consent gate on every commit and push'),
+    'the process blurb no longer says what dropping the pack costs');
 });
 
 test('the declined wizard returns null and the confirmed one does not', () => {
@@ -280,8 +318,9 @@ test('the declined wizard returns null and the confirmed one does not', () => {
   // `n` — must differ in exactly that.
   assert.deepEqual(runs()['wizard-declined'].results, [null]);
   assert.deepEqual(runs()['wizard-defaults'].results, [{
-    theme: 'pirate', posture: 'artisan', mode: 'foreman', emit: 'claude-global',
-    out: null, root: null, footprint: 'full',
+    theme: 'pirate', posture: 'artisan', mode: 'foreman',
+    doctrines: ['craft', 'rigor', 'ops', 'process'],
+    emit: 'claude-global', out: null, root: null, footprint: 'full',
   }]);
 });
 
@@ -291,13 +330,26 @@ test('the project arm asks a sixth question and the files arm does not', () => {
   // whether the generator writes a repo-rooted install or a loose bundle. `lean` against `full` is
   // the second half: the project job never names a footprint and takes the default.
   assert.deepEqual(runs()['wizard-project'].results, [{
-    theme: 'neutral', posture: 'peer', mode: 'direct', emit: 'opencode',
-    out: '/tmp/somerepo', root: '/tmp/somerepo', footprint: 'lean',
+    theme: 'neutral', posture: 'peer', mode: 'direct',
+    doctrines: ['craft', 'rigor', 'ops', 'process'],
+    emit: 'opencode', out: '/tmp/somerepo', root: '/tmp/somerepo', footprint: 'lean',
   }]);
   assert.deepEqual(runs()['wizard-files'].results, [{
-    theme: 'neutral', posture: 'expert', mode: 'foreman', emit: 'files',
-    out: 'Harness', root: null, footprint: 'full',
+    theme: 'neutral', posture: 'expert', mode: 'foreman', doctrines: ['rigor', 'process'],
+    emit: 'files', out: 'Harness', root: null, footprint: 'full',
   }]);
+});
+
+test('a narrowed pack selection reaches the plan line, and an emptied one says none', () => {
+  // The whole point of the question: an answer that is not "all four" must arrive in the argv
+  // the wizard prints and then runs. `all` elides the flag (asserted above), so these two are
+  // the only inputs that can prove the elision is a CONDITION and not a deletion.
+  assert.deepEqual(runs()['wizard-files'].results[0].doctrines, ['rigor', 'process']);
+  assert.ok(runs()['wizard-files'].text.includes('--doctrines rigor,process'),
+    'a partial pack selection never reached the build command');
+  assert.deepEqual(runs()['wizard-no-packs'].results[0].doctrines, []);
+  assert.ok(runs()['wizard-no-packs'].text.includes('--doctrines none'),
+    'an empty pack selection must be spelled `none`, which is what the driver parses back');
 });
 
 test('the summary job produces rows and not an empty list', () => {
@@ -331,7 +383,7 @@ test('every job wrote something, and every newline in it is the platform\'s', ()
   // a stream of untranslated ones. A bare LF is an LF that is not the tail of a CRLF, and on
   // Windows there must be none; on POSIX there must be no CR at all.
   const all = runs();
-  assert.equal(Object.keys(all).length, 12, 'a job was dropped from the table');
+  assert.equal(Object.keys(all).length, 13, 'a job was dropped from the table');
   const win = process.platform === 'win32';
   let newlines = 0;
   for (const [name, { bytes }] of Object.entries(all)) {

@@ -33,7 +33,7 @@ import { existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { main as driverMain } from '../bin/geneseed.mjs';
-import { makeCfg } from './checkout.mjs';
+import { makeCfg, PACK_ORDER } from './checkout.mjs';
 import { opencodeConfigDir, pyResolve } from './hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, footprintOfDir, installState,
@@ -101,9 +101,21 @@ export function cmdBuild(args) {
  * because omitting it when it matched the generator's default silently coupled the answer to
  * whatever that default happened to be — the moment the default moved, picking the old one
  * produced the new one. `posture` and `mode` still elide at theirs, and neither has moved.
+ *
+ * `doctrines` elides too, but it is NOT the `!== 'peer'` shape it looks like from a distance.
+ * Posture and mode are scalars compared against a frozen literal; a pack selection is a SET
+ * compared against a default that is itself a list which grows when a pack file is added. The
+ * full list therefore comes in as `allPacks` rather than being reached for here — this
+ * function is pure and has no discovery, and a caller that already knows the checkout's packs
+ * (the wizard, the web console) should not have that knowledge re-derived behind its back.
+ *
+ * Three states, not two: `null` means "the caller expressed no opinion" and emits no flag at
+ * all, so the generator falls back to `harness.config.json`; `[]` is a deliberate empty
+ * selection and emits `--doctrines none`, which is the spelling the driver's `parseDoctrines`
+ * accepts (an empty `--doctrines ` is a usage error there, so it can never be produced here).
  */
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
-  posture = 'peer', mode = 'direct') {
+  posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER) {
   const argv = ['--theme', theme, '--emit', emit];
   if (!['opencode-global', 'claude-global', 'bob-global', 'copilot-global'].includes(emit)) {
     if (out) argv.push('--out', out);
@@ -112,6 +124,15 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   if (footprint) argv.push('--footprint', footprint);
   if (posture && posture !== 'peer') argv.push('--posture', posture);
   if (mode && mode !== 'direct') argv.push('--mode', mode);
+  if (Array.isArray(doctrines) && !(doctrines.length === allPacks.length
+    && allPacks.every((p) => doctrines.includes(p)))) {
+    // Emitted in `allPacks` order, not the order handed in. The elision above is a SET
+    // comparison, so a caller may legitimately pass an unsorted list and still be eliding;
+    // the flag it produces when it is not eliding has to be canonical for the same reason the
+    // driver re-normalises on parse — the `Active packs:` marker is compared against itself.
+    const picked = allPacks.filter((p) => doctrines.includes(p));
+    argv.push('--doctrines', picked.length ? picked.join(',') : 'none');
+  }
   return argv;
 }
 
@@ -167,6 +188,11 @@ export function cmdRebuildAll() {
     const posture = postureOfDir(root) || defaultPosture();
     const mode = modeOfDir(root) || defaultMode();
     const out = scope === 'global' ? null : root;
+    // The sixth value, `doctrines`, is deliberately NOT read back yet: detecting a deployed
+    // install's active packs needs `doctrinesOfDir` (the `Active packs:` marker reader), which
+    // does not exist here yet. Passing nothing elides the flag, so a rebuild takes the
+    // configured default — the same answer this loop gave before packs existed. The moment
+    // `doctrinesOfDir` lands it belongs here, beside the other four read-back values.
     const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode);
     const label = `${host}:${scope} (${root})`;
     pyPrint(`[rebuild-all] ${label}: theme=${theme} emit=${emit} footprint=${footprint} `

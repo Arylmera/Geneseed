@@ -392,8 +392,10 @@ export const MUTATIONS = [
     id: 'M21',
     name: 'make the deploy resolver ignore the requested host',
     file: 'js/web/actions.mjs',
-    find: "  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode);",
-    replace: "  const argv = setupBuildArgs(theme || 'neutral', 'files', root, root, fp, pos, mode);",
+    find: "  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, "
+      + 'doctrines);',
+    replace: "  const argv = setupBuildArgs(theme || 'neutral', 'files', root, root, fp, pos, "
+      + 'mode, doctrines);',
     gate: UNIT,
     why: "`apiDeployCmd`'s `{cmd: [...]}` is handed straight to the job runner and never reaches "
       + 'the wire, so a resolver that deployed the host-agnostic bundle to every host would '

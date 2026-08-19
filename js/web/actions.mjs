@@ -104,7 +104,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { emitGlobalInto } from '../../bin/geneseed.mjs';
-import { ROOT, discoverNames } from '../checkout.mjs';
+import { ROOT, discoverNames, PACK_ORDER } from '../checkout.mjs';
 import { withStdoutSwallowed } from '../diff.mjs';
 import { excludeAdd, excludeRemove } from '../excludes.mjs';
 import { setupBuildArgs } from '../generate.mjs';
@@ -139,6 +139,36 @@ const bget = (body, key, dflt = null) => (isDict(body) && Object.hasOwn(body, ke
 
 /** `str(x or "")` — Python's truthiness, then Python's `str`. */
 const strOr = (v) => (pyTruthy(v) ? pyStr(v) : '');
+
+/**
+ * A request body's `doctrines` -> a normalised pack list, or `null` for "said nothing usable".
+ *
+ * THE SAME TRUST BOUNDARY THE THEME CROSSES, and it needs more care than posture or mode do
+ * because this value is a LIST: `discoverNames(...).includes(x)` closes a scalar in one call,
+ * but a list has to be closed member by member or one bogus element rides in beside three good
+ * ones and reaches an argv. Every name is checked against DISCOVERY — what this checkout
+ * actually ships — and the result is re-ordered through `PACK_ORDER`, because the
+ * `Active packs:` line the build writes is a marker that a later reader parses back out and a
+ * marker whose contents depend on request-body order compares unequal to itself.
+ *
+ * `null` rather than a substituted default on every rejection, so the caller decides what
+ * "unspecified" means for its own endpoint — a rebuild keeps the deployment's answer, a fresh
+ * deploy takes the configured one. That mirrors the bogus-theme fallback right beside it.
+ *
+ * Accepts an array (what the console sends) or a comma string (what a curl by hand sends), and
+ * `none`/`[]` both mean the deliberate empty selection — a real configuration, not a rejection.
+ */
+function bodyDoctrines(body) {
+  const raw = bget(body, 'doctrines');
+  if (Array.isArray(raw) && !raw.length) return [];
+  const names = Array.isArray(raw) ? raw
+    : (typeof raw === 'string' ? raw.split(',').map((s) => s.trim()).filter(Boolean) : null);
+  if (names === null || !names.length) return null;
+  if (names.length === 1 && names[0] === 'none') return [];
+  const known = discoverNames('doctrines', PACK_ORDER[0]);
+  if (!names.every((n) => typeof n === 'string' && known.includes(n))) return null;
+  return PACK_ORDER.filter((p) => names.includes(p));
+}
 
 /** `str.split()` with no argument — runs of PYTHON whitespace, no empties. */
 const pyWords = (s) => s.split(new RegExp(`[${PY_SPACE}]+`)).filter(Boolean);
@@ -781,8 +811,12 @@ export function apiInstallCmd(state, body) {
   const bmode = bget(body, 'mode');
   const mode = discoverNames('modes', 'direct').includes(bmode)
     ? bmode : (modeOfDir(root) || 'direct');
+  // Unspecified stays unspecified: no flag means the generator falls back to
+  // `harness.config.json`, which is the answer a rebuild has always given. It cannot yet be
+  // read back off the deployment — that needs the `Active packs:` marker reader.
+  const doctrines = bodyDoctrines(body);
   const out = scope === 'global' ? null : String(root);
-  const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode);
+  const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
 }
 
@@ -878,7 +912,8 @@ export function apiDeployCmd(state, body) {
   const pos = discoverNames('postures', 'peer').includes(bpos) ? bpos : 'peer';
   const bmode = bget(body, 'mode');
   const mode = discoverNames('modes', 'direct').includes(bmode) ? bmode : 'direct';
+  const doctrines = bodyDoctrines(body);
   // project-scope emit name == host name (opencode / claude / bob / copilot)
-  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode);
+  const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'geneseed.mjs'), ...argv] };
 }

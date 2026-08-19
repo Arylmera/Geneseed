@@ -1229,6 +1229,60 @@ test('an unknown (host, path) pair raises NotFound', () => {
   });
 });
 
+// The doctrine packs are the fourth value a build command carries out of a request body, and the
+// first that is a LIST. `includes(x)` closes a scalar in one call; a list has to be closed member
+// by member, or one bogus name rides into an argv beside three good ones.
+
+test('a picked pack list reaches the install command, normalised into PACK_ORDER', () => {
+  withThreeInstalls(({ st, cl }) => {
+    const cmd = apiInstallCmd(st, { host: 'claude', path: cl, doctrines: ['process', 'craft'] })
+      .cmd.map(String);
+    assert.equal(cmd[cmd.indexOf('--doctrines') + 1], 'craft,process',
+      'the packs arrived in request-body order — the `Active packs:` marker a later reader '
+      + 'parses back must not depend on the order a client happened to send');
+    // A comma string is the same request by hand, and answers identically.
+    const typed = apiInstallCmd(st, { host: 'claude', path: cl, doctrines: 'process, craft' })
+      .cmd.map(String);
+    assert.deepEqual(typed, cmd);
+  });
+});
+
+test('the install command elides --doctrines when the body says nothing usable', () => {
+  withThreeInstalls(({ st, cl }) => {
+    // No key at all: the build falls back to `harness.config.json`, which is what a rebuild has
+    // always done. Not the same as an empty selection, and must not become one.
+    assert.ok(!apiInstallCmd(st, { host: 'claude', path: cl }).cmd.map(String)
+      .includes('--doctrines'));
+    // A bogus member poisons the WHOLE list rather than being filtered out of it: a request
+    // asking for craft and something that does not exist is a request this endpoint does not
+    // understand, and silently building three-quarters of it is the wrong repair.
+    for (const bad of [['craft', '../evil'], ['nope'], [7], 'craft,nope', 42, {}]) {
+      const cmd = apiInstallCmd(st, { host: 'claude', path: cl, doctrines: bad }).cmd.map(String);
+      assert.ok(!cmd.includes('--doctrines'), `a bogus doctrines value reached the argv: ${
+        JSON.stringify(bad)}`);
+      assert.ok(!cmd.some((a) => a.includes('evil')), 'a path-shaped pack name reached the argv');
+    }
+  });
+});
+
+test('an empty pack list is a real answer and is spelled none', () => {
+  withThreeInstalls(({ st, cl }) => {
+    for (const empty of [[], ['none'], 'none']) {
+      const cmd = apiInstallCmd(st, { host: 'claude', path: cl, doctrines: empty }).cmd.map(String);
+      assert.equal(cmd[cmd.indexOf('--doctrines') + 1], 'none',
+        `${JSON.stringify(empty)} did not reach the deliberate empty selection`);
+    }
+  });
+});
+
+test('a full pack list elides, so a rebuild does not pin the install to today\'s pack set', () => {
+  withThreeInstalls(({ st, cl }) => {
+    const cmd = apiInstallCmd(st,
+      { host: 'claude', path: cl, doctrines: ['craft', 'rigor', 'ops', 'process'] }).cmd.map(String);
+    assert.ok(!cmd.includes('--doctrines'));
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // The harness selector: `apiSelectView` re-points the whole console at a detected install
 // (target, theme, emit) and `apiInstalls` marks the current one selected.
@@ -1949,6 +2003,21 @@ test('the deploy command validates its host and its path', () => {
     assert.equal(after$(cmd, '--theme'), 'imperial');
     assert.equal(after$(cmd, '--out'), pyResolve(sb.path));
     assert.equal(after$(cmd, '--root'), pyResolve(sb.path));
+  } finally { sb.cleanup(); }
+});
+
+test('the deploy command validates its pack list the same way the install command does', () => {
+  const sb = makeSandbox();
+  try {
+    const at = (body) => apiDeployCmd(neutral(), { host: 'opencode', path: sb.path, ...body })
+      .cmd.map(String);
+    assert.equal(after$(at({ doctrines: ['ops', 'craft'] }), '--doctrines'), 'craft,ops');
+    assert.equal(after$(at({ doctrines: [] }), '--doctrines'), 'none');
+    // A fresh deploy has no deployment to read a default off, so an unspecified or unusable
+    // value leaves the flag off and the generator takes the configured default.
+    assert.ok(!at({}).includes('--doctrines'));
+    assert.ok(!at({ doctrines: ['craft', '../evil'] }).includes('--doctrines'));
+    assert.ok(!at({ doctrines: ['craft', 'rigor', 'ops', 'process'] }).includes('--doctrines'));
   } finally { sb.cleanup(); }
 });
 

@@ -21,11 +21,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { setupBuildArgs } from '../../js/generate.mjs';
-import { javaMajorOk, lspPrereqs, setupSummaryLines } from '../../js/setup.mjs';
+import { doctrineOptions, javaMajorOk, lspPrereqs, setupSummaryLines } from '../../js/setup.mjs';
 import { themeFlair, tuiEntries, detailLines } from '../../js/tui.mjs';
 import { tuiInventory } from '../../js/inventory.mjs';
 import { themeFiles } from '../../js/installs.mjs';
-import { SRC } from '../../js/checkout.mjs';
+import { SRC, PACK_ORDER, discoverNames } from '../../js/checkout.mjs';
 
 const themeNames = () => themeFiles().map((p) => path.basename(p, '.json'));
 
@@ -56,6 +56,61 @@ test('a project emit carries --out and --root', () => {
 test('an explicit full survives the lean default', () => {
   // The regression the elision would have caused, pinned directly.
   assert.ok(setupBuildArgs('neutral', 'opencode-global', null, null, 'full').includes('full'));
+});
+
+// ---------------------------------------------------------------------------------------------
+// The doctrines elision, which is the only one of the four that compares a SET against a default
+// that is itself a list. Three states, and the middle one is the one a `!== 'peer'` copy loses:
+// `null` (no opinion, no flag) is NOT the same as `[]` (a deliberate empty selection).
+
+const ARGS = (doctrines, allPacks = PACK_ORDER) => setupBuildArgs('neutral', 'opencode-global',
+  null, null, 'lean', 'peer', 'direct', doctrines, allPacks);
+
+test('a full pack selection elides --doctrines and no selection at all elides it too', () => {
+  // Both take the flag off the command line, and they mean different things: an unasked build
+  // falls back to `harness.config.json`, while an "all four" answer happens to agree with it.
+  // They are the same ARGV on purpose — a flag that restated the default would couple the
+  // answer to it, which is the exact bug `--footprint`'s docblock exists to describe.
+  assert.ok(!ARGS(null).includes('--doctrines'));
+  assert.ok(!ARGS([...PACK_ORDER]).includes('--doctrines'));
+  // ...and order is not what makes them equal: the set is.
+  assert.ok(!ARGS([...PACK_ORDER].reverse()).includes('--doctrines'));
+});
+
+test('a narrowed selection is passed, in PACK_ORDER, and an empty one is spelled none', () => {
+  assert.deepEqual(ARGS(['rigor', 'craft']).slice(-2), ['--doctrines', 'craft,rigor']);
+  assert.deepEqual(ARGS(['process']).slice(-2), ['--doctrines', 'process']);
+  // The empty list cannot be `--doctrines ` — the driver's parser rejects that as a usage
+  // error — so it has to become the literal `none` it also accepts.
+  assert.deepEqual(ARGS([]).slice(-2), ['--doctrines', 'none']);
+});
+
+test('the elision default is the one passed in, not one this function reached for', () => {
+  // `setupBuildArgs` is pure and has no discovery. Hand it a checkout with three packs and
+  // "all three" must still elide — a function that compared against its own frozen `PACK_ORDER`
+  // would emit `--doctrines craft,rigor,ops` here and pin an install to a list that stops being
+  // "all of them" the moment a fourth pack file lands.
+  const three = ['craft', 'rigor', 'ops'];
+  assert.ok(!ARGS([...three], three).includes('--doctrines'));
+  // ...and the same selection against the real four-pack default is a genuine narrowing.
+  assert.deepEqual(ARGS([...three]).slice(-2), ['--doctrines', 'craft,rigor,ops']);
+});
+
+test('the wizard menu lists every shipped pack, in narrative order, each with a blurb', () => {
+  // `doctrineOptions` orders by `PACK_ORDER` and takes membership from discovery. Ordering by
+  // discovery instead yields `craft, ops, process, rigor` — it `.sort()`s — and the menu would
+  // stop matching the `Active packs:` marker the build normalises into `PACK_ORDER`.
+  const opts = doctrineOptions();
+  assert.deepEqual(opts.map(([n]) => n),
+    PACK_ORDER.filter((p) => discoverNames('doctrines', PACK_ORDER[0]).includes(p)));
+  assert.deepEqual(opts.map(([n]) => n), ['craft', 'rigor', 'ops', 'process']);
+  for (const [name, blurb] of opts) {
+    assert.ok(blurb.length > 20, `pack ${name} has no usable blurb: ${JSON.stringify(blurb)}`);
+  }
+  // Turning `process` off is what removes the commit/push consent gate. The one blurb that has
+  // to say what it costs, asserted so it cannot quietly stop saying it.
+  const process$ = opts.find(([n]) => n === 'process');
+  assert.match(process$[1], /consent gate on every commit and push/);
 });
 
 // ---------------------------------------------------------------------------------------------
