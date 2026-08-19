@@ -6,7 +6,7 @@ labels in `harness.config.json`. The canonical identity of an *installed* harnes
 is the source fingerprint in `.geneseed-version` (see `geneseed version`), not this
 label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
-## [Unreleased]
+## [2.1.0] — 2026-08-19
 
 ### Added
 - **Law XXXVIII — Prove the Gate.** A 38th universal law, in the verification class:
@@ -890,7 +890,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   These join `learning-path`, `gap-detector`, and `feynman`, bringing the
   skill count to 33.
 
-## [2.0.0] — not yet published
+## [2.0.0] — 2026-08-17
 
 *Published to npm as `geneseed@2.0.0` on 2026-08-17, by hand — npm's trusted-publisher screen
 needs a package that already exists, so the first release could not come from the workflow that
@@ -957,7 +957,7 @@ than a step. `docs/limits.md` is the standing list of what that costs, row by ro
 four strings that are known to be wrong and are now permanently unfixable.
 
 *⚠ Superseded before publication. The emit, cli and web corpora were retired on 2026-08-17 for
-exactly the reason this section admits — see Unreleased → Removed. The paragraph above stands as
+exactly the reason this section admits — see 2.1.0 → Removed. The paragraph above stands as
 the record of what was believed at the time; what this release guarantees is the shorter list
 there.*
 
