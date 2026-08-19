@@ -285,10 +285,18 @@ const SHIPS = [
   ['themes/', 'render.loadTheme reads these; a themeless install renders nothing'],
   ['adapters/', 'bin/geneseed.mjs, js/hooks.mjs and js/web/docs.mjs all read ROOT/adapters'],
   ['docs/web/', "js/web/docs.mjs serves ROOT/docs; the console's Docs pages ARE these files"],
-  ['docs/opencode-plugin-setup.md', 'docs/*.md — the five non-web pages, same reader'],
-  ['docs/token-footprint.md', 'docs/*.md'],
-  ['docs/web-ui.md', 'docs/*.md'],
-  ['docs/wiki.md', 'docs/*.md'],
+  // ONE ROW FOR THE NON-WEB PAGES, not one per page, and the reason is that every per-file row
+  // this replaced gave the SAME reason — the literal string `docs/*.md`, seven times. The
+  // decision they were all restating is `package.json`'s own `files` entry, spelled identically
+  // and with npm's semantics: `*` does not cross a separator, so `docs/guides/nested.md` and
+  // `docs/diagram.png` are still orphans and still owe a decision. The two-sided thesis this
+  // file opens with survives whole — `tools/thing.sh` fails until a human writes down its side.
+  //
+  // WHAT IT GIVES UP, exactly: `no row is dead` no longer fires when ONE un-anchored page is
+  // deleted. The two below keep their own rows because the suite cites them BY NAME (nine
+  // callers for limits.md, two for declined.md), so deleting either breaks live citations and
+  // is worth a red run. A page nothing cites is worth a glob.
+  ['docs/*.md', 'the non-web pages: js/web/docs.mjs serves ROOT/docs, same reader as docs/web/'],
   // Ships for the reason the others do not: it is the standing statement of what this tool
   // does NOT prove about itself, and a package whose only oracle is a frozen recording owes
   // its reader that list. `docs/specs/` is gitignored, so a ledger kept only in a phase note
@@ -373,10 +381,24 @@ const NPM_STRIPS = new Set();
 // `npm pack` adds this whatever `files` says, and it was untracked until it was committed.
 const ALWAYS_PACKED = new Set(['package.json']);
 
+/**
+ * A `*` row, with npm's `files` semantics rather than the shell's.
+ *
+ * ⚠ `*` DOES NOT CROSS A SEPARATOR — hence `[^/]*`, not `[\s\S]*`. `js/hooks.mjs:172` has an
+ * `fnmatch` that looks reusable and is the opposite convention on purpose (its own docblock says
+ * so): there `docs/*.md` really does select `docs/nested/deep.md`. Reusing it here would silently
+ * claim files npm never packs. This direction is the fail-safe one — a glob that is too NARROW
+ * produces an orphan, which is a forced decision, and one that is too wide is a lie.
+ */
+const globRow = (pat) => new RegExp(
+  `^${pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')}$`);
+
 function rowFor(p, rows) {
   let best = null;
   for (const [pattern] of rows) {
-    const hit = pattern.endsWith('/') ? p.startsWith(pattern) : p === pattern;
+    const hit = pattern.endsWith('/') ? p.startsWith(pattern)
+      : pattern.includes('*') ? globRow(pattern).test(p)
+        : p === pattern;
     if (hit && (best === null || pattern.length > best.length)) best = pattern;
   }
   return best;
@@ -759,8 +781,8 @@ const PYTHON_IN_THE_PRODUCT = new Set();
 // THREE GATES, THREE SUBJECTS, and reading any two of them as duplicates is how one of them gets
 // deleted. `tests/unit/no_python.test.mjs` scans the SHIPPING SOURCE TREE for an INVOCATION or a
 // path a reader could follow — a property of prose and of code, not of file extensions, so it
-// does not go green merely because the `.py` files went. `tests/snapshot/no_python_in_corpus.test.mjs`
-// asks that same question of the RECORDED CORPUS, whose rows can never be re-measured. Neither
+// does not go green merely because the `.py` files went. (A third gate asked that same question
+// of the RECORDED CORPUS and was retired with the corpora on 2026-08-17.) Neither
 // of them opens the package. THIS file owns the packaged tarball, the tree npm extracts from it,
 // and the output of the verbs driven out of that tree — and it is the only one of the three that
 // asserts the flat count of tracked `.py` files, which is what `the product carries no Python
@@ -874,6 +896,27 @@ test('the product carries no Python file at all', () => {
   const found = tracked().filter((p) => p.endsWith('.py')).sort();
   assert.deepEqual(found, [...PYTHON_IN_THE_PRODUCT_FILES].sort(),
     `tracked .py files: ${JSON.stringify(found)}`);
+
+  // ⚠ SALVAGED FROM `tests/unit/ported.test.mjs` WHEN THAT FILE WAS RETIRED (2026-08-19), and it
+  // is the one claim in it that outranked its own ledger. Everything above asks the INDEX, which
+  // is a strictly weaker question than the one being answered: a file dropped from the index but
+  // left in the working tree is still importable, still collectable by a runner, and invisible
+  // to `git ls-files` — and an untracked leftover is exactly what a deletion leaves behind. The
+  // walk also needs no repository at all, which is the sharper half: in a copy of this tree
+  // without version-control metadata the index query returns nothing, and for an assertion whose
+  // success looks like an empty list, "nothing" and "clean" are the same output. That is the
+  // fail-quiet mode you least want in the gate that certifies a deletion.
+  //
+  // RECURSIVE, because the flip that retired the ledger found four `.py` files one directory
+  // down. `__pycache__` is deliberately out of scope: it is untracked, regenerable residue no
+  // deletion commit can remove from somebody's working copy, and widening this to catch it would
+  // make the gate permanently red on any machine that ever ran the reference.
+  const strays = fs.readdirSync(path.join(ROOT, 'tests'), { recursive: true })
+    .filter((f) => String(f).endsWith('.py'))
+    .map((f) => `tests/${String(f).split(path.sep).join('/')}`)
+    .sort();
+  assert.deepEqual(strays, [],
+    `untracked .py left under tests/: ${JSON.stringify(strays)}`);
 });
 
 // =============================================================================================

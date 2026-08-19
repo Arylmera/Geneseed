@@ -433,12 +433,12 @@ export function detailLines(kind, label, data) {
  */
 export function cmdTui() {
   if (!process.stdin.isTTY) {
-    pyPrint('[tui] not an interactive terminal. Use `harness setup`, `doctor`, or `build`.\n');
+    pyPrint('[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
     return 1;
   }
   // The pointer to the Python panel is gone for `js/menu.mjs`'s reason: the
   // panel it named is the Python being deleted. What is left is true and stays true.
   pyPrint('[tui] full-screen panel unavailable (this entry carries the TUI\'s layout '
-    + 'half, not its screens). Use `harness setup`, `doctor`, or `build`.\n');
+    + 'half, not its screens). Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
   return 1;
 }

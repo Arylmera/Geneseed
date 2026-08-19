@@ -387,7 +387,7 @@ function warnBobGlobalOverProject() {
     + "(doubled context) unless Bob's workspace rules truly shadow the global "
     + "one there. Review and remove what you don't want:\n");
   for (const root of survivors) {
-    process.stderr.write(`  - ${root}  ->  harness uninstall --target "${root}"\n`);
+    process.stderr.write(`  - ${root}  ->  geneseed uninstall --target "${root}"\n`);
   }
 }
 
@@ -501,7 +501,7 @@ function warnCopilotGlobalOverProject() {
     + '(doubled context): Copilot stacks ~/.copilot/copilot-instructions.md on top '
     + "of a repo's own AGENTS.md. Review and remove what you don't want:\n");
   for (const root of survivors) {
-    process.stderr.write(`  - ${root}  ->  harness uninstall --target "${root}"\n`);
+    process.stderr.write(`  - ${root}  ->  geneseed uninstall --target "${root}"\n`);
   }
 }
 

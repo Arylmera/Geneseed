@@ -1,5 +1,5 @@
 /**
- * `harness uninstall` — the first verb in this port that DELETES.
+ * `geneseed uninstall` — the first verb in this port that DELETES.
  *
  * Thirteen subcommands crossed before this one and every one of them either writes or
  * reports. `uninstall` removes a deployed install: the manifest's owned files, the empty
@@ -187,7 +187,7 @@ function warnSurvivors(failed) {
 
 function warnMarkersKept() {
   pyPrintErr('[uninstall] WARN: the manifest and markers were KEPT so '
-    + '`harness uninstall` can be retried once the file(s) are '
+    + '`geneseed uninstall` can be retried once the file(s) are '
     + 'unlocked/removable.\n');
 }
 
@@ -510,7 +510,7 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
       // With `failed` set the reversal already warned twice — no third overlapping WARN.
       pyPrintErr('[uninstall] WARN: could not fully remove the install — still present: '
         + `${survivors.join(', ')}. The install marker was KEPT so you can retry `
-        + '`harness uninstall` once the file(s) are unlocked/removable.\n');
+        + '`geneseed uninstall` once the file(s) are unlocked/removable.\n');
     }
     const out = {
       ok: true,
@@ -626,7 +626,7 @@ export function printSurvivingProjectInventory(removedRoot) {
     + 'does not affect them (each is self-contained):\n');
   for (const [host, scope, root] of survivors) {
     pyPrint(`  - ${root} (${host}:${scope}) — remove with: `
-      + `harness uninstall --target "${root}" --yes\n`);
+      + `geneseed uninstall --target "${root}" --yes\n`);
   }
 }
 
@@ -733,7 +733,7 @@ export function cmdUninstall(args) {
   if (s.incomplete && s.incomplete.length) {
     pyPrint(`[uninstall] INCOMPLETE — removed ${s.removed} file(s), but `
       + `${s.incomplete.length} item(s) survived (see the WARN above); `
-      + 'the install marker was kept — retry `harness uninstall` once they\'re '
+      + 'the install marker was kept — retry `geneseed uninstall` once they\'re '
       + `removable. ${cfgfile} updated where needed; memory/notebook ${mem}.\n`);
   } else {
     pyPrint(`[uninstall] done — removed ${s.removed} file(s); ${cfgfile} updated where `

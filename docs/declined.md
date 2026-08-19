@@ -163,3 +163,38 @@ docblock this as "argparse's own rule". It is not — that generalised from `dif
 which works only because an UNKNOWN option is deferred to the end of `parse_known_args`. Two of
 that test's four cases are cases where the reference errors instead, so the test pins a
 divergence; its docblock now says which cases those are and points here.
+
+## A verb that postdates the recorder is exempted from the cell matrix by name
+
+**Status:** ACCEPTED, 2026-08-19. This widens an existing exemption rather than minting a second
+one, and it changes a TEST, not the product.
+
+**What differs.** `tests/unit/hook_cli.test.mjs`'s `the matrix covers every verb each entry
+claims` asserted a strict equality between the hook verbs `tests/helpers/matrix/cli.*.json`
+covers and the verbs `bin/geneseed-hook.mjs` carries. The CLI half of the same test already
+exempted a named `NATIVE` list; the hook half exempted nothing. Both halves now filter through
+the same list.
+
+**Why the recording could not be kept as the whole answer.** The matrix was exported by the
+reference implementation, which was deleted on 2026-08-17 along with every recorder that could
+write a cell. So the covered set is frozen at four hook verbs for good. A fifth hook verb —
+wired in `js/settings.mjs`, carried in `bin/geneseed-hook.mjs`, declared in `js/cli-table.json` —
+would fail this equality with **no green path**: the corpus cannot grow, and the failure message
+correctly forbids deleting cells to pass. The gate had become a wall, and a wall that stops a
+legitimate change is not protection, it is an accident of when the recorder died.
+
+The reason the three CLI verbs were exempted in the first place — *the reference had nothing to
+compare against, and authoring one would be recording a copy of the value under test* — is
+exactly the reason a verb that postdates the reference has no cell. Same reason, same exemption.
+
+**What was lost, measured.** Nothing that another gate does not already hold. The only property
+the frozen hook half carried beyond `NATIVE` was *"a hook verb cannot be removed by a coordinated
+edit of three files"* — and `tests/unit/hook_cli.test.mjs`'s own literal (`sorted(wired)` against
+the four names) plus its `verbsOf(HOOK) === wired` equality are two editable copies of that same
+set, twelve lines above. `tests/mutate.mjs`'s M8 plants the one-file removal and is killed there,
+not here.
+
+**How it stays honest.** The exemption is a NAMED list, not a containment: a new verb has to be
+written into `NATIVE` deliberately, in two files that read each other's source, and the reverse
+check refuses an exemption for a verb neither entry point carries. So the next new verb still
+fails loudly until someone decides about it — which is the whole point of the original design.

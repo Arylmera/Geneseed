@@ -147,8 +147,8 @@ const textwrapCorpus = load('textwrap.json');
 
 test('the primitive corpus replays against the port', { skip: primitives ? false
   : `tests/__snapshots__/primitives/${PLATFORM}.json has not been recorded — the ${PLATFORM} `
-    + 'half comes from a run on that platform (the `record-corpus` workflow job records the '
-    + 'posix one)' }, () => {
+    + 'half was recorded on that platform by a job that no longer exists, so a missing half can '
+    + 'never be filled)' }, () => {
   const prefixes = machinePrefixes();
   const cases = primitives.cases.map((c) => ({ fn: c.fn, args: c.args }));
   const plain = runProbe(cases, false);
